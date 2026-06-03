@@ -87,7 +87,7 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		database_name.Append(Value(entry.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
-		schema_name.Append(Value(entry.name));
+		schema_name.Append(Value(entry.name.GetName()));
 		comment.Append(Value(entry.comment));
 		tags.Append(Value::MAP(entry.tags));
 		internal.Append(Value::BOOLEAN(entry.internal));

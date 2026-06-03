@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 	if (join_qualifier.on_clause) {
 		node.join_condition = std::move(join_qualifier.on_clause);
 	} else {
-		node.using_columns = std::move(join_qualifier.using_columns);
+		node.using_columns = StringsToIdentifiers(join_qualifier.using_columns);
 	}
 
 	set<MergeActionCondition> unconditional_actions;

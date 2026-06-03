@@ -87,7 +87,7 @@ duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, 
 		return nullptr;
 	}
 
-	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, name);
+	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, duckdb::Identifier(name));
 
 	if (!catalog_ptr) {
 		return nullptr;

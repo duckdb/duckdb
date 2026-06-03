@@ -14,7 +14,7 @@ string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_
 		if (!result.empty()) {
 			result += ".";
 		}
-		result += schema->name;
+		result += schema->name.GetName();
 	}
 	if (!result.empty()) {
 		result += ".";

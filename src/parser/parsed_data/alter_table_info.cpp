@@ -25,8 +25,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
-	                                                      owner_name, if_not_found);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog.GetName(), schema.GetName(),
+	                                                      name.GetName(), owner_schema, owner_name, if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -38,9 +38,9 @@ string ChangeOwnershipInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " OWNED BY ";
-	result += QualifierToString(catalog, owner_schema, owner_name);
+	result += QualifierToString(catalog.GetName(), owner_schema, owner_name);
 	result += ";";
 	return result;
 }
@@ -60,8 +60,8 @@ CatalogType SetCommentInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value,
-	                                                 if_not_found);
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog.GetName(), schema.GetName(),
+	                                                 name.GetName(), comment_value, if_not_found);
 }
 
 string SetCommentInfo::ToString() const {
@@ -70,7 +70,7 @@ string SetCommentInfo::ToString() const {
 	result += "COMMENT ON ";
 	result += ParseInfo::TypeToString(entry_catalog_type);
 	result += " ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " IS ";
 	result += comment_value.ToSQLString();
 
@@ -88,8 +88,8 @@ AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER
 }
 
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog.GetName()), std::move(data.schema.GetName()),
+                std::move(data.name.GetName()), data.if_not_found),
       alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
@@ -113,7 +113,7 @@ RenameColumnInfo::~RenameColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
+	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name.GetName(), new_name.GetName());
 }
 
 string RenameColumnInfo::ToString() const {
@@ -122,11 +122,11 @@ string RenameColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " RENAME COLUMN ";
-	result += SQLIdentifier(old_name);
+	result += SQLIdentifier(old_name.GetName());
 	result += " TO ";
-	result += SQLIdentifier(new_name);
+	result += SQLIdentifier(new_name.GetName());
 	result += ";";
 	return result;
 }
@@ -146,7 +146,7 @@ RenameFieldInfo::~RenameFieldInfo() {
 }
 
 unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name);
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name.GetName());
 }
 
 string RenameFieldInfo::ToString() const {
@@ -155,7 +155,7 @@ string RenameFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " RENAME COLUMN ";
 	for (idx_t i = 0; i < column_path.size(); i++) {
 		if (i > 0) {
@@ -164,7 +164,7 @@ string RenameFieldInfo::ToString() const {
 		result += SQLIdentifier(column_path[i]);
 	}
 	result += " TO ";
-	result += SQLIdentifier(new_name);
+	result += SQLIdentifier(new_name.GetName());
 	result += ";";
 	return result;
 }
@@ -183,7 +183,7 @@ RenameTableInfo::~RenameTableInfo() {
 }
 
 unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
+	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name.GetName());
 }
 
 string RenameTableInfo::ToString() const {
@@ -192,9 +192,9 @@ string RenameTableInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " RENAME TO ";
-	result += SQLIdentifier(new_table_name);
+	result += SQLIdentifier(new_table_name.GetName());
 	result += ";";
 	return result;
 }
@@ -224,7 +224,7 @@ string AddColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
@@ -265,7 +265,7 @@ string AddFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ADD COLUMN ";
 	if (if_field_not_exists) {
 		result += "IF NOT EXISTS ";
@@ -293,7 +293,8 @@ RemoveColumnInfo::~RemoveColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists, cascade);
+	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column.GetName(), if_column_exists,
+	                                                   cascade);
 }
 
 string RemoveColumnInfo::ToString() const {
@@ -302,12 +303,12 @@ string RemoveColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
 	}
-	result += SQLIdentifier(removed_column);
+	result += SQLIdentifier(removed_column.GetName());
 	if (cascade) {
 		result += " CASCADE";
 	}
@@ -338,7 +339,7 @@ string RemoveFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -371,7 +372,7 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
+	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name.GetName(), target_type,
 	                                                       expression->Copy());
 }
 
@@ -381,9 +382,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	result += SQLIdentifier(column_name.GetName());
 	result += " TYPE ";
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
@@ -417,7 +418,7 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
+	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name.GetName(),
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
@@ -427,9 +428,9 @@ string SetDefaultInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	result += SQLIdentifier(column_name.GetName());
 	if (expression) {
 		result += " SET DEFAULT ";
 		result += expression->ToString();
@@ -453,7 +454,7 @@ SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name.GetName());
 }
 
 string SetNotNullInfo::ToString() const {
@@ -462,9 +463,9 @@ string SetNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	result += SQLIdentifier(column_name.GetName());
 	result += " SET NOT NULL";
 	result += ";";
 	return result;
@@ -483,7 +484,7 @@ DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name.GetName());
 }
 
 string DropNotNullInfo::ToString() const {
@@ -492,9 +493,9 @@ string DropNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name);
+	result += SQLIdentifier(column_name.GetName());
 	result += " DROP NOT NULL";
 	result += ";";
 	return result;
@@ -532,8 +533,8 @@ AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VI
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog.GetName()), std::move(data.schema.GetName()),
+                std::move(data.name.GetName()), data.if_not_found),
       alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {
@@ -564,7 +565,7 @@ string RenameViewInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " RENAME TO ";
 	result += SQLIdentifier(new_view_name);
 	result += ";";
@@ -590,7 +591,7 @@ unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
 
 string AddConstraintInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " ADD ";
 	result += constraint->ToString();
 	result += ";";
@@ -620,7 +621,7 @@ unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
 
 string SetPartitionedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	if (partition_keys.empty()) {
 		result += " RESET PARTITIONED BY";
 	} else {
@@ -659,7 +660,7 @@ unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
 
 string SetSortedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	if (orders.empty()) {
 		result += " RESET SORTED BY";
 	} else {
@@ -699,7 +700,7 @@ unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
 
 string SetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " SET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {
@@ -736,7 +737,7 @@ unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
 
 string ResetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 	result += " RESET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {

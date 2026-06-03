@@ -44,7 +44,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -660,8 +660,8 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ErrorData error;
 
 	FunctionBinder function_binder(context);
-	auto best_function =
-	    function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, state_type.bound_argument_types, error);
+	auto best_function = function_binder.BindFunction(aggr_entry.name.GetName(), aggr_entry.functions,
+	                                                  state_type.bound_argument_types, error);
 	if (!best_function.IsValid()) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());

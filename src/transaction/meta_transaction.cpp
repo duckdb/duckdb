@@ -206,7 +206,7 @@ optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const stri
 shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const string &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	for (auto &entry : referenced_databases) {
-		if (StringUtil::CIEquals(entry.first.get().name, name)) {
+		if (entry.first.get().name == name) {
 			return entry.second;
 		}
 	}

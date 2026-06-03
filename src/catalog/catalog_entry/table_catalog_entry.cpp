@@ -24,7 +24,7 @@ namespace duckdb {
 constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table.GetName()), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
@@ -64,7 +64,7 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 			column_names.push_back(col.Name());
 		}
 		auto candidates = StringUtil::CandidatesErrorMessage(column_names, column_name, "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name, column_name,
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetName(), column_name,
 		                      candidates);
 	}
 	return entry;
@@ -285,7 +285,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	auto bound_constraints = binder.BindConstraints(constraints, name, columns);
+	auto bound_constraints = binder.BindConstraints(constraints, name.GetName(), columns);
 	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();

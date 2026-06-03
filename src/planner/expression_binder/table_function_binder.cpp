@@ -31,14 +31,14 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.ColumnNames()[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
-	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+	} else if (col_ref.ColumnNames()[0].GetName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+	           binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 		throw ParameterNotResolvedException();
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.ColumnNames();
-	auto result_name = StringUtil::Join(column_names, ".");
+	auto result_name = StringUtil::Join(IdentifiersToStrings(column_names), ".");
 	if (!table_function_name.empty()) {
 		// check if this is a lateral join column/parameter
 		auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
@@ -52,7 +52,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	}
 
 	if (accept_sql_value_functions) {
-		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
+		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back().GetName());
 		if (value_function) {
 			return BindExpression(value_function, depth, root_expression);
 		}

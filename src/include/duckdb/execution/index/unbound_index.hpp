@@ -89,7 +89,7 @@ public:
 		return GetCreateInfo().index_type;
 	}
 	const string &GetIndexName() const override {
-		return GetCreateInfo().index_name;
+		return GetCreateInfo().index_name.GetName();
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return GetCreateInfo().constraint_type;
@@ -104,7 +104,7 @@ public:
 		return GetCreateInfo().parsed_expressions;
 	}
 	const string &GetTableName() const {
-		return GetCreateInfo().table;
+		return GetCreateInfo().table.GetName();
 	}
 
 	//! Buffer Index delete or insert (replay_type) data chunk.

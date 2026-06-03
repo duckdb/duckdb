@@ -18,7 +18,7 @@ BoundStatement Binder::Bind(SubqueryRef &ref) {
 			subquery_alias += to_string(index);
 		}
 	} else {
-		subquery_alias = ref.alias;
+		subquery_alias = ref.alias.GetName();
 	}
 	binder->is_outside_flattened = is_outside_flattened;
 	if (binder->has_unplanned_dependent_joins) {

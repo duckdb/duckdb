@@ -120,7 +120,7 @@ void ExtensionLoader::FinalizeLoad() {
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
-	ScalarFunctionSet set(function.name);
+	ScalarFunctionSet set(function.name.GetName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -144,7 +144,7 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
-	AggregateFunctionSet set(function.name);
+	AggregateFunctionSet set(function.name.GetName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -168,7 +168,7 @@ void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunction function) {
-	WindowFunctionSet set(function.name);
+	WindowFunctionSet set(function.name.GetName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -198,7 +198,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(TableFunction function) {
-	TableFunctionSet set(function.name);
+	TableFunctionSet set(function.name.GetName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -224,14 +224,14 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 	D_ASSERT(!function.name.empty());
-	PragmaFunctionSet set(function.name);
+	PragmaFunctionSet set(function.name.GetName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	auto function_name = function.name;
+	auto function_name = function.name.GetName();
 	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
 	info.extension_name = GetRegisteredExtensionName();
 	info.schema = loader_info.extension_schema;
@@ -284,13 +284,13 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
-	auto &scalar_function = GetFunction(function.name);
+	auto &scalar_function = GetFunction(function.name.GetName());
 	scalar_function.functions.AddFunction(std::move(function));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
-	auto &scalar_function = GetFunction(functions.name);
+	auto &scalar_function = GetFunction(functions.name.GetName());
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		scalar_function.functions.AddFunction(std::move(function));
@@ -298,7 +298,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
-	auto &table_function = GetTableFunction(functions.name);
+	auto &table_function = GetTableFunction(functions.name.GetName());
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		table_function.functions.AddFunction(std::move(function));
@@ -309,7 +309,7 @@ static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+	auto &schema = system_catalog.GetSchema(data, Identifier(DEFAULT_SCHEMA));
 	return schema.GetEntry(data, type, name);
 }
 

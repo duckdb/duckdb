@@ -11,7 +11,7 @@ BoundStatement Binder::Bind(DelimGetRef &ref) {
 
 	BoundStatement result;
 	result.types = std::move(ref.types);
-	result.names = std::move(ref.internal_aliases);
+	result.names = IdentifiersToStrings(ref.internal_aliases);
 	result.plan = make_uniq<LogicalDelimGet>(tbl_idx, result.types);
 
 	bind_context.AddGenericBinding(tbl_idx, internal_name, result.names, result.types);

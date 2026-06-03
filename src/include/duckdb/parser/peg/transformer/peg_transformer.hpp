@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/transform_enum_result.hpp"
@@ -186,7 +187,7 @@ public:
 	const case_insensitive_map_t<PEGRule> &grammar_rules;
 	const case_insensitive_map_t<AnyTransformFunction> &transform_functions;
 	const case_insensitive_map_t<unique_ptr<TransformEnumValue>> &enum_mappings;
-	case_insensitive_map_t<idx_t> named_parameter_map;
+	identifier_map_t<idx_t> named_parameter_map;
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 

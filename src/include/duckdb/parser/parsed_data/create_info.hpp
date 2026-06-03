@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
@@ -33,9 +34,9 @@ public:
 	//! The to-be-created catalog type
 	CatalogType type;
 	//! The catalog name of the entry
-	string catalog;
+	Identifier catalog;
 	//! The schema name of the entry
-	string schema;
+	Identifier schema;
 	//! What to do on create conflict
 	OnCreateConflict on_conflict;
 	//! Whether or not the entry is temporary

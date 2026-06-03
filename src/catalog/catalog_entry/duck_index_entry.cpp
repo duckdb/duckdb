@@ -18,7 +18,7 @@ void DuckIndexEntry::Rollback(CatalogEntry &) {
 	if (!info->info) {
 		return;
 	}
-	info->info->GetIndexes().RemoveIndex(name);
+	info->info->GetIndexes().RemoveIndex(name.GetName());
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -26,7 +26,7 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
     : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
-	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
+	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name.GetName());
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -58,7 +58,7 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop(CommitDropState &drop_state) {
 	D_ASSERT(info);
-	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), name);
+	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), name.GetName());
 }
 
 } // namespace duckdb

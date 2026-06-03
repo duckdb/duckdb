@@ -30,7 +30,7 @@ RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEn
 }
 
 unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
-	return make_uniq<RenameDatabaseInfo>(catalog, new_name, if_not_found);
+	return make_uniq<RenameDatabaseInfo>(catalog.GetName(), new_name.GetName(), if_not_found);
 }
 
 string RenameDatabaseInfo::ToString() const {
@@ -39,7 +39,7 @@ string RenameDatabaseInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += StringUtil::Format("%s SET ALIAS TO %s", SQLIdentifier(catalog), SQLIdentifier(new_name));
+	result += StringUtil::Format("%s SET ALIAS TO %s", catalog, new_name);
 	return result;
 }
 

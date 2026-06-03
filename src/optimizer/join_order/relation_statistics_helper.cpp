@@ -103,7 +103,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
 	if (catalog_table) {
-		name = catalog_table->name;
+		name = catalog_table->name.GetName();
 		return_stats.table_name = name;
 	}
 

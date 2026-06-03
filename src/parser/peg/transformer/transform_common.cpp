@@ -251,8 +251,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleType(PEGTrans
 			qualified_type_name.schema = qualified_type_name.catalog;
 			qualified_type_name.catalog = INVALID_CATALOG;
 		}
-		return make_uniq<TypeExpression>(qualified_type_name.catalog, qualified_type_name.schema,
-		                                 qualified_type_name.name, std::move(children));
+		return make_uniq<TypeExpression>(qualified_type_name.catalog.GetName(), qualified_type_name.schema.GetName(),
+		                                 qualified_type_name.name.GetName(), std::move(children));
 	}
 	if (type_or_character_pr.name == "CharacterType") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(type_or_character_pr);

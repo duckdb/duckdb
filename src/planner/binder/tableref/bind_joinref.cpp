@@ -192,7 +192,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding->GetColumnNames()) {
-				lhs_columns.insert(column_name);
+				lhs_columns.insert(column_name.GetName());
 			}
 		}
 		// now bind the rhs
@@ -245,7 +245,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);
-			extra_using_columns = ref.using_columns;
+			extra_using_columns = IdentifiersToStrings(ref.using_columns);
 		}
 		break;
 

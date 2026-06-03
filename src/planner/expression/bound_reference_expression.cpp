@@ -21,7 +21,7 @@ string BoundReferenceExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetName();
 	}
 	return "#" + to_string(index);
 }
@@ -39,7 +39,7 @@ hash_t BoundReferenceExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundReferenceExpression::Copy() const {
-	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
+	return make_uniq<BoundReferenceExpression>(alias.GetName(), return_type, index);
 }
 
 } // namespace duckdb

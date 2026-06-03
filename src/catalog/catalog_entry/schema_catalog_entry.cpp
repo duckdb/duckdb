@@ -11,7 +11,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema.GetName()) {
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -30,10 +30,10 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
-		auto entry_score = StringUtil::SimilarityRating(entry.name, lookup_info.GetEntryName());
+		auto entry_score = StringUtil::SimilarityRating(entry.name.GetName(), lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = entry.name;
+			result.name = entry.name.GetName();
 		}
 	});
 	return result;

@@ -108,14 +108,19 @@ public:
 	//! Get the SystemCatalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetSystemCatalog(DatabaseInstance &db);
 	//! Get the specified Catalog from the ClientContext
+	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const Identifier &catalog_name);
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
 	//! Get the specified Catalog from the ClientContext
+	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name);
 	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
+	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const Identifier &catalog_name);
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const string &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
+	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(CatalogEntryRetriever &retriever,
+	                                                        const Identifier &catalog_name);
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(CatalogEntryRetriever &retriever,
 	                                                        const string &catalog_name);
 	//! Get the specific Catalog from the AttachedDatabase
@@ -245,51 +250,55 @@ public:
 	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
 	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema);
 
+	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const string &schema);
+	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const Identifier &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup);
-	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const string &catalog_name,
+	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                const EntryLookupInfo &schema_lookup);
-	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &schema,
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &schema,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema,
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const Identifier &schema,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &catalog_name,
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                             const EntryLookupInfo &schema_lookup,
 	                                                             OnEntryNotFound if_not_found);
-	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const string &catalog_name,
-	                                                const string &schema);
-	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &catalog_name,
-	                                                             const string &schema, OnEntryNotFound if_not_found);
+	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &catalog_name,
+	                                                const Identifier &schema);
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
+	                                                             const Identifier &schema,
+	                                                             OnEntryNotFound if_not_found);
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(CatalogEntryRetriever &retriever,
-	                                                             const string &catalog_name,
+	                                                             const Identifier &catalog_name,
 	                                                             const EntryLookupInfo &schema_lookup,
 	                                                             OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const Identifier &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType catalog_type,
-	                                               const string &schema, const string &name,
+	                                               const Identifier &schema, const Identifier &name,
 	                                               OnEntryNotFound if_not_found);
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &schema,
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const Identifier &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info);
+	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const Identifier &schema,
+	                                  const EntryLookupInfo &lookup_info);
 	//! Gets the "catalog.schema.name" entry of the specified type, if entry does not exist behavior depends on
 	//! OnEntryNotFound
-	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &catalog,
-	                                                      const string &schema, const EntryLookupInfo &lookup_info,
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const Identifier &catalog,
+	                                                      const Identifier &schema, const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
-	                                                      const string &schema, const EntryLookupInfo &lookup_info,
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const Identifier &catalog,
+	                                                      const Identifier &schema, const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const string &catalog, const string &schema,
-	                                         const EntryLookupInfo &lookup_info);
+	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const Identifier &catalog,
+	                                         const Identifier &schema, const EntryLookupInfo &lookup_info);
 
 	template <class T>
-	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
+	optional_ptr<T> GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
 		EntryLookupInfo lookup_info(T::Type, name, error_context);
 		auto entry = GetEntry(context, schema_name, lookup_info, if_not_found);
@@ -303,16 +312,16 @@ public:
 	}
 
 	template <class T>
-	T &GetEntry(ClientContext &context, const string &schema_name, const string &name,
+	T &GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
 	            QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry = GetEntry<T>(context, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 		return *entry;
 	}
 
-	static CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
-	                              const string &schema_name, const string &name);
-	CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema_name,
-	                       const string &name);
+	static CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
+	                              const Identifier &schema_name, const Identifier &name);
+	CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const Identifier &schema_name,
+	                       const Identifier &name);
 
 	//! Append a scalar or aggregate function to the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
@@ -380,7 +389,7 @@ public:
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
 	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
-	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
+	DUCKDB_API void SetDefaultTable(const Identifier &schema, const Identifier &name);
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
 
@@ -392,8 +401,8 @@ public:
 
 public:
 	template <class T>
-	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
-	                                const string &name, OnEntryNotFound if_not_found,
+	static optional_ptr<T> GetEntry(ClientContext &context, const Identifier &catalog_name,
+	                                const Identifier &schema_name, const Identifier &name, OnEntryNotFound if_not_found,
 	                                QueryErrorContext error_context = QueryErrorContext()) {
 		EntryLookupInfo lookup_info(T::Type, name, error_context);
 		auto entry = GetEntry(context, catalog_name, schema_name, lookup_info, if_not_found);
@@ -406,8 +415,8 @@ public:
 		return &entry->template Cast<T>();
 	}
 	template <class T>
-	static T &GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
-	                   const string &name, QueryErrorContext error_context = QueryErrorContext()) {
+	static T &GetEntry(ClientContext &context, const Identifier &catalog_name, const Identifier &schema_name,
+	                   const Identifier &name, QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry =
 		    GetEntry<T>(context, catalog_name, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 		return *entry;

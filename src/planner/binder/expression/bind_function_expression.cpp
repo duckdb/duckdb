@@ -498,7 +498,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			D_ASSERT(column_names.size() == column_types.size());
 
 			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1].GetName(),
 				                                                              column_types[column_idx - 1], offset);
 				offset++;
 				bound_function_expr.GetChildrenMutable().push_back(std::move(bound_lambda_param));

@@ -30,18 +30,18 @@ const string &BindingAlias::GetAlias() const {
 	if (!IsSet()) {
 		throw InternalException("Calling BindingAlias::GetAlias on a non-set alias");
 	}
-	return alias;
+	return alias.GetName();
 }
 
 string BindingAlias::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+		result += SQLIdentifier(catalog.GetName()) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+		result += SQLIdentifier(schema.GetName()) + ".";
 	}
-	result += SQLIdentifier(alias);
+	result += SQLIdentifier(alias.GetName());
 	return result;
 }
 
@@ -50,21 +50,20 @@ bool BindingAlias::Matches(const BindingAlias &other) const {
 	// i.e. "tbl" matches "catalog.schema.tbl"
 	// but "schema2.tbl" does not match "schema.tbl"
 	if (!other.catalog.empty()) {
-		if (!StringUtil::CIEquals(catalog, other.catalog)) {
+		if (catalog != other.catalog) {
 			return false;
 		}
 	}
 	if (!other.schema.empty()) {
-		if (!StringUtil::CIEquals(schema, other.schema)) {
+		if (schema != other.schema) {
 			return false;
 		}
 	}
-	return StringUtil::CIEquals(alias, other.alias);
+	return alias == other.alias;
 }
 
 bool BindingAlias::operator==(const BindingAlias &other) const {
-	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) &&
-	       StringUtil::CIEquals(alias, other.alias);
+	return catalog == other.catalog && schema == other.schema && alias == other.alias;
 }
 
 } // namespace duckdb

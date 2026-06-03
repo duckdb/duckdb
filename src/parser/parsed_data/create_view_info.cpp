@@ -16,12 +16,12 @@ CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_na
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
-    : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
+    : CreateViewInfo(schema.catalog.GetName(), schema.name.GetName(), std::move(view_name)) {
 }
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? "" : catalog, schema, view_name);
+	result += QualifierToString(temporary ? "" : catalog.GetName(), schema.GetName(), view_name.GetName());
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -38,7 +38,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
+	auto result = make_uniq<CreateViewInfo>(catalog.GetName(), schema.GetName(), view_name.GetName());
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;

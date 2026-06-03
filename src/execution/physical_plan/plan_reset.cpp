@@ -5,7 +5,7 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalReset &op) {
-	return Make<PhysicalReset>(op.name, op.scope, op.estimated_cardinality);
+	return Make<PhysicalReset>(op.name.GetName(), op.scope, op.estimated_cardinality);
 }
 
 } // namespace duckdb

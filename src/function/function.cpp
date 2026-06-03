@@ -84,7 +84,7 @@ string FunctionSignature::ToString() const {
 }
 
 string SimpleFunction::ToString() const {
-	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name.GetName(), schema_name.GetName())) {
 		return StringUtil::Format("%s.%s.%s%s", catalog_name, schema_name, name, signature.ToString());
 	}
 	return name + signature.ToString();
@@ -99,7 +99,8 @@ SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
 string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, named_parameters);
+	return Function::CallToString(catalog_name.GetName(), schema_name.GetName(), name.GetName(), arguments,
+	                              named_parameters);
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
@@ -202,11 +203,12 @@ hash_t BoundSimpleFunction::Hash() const {
 }
 
 string BoundSimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
+	return Function::CallToString(catalog_name.GetName(), schema_name.GetName(), name.GetName(), arguments,
+	                              LogicalTypeId::INVALID, return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {
-	return type == other.type && StringUtil::CIEquals(name, other.name);
+	return type == other.type && name == other.name;
 }
 
 bool FunctionParameter::operator!=(const FunctionParameter &other) const {

@@ -17,7 +17,7 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr
 }
 
 ColumnDefinition ColumnDefinition::Copy() const {
-	ColumnDefinition copy(name, type);
+	ColumnDefinition copy(name.GetName(), type);
 	copy.oid = oid;
 	copy.storage_oid = storage_oid;
 	copy.expression = expression ? expression->Copy() : nullptr;
@@ -65,7 +65,7 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 }
 
 const string &ColumnDefinition::Name() const {
-	return name;
+	return name.GetName();
 }
 void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
@@ -201,7 +201,7 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 }
 
 string ColumnDefinition::GetName() const {
-	return name;
+	return name.GetName();
 }
 
 LogicalType ColumnDefinition::GetType() const {

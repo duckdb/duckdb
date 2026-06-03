@@ -122,7 +122,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 		database_name.Append(Value(type_entry.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
-		schema_name.Append(Value(type_entry.schema.name));
+		schema_name.Append(Value(type_entry.schema.name.GetName()));
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.schema.oid)));
 		int64_t oid;
 		if (type_entry.internal) {
@@ -138,7 +138,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			oid_val = Value();
 		}
 		type_oid.Append(oid_val);
-		type_name.Append(Value(type_entry.name));
+		type_name.Append(Value(type_entry.name.GetName()));
 		auto internal_type = type.InternalType();
 		type_size.Append(internal_type == PhysicalType::INVALID
 		                     ? Value()

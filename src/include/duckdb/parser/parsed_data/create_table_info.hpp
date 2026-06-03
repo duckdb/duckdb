@@ -22,7 +22,7 @@ struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, string name);
 
 	//! Table name to insert to
-	string table;
+	Identifier table;
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

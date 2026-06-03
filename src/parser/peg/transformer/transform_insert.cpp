@@ -16,7 +16,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 	node.cte_map = std::move(with_clause);
 	node.catalog = insert_target->catalog_name;
 	node.schema = insert_target->schema_name;
-	node.table = insert_target->table_name;
+	node.table = insert_target->table_name.GetName();
 	node.column_order = by_name_or_position;
 	node.columns = insert_column_list;
 	if (!node.columns.empty() && insert_values.default_values) {

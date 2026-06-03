@@ -142,7 +142,7 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &inpu
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                            const string &entry_name) {
-	auto info = GetDefaultTableFunction(schema.name, entry_name);
+	auto info = GetDefaultTableFunction(schema.name.GetName(), entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}

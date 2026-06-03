@@ -655,10 +655,10 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.schema.catalog.GetOid())));
 
 	// schema_name, LogicalType::VARCHAR
-	output.data[col++].Append(Value(function.schema.name));
+	output.data[col++].Append(Value(function.schema.name.GetName()));
 
 	// function_name, LogicalType::VARCHAR
-	output.data[col++].Append(Value(function.name));
+	output.data[col++].Append(Value(function.name.GetName()));
 
 	// alias_of, LogicalType::VARCHAR
 	output.data[col++].Append(

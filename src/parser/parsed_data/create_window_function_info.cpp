@@ -3,7 +3,7 @@
 namespace duckdb {
 
 CreateWindowFunctionInfo::CreateWindowFunctionInfo(WindowFunction function)
-    : CreateFunctionInfo(CatalogType::WINDOW_FUNCTION_ENTRY), functions(function.name) {
+    : CreateFunctionInfo(CatalogType::WINDOW_FUNCTION_ENTRY), functions(function.name.GetName()) {
 	name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;

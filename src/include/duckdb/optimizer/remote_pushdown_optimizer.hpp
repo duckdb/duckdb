@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -105,8 +106,8 @@ private:
 	unique_ptr<RemotePushdownState> owned_pushdown_state;
 	RemotePushdownState &pushdown_state;
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
-	case_insensitive_set_t local_table_names;
+	identifier_set_t local_table_names;
 	//! CTE name to catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
-	case_insensitive_map_t<CatalogPushdownResult> cte_results;
+	identifier_map_t<CatalogPushdownResult> cte_results;
 };
 } // namespace duckdb

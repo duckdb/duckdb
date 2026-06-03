@@ -45,7 +45,7 @@ static void duckdb_prepare_param_index_to_name_map_internal(PreparedStatementWra
 	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
 	for (auto &kv : named_param_map) {
-		cache[kv.second] = kv.first;
+		cache[kv.second] = kv.first.GetName();
 	}
 }
 
@@ -266,7 +266,7 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 	}
 	auto name = std::string(name_p);
 	for (auto &pair : wrapper->statement->named_param_map) {
-		if (duckdb::StringUtil::CIEquals(pair.first, name)) {
+		if (pair.first == name) {
 			*param_idx_out = pair.second;
 			return DuckDBSuccess;
 		}

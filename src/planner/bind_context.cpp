@@ -62,11 +62,11 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
 		for (auto &name : binding.GetColumnNames()) {
-			double distance = StringUtil::SimilarityRating(name, column_name);
+			double distance = StringUtil::SimilarityRating(name.GetName(), column_name);
 			// check if we need to qualify the column
-			auto matching_bindings = GetMatchingBindings(name);
+			auto matching_bindings = GetMatchingBindings(name.GetName());
 			if (matching_bindings.size() > 1) {
-				scores.emplace_back(binding.GetAlias() + "." + name, distance);
+				scores.emplace_back(binding.GetAlias() + "." + name.GetName(), distance);
 			} else {
 				scores.emplace_back(name, distance);
 			}
@@ -160,7 +160,7 @@ string BindContext::GetActualColumnName(Binding &binding, const string &column_n
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding.GetAlias(),
 		                        column_name);
 	} // LCOV_EXCL_STOP
-	return binding.GetColumnNames()[binding_index];
+	return binding.GetColumnNames()[binding_index].GetName();
 }
 
 string BindContext::GetActualColumnName(const BindingAlias &binding_alias, const string &column_name) {
@@ -247,7 +247,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	if (column_index < column_names.size() && column_names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->SetAlias(column_names[column_index]);
+		result->SetAlias(column_names[column_index].GetName());
 	}
 	return std::move(result);
 }
@@ -387,12 +387,13 @@ BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
 		throw InternalException("Cannot get binding alias from column ref unless it has 2..4 entries");
 	}
 	if (colref.ColumnNames().size() >= 4) {
-		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1], colref.ColumnNames()[2]);
+		return BindingAlias(colref.ColumnNames()[0].GetName(), colref.ColumnNames()[1].GetName(),
+		                    colref.ColumnNames()[2].GetName());
 	}
 	if (colref.ColumnNames().size() == 3) {
-		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1]);
+		return BindingAlias(colref.ColumnNames()[0].GetName(), colref.ColumnNames()[1].GetName());
 	}
-	return BindingAlias(colref.ColumnNames()[0]);
+	return BindingAlias(colref.ColumnNames()[0].GetName());
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
@@ -424,7 +425,7 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 		}
 		if (current_position < entry_column_count) {
 			table_name = binding.GetAlias();
-			column_name = column_names[current_position];
+			column_name = column_names[current_position].GetName();
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -465,7 +466,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 
 bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
                   unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
-	auto replace_entry = expr.ReplaceList().find(qualified_name.column);
+	auto replace_entry = expr.ReplaceList().find(qualified_name.column.GetName());
 	if (replace_entry != expr.ReplaceList().end()) {
 		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
 			new_expr = replace_entry->second->Copy();
@@ -498,12 +499,12 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &column_names = binding.GetColumnNames();
 			auto &binding_alias = binding.GetBindingAlias();
 			for (auto &column_name : column_names) {
-				QualifiedColumnName qualified_column(binding_alias, column_name);
+				QualifiedColumnName qualified_column(binding_alias, column_name.GetName());
 				if (CheckExclusionList(expr, qualified_column, exclusion_info)) {
 					continue;
 				}
 				// check if this column is a USING column
-				auto using_binding_ptr = GetUsingBinding(column_name, binding_alias);
+				auto using_binding_ptr = GetUsingBinding(column_name.GetName(), binding_alias);
 				if (using_binding_ptr) {
 					auto &using_binding = *using_binding_ptr;
 					// it is!
@@ -519,16 +520,16 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
 							coalesce->Cast<OperatorExpression>().GetChildrenMutable().push_back(
-							    make_uniq<ColumnRefExpression>(column_name, child_binding));
+							    make_uniq<ColumnRefExpression>(column_name.GetName(), child_binding));
 						}
-						coalesce->SetAlias(column_name);
+						coalesce->SetAlias(column_name.GetName());
 						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
 							new_select_list.push_back(std::move(coalesce));
 						}
 					} else {
 						// primary binding: output the qualified column ref
 						auto new_expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(
-						    column_name, using_binding.primary_binding);
+						    column_name.GetName(), using_binding.primary_binding);
 						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
 							new_select_list.push_back(std::move(new_expr));
 						}
@@ -536,8 +537,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				auto new_expr =
-				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr = CreateColumnReference(binding_alias, column_name.GetName(),
+				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
@@ -584,12 +585,12 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		} else {
 			for (auto &column_name : column_names) {
-				QualifiedColumnName qualified_name(binding_alias, column_name);
+				QualifiedColumnName qualified_name(binding_alias, column_name.GetName());
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				auto new_expr =
-				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr = CreateColumnReference(binding_alias, column_name.GetName(),
+				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
@@ -630,7 +631,7 @@ void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalT
 		auto &column_types = binding.GetColumnTypes();
 		D_ASSERT(column_names.size() == column_types.size());
 		for (idx_t i = 0; i < column_names.size(); i++) {
-			result_names.push_back(column_names[i]);
+			result_names.push_back(column_names[i].GetName());
 			result_types.push_back(column_types[i]);
 		}
 	}
@@ -683,7 +684,7 @@ static string AddColumnNameToBinding(const string &base_name, case_insensitive_s
 }
 
 vector<string> BindContext::AliasColumnNames(const string &table_name, const vector<string> &names,
-                                             const vector<string> &column_aliases) {
+                                             const vector<Identifier> &column_aliases) {
 	vector<string> result;
 	if (column_aliases.size() > names.size()) {
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
@@ -692,7 +693,7 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 	case_insensitive_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
-		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
+		result.push_back(AddColumnNameToBinding(column_aliases[i].GetName(), current_names));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
 	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
@@ -782,7 +783,7 @@ void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 				using_set.bindings.erase(it, using_set.bindings.end());
 				if (using_set.bindings.empty() || using_set.primary_binding == alias) {
 					// if the using column is no longer referred to - remove it entirely
-					removed_using_columns.push_back(using_sets.first);
+					removed_using_columns.push_back(using_sets.first.GetName());
 				}
 			}
 		}

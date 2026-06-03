@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 
@@ -66,22 +67,22 @@ public:
 
 public:
 	const string &Catalog() const {
-		return catalog;
+		return catalog.GetName();
 	}
 	string &CatalogMutable() {
-		return catalog;
+		return catalog.GetNameMutable();
 	}
 	const string &Schema() const {
-		return schema;
+		return schema.GetName();
 	}
 	string &SchemaMutable() {
-		return schema;
+		return schema.GetNameMutable();
 	}
 	const string &FunctionName() const {
-		return function_name;
+		return function_name.GetName();
 	}
 	string &FunctionNameMutable() {
-		return function_name;
+		return function_name.GetNameMutable();
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;
@@ -354,11 +355,11 @@ public:
 
 private:
 	//! Catalog of the aggregate function
-	string catalog;
+	Identifier catalog;
 	//! Schema of the aggregate function
-	string schema;
+	Identifier schema;
 	//! Name of the aggregate function
-	string function_name;
+	Identifier function_name;
 	//! The child expression of the main window function
 	vector<unique_ptr<ParsedExpression>> children;
 	//! The set of expressions to partition by

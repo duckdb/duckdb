@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -25,7 +26,7 @@ public:
 	      scope(scope_p) {
 	}
 
-	std::string name;
+	Identifier name;
 	Value value;
 	SetScope scope;
 

@@ -115,7 +115,7 @@ public:
 	}
 
 	const string &GetName() const {
-		return name;
+		return name.GetName();
 	}
 	void SetName(const string &new_name) {
 		name = new_name;

@@ -29,7 +29,7 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	result->catalog = catalog.GetName();
 	result->schema = schema.name;
-	result->trigger_name = name;
+	result->trigger_name = name.GetName();
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
@@ -47,7 +47,7 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 string TriggerCatalogEntry::ToSQL() const {
 	duckdb::stringstream ss;
 	ss << "CREATE TRIGGER ";
-	ss << SQLIdentifier(name);
+	ss << SQLIdentifier(name.GetName());
 	ss << " ";
 	ss << EnumUtil::ToString(timing);
 	ss << " ";
@@ -62,7 +62,8 @@ string TriggerCatalogEntry::ToSQL() const {
 		}
 	}
 	ss << " ON ";
-	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
+	ss << ParseInfo::QualifierToString(base_table->catalog_name.GetName(), base_table->schema_name.GetName(),
+	                                   base_table->table_name.GetName());
 	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
 		ss << " REFERENCING";
 		if (!referencing_new_table.empty()) {

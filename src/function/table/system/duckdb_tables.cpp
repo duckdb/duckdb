@@ -150,9 +150,9 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 
 		database_name.Append(Value(table.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.catalog.GetOid())));
-		schema_name.Append(Value(table.schema.name));
+		schema_name.Append(Value(table.schema.name.GetName()));
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.schema.oid)));
-		table_name.Append(Value(table.name));
+		table_name.Append(Value(table.name.GetName()));
 		table_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.oid)));
 		comment.Append(Value(table.comment));
 		tags.Append(Value::MAP(table.tags));

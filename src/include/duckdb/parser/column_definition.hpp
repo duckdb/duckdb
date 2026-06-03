@@ -93,7 +93,7 @@ public:
 
 private:
 	//! The name of the entry
-	string name;
+	Identifier name;
 	//! The type of the column
 	LogicalType type;
 	//! Compression Type used for this column

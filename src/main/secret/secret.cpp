@@ -257,7 +257,7 @@ bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 }
 
 void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict) {
-	if (ProviderExists(function.provider)) {
+	if (ProviderExists(function.provider.GetName())) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw InternalException(
 			    "Attempted to override a Create Secret Function with OnCreateConflict::ERROR_ON_CONFLICT for: '%s'",

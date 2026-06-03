@@ -34,9 +34,10 @@ static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, Ta
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	// look up the table name in the catalog
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
 
-	auto &entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+	auto &entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog.GetName(), qname.schema.GetName(),
+	                                                   qname.name.GetName());
 	if (entry.type != CatalogType::TABLE_ENTRY) {
 		throw NotImplementedException("Invalid Catalog type passed to table_sample()");
 	}

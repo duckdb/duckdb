@@ -63,7 +63,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 		throw ParserException("Empty table name not supported");
 	}
 	// Use appropriate constructor
-	auto info = make_uniq<CreateTableInfo>(table_name.catalog, table_name.schema, table_name.name);
+	auto info = make_uniq<CreateTableInfo>(table_name.catalog.GetName(), table_name.schema.GetName(),
+	                                       table_name.name.GetName());
 
 	bool if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -303,7 +304,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				}
 			} else if (cc_entry.constraint_name == "ForeignKeyConstraint") {
 				auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
-				fk_constraint.fk_columns.push_back(qualified_name.name);
+				fk_constraint.fk_columns.push_back(qualified_name.name.GetName());
 				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (generated_opt.HasResult()) {
@@ -346,7 +347,8 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 			                      qualified_name.name);
 		}
 
-		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
+		ColumnDefinition col(qualified_name.name.GetName(), type, std::move(generated.expr),
+		                     TableColumnType::GENERATED);
 		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
 			throw ParserException("Not allowed to set default on a generated column");
@@ -356,7 +358,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		return result;
 	}
 
-	ColumnDefinition col(qualified_name.name, type);
+	ColumnDefinition col(qualified_name.name.GetName(), type);
 
 	if (column_constraint.default_value) {
 		col.SetDefaultValue(std::move(column_constraint.default_value));
@@ -486,8 +488,8 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	ForeignKeyInfo fk_info;
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
-	fk_info.schema = base_table->schema_name;
-	fk_info.table = base_table->table_name;
+	fk_info.schema = base_table->schema_name.GetName();
+	fk_info.table = base_table->table_name.GetName();
 	fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 	vector<string> pk_list;
 	auto &col_list_opt = list_pr.Child<OptionalParseResult>(2);

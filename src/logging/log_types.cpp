@@ -201,7 +201,7 @@ LogicalType CheckpointLogType::GetLogType() {
 string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op_name,
                                     vector<Value> map_keys, vector<Value> map_values) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", db.name.GetName()},
 	    {"schema", table.GetSchemaName()},
 	    {"table", table.GetTableName()},
 	    {"type", op_name},
@@ -247,7 +247,7 @@ LogicalType TransactionLogType::GetLogType() {
 string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
                                                transaction_t transaction_id) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", db.name.GetName()},
 	    {"type", log_type},
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};

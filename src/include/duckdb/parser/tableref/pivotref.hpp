@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 
@@ -19,7 +20,7 @@ struct PivotColumnEntry {
 	//! The expression (UNPIVOT only)
 	unique_ptr<ParsedExpression> expr;
 	//! The alias of the pivot column entry
-	string alias;
+	Identifier alias;
 
 	bool Equals(const PivotColumnEntry &other) const;
 	PivotColumnEntry Copy() const;

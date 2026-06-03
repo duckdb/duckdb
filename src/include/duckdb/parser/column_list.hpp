@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -63,7 +64,7 @@ public:
 private:
 	vector<ColumnDefinition> columns;
 	//! A map of column name to column index
-	case_insensitive_map_t<column_t> name_map;
+	identifier_map_t<column_t> name_map;
 	//! The set of physical columns
 	vector<idx_t> physical_columns;
 	//! Allow duplicate names or not

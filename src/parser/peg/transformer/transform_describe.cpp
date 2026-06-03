@@ -27,11 +27,11 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
                                                                  const QualifiedName &qualified_name) {
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = ShowType::SHOW_FROM;
-	if (!IsInvalidCatalog(qualified_name.catalog)) {
+	if (!IsInvalidCatalog(qualified_name.catalog.GetName())) {
 		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
 		                      "\"SHOW TABLES FROM database.schema\"");
 	}
-	if (IsInvalidSchema(qualified_name.schema)) {
+	if (IsInvalidSchema(qualified_name.schema.GetName())) {
 		showref->schema_name = qualified_name.name;
 	} else {
 		showref->catalog_name = qualified_name.schema;
@@ -71,15 +71,15 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 
 			if (showref->show_type == ShowType::SHOW_FROM) {
 				// Logic for SHOW TABLES FROM [database].[schema]
-				if (IsInvalidSchema(base_table.schema_name)) {
+				if (IsInvalidSchema(base_table.schema_name.GetName())) {
 					showref->schema_name = base_table.table_name;
 				} else {
 					showref->catalog_name = base_table.schema_name;
 					showref->schema_name = base_table.table_name;
 				}
-			} else if (IsInvalidSchema(base_table.schema_name)) {
+			} else if (IsInvalidSchema(base_table.schema_name.GetName())) {
 				// Logic for unqualified relations (databases, tables, variables)
-				auto table_name = StringUtil::Lower(base_table.table_name);
+				auto table_name = StringUtil::Lower(base_table.table_name.GetName());
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
 				    table_name == "variables") {
 					showref->table_name = "\"" + table_name + "\"";

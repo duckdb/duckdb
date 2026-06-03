@@ -11,6 +11,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -507,6 +508,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, string>::value, T>::type Read() {
 		return ReadString();
+	}
+
+	// Deserialize an Identifier (stored identically to a plain string)
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type Read() {
+		return Identifier(ReadString());
 	}
 
 	// Deserialize a Enum

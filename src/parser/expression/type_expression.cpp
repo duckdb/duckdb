@@ -24,10 +24,10 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 string TypeExpression::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+		result += SQLIdentifier(catalog.GetName()) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+		result += SQLIdentifier(schema.GetName()) + ".";
 	}
 
 	auto &params = children;

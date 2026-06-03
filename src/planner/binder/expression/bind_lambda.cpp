@@ -184,8 +184,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 				if (ProjectionIndex(column_idx) == bound_lambda_ref.Binding().column_index) {
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
-					replacement =
-					    make_uniq<BoundReferenceExpression>(column_names[column_idx], column_types[column_idx], index);
+					replacement = make_uniq<BoundReferenceExpression>(column_names[column_idx].GetName(),
+					                                                  column_types[column_idx], index);
 					return;
 				}
 			}

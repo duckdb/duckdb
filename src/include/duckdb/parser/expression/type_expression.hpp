@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -26,13 +27,13 @@ public:
 		return type_name;
 	}
 	const string &GetSchema() const {
-		return schema;
+		return schema.GetName();
 	}
 	void SetSchema(string new_schema) {
 		schema = std::move(new_schema);
 	}
 	const string &GetCatalog() const {
-		return catalog;
+		return catalog.GetName();
 	}
 	void SetCatalog(string new_catalog) {
 		catalog = std::move(new_catalog);
@@ -61,8 +62,8 @@ private:
 	TypeExpression();
 
 	//! Qualified name parts
-	string catalog;
-	string schema;
+	Identifier catalog;
+	Identifier schema;
 	string type_name;
 
 	//! Children of the type expression (e.g. type parameters)

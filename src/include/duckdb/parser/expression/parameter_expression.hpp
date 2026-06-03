@@ -36,10 +36,10 @@ public:
 
 public:
 	const string &Identifier() const {
-		return identifier;
+		return identifier.GetName();
 	}
 	string &IdentifierMutable() {
-		return identifier;
+		return identifier.GetNameMutable();
 	}
 	bool IsScalar() const override {
 		return true;
@@ -59,6 +59,6 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 private:
-	string identifier;
+	duckdb::Identifier identifier;
 };
 } // namespace duckdb

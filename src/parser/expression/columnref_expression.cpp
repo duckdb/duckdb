@@ -34,8 +34,11 @@ ColumnRefExpression::ColumnRefExpression(string column_name)
 }
 
 ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
-      column_names(std::move(column_names_p)) {
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+	column_names.reserve(column_names_p.size());
+	for (auto &col_name : column_names_p) {
+		column_names.push_back(std::move(col_name));
+	}
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());
@@ -49,22 +52,22 @@ bool ColumnRefExpression::IsQualified() const {
 
 const string &ColumnRefExpression::GetColumnName() const {
 	D_ASSERT(column_names.size() <= 4);
-	return column_names.back();
+	return column_names.back().GetName();
 }
 
 const string &ColumnRefExpression::GetTableName() const {
 	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
 	if (column_names.size() == 4) {
-		return column_names[2];
+		return column_names[2].GetName();
 	}
 	if (column_names.size() == 3) {
-		return column_names[1];
+		return column_names[1].GetName();
 	}
-	return column_names[0];
+	return column_names[0].GetName();
 }
 
 string ColumnRefExpression::GetName() const {
-	return !alias.empty() ? alias : column_names.back();
+	return !alias.empty() ? alias.GetName() : column_names.back().GetName();
 }
 
 string ColumnRefExpression::ToString() const {
@@ -73,7 +76,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += SQLIdentifier(column_names[i]);
+		result += SQLIdentifier(column_names[i].GetName());
 	}
 	return result;
 }

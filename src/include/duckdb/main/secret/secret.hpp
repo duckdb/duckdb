@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -27,13 +28,13 @@ enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
 //! Input passed to a CreateSecretFunction
 struct CreateSecretInput {
 	//! type
-	string type;
+	Identifier type;
 	//! mode
-	string provider;
+	Identifier provider;
 	//! should the secret be persisted?
-	string storage_type;
+	Identifier storage_type;
 	//! (optional) alias provided by user
-	string name;
+	Identifier name;
 	//! (optional) scope provided by user
 	vector<string> scope;
 	//! (optional) named parameter map, each create secret function has defined it's own set of these
@@ -51,7 +52,7 @@ typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &contex
 class CreateSecretFunction {
 public:
 	string secret_type;
-	string provider;
+	Identifier provider;
 	create_secret_function_t function;
 	named_parameter_type_map_t named_parameters;
 };
@@ -69,9 +70,9 @@ public:
 
 protected:
 	//! Create Secret Function type name
-	string name;
+	Identifier name;
 	//! Maps of provider -> function
-	case_insensitive_map_t<CreateSecretFunction> functions;
+	identifier_map_t<CreateSecretFunction> functions;
 };
 
 //! Determines whether the secrets are allowed to be shown
@@ -80,7 +81,7 @@ enum class SecretDisplayType : uint8_t { REDACTED, UNREDACTED };
 //! Secret types contain the base settings of a secret
 struct SecretType {
 	//! Unique name identifying the secret type
-	string name;
+	Identifier name;
 	//! The deserialization function for the type
 	secret_deserializer_t deserializer;
 	//! Provider to use when non is specified
@@ -131,13 +132,13 @@ public:
 		return prefix_paths;
 	}
 	const string &GetType() const {
-		return type;
+		return type.GetName();
 	}
 	const string &GetProvider() const {
-		return provider;
+		return provider.GetName();
 	}
 	const string &GetName() const {
-		return name;
+		return name.GetName();
 	}
 	bool IsSerializable() const {
 		return serializable;
@@ -151,11 +152,11 @@ protected:
 	vector<string> prefix_paths;
 
 	//! Type of secret
-	string type;
+	Identifier type;
 	//! Provider of the secret
-	string provider;
+	Identifier provider;
 	//! Name of the secret
-	string name;
+	Identifier name;
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
 };
@@ -180,8 +181,8 @@ public:
 		serializable = true;
 	};
 	KeyValueSecret(KeyValueSecret &&secret) noexcept
-	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider),
-	                 std::move(secret.name)) {
+	    : BaseSecret(std::move(secret.prefix_paths), secret.type.GetName(), secret.provider.GetName(),
+	                 secret.name.GetName()) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;

@@ -19,7 +19,7 @@ string DetachInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += " " + SQLIdentifier(name);
+	result += " " + SQLIdentifier(name.GetName());
 	result += ";";
 	return result;
 }

@@ -42,7 +42,8 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
-    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name), bind_state(ViewBindState::UNBOUND) {
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name.GetName()),
+      bind_state(ViewBindState::UNBOUND) {
 	Initialize(info);
 }
 
@@ -74,7 +75,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		string &resolved_column_name = comment_on_column_info.column_name;
+		string &resolved_column_name = comment_on_column_info.column_name.GetNameMutable();
 		auto view_columns = GetColumnInfo();
 		if (view_columns) {
 			// if the view is bound - verify the name we are commenting on exists
@@ -84,7 +85,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 				// the column name might be a view alias - check those as well
 				auto alias_entry = std::find(aliases.begin(), aliases.end(), resolved_column_name);
 				if (alias_entry == aliases.end()) {
-					throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
+					throw BinderException("View \"%s\" does not have a column with name \"%s\"", name.GetName(),
 					                      resolved_column_name);
 				}
 				auto alias_index = NumericCast<idx_t>(std::distance(aliases.begin(), alias_entry));
@@ -163,8 +164,8 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	bind_thread = ThreadUtil::GetThreadId();
 	try {
 		auto columns = make_shared_ptr<ViewColumnInfo>();
-		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
-		                 columns->types, columns->names);
+		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name.GetName(), nullptr,
+		                 aliases, columns->types, columns->names);
 		view_columns.atomic_store(columns);
 	} catch (...) {
 		bind_state = prev_bind_state;

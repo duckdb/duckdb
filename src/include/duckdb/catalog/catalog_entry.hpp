@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
@@ -45,7 +46,7 @@ public:
 	//! Reference to the catalog set this entry is stored in
 	optional_ptr<CatalogSet> set;
 	//! The name of the entry
-	string name;
+	Identifier name;
 	//! Whether or not the object is deleted
 	bool deleted;
 	//! Whether or not the object is temporary and should not be added to the WAL

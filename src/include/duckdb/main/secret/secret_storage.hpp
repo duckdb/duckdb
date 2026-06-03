@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/common.hpp"
@@ -154,7 +155,7 @@ protected:
 	void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
-	case_insensitive_set_t persistent_secrets;
+	identifier_set_t persistent_secrets;
 	//! Path that is searched for secrets;
 	string secret_path;
 };

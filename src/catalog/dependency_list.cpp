@@ -42,9 +42,9 @@ LogicalDependency::LogicalDependency() : entry(), catalog() {
 
 static string GetSchema(CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name;
+		return entry.name.GetName();
 	}
-	return entry.ParentSchema().name;
+	return entry.ParentSchema().name.GetName();
 }
 
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {

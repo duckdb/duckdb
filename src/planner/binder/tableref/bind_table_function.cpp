@@ -140,7 +140,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			continue;
 		}
 
-		TableFunctionBinder binder(*this, context, table_function.name);
+		TableFunctionBinder binder(*this, context, table_function.name.GetName());
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (expr->HasParameter()) {
@@ -168,7 +168,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 
 static string GetAlias(const TableFunctionRef &ref) {
 	if (!ref.alias.empty()) {
-		return ref.alias;
+		return ref.alias.GetName();
 	}
 	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
@@ -183,7 +183,7 @@ static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_func
 	    !ref.column_name_alias.empty() || return_names.size() != 1) {
 		return;
 	}
-	return_names[0] = ref.alias;
+	return_names[0] = ref.alias.GetName();
 }
 
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
@@ -254,7 +254,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 				ci_return_names.insert(n);
 			}
 			for (auto &n : column_name_alias) {
-				ci_return_names.insert(n);
+				ci_return_names.insert(n.GetName());
 			}
 			while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
 				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
@@ -283,7 +283,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
-		return_names[i] = column_name_alias[i];
+		return_names[i] = column_name_alias[i].GetName();
 	}
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
@@ -321,8 +321,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
-			row_number->SetAlias(column_name_alias[return_names.size()]);
-			ordinality_alias = column_name_alias[return_names.size()];
+			row_number->SetAlias(column_name_alias[return_names.size()].GetName());
+			ordinality_alias = column_name_alias[return_names.size()].GetName();
 		} else {
 			row_number->SetAlias(ordinality_column_name);
 		}
@@ -396,7 +396,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 		auto bind_index = query.plan->GetRootIndex();
 		// string alias;
-		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias);
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias.GetName());
 
 		// remember ref here is TableFunctionRef and NOT base class
 		bind_context.AddSubquery(bind_index, alias, ref, query);
@@ -420,7 +420,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(*this);
-	auto best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
+	auto best_function_idx =
+	    function_binder.BindFunction(function.name.GetName(), function.functions, arguments, error);
 	if (!best_function_idx.IsValid()) {
 		error.AddQueryLocation(ref);
 		error.Throw();
@@ -428,7 +429,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 
 	// now check the named parameters
-	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
+	BindNamedParameters(table_function.named_parameters, named_parameters, error_context,
+	                    table_function.name.GetNameMutable());
 
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;

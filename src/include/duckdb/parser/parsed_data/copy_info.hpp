@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -27,11 +28,11 @@ public:
 	CopyInfo();
 
 	//! The catalog name to copy to/from
-	string catalog;
+	Identifier catalog;
 	//! The schema name to copy to/from
-	string schema;
+	Identifier schema;
 	//! The table name to copy to/from
-	string table;
+	Identifier table;
 	//! List of columns to copy to/from
 	vector<string> select_list;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)

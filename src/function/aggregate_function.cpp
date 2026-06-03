@@ -35,8 +35,8 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 
 BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
 	name = function.name;
-	schema_name = function.schema_name;
-	catalog_name = function.catalog_name;
+	schema_name = function.schema_name.GetName();
+	catalog_name = function.catalog_name.GetName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	properties = function.GetProperties();
@@ -60,8 +60,8 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
 	this->name = function.name;
-	this->schema_name = function.schema_name;
-	this->catalog_name = function.catalog_name;
+	this->schema_name = function.schema_name.GetName();
+	this->catalog_name = function.catalog_name.GetName();
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();

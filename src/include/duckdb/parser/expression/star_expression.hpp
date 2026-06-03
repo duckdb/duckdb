@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
@@ -26,10 +27,10 @@ public:
 
 public:
 	const string &RelationName() const {
-		return relation_name;
+		return relation_name.GetName();
 	}
 	string &RelationNameMutable() {
-		return relation_name;
+		return relation_name.GetNameMutable();
 	}
 	const qualified_column_set_t &ExcludeList() const {
 		return exclude_list;
@@ -83,7 +84,7 @@ public:
 
 private:
 	//! The relation name in case of tbl.*, or empty if this is a normal *
-	string relation_name;
+	Identifier relation_name;
 	//! List of columns to exclude from the STAR expression
 	qualified_column_set_t exclude_list;
 	//! List of columns to replace with another expression

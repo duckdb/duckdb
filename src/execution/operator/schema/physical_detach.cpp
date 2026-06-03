@@ -19,7 +19,7 @@ SourceResultType PhysicalDetach::GetDataInternal(ExecutionContext &context, Data
 
 	// Reject detach if the current transaction already has outstanding work on the database.
 	{
-		auto attached_db = db_manager.GetDatabase(info->name);
+		auto attached_db = db_manager.GetDatabase(info->name.GetName());
 		if (attached_db) {
 			auto &meta_transaction = MetaTransaction::Get(context.client);
 			if (meta_transaction.TryGetTransaction(*attached_db)) {
@@ -31,7 +31,7 @@ SourceResultType PhysicalDetach::GetDataInternal(ExecutionContext &context, Data
 		}
 	}
 
-	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
+	db_manager.DetachDatabase(context.client, info->name.GetName(), info->if_not_found);
 
 	return SourceResultType::FINISHED;
 }

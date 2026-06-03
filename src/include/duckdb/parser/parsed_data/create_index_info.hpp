@@ -22,9 +22,9 @@ struct CreateIndexInfo : public CreateInfo {
 	CreateIndexInfo(const CreateIndexInfo &info);
 
 	//! The table name of the underlying table
-	string table;
+	Identifier table;
 	//! The name of the index
-	string index_name;
+	Identifier index_name;
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;

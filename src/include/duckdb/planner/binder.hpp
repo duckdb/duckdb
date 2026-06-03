@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
@@ -180,7 +181,7 @@ struct GlobalBinderState {
 	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
 	unordered_set<string> table_names;
 	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
-	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
+	identifier_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
@@ -216,7 +217,7 @@ public:
 	//! vector)
 	CorrelatedColumns correlated_columns;
 	//! The alias for the currently processing subquery, if it exists
-	string alias;
+	Identifier alias;
 	//! Macro parameter bindings (if any)
 	optional_ptr<DummyBinding> macro_binding;
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
@@ -321,7 +322,7 @@ public:
 	void AddTableName(string table_name);
 	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
-	case_insensitive_map_t<unique_ptr<TableRef>> &GetReplacementScans();
+	identifier_map_t<unique_ptr<TableRef>> &GetReplacementScans();
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}

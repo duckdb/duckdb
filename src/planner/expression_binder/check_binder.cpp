@@ -35,9 +35,9 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	if (colref.ColumnNames()[0] == table_name) {
 		struct_start++;
 	}
-	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.ColumnNames().back());
+	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.ColumnNames().back().GetName());
 	for (idx_t i = struct_start; i + 1 < colref.ColumnNames().size(); i++) {
-		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i]);
+		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i].GetName());
 	}
 	return BindExpression(result, 0);
 }
@@ -59,11 +59,11 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (colref.ColumnNames().size() > 1) {
 		return BindQualifiedColumnName(colref, table);
 	}
-	if (!columns.ColumnExists(colref.ColumnNames()[0])) {
+	if (!columns.ColumnExists(colref.ColumnNames()[0].GetName())) {
 		throw BinderException("Table does not contain column %s referenced in check constraint!",
 		                      colref.ColumnNames()[0]);
 	}
-	auto &col = columns.GetColumn(colref.ColumnNames()[0]);
+	auto &col = columns.GetColumn(colref.ColumnNames()[0].GetName());
 	if (col.Generated()) {
 		auto bound_expression = col.GeneratedExpression().Copy();
 		return BindExpression(bound_expression, 0, false);

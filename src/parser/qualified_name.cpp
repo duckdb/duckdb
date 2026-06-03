@@ -5,7 +5,7 @@
 namespace duckdb {
 
 string QualifiedName::ToString() const {
-	return ParseInfo::QualifierToString(catalog, schema, name);
+	return ParseInfo::QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 }
 
 vector<string> QualifiedName::ParseComponents(const string &input) {
@@ -116,15 +116,15 @@ QualifiedColumnName QualifiedColumnName::Parse(string &input) {
 string QualifiedColumnName::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+		result += SQLIdentifier(catalog.GetName()) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+		result += SQLIdentifier(schema.GetName()) + ".";
 	}
 	if (!table.empty()) {
-		result += SQLIdentifier(table) + ".";
+		result += SQLIdentifier(table.GetName()) + ".";
 	}
-	result += SQLIdentifier(column);
+	result += SQLIdentifier(column.GetName());
 	return result;
 }
 
@@ -133,8 +133,7 @@ bool QualifiedColumnName::IsQualified() const {
 }
 
 bool QualifiedColumnName::operator==(const QualifiedColumnName &rhs) const {
-	return StringUtil::CIEquals(catalog, rhs.catalog) && StringUtil::CIEquals(schema, rhs.schema) &&
-	       StringUtil::CIEquals(table, rhs.table) && StringUtil::CIEquals(column, rhs.column);
+	return catalog == rhs.catalog && schema == rhs.schema && table == rhs.table && column == rhs.column;
 }
 
 } // namespace duckdb

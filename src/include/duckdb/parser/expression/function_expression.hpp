@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -32,22 +33,22 @@ public:
 
 public:
 	const string &Catalog() const {
-		return catalog;
+		return catalog.GetName();
 	}
 	string &CatalogMutable() {
-		return catalog;
+		return catalog.GetNameMutable();
 	}
 	const string &Schema() const {
-		return schema;
+		return schema.GetName();
 	}
 	string &SchemaMutable() {
-		return schema;
+		return schema.GetNameMutable();
 	}
 	const string &FunctionName() const {
-		return function_name;
+		return function_name.GetName();
 	}
 	string &FunctionNameMutable() {
-		return function_name;
+		return function_name.GetNameMutable();
 	}
 	bool IsOperator() const {
 		return is_operator;
@@ -169,11 +170,11 @@ public:
 
 private:
 	//! Catalog of the function
-	string catalog;
+	Identifier catalog;
 	//! Schema of the function
-	string schema;
+	Identifier schema;
 	//! Function name
-	string function_name;
+	Identifier function_name;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! List of arguments to the function

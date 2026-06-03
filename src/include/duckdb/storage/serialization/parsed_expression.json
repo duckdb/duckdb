@@ -29,7 +29,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string",
+        "type": "Identifier",
         "equals_skip": true
       },
       {
@@ -233,14 +233,14 @@
       {
         "id": 200,
         "name": "function_name",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "FunctionNameMutable()",
         "accessor": "FunctionName()"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "SchemaMutable()",
         "accessor": "Schema()"
       },
@@ -293,7 +293,7 @@
       {
         "id": 208,
         "name": "catalog",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "CatalogMutable()",
         "accessor": "Catalog()"
       }
@@ -355,7 +355,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "Identifier"
+        "type": "duckdb::Identifier"
       }
     ]
   },
@@ -470,17 +470,17 @@
       {
         "id": 200,
         "name": "function_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -597,12 +597,12 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,

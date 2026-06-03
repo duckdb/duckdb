@@ -64,7 +64,8 @@ static const char *TryGetEnv(const char *name) {
 
 unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(ClientContext &context,
                                                                           CreateSecretInput &input) {
-	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
+	auto secret =
+	    make_uniq<KeyValueSecret>(input.scope, input.type.GetName(), input.provider.GetName(), input.name.GetName());
 
 	auto http_proxy = TryGetEnv("http_proxy");
 	if (http_proxy) {
@@ -96,7 +97,8 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(Client
 
 unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(ClientContext &context,
                                                                              CreateSecretInput &input) {
-	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
+	auto secret =
+	    make_uniq<KeyValueSecret>(input.scope, input.type.GetName(), input.provider.GetName(), input.name.GetName());
 
 	secret->TrySetValue("verify_ssl", input);
 	secret->TrySetValue("http_proxy", input);

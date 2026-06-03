@@ -34,8 +34,8 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
-	if (!IsInvalidSchema(schema)) {
-		ss << SQLIdentifier(schema) << ".";
+	if (!IsInvalidSchema(schema.GetName())) {
+		ss << SQLIdentifier(schema.GetName()) << ".";
 	}
 	ss << SQLIdentifier(trigger_name);
 	ss << " ";

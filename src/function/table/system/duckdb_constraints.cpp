@@ -23,7 +23,7 @@ struct ConstraintEntry {
 			return;
 		}
 		auto binder = Binder::CreateBinder(context);
-		bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
+		bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name.GetName(), table.GetColumns());
 	}
 
 	TableCatalogEntry &table;
@@ -281,9 +281,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			database_name.Append(Value(table.schema.catalog.GetName()));
 			database_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.schema.catalog.GetOid())));
-			schema_name.Append(Value(table.schema.name));
+			schema_name.Append(Value(table.schema.name.GetName()));
 			schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.schema.oid)));
-			table_name.Append(Value(table.name));
+			table_name.Append(Value(table.name.GetName()));
 			table_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.oid)));
 
 			auto info = GetExtraConstraintInfo(table, *constraint);

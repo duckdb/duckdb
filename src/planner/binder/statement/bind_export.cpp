@@ -49,7 +49,7 @@ string SanitizeExportIdentifier(const string &str) {
 bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
 	for (auto &entry : ordered) {
 		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
-		if (StringUtil::CIEquals(table_entry.name, referenced_table)) {
+		if (StringUtil::CIEquals(table_entry.name.GetName(), referenced_table)) {
 			// The referenced table is already ordered
 			return true;
 		}
@@ -109,11 +109,11 @@ void ReorderTableEntries(catalog_entry_vector_t &tables) {
 }
 
 string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const string &extension) {
-	auto name = SanitizeExportIdentifier(table.name);
+	auto name = SanitizeExportIdentifier(table.name.GetName());
 	if (table.schema.name == DEFAULT_SCHEMA) {
 		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
 	}
-	auto schema = SanitizeExportIdentifier(table.schema.name);
+	auto schema = SanitizeExportIdentifier(table.schema.name.GetName());
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 

@@ -51,7 +51,7 @@ public:
 	const BindingAlias &GetBindingAlias();
 	TableIndex GetIndex();
 	const vector<LogicalType> &GetColumnTypes();
-	const vector<string> &GetColumnNames();
+	const vector<Identifier> &GetColumnNames();
 	idx_t GetColumnCount();
 	void SetColumnType(idx_t col_idx, LogicalType type);
 
@@ -88,9 +88,9 @@ protected:
 	//! The types of the bound columns
 	vector<LogicalType> types;
 	//! Column names of the subquery
-	vector<string> names;
+	vector<Identifier> names;
 	//! Name -> index for the names
-	case_insensitive_map_t<column_t> name_map;
+	identifier_map_t<column_t> name_map;
 };
 
 struct EntryBinding : public Binding {

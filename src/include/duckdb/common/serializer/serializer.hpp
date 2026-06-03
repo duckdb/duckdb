@@ -11,6 +11,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -383,6 +384,10 @@ protected:
 	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const char *str) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
+	//! Identifiers are serialized identically to a plain string (preserving the original casing)
+	void WriteValue(const Identifier &value) {
+		WriteValue(value.GetName());
+	}
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
 	}

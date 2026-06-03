@@ -49,9 +49,9 @@ DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), s
 
 string DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name;
+		return entry.name.GetName();
 	}
-	return entry.ParentSchema().name;
+	return entry.ParentSchema().name.GetName();
 }
 
 MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {
@@ -326,12 +326,12 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	auto &name = info.name;
 
 	// Lookup the schema
-	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
+	auto schema_entry = catalog.GetSchema(transaction, schema.GetName(), OnEntryNotFound::RETURN_NULL);
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
 		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto entry = schema_entry->GetEntry(transaction, type, name);
+	auto entry = schema_entry->GetEntry(transaction, type, name.GetName());
 	return entry;
 }
 
@@ -459,11 +459,11 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	auto &schema_catalog_set = duck_catalog.GetSchemaCatalogSet();
 
 	CatalogSet::EntryLookup lookup_result;
-	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
+	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema.GetName());
 
 	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
 		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-		EntryLookupInfo lookup_info(type, name);
+		EntryLookupInfo lookup_info(type, name.GetName());
 		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
 	}
 
@@ -570,7 +570,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	for (auto &entry : to_drop) {
 		auto set = entry.get().set;
 		D_ASSERT(set);
-		set->DropEntry(transaction, entry.get().name, cascade);
+		set->DropEntry(transaction, entry.get().name.GetName(), cascade);
 	}
 }
 
@@ -697,7 +697,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name, new_obj.name)) {
+	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name.GetName(), new_obj.name.GetName())) {
 		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
 		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);

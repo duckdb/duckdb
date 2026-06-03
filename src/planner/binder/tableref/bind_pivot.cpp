@@ -33,7 +33,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
 	for (auto &entry : pivot.entries) {
 		PivotValueElement new_value = current_value;
-		string name = entry.alias;
+		string name = entry.alias.GetName();
 		D_ASSERT(entry.values.size() == pivot.pivot_expressions.size());
 		for (idx_t v = 0; v < entry.values.size(); v++) {
 			auto &value = entry.values[v];
@@ -65,8 +65,8 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitiv
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.ColumnNames()[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
-			        macro_binding->HasMatchingBinding(child_colref.GetName())) {
+			    if (child_colref.ColumnNames()[0].GetName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+			        macro_binding && macro_binding->HasMatchingBinding(child_colref.GetName())) {
 				    throw ParameterNotResolvedException();
 			    }
 			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");
@@ -499,7 +499,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
 	result.bound_pivot.types = types;
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetName();
 	QueryResult::DeduplicateColumns(names);
 	bind_context.AddGenericBinding(result.bind_index, subquery_alias, names, types);
 
@@ -744,7 +744,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias;
+		unpivot_entry.alias = entry.alias.GetName();
 		for (auto &val : entry.values) {
 			auto column_name = val.ToString();
 			if (column_name.empty()) {
@@ -759,7 +759,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	vector<string> column_names;
 	if (TryExtractUnpivotList(*entry.expr, column_names)) {
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias;
+		unpivot_entry.alias = entry.alias.GetName();
 		for (auto &column_name : column_names) {
 			if (column_name.empty()) {
 				throw BinderException("UNPIVOT - empty column name not supported");
@@ -962,7 +962,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(unpivot_list_ref));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
-		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
+		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i].GetName() : ref.unpivot_names[i];
 		unnest_val_expr->SetAlias(unnest_name);
 		result_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
@@ -1015,21 +1015,21 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	auto root_index = result.plan->GetRootIndex();
 
 	MoveCorrelatedExpressions(*child_binder);
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetName();
 	SubqueryRef subquery_ref(nullptr, subquery_alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
 	if (where_clause) {
 		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
 		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
 		child_binder = Binder::CreateBinder(context, this);
-		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result);
+		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias.GetName(), subquery_ref, result);
 		auto where_query = make_uniq<SelectNode>();
 		where_query->select_list.push_back(make_uniq<StarExpression>());
 		where_query->where_clause = std::move(where_clause);
 		result = child_binder->BindSelectNode(*where_query, std::move(result));
 		root_index = result.plan->GetRootIndex();
 	}
-	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result);
+	bind_context.AddSubquery(root_index, subquery_ref.alias.GetName(), subquery_ref, result);
 	return result;
 }
 

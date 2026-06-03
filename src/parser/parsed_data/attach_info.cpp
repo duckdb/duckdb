@@ -34,7 +34,7 @@ string AttachInfo::ToString() const {
 		result += SQLString(path);
 	}
 	if (!name.empty()) {
-		result += " AS " + SQLIdentifier(name);
+		result += " AS " + SQLIdentifier(name.GetName());
 	}
 	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;

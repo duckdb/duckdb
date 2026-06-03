@@ -17,12 +17,12 @@
       {
         "id": 101,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 102,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
@@ -81,13 +81,13 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string",
+        "type": "Identifier",
         "property": "index_name"
       },
       {
         "id": 201,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -144,7 +144,7 @@
       {
         "id": 200,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -199,7 +199,7 @@
       {
         "id": 200,
         "name": "view_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -250,7 +250,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -271,7 +271,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -299,7 +299,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

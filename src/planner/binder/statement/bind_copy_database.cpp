@@ -61,7 +61,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto &insert_node = *insert_stmt.node;
 		insert_node.catalog = target_database_name;
 		insert_node.schema = table.ParentSchema().name;
-		insert_node.table = table.name;
+		insert_node.table = table.name.GetName();
 
 		auto from_tbl = make_uniq<BaseTableRef>();
 		from_tbl->catalog_name = source_catalog.GetName();
@@ -71,7 +71,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto select_node = make_uniq<SelectNode>();
 		auto &select_list = select_node->select_list;
 		for (auto &col : table.GetColumns().Physical()) {
-			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name));
+			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name.GetName()));
 		}
 
 		select_node->from_table = std::move(from_tbl);

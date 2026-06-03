@@ -32,7 +32,7 @@ public:
 	//! (optionally) the provider of the secret credentials
 	unique_ptr<ParsedExpression> provider;
 	//! (optionally) the name of the secret
-	string name;
+	Identifier name;
 	//! (optionally) the scope of the secret
 	unique_ptr<ParsedExpression> scope;
 	//! Named parameter list (if any)

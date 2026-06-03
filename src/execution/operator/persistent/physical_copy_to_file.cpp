@@ -1607,7 +1607,7 @@ PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<Logic
 
 InsertionOrderPreservingMap<string> PhysicalCopyToFile::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["FORMAT"] = StringUtil::Upper(function.name);
+	result["FORMAT"] = StringUtil::Upper(function.name.GetName());
 	return result;
 }
 

@@ -125,21 +125,21 @@ const string Binder::BindCatalog(string &catalog) {
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
-	BindSchemaOrCatalog(info.catalog, info.schema);
-	if (IsInvalidCatalog(info.catalog) && info.temporary) {
+	BindSchemaOrCatalog(info.catalog.GetNameMutable(), info.schema.GetNameMutable());
+	if (IsInvalidCatalog(info.catalog.GetName()) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
+	if (IsInvalidCatalog(info.catalog.GetName()) && IsInvalidSchema(info.schema.GetName())) {
 		auto &default_entry = search_path->GetDefault();
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
-	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(context, info.catalog);
-	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = search_path->GetDefaultCatalog(info.schema);
+	} else if (IsInvalidSchema(info.schema.GetName())) {
+		info.schema = search_path->GetDefaultSchema(context, info.catalog.GetName());
+	} else if (IsInvalidCatalog(info.catalog.GetName())) {
+		info.catalog = search_path->GetDefaultCatalog(info.schema.GetName());
 	}
-	if (IsInvalidCatalog(info.catalog)) {
+	if (IsInvalidCatalog(info.catalog.GetName())) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!info.temporary) {
@@ -157,7 +157,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	SearchSchema(info);
 	// fetch the schema in which we want to create the object
-	auto &schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
+	auto &schema_obj = Catalog::GetSchema(context, info.catalog.GetName(), info.schema.GetName());
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
@@ -229,7 +229,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
 	}
-	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
+	BindView(context, *base.query, base.catalog.GetName(), base.schema.GetName(), dependencies, base.aliases,
+	         base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -263,7 +264,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// Bind the catalog/schema
 	SearchSchema(info);
-	auto &catalog = Catalog::GetCatalog(context, info.catalog);
+	auto &catalog = Catalog::GetCatalog(context, info.catalog.GetName());
 
 	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
@@ -364,10 +365,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		if (!type_overloads.insert(dummy_types).second) {
 			throw BinderException(
 			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
-			    base.name);
+			    base.name.GetName());
 		}
 
-		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetName());
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
@@ -477,9 +478,9 @@ void Binder::BindLogicalType(LogicalType &type) {
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
-	TableDescription table_description(create_trigger_info.base_table->catalog_name,
-	                                   create_trigger_info.base_table->schema_name,
-	                                   create_trigger_info.base_table->table_name);
+	TableDescription table_description(create_trigger_info.base_table->catalog_name.GetName(),
+	                                   create_trigger_info.base_table->schema_name.GetName(),
+	                                   create_trigger_info.base_table->table_name.GetName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -499,7 +500,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &schema = BindCreateSchema(create_trigger_info);
 
 	// Block trigger creation on databases with an older storage version
-	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog.GetName());
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
@@ -586,7 +587,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
-		auto catalog = BindCatalog(base.catalog);
+		auto catalog = BindCatalog(base.catalog.GetNameMutable());
 		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
@@ -598,7 +599,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			CatalogTransaction transaction(schema.ParentCatalog(), context);
-			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name);
+			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name.GetName());
 			if (existing_entry && existing_entry->type == CatalogType::VIEW_ENTRY) {
 				// IF EXISTS and the view already exists - avoid binding
 				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;
@@ -631,8 +632,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
 		// Plan the table scan.
-		TableDescription table_description(create_index_info.catalog, create_index_info.schema,
-		                                   create_index_info.table);
+		TableDescription table_description(create_index_info.catalog.GetName(), create_index_info.schema.GetName(),
+		                                   create_index_info.table.GetName());
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);
@@ -778,7 +779,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
+		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name.GetName(),
 		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
 
 		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);

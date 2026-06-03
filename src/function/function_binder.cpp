@@ -173,10 +173,10 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 		string schema_name;
 		for (auto &f : functions.functions) {
 			if (catalog_name.empty() && !f.catalog_name.empty()) {
-				catalog_name = f.catalog_name;
+				catalog_name = f.catalog_name.GetName();
 			}
 			if (schema_name.empty() && !f.schema_name.empty()) {
-				schema_name = f.schema_name;
+				schema_name = f.schema_name.GetName();
 			}
 			candidates.push_back(f.ToString());
 		}
@@ -227,8 +227,8 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, Funct
 		}
 		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
 		auto schema_name = functions.functions.size() > 0 ? functions.functions[0].schema_name : "";
-		return MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions, arguments,
-		                                  error);
+		return MultipleCandidateException(catalog_name.GetName(), schema_name.GetName(), name, functions,
+		                                  candidate_functions, arguments, error);
 	}
 	return candidate_functions[0];
 }
@@ -392,7 +392,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
-	auto best_function = BindFunction(func.name, func.functions, children, error);
+	auto best_function = BindFunction(func.name.GetName(), func.functions, children, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}

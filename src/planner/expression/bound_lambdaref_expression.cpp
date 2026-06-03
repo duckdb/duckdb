@@ -18,7 +18,7 @@ BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBindi
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::Copy() const {
-	return make_uniq<BoundLambdaRefExpression>(alias, return_type, binding, lambda_idx, depth);
+	return make_uniq<BoundLambdaRefExpression>(alias.GetName(), return_type, binding, lambda_idx, depth);
 }
 
 hash_t BoundLambdaRefExpression::Hash() const {
@@ -39,7 +39,7 @@ bool BoundLambdaRefExpression::Equals(const BaseExpression &other_p) const {
 
 string BoundLambdaRefExpression::ToString() const {
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetName();
 	}
 	return "#[" + to_string(binding.table_index.index) + "." + to_string(binding.column_index) + "." +
 	       to_string(lambda_idx) + "]";

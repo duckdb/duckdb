@@ -16,7 +16,7 @@ bool LambdaRefExpression::IsScalar() const {
 }
 
 string LambdaRefExpression::GetName() const {
-	return column_name;
+	return column_name.GetName();
 }
 
 string LambdaRefExpression::ToString() const {

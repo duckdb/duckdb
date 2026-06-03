@@ -8,13 +8,13 @@
 namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetErrorsTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier(TEMP_CATALOG));
 	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
 	return table_entry;
 }
 
 TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier(TEMP_CATALOG));
 	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
 	return table_entry;
 }
@@ -37,7 +37,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	auto key =
 	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(TEMP_CATALOG));
 	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
 	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
 	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
@@ -59,7 +59,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
 	// (Re)Create the temporary rejects table
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(TEMP_CATALOG));
 
 	// Create CSV_ERROR_TYPE ENUM
 	string enum_name = "CSV_ERROR_TYPE";

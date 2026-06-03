@@ -13,7 +13,7 @@
       {
         "id": 101,
         "name": "named_param_map",
-        "type": "case_insensitive_map_t<idx_t>"
+        "type": "identifier_map_t<idx_t>"
       }
     ]
   },

@@ -7,8 +7,8 @@ namespace duckdb {
 // AlterScalarFunctionInfo
 //===--------------------------------------------------------------------===//
 AlterScalarFunctionInfo::AlterScalarFunctionInfo(AlterScalarFunctionType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_SCALAR_FUNCTION, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_SCALAR_FUNCTION, std::move(data.catalog.GetName()), std::move(data.schema.GetName()),
+                std::move(data.name.GetName()), data.if_not_found),
       alter_scalar_function_type(type) {
 }
 AlterScalarFunctionInfo::~AlterScalarFunctionInfo() {

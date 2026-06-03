@@ -18,7 +18,7 @@ string PragmaInfo::ToString() const {
 	string result = "";
 	result += "PRAGMA";
 	// FIXME: Can pragma's live in different catalog/schemas ?
-	result += " " + SQLIdentifier(name);
+	result += " " + SQLIdentifier(name.GetName());
 	if (!parameters.empty()) {
 		vector<string> stringified;
 		for (auto &param : parameters) {

@@ -30,7 +30,7 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 
 	if (prioritize_table_when_binding) {
 		binder_with_search_path =
-		    CreateBinderWithSearchPath(table.ParentCatalog().GetName(), table.ParentSchema().name);
+		    CreateBinderWithSearchPath(table.ParentCatalog().GetName(), table.ParentSchema().name.GetName());
 		expr_binder_ptr = binder_with_search_path.get();
 	}
 
@@ -168,7 +168,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name, schema_name);
+	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name, schema_name.GetName());
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
@@ -204,7 +204,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	if (!node.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(node.returning_list), table, node.table->alias, update_table_index,
+		return BindReturning(std::move(node.returning_list), table, node.table->alias.GetName(), update_table_index,
 		                     std::move(update_as_logicaloperator));
 	}
 

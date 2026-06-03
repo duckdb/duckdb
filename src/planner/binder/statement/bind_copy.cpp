@@ -418,9 +418,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
 	auto &insert_node = *insert.node;
-	insert_node.table = stmt.info->table;
-	insert_node.schema = stmt.info->schema;
-	insert_node.catalog = stmt.info->catalog;
+	insert_node.table = stmt.info->table.GetName();
+	insert_node.schema = stmt.info->schema.GetName();
+	insert_node.catalog = stmt.info->catalog.GetName();
 	insert_node.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
@@ -430,9 +430,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	BindSchemaOrCatalog(stmt.info->catalog.GetNameMutable(), stmt.info->schema.GetNameMutable());
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog.GetName(),
+	                                                   stmt.info->schema.GetName(), stmt.info->table.GetName());
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
@@ -562,9 +562,9 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
-		ref->catalog_name = stmt.info->catalog;
-		ref->schema_name = stmt.info->schema;
-		ref->table_name = stmt.info->table;
+		ref->catalog_name = stmt.info->catalog.GetName();
+		ref->schema_name = stmt.info->schema.GetName();
+		ref->table_name = stmt.info->table.GetName();
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);

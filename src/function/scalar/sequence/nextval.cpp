@@ -46,7 +46,7 @@ SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &ca
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const string &name) {
 	auto qname = QualifiedName::Parse(name);
-	return BindSequence(binder, qname.catalog, qname.schema, qname.name);
+	return BindSequence(binder, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable(), qname.name.GetName());
 }
 
 struct NextValLocalState : public FunctionLocalState {
@@ -124,7 +124,8 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunc
 	}
 	auto &seq_info = create_info->Cast<CreateSequenceInfo>();
 	auto &context = deserializer.Get<ClientContext &>();
-	auto &sequence = BindSequenceFromContext(context, seq_info.catalog, seq_info.schema, seq_info.name);
+	auto &sequence = BindSequenceFromContext(context, seq_info.catalog.GetNameMutable(),
+	                                         seq_info.schema.GetNameMutable(), seq_info.name.GetName());
 	return make_uniq<NextvalBindData>(sequence);
 }
 

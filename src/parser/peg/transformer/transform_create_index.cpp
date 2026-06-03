@@ -22,8 +22,10 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	index_info->schema = base_table_name->schema_name;
 	index_info->index_type = index_type.empty() ? "ART" : index_type;
 	for (auto &column : insert_column_list) {
-		index_info->expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
-		index_info->parsed_expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
+		index_info->expressions.push_back(
+		    make_uniq<ColumnRefExpression>(column, base_table_name->table_name.GetName()));
+		index_info->parsed_expressions.push_back(
+		    make_uniq<ColumnRefExpression>(column, base_table_name->table_name.GetName()));
 	}
 	for (auto &expr : index_element) {
 		if (expr->GetExpressionType() == ExpressionType::COLLATE) {

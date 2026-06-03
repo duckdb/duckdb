@@ -125,7 +125,7 @@ case_insensitive_set_t StarExpression::SerializedExcludeList() const {
 	case_insensitive_set_t result;
 	for (auto &entry : exclude_list) {
 		if (!entry.IsQualified()) {
-			result.insert(entry.column);
+			result.insert(entry.column.GetName());
 		}
 	}
 	return result;

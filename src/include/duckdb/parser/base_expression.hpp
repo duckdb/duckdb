@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
@@ -63,7 +64,7 @@ public:
 
 	//! Returns the alias of the expression
 	const string &GetAlias() const {
-		return alias;
+		return alias.GetName();
 	}
 
 	//! Sets the alias of the expression
@@ -89,7 +90,7 @@ protected:
 	ExpressionClass expression_class;
 
 	//! The alias of the expression,
-	string alias;
+	Identifier alias;
 
 	//! The location in the query (if any)
 	optional_idx query_location;

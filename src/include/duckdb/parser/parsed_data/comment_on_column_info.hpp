@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
@@ -30,7 +31,7 @@ public:
 	CatalogType catalog_entry_type;
 
 	//! name of the column to comment on
-	string column_name;
+	Identifier column_name;
 	//! The comment, can be NULL or a string
 	Value comment_value;
 

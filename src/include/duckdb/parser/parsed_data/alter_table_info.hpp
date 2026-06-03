@@ -113,9 +113,9 @@ struct RenameColumnInfo : public AlterTableInfo {
 	~RenameColumnInfo() override;
 
 	//! Column old name
-	string old_name;
+	Identifier old_name;
 	//! Column new name
-	string new_name;
+	Identifier new_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -138,7 +138,7 @@ struct RenameFieldInfo : public AlterTableInfo {
 	//! Path to source field.
 	vector<string> column_path;
 	//! New name of the column (field).
-	string new_name;
+	Identifier new_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -162,7 +162,7 @@ struct RenameTableInfo : public AlterTableInfo {
 	~RenameTableInfo() override;
 
 	//! Relation new name
-	string new_table_name;
+	Identifier new_table_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -234,7 +234,7 @@ struct RemoveColumnInfo : public AlterTableInfo {
 	~RemoveColumnInfo() override;
 
 	//! The column to remove
-	string removed_column;
+	Identifier removed_column;
 	//! Whether or not an error should be thrown if the column does not exist
 	bool if_column_exists;
 	//! Whether or not the column should be removed if a dependency conflict arises (used by GENERATED columns)
@@ -246,7 +246,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	string GetColumnName() const override {
-		return removed_column;
+		return removed_column.GetName();
 	}
 
 private:
@@ -289,7 +289,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	~ChangeColumnTypeInfo() override;
 
 	//! The column name to alter
-	string column_name;
+	Identifier column_name;
 	//! The target type of the column
 	LogicalType target_type;
 	//! The expression used for data conversion
@@ -301,8 +301,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	string GetColumnName() const override {
-		return column_name;
-	};
+		return column_name.GetName();
+	}
 
 private:
 	ChangeColumnTypeInfo();
@@ -316,7 +316,7 @@ struct SetDefaultInfo : public AlterTableInfo {
 	~SetDefaultInfo() override;
 
 	//! The column name to alter
-	string column_name;
+	Identifier column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
 
@@ -363,7 +363,7 @@ struct SetNotNullInfo : public AlterTableInfo {
 	~SetNotNullInfo() override;
 
 	//! The column name to alter
-	string column_name;
+	Identifier column_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -383,7 +383,7 @@ struct DropNotNullInfo : public AlterTableInfo {
 	~DropNotNullInfo() override;
 
 	//! The column name to alter
-	string column_name;
+	Identifier column_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

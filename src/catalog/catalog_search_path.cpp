@@ -181,7 +181,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
-					path.schema = schema->name;
+					path.schema = schema->name.GetName();
 					continue;
 				}
 			}

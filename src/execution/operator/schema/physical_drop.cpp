@@ -21,7 +21,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(info->name);
+		auto stmt_iter = statements.find(info->name.GetName());
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}
@@ -49,7 +49,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
+		    .DropSecretByName(context.client, info->name.GetName(), info->if_not_found, extra_info.persist_mode,
 		                      extra_info.secret_storage);
 		break;
 	}
@@ -63,11 +63,11 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 			throw InternalException("DROP TRIGGER: ExtraDropTriggerInfo has no base_table");
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->catalog, info->schema,
-		                                                         base_table_ref.table_name);
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+		    context.client, info->catalog.GetName(), info->schema.GetName(), base_table_ref.table_name.GetName());
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->name, info->cascade)) {
+		if (!duck_table.DropTrigger(transaction, info->name.GetName(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name,
 				                       base_table_ref.table_name);

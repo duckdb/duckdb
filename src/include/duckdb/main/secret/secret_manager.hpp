@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -197,11 +198,11 @@ private:
 	//! Lock for types, functions, settings and storages
 	mutex manager_lock;
 	//! Secret functions;
-	case_insensitive_map_t<CreateSecretFunctionSet> secret_functions;
+	identifier_map_t<CreateSecretFunctionSet> secret_functions;
 	//! Secret types;
-	case_insensitive_map_t<SecretType> secret_types;
+	identifier_map_t<SecretType> secret_types;
 	//! Map of all registered SecretStorages
-	case_insensitive_map_t<unique_ptr<SecretStorage>> secret_storages;
+	identifier_map_t<unique_ptr<SecretStorage>> secret_storages;
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};
 	//! Configuration for secret manager
@@ -213,7 +214,7 @@ private:
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog
 class DefaultSecretGenerator : public DefaultGenerator {
 public:
-	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
+	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, identifier_set_t &persistent_secrets);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
@@ -228,7 +229,7 @@ protected:
 
 	SecretManager &secret_manager;
 	mutex lock;
-	case_insensitive_set_t persistent_secrets;
+	identifier_set_t persistent_secrets;
 };
 
 } // namespace duckdb

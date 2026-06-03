@@ -21,7 +21,7 @@ SequenceData::SequenceData(CreateSequenceInfo &info)
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name.GetName()), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -114,7 +114,7 @@ string SequenceCatalogEntry::ToSQL() const {
 
 	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
-	ss << name;
+	ss << name.GetName();
 	ss << " INCREMENT BY " << seq_data.increment;
 	ss << " MINVALUE " << seq_data.min_value;
 	ss << " MAXVALUE " << seq_data.max_value;

@@ -30,17 +30,17 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 204,
@@ -78,12 +78,12 @@
       {
         "id": 400,
         "name": "old_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -100,7 +100,7 @@
       {
         "id": 401,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -112,7 +112,7 @@
       {
         "id": 400,
         "name": "new_table_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -165,7 +165,7 @@
       {
         "id": 400,
         "name": "removed_column",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -209,7 +209,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -231,7 +231,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -286,7 +286,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -298,7 +298,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -362,7 +362,7 @@
       {
         "id": 302,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -415,7 +415,7 @@
       {
         "id": 400,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -430,7 +430,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -481,17 +481,17 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -541,7 +541,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -561,7 +561,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -600,17 +600,17 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 204,
@@ -700,7 +700,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

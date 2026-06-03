@@ -224,7 +224,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 		auto &func = arg_min_max_entry;
 		ErrorData error;
-		auto best_function = function_binder.BindFunction(func.name, func.functions, child_types, error);
+		auto best_function = function_binder.BindFunction(func.name.GetName(), func.functions, child_types, error);
 		if (!best_function.IsValid()) {
 			return nullptr;
 		}

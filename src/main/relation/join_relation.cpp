@@ -42,7 +42,7 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	if (condition) {
 		join_ref->condition = condition->Copy();
 	}
-	join_ref->using_columns = using_columns;
+	join_ref->using_columns = StringsToIdentifiers(using_columns);
 	join_ref->type = join_type;
 	join_ref->delim_flipped = delim_flipped;
 	for (auto &col : duplicate_eliminated_columns) {

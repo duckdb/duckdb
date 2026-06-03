@@ -37,7 +37,7 @@ public:
 	RenameDatabaseInfo();
 	RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found);
 
-	string new_name;
+	Identifier new_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

@@ -554,7 +554,8 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	auto &schema = catalog.GetSchema(transaction, trigger_info.schema);
-	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name);
+	auto table_entry =
+	    schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name.GetName());
 	if (!table_entry) {
 		throw IOException("corrupt database file - trigger entry without table entry");
 	}
@@ -600,8 +601,8 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// create the index in the catalog
 
 	// look for the table in the catalog
-	auto &schema = catalog.GetSchema(transaction, create_info->schema);
-	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
+	auto &schema = catalog.GetSchema(transaction, create_info->schema.GetName());
+	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table.GetName());
 	if (!catalog_table) {
 		// See internal issue 3663.
 		throw IOException("corrupt database file - index entry without table entry");
@@ -623,11 +624,11 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// Read older duckdb files.
-		index_storage_info.name = index.name;
+		index_storage_info.name = index.name.GetName();
 		index_storage_info.root_block_ptr = root_block_pointer;
 	} else {
 		// Extract the matching index storage info (moves it out of the stored collection).
-		index_storage_info = table_info->ExtractIndexStorageInfo(index.name);
+		index_storage_info = table_info->ExtractIndexStorageInfo(index.name.GetName());
 	}
 
 	D_ASSERT(index_storage_info.IsValid());
@@ -702,7 +703,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
-	auto &schema = catalog.GetSchema(transaction, info->schema);
+	auto &schema = catalog.GetSchema(transaction, info->schema.GetName());
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	for (auto &dep : bound_info->Base().dependencies.Set()) {

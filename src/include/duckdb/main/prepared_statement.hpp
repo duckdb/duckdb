@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
@@ -24,7 +25,7 @@ class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, case_insensitive_map_t<idx_t> named_param_map);
+	                             string query, identifier_map_t<idx_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -42,7 +43,7 @@ public:
 	//! The error message (if success = false)
 	ErrorData error;
 	//! The parameter mapping
-	case_insensitive_map_t<idx_t> named_param_map;
+	identifier_map_t<idx_t> named_param_map;
 
 public:
 	//! Returns the stored error message
@@ -93,7 +94,7 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	static string ExcessValuesException(const identifier_map_t<idx_t> &parameters,
 	                                    const case_insensitive_map_t<PAYLOAD> &values) {
 		// Too many values
 		set<string> excess_set;
@@ -112,14 +113,14 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
 	                                     const case_insensitive_map_t<PAYLOAD> &values) {
 		// Missing values
 		set<string> missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
-			if (!values.count(name)) {
-				missing_set.insert(name);
+			if (!values.count(name.GetName())) {
+				missing_set.insert(name.GetName());
 			}
 		}
 		vector<string> missing_values;
@@ -132,12 +133,12 @@ public:
 
 	template <class PAYLOAD>
 	static void VerifyParameters(const case_insensitive_map_t<PAYLOAD> &provided,
-	                             const case_insensitive_map_t<idx_t> &expected) {
+	                             const identifier_map_t<idx_t> &expected) {
 		if (expected.size() == provided.size()) {
 			// Same amount of identifiers, if
 			for (auto &pair : expected) {
 				auto &identifier = pair.first;
-				if (!provided.count(identifier)) {
+				if (!provided.count(identifier.GetName())) {
 					throw InvalidInputException(MissingValuesException(expected, provided));
 				}
 			}

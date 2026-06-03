@@ -16,7 +16,7 @@ BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBindi
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() const {
-	return make_uniq<BoundColumnRefExpression>(alias, return_type, binding, depth);
+	return make_uniq<BoundColumnRefExpression>(alias.GetName(), return_type, binding, depth);
 }
 
 hash_t BoundColumnRefExpression::Hash() const {
@@ -50,7 +50,7 @@ string BoundColumnRefExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetName();
 	}
 	return binding.ToString();
 }

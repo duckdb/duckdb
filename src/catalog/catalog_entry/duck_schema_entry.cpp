@@ -59,7 +59,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 			AlterEntryData alter_data(catalog.GetName(), fk.info.schema, fk.info.table,
 			                          OnEntryNotFound::THROW_EXCEPTION);
-			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns,
+			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name.GetName(), fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
 			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
@@ -115,7 +115,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	auto &set = GetCatalogSet(entry_type);
 	dependencies.AddDependency(*this);
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		auto old_entry = set.GetEntry(transaction, entry_name);
+		auto old_entry = set.GetEntry(transaction, entry_name.GetName());
 		if (old_entry) {
 			return nullptr;
 		}
@@ -123,7 +123,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
-		auto old_entry = set.GetEntry(transaction, entry_name);
+		auto old_entry = set.GetEntry(transaction, entry_name.GetName());
 		if (old_entry) {
 			if (dependencies.Contains(*old_entry)) {
 				throw CatalogException("CREATE OR REPLACE is not allowed to depend on itself");
@@ -133,16 +133,16 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
 			OnDropEntry(transaction, *old_entry);
-			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
+			(void)set.DropEntry(transaction, entry_name.GetName(), false, entry->internal);
 		}
 	}
 	// now try to add the entry
-	if (!set.CreateEntry(transaction, entry_name, std::move(entry), dependencies)) {
+	if (!set.CreateEntry(transaction, entry_name.GetName(), std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			auto existing_entry = set.GetEntry(transaction, entry_name);
+			auto existing_entry = set.GetEntry(transaction, entry_name.GetName());
 			auto existing_type = existing_entry ? existing_entry->type : entry_type;
-			throw CatalogException::EntryAlreadyExists(existing_type, entry_name);
+			throw CatalogException::EntryAlreadyExists(existing_type, entry_name.GetName());
 		} else {
 			return nullptr;
 		}
@@ -163,7 +163,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name.GetName()));
 	}
 	for (auto &dep : info.dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
@@ -181,7 +181,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	if (info.on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info.type);
-		auto current_entry = catalog_set.GetEntry(transaction, info.name);
+		auto current_entry = catalog_set.GetEntry(transaction, info.name.GetName());
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
@@ -255,7 +255,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.index_name)) {
+	    !table.GetStorage().IndexNameIsUnique(info.index_name.GetName())) {
 		throw CatalogException("An index with the name " + info.index_name + " already exists!");
 	}
 
@@ -307,7 +307,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		string name = info.name;
+		string name = info.name.GetName();
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
@@ -333,7 +333,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
-	auto existing_entry = set.GetEntry(transaction, info.name);
+	auto existing_entry = set.GetEntry(transaction, info.name.GetName());
 	if (!existing_entry) {
 		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
@@ -350,7 +350,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	}
 
 	OnDropEntry(transaction, *existing_entry);
-	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {
+	if (!set.DropEntry(transaction, info.name.GetName(), info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 
@@ -376,17 +376,17 @@ void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::LookupEntry(CatalogTransaction transaction,
                                                         const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntry(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntry(transaction, lookup_info.GetEntryIdentifier());
 }
 
 CatalogSet::EntryLookup DuckSchemaEntry::LookupEntryDetailed(CatalogTransaction transaction,
                                                              const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntryDetailed(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntryDetailed(transaction, lookup_info.GetEntryIdentifier());
 }
 
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction,
                                                      const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).SimilarEntry(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).SimilarEntry(transaction, lookup_info.GetEntryIdentifier());
 }
 
 CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {

@@ -14,12 +14,12 @@ string ShowRef::ToString() const {
 		result += "SHOW TABLES FROM ";
 		string name = "";
 		if (!catalog_name.empty()) {
-			name += SQLIdentifier(catalog_name);
+			name += SQLIdentifier(catalog_name.GetName());
 			if (!schema_name.empty()) {
 				name += ".";
 			}
 		}
-		name += SQLIdentifier(schema_name);
+		name += SQLIdentifier(schema_name.GetName());
 		result += name;
 	} else {
 		result += "DESCRIBE ";
@@ -29,7 +29,7 @@ string ShowRef::ToString() const {
 		result += query->ToString();
 		result += ")";
 	} else if (table_name != "__show_tables_expanded") {
-		result += table_name;
+		result += table_name.GetName();
 	}
 	return result;
 }

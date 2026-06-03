@@ -24,7 +24,7 @@ public:
 
 public:
 	//! View name
-	string view_name;
+	Identifier view_name;
 	//! Aliases of the view
 	vector<string> aliases;
 	//! Return types

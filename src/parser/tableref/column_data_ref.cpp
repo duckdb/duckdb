@@ -10,7 +10,7 @@ ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collecti
 
 string ColumnDataRef::ToString() const {
 	auto result = collection->ToString();
-	return BaseToString(result, expected_names);
+	return BaseToString(result, StringsToIdentifiers(expected_names));
 }
 
 bool ColumnDataRef::Equals(const TableRef &other_p) const {

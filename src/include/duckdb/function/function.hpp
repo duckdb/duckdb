@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -110,7 +111,7 @@ public:
 	bool operator!=(const FunctionParameter &other) const;
 
 	auto GetName() const -> const string & {
-		return name;
+		return name.GetName();
 	}
 	auto SetName(string name_p) -> void {
 		name = std::move(name_p);
@@ -124,7 +125,7 @@ public:
 	}
 
 private:
-	string name;
+	Identifier name;
 	LogicalType type;
 };
 
@@ -189,7 +190,7 @@ public:
 	}
 
 	void Verify() const {
-		case_insensitive_set_t seen_names;
+		identifier_set_t seen_names;
 		for (const auto &param : parameters) {
 			if (seen_names.find(param.GetName()) != seen_names.end()) {
 				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
@@ -213,15 +214,15 @@ public:
 	DUCKDB_API virtual ~Function();
 
 	//! The name of the function
-	string name;
+	Identifier name;
 	//! Additional Information to specify function from it's name
 	string extra_info;
 
 	// Optional catalog name of the function
-	string catalog_name;
+	Identifier catalog_name;
 
 	// Optional schema name of the function
-	string schema_name;
+	Identifier schema_name;
 
 public:
 	auto SetName(string name_p) -> void {
@@ -235,13 +236,13 @@ public:
 	}
 
 	const string &GetName() const {
-		return name;
+		return name.GetName();
 	}
 	const string &GetSchemaName() const {
-		return schema_name;
+		return schema_name.GetName();
 	}
 	const string &GetCatalogName() const {
-		return catalog_name;
+		return catalog_name.GetName();
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
@@ -405,9 +406,9 @@ public:
 
 class BoundSimpleFunction {
 protected:
-	string name;
-	string schema_name;
-	string catalog_name;
+	Identifier name;
+	Identifier schema_name;
+	Identifier catalog_name;
 	string extra_info;
 
 	//! The set of arguments of the function
@@ -424,13 +425,13 @@ public:
 	}
 
 	const string &GetName() const {
-		return name;
+		return name.GetName();
 	}
 	const string &GetSchemaName() const {
-		return schema_name;
+		return schema_name.GetName();
 	}
 	const string &GetCatalogName() const {
-		return catalog_name;
+		return catalog_name.GetName();
 	}
 
 	const string &GetExtraInfo() const {

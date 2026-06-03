@@ -32,7 +32,7 @@ struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo();
 
 	//! Sequence name to create
-	string name;
+	Identifier name;
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

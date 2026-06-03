@@ -151,7 +151,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 }
 
 BoundStatement Binder::BindShowTable(ShowRef &ref) {
-	auto lname = StringUtil::Lower(ref.table_name);
+	auto lname = StringUtil::Lower(ref.table_name.GetName());
 
 	string sql;
 	if (lname == "\"databases\"") {
@@ -169,8 +169,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
-		auto catalog_name = ref.catalog_name;
-		auto schema_name = ref.schema_name;
+		auto catalog_name = ref.catalog_name.GetName();
+		auto schema_name = ref.schema_name.GetName();
 
 		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
 		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
@@ -199,7 +199,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	} else if (lname == "__show_tables_expanded") {
 		sql = PragmaShowTablesExpanded();
 	} else {
-		sql = PragmaShow(ref.table_name);
+		sql = PragmaShow(ref.table_name.GetName());
 	}
 	auto select = CreateViewInfo::ParseSelect(sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));

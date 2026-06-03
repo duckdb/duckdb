@@ -21,7 +21,7 @@ string DropInfo::ToString() const {
 	string result = "";
 	if (type == CatalogType::PREPARED_STATEMENT) {
 		result += "DEALLOCATE PREPARE ";
-		result += SQLIdentifier(name);
+		result += SQLIdentifier(name.GetName());
 	} else {
 		result += "DROP";
 		result += " " + ParseInfo::TypeToString(type);
@@ -29,7 +29,7 @@ string DropInfo::ToString() const {
 			result += " IF EXISTS";
 		}
 		result += " ";
-		result += QualifierToString(catalog, schema, name);
+		result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
 		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
 			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
 			if (trigger_info.base_table) {

@@ -12,15 +12,15 @@ namespace duckdb {
 
 void CatalogEntryInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
-	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(102, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
 }
 
 CatalogEntryInfo CatalogEntryInfo::Deserialize(Deserializer &deserializer) {
 	CatalogEntryInfo result;
 	deserializer.ReadProperty<CatalogType>(100, "type", result.type);
-	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<string>(102, "name", result.name);
+	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
 	return result;
 }
 

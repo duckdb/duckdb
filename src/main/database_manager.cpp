@@ -122,7 +122,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = GetDatabase(info.name);
+		auto existing_db = GetDatabase(info.name.GetName());
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
@@ -133,7 +133,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				                      info.name, existing_mode_str, attached_mode);
 			}
 			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema.GetName(),
+				                                          options.default_table.name.GetName());
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// allow custom catalogs to override this behavior
@@ -154,7 +155,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
-			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
+			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name.GetName())) {
 				// it does! return it
 				return existing_db;
 			}
@@ -162,7 +163,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			// ... but it might not be done attaching yet!
 			// verify the database has actually finished attaching prior to returning
 			lock_guard<mutex> guard(databases_lock);
-			auto entry = databases.find(info.name);
+			auto entry = databases.find(info.name.GetName());
 			if (entry != databases.end()) {
 				// The database ACTUALLY exists, so we return it.
 				return entry->second;
@@ -179,8 +180,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
 		options.stored_database_path.reset();
 	}
-	if (AttachedDatabase::NameIsReserved(info.name)) {
-		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
+	if (AttachedDatabase::NameIsReserved(info.name.GetName())) {
+		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
+		                      info.name.GetName());
 	}
 	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
@@ -204,7 +206,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	} else {
 		attached_db->Initialize(context);
 		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema.GetName(),
+			                                          options.default_table.name.GetName());
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -277,7 +280,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		RenameDatabase(context, db_info.catalog.GetName(), rename_info.new_name.GetName(), db_info.if_not_found);
 		break;
 	}
 	default:
@@ -341,7 +344,7 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 }
 
 InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
-	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
+	return path_manager->InsertDatabasePath(*this, info.path, info.name.GetName(), info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {

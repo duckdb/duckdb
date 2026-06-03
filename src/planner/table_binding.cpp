@@ -17,8 +17,11 @@ namespace duckdb {
 
 Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
                  TableIndex index)
-    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
-      names(std::move(colnames)) {
+    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)) {
+	names.reserve(colnames.size());
+	for (auto &colname : colnames) {
+		names.push_back(std::move(colname));
+	}
 	Initialize();
 }
 
@@ -50,7 +53,7 @@ const vector<LogicalType> &Binding::GetColumnTypes() {
 	return types;
 }
 
-const vector<string> &Binding::GetColumnNames() {
+const vector<Identifier> &Binding::GetColumnNames() {
 	return names;
 }
 
@@ -106,7 +109,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
 	if (colref.GetAlias().empty()) {
-		colref.SetAlias(names[column_index]);
+		colref.SetAlias(names[column_index].GetName());
 	}
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
@@ -177,7 +180,7 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.ColumnNamesMutable();
 		D_ASSERT(col_names.size() == 1);
-		auto idx_entry = list.GetColumnIndex(col_names[0]);
+		auto idx_entry = list.GetColumnIndex(col_names[0].GetNameMutable());
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = {alias};
 	});
@@ -211,7 +214,7 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, string> alias_map;
 	for (auto &entry : name_map) {
-		alias_map[entry.second] = entry.first;
+		alias_map[entry.second] = entry.first.GetName();
 	}
 	ReplaceAliases(*expression, table_entry.GetColumns(), alias_map);
 	BakeTableName(*expression, alias);
@@ -286,7 +289,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
 		if (colref.GetAlias().empty()) {
-			colref.SetAlias(names[column_index]);
+			colref.SetAlias(names[column_index].GetName());
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
@@ -298,7 +301,8 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 }
 
 ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
-	auto candidate_message = StringUtil::CandidatesErrorMessage(names, column_name, "Candidate bindings: ");
+	auto candidate_message =
+	    StringUtil::CandidatesErrorMessage(IdentifiersToStrings(names), column_name, "Candidate bindings: ");
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
@@ -368,7 +372,7 @@ void CTEBinding::Reference() {
 		bind_state->Bind(*this);
 
 		// copy over the names / types and initialize the binding
-		this->names = bind_state->names;
+		this->names = StringsToIdentifiers(bind_state->names);
 		this->types = bind_state->types;
 		Initialize();
 

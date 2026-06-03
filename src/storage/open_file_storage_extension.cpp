@@ -57,7 +57,7 @@ unique_ptr<Catalog> OpenFileStorageAttach(optional_ptr<StorageExtensionInfo> sto
 
 	// set up the default view generator for "file" and the derived name of the file
 	auto system_transaction = CatalogTransaction::GetSystemTransaction(db.GetDatabase());
-	auto &schema = catalog->GetSchema(system_transaction, DEFAULT_SCHEMA);
+	auto &schema = catalog->GetSchema(system_transaction, Identifier(DEFAULT_SCHEMA));
 	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
 	auto &catalog_set = duck_schema.GetCatalogSet(CatalogType::VIEW_ENTRY);
 	auto default_generator = make_uniq<OpenFileDefaultGenerator>(*catalog, schema, view_names, std::move(file));

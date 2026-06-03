@@ -127,17 +127,17 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 	}
 	case_insensitive_map_t<idx_t> table_names;
 	for (auto &table : tables) {
-		table_names[table.get().name]++;
+		table_names[table.get().name.GetName()]++;
 	}
 	vector<string> candidate_list;
 	for (auto &table_ref : tables) {
 		auto &table = table_ref.get();
-		if (table_names[table.name] > 1) {
+		if (table_names[table.name.GetName()] > 1) {
 			// name conflicts across schemas - add the schema name
 			auto &schema = table.ParentSchema();
 			candidate_list.push_back(schema.name + "." + table.name);
 		} else {
-			candidate_list.push_back(table.name);
+			candidate_list.push_back(table.name.GetName());
 		}
 	}
 	string search_term = schema_name;
@@ -173,10 +173,10 @@ string DuckDBFileReaderOptions::PrintOptions() const {
 }
 
 bool DuckDBFileReaderOptions::Matches(TableCatalogEntry &table) const {
-	if (!schema_name.empty() && !StringUtil::CIEquals(table.ParentSchema().name, schema_name)) {
+	if (!schema_name.empty() && table.ParentSchema().name != schema_name) {
 		return false;
 	}
-	if (!table_name.empty() && !StringUtil::CIEquals(table.name, table_name)) {
+	if (!table_name.empty() && table.name != table_name) {
 		return false;
 	}
 	return true;
@@ -233,8 +233,8 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 		columns.emplace_back(col.Name(), col.Type());
 	}
 	column_count = columns.size();
-	schema_name = table.ParentSchema().name;
-	table_name = table.name;
+	schema_name = table.ParentSchema().name.GetName();
+	table_name = table.name.GetName();
 	db_wrapper->table_entry = table;
 }
 

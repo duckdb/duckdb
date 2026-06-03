@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -16,10 +17,10 @@ class TableCatalogEntry;
 
 struct ExportedTableData {
 	//! Name of the exported table
-	string table_name;
+	Identifier table_name;
 
 	//! Name of the schema
-	string schema_name;
+	Identifier schema_name;
 
 	//! Name of the database
 	string database_name;

@@ -352,7 +352,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -395,7 +395,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,
@@ -1013,22 +1013,22 @@
       {
         "id": 100,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 102,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
         "name": "column",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -1057,12 +1057,12 @@
       {
         "id": 1,
         "name": "table_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 2,
         "name": "schema_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 3,

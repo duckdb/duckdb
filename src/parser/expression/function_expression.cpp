@@ -32,8 +32,9 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 }
 
 string FunctionExpression::ToString() const {
-	return ToString<FunctionExpression, ParsedExpression>(*this, catalog, schema, function_name, is_operator, distinct,
-	                                                      filter.get(), order_bys.get(), export_state, true);
+	return ToString<FunctionExpression, ParsedExpression>(*this, catalog.GetName(), schema.GetName(),
+	                                                      function_name.GetName(), is_operator, distinct, filter.get(),
+	                                                      order_bys.get(), export_state, true);
 }
 
 void FunctionExpression::Verify() const {

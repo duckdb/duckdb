@@ -31,10 +31,10 @@ public:
 	explicit ColumnRefExpression(vector<string> column_names);
 
 public:
-	const vector<string> &ColumnNames() const {
+	const vector<Identifier> &ColumnNames() const {
 		return column_names;
 	}
-	vector<string> &ColumnNamesMutable() {
+	vector<Identifier> &ColumnNamesMutable() {
 		return column_names;
 	}
 
@@ -58,7 +58,7 @@ public:
 
 private:
 	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
-	vector<string> column_names;
+	vector<Identifier> column_names;
 
 private:
 	ColumnRefExpression();

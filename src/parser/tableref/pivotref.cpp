@@ -68,7 +68,7 @@ string PivotColumn::ToString() const {
 				result += ")";
 			}
 			if (!entry.alias.empty()) {
-				result += " AS " + SQLIdentifier(entry.alias);
+				result += " AS " + SQLIdentifier(entry.alias.GetName());
 			}
 		}
 		result += ")";
@@ -376,14 +376,14 @@ string PivotRef::ToString() const {
 	}
 	result += ")";
 	if (!alias.empty()) {
-		result += " AS " + SQLIdentifier(alias);
+		result += " AS " + SQLIdentifier(alias.GetName());
 		if (!column_name_alias.empty()) {
 			result += "(";
 			for (idx_t i = 0; i < column_name_alias.size(); i++) {
 				if (i > 0) {
 					result += ", ";
 				}
-				result += SQLIdentifier(column_name_alias[i]);
+				result += SQLIdentifier(column_name_alias[i].GetName());
 			}
 			result += ")";
 		}

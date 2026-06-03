@@ -55,7 +55,7 @@ struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p = nullptr);
 
 	//! Name of the Type
-	string name;
+	Identifier name;
 	//! Logical Type
 	LogicalType type;
 	//! Used by create enum from query

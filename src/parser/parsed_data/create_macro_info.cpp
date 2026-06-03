@@ -18,7 +18,7 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 
 string CreateMacroInfo::ToString() const {
 	auto prefix = GetCreatePrefix("MACRO");
-	prefix += QualifierToString(temporary ? "" : catalog, schema, name) + " ";
+	prefix += QualifierToString(temporary ? "" : catalog.GetName(), schema.GetName(), name.GetName()) + " ";
 	string definitions;
 	for (auto &function : macros) {
 		if (!definitions.empty()) {

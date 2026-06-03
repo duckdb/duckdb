@@ -18,7 +18,8 @@ void MergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", update_info);
 	serializer.WritePropertyWithDefault<vector<string>>(103, "insert_columns", insert_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", expressions);
-	serializer.WritePropertyWithDefault<InsertColumnOrder>(105, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	serializer.WritePropertyWithDefault<InsertColumnOrder>(105, "column_order", column_order,
+	                                                       InsertColumnOrder::INSERT_BY_POSITION);
 	serializer.WritePropertyWithDefault<bool>(106, "default_values", default_values, false);
 	serializer.WritePropertyWithDefault<unordered_set<string>>(107, "exclude_columns", exclude_columns);
 }
@@ -30,7 +31,8 @@ unique_ptr<MergeIntoAction> MergeIntoAction::Deserialize(Deserializer &deseriali
 	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", result->update_info);
 	deserializer.ReadPropertyWithDefault<vector<string>>(103, "insert_columns", result->insert_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", result->expressions);
-	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(105, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(105, "column_order", result->column_order,
+	                                                                InsertColumnOrder::INSERT_BY_POSITION);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(106, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithDefault<unordered_set<string>>(107, "exclude_columns", result->exclude_columns);
 	return result;
@@ -54,13 +56,13 @@ unique_ptr<OnConflictInfo> OnConflictInfo::Deserialize(Deserializer &deserialize
 
 void SelectStatement::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "named_param_map", named_param_map);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", named_param_map);
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node", result->node);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
+	deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
 	return result;
 }
 

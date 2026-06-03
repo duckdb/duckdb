@@ -113,7 +113,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	curr_op = &delim_join.children[other_idx];
 	if (curr_op->get()->type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = curr_op->get()->Cast<LogicalGet>();
-		if (!ExpressionBinder::IsUnnestFunction(get.function.name)) {
+		if (!ExpressionBinder::IsUnnestFunction(get.function.name.GetName())) {
 			return;
 		}
 		// pattern2: delim_get -> projection -> table_in_out(unnest)

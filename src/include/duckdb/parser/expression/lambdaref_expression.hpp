@@ -33,10 +33,10 @@ public:
 		return lambda_idx;
 	}
 	const string &ColumnName() const {
-		return column_name;
+		return column_name.GetName();
 	}
 	string &ColumnNameMutable() {
-		return column_name;
+		return column_name.GetNameMutable();
 	}
 
 	bool IsScalar() const override;
@@ -57,6 +57,6 @@ private:
 	//! The index of the lambda parameter in the lambda_bindings vector
 	idx_t lambda_idx;
 	//! The name of the lambda parameter (in a specific Binding in lambda_bindings)
-	string column_name;
+	Identifier column_name;
 };
 } // namespace duckdb

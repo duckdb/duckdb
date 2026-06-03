@@ -12,7 +12,7 @@ namespace duckdb {
 constexpr const char *TypeCatalogEntry::Name;
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type),
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name.GetName()), user_type(info.type),
       bind_function(info.bind_function) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
@@ -46,7 +46,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 string TypeCatalogEntry::ToSQL() const {
 	duckdb::stringstream ss;
 	ss << "CREATE TYPE ";
-	ss << SQLIdentifier(name);
+	ss << SQLIdentifier(name.GetName());
 	ss << " AS ";
 
 	auto user_type_copy = user_type;

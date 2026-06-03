@@ -80,7 +80,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			break;
 		}
 
-		string alias_name = colref.ColumnNames().back();
+		string alias_name = colref.ColumnNames().back().GetName();
 		// check the alias list
 		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry != bind_state.alias_map.end()) {

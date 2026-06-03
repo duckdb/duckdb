@@ -82,7 +82,7 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	if (ref.query) {
 		query = std::move(ref.query);
 	} else {
-		auto table_name = QualifiedName::Parse(ref.table_name);
+		auto table_name = QualifiedName::Parse(ref.table_name.GetName());
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(make_uniq<StarExpression>());
 		auto basetableref = make_uniq<BaseTableRef>();
@@ -142,7 +142,7 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select), "summarize_tbl");
-	subquery_ref->column_name_alias = plan.names;
+	subquery_ref->column_name_alias = StringsToIdentifiers(plan.names);
 
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(SummarizeWrapUnnest(name_children, "column_name"));

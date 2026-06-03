@@ -331,7 +331,6 @@ bool BetweenExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
 	copy->input = input ? input->Copy() : nullptr;
@@ -362,7 +361,6 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
@@ -447,7 +445,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	for (idx_t i = 0; i < column_names.size(); i++) {
-		if (!StringUtil::CIEquals(column_names[i], other_p.column_names[i])) {
+		if (column_names[i] != other_p.column_names[i]) {
 			return false;
 		}
 	}
@@ -457,7 +455,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 hash_t ColumnRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	for (auto &s : column_names) {
-		hash = CombineHash(hash, StringUtil::CIHash(s));
+		hash = CombineHash(hash, s.Hash());
 	}
 	return hash;
 }
@@ -477,7 +475,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 	if (lambda_idx != other_p.lambda_idx) {
 		return false;
 	}
-	if (!StringUtil::CIEquals(column_name, other_p.column_name)) {
+	if (column_name != other_p.column_name) {
 		return false;
 	}
 	return true;
@@ -486,7 +484,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 hash_t LambdaRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<uint64_t>(lambda_idx));
-	hash = CombineHash(hash, StringUtil::CIHash(column_name));
+	hash = CombineHash(hash, column_name.Hash());
 	return hash;
 }
 
@@ -508,7 +506,6 @@ bool ComparisonExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression());
 	copy->left = left ? left->Copy() : nullptr;
@@ -527,7 +524,6 @@ bool ConjunctionExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression());
@@ -568,7 +564,6 @@ bool DefaultExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
-
 
 unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<DefaultExpression>(new DefaultExpression());
@@ -649,7 +644,6 @@ bool LambdaExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	copy->lhs = lhs ? lhs->Copy() : nullptr;
@@ -670,7 +664,6 @@ bool OperatorExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
-
 unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression());
 	for (auto &child : children) {
@@ -685,7 +678,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ParameterExpression>();
-	if (!StringUtil::CIEquals(identifier, other_p.identifier)) {
+	if (identifier != other_p.identifier) {
 		return false;
 	}
 	return true;
@@ -693,7 +686,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ParameterExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(identifier));
+	hash = CombineHash(hash, identifier.Hash());
 	return hash;
 }
 

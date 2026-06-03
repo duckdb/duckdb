@@ -23,7 +23,7 @@ public:
 	}
 
 	//! The name of the function set
-	string name;
+	Identifier name;
 	//! The set of functions.
 	vector<T> functions;
 

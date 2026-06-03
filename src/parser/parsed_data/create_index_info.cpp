@@ -9,9 +9,10 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, INVALI
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
-      options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
-      column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
+    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema.GetName()), table(info.table.GetName()),
+      index_name(info.index_name.GetName()), options(info.options), index_type(info.index_type),
+      constraint_type(info.constraint_type), column_ids(info.column_ids), scan_types(info.scan_types),
+      names(info.names) {
 }
 
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
@@ -33,7 +34,7 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 
 		// Column reference expressions are qualified with the table name.
 		// We need to remove them to reproduce the original query.
-		RemoveTableQualificationRecursive(copy, table);
+		RemoveTableQualificationRecursive(copy, table.GetName());
 		bool add_parenthesis = true;
 		if (copy->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &column_ref = copy->Cast<ColumnRefExpression>();
@@ -69,9 +70,9 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += SQLIdentifier(index_name);
+	result += SQLIdentifier(index_name.GetName());
 	result += " ON ";
-	result += QualifierToString(temporary ? "" : catalog, schema, table);
+	result += QualifierToString(temporary ? "" : catalog.GetName(), schema.GetName(), table.GetName());
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

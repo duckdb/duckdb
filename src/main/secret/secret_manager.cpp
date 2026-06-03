@@ -238,14 +238,14 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Make a copy to set the provider to default if necessary
 	auto function_input = input;
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(function_input.type);
+		auto secret_type = LookupTypeInternal(function_input.type.GetName());
 		function_input.provider = secret_type.default_provider;
 	}
 
 	// Lookup function
-	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
+	auto function_lookup = LookupFunctionInternal(function_input.type.GetName(), function_input.provider.GetName());
 	if (!function_lookup) {
-		ThrowProviderNotFoundError(input.type, input.provider);
+		ThrowProviderNotFoundError(input.type.GetName(), input.provider.GetName());
 	}
 
 	// Call the function
@@ -258,7 +258,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 
 	// Register the secret at the secret_manager
 	return RegisterSecretInternal(transaction, std::move(secret), input.on_conflict, input.persist_type,
-	                              input.storage_type);
+	                              input.storage_type.GetName());
 }
 
 BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info) {
@@ -270,16 +270,16 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(type);
+		auto secret_type = LookupTypeInternal(type.GetName());
 		provider = secret_type.default_provider;
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function = LookupFunctionInternal(type, provider);
+	auto function = LookupFunctionInternal(type.GetName(), provider.GetName());
 
 	if (!function) {
-		ThrowProviderNotFoundError(info.type, info.provider, default_provider);
+		ThrowProviderNotFoundError(info.type.GetName(), info.provider.GetName(), default_provider);
 	}
 
 	auto bound_info = info;
@@ -646,7 +646,7 @@ vector<reference<SecretStorage>> SecretManager::GetSecretStorages() {
 }
 
 DefaultSecretGenerator::DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager,
-                                               case_insensitive_set_t &persistent_secrets)
+                                               identifier_set_t &persistent_secrets)
     : DefaultGenerator(catalog), secret_manager(secret_manager), persistent_secrets(persistent_secrets) {
 }
 
@@ -726,7 +726,7 @@ vector<string> DefaultSecretGenerator::GetDefaultEntries() {
 
 	lock_guard<mutex> guard(lock);
 	for (const auto &res : persistent_secrets) {
-		ret.push_back(res);
+		ret.push_back(res.GetName());
 	}
 
 	return ret;

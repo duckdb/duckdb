@@ -349,7 +349,7 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return global_binder_state->table_names;
 }
 
-case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+identifier_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 	return global_binder_state->replacement_scans;
 }
 

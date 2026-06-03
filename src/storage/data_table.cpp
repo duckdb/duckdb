@@ -906,7 +906,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 		// Verify the generated columns against the inserted values.
 		auto binder = Binder::CreateBinder(context);
 		physical_index_set_t bound_columns;
-		CheckBinder generated_check_binder(*binder, context, table.name, table.GetColumns(), bound_columns);
+		CheckBinder generated_check_binder(*binder, context, table.name.GetName(), table.GetColumns(), bound_columns);
 		for (auto &col : table.GetColumns().Logical()) {
 			if (!col.Generated()) {
 				continue;

@@ -55,11 +55,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEG
 			}
 			if (col_expr.ColumnNames().size() == 3) {
 				auto table_description =
-				    TableDescription(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]);
+				    TableDescription(col_expr.ColumnNames()[0].GetName(), col_expr.ColumnNames()[1].GetName(),
+				                     col_expr.ColumnNames()[2].GetName());
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			} else if (col_expr.ColumnNames().size() == 2) {
-				auto table_description =
-				    TableDescription(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]);
+				auto table_description = TableDescription(INVALID_CATALOG, col_expr.ColumnNames()[0].GetName(),
+				                                          col_expr.ColumnNames()[1].GetName());
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
@@ -201,7 +202,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-	auto lowercase_name = StringUtil::Lower(qualified_function.name);
+	auto lowercase_name = StringUtil::Lower(qualified_function.name.GetName());
 
 	auto &over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
@@ -220,8 +221,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.GetResult());
-		expr->CatalogMutable() = qualified_function.catalog;
-		expr->SchemaMutable() = qualified_function.schema;
+		expr->CatalogMutable() = qualified_function.catalog.GetName();
+		expr->SchemaMutable() = qualified_function.schema.GetName();
 		expr->SetFunctionName(lowercase_name);
 
 		expr->GetChildrenMutable() = std::move(function_children);
@@ -320,9 +321,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema, lowercase_name,
-	                                            std::move(function_children), std::move(filter_expr),
-	                                            std::move(order_modifier), distinct, false, export_opt.HasResult());
+	auto result =
+	    make_uniq<FunctionExpression>(qualified_function.catalog.GetName(), qualified_function.schema.GetName(),
+	                                  lowercase_name, std::move(function_children), std::move(filter_expr),
+	                                  std::move(order_modifier), distinct, false, export_opt.HasResult());
 
 	return std::move(result);
 }
@@ -420,7 +422,7 @@ void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedE
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
 		    auto &col_names = col_ref.ColumnNamesMutable();
 		    if (col_names.size() > 1) {
-			    col_names = vector<string> {col_names.back()};
+			    col_names = vector<Identifier> {col_names.back()};
 		    }
 	    });
 }
@@ -1244,7 +1246,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 			collate_string = const_expr.GetValue().GetValue<string>();
 		} else if (collate_string_expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			auto &col_ref = collate_string_expr->Cast<ColumnRefExpression>();
-			collate_string = StringUtil::Join(col_ref.ColumnNames(), ".");
+			collate_string = StringUtil::Join(IdentifiersToStrings(col_ref.ColumnNames()), ".");
 		} else {
 			throw NotImplementedException("Unexpected expression encountered for collate, %s",
 			                              EnumUtil::ToString(collate_string_expr->GetExpressionClass()));
@@ -1764,7 +1766,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
 				                      rename_column.first.ToString());
 			}
-			if (result->ReplaceList().find(rename_column.first.column) != result->ReplaceList().end()) {
+			if (result->ReplaceList().find(rename_column.first.column.GetName()) != result->ReplaceList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
 				                      rename_column.first.ToString());
 			}

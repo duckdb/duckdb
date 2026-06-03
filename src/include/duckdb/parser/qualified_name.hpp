@@ -15,9 +15,9 @@
 namespace duckdb {
 
 struct QualifiedName {
-	string catalog;
-	string schema;
-	string name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier name;
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
@@ -32,10 +32,10 @@ struct QualifiedColumnName {
 	QualifiedColumnName(string table_p, string column_p);
 	QualifiedColumnName(const BindingAlias &alias, string column_p);
 
-	string catalog;
-	string schema;
-	string table;
-	string column;
+	Identifier catalog;
+	Identifier schema;
+	Identifier table;
+	Identifier column;
 
 	static QualifiedColumnName Parse(string &input);
 

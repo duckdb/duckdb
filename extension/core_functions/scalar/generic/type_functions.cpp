@@ -111,8 +111,9 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	auto type_name = args.front().second.GetValue<string>();
 	auto qualified_name = QualifiedName::Parse(type_name);
 
-	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(qualified_name.catalog, qualified_name.schema,
-	                                                                   qualified_name.name, std::move(type_args)));
+	auto unbound_type = LogicalType::UNBOUND(
+	    make_uniq<TypeExpression>(qualified_name.catalog.GetName(), qualified_name.schema.GetName(),
+	                              qualified_name.name.GetName(), std::move(type_args)));
 
 	// Bind the unbound type
 	auto binder = Binder::CreateBinder(input.context);

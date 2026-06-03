@@ -73,7 +73,8 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(), table.name);
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(),
+		                               table.name.GetName());
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -289,7 +290,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto &on_conflict_info = *node.on_conflict_info;
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
-	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias : node.table;
+	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias.GetName() : node.table;
 	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
@@ -398,7 +399,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			                      "CONSTRAINT or INDEX");
 		}
 		all_distinct_on_columns.push_back(on_conflict_info.indexed_columns);
-		merge_into->node->using_columns = std::move(on_conflict_info.indexed_columns);
+		merge_into->node->using_columns = StringsToIdentifiers(on_conflict_info.indexed_columns);
 	}
 
 	// expand any default values
@@ -429,7 +430,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		// if we are inserting by position add the columns of the target table as an alias to the source
 		if (!node.columns.empty() || node.default_values) {
 			// we are not emitting all columns - set the column set as the set of aliases
-			source->column_name_alias = node.columns;
+			source->column_name_alias = StringsToIdentifiers(node.columns);
 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
@@ -539,8 +540,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	BindSchemaOrCatalog(node.catalog, node.schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+	BindSchemaOrCatalog(node.catalog.GetNameMutable(), node.schema.GetNameMutable());
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, node.catalog.GetName(), node.schema.GetName(), node.table);
 
 	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
@@ -592,7 +594,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name);
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name.GetName());
 	insert->bound_constraints = BindConstraints(table);
 	if (!node.select_statement && !node.default_values) {
 		result.plan = std::move(insert);
@@ -611,7 +613,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 			MoveCorrelatedExpressions(*select_binder);
 		}
 		// inserting from a select - check if the column count matches
-		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(), table.name);
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(),
+		                               table.name.GetName());
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {
@@ -625,8 +628,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(std::move(node.returning_list), table, node.table_ref ? node.table_ref->alias : string(),
-		                     insert_table_index, std::move(index_as_logicaloperator));
+		return BindReturning(std::move(node.returning_list), table,
+		                     node.table_ref ? node.table_ref->alias.GetName() : string(), insert_table_index,
+		                     std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

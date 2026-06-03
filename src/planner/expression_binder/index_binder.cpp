@@ -42,7 +42,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	}
 
 	CreateIndexInput input(context, unbound_index.table_io_manager, unbound_index.db, create_info.constraint_type,
-	                       create_info.index_name, create_info.column_ids, unbound_expressions, storage_info,
+	                       create_info.index_name.GetName(), create_info.column_ids, unbound_expressions, storage_info,
 	                       create_info.options);
 
 	return index_type->create_instance(input);
@@ -73,7 +73,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
                                                          unique_ptr<AlterTableInfo> alter_table_info) {
 	// Add the dependencies.
 	auto &dependencies = create_index_info->dependencies;
-	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
+	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog.GetName());
 	SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			return;
@@ -88,7 +88,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	}
 
 	auto &get = plan->Cast<LogicalGet>();
-	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name);
+	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name.GetName());
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 

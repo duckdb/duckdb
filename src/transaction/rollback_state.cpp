@@ -47,7 +47,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::ATTACHED_DATABASE: {
 		auto db = Load<AttachedDatabase *>(data);
 		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
-		db_manager.DetachInternal(db->name);
+		db_manager.DetachInternal(db->name.GetName());
 		break;
 	}
 	case UndoFlags::SEQUENCE_VALUE:

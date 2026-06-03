@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <atomic>
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -336,6 +337,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, Identifier>::value, T>::type &value) {
 		return value.empty();
 	}
 

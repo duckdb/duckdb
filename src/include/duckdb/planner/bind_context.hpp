@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/column_index.hpp"
@@ -149,7 +150,7 @@ public:
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
 	static vector<string> AliasColumnNames(const string &table_name, const vector<string> &names,
-	                                       const vector<string> &column_aliases);
+	                                       const vector<Identifier> &column_aliases);
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
@@ -176,7 +177,7 @@ private:
 	//! The list of bindings in insertion order
 	vector<unique_ptr<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
-	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
+	identifier_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! The set of CTE bindings
 	vector<unique_ptr<CTEBinding>> cte_bindings;
 };
