@@ -106,14 +106,13 @@ static void ShellHistoryFunction(ClientContext &context, TableFunctionInput &dat
 #ifdef HAVE_LINENOISE
 		string entry = History::GetEntry(history_index);
 		// multi-line history entries are stored with \r\n separators - normalize to \n
-		entry.erase(std::remove(entry.begin(), entry.end(), '\r'), entry.end());
+		entry = StringUtil::Replace(entry, "\r\n", "\n");
 #else
 		string entry;
 #endif
 		id_vec.Append(Value::BIGINT(NumericCast<int64_t>(history_index + 1)));
 		sql_vec.Append(Value(std::move(entry)));
 	}
-	output.SetCardinality(chunk_count);
 	data.offset += chunk_count;
 }
 
