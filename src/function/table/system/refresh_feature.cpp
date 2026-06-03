@@ -3,6 +3,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -278,6 +281,22 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 		// Garbage-collect old version tables beyond retain limit (only if we created a new version)
 		if (did_work) {
+			// Register ownership: feature owns the new version table
+			auto &con_context = *con.context;
+			auto &feat_cat = feat.ParentCatalog();
+			auto &feat_sch = feat_cat.GetSchema(con_context, feat.ParentSchema().name);
+			auto con_transaction = feat_cat.GetCatalogTransaction(con_context);
+			auto new_table_entry = feat_sch.GetEntry(con_transaction, CatalogType::TABLE_ENTRY, new_table_name);
+			if (new_table_entry) {
+				auto &duck_catalog = feat_cat.Cast<DuckCatalog>();
+				auto &duck_schema = feat_sch.Cast<DuckSchemaEntry>();
+				auto &feature_set = duck_schema.GetCatalogSet(CatalogType::FEATURE_ENTRY);
+				auto feat_entry = feature_set.GetEntry(con_transaction, feature_name);
+				if (feat_entry) {
+					duck_catalog.GetDependencyManager()->AddOwnership(con_transaction, *feat_entry, *new_table_entry);
+				}
+			}
+
 			// Garbage-collect old version tables beyond retain limit
 			int64_t min_retain_version = new_version - feat.retain_versions + 1;
 			if (min_retain_version > 1) {

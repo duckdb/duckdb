@@ -7,12 +7,8 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -80,42 +76,9 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	case CatalogType::FEATURE_ENTRY: {
-		// Look up the feature to get version info before dropping
+		// Drop the feature catalog entry; ownership cascades to the view and all version tables
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		auto &schema = catalog.GetSchema(context.client, info->schema);
-		auto transaction = catalog.GetCatalogTransaction(context.client);
-		auto entry = schema.GetEntry(transaction, CatalogType::FEATURE_ENTRY, info->name);
-
-		int64_t current_version = 0;
-		int64_t retain_versions = 1;
-		if (entry) {
-			auto &feat = entry->Cast<FeatureCatalogEntry>();
-			current_version = feat.current_version;
-			retain_versions = feat.retain_versions;
-		}
-
-		// Drop the feature catalog entry; ownership cascades to the view
 		catalog.DropEntry(context.client, *info);
-
-		// Clean up version tables
-		if (current_version > 0) {
-			auto &db = DatabaseInstance::GetDatabase(context.client);
-			Connection con(db);
-			if (!info->catalog.empty()) {
-				con.Query("USE " + SQLIdentifier::ToString(info->catalog));
-			}
-			if (!info->schema.empty() && info->schema != DEFAULT_SCHEMA) {
-				con.Query("SET schema = '" + info->schema + "'");
-			}
-			int64_t min_version = current_version - retain_versions + 1;
-			if (min_version < 1) {
-				min_version = 1;
-			}
-			for (int64_t v = min_version; v <= current_version; v++) {
-				auto table_name = info->name + "__v" + duckdb::to_string(v);
-				con.Query("DROP TABLE IF EXISTS " + SQLIdentifier::ToString(table_name));
-			}
-		}
 		break;
 	}
 	default: {

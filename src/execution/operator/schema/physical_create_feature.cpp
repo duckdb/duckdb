@@ -70,10 +70,11 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 		throw CatalogException::EntryAlreadyExists(CatalogType::FEATURE_ENTRY, info->feature_name);
 	}
 
-	// Make the feature own the view so dropping feature cascades to the view
+	// Make the feature own the view and the backing table so dropping feature cascades
 	auto feature_entry = set.GetEntry(transaction, info->feature_name);
 	auto &duck_catalog = catalog.Cast<DuckCatalog>();
 	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
+	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *table_entry);
 
 	return std::move(result);
 }
