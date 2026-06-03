@@ -260,15 +260,14 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (auto &arg : aggr.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
-		if (aggr.IsLegacyFunctionCall()) {
-			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-			// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
+		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
+		if (!arg.GetName().empty()) {
 			bound_arg->SetAlias(arg.GetName());
+		}
+		if (aggr.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
-			if (!arg.GetName().empty()) {
-				bound_arg->SetAlias(arg.GetName());
-			}
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
 	}
