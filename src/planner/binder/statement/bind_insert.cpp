@@ -63,37 +63,33 @@ void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, con
 
 void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
                                        optional_ptr<ExpressionListRef> values_list,
-                                       const vector<LogicalIndex> &named_column_map, bool preserve_struct_types) {
+                                       const vector<LogicalIndex> &named_column_map) {
 	if (!values_list) {
 		return;
 	}
 	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
 
 	// special case: check if we are inserting from a VALUES statement
-	if (values_list) {
-		auto &expr_list = values_list->Cast<ExpressionListRef>();
-		expr_list.expected_types.resize(expected_columns);
-		expr_list.expected_names.resize(expected_columns);
+	auto &expr_list = values_list->Cast<ExpressionListRef>();
+	expr_list.expected_types.resize(expected_columns);
+	expr_list.expected_names.resize(expected_columns);
 
-		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(), table.name);
+	D_ASSERT(!expr_list.values.empty());
+	CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(), table.name);
 
-		// VALUES list!
-		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-			D_ASSERT(named_column_map.size() >= col_idx);
-			auto &table_col_idx = named_column_map[col_idx];
+	// VALUES list!
+	for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+		D_ASSERT(named_column_map.size() >= col_idx);
+		auto &table_col_idx = named_column_map[col_idx];
 
-			// set the expected types as the types for the INSERT statement
-			auto &column = table.GetColumn(table_col_idx);
-			expr_list.expected_types[col_idx] = preserve_struct_types && column.Type().id() == LogicalTypeId::STRUCT
-			                                        ? LogicalType::INVALID
-			                                        : column.Type();
-			expr_list.expected_names[col_idx] = column.Name();
+		// set the expected types as the types for the INSERT statement
+		auto &column = table.GetColumn(table_col_idx);
+		expr_list.expected_types[col_idx] = table.GetExpectedTypeForInsert(column);
+		expr_list.expected_names[col_idx] = column.Name();
 
-			// now replace any DEFAULT values with the corresponding default expression
-			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-				TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
-			}
+		// now replace any DEFAULT values with the corresponding default expression
+		for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+			TryReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 		}
 	}
 }
@@ -104,9 +100,10 @@ unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &ins
 		throw InternalException("No defaults to push");
 	}
 
+	auto &table = insert.table;
 	auto source_bindings = root->GetColumnBindings();
 	vector<unique_ptr<Expression>> select_list;
-	for (auto &col : insert.table.GetColumns().Physical()) {
+	for (auto &col : table.GetColumns().Physical()) {
 		auto storage_idx = col.StorageOid();
 		auto mapped_index = insert.column_index_map[col.Physical()];
 		if (mapped_index == DConstants::INVALID_INDEX) {
@@ -114,10 +111,10 @@ unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &ins
 			select_list.push_back(std::move(insert.bound_defaults[storage_idx]));
 			continue;
 		}
-
 		auto &original_type = source_types[mapped_index];
 		auto source_binding = source_bindings[mapped_index];
-		select_list.push_back(make_uniq<BoundColumnRefExpression>(original_type, source_binding));
+		select_list.push_back(table.GetDefaultExpressionForColumn(context, original_type, source_binding,
+		                                                          *insert.bound_defaults[storage_idx]));
 	}
 
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
@@ -633,8 +630,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	}
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
-	ExpandDefaultInValuesList(node, table, values_list, named_column_map,
-	                          node.column_order == InsertColumnOrder::INSERT_BY_POSITION);
+	ExpandDefaultInValuesList(node, table, values_list, named_column_map);
 
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;
