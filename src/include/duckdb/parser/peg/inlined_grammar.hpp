@@ -4,7 +4,7 @@
 namespace duckdb {
 
 const char INLINED_PEG_GRAMMAR[] = {
-	"Program <- Statement? (';'+ Statement)* ';'*\n"
+	"Program <- Statement? (';'+ Statement)* ';'* EndOfInput\n"
 	"Statement <-\n"
 	"	CreateStatement /\n"
 	"	SelectStatement /\n"

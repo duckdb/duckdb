@@ -507,21 +507,30 @@ bool BaseTokenizer::TokenizeInput() {
 		}
 	}
 
-	// finished processing - check the final state
+	// `append_end_of_input` always emits END_OF_INPUT (suggestions wouldn't make sense from
+	// inside an unterminated comment or string).
+	auto append_sentinel = [&]() {
+		tokens.emplace_back("", sql.size(), GetEndOfInputType());
+	};
+	auto append_end_of_input = [&]() {
+		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
+	};
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
-		// no suggestions in comments or dollar-quoted strings
+		append_end_of_input();
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
+		append_end_of_input();
 		return false;
 	default:
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
 	OnLastToken(state, std::move(last_word), last_pos);
+	append_sentinel();
 	return true;
 }
 
