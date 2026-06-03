@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_all_null.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics with all NULL values
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_all_null.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics with all NULL values
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000
+SHAPE_NAME=all null
+NULL_EXPR=true

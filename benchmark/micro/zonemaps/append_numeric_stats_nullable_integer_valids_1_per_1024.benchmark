@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_valids_1_per_1024.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics with one valid value per 1024 rows
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_valids_1_per_1024.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics with one valid value per 1024 rows
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000
+SHAPE_NAME=1 valid per 1024
+NULL_EXPR=(i % 1024) > 0

@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_double_valids_1_per_64.benchmark
+# description: Benchmark SQL append while computing DOUBLE zonemap statistics with one valid value per validity word
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_double_valids_1_per_64.benchmark
+DESCRIPTION=Benchmark SQL append while computing DOUBLE zonemap statistics with one valid value per validity word
+TYPE_NAME=DOUBLE
+TYPE=DOUBLE
+VALUE_MODULUS=1000000000
+SHAPE_NAME=1 valid per 64
+NULL_EXPR=(i % 64) > 0

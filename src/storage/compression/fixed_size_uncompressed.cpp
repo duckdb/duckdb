@@ -1,13 +1,21 @@
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/validity_executor.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats_traits.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
@@ -203,36 +211,240 @@ static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &seg
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
+template <class T>
+struct FixedSizeStatsWriterTraits {
+	using TYPE = typename std::remove_cv<T>::type;
+	static constexpr bool SUPPORTS_NUMERIC_STATS_WRITER =
+	    std::is_integral<TYPE>::value || std::is_floating_point<TYPE>::value || std::is_same<TYPE, hugeint_t>::value ||
+	    std::is_same<TYPE, uhugeint_t>::value;
+};
+
+template <class T>
+using FixedSizeStatsWriter = typename std::conditional<FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER,
+                                                       StatsWriter<T>, StatsWriter<void>>::type;
+
+static constexpr idx_t FIXED_SIZE_UNCOMPRESSED_VALIDITY_EXTRACT_RUN_LENGTH = 16;
+
+template <class T>
+static inline void AppendContiguousValidFixedSizeValues(BaseStatistics &stats, FixedSizeStatsWriter<T> &writer,
+                                                        T *__restrict target, const T *__restrict source, idx_t count) {
+	D_ASSERT(count > 0);
+	if constexpr (FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER) {
+		using OPERATIONS = NumericStatsTraits<T>;
+		FixedSizeStatsWriter<T> local_writer;
+		local_writer.SetHasValid();
+		for (idx_t i = 0; i < count; i++) {
+			const auto input = OPERATIONS::LoadInput(source + i);
+			OPERATIONS::StoreInput(target + i, input);
+			local_writer.UpdateMinMaxFromInput(input);
+		}
+		local_writer.Merge(writer);
+	} else {
+		writer.SetHasValid();
+		for (idx_t i = 0; i < count; i++) {
+			const auto value = source[i];
+			target[i] = value;
+			stats.UpdateNumericStats<T>(value);
+		}
+	}
+}
+
+template <class T>
+static inline void AppendContiguousFixedSizeValues(BaseStatistics &stats, T *__restrict target,
+                                                   const T *__restrict source, idx_t count) {
+	FixedSizeStatsWriter<T> writer;
+	AppendContiguousValidFixedSizeValues<T>(stats, writer, target, source, count);
+	writer.Merge(stats);
+}
+
+template <class T>
+static inline void AppendContiguousInvalidFixedSizeValues(FixedSizeStatsWriter<T> &writer, T *__restrict target,
+                                                          idx_t count) {
+	D_ASSERT(count > 0);
+	writer.SetHasNull();
+	if constexpr (FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER) {
+		using OPERATIONS = NumericStatsTraits<T>;
+		const auto null_input = OPERATIONS::NullInput();
+		for (idx_t i = 0; i < count; i++) {
+			OPERATIONS::StoreInput(target + i, null_input);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			target[i] = NullValue<T>();
+		}
+	}
+}
+
+// Validity slices are word-local fragments from ValidityExecutor. Numeric fixed-size types use NumericStatsTraits
+// for local min/max reduction; other fixed-size types update validity through StatsWriter<void>.
+template <class T>
+static inline void AppendContiguousValiditySlice(BaseStatistics &stats, FixedSizeStatsWriter<T> &writer,
+                                                 T *__restrict target, const T *__restrict source,
+                                                 const ValidityWordSlice &word) {
+	const auto slice_count = word.Count();
+	const auto has_valid = word.HasValid();
+	const auto has_invalid = word.HasInvalid();
+	if constexpr (FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER) {
+		using OPERATIONS = NumericStatsTraits<T>;
+		FixedSizeStatsWriter<T> local_writer;
+		if (has_valid) {
+			local_writer.SetHasValid();
+		}
+		if (has_invalid) {
+			local_writer.SetHasNull();
+		}
+		for (idx_t i = 0; i < slice_count; i++) {
+			if (word.RowIsValid(i)) {
+				const auto input = OPERATIONS::LoadInput(source + i);
+				OPERATIONS::StoreInput(target + i, input);
+				local_writer.UpdateMinMaxFromInput(input);
+			} else {
+				OPERATIONS::StoreInput(target + i, OPERATIONS::NullInput());
+			}
+		}
+		local_writer.Merge(writer);
+	} else {
+		if (has_valid) {
+			writer.SetHasValid();
+		}
+		if (has_invalid) {
+			writer.SetHasNull();
+		}
+		for (idx_t i = 0; i < slice_count; i++) {
+			if (word.RowIsValid(i)) {
+				const auto value = source[i];
+				target[i] = value;
+				stats.UpdateNumericStats<T>(value);
+			} else {
+				target[i] = NullValue<T>();
+			}
+		}
+	}
+}
+
+template <class T>
+static inline void AppendContiguousNullableFixedSizeValues(BaseStatistics &stats, T *__restrict target,
+                                                           const T *__restrict source, const ValidityMask &validity,
+                                                           idx_t source_offset, idx_t count) {
+	FixedSizeStatsWriter<T> writer;
+	auto valid_func = [&](idx_t local_offset, idx_t append_count) {
+		AppendContiguousValidFixedSizeValues<T>(stats, writer, target + local_offset, source + local_offset,
+		                                        append_count);
+	};
+	auto invalid_func = [&](idx_t local_offset, idx_t append_count) {
+		AppendContiguousInvalidFixedSizeValues<T>(writer, target + local_offset, append_count);
+	};
+	auto validity_slice_func = [&](idx_t local_offset, ValidityWordSlice word) {
+		AppendContiguousValiditySlice<T>(stats, writer, target + local_offset, source + local_offset, word);
+	};
+
+	ValidityExecutor::Execute<FIXED_SIZE_UNCOMPRESSED_VALIDITY_EXTRACT_RUN_LENGTH>(
+	    validity, source_offset, count, valid_func, invalid_func, validity_slice_func);
+	writer.Merge(stats);
+}
+
+template <class T>
+static inline void AppendSelectedValidFixedSizeValues(BaseStatistics &stats, T *__restrict target,
+                                                      const T *__restrict source, const SelectionVector &sel,
+                                                      idx_t source_offset, idx_t count) {
+	D_ASSERT(count > 0);
+	if constexpr (FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER) {
+		using OPERATIONS = NumericStatsTraits<T>;
+		StatsWriter<T> writer;
+		writer.SetHasValid();
+		for (idx_t i = 0; i < count; i++) {
+			const auto source_idx = sel.get_index(source_offset + i);
+			const auto input = OPERATIONS::LoadInput(source + source_idx);
+			OPERATIONS::StoreInput(target + i, input);
+			writer.UpdateMinMaxFromInput(input);
+		}
+		writer.Merge(stats);
+	} else {
+		stats.SetHasNoNullFast();
+		for (idx_t i = 0; i < count; i++) {
+			const auto source_idx = sel.get_index(source_offset + i);
+			const auto value = source[source_idx];
+			target[i] = value;
+			stats.UpdateNumericStats<T>(value);
+		}
+	}
+}
+
+template <class T>
+static inline void AppendSelectedNullableFixedSizeValues(BaseStatistics &stats, T *__restrict target,
+                                                         const T *__restrict source, const SelectionVector &sel,
+                                                         const ValidityMask &validity, idx_t source_offset,
+                                                         idx_t count) {
+	D_ASSERT(count > 0);
+	if constexpr (FixedSizeStatsWriterTraits<T>::SUPPORTS_NUMERIC_STATS_WRITER) {
+		using OPERATIONS = NumericStatsTraits<T>;
+		StatsWriter<T> writer;
+		bool has_valid = false;
+		bool has_null = false;
+		for (idx_t i = 0; i < count; i++) {
+			const auto source_idx = sel.get_index(source_offset + i);
+			if (validity.RowIsValid(source_idx)) {
+				has_valid = true;
+				const auto input = OPERATIONS::LoadInput(source + source_idx);
+				OPERATIONS::StoreInput(target + i, input);
+				writer.UpdateMinMaxFromInput(input);
+			} else {
+				has_null = true;
+				OPERATIONS::StoreInput(target + i, OPERATIONS::NullInput());
+			}
+		}
+		if (has_valid) {
+			writer.SetHasValid();
+		}
+		if (has_null) {
+			writer.SetHasNull();
+		}
+		writer.Merge(stats);
+	} else {
+		bool has_valid = false;
+		bool has_null = false;
+		for (idx_t i = 0; i < count; i++) {
+			const auto source_idx = sel.get_index(source_offset + i);
+			if (validity.RowIsValid(source_idx)) {
+				has_valid = true;
+				const auto value = source[source_idx];
+				target[i] = value;
+				stats.UpdateNumericStats<T>(value);
+			} else {
+				has_null = true;
+				target[i] = NullValue<T>();
+			}
+		}
+		if (has_valid) {
+			stats.SetHasNoNullFast();
+		}
+		if (has_null) {
+			stats.SetHasNullFast();
+		}
+	}
+}
+
 struct StandardFixedSizeAppend {
 	template <class T>
 	static void Append(BaseStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
 		auto sdata = UnifiedVectorFormat::GetData<T>(adata);
 		auto tdata = reinterpret_cast<T *>(target);
-		if (adata.validity.CanHaveNull()) {
-			for (idx_t i = 0; i < count; i++) {
-				auto source_idx = adata.sel->get_index(offset + i);
-				auto target_idx = target_offset + i;
-				bool is_null = !adata.validity.RowIsValid(source_idx);
-				if (!is_null) {
-					stats.SetHasNoNullFast();
-					stats.UpdateNumericStats<T>(sdata[source_idx]);
-					tdata[target_idx] = sdata[source_idx];
-				} else {
-					stats.SetHasNullFast();
-					// we insert a NullValue<T> in the null gap for debuggability
-					// this value should never be used or read anywhere
-					tdata[target_idx] = NullValue<T>();
-				}
+		if (!adata.sel->IsSet()) {
+			// Contiguous buffer fast path
+			auto source = sdata + offset;
+			auto target_data = tdata + target_offset;
+			if (adata.validity.CannotHaveNull()) {
+				AppendContiguousFixedSizeValues<T>(stats, target_data, source, count);
+			} else {
+				AppendContiguousNullableFixedSizeValues<T>(stats, target_data, source, adata.validity, offset, count);
 			}
+			return;
+		} else if (adata.validity.CanHaveNull()) {
+			AppendSelectedNullableFixedSizeValues<T>(stats, tdata + target_offset, sdata, *adata.sel, adata.validity,
+			                                         offset, count);
 		} else {
-			stats.SetHasNoNullFast();
-			for (idx_t i = 0; i < count; i++) {
-				auto source_idx = adata.sel->get_index(offset + i);
-				auto target_idx = target_offset + i;
-				stats.UpdateNumericStats<T>(sdata[source_idx]);
-				tdata[target_idx] = sdata[source_idx];
-			}
+			AppendSelectedValidFixedSizeValues<T>(stats, tdata + target_offset, sdata, *adata.sel, offset, count);
 		}
 	}
 };
@@ -259,6 +471,13 @@ idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segme
 	auto target_ptr = append_state.handle.GetDataMutable();
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
+
+	// Compress() flushes when Append() returns _fewer_ rows than requested. If the previous call filled this segment
+	// exactly, this call starts with no remaining capacity, so copy_count is zero.
+	// StandardFixedSizeAppend assumes at least one row, so if copy_count is zero, exit early here.
+	if (copy_count == 0) {
+		return 0;
+	}
 
 	OP::template Append<T>(stats, target_ptr, segment.count, data, offset, copy_count);
 	segment.count += copy_count;

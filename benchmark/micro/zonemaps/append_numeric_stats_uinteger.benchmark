@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_uinteger.benchmark
+# description: Benchmark SQL append while computing UINTEGER zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_uinteger.benchmark
+DESCRIPTION=Benchmark SQL append while computing UINTEGER zonemap statistics
+TYPE_NAME=UINTEGER
+TYPE=UINTEGER
+VALUE_MODULUS=1000000000

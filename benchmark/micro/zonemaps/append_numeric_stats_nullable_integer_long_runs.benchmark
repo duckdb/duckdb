@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_long_runs.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics with long alternating valid and NULL runs
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_long_runs.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics with long alternating valid and NULL runs
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000
+SHAPE_NAME=long valid and null runs
+NULL_EXPR=((i // 4096) % 2) > 0

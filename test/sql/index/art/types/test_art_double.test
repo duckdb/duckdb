@@ -12,6 +12,9 @@ statement ok
 INSERT INTO numbers VALUES (CAST(-0 AS DOUBLE))
 
 statement ok
+INSERT INTO numbers VALUES ('-inf'::DOUBLE), (-2.5::DOUBLE), (1.5::DOUBLE), ('inf'::DOUBLE), ('nan'::DOUBLE)
+
+statement ok
 CREATE INDEX i_index ON numbers(i)
 
 query I
@@ -24,3 +27,32 @@ SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS DOUBLE)
 ----
 2
 
+query I
+SELECT COUNT(i) FROM numbers WHERE i = '-inf'::DOUBLE
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = 'inf'::DOUBLE
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = 'nan'::DOUBLE
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i < '-inf'::DOUBLE
+----
+0
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i > 'inf'::DOUBLE
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i >= -2.5::DOUBLE AND i <= 1.5::DOUBLE
+----
+4

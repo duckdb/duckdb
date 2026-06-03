@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_decimal_18_6.benchmark
+# description: Benchmark SQL append while computing DECIMAL(18,6) zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_decimal_18_6.benchmark
+DESCRIPTION=Benchmark SQL append while computing DECIMAL(18,6) zonemap statistics
+TYPE_NAME=DECIMAL(18,6)
+TYPE=DECIMAL(18,6)
+VALUE_MODULUS=10000000000

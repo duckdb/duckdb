@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <limits>
 
 using namespace duckdb;
 
@@ -265,5 +266,61 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 			REQUIRE(next_encoded > current_encoded);
 			current_encoded = next_encoded;
 		}
+	}
+}
+
+template <class T, class WORD>
+static T FloatingValueFromBits(WORD bits) {
+	T result;
+	memcpy(&result, &bits, sizeof(T));
+	return result;
+}
+
+TEST_CASE("Radix floating point special value encodings", "[art-enc]") {
+	{
+		REQUIRE(Radix::EncodeFloat(0.0f) == 0x80000000);
+		REQUIRE(Radix::EncodeFloat(-0.0f) == 0x80000000);
+
+		REQUIRE(Radix::EncodeFloat(-std::numeric_limits<float>::infinity()) == 0x00000000);
+		REQUIRE(Radix::EncodeFloat(std::numeric_limits<float>::infinity()) == 0xfffffffe);
+		REQUIRE(Radix::EncodeFloat(std::numeric_limits<float>::quiet_NaN()) == 0xffffffff);
+		REQUIRE(Radix::EncodeFloat(FloatingValueFromBits<float>(uint32_t(0xffc00000))) == 0xffffffff);
+
+		// Finite positive values set the sign bit:
+		//  1.5f word    0x3FC00000
+		//  sign bit   | 0x80000000
+		//               ----------
+		//  radix key    0xBFC00000
+		REQUIRE(Radix::EncodeFloat(1.5f) == 0xbfc00000);
+
+		// Finite negative values invert all bits:
+		//  -2.5f word   0xC0200000
+		//  radix key   ~0xC0200000
+		//               ----------
+		//               0x3FDFFFFF
+		REQUIRE(Radix::EncodeFloat(-2.5f) == 0x3fdfffff);
+	}
+	{
+		REQUIRE(Radix::EncodeDouble(0.0) == 0x8000000000000000);
+		REQUIRE(Radix::EncodeDouble(-0.0) == 0x8000000000000000);
+
+		REQUIRE(Radix::EncodeDouble(-std::numeric_limits<double>::infinity()) == 0x0000000000000000);
+		REQUIRE(Radix::EncodeDouble(std::numeric_limits<double>::infinity()) == 0xfffffffffffffffe);
+		REQUIRE(Radix::EncodeDouble(std::numeric_limits<double>::quiet_NaN()) == 0xffffffffffffffff);
+		REQUIRE(Radix::EncodeDouble(FloatingValueFromBits<double>(uint64_t(0xfff8000000000000))) == 0xffffffffffffffff);
+
+		// Finite positive values set the sign bit:
+		//  1.5 word     0x3FF8000000000000
+		//  sign bit   | 0x8000000000000000
+		//               ------------------
+		//  radix key    0xBFF8000000000000
+		REQUIRE(Radix::EncodeDouble(1.5) == 0xbff8000000000000);
+
+		// Finite negative values invert all bits:
+		//  -2.5 word   0xC004000000000000
+		//  radix key  ~0xC004000000000000
+		//              ------------------
+		//              0x3FFBFFFFFFFFFFFF
+		REQUIRE(Radix::EncodeDouble(-2.5) == 0x3ffbffffffffffff);
 	}
 }
