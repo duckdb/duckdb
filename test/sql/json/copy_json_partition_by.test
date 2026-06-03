@@ -52,3 +52,43 @@ FROM read_text('{TEST_DIR}/json_partition_dateformat/*/*.json') ORDER BY filenam
 ----
 {TEST_DIR}/json_partition_dateformat/val=0/data_0.json	{"d":"2024/01/01"}
 {TEST_DIR}/json_partition_dateformat/val=1/data_0.json	{"d":"2024/01/01"}
+
+# PARTITION_BY all columns matches generic COPY and requires WRITE_PARTITION_COLUMNS
+statement error
+COPY (SELECT 1 AS a, 2 AS b)
+TO '{TEST_DIR}/json_partition_all' (FORMAT JSON, PARTITION_BY (a, b));
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+statement error
+COPY (SELECT 1 AS a, 2 AS b)
+TO '{TEST_DIR}/json_partition_star' (FORMAT JSON, PARTITION_BY '*');
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
+statement ok
+COPY (SELECT 1 AS a, 2 AS b)
+TO '{TEST_DIR}/json_partition_star_written' (FORMAT JSON, PARTITION_BY '*', WRITE_PARTITION_COLUMNS);
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_star_written/*/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_star_written/a=1/b=2/data_0.json	{"a":1,"b":2}
+
+# Date formatting is projected before partitioning, so it also applies to hive partition values
+statement ok
+COPY (SELECT DATE '2024-01-02' AS d, 42 AS v)
+TO '{TEST_DIR}/json_partition_date_dir' (FORMAT JSON, PARTITION_BY (d), dateformat '%Y/%m/%d');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_date_dir/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_date_dir/d=2024%2F01%2F02/data_0.json	{"v":42}
+
+statement error
+COPY (SELECT 1 AS a, 2 AS b)
+TO '{TEST_DIR}/json_partition_bad_wpc' (FORMAT JSON, PARTITION_BY (a), WRITE_PARTITION_COLUMNS (true, false));
+----
+Invalid Input Error: Copy option "write_partition_columns" did not expect a list as argument
