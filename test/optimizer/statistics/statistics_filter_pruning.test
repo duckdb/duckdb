@@ -21,7 +21,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_int_profile.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "EXTRA_INFO": "true"}';
+SET tracked_metrics = ['query.total_rows_scanned'];
 
 query I
 SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 + 4 > 5;
@@ -31,13 +31,12 @@ SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 + 4 > 5;
 statement ok
 PRAGMA disable_profiling;
 
+# Parse the JSON profile with core read_csv (not read_json) to avoid a
+# `require json` that would skip this whole test when JSON is unavailable.
 query I
-SELECT CASE
-	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
-	ELSE 'false'
-END
+SELECT max(regexp_extract(json, 'total_rows_scanned": ([0-9]+)', 1)::BIGINT) < 300000
 FROM read_csv('{TEST_DIR}/statistics_filter_pruning_int_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
-WHERE json LIKE '%cumulative_rows_scanned%';
+WHERE json LIKE '%total_rows_scanned%';
 ----
 true
 
@@ -96,7 +95,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_double_profile.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "EXTRA_INFO": "true"}';
+SET tracked_metrics = ['query.total_rows_scanned'];
 
 query I
 SELECT count(*) FROM stats_filter_prune_double WHERE a * 4e0 + 4e0 > 5e0;
@@ -107,12 +106,9 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT CASE
-	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
-	ELSE 'false'
-END
+SELECT max(regexp_extract(json, 'total_rows_scanned": ([0-9]+)', 1)::BIGINT) < 300000
 FROM read_csv('{TEST_DIR}/statistics_filter_pruning_double_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
-WHERE json LIKE '%cumulative_rows_scanned%';
+WHERE json LIKE '%total_rows_scanned%';
 ----
 true
 
@@ -150,6 +146,9 @@ PRAGMA enable_profiling = 'json';
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_struct_profile.json';
 
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned'];
+
 query I
 SELECT count(*) FROM stats_filter_prune_struct WHERE a.b + 5 > 6;
 ----
@@ -159,12 +158,9 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT CASE
-	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
-	ELSE 'false'
-END
+SELECT max(regexp_extract(json, 'total_rows_scanned": ([0-9]+)', 1)::BIGINT) < 300000
 FROM read_csv('{TEST_DIR}/statistics_filter_pruning_struct_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
-WHERE json LIKE '%cumulative_rows_scanned%';
+WHERE json LIKE '%total_rows_scanned%';
 ----
 true
 
@@ -189,6 +185,9 @@ PRAGMA enable_profiling = 'json';
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_struct_extract_at_profile.json';
 
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned'];
+
 query I
 SELECT count(*) FROM stats_filter_prune_struct WHERE struct_extract_at(a, 1) + 5 > 6;
 ----
@@ -198,12 +197,9 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT CASE
-	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
-	ELSE 'false'
-END
+SELECT max(regexp_extract(json, 'total_rows_scanned": ([0-9]+)', 1)::BIGINT) < 300000
 FROM read_csv('{TEST_DIR}/statistics_filter_pruning_struct_extract_at_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
-WHERE json LIKE '%cumulative_rows_scanned%';
+WHERE json LIKE '%total_rows_scanned%';
 ----
 true
 

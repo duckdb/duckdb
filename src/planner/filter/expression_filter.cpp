@@ -207,13 +207,13 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	case ExpressionClass::BOUND_REF:
 		return &stats;
 	case ExpressionClass::BOUND_CONSTANT: {
-		auto &constant = expr.Cast<BoundConstantExpression>().value;
+		auto &constant = expr.Cast<BoundConstantExpression>().GetValue();
 		owned_stats.push_back(BaseStatistics::FromConstant(constant).ToUnique());
 		return owned_stats.back().get();
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		auto child_stats = TryGetFilterStats(context_p, *cast_expr.Child(), stats, owned_stats);
+		auto child_stats = TryGetFilterStats(context_p, cast_expr.Child(), stats, owned_stats);
 		if (!child_stats) {
 			return nullptr;
 		}
@@ -244,13 +244,13 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 			}
 		}
 
-		if (!context_p || !func.function.HasStatisticsCallback()) {
+		if (!context_p || !func.Function().HasStatisticsCallback()) {
 			return nullptr;
 		}
 
 		vector<BaseStatistics> child_stats;
-		child_stats.reserve(func.children.size());
-		for (auto &child_expr : func.children) {
+		child_stats.reserve(func.GetChildren().size());
+		for (auto &child_expr : func.GetChildren()) {
 			auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
 			if (!child_stat) {
 				return nullptr;
@@ -261,8 +261,8 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 		// Use copy to avoid expression rewritten
 		auto expr_copy = func.Copy();
 		auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-		FunctionStatisticsInput input(func_copy, func_copy.bind_info.get(), child_stats, &expr_copy);
-		owned_stats.push_back(func.function.GetStatisticsCallback()(*context_p, input));
+		FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+		owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
 		return owned_stats.back().get();
 	}
 	default:
@@ -318,7 +318,7 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 	}
 	vector<unique_ptr<BaseStatistics>> owned_stats;
 	auto filter_stats = &stats;
-	if (!func_expr.children.empty()) {
+	if (!func_expr.GetChildren().empty()) {
 		auto child_stats = TryGetFilterStats(context_p, *func_expr.GetChildren()[0], stats, owned_stats);
 		if (!child_stats) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
