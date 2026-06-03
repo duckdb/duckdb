@@ -104,9 +104,6 @@ public:
 	//! Creates a new (empty) physical plan if none exists yet.
 	ArenaAllocator &ArenaRef();
 
-public:
-	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
-
 protected:
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);
 	PhysicalOperator &CreatePlan(LogicalAnyJoin &op);

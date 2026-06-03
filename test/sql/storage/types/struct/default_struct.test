@@ -6,7 +6,17 @@
 load {TEST_DIR}/struct_default_test.db
 
 statement ok
-CREATE TABLE a(i ROW(a INT, b INT) DEFAULT ({'a': 7, 'b': 2}))
+CREATE TABLE a(
+	i ROW(
+		a INT,
+		b INT
+	) DEFAULT (
+		{
+			'a': 7,
+			'b': 2
+		}
+	)
+)
 
 statement ok
 INSERT INTO a VALUES (DEFAULT)
@@ -26,3 +36,133 @@ SELECT * FROM a
 ----
 {'a': 7, 'b': 2}
 {'a': 7, 'b': 2}
+
+statement ok
+CREATE TABLE b(
+	i ROW(
+		a INT,
+		b INT
+	) DEFAULT (
+		{
+			'a': 7,
+			'b': 2
+		}
+	),
+	j INT DEFAULT 42
+)
+
+statement ok
+INSERT INTO b(i) VALUES (
+	{'a': 11}
+)
+
+statement ok
+INSERT INTO b(i) SELECT {'b': 12}
+
+statement ok
+INSERT INTO b(i) VALUES (NULL)
+
+query II
+SELECT * FROM b ORDER BY j, i.a NULLS LAST
+----
+{'a': 7, 'b': 12}	42
+{'a': 11, 'b': 2}	42
+NULL	42
+
+statement ok
+CREATE TABLE c(
+	i ROW(
+		a INT,
+		n ROW(
+			x INT,
+			y INT
+		),
+		z INT
+	) DEFAULT (
+		{
+			'a': 1,
+			'n': {
+				'x': 2,
+				'y': 3
+			},
+			'z': 4
+		}
+	)
+)
+
+statement ok
+INSERT INTO c(i) VALUES ({'n': {'x': 10}})
+
+query I
+SELECT * FROM c
+----
+{'a': 1, 'n': {'x': 10, 'y': 3}, 'z': 4}
+
+statement ok
+CREATE TABLE d(
+	i ROW(
+		a INT,
+		b INT
+	) DEFAULT (
+		{
+			'a': 7 + 1,
+			'b': 2 + 3
+		}
+	)
+)
+
+statement ok
+INSERT INTO d(i) VALUES ({'a': 11})
+
+query I
+SELECT * FROM d
+----
+{'a': 11, 'b': 5}
+
+statement ok
+CREATE TABLE e(
+	i ROW(
+		a INT,
+		b INT,
+		c INT
+	) DEFAULT (
+		{
+			'a': 7
+		}
+	)
+)
+
+statement ok
+INSERT INTO e(i) VALUES ({'b': 12})
+
+query I
+SELECT * FROM e
+----
+{'a': 7, 'b': 12, 'c': NULL}
+
+statement ok
+CREATE TABLE f(
+	i ROW(
+		a INT,
+		n ROW(
+			x INT,
+			y INT,
+			z INT
+		),
+		b INT
+	) DEFAULT (
+		{
+			'n': {
+				'y': 3
+			}
+		}
+	)
+)
+
+statement ok
+INSERT INTO f(i) VALUES ({'n': {'x': 10}})
+
+query I
+SELECT * FROM f
+----
+{'a': NULL, 'n': {'x': 10, 'y': 3, 'z': NULL}, 'b': NULL}

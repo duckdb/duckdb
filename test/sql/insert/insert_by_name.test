@@ -122,6 +122,61 @@ FROM tbl2
 ----
 1	22
 
+statement ok
+CREATE TABLE struct_defaults_by_name(
+	i ROW(
+		a INT,
+		b INT,
+		c INT
+	) DEFAULT (
+		{
+			'a': 7
+		}
+	),
+	j INT DEFAULT 42,
+	k INT DEFAULT 99
+);
+
+statement ok
+INSERT INTO struct_defaults_by_name BY NAME SELECT {'b': 12} AS i, 10 AS k;
+
+statement ok
+INSERT INTO struct_defaults_by_name BY NAME SELECT {'a': 11} AS i;
+
+query III
+SELECT * FROM struct_defaults_by_name ORDER BY k, i.a NULLS LAST
+----
+{'a': 7, 'b': 12, 'c': NULL}	42	10
+{'a': 11, 'b': NULL, 'c': NULL}	42	99
+
+statement ok
+CREATE TABLE nested_struct_defaults_by_name(
+	i ROW(
+		a INT,
+		n ROW(
+			x INT,
+			y INT,
+			z INT
+		),
+		b INT
+	) DEFAULT (
+		{
+			'n': {
+				'y': 3
+			}
+		}
+	),
+	j INT DEFAULT 42
+);
+
+statement ok
+INSERT INTO nested_struct_defaults_by_name BY NAME SELECT {'n': {'x': 10}} AS i;
+
+query II
+SELECT * FROM nested_struct_defaults_by_name
+----
+{'a': NULL, 'n': {'x': 10, 'y': 3, 'z': NULL}, 'b': NULL}	42
+
 
 # INSERT OR REPLACE BY NAME on a table with only a PK column (no columns to update)
 statement ok

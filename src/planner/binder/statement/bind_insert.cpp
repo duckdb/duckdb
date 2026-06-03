@@ -19,10 +19,14 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -59,7 +63,7 @@ void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, con
 
 void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
                                        optional_ptr<ExpressionListRef> values_list,
-                                       const vector<LogicalIndex> &named_column_map) {
+                                       const vector<LogicalIndex> &named_column_map, bool bind_expected_types) {
 	if (!values_list) {
 		return;
 	}
@@ -68,7 +72,9 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 	// special case: check if we are inserting from a VALUES statement
 	if (values_list) {
 		auto &expr_list = values_list->Cast<ExpressionListRef>();
-		expr_list.expected_types.resize(expected_columns);
+		if (bind_expected_types) {
+			expr_list.expected_types.resize(expected_columns);
+		}
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
@@ -81,7 +87,9 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table.GetColumn(table_col_idx);
-			expr_list.expected_types[col_idx] = column.Type();
+			if (bind_expected_types) {
+				expr_list.expected_types[col_idx] = column.Type();
+			}
 			expr_list.expected_names[col_idx] = column.Name();
 
 			// now replace any DEFAULT values with the corresponding default expression
@@ -90,6 +98,142 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 			}
 		}
 	}
+}
+
+namespace {
+
+//! Used to determine if the field of a struct is mapped or not
+struct StructFieldMapping {
+	case_insensitive_map_t<StructFieldMapping> child_mapping;
+};
+
+static Value CreateStructMapping(const LogicalType &struct_type, const string &name,
+                                 case_insensitive_map_t<StructFieldMapping> &out_mapping) {
+	child_list_t<Value> field_mapping;
+
+	auto &struct_children = StructType::GetChildTypes(struct_type);
+	for (auto &[field_name, field_type] : struct_children) {
+		auto &child_mapping = out_mapping[field_name];
+		Value mapping;
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			mapping = CreateStructMapping(field_type, field_name, child_mapping.child_mapping);
+		} else {
+			mapping = Value(field_name);
+		}
+		field_mapping.emplace_back(field_name, mapping);
+	}
+	auto struct_value = Value::STRUCT(field_mapping);
+	if (name.empty()) {
+		//! Root column
+		return struct_value;
+	}
+	return Value::STRUCT({{"", Value(name)}, {"", struct_value}});
+}
+
+static Value CreateStructDefault(const Value &value, const case_insensitive_map_t<StructFieldMapping> &mapping = {}) {
+	child_list_t<Value> field_defaults;
+	auto &field_values = StructValue::GetChildren(value);
+	auto &struct_children = StructType::GetChildTypes(value.type());
+	for (idx_t j = 0; j < field_values.size(); j++) {
+		auto &field_name = struct_children[j].first;
+		auto &field_type = struct_children[j].second;
+		auto &field_value = field_values[j];
+
+		auto it = mapping.find(field_name);
+		const bool is_mapped = it != mapping.end();
+
+		Value field_default;
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			if (is_mapped) {
+				field_default = CreateStructDefault(field_value, it->second.child_mapping);
+			} else {
+				field_default = CreateStructDefault(field_value);
+			}
+
+			if (field_default.IsNull()) {
+				//! All fields were skipped, no need to include this value
+				continue;
+			}
+		} else {
+			if (is_mapped) {
+				continue;
+			}
+			field_default = field_value;
+		}
+
+		field_defaults.emplace_back(field_name, field_default);
+	}
+	if (field_defaults.empty()) {
+		//! Skipped all fields, signal that the value should be omitted
+		return Value();
+	}
+	return Value::STRUCT(field_defaults);
+}
+
+static Value EvaluateStructDefault(ClientContext &context, const Expression &default_expr, const string &column_name) {
+	if (!default_expr.IsFoldable()) {
+		throw BinderException("Cannot resolve partial STRUCT insert for column \"%s\" with non-constant default value",
+		                      column_name);
+	}
+	Value default_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, default_expr, default_value)) {
+		throw BinderException("Cannot resolve partial STRUCT insert for column \"%s\" with non-constant default value",
+		                      column_name);
+	}
+	return default_value;
+}
+
+} // namespace
+
+unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
+                                                              vector<LogicalType> &source_types) {
+	if (insert.column_index_map.empty()) {
+		throw InternalException("No defaults to push");
+	}
+
+	auto source_bindings = root->GetColumnBindings();
+	vector<unique_ptr<Expression>> select_list;
+	for (auto &col : insert.table.GetColumns().Physical()) {
+		auto storage_idx = col.StorageOid();
+		auto mapped_index = insert.column_index_map[col.Physical()];
+		if (mapped_index == DConstants::INVALID_INDEX) {
+			// Push default value
+			select_list.push_back(std::move(insert.bound_defaults[storage_idx]));
+			continue;
+		}
+
+		auto &original_type = source_types[mapped_index];
+		auto source_binding = source_bindings[mapped_index];
+		if (col.Type().id() != LogicalTypeId::STRUCT || original_type.id() != LogicalTypeId::STRUCT) {
+			select_list.push_back(make_uniq<BoundColumnRefExpression>(original_type, source_binding));
+			continue;
+		}
+
+		auto default_value = EvaluateStructDefault(context, *insert.bound_defaults[storage_idx], col.Name());
+		if (default_value.IsNull()) {
+			select_list.push_back(make_uniq<BoundColumnRefExpression>(original_type, source_binding));
+			continue;
+		}
+
+		// Column is of type STRUCT, create a remap that fills in omitted fields from the column default.
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundColumnRefExpression>(original_type, source_binding));
+		children.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
+
+		case_insensitive_map_t<StructFieldMapping> mapping;
+		children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "", mapping)));
+		children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(default_value, mapping)));
+		select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
+	}
+
+	source_types.clear();
+	for (auto &expr : select_list) {
+		source_types.push_back(expr->GetReturnType());
+	}
+
+	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+	projection->AddChild(std::move(root));
+	return std::move(projection);
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
@@ -600,7 +744,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	}
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
-	ExpandDefaultInValuesList(node, table, values_list, named_column_map);
+	ExpandDefaultInValuesList(node, table, values_list, named_column_map,
+	                          node.column_order != InsertColumnOrder::INSERT_BY_POSITION);
 
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;
@@ -613,7 +758,16 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		// inserting from a select - check if the column count matches
 		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(), table.name);
 
-		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+		auto source_types = root_select.types;
+		auto target_types = insert->expected_types;
+		if (!insert->column_index_map.empty()) {
+			root_select.plan = ResolveDefaultsProjection(*insert, std::move(root_select.plan), source_types);
+			target_types.clear();
+			for (auto &column : table.GetColumns().Physical()) {
+				target_types.push_back(column.Type());
+			}
+		}
+		root = CastLogicalOperatorToTypes(source_types, target_types, std::move(root_select.plan));
 	} else {
 		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
 	}
