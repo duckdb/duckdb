@@ -61,7 +61,7 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	}
 }
 
-LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, string catalog_str)
+LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, Identifier catalog_str)
     : entry(std::move(entry_p)), catalog(std::move(catalog_str)) {
 	if (catalog_p) {
 		catalog = catalog_p->GetName();
@@ -86,7 +86,7 @@ bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	return set.count(logical_entry);
 }
 
-void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
+void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const Identifier &name) {
 	for (auto &dep : set) {
 		if (dep.catalog != catalog.GetName()) {
 			throw DependencyException(

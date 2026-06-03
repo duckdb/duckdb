@@ -242,7 +242,7 @@ string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identif
 }
 
 string CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const {
-	if (DefaultSchemaGenerator::IsDefaultSchema(schema.GetName())) {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
 		return SYSTEM_CATALOG;
 	}
 	for (auto &path : paths) {
@@ -258,7 +258,7 @@ string CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const {
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {
 	vector<string> catalogs;
-	if (DefaultSchemaGenerator::IsDefaultSchema(schema.GetName())) {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
 		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {

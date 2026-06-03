@@ -281,7 +281,7 @@
       {
         "id": 202,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,

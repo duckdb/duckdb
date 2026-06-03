@@ -76,7 +76,7 @@ string ColumnRefExpression::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += SQLIdentifier(column_names[i].GetName());
+		result += SQLIdentifier(column_names[i]);
 	}
 	return result;
 }

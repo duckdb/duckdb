@@ -104,7 +104,7 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &inde
 	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
 	vector<string> available;
 	for (auto &idx : index_list.Indexes()) {
-		available.push_back(idx.GetIndexName());
+		available.push_back(idx.GetIndexName().GetName());
 	}
 
 	if (available.empty()) {

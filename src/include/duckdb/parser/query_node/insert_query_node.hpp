@@ -37,7 +37,7 @@ public:
 	vector<string> columns;
 
 	//! Table name to insert to
-	string table;
+	Identifier table;
 	//! Schema name to insert to
 	Identifier schema;
 	//! The catalog name to insert to

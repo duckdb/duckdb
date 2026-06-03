@@ -242,11 +242,11 @@ public:
 	                                                           const vector<unique_ptr<Constraint>> &constraints,
 	                                                           const string &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
-	                                                    const string &table_name, const ColumnList &columns);
+	                                                    const Identifier &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const string &table,
+	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const Identifier &table,
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
 	                                                 const ColumnList &columns);
@@ -255,8 +255,8 @@ public:
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
-	static void BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-	                     const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+	                     const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
 	                     const vector<string> &aliases, vector<LogicalType> &result_types,
 	                     vector<string> &result_names);
 
@@ -561,7 +561,7 @@ private:
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
 
 	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 

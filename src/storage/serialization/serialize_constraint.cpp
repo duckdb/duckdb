@@ -51,8 +51,8 @@ void ForeignKeyConstraint::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(200, "pk_columns", pk_columns);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "fk_columns", fk_columns);
 	serializer.WriteProperty<ForeignKeyType>(202, "fk_type", info.type);
-	serializer.WritePropertyWithDefault<string>(203, "schema", info.schema);
-	serializer.WritePropertyWithDefault<string>(204, "table", info.table);
+	serializer.WritePropertyWithDefault<Identifier>(203, "schema", info.schema);
+	serializer.WritePropertyWithDefault<Identifier>(204, "table", info.table);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", info.pk_keys);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", info.fk_keys);
 }
@@ -62,8 +62,8 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deseriali
 	deserializer.ReadPropertyWithDefault<vector<string>>(200, "pk_columns", result->pk_columns);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "fk_columns", result->fk_columns);
 	deserializer.ReadProperty<ForeignKeyType>(202, "fk_type", result->info.type);
-	deserializer.ReadPropertyWithDefault<string>(203, "schema", result->info.schema);
-	deserializer.ReadPropertyWithDefault<string>(204, "table", result->info.table);
+	deserializer.ReadPropertyWithDefault<Identifier>(203, "schema", result->info.schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(204, "table", result->info.table);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", result->info.pk_keys);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", result->info.fk_keys);
 	return std::move(result);

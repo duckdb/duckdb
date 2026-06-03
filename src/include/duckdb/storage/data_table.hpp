@@ -292,7 +292,7 @@ public:
 	void Destroy();
 
 	string GetTableName() const;
-	void SetTableName(string new_name);
+	void SetTableName(Identifier new_name);
 
 	TableStorageInfo GetStorageInfo();
 

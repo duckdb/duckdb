@@ -58,9 +58,9 @@ SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, L
 SimpleFunction::~SimpleFunction() {
 }
 
-static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
-	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
-	       schema_name != DEFAULT_SCHEMA;
+static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, const Identifier &schema_name) {
+	return !catalog_name.empty() && catalog_name != Identifier(SYSTEM_CATALOG) && !schema_name.empty() &&
+	       schema_name != Identifier(DEFAULT_SCHEMA);
 }
 
 string FunctionParameter::ToString() const {
@@ -84,7 +84,7 @@ string FunctionSignature::ToString() const {
 }
 
 string SimpleFunction::ToString() const {
-	if (RequiresCatalogAndSchemaNamePrefix(catalog_name.GetName(), schema_name.GetName())) {
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		return StringUtil::Format("%s.%s.%s%s", catalog_name, schema_name, name, signature.ToString());
 	}
 	return name + signature.ToString();
@@ -99,8 +99,7 @@ SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
 string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(catalog_name.GetName(), schema_name.GetName(), name.GetName(), arguments,
-	                              named_parameters);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, named_parameters);
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
@@ -139,7 +138,7 @@ hash_t SimpleFunction::Hash() const {
 	return signature.Hash();
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments, const LogicalType &varargs) {
 	string result;
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
@@ -157,7 +156,7 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	return result + ")";
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
 	string result = CallToString(catalog_name, schema_name, name, arguments, varargs);
@@ -165,7 +164,7 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	return result;
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments,
                               const named_parameter_type_map_t &named_parameters) {
 	vector<string> input_arguments;
@@ -203,8 +202,7 @@ hash_t BoundSimpleFunction::Hash() const {
 }
 
 string BoundSimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name.GetName(), schema_name.GetName(), name.GetName(), arguments,
-	                              LogicalTypeId::INVALID, return_type);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {

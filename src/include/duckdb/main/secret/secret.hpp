@@ -102,7 +102,7 @@ class BaseSecret {
 	friend class SecretManager;
 
 public:
-	BaseSecret(vector<string> prefix_paths_p, string type_p, string provider_p, string name_p)
+	BaseSecret(vector<string> prefix_paths_p, Identifier type_p, Identifier provider_p, Identifier name_p)
 	    : prefix_paths(std::move(prefix_paths_p)), type(std::move(type_p)), provider(std::move(provider_p)),
 	      name(std::move(name_p)), serializable(false) {
 		D_ASSERT(!type.empty());

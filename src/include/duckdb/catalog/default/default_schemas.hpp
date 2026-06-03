@@ -19,7 +19,7 @@ public:
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
-	static bool IsDefaultSchema(const string &input_schema);
+	static bool IsDefaultSchema(const Identifier &input_schema);
 };
 
 } // namespace duckdb

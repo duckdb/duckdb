@@ -24,10 +24,10 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 string TypeExpression::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog.GetName()) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema.GetName()) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
 
 	auto &params = children;
@@ -93,7 +93,7 @@ string TypeExpression::ToString() const {
 		// Built-in type name
 		result += type_name.GetName();
 	} else {
-		result += SQLIdentifier(type_name.GetName());
+		result += SQLIdentifier(type_name);
 	}
 
 	if (!params.empty()) {

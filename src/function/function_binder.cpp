@@ -189,14 +189,14 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name,
 }
 
 template <class T>
-optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_name, const string &schema_name,
+optional_idx FunctionBinder::MultipleCandidateException(const Identifier &catalog_name, const string &schema_name,
                                                         const Identifier &name, FunctionSet<T> &functions,
                                                         vector<idx_t> &candidate_functions,
                                                         const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
-	string call_str = Function::CallToString(catalog_name, schema_name, name.GetName(), arguments);
+	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		const auto &f = functions.GetFunctionByOffset(conf);

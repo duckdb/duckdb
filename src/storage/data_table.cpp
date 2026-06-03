@@ -39,8 +39,8 @@
 
 namespace duckdb {
 
-DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
-                             string table)
+DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, Identifier schema,
+                             Identifier table)
     : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
 }
 
@@ -52,7 +52,7 @@ bool DataTableInfo::IsTemporary() const {
 	return db.IsTemporary();
 }
 
-IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const string &name) {
+IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) {
 	for (idx_t i = 0; i < index_storage_infos.size(); i++) {
 		if (index_storage_infos[i].name == name) {
 			auto result = std::move(index_storage_infos[i]);
@@ -60,7 +60,7 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const string &name) {
 			return result;
 		}
 	}
-	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found", name);
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found", name.GetName());
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
@@ -450,15 +450,15 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 }
 
 string DataTableInfo::GetSchemaName() {
-	return schema;
+	return schema.GetName();
 }
 
 string DataTableInfo::GetTableName() {
 	lock_guard<mutex> l(name_lock);
-	return table;
+	return table.GetName();
 }
 
-void DataTableInfo::SetTableName(string name) {
+void DataTableInfo::SetTableName(Identifier name) {
 	lock_guard<mutex> l(name_lock);
 	table = std::move(name);
 }
@@ -467,7 +467,7 @@ string DataTable::GetTableName() const {
 	return info->GetTableName();
 }
 
-void DataTable::SetTableName(string new_name) {
+void DataTable::SetTableName(Identifier new_name) {
 	info->SetTableName(std::move(new_name));
 }
 
@@ -1271,7 +1271,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
-	log.WriteSetTable(info->schema, info->table);
+	log.WriteSetTable(info->schema.GetName(), info->table.GetName());
 	if (!commit_state) {
 		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 		return;

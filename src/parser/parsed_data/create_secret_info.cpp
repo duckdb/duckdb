@@ -45,7 +45,7 @@ string CreateSecretInfo::ToString() const {
 	}
 	result = GetCreatePrefix(create_type);
 	if (!name.empty()) {
-		result += " " + SQLIdentifier(name.GetName());
+		result += " " + SQLIdentifier(name);
 	}
 	if (!storage_type.empty()) {
 		result += " IN" + SQLIdentifier(storage_type);

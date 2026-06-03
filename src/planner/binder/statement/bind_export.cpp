@@ -46,10 +46,10 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
+bool ReferencedTableIsOrdered(const Identifier &referenced_table, catalog_entry_vector_t &ordered) {
 	for (auto &entry : ordered) {
 		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
-		if (StringUtil::CIEquals(table_entry.name.GetName(), referenced_table)) {
+		if (table_entry.name == referenced_table) {
 			// The referenced table is already ordered
 			return true;
 		}

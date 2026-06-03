@@ -67,7 +67,7 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 const string &ColumnDefinition::Name() const {
 	return name.GetName();
 }
-void ColumnDefinition::SetName(const string &name) {
+void ColumnDefinition::SetName(const Identifier &name) {
 	this->name = name;
 }
 

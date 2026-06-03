@@ -77,8 +77,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 
 BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	name = function.name;
-	schema_name = function.schema_name.GetName();
-	catalog_name = function.catalog_name.GetName();
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	callbacks = function.GetCallbacks();

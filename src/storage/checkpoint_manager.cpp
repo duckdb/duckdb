@@ -623,11 +623,11 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// Read older duckdb files.
-		index_storage_info.name = index.name.GetName();
+		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 	} else {
 		// Extract the matching index storage info (moves it out of the stored collection).
-		index_storage_info = table_info->ExtractIndexStorageInfo(index.name.GetName());
+		index_storage_info = table_info->ExtractIndexStorageInfo(index.name);
 	}
 
 	D_ASSERT(index_storage_info.IsValid());

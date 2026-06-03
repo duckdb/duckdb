@@ -24,15 +24,15 @@ string InsertQueryNode::ToString() const {
 	}
 	result += " INTO ";
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog.GetName()) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema.GetName()) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
 	result += SQLIdentifier(table);
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
-		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias.GetName()));
+		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias));
 	}
 	if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		result += " BY NAME";

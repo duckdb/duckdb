@@ -10,7 +10,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	if (IsInvalidSchema(use_target.schema)) {
 		value_str = SQLIdentifier::ToString(use_target.name.GetName());
 	} else {
-		value_str = SQLIdentifier(use_target.schema.GetName()) + "." + SQLIdentifier(use_target.name.GetName());
+		value_str = SQLIdentifier(use_target.schema) + "." + SQLIdentifier(use_target.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));

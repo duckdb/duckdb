@@ -8,11 +8,11 @@ namespace duckdb {
 CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALID_SCHEMA) {
 }
 
-CreateTableInfo::CreateTableInfo(string catalog_p, string schema_p, string name_p)
+CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Identifier name_p)
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
 }
 
-CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, string name_p)
+CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
     : CreateTableInfo(schema.catalog.GetName(), schema.name.GetName(), std::move(name_p)) {
 }
 

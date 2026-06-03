@@ -124,9 +124,9 @@ string RenameColumnInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
-	result += SQLIdentifier(old_name.GetName());
+	result += SQLIdentifier(old_name);
 	result += " TO ";
-	result += SQLIdentifier(new_name.GetName());
+	result += SQLIdentifier(new_name);
 	result += ";";
 	return result;
 }
@@ -164,7 +164,7 @@ string RenameFieldInfo::ToString() const {
 		result += SQLIdentifier(column_path[i]);
 	}
 	result += " TO ";
-	result += SQLIdentifier(new_name.GetName());
+	result += SQLIdentifier(new_name);
 	result += ";";
 	return result;
 }
@@ -194,7 +194,7 @@ string RenameTableInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
-	result += SQLIdentifier(new_table_name.GetName());
+	result += SQLIdentifier(new_table_name);
 	result += ";";
 	return result;
 }
@@ -308,7 +308,7 @@ string RemoveColumnInfo::ToString() const {
 	if (if_column_exists) {
 		result += "IF EXISTS ";
 	}
-	result += SQLIdentifier(removed_column.GetName());
+	result += SQLIdentifier(removed_column);
 	if (cascade) {
 		result += " CASCADE";
 	}
@@ -384,7 +384,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name.GetName());
+	result += SQLIdentifier(column_name);
 	result += " TYPE ";
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
@@ -430,7 +430,7 @@ string SetDefaultInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name.GetName());
+	result += SQLIdentifier(column_name);
 	if (expression) {
 		result += " SET DEFAULT ";
 		result += expression->ToString();
@@ -465,7 +465,7 @@ string SetNotNullInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name.GetName());
+	result += SQLIdentifier(column_name);
 	result += " SET NOT NULL";
 	result += ";";
 	return result;
@@ -495,7 +495,7 @@ string DropNotNullInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += SQLIdentifier(column_name.GetName());
+	result += SQLIdentifier(column_name);
 	result += " DROP NOT NULL";
 	result += ";";
 	return result;

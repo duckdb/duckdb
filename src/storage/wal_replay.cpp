@@ -839,7 +839,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
+	                       index_storage_info.name.GetName(), column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);

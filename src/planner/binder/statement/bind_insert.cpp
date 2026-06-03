@@ -290,7 +290,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto &on_conflict_info = *node.on_conflict_info;
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
-	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias.GetName() : node.table;
+	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias.GetName() : node.table.GetName();
 	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
@@ -541,8 +541,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.types = {LogicalType::BIGINT};
 
 	BindSchemaOrCatalog(node.catalog.GetNameMutable(), node.schema.GetNameMutable());
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, node.catalog.GetName(), node.schema.GetName(), node.table);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
 
 	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);

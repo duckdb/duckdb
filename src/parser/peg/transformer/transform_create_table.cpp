@@ -488,8 +488,8 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	ForeignKeyInfo fk_info;
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
-	fk_info.schema = base_table->schema_name.GetName();
-	fk_info.table = base_table->table_name.GetName();
+	fk_info.schema = base_table->schema_name;
+	fk_info.table = base_table->table_name;
 	fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 	vector<string> pk_list;
 	auto &col_list_opt = list_pr.Child<OptionalParseResult>(2);

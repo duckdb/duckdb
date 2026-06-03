@@ -37,12 +37,12 @@ const string &BindingAlias::GetAlias() const {
 string BindingAlias::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog.GetName()) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema.GetName()) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
-	result += SQLIdentifier(alias.GetName());
+	result += SQLIdentifier(alias);
 	return result;
 }
 

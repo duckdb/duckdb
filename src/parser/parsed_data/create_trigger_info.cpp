@@ -35,7 +35,7 @@ string CreateTriggerInfo::ToString() const {
 		ss << "IF NOT EXISTS ";
 	}
 	if (!IsInvalidSchema(schema)) {
-		ss << SQLIdentifier(schema.GetName()) << ".";
+		ss << SQLIdentifier(schema) << ".";
 	}
 	ss << SQLIdentifier(trigger_name);
 	ss << " ";

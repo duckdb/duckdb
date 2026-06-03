@@ -41,7 +41,7 @@ public:
 
 	//! name
 	DUCKDB_API const string &Name() const;
-	void SetName(const string &name);
+	void SetName(const Identifier &name);
 
 	//! comment
 	DUCKDB_API const Value &Comment() const;

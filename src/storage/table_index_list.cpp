@@ -133,7 +133,7 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	return true;
 }
 
-optional_ptr<BoundIndex> TableIndexList::Find(const string &name) {
+optional_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) {
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (index.GetIndexName() == name) {

@@ -21,7 +21,7 @@ string ConnectInfo::ToString() const {
 	if (name_is_string_literal) {
 		result += SQLString(name.GetName());
 	} else {
-		result += SQLIdentifier(name.GetName());
+		result += SQLIdentifier(name);
 	}
 	result += ";";
 	return result;

@@ -106,7 +106,7 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", select_statement);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "columns", columns);
-	serializer.WritePropertyWithDefault<string>(202, "table", table);
+	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
 	serializer.WritePropertyWithDefault<Identifier>(203, "schema", schema);
 	serializer.WritePropertyWithDefault<Identifier>(204, "catalog", catalog);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
@@ -122,7 +122,7 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement",
 	                                                                  result->select_statement);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "columns", result->columns);
-	deserializer.ReadPropertyWithDefault<string>(202, "table", result->table);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
 	deserializer.ReadPropertyWithDefault<Identifier>(203, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault<Identifier>(204, "catalog", result->catalog);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list",

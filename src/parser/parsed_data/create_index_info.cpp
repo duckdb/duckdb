@@ -70,7 +70,7 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += SQLIdentifier(index_name.GetName());
+	result += SQLIdentifier(index_name);
 	result += " ON ";
 	result += QualifierToString(temporary ? "" : catalog, schema, table);
 	if (index_type != "ART") {

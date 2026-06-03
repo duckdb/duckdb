@@ -96,11 +96,11 @@ unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause)
 	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
 }
 
-vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name) {
+vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identifier &schema_name) {
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
 	if (!schema_name.empty()) {
-		view_search_path.emplace_back(catalog_name, schema_name);
+		view_search_path.emplace_back(catalog_name, schema_name.GetName());
 	}
 	auto default_schema = catalog.GetDefaultSchema();
 	if (schema_name.empty() && schema_name != default_schema) {

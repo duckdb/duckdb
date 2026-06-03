@@ -92,7 +92,7 @@ const ColumnDefinition &ColumnList::GetColumn(PhysicalIndex physical) const {
 	return columns[logical_index];
 }
 
-const ColumnDefinition &ColumnList::GetColumn(const string &name) const {
+const ColumnDefinition &ColumnList::GetColumn(const Identifier &name) const {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
 		throw InternalException("Column with name \"%s\" does not exist", name);
@@ -120,7 +120,7 @@ vector<LogicalType> ColumnList::GetColumnTypes() const {
 	return types;
 }
 
-bool ColumnList::ColumnExists(const string &name) const {
+bool ColumnList::ColumnExists(const Identifier &name) const {
 	auto entry = name_map.find(name);
 	return entry != name_map.end();
 }

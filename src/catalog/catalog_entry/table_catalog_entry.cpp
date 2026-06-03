@@ -74,11 +74,11 @@ unique_ptr<BlockingSample> TableCatalogEntry::GetSample() {
 	return nullptr;
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) const {
+bool TableCatalogEntry::ColumnExists(const Identifier &name) const {
 	return columns.ColumnExists(name);
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) const {
+const ColumnDefinition &TableCatalogEntry::GetColumn(const Identifier &name) const {
 	return columns.GetColumn(name);
 }
 

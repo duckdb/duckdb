@@ -89,7 +89,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEn
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
-                                                            const string &table_name, const ColumnList &columns) {
+                                                            const Identifier &table_name, const ColumnList &columns) {
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	for (const auto &constr : constraints) {
 		bound_constraints.push_back(BindConstraint(*constr, table_name, columns));
@@ -225,11 +225,11 @@ unique_ptr<BoundConstraint> BindForeignKey(const Constraint &constraint) {
 	return make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set));
 }
 
-unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint, const Identifier &table,
                                                    const ColumnList &columns) {
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {
-		return BindCheckConstraint(*this, constraint, table, columns);
+		return BindCheckConstraint(*this, constraint, table.GetName(), columns);
 	}
 	case ConstraintType::NOT_NULL: {
 		auto &not_null = constraint.Cast<NotNullConstraint>();
@@ -237,7 +237,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
 	case ConstraintType::UNIQUE: {
-		return BindUniqueConstraint(constraint, table, columns);
+		return BindUniqueConstraint(constraint, table.GetName(), columns);
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		return BindForeignKey(constraint);
@@ -503,7 +503,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		// no unique constraint or primary key
 		string search_term = find_primary_key ? "primary key" : "primary key or unique constraint";
 		throw BinderException("Failed to create foreign key: there is no %s for referenced table \"%s\"", search_term,
-		                      fk.info.table);
+		                      fk.info.table.GetName());
 	}
 	// check if all the columns exist
 	for (auto &name : fk.pk_columns) {
@@ -511,13 +511,13 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (!found) {
 			throw BinderException(
 			    "Failed to create foreign key: referenced table \"%s\" does not have a column named \"%s\"",
-			    fk.info.table, name);
+			    fk.info.table.GetName(), name);
 		}
 	}
 	auto fk_names = StringUtil::Join(fk.pk_columns, ",");
 	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
 	                      "constraint on the columns %s",
-	                      fk.info.table, fk_names);
+	                      fk.info.table.GetName(), fk_names);
 }
 
 static void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk) {
@@ -554,7 +554,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
 
 		// Resolve the self-reference.
-		if (StringUtil::CIEquals(create_info.table.GetName(), fk.info.table)) {
+		if (create_info.table == fk.info.table) {
 			fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 			FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 			FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
@@ -565,7 +565,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		// Resolve the table reference in the same catalog/schema as the table being
 		// created, so FK references work for external catalogs (not just the default).
 		string fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : INVALID_CATALOG;
-		string fk_schema = fk.info.schema.empty() ? schema.name.GetName() : fk.info.schema;
+		string fk_schema = fk.info.schema.empty() ? schema.name.GetName() : fk.info.schema.GetName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
 		auto table_entry = entry_retriever.GetEntry(fk_catalog, fk_schema, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
@@ -573,7 +573,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		}
 
 		auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
-		fk.info.schema = pk_table_entry_ptr.schema.name.GetName();
+		fk.info.schema = pk_table_entry_ptr.schema.name;
 		if (&pk_table_entry_ptr.schema != &schema) {
 			throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 		}
@@ -701,7 +701,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table.GetName());
+	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 #ifdef DEBUG
 	// Ensure all types are bound

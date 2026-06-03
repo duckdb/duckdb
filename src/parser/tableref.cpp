@@ -24,7 +24,7 @@ string TableRef::AliasToString(const vector<Identifier> &column_name_alias) cons
 			if (i > 0) {
 				result += ", ";
 			}
-			result += SQLIdentifier(column_name_alias[i].GetName());
+			result += SQLIdentifier(column_name_alias[i]);
 		}
 		result += ")";
 	}

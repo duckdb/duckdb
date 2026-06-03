@@ -78,7 +78,7 @@ SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context
 		                                                        create_index_info.table.GetName());
 		auto &data_table = table_entry.GetStorage();
 
-		IndexStorageInfo storage_info(create_index_info.index_name.GetName());
+		IndexStorageInfo storage_info(create_index_info.index_name);
 		storage_info.options.emplace("v1_0_0_storage", false);
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), std::move(storage_info),
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());

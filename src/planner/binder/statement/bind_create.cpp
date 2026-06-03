@@ -179,8 +179,8 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+                      const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
                       const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);

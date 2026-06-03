@@ -1193,7 +1193,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 	}
 	ForeignKeyInfo fk_info;
 	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-	fk_info.schema = info.schema.GetName();
+	fk_info.schema = info.schema;
 	fk_info.table = info.fk_table;
 	fk_info.pk_keys = info.pk_keys;
 	fk_info.fk_keys = info.fk_keys;
@@ -1408,7 +1408,7 @@ void DuckTableEntry::ScanTriggersNonTransactional(const std::function<void(Catal
 	triggers->Scan(callback);
 }
 
-bool DuckTableEntry::DropTrigger(CatalogTransaction transaction, const string &name, bool cascade) {
+bool DuckTableEntry::DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade) {
 	return triggers->DropEntry(transaction, name, cascade);
 }
 

@@ -45,7 +45,7 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += SQLIdentifier(using_columns[i].GetName());
+			result += SQLIdentifier(using_columns[i]);
 		}
 		result += ")";
 	}

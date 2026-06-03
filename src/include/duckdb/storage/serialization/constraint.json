@@ -63,13 +63,13 @@
       {
         "id": 203,
         "name": "schema",
-        "type": "string",
+        "type": "Identifier",
         "property":  "info.schema"
       },
       {
         "id": 204,
         "name": "table",
-        "type": "string",
+        "type": "Identifier",
         "property":  "info.table"
       },
       {

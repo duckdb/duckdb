@@ -78,12 +78,12 @@ QualifiedName QualifiedName::Parse(const string &input) {
 
 QualifiedColumnName::QualifiedColumnName() {
 }
-QualifiedColumnName::QualifiedColumnName(string column_p) : column(std::move(column_p)) {
+QualifiedColumnName::QualifiedColumnName(Identifier column_p) : column(std::move(column_p)) {
 }
-QualifiedColumnName::QualifiedColumnName(string table_p, string column_p)
+QualifiedColumnName::QualifiedColumnName(Identifier table_p, Identifier column_p)
     : table(std::move(table_p)), column(std::move(column_p)) {
 }
-QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, string column_p)
+QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, Identifier column_p)
     : catalog(alias.GetCatalog()), schema(alias.GetSchema()), table(alias.GetAlias()), column(std::move(column_p)) {
 }
 
@@ -116,15 +116,15 @@ QualifiedColumnName QualifiedColumnName::Parse(string &input) {
 string QualifiedColumnName::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog.GetName()) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += SQLIdentifier(schema.GetName()) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
 	if (!table.empty()) {
-		result += SQLIdentifier(table.GetName()) + ".";
+		result += SQLIdentifier(table) + ".";
 	}
-	result += SQLIdentifier(column.GetName());
+	result += SQLIdentifier(column);
 	return result;
 }
 
