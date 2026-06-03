@@ -224,6 +224,11 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 	}
 }
 
+static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
+                                                              const vector<ColumnBinding> &old_child_bindings);
+static void RegisterChangedBindingAliases(column_binding_map_t<ColumnBinding> &correlated_aliases,
+                                          const vector<ReplacementBinding> &replacements);
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -281,6 +286,8 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
 		state = DecorrelateSubtree(child, propagate_null_values, std::move(state));
+		auto replacements = RewriteChangedChildBindings(*plan, *child, old_child_bindings);
+		RegisterChangedBindingAliases(correlated_aliases, replacements);
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
 	return state;
@@ -308,6 +315,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDependentJoin &op,
                                                                       bool propagate_null_values,
                                                                       vector<ColumnBinding> state) {
+	auto old_left_bindings = op.children[0]->GetColumnBindings();
 	// If we have a parent, we unnest the left side of the DEPENDENT JOIN in the parent's context.
 	if (parent) {
 		// only push the dependent join to the left side, if there is correlation.
@@ -318,9 +326,14 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 			op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
 		}
 
-		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 	} else {
 		state = DecorrelateSubtree(op.children[0], true, std::move(state));
+	}
+
+	auto replacements = RewriteChangedChildBindings(op, *op.children[0], old_left_bindings);
+	RegisterChangedBindingAliases(correlated_aliases, replacements);
+	if (parent) {
+		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 	}
 
 	if (!op.perform_delim) {
@@ -335,7 +348,10 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOperator> &plan,
                                                            bool propagate_null_values, vector<ColumnBinding> state,
                                                            bool rewrite_parent, idx_t child_idx) {
+	auto old_child_bindings = plan->children[child_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[child_idx], propagate_null_values, std::move(state));
+	auto replacements = RewriteChangedChildBindings(*plan, *plan->children[child_idx], old_child_bindings);
+	RegisterChangedBindingAliases(correlated_aliases, replacements);
 	if (rewrite_parent) {
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
@@ -434,6 +450,12 @@ static vector<string> GenerateCTEColumnNames(idx_t column_count, const string &p
 }
 
 static void RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIndex delim_scan_index) {
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		if (!op->children.empty()) {
+			RewriteDelimScanReferences(op->children[0], delim_scan_index);
+		}
+		return;
+	}
 	for (auto &child : op->children) {
 		RewriteDelimScanReferences(child, delim_scan_index);
 	}
@@ -446,11 +468,100 @@ static void RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableInd
 	}
 }
 
+static vector<ReplacementBinding> CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                            const vector<ColumnBinding> &new_bindings) {
+	vector<ReplacementBinding> result;
+	auto count = MinValue(old_bindings.size(), new_bindings.size());
+	for (idx_t i = 0; i < count; i++) {
+		if (old_bindings[i] != new_bindings[i] &&
+		    std::find(new_bindings.begin(), new_bindings.end(), old_bindings[i]) == new_bindings.end()) {
+			result.emplace_back(old_bindings[i], new_bindings[i]);
+		}
+	}
+	return result;
+}
+
+static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
+                                                              const vector<ColumnBinding> &old_child_bindings) {
+	auto new_child_bindings = child.GetColumnBindings();
+	auto replacements = CreateBindingReplacements(old_child_bindings, new_child_bindings);
+	if (replacements.empty()) {
+		return replacements;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		auto &dependent_join = op.Cast<LogicalDependentJoin>();
+		for (auto &col : dependent_join.correlated_columns) {
+			for (const auto &replacement : replacements) {
+				if (col.binding == replacement.old_binding) {
+					col.binding = replacement.new_binding;
+					break;
+				}
+			}
+		}
+	}
+	ColumnBindingReplacer replacer;
+	replacer.replacement_bindings = replacements;
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && op.children[0].get() == &child) {
+		replacer.stop_operator = child;
+		replacer.VisitOperator(op);
+	} else {
+		LogicalOperatorVisitor::EnumerateExpressions(op,
+		                                             [&](unique_ptr<Expression> *expr) { replacer.VisitExpression(expr); });
+	}
+	return replacements;
+}
+
+static void RegisterChangedBindingAliases(column_binding_map_t<ColumnBinding> &correlated_aliases,
+                                          const vector<ReplacementBinding> &replacements) {
+	for (const auto &replacement : replacements) {
+		auto entry = correlated_aliases.find(replacement.old_binding);
+		if (entry == correlated_aliases.end()) {
+			continue;
+		}
+		auto result = correlated_aliases.emplace(replacement.new_binding, entry->second);
+		D_ASSERT(result.second || result.first->second == entry->second);
+	}
+}
+
+static vector<ColumnBinding> RewriteStateBindings(vector<ColumnBinding> state,
+                                                  const vector<ReplacementBinding> &replacements) {
+	for (auto &binding : state) {
+		for (const auto &replacement : replacements) {
+			if (binding == replacement.old_binding) {
+				binding = replacement.new_binding;
+				break;
+			}
+		}
+	}
+	return state;
+}
+
+static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
+	auto entry = std::find(bindings.begin(), bindings.end(), binding);
+	if (entry == bindings.end()) {
+		return optional_idx();
+	}
+	return NumericCast<idx_t>(entry - bindings.begin());
+}
+
 vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan,
                                                                    vector<ColumnBinding> outer_state,
                                                                    const vector<ColumnBinding> &right_state) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(outer_state), correlated_aliases);
+
+	auto left_bindings = plan->children[0]->GetColumnBindings();
+	idx_t correlated_idx = 0;
+	for (auto &col : op.correlated_columns) {
+		if (correlated_idx >= outer_state.size()) {
+			break;
+		}
+		if (!FindBindingIndex(left_bindings, col.binding).IsValid() &&
+		    FindBindingIndex(left_bindings, outer_state[correlated_idx]).IsValid()) {
+			col.binding = outer_state[correlated_idx];
+		}
+		correlated_idx++;
+	}
 
 	op.duplicate_eliminated_columns.clear();
 	op.mark_types.clear();
@@ -493,31 +604,104 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 		// Build the same comparison join that a DELIM_JOIN would execute, then make the
 		// delim inputs explicit through materialized CTEs.
 		plan->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		auto dedup_column_count = plan->children[0]->GetColumnBindings().size();
+		if (op.right_projection_map.empty() && !right_state.empty()) {
+			auto right_bindings = plan->children[1]->GetColumnBindings();
+			vector<ProjectionIndex> right_projection_map;
+			right_projection_map.reserve(right_bindings.size());
+			for (idx_t i = 0; i < right_bindings.size(); i++) {
+				if (!FindBindingIndex(right_state, right_bindings[i]).IsValid()) {
+					right_projection_map.emplace_back(i);
+				}
+			}
+			if (right_projection_map.size() < right_bindings.size()) {
+				op.right_projection_map = std::move(right_projection_map);
+			}
+		}
+
+		left_bindings = plan->children[0]->GetColumnBindings();
+		plan->children[0]->ResolveOperatorTypes();
+		auto left_types = plan->children[0]->types;
+		vector<idx_t> dedup_column_indices;
+		vector<LogicalType> dedup_types;
+		vector<string> dedup_names;
+		vector<unique_ptr<Expression>> extra_left_expressions;
+		bool added_hidden_left_columns = false;
+		dedup_column_indices.reserve(op.duplicate_eliminated_columns.size());
+		dedup_types.reserve(op.duplicate_eliminated_columns.size());
+		dedup_names.reserve(op.duplicate_eliminated_columns.size());
+		for (auto &expr : op.duplicate_eliminated_columns) {
+			if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				throw InternalException("Flatten dependent joins - expected duplicate eliminated column reference");
+			}
+			auto &colref_expr = expr->Cast<BoundColumnRefExpression>();
+			auto binding_index = FindBindingIndex(left_bindings, colref_expr.Binding());
+			if (binding_index.IsValid()) {
+				dedup_column_indices.push_back(binding_index.GetIndex());
+			} else {
+				dedup_column_indices.push_back(left_bindings.size() + extra_left_expressions.size());
+				extra_left_expressions.push_back(expr->Copy());
+			}
+			dedup_types.push_back(expr->GetReturnType());
+			dedup_names.push_back(expr->GetName());
+		}
+
+		if (!extra_left_expressions.empty()) {
+			added_hidden_left_columns = true;
+			vector<unique_ptr<Expression>> expressions;
+			expressions.reserve(left_bindings.size() + extra_left_expressions.size());
+			for (idx_t i = 0; i < left_bindings.size(); i++) {
+				expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
+			}
+			for (auto &expr : extra_left_expressions) {
+				expressions.push_back(std::move(expr));
+			}
+			auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+			projection->children.push_back(std::move(plan->children[0]));
+			plan->children[0] = std::move(projection);
+			plan->children[0]->ResolveOperatorTypes();
+			left_types = plan->children[0]->types;
+		}
+
+		auto left_column_count = plan->children[0]->GetColumnBindings().size();
 		auto cte_index = binder.GenerateTableIndex();
 		auto cte_name = "__duckdb_delim_" + to_string(cte_index.index);
 		auto cte =
-		    make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, dedup_column_count, std::move(plan->children[0]),
+		    make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(plan->children[0]),
 		                                      nullptr, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 
 		cte->children[0]->ResolveOperatorTypes();
-		auto types = cte->children[0]->types;
+		left_types = cte->children[0]->types;
 
 		auto cte_ref_index = binder.GenerateTableIndex();
-		auto cte_ref = make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types,
-		                                        GenerateCTEColumnNames(dedup_column_count, "__duckdb_delim_col_"));
+		auto cte_ref = make_uniq<LogicalCTERef>(cte_ref_index, cte_index, left_types,
+		                                        GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
 		plan->children[0] = std::move(cte_ref);
+		if (added_hidden_left_columns && op.left_projection_map.empty()) {
+			op.left_projection_map.reserve(left_bindings.size());
+			for (idx_t i = 0; i < left_bindings.size(); i++) {
+				op.left_projection_map.emplace_back(i);
+			}
+		}
 
 		// the bindings are now materialized in the CTE, and the join reads from a CTE_REF
 
 		ColumnBindingReplacer replacer;
-		vector<ReplacementBinding> binding_replacements;
-		auto old_bindings = cte->children[0]->GetColumnBindings();
 		auto new_bindings = plan->children[0]->GetColumnBindings();
-		for (idx_t i = 0; i < old_bindings.size() && i < new_bindings.size(); i++) {
-			binding_replacements.push_back({old_bindings[i], new_bindings[i]});
+		vector<ColumnBinding> new_visible_bindings(
+		    new_bindings.begin(),
+		    new_bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(left_bindings.size()));
+		auto binding_replacements = CreateBindingReplacements(left_bindings, new_visible_bindings);
+		for (idx_t i = 0; i < op.duplicate_eliminated_columns.size(); i++) {
+			auto &expr = op.duplicate_eliminated_columns[i];
+			auto &colref_expr = expr->Cast<BoundColumnRefExpression>();
+			auto new_binding = new_bindings[dedup_column_indices[i]];
+			if (colref_expr.Binding() != new_binding) {
+				binding_replacements.emplace_back(colref_expr.Binding(), new_binding);
+			}
 		}
-		replacer.replacement_bindings = std::move(binding_replacements);
+		outer_state = RewriteStateBindings(std::move(outer_state), binding_replacements);
+		RegisterChangedBindingAliases(correlated_aliases, binding_replacements);
+		replacer.replacement_bindings = binding_replacements;
 		replacer.VisitOperator(*plan);
 
 		auto dedup_group_index = binder.GenerateTableIndex();
@@ -526,16 +710,17 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 
 		auto dedup1 = make_uniq<LogicalAggregate>(dedup_group_index, dedup_aggregate_index, std::move(dedup_aggrs));
 		auto dedup_child_index = binder.GenerateTableIndex();
-		for (idx_t i = 0; i < dedup_column_count; i++) {
-			auto colref =
-			    make_uniq<BoundColumnRefExpression>("", types[i], ColumnBinding(dedup_child_index, ProjectionIndex(i)));
+		auto dedup_child = make_uniq<LogicalCTERef>(dedup_child_index, cte_index, left_types,
+		                                            GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
+		auto dedup_child_bindings = dedup_child->GetColumnBindings();
+		for (idx_t i = 0; i < dedup_column_indices.size(); i++) {
+			auto colref = make_uniq<BoundColumnRefExpression>(dedup_names[i], dedup_types[i],
+			                                                  dedup_child_bindings[dedup_column_indices[i]]);
 			auto new_group_index = ColumnBinding::PushExpression(dedup1->groups, std::move(colref));
 			for (auto &set : dedup1->grouping_sets) {
 				set.insert(new_group_index);
 			}
 		}
-		auto dedup_child = make_uniq<LogicalCTERef>(dedup_child_index, cte_index, types,
-		                                            GenerateCTEColumnNames(dedup_column_count, "__duckdb_delim_col_"));
 		dedup1->children.push_back(std::move(dedup_child));
 
 		auto dedup_cte_index = binder.GenerateTableIndex();
@@ -544,8 +729,8 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 		op.duplicate_eliminated_columns.clear();
 
 		auto dedup_cte =
-		    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_column_count, std::move(dedup1),
-		                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+		    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup1),
+		                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 
 		cte->children[1] = std::move(dedup_cte);
 
@@ -560,7 +745,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
                                                                            bool correlated_left) {
 	idx_t correlated_idx = correlated_left ? 0 : 1;
 	idx_t independent_idx = correlated_left ? 1 : 0;
+	auto old_correlated_bindings = plan->children[correlated_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[correlated_idx], propagate_null_values, std::move(state));
+	auto replacements = RewriteChangedChildBindings(*plan, *plan->children[correlated_idx], old_correlated_bindings);
+	RegisterChangedBindingAliases(correlated_aliases, replacements);
 	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
 	return state;
 }
