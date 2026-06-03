@@ -124,7 +124,7 @@ void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpMatchesBindData>();
 	if (info.constant_pattern) {
 		// fast path: pre-compiled regex
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();

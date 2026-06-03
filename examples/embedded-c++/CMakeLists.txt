@@ -4,6 +4,7 @@ project(example-c++)
 set(CMAKE_CXX_STANDARD 17)
 
 include_directories(../../src/include)
+include_directories(../../third_party/fmt/include)
 link_directories(../../build/release/src)
 
 add_executable(example main.cpp)

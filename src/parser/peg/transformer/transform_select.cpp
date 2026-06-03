@@ -684,13 +684,13 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
-		for (auto &col : col_ref_expr.column_names) {
+		for (auto &col : col_ref_expr.ColumnNames()) {
 			result.push_back(Value(col));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
-		if (func_expr.function_name == "row") {
-			for (auto &col : func_expr.children) {
+		if (func_expr.FunctionName() == "row") {
+			for (auto &col : func_expr.GetChildrenMutable()) {
 				GetValueFromExpression(col, result);
 			}
 		}
@@ -698,6 +698,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 }
 
 bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry) {
+	auto initial_size = entry.values.size();
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -709,11 +710,12 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildrenMutable()) {
 			if (!TransformPivotInList(child, entry)) {
+				entry.values.resize(initial_size);
 				return false;
 			}
 		}
@@ -728,6 +730,17 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		return true;
 	}
 	}
+}
+
+static bool PivotEntryIsTuple(const PivotColumnEntry &entry) {
+	if (entry.values.size() > 1) {
+		return true;
+	}
+	if (!entry.expr || entry.expr->GetExpressionType() != ExpressionType::FUNCTION) {
+		return false;
+	}
+	auto &function = entry.expr->Cast<FunctionExpression>();
+	return function.FunctionName() == "row";
 }
 
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
@@ -792,7 +805,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		return result;
 	}
 	auto &func_expr = pivot_expression->Cast<FunctionExpression>();
-	if (func_expr.function_name != "row") {
+	if (func_expr.FunctionName() != "row") {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 		return result;
 	}
@@ -801,13 +814,13 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 	// so pivot_expressions.size() matches entry.values.size() (both 1).
 	bool has_tuple_entries = false;
 	for (auto &entry : result.entries) {
-		if (entry.values.size() > 1) {
+		if (PivotEntryIsTuple(entry)) {
 			has_tuple_entries = true;
 			break;
 		}
 	}
 	if (has_tuple_entries) {
-		result.pivot_expressions = std::move(func_expr.children);
+		result.pivot_expressions = std::move(func_expr.GetChildrenMutable());
 	} else {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 	}
@@ -1225,7 +1238,7 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.GetResult());
 	}
 	auto star_expr = make_uniq<StarExpression>();
-	star_expr->columns = true;
+	star_expr->IsColumnsMutable() = true;
 	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
 	return result;
 }
@@ -1281,13 +1294,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
-	if (limit.is_percent) {
-		auto result = make_uniq<LimitPercentModifier>();
-		result->limit = std::move(limit.expression);
-		result->offset = std::move(offset.expression);
-		return std::move(result);
-	}
 	auto result = make_uniq<LimitModifier>();
+	result->limit_type = limit.is_percent ? LimitValueType::PERCENTAGE : LimitValueType::ROW_COUNT;
 	if (limit.expression) {
 		result->limit = std::move(limit.expression);
 	}
@@ -1409,8 +1417,8 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
                                                  GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
-		if (func.function_name == "row") {
-			for (auto &child : func.children) {
+		if (func.FunctionName() == "row") {
+			for (auto &child : func.GetChildrenMutable()) {
 				AddGroupByExpression(std::move(child), map, result, result_set);
 			}
 			return;

@@ -1,8 +1,8 @@
 diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
-index 26fe7790..9fe0955b 100644
+index 983239df..35caaefc 100644
 --- a/src/include/planning/iceberg_multi_file_reader.hpp
 +++ b/src/include/planning/iceberg_multi_file_reader.hpp
-@@ -71,11 +71,10 @@ public:
+@@ -75,11 +75,10 @@ public:
  	                          const vector<MultiFileColumnDefinition> &local_columns);
  	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
  
@@ -18,10 +18,10 @@ index 26fe7790..9fe0955b 100644
  public:
  	shared_ptr<TableFunctionInfo> function_info;
 diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
-index 35dffb59..578fca53 100644
+index 3ac91158..5b2faae0 100644
 --- a/src/planning/iceberg_multi_file_reader.cpp
 +++ b/src/planning/iceberg_multi_file_reader.cpp
-@@ -536,10 +536,9 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
+@@ -511,10 +511,9 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
  	return function_expr;
  }
  
@@ -34,7 +34,7 @@ index 35dffb59..578fca53 100644
  	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
  		// row id column
  		// this is computed as row_id_start + file_row_number OR read from the file
-@@ -558,13 +557,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -533,13 +532,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  			if (col.identifier.GetValue<int32_t>() == MultiFileReader::ROW_ID_FIELD_ID) {
  				if (entry == options.end()) {
  					//! There is no parent 'first_row_id' to inherit, simply reference the existing column
@@ -49,9 +49,9 @@ index 35dffb59..578fca53 100644
  
  				auto computed_row_id =
  				    ConstructVirtualRowIdExpression(context, type, entry->second, local_idx.GetIndex() + 1);
-@@ -574,19 +568,20 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
- 				coalesce_expr->children.push_back(std::move(file_row_id));
- 				coalesce_expr->children.push_back(std::move(computed_row_id));
+@@ -549,19 +543,20 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+ 				coalesce_expr->GetChildrenMutable().push_back(std::move(file_row_id));
+ 				coalesce_expr->GetChildrenMutable().push_back(std::move(computed_row_id));
  
 -				// Transform virtual column to file_row_number for the reference
 -				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
@@ -77,7 +77,7 @@ index 35dffb59..578fca53 100644
  	}
  	if (column_id == COLUMN_IDENTIFIER_LAST_SEQUENCE_NUMBER) {
  		// get the row id start for this file
-@@ -603,16 +598,13 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -578,16 +573,13 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  			if (col.identifier.GetValue<int32_t>() == MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID) {
  				if (entry == options.end()) {
  					//! There is no parent 'sequence_number' to inherit, simply reference the existing column
@@ -95,9 +95,9 @@ index 35dffb59..578fca53 100644
  				auto computed_sequence_number = make_uniq<BoundConstantExpression>(entry->second);
  				// Create COALESCE(_last_updated_sequence_number, computed_sequence_number)
  				auto coalesce_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, type);
-@@ -620,18 +612,18 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
- 				coalesce_expr->children.push_back(std::move(sequence_number));
- 				coalesce_expr->children.push_back(std::move(computed_sequence_number));
+@@ -595,18 +587,18 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+ 				coalesce_expr->GetChildrenMutable().push_back(std::move(sequence_number));
+ 				coalesce_expr->GetChildrenMutable().push_back(std::move(computed_sequence_number));
  
 -				// Transform virtual column to file_row_number for the reference
 -				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
@@ -139,7 +139,7 @@ index 3c6ef640..f057805a 100644
  			}
  		}
 diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
-index 8dd5610e..6b7e34ff 100644
+index 3ce08b8b..1a22d863 100644
 --- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 +++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 @@ -22,14 +22,20 @@ DROP TABLE IF EXISTS my_datalake.default.v2_to_v3_upgrade;

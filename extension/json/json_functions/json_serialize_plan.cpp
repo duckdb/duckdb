@@ -116,7 +116,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 	const auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JsonSerializePlanBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<JsonSerializePlanBindData>();
 
 	if (!state.HasContext()) {
 		throw InvalidInputException("json_serialize_plan: No client context available");

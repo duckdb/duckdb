@@ -74,10 +74,24 @@ struct Settings {
 		return StringUtil::ToDouble(OP::DefaultValue);
 	}
 
+	template <class SOURCE>
+	static void Set(SOURCE &source, idx_t setting_index, SetScope scope, Value target_value) {
+		SetSettingInternal(source, setting_index, scope, std::move(target_value));
+	}
+
+	template <class OP, class SOURCE>
+	static void Set(SOURCE &source, SetScope scope, Value target_value) {
+		Set(source, OP::SettingIndex, scope, std::move(target_value));
+	}
+
 private:
 	static bool TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
+
+	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 };
 
 static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
@@ -666,6 +680,18 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DefaultIoModeSetting {
+	using RETURN_TYPE = FileIOMode;
+	static constexpr const char *Name = "default_io_mode";
+	static constexpr const char *Description =
+	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "BUFFERED_IO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
@@ -899,6 +925,16 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct EnableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_optimizer";
+	static constexpr const char *Description = "Whether or not query optimization is enabled";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -1280,6 +1316,17 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct LegacyDisableNullTypeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_disable_null_type";
+	static constexpr const char *Description =
+	    "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct LegacyMetricsFormatSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "legacy_metrics_format";
@@ -1349,7 +1396,7 @@ struct MaxExecutionTimeSetting {
 	static constexpr const char *Description = "The maximum execution time per query in milliseconds (0 = no limit)";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1685,6 +1732,16 @@ struct SecretDirectorySetting {
 	static constexpr const char *Name = "secret_directory";
 	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct StandardVectorSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "standard_vector_size";
+	static constexpr const char *Description = "The compiled-in STANDARD_VECTOR_SIZE (read-only)";
+	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

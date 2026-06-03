@@ -125,7 +125,6 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -170,7 +169,6 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {

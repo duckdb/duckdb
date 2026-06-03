@@ -281,7 +281,7 @@ struct ICUDatePart : public ICUDateFunc {
 		const auto &date_arg = args.data[0];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
+		auto &info = func_expr.BindInfo()->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -304,7 +304,7 @@ struct ICUDatePart : public ICUDateFunc {
 		const auto &date_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
+		auto &info = func_expr.BindInfo()->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -369,7 +369,7 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE>
 	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindStructData>();
+		auto &info = func_expr.BindInfo()->Cast<BindStructData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 

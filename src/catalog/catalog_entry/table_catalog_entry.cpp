@@ -376,6 +376,8 @@ vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEv
                                                                                     TriggerTiming timing,
                                                                                     TriggerEventType event_type) const {
 	vector<const_reference<TriggerCatalogEntry>> result;
+	// CatalogSet is backed by case_insensitive_tree_t (a map with case-insensitive comparator),
+	// so ScanTriggers yields entries in alphabetical order by name
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
 		if (trigger.timing == timing && trigger.event_type == event_type) {

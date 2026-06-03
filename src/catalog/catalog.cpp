@@ -345,6 +345,18 @@ unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCata
 	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
 }
 
+unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
+	throw NotImplementedException("RemoteExecute(QueryNode) not supported by this catalog");
+}
+
+unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, const string &sql) {
+	throw NotImplementedException("RemoteExecute(string) not supported by this catalog");
+}
+
+string Catalog::GetConnectDisplay() {
+	return GetAttached().GetName();
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
@@ -431,6 +443,10 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const Ent
 }
 
 bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) {
+	if (Supports(RemoteCapability::IS_REMOTE)) {
+		// skip this check for remote catalogs
+		return false;
+	}
 	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema);
 	return !!GetSchema(context, schema_lookup, OnEntryNotFound::RETURN_NULL);
 }

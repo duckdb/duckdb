@@ -74,7 +74,7 @@ public:
 	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const;
 
 	void Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-	              OperatorSinkInput &sink) const;
+	              OperatorSinkInput &sink, idx_t count) const;
 
 	// The function
 	const BoundWindowExpression &wexpr;

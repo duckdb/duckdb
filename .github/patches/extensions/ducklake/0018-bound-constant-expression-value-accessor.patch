@@ -1,0 +1,23 @@
+diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
+index 4e53678d..d1cdd2d1 100644
+--- a/src/storage/ducklake_metadata_manager.cpp
++++ b/src/storage/ducklake_metadata_manager.cpp
+@@ -1151,15 +1151,15 @@ string DuckLakeMetadataManager::GenerateFilterFromExpression(const Expression &e
+ 		} else {
+ 			return string();
+ 		}
+-		const auto &target_type = type ? *type : constant_expr->value.type();
++		const auto &target_type = type ? *type : constant_expr->GetValue().type();
+ 		switch (target_type.id()) {
+ 		case LogicalTypeId::BLOB:
+ 			return string();
+ 		case LogicalTypeId::FLOAT:
+ 		case LogicalTypeId::DOUBLE:
+-			return GenerateConstantFilterDouble(comparison_type, constant_expr->value, target_type, referenced_stats);
++			return GenerateConstantFilterDouble(comparison_type, constant_expr->GetValue(), target_type, referenced_stats);
+ 		default:
+-			return GenerateConstantFilter(comparison_type, constant_expr->value, target_type, referenced_stats);
++			return GenerateConstantFilter(comparison_type, constant_expr->GetValue(), target_type, referenced_stats);
+ 		}
+ 	}
+ 	switch (expr.GetExpressionClass()) {

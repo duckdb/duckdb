@@ -804,7 +804,7 @@ Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index)
 	auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
 	auto &expr = reader_data.expressions[global_index];
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		return expr->Cast<BoundConstantExpression>().value;
+		return expr->Cast<BoundConstantExpression>().GetValue();
 	}
 	for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
 		auto &constant_map_entry = reader_data.constant_map[MultiFileConstantMapIndex(i)];
@@ -895,7 +895,7 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 		if (!TryGetStructExtractChildIndex(func, child_idx)) {
 			return result;
 		}
-		auto child_result = RewriteMappedValueExpression(*func.children[0], mapping, target_type);
+		auto child_result = RewriteMappedValueExpression(*func.GetChildren()[0], mapping, target_type);
 		if (!child_result.expr || !child_result.mapping || !child_result.type ||
 		    child_result.type->id() != LogicalTypeId::STRUCT) {
 			return result;
@@ -935,11 +935,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return CreateOptionalFilterExpression(nullptr, target_type);
 			}
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
 			auto child_expr = data.child_filter_expr
 			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
 			                      : nullptr;
@@ -948,11 +948,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
 		}
-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
 			}
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 			auto child_expr = data.child_filter_expr
 			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
 			                      : nullptr;
@@ -962,11 +962,11 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
 			                                                 data.selectivity_threshold, data.n_vectors_to_check);
 		}
-		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == DynamicFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return nullptr;
 			}
-			auto &data = func.bind_info->Cast<DynamicFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<DynamicFilterFunctionData>();
 			return RewriteDynamicFilterExpression(data.filter_data, target_type);
 		}
 		if (!BoundComparisonExpression::IsComparison(expr)) {
@@ -982,7 +982,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		if (!lhs.expr || !lhs.type) {
 			return nullptr;
 		}
-		auto constant = right.Cast<BoundConstantExpression>().value;
+		auto constant = right.Cast<BoundConstantExpression>().GetValue();
 		if (!TryCastConstant(constant, *lhs.type)) {
 			return nullptr;
 		}
@@ -992,12 +992,12 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		auto result = make_uniq<BoundConjunctionExpression>(conjunction.GetExpressionType());
-		for (auto &child : conjunction.children) {
+		for (auto &child : conjunction.GetChildren()) {
 			auto rewritten_child = TryCastFilterExpression(*child, mapping, target_type);
 			if (!rewritten_child) {
 				return nullptr;
 			}
-			result->children.push_back(std::move(rewritten_child));
+			result->GetChildrenMutable().push_back(std::move(rewritten_child));
 		}
 		return std::move(result);
 	}
@@ -1006,36 +1006,36 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		switch (op.GetExpressionType()) {
 		case ExpressionType::OPERATOR_IS_NULL:
 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
-			if (op.children.size() != 1) {
+			if (op.GetChildren().size() != 1) {
 				return nullptr;
 			}
-			auto child = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			auto child = RewriteMappedValueExpression(*op.GetChildren()[0], mapping, target_type);
 			if (!child.expr) {
 				return nullptr;
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.GetReturnType());
-			result->children.push_back(std::move(child.expr));
+			result->GetChildrenMutable().push_back(std::move(child.expr));
 			return std::move(result);
 		}
 		case ExpressionType::COMPARE_IN: {
-			if (op.children.empty()) {
+			if (op.GetChildren().empty()) {
 				return nullptr;
 			}
-			auto lhs = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			auto lhs = RewriteMappedValueExpression(*op.GetChildren()[0], mapping, target_type);
 			if (!lhs.expr || !lhs.type) {
 				return nullptr;
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.GetReturnType());
-			result->children.push_back(std::move(lhs.expr));
-			for (idx_t i = 1; i < op.children.size(); i++) {
-				if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			result->GetChildrenMutable().push_back(std::move(lhs.expr));
+			for (idx_t i = 1; i < op.GetChildren().size(); i++) {
+				if (op.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 					return nullptr;
 				}
-				auto constant = op.children[i]->Cast<BoundConstantExpression>().value;
+				auto constant = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
 				if (!TryCastConstant(constant, *lhs.type)) {
 					return nullptr;
 				}
-				result->children.push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
+				result->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
 			}
 			return std::move(result);
 		}
@@ -1066,14 +1066,14 @@ static idx_t StartIndexAtZero(unique_ptr<Expression> &root_expr) {
 	//! First gather all references, sorted by their index
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    root_expr, [&reference_map](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) {
-		    reference_map[ref.index].push_back(ref);
+		    reference_map[ref.Index()].push_back(ref);
 	    });
 	idx_t new_index = 0;
 	//! Then assign all the references a new index, starting at 0
 	for (auto &[_, references] : reference_map) {
 		auto index = new_index++;
 		for (auto &ref : references) {
-			ref.get().index = index;
+			ref.get().IndexMutable() = index;
 		}
 	}
 	return new_index;

@@ -78,7 +78,7 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 	const auto &expr = input.expr;
 
 	auto &arg_stats = input.child_stats;
-	auto &arg_exprs = input.expr.children;
+	auto &arg_exprs = input.expr.GetChildren();
 
 	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
 	idx_t struct_index = 0;

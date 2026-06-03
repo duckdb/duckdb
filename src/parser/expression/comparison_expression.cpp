@@ -14,7 +14,7 @@ ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<Parse
 }
 
 string ComparisonExpression::ToString() const {
-	return ToString<ParsedExpression>(type, *left, *right);
+	return ToString<ParsedExpression>(type, Left(), Right());
 }
 
 } // namespace duckdb

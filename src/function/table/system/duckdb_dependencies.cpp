@@ -113,7 +113,6 @@ void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBDependenciesFun::RegisterFunction(BuiltinFunctions &set) {

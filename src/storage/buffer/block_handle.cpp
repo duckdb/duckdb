@@ -178,7 +178,11 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
-	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
+	// A buffer that doesn't own its memory (e.g. it adopted a pointer into a memory-mapped
+	// region) cannot be reused for a different block: rewriting its bytes would clobber the
+	// original block on disk through the mapping.
+	if (reusable_buffer && reusable_buffer->OwnsInternalBuffer() &&
+	    reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
 		// Reusable buffer: reuse it.
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// Reuse the entire buffer.

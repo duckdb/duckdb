@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -193,7 +194,7 @@ public:
 				if (action->action_type == MergeActionType::MERGE_ERROR) {
 					// abort - generate an error message
 					string merge_condition;
-					merge_condition += MergeIntoStatement::ActionConditionToString(range.condition);
+					merge_condition += MergeQueryNode::ActionConditionToString(range.condition);
 					if (action->condition) {
 						merge_condition += " AND " + action->condition->ToString();
 					}
@@ -456,7 +457,6 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
                                                     OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<MergeIntoGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
 		return SourceResultType::FINISHED;
 	}
@@ -503,7 +503,6 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
 			}
 			Value merge_action(merge_action_name);
 			chunk.data.back().Reference(merge_action, count_t(lstate.scan_chunk.size()));
-			chunk.SetCardinality(lstate.scan_chunk.size());
 		}
 
 		if (result != SourceResultType::FINISHED) {

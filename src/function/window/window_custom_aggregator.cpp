@@ -8,16 +8,16 @@ namespace duckdb {
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
 bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, WindowAggregationMode mode) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanWindow()) {
+	if (!wexpr.AggregateFunction()->CanWindow()) {
 		return false;
 	}
 
 	//	ORDER BY arguments are not currently supported
-	if (!wexpr.arg_orders.empty()) {
+	if (!wexpr.ArgOrders().empty()) {
 		return false;
 	}
 

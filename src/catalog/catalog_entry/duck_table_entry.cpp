@@ -332,8 +332,8 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 
 static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (colref.column_names.back() == info.old_name) {
-			colref.column_names.back() = info.new_name;
+		if (colref.ColumnNames().back() == info.old_name) {
+			colref.ColumnNamesMutable().back() = info.new_name;
 		}
 	});
 }
@@ -1384,6 +1384,11 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 		auto old_entry = triggers->GetEntry(transaction, entry_name);
 		if (old_entry) {
 			return nullptr;
+		}
+	} else if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
+		if (old_entry) {
+			triggers->DropEntry(transaction, entry_name, false);
 		}
 	}
 	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {

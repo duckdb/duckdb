@@ -108,7 +108,7 @@ public:
 
 			// get the lambda expression
 			auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-			auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
+			auto &bind_info = func_expr.BindInfo()->Cast<ListLambdaBindData>();
 			lambda_expr = bind_info.lambda_expr;
 			is_volatile = lambda_expr->IsVolatile();
 			has_index = bind_info.has_index;

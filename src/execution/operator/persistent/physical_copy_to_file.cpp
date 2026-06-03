@@ -360,6 +360,7 @@ public:
 
 public:
 	bool ShouldInitiateFlush(const idx_t &local_append_count);
+	bool IsCombineComplete() const DUCKDB_REQUIRES(lock);
 	void CreateTaskList() DUCKDB_REQUIRES(lock);
 	bool HasCompleted() const;
 	optional<PartitionedCopyTask> TryAssignTask();
@@ -843,6 +844,10 @@ bool PartitionedCopyState::ShouldInitiateFlush(const idx_t &local_append_count) 
 	return total_count / unique_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(partitioned_copy.context);
 }
 
+bool PartitionedCopyState::IsCombineComplete() const {
+	return combined == locals;
+}
+
 void PartitionedCopyState::CreateTaskList() {
 	global_source_state =
 	    partitioned_copy.sort_strategy->GetGlobalSourceState(partitioned_copy.context, *global_sink_state);
@@ -913,7 +918,6 @@ optional<PartitionedCopyTask> PartitionedCopyState::TryAssignTask() {
 	while (next_group < partition_blocks.size()) {
 		const auto group_idx = partition_blocks[next_group++].second;
 		active_groups.emplace_back(group_idx);
-
 		auto &hash_group = hash_groups[group_idx];
 		annotated_lock_guard<annotated_mutex> guard(hash_group->lock);
 		hash_group->TryPrepareNextStage();
@@ -1225,9 +1229,18 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 
 	{
 		annotated_lock_guard<annotated_mutex> guard(flushing_state_copy->lock);
+		D_ASSERT(flushing_state_copy->combined <= flushing_state_copy->locals);
 		if (!flushing_state_copy->global_source_state) {
-			return; // Finalization not yet complete, nothing to do
+			if (!flushing_state_copy->IsCombineComplete()) {
+				return; // Combine not complete yet
+			}
+			D_ASSERT(flushing_state_copy->IsCombineComplete());
+			FinalizeState(*flushing_state_copy, interrupt_state);
+			if (!flushing_state_copy->global_source_state) {
+				return; // Finalization not yet complete, nothing to do
+			}
 		}
+		D_ASSERT(flushing_state_copy->global_source_state);
 	}
 
 	if (ShouldStopFlushing()) {
@@ -2011,13 +2024,11 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
-		chunk.SetCardinality(count);
 		source_state.offset += count;
 		return source_state.offset < gstate.written_files.size() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                         : SourceResultType::FINISHED;
 	}
 
-	chunk.SetCardinality(1);
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));

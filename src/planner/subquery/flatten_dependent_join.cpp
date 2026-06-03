@@ -64,8 +64,8 @@ static bool DependsOnCorrelatedWalk(LogicalOperator &op, Binder &binder,
 			}
 			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 			    **expr_ptr, [&](const BoundColumnRefExpression &bound_colref) {
-				    result |= bound_colref.depth > 0 &&
-				              correlated_aliases.find(bound_colref.binding) != correlated_aliases.end();
+				    result |= bound_colref.Depth() > 0 &&
+				              correlated_aliases.find(bound_colref.Binding()) != correlated_aliases.end();
 			    });
 		});
 	}
@@ -293,10 +293,10 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	auto window = make_uniq<LogicalWindow>(table_index);
 
 	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
-	row_number->partitions = std::move(partitions);
-	row_number->orders = std::move(orders);
-	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	row_number->PartitionsMutable() = std::move(partitions);
+	row_number->OrderByMutable() = std::move(orders);
+	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	row_number->SetAlias("limit_rownum");
 
 	window->expressions.push_back(std::move(row_number));
@@ -606,7 +606,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
 
 		auto count_fun = CountFunctionBase::GetFunction();
 		auto count_star_fun = CountStarFun::GetFunction();
@@ -781,7 +781,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOp
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
-		AppendCorrelatedColumns(w.partitions, state, false);
+		AppendCorrelatedColumns(w.PartitionsMutable(), state, false);
 	}
 	return state;
 }

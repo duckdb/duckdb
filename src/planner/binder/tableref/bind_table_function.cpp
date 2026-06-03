@@ -79,7 +79,7 @@ void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list = std::move(expressions);
 	select_node->from_table = make_uniq<EmptyTableRef>();
-	binder->can_contain_nulls = true;
+	binder->SetCanContainNulls(true);
 	subquery = binder->BindNode(*select_node);
 	MoveCorrelatedExpressions(*binder);
 }
@@ -105,11 +105,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
 			auto &comp = child->Cast<ComparisonExpression>();
-			if (comp.left->GetExpressionType() == ExpressionType::COLUMN_REF) {
-				auto &colref = comp.left->Cast<ColumnRefExpression>();
+			if (comp.Left().GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &colref = comp.Left().Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
-					child = std::move(comp.right);
+					child = std::move(comp.RightMutable());
 				}
 			}
 		} else if (!child->GetAlias().empty()) {
@@ -130,9 +130,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this);
-			binder->can_contain_nulls = true;
+			binder->SetCanContainNulls(true);
 			auto &se = child->Cast<SubqueryExpression>();
-			subquery = binder->BindNode(*se.subquery->node);
+			subquery = binder->BindNode(*se.Subquery()->node);
 			MoveCorrelatedExpressions(*binder);
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
@@ -172,7 +172,7 @@ static string GetAlias(const TableFunctionRef &ref) {
 	}
 	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
-		return function_expr.function_name;
+		return function_expr.FunctionName();
 	}
 	return string();
 }
@@ -317,8 +317,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number = RowNumberFun::GetFunction().Bind(context);
-		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->SetAlias(column_name_alias[return_names.size()]);
@@ -367,13 +367,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	string catalog = fexpr.catalog;
-	string schema = fexpr.schema;
+	string catalog = fexpr.Catalog();
+	string schema = fexpr.Schema();
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
 
-	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
+	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.FunctionName(), error_context);
 	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
@@ -382,7 +382,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		D_ASSERT(query_node);
 
 		auto binder = Binder::CreateBinder(context, this);
-		binder->can_contain_nulls = true;
+		binder->SetCanContainNulls(true);
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
 		BoundStatement query;
@@ -412,8 +412,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	BoundStatement subquery;
 	ErrorData error;
-	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
-	                                 error)) {
+	if (!BindTableFunctionParameters(function, fexpr.GetChildrenMutable(), arguments, parameters, named_parameters,
+	                                 subquery, error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}

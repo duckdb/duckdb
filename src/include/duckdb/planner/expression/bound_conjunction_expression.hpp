@@ -20,9 +20,13 @@ public:
 	explicit BoundConjunctionExpression(ExpressionType type);
 	BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 
-	vector<unique_ptr<Expression>> children;
-
 public:
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;
@@ -33,5 +37,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	vector<unique_ptr<Expression>> children;
 };
 } // namespace duckdb

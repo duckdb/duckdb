@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -42,6 +43,17 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 	for (auto &child : children) {
 		child.SetVectorType(new_vector_type);
+	}
+}
+
+void VectorStructBuffer::PrepareChildrenForSetConstant() {
+	for (auto &child : children) {
+		if (child.GetVectorType() != VectorType::FLAT_VECTOR && child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			child.Flatten();
+		}
+		if (child.GetType().InternalType() == PhysicalType::STRUCT) {
+			child.BufferMutable().Cast<VectorStructBuffer>().PrepareChildrenForSetConstant();
+		}
 	}
 }
 

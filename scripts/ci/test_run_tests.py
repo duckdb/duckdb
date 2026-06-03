@@ -27,6 +27,42 @@ def start_runner(cli_args: list[str]):
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_summarizes_wrong_result_failure(self):
+        stderr = """
+1. test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow:29
+================================================================================
+
+Error: Wrong result in query! (test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow:29)!
+================================================================================
+SELECT COUNT(*) FROM integers WHERE i = 1;
+================================================================================
+Mismatch on row 1, column count_star()(index 1)
+16 <> 20001
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            None,
+            "",
+            stderr,
+            ["test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow"],
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow",
+                "",
+                "expected: 20001, got 16; Mismatch on row 1, column count_star()(index 1)",
+                "",
+                "  > 29  query I",
+                "    30  SELECT COUNT(*) FROM integers WHERE i = 1",
+                "    31  ----",
+                "    32  20001",
+            ],
+        )
+        self.assertEqual(
+            reproduce_batch,
+            ["test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow"],
+        )
+
     def test_reports_skipped_tests_summary(self):
         cases = [
             {
@@ -315,7 +351,11 @@ require windows: 2
             #!/bin/sh
             # run_tests.py calls: <helper> --list-tests <pattern>
             if [ "$1" != "--list-tests" ]; then
-              exit 2
+              printf '\\n[0/2] (0%%): test/sql/slow.test\\n'
+              printf '[1/2] (50%%): test/sql/slow.test took 0.001s\\n'
+              printf '[2/2] (100%%): test/sql/fast.test took 0.002s\\n'
+              printf 'All tests passed (100 assertions in 2 test cases)\\n'
+              exit 0
             fi
             cat "$2"
             exit 2
@@ -334,7 +374,7 @@ require windows: 2
                     "--track-runtime",
                     "0",
                     "--test-command",
-                    "echo fake-run {test_list}",
+                    "{binary} {test_list}",
                     str(list_helper_path),
                     str(listed_tests_path),
                 ]
@@ -345,9 +385,11 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("generated test list using:", proc.stdout)
+        self.assertIn("batch_size=2", proc.stdout)
         self.assertNotIn("found 2 tests", proc.stdout)
-        self.assertIn("test/sql/slow.test took", proc.stdout)
-        self.assertIn("test/sql/fast.test took", proc.stdout)
+        self.assertNotIn("forces batch_size=1", proc.stdout)
+        self.assertIn("warn: test/sql/slow.test took", proc.stdout)
+        self.assertIn("warn: test/sql/fast.test took", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)
 
     def test_runs_with_echo_test_command(self):
@@ -437,6 +479,219 @@ require windows: 2
         self.assertIn("added 1 tests from --changed-tests file to the smoke test run", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)
 
+    def test_stabilize_tests_reruns_selected_tests_with_fast_and_slow_policy(self):
+        test_list_path = create_temp_file(
+            """
+            name\tgroup
+            test/sql/fast.test\t[fast]
+            test/sql/slow.test\t[.][slow]
+            """
+        )
+        run_calls = []
+
+        def fake_run_tests(_config, batches, total_tests):
+            run_calls.append({"batches": batches, "total_tests": total_tests})
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_tests", side_effect=fake_run_tests):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "10",
+                        "--stabilize-tests",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len(run_calls), 12)
+        self.assertEqual(run_calls[0]["total_tests"], 2)
+        fast_reruns = [
+            call for call in run_calls[1:] if call["total_tests"] == 1 and call["batches"][0][0].endswith("fast.test")
+        ]
+        slow_reruns = [
+            call for call in run_calls[1:] if call["total_tests"] == 1 and call["batches"][0][0].endswith("slow.test")
+        ]
+        self.assertEqual(len(fast_reruns), 9)
+        self.assertEqual(len(slow_reruns), 2)
+
+    def test_changed_tests_auto_stabilize_reruns_only_added_tests(self):
+        base_test_list_path = create_temp_file(
+            """
+            test/sql/a.test
+            """
+        )
+        changed_test_list_path = create_temp_file(
+            """
+            test/sql/a.test
+            test/sql/b.test
+            """
+        )
+        listed_tests_path = create_temp_file(
+            """
+            name\tgroup
+            test/sql/a.test\t[fast]
+            test/sql/b.test\t[fast]
+            """
+        )
+        list_helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ "$1" != "--list-tests" ]; then
+              exit 2
+            fi
+            cat "{listed_tests_path}"
+            exit 0
+            """,
+            listed_tests_path=listed_tests_path,
+        )
+        os.chmod(list_helper_path, 0o755)
+        run_calls = []
+
+        def fake_run_tests(_config, batches, total_tests):
+            run_calls.append({"batches": batches, "total_tests": total_tests})
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_tests", side_effect=fake_run_tests):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "10",
+                        "--test-list",
+                        str(base_test_list_path),
+                        "--changed-tests",
+                        str(changed_test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        str(list_helper_path),
+                    ]
+                )
+        finally:
+            base_test_list_path.unlink(missing_ok=True)
+            changed_test_list_path.unlink(missing_ok=True)
+            listed_tests_path.unlink(missing_ok=True)
+            list_helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        rerun_calls = run_calls[1:]
+        self.assertEqual(len(rerun_calls), 9)
+        for call in rerun_calls:
+            self.assertEqual(call["total_tests"], 1)
+            self.assertTrue(call["batches"][0][0].endswith("test/sql/b.test"))
+
+    def test_changed_tests_large_set_uses_fast_three_total_runs(self):
+        base_test_list_path = create_temp_file("test/sql/base.test\n")
+        changed_lines = ["test/sql/base.test"] + [f"test/sql/new_{idx}.test" for idx in range(501)]
+        changed_test_list_path = create_temp_file("\n".join(changed_lines) + "\n")
+        listed_rows = (
+            ["name\tgroup"]
+            + [f"test/sql/new_{idx}.test\t[fast]" for idx in range(501)]
+            + ["test/sql/base.test\t[fast]"]
+        )
+        listed_tests_path = create_temp_file("\n".join(listed_rows) + "\n")
+        list_helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ "$1" != "--list-tests" ]; then
+              exit 2
+            fi
+            cat "{listed_tests_path}"
+            exit 0
+            """,
+            listed_tests_path=listed_tests_path,
+        )
+        os.chmod(list_helper_path, 0o755)
+        run_calls = []
+
+        def fake_run_tests(_config, batches, total_tests):
+            run_calls.append({"batches": batches, "total_tests": total_tests})
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_tests", side_effect=fake_run_tests):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1000",
+                        "--test-list",
+                        str(base_test_list_path),
+                        "--changed-tests",
+                        str(changed_test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        str(list_helper_path),
+                    ]
+                )
+        finally:
+            base_test_list_path.unlink(missing_ok=True)
+            changed_test_list_path.unlink(missing_ok=True)
+            listed_tests_path.unlink(missing_ok=True)
+            list_helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len(run_calls), 3)
+        self.assertEqual(run_calls[0]["total_tests"], 502)
+        self.assertEqual(run_calls[1]["total_tests"], 501)
+        self.assertEqual(run_calls[2]["total_tests"], 501)
+
+    def test_stabilization_failure_fails_config_run(self):
+        test_list_path = create_temp_file(
+            """
+            name\tgroup
+            test/sql/fast.test\t[fast]
+            """
+        )
+        run_results = [
+            run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            ),
+            run_tests.ConfigRunResult(
+                returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
+            ),
+        ]
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_tests", side_effect=run_results):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "10",
+                        "--stabilize-tests",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("error: stabilization rerun failure detected", proc.stdout)
+
     def test_retries_failed_fake_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
         state_file_path = create_temp_file("")
@@ -481,8 +736,11 @@ require windows: 2
             helper_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("retrying failed test batch 0 (attempt 1/1, retry 1/4)", proc.stdout)
+        self.assertIn("retrying failed test test/sql/a.test (attempt 1/1, retry 1/4)", proc.stdout)
+        self.assertIn("error: FAIL test/sql/a.test", proc.stdout)
         self.assertIn("fake failure", proc.stdout)
+        self.assertIn("recovered: passed on retry 1/1", proc.stdout)
+        self.assertEqual(proc.stdout.count("fake failure"), 1)
         self.assertIn("ran tests: ", proc.stdout)
 
     def test_retries_timed_out_sleep_job(self):
@@ -528,9 +786,292 @@ require windows: 2
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn(f"batch timed out after {batch_timeout} seconds", proc.stdout)
-        self.assertIn("retrying failed test", proc.stdout)
+        self.assertIn(f"error: timeout ({batch_timeout}s) for test/sql/a.test.", proc.stdout)
+        self.assertIn("recovered: passed on retry 1/1", proc.stdout)
+        self.assertIn("retrying failed test test/sql/a.test", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)
+
+    def test_failed_batch_prints_single_compact_summary_after_retries(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                side_effect=[
+                    {
+                        "failed": True,
+                        "stdout": "",
+                        "stderr": (
+                            "Error: Wrong result in query!\n"
+                            "SELECT COUNT(*) FROM integers WHERE i = 1;\n"
+                            "Mismatch on row 1, column count_star()(index 1)\n"
+                            "16 <> 20001\n"
+                        ),
+                        "message": None,
+                        "peak_rss_bytes": 0,
+                    },
+                    {
+                        "failed": True,
+                        "stdout": "",
+                        "stderr": (
+                            "Error: Wrong result in query!\n"
+                            "SELECT COUNT(*) FROM integers WHERE i = 1;\n"
+                            "Mismatch on row 1, column count_star()(index 1)\n"
+                            "24 <> 20001\n"
+                        ),
+                        "message": None,
+                        "peak_rss_bytes": 0,
+                    },
+                ],
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--retry",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("error: FAIL test/sql/a.test", proc.stdout)
+        self.assertIn("expected: 20001, got 24; Mismatch on row 1, column count_star()(index 1)", proc.stdout)
+        self.assertNotIn("### failed test batch", proc.stdout)
+        self.assertNotIn("attempts:", proc.stdout)
+
+    def test_failed_batch_includes_mismatch_context(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                return_value={
+                    "failed": True,
+                    "stdout": "",
+                    "stderr": (
+                        "Error: Wrong result in query!\n"
+                        "SELECT COUNT(*) FROM integers WHERE i = 1;\n"
+                        "Mismatch on row 1, column count_star()(index 1)\n"
+                        "24 <> 20001\n"
+                    ),
+                    "message": None,
+                    "peak_rss_bytes": 0,
+                },
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("error: FAIL test/sql/a.test", proc.stdout)
+        self.assertIn("expected: 20001, got 24; Mismatch on row 1, column count_star()(index 1)", proc.stdout)
+
+    def test_prefers_failing_stderr_block_and_single_test_reproduce(self):
+        batch = [
+            "/tmp/a.test",
+            "/tmp/b.test",
+            "test/sql/logging/http_logging.test",
+        ]
+        stdout = (
+            "[2/5] (40%): /tmp/b.test took 0.007s"
+            "PRAGMA enable_verification has been deprecated - there is no need to set this anymore\n"
+        )
+        stderr = """
+1. test/sql/logging/http_logging.test:25
+================================================================================
+Wrong result in query! (test/sql/logging/http_logging.test:25)!
+================================================================================
+SELECT request.headers['Range'], response.headers['Content-Range']
+FROM duckdb_logs_parsed('HTTP')
+WHERE request.type='GET';
+================================================================================
+Mismatch on row 1, column response.headers['Content-Range'](index 2)
+NULL <> bytes 0-1275/1276
+================================================================================
+Expected result:
+================================================================================
+bytes=0-1275\tbytes 0-1275/1276
+
+================================================================================
+Actual result:
+================================================================================
+bytes=0-1275\tNULL
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unittest is a Catch v2.13.7 host application.
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(
+            reproduce_batch,
+            ["test/sql/logging/http_logging.test"],
+        )
+        self.assertIn(
+            "error: FAIL test/sql/logging/http_logging.test",
+            lines,
+        )
+        self.assertIn(
+            "expected: bytes 0-1275/1276, got NULL; Mismatch on row 1, column response.headers['Content-Range'](index 2)",
+            lines,
+        )
+        self.assertNotIn(
+            "PRAGMA enable_verification has been deprecated - there is no need to set this anymore",
+            "\n".join(lines),
+        )
+
+    def test_generic_failure_uses_failing_stderr_block_instead_of_stdout(self):
+        batch = ["/tmp/a.test", "/tmp/fail.test"]
+        stdout = "irrelevant warning from another test\n"
+        stderr = """
+1. /tmp/fail.test:7
+================================================================================
+Error: Catalog Error: nope
+================================================================================
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unittest is a Catch v2.13.7 host application.
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(reproduce_batch, ["/tmp/fail.test"])
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL /tmp/fail.test",
+                "",
+                "1. /tmp/fail.test:7",
+                "================================================================================",
+                "Error: Catalog Error: nope",
+                "================================================================================",
+            ],
+        )
+
+    def test_fatal_stdout_failure_uses_last_started_test_and_signal(self):
+        batch = [
+            "/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/slow/hnsw_reclaim_storage.test_slow",
+            "/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_projection.test",
+            "/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test",
+        ]
+        stdout = """
+[0/3] (0%): /duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/slow/hnsw_reclaim_storage.test_slow
+[1/3] (33%): /duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_projection.test
+[2/3] (66%): /duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test
+/duckdb_build_dir/duckdb/test/sqlite/test_sqllogictest.cpp:41: FAILED:
+  {Unknown expression after the reported line}
+due to a fatal error condition:
+  SIGSEGV - Segmentation violation signal
+"""
+        stderr = """
+Replacing deprecated string __TEST_DIR__ in path "__TEST_DIR__/hnsw_reclaim_space.db" - please replace with {TEST_DIR}
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL /duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test",
+                "",
+                "SIGSEGV - Segmentation violation signal",
+            ],
+        )
+        self.assertEqual(
+            reproduce_batch,
+            ["/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test"],
+        )
+
+    def test_stdout_failed_block_extracts_explicit_message_reason(self):
+        batch = ["/tmp/a.test", "/tmp/fail.test"]
+        stdout = """
+[0/2] (0%): /tmp/a.test
+[1/2] (50%): /tmp/fail.test
+/tmp/fail.test:25: FAILED:
+explicitly with message:
+  catalog blew up
+"""
+        stderr = "unrelated warning from another test\n"
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL /tmp/fail.test",
+                "",
+                "catalog blew up",
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["/tmp/fail.test"])
+
+    def test_snippet_trims_blank_edges(self):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as tmp_file:
+            tmp_file.write("\nquery I\nSELECT 42\n----\n42\n\n")
+            tmp_file.flush()
+            snippet_test_path = Path(tmp_file.name)
+        try:
+            lines = run_tests.render_test_snippet(str(snippet_test_path), 2)
+        finally:
+            snippet_test_path.unlink(missing_ok=True)
+
+        self.assertEqual(
+            lines,
+            [
+                "  > 2  query I",
+                "    3  SELECT 42",
+                "    4  ----",
+                "    5  42",
+            ],
+        )
+
+    def test_timeout_names_last_file_in_multi_test_batch(self):
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            "batch timed out after 5 seconds",
+            "",
+            "",
+            ["test/sql/a.test", "test/sql/b.test"],
+        )
+        self.assertEqual(lines, ["error: timeout (5s) for test/sql/b.test."])
+        self.assertEqual(reproduce_batch, ["test/sql/b.test"])
+
+    def test_timeout_uses_first_started_but_not_completed_test(self):
+        batch = [
+            "/tmp/first.test",
+            "/tmp/second.test_slow",
+            "/tmp/third.test",
+        ]
+        stdout = """
+[0/10] (0%): /tmp/first.test
+[1/10] (10%): /tmp/first.test took 5.334s
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            "batch timed out after 300 seconds",
+            stdout,
+            "",
+            batch,
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: timeout (300s) for /tmp/second.test_slow.",
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["/tmp/second.test_slow"])
 
     def test_multiple_test_configs_run_independently(self):
         listed_tests_path = create_temp_file(
