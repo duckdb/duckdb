@@ -96,6 +96,11 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 			if (tcount == 0) {
 				continue;
 			}
+			idx_t fcount = current_count - tcount;
+			if (fcount == 0 && current_count == count) {
+				Execute(*case_check.then_expr, then_state, current_sel, current_count, result);
+				return;
+			}
 			for (idx_t entry_idx = 0; entry_idx < tcount; entry_idx++) {
 				auto local_idx = state.local_true_sel.get_index(entry_idx);
 				state.true_sel.set_index(entry_idx, current_sel->get_index(local_idx));
@@ -103,7 +108,6 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 			Execute(*case_check.then_expr, then_state, &state.true_sel, tcount, intermediate_result);
 			FillSwitch(intermediate_result, result, state.true_sel, NumericCast<sel_t>(tcount));
 
-			idx_t fcount = current_count - tcount;
 			if (fcount == 0) {
 				current_count = 0;
 				break;

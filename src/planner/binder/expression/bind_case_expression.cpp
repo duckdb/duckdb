@@ -9,7 +9,7 @@
 namespace duckdb {
 
 static unique_ptr<Expression> CreateCaseComparison(ClientContext &context, const LogicalType &case_type,
-                                                   const LogicalType &when_type, LogicalType input_type) {
+                                                   const LogicalType &when_type, const LogicalType &input_type) {
 	unique_ptr<Expression> case_ref = make_uniq<BoundReferenceExpression>(case_type, 0ULL);
 	unique_ptr<Expression> when_ref = make_uniq<BoundReferenceExpression>(when_type, 1ULL);
 	case_ref = BoundCastExpression::AddCastToType(context, std::move(case_ref), input_type,
@@ -72,7 +72,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 				    case_sql_type.ToString(), when_sql_type.ToString()));
 			}
 			result_check.compare_expr = CreateCaseComparison(context, result->CaseExpr()->GetReturnType(),
-			                                                 when_expr->GetReturnType(), std::move(input_type));
+			                                                 when_expr->GetReturnType(), input_type);
 			result_check.when_expr = std::move(when_expr);
 		} else {
 			result_check.when_expr =
