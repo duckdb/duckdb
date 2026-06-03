@@ -578,7 +578,7 @@ private:
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map, bool bind_expected_types = true);
 	unique_ptr<LogicalOperator> ResolveDefaultsProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
-	                                                      vector<LogicalType> &source_types);
+	                                                      const vector<LogicalType> &source_types);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
 	                                                 LogicalGet &get, TableIndex proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,

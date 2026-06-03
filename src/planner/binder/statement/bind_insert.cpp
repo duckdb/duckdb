@@ -186,7 +186,7 @@ static Value EvaluateStructDefault(ClientContext &context, const Expression &def
 } // namespace
 
 unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
-                                                              vector<LogicalType> &source_types) {
+                                                              const vector<LogicalType> &source_types) {
 	if (insert.column_index_map.empty()) {
 		throw InternalException("No defaults to push");
 	}
@@ -224,11 +224,6 @@ unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &ins
 		children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "", mapping)));
 		children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(default_value, mapping)));
 		select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
-	}
-
-	source_types.clear();
-	for (auto &expr : select_list) {
-		source_types.push_back(expr->GetReturnType());
 	}
 
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
@@ -765,6 +760,10 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 			target_types.clear();
 			for (auto &column : table.GetColumns().Physical()) {
 				target_types.push_back(column.Type());
+			}
+			source_types.clear();
+			for (auto &expr : root_select.plan->expressions) {
+				source_types.push_back(expr->GetReturnType());
 			}
 		}
 		root = CastLogicalOperatorToTypes(source_types, target_types, std::move(root_select.plan));
