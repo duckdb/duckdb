@@ -48,6 +48,15 @@ struct ReadHead {
 			buffer_ptr = local_buffer.get();
 		}
 	}
+
+	void Fetch(CachingFileHandle &file_handle) {
+		if (GetEnd() > file_handle.GetFileSize()) {
+			throw std::runtime_error("Prefetch registered requested for bytes outside file");
+		}
+		handle_group = file_handle.Read(size, location);
+		Materialize();
+		data_isset = true;
+	}
 };
 
 struct ReadHeadComparator {
@@ -140,12 +149,7 @@ struct ReadAheadBuffer {
 	// Prefetch all read heads
 	void Prefetch() {
 		for (auto &read_head : read_heads) {
-			if (read_head.GetEnd() > file_handle.GetFileSize()) {
-				throw std::runtime_error("Prefetch registered requested for bytes outside file");
-			}
-			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
-			read_head.Materialize();
-			read_head.data_isset = true;
+			read_head.Fetch(file_handle);
 		}
 	}
 };
@@ -175,9 +179,7 @@ public:
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
 			if (!prefetch_buffer->data_isset) {
-				prefetch_buffer->handle_group = file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
-				prefetch_buffer->Materialize();
-				prefetch_buffer->data_isset = true;
+				prefetch_buffer->Fetch(file_handle);
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
@@ -239,6 +241,16 @@ public:
 
 	optional_ptr<ReadHead> GetReadHead(idx_t pos) {
 		return ra_buffer.GetReadHead(pos);
+	}
+
+	// The coalesced read heads registered for prefetch; each is one I/O unit (see ReadHead::Fetch).
+	std::list<ReadHead> &GetReadHeads() {
+		return ra_buffer.read_heads;
+	}
+
+	// The caching file handle that prefetch reads go through.
+	CachingFileHandle &GetCachingFileHandle() {
+		return file_handle;
 	}
 
 	idx_t GetSize() const {
