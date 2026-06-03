@@ -58,6 +58,45 @@ SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 END FROM exprtest
 NULL
 NULL
 
+query I
+SELECT count(*) FROM (
+	SELECT CASE cast(floor(random() * 3) AS integer)
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM range(10000)
+) WHERE result = 'other'
+----
+0
+
+query I
+SELECT count(*) FROM range(10000) tbl(i)
+WHERE i % 2 = 0 AND CASE cast(floor(random() * 3) AS integer)
+	WHEN 0 THEN 'zero'
+	WHEN 1 THEN 'one'
+	WHEN 2 THEN 'two'
+	ELSE 'other'
+END = 'other'
+----
+0
+
+query T
+SELECT CASE NULL WHEN NULL THEN 'hit' ELSE 'miss' END
+----
+miss
+
+query T
+SELECT CASE 1 WHEN '1' THEN 'hit' ELSE 'miss' END
+----
+hit
+
+query T
+SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
+----
+hit
+
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)
@@ -198,4 +237,3 @@ query I
 SELECT a FROM strtest WHERE b >= 'h'
 ----
 2
-
