@@ -374,6 +374,14 @@ duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *
 	}
 }
 
+bool duckdb_bind_has_named_parameter(duckdb_bind_info info, const char *name) {
+	if (!info || !name) {
+		return false;
+	}
+	auto &bind_info = GetCTableFunctionBindInfo(info);
+	return bind_info.named_parameters.find(name) != bind_info.named_parameters.end();
+}
+
 void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy) {
 	if (!info) {
 		return;
