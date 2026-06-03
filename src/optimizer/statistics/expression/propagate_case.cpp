@@ -6,6 +6,9 @@ namespace duckdb {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCaseExpression &bound_case,
                                                                      unique_ptr<Expression> &expr_ptr) {
 	// propagate in all the children
+	if (bound_case.CaseExpr()) {
+		PropagateExpression(bound_case.CaseExprMutable());
+	}
 	auto result_stats = PropagateExpression(bound_case.ElseMutable());
 	for (auto &case_check : bound_case.CaseChecksMutable()) {
 		PropagateExpression(case_check.when_expr);
