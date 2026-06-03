@@ -421,6 +421,35 @@ def find_failing_test_from_stdout(stdout_lines: list[str], batch):
     return test_name
 
 
+def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
+    started_tests = []
+    completed_tests = set()
+
+    for line in stdout_lines:
+        stripped = line.strip()
+        progress_match = PROGRESS_TEST_START_PATTERN.match(stripped)
+        if not progress_match:
+            continue
+        progress_text = progress_match.group(1)
+        if " took " in progress_text:
+            completed_tests.add(progress_text.split(" took ", 1)[0])
+        else:
+            started_tests.append(progress_text)
+
+    for test_name in started_tests:
+        if test_name not in completed_tests:
+            return test_name
+    if completed_tests and batch:
+        for test_name in batch:
+            if test_name not in completed_tests:
+                return test_name
+    if started_tests:
+        return started_tests[-1]
+    if batch:
+        return batch[-1]
+    return None
+
+
 def extract_failed_reason_line(stdout_lines: list[str]):
     for idx, line in enumerate(stdout_lines):
         if not FAILED_HEADER_PATTERN.match(line):
@@ -480,7 +509,7 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch):
     batch_test_name = batch[0] if len(batch) == 1 else None
 
     if message is not None and message.startswith("batch timed out after "):
-        timeout_test_name = batch_test_name or (batch[-1] if batch else None)
+        timeout_test_name = batch_test_name or infer_timed_out_test_from_stdout(stdout_lines, batch)
         reproduce_batch = [timeout_test_name] if timeout_test_name else list(batch)
         return FailureInfo(
             kind="timeout",

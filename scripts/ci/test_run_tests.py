@@ -1049,6 +1049,30 @@ explicitly with message:
         self.assertEqual(lines, ["error: timeout (5s) for test/sql/b.test."])
         self.assertEqual(reproduce_batch, ["test/sql/b.test"])
 
+    def test_timeout_uses_first_started_but_not_completed_test(self):
+        batch = [
+            "/tmp/first.test",
+            "/tmp/second.test_slow",
+            "/tmp/third.test",
+        ]
+        stdout = """
+[0/10] (0%): /tmp/first.test
+[1/10] (10%): /tmp/first.test took 5.334s
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            "batch timed out after 300 seconds",
+            stdout,
+            "",
+            batch,
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: timeout (300s) for /tmp/second.test_slow.",
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["/tmp/second.test_slow"])
+
     def test_multiple_test_configs_run_independently(self):
         listed_tests_path = create_temp_file(
             """
