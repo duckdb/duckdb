@@ -152,7 +152,7 @@ unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector
 bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query) {
 	// run FROM arrow_scan(...) EXCEPT ALL <query> - this should be empty
 	shared_ptr<Relation> regular_result;
-	auto statements = con.ExtractStatements(query);
+	auto statements = con.context->ParseStatements(query);
 	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 		auto query_result = con.Query(query);
 		auto duck_collection = query_result->TakeCollection();

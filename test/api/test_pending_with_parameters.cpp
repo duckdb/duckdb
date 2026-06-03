@@ -14,7 +14,7 @@ static void ModifySimpleTable(Connection &con) {
 }
 
 static void CheckSimpleQuery(Connection &con) {
-	auto statements = con.ExtractStatements("SELECT COUNT(*) FROM a WHERE i=12");
+	auto statements = con.context->ParseStatements("SELECT COUNT(*) FROM a WHERE i=12");
 	REQUIRE(statements.size() == 1);
 	duckdb::vector<duckdb::Value> values = {Value(12)};
 	auto pending_result = con.PendingQuery("SELECT COUNT(*) FROM a WHERE i=?", values, true);

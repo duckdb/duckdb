@@ -212,6 +212,14 @@ public:
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
 
+	//! Parse a query that must contain exactly one statement and return it raw — no
+	//! StatementPreprocessor pass (no PRAGMA reparse, no MULTI_STATEMENT unpacking). Throws if
+	//! the query yields zero or more than one statement. Use this when you need the AST and
+	//! plan to run preprocessing yourself (or skip it entirely, e.g. for static analysis).
+	DUCKDB_API unique_ptr<SQLStatement> ParseStatementRaw(const string &query);
+	//! Same as above, but for callers that already hold the context lock.
+	unique_ptr<SQLStatement> ParseStatementRaw(ClientContextLock &lock, const string &query);
+
 	//! Extract a query's statements as a StatementIterator (iterator-style API). The caller drives
 	//! Peek(context) + GetStatement() to walk through statements one at a time. Replaces the
 	//! flat-vector form (`ParseStatements` / `ExtractStatements`) over time.

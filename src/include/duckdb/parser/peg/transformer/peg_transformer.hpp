@@ -305,9 +305,11 @@ private:
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
 
-	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
-	// hand-write the (PEGTransformer&, ParseResult&) entry points.
+	// connect.gram — these rules have optional sub-clauses or non-standard shapes, so the
+	// generator skips them and we hand-write the (PEGTransformer&, ParseResult&) entry points.
 	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformConnectExecuteStatement(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 

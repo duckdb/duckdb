@@ -58,7 +58,7 @@ static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
 
-static void ValidateUTF8Query(const string &query) {
+void Parser::ValidateUTF8Query(const string &query) {
 	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
 	size_t invalid_pos = 0;
 	auto unicode_type = Utf8Proc::Analyze(query.c_str(), query.size(), &reason, &invalid_pos);
@@ -221,7 +221,7 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 }
 
 void Parser::ParseQuery(const string &query) {
-	ValidateUTF8Query(query);
+	Parser::ValidateUTF8Query(query);
 	{
 		string new_query;
 		if (StripUnicodeSpaces(query, new_query)) {
@@ -272,56 +272,11 @@ void Parser::ParseQuery(const string &query) {
 				statements.push_back(std::move(stmt));
 			}
 		} catch (ParserException &e) {
-			bool parsed = false;
-			if (options.extensions && options.extensions->HasParserExtensions()) {
-				idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
-				string tail = query.substr(failure_byte);
-				// Build allowed_boundaries: every token start AND token end, relative to `tail`,
-				// plus a final sentinel = tail.size(). Sorted and deduplicated so adjacent tokens
-				// with no whitespace between contribute a single shared boundary.
-				vector<idx_t> allowed_boundaries;
-				allowed_boundaries.reserve((tokens.size() - token_cursor) * 2 + 1);
-				for (idx_t i = token_cursor; i < tokens.size(); i++) {
-					allowed_boundaries.push_back(tokens[i].offset - failure_byte);
-					allowed_boundaries.push_back(tokens[i].offset - failure_byte + tokens[i].length);
-				}
-				allowed_boundaries.push_back(tail.size());
-				std::sort(allowed_boundaries.begin(), allowed_boundaries.end());
-				allowed_boundaries.erase(std::unique(allowed_boundaries.begin(), allowed_boundaries.end()),
-				                         allowed_boundaries.end());
-				for (auto &ext : options.extensions->ParserExtensions()) {
-					if (!ext.parse_function) {
-						continue;
-					}
-					auto result = ext.parse_function(ext.parser_info.get(), tail, allowed_boundaries);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL && result.consumed_chars > 0) {
-						if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(),
-						                        result.consumed_chars)) {
-							throw ParserException(
-							    "Extension returned consumed_chars=%llu — must be one of the allowed_boundaries",
-							    (uint64_t)result.consumed_chars);
-						}
-						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-						estmt->stmt_location = failure_byte;
-						estmt->stmt_length = result.consumed_chars;
-						statements.push_back(std::move(estmt));
-						// Advance token_cursor past every token whose start lies inside the
-						// span the extension claimed.
-						const idx_t resume_byte = failure_byte + result.consumed_chars;
-						while (token_cursor < tokens.size() && tokens[token_cursor].offset < resume_byte) {
-							token_cursor++;
-						}
-						parsed = true;
-						break;
-					}
-					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException::SyntaxError(query, result.error, result.error_location);
-					}
-				}
-			}
-			if (!parsed) {
+			auto ext_stmt = TryParseExtensionStatement(tokens, token_cursor, query);
+			if (!ext_stmt) {
 				throw;
 			}
+			statements.push_back(std::move(ext_stmt));
 		}
 	}
 
@@ -340,6 +295,54 @@ void Parser::ParseQuery(const string &query) {
 			}
 		}
 	}
+}
+
+unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
+                                                            const string &query) {
+	if (!options.extensions || !options.extensions->HasParserExtensions()) {
+		return nullptr;
+	}
+	idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+	string tail = query.substr(failure_byte);
+	// Build allowed_boundaries: every token start AND token end, relative to `tail`, plus a
+	// final sentinel = tail.size(). Sorted and deduplicated so adjacent tokens with no
+	// whitespace between contribute a single shared boundary.
+	vector<idx_t> allowed_boundaries;
+	allowed_boundaries.reserve((tokens.size() - token_cursor) * 2 + 1);
+	for (idx_t i = token_cursor; i < tokens.size(); i++) {
+		allowed_boundaries.push_back(tokens[i].offset - failure_byte);
+		allowed_boundaries.push_back(tokens[i].offset - failure_byte + tokens[i].length);
+	}
+	allowed_boundaries.push_back(tail.size());
+	std::sort(allowed_boundaries.begin(), allowed_boundaries.end());
+	allowed_boundaries.erase(std::unique(allowed_boundaries.begin(), allowed_boundaries.end()),
+	                         allowed_boundaries.end());
+	for (auto &ext : options.extensions->ParserExtensions()) {
+		if (!ext.parse_function) {
+			continue;
+		}
+		auto result = ext.parse_function(ext.parser_info.get(), tail, allowed_boundaries);
+		if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL && result.consumed_chars > 0) {
+			if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(), result.consumed_chars)) {
+				throw ParserException("Extension returned consumed_chars=%llu — must be one of the allowed_boundaries",
+				                      (uint64_t)result.consumed_chars);
+			}
+			auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+			estmt->stmt_location = failure_byte;
+			estmt->stmt_length = result.consumed_chars;
+			// Advance token_cursor past every token whose start lies inside the span the
+			// extension claimed.
+			const idx_t resume_byte = failure_byte + result.consumed_chars;
+			while (token_cursor < tokens.size() && tokens[token_cursor].offset < resume_byte) {
+				token_cursor++;
+			}
+			return std::move(estmt);
+		}
+		if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+			throw ParserException::SyntaxError(query, result.error, result.error_location);
+		}
+	}
+	return nullptr;
 }
 
 unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor) {

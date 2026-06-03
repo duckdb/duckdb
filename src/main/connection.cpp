@@ -183,10 +183,6 @@ unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
 	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
 }
 
-vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
-	return context->ParseStatements(query);
-}
-
 unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 	return context->ExtractPlan(query);
 }
