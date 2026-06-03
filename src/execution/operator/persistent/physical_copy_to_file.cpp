@@ -259,9 +259,9 @@ struct PartitionWriteInfo {
 	idx_t active_writes = 0;
 };
 
-struct CreatePartitionFileStateResult {
-	unique_ptr<GlobalFileState> file_state;
+struct PartitionFileStateReservation {
 	vector<unique_ptr<GlobalFileState>> files_to_finalize;
+	idx_t offset = 0;
 };
 
 enum class PartitionedCopyBatchMode : uint8_t { BUFFERING, PREPARING, DELAYED, PREPARED };
@@ -701,6 +701,14 @@ public:
 	void Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state);
 	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
 	bool RequiresSerializedPartitionWrites() const;
+	template <class FUNC>
+	void WithPartitionWriteRun(PartitionWriteInfo &write_info, FUNC &&func) {
+		annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
+		if (RequiresSerializedPartitionWrites()) {
+			run_guard.lock();
+		}
+		func();
+	}
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
@@ -730,9 +738,11 @@ public:
 	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values,
 	                                                     FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_EXCLUDES(active_writes_lock);
-	CreatePartitionFileStateResult
-	CreatePartitionFileStateLocked(const vector<Value> &values, FileCreationReason reason = FileCreationReason::NORMAL)
+	PartitionFileStateReservation
+	ReservePartitionFileStateLocked(const vector<Value> &values, FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_REQUIRES(active_writes_lock);
+	unique_ptr<GlobalFileState> CreatePartitionFileStateFromReservation(const vector<Value> &values, idx_t offset)
+	    DUCKDB_EXCLUDES(active_writes_lock);
 	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
 	    DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
@@ -1369,16 +1379,13 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 
 	D_ASSERT(write_info);
 	PartitionWriteInfoGuard write_guard(partitioned_copy, *write_info);
-	annotated_unique_lock<annotated_mutex> run_guard(write_info->lock, std::defer_lock);
-	if (partitioned_copy.RequiresSerializedPartitionWrites()) {
-		run_guard.lock();
-	}
-
-	partitioned_copy.EnsureFreshPartitionFileForSortedRun(*write_info, values);
-	for (auto &batch : batches) {
-		D_ASSERT(batch);
-		partitioned_copy.FlushPreparedPartitionBatch(values, *write_info, std::move(batch));
-	}
+	partitioned_copy.WithPartitionWriteRun(*write_info, [&]() {
+		partitioned_copy.EnsureFreshPartitionFileForSortedRun(*write_info, values);
+		for (auto &batch : batches) {
+			D_ASSERT(batch);
+			partitioned_copy.FlushPreparedPartitionBatch(values, *write_info, std::move(batch));
+		}
+	});
 }
 
 PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
@@ -2029,11 +2036,7 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 
 			auto &write_info = GetPartitionWriteInfo(flush.values);
 			PartitionWriteInfoGuard write_guard(*this, write_info);
-			{
-				annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
-				if (RequiresSerializedPartitionWrites()) {
-					run_guard.lock();
-				}
+			WithPartitionWriteRun(write_info, [&]() {
 				EnsureFreshPartitionFileForSortedRun(write_info, flush.values);
 
 				DataChunk scan_chunk;
@@ -2066,7 +2069,7 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 					}
 				}
 				flush_batch();
-			}
+			});
 		}
 
 		auto next = delayed_guard.Complete();
@@ -2079,7 +2082,6 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 
 PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &values) {
 	PartitionWriteInfo *result;
-	vector<unique_ptr<GlobalFileState>> files_to_finalize;
 	{
 		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
 		// check if we have already started writing this partition
@@ -2090,9 +2092,6 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 			result = active_write_entry->second.get();
 		} else {
 			auto info = make_uniq<PartitionWriteInfo>();
-			auto create_result = CreatePartitionFileStateLocked(values);
-			info->file_state = std::move(create_result.file_state);
-			files_to_finalize = std::move(create_result.files_to_finalize);
 			result = info.get();
 
 			info->active_writes = 1;
@@ -2101,7 +2100,6 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 		}
 	}
 
-	FinalizeFileStates(std::move(files_to_finalize));
 	return *result;
 }
 
@@ -2113,26 +2111,25 @@ void PartitionedCopy::ReleasePartitionWriteInfo(PartitionWriteInfo &write_info) 
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values,
                                                                       FileCreationReason reason) {
-	CreatePartitionFileStateResult result;
+	PartitionFileStateReservation reservation;
 	{
 		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		result = CreatePartitionFileStateLocked(values, reason);
+		reservation = ReservePartitionFileStateLocked(values, reason);
 	}
-	FinalizeFileStates(std::move(result.files_to_finalize));
-	return std::move(result.file_state);
+	FinalizeFileStates(std::move(reservation.files_to_finalize));
+	return CreatePartitionFileStateFromReservation(values, reservation.offset);
 }
 
-CreatePartitionFileStateResult PartitionedCopy::CreatePartitionFileStateLocked(const vector<Value> &values,
+PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(const vector<Value> &values,
                                                                                FileCreationReason reason) {
-	CreatePartitionFileStateResult result;
-	idx_t offset = 0;
+	PartitionFileStateReservation reservation;
 	// check if we need to close any writers before we can continue
 	if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
 		// we need to! try to close writers
 		for (auto it = active_writes.begin(); it != active_writes.end(); ++it) {
 			if (it->second->active_writes == 0) {
 				// we can evict this entry - evict the partition
-				result.files_to_finalize.push_back(std::move(it->second->file_state));
+				reservation.files_to_finalize.push_back(std::move(it->second->file_state));
 				++previous_partitions[it->first];
 				active_writes.erase(it);
 				break;
@@ -2146,12 +2143,17 @@ CreatePartitionFileStateResult PartitionedCopy::CreatePartitionFileStateLocked(c
 		}
 		auto prev_offset = previous_partitions.find(values);
 		if (prev_offset != previous_partitions.end()) {
-			offset = prev_offset->second;
+			reservation.offset = prev_offset->second;
 		}
 	} else {
-		offset = global_offset++;
+		reservation.offset = global_offset++;
 	}
 
+	return reservation;
+}
+
+unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateFromReservation(const vector<Value> &values,
+                                                                                     idx_t offset) {
 	// Access global state under lock
 	annotated_lock_guard<annotated_mutex> guard(copy_gstate.lock);
 
@@ -2170,8 +2172,7 @@ CreatePartitionFileStateResult PartitionedCopy::CreatePartitionFileStateLocked(c
 		}
 	}
 	// Initialize write
-	result.file_state = copy_gstate.CreateFileStateLocked(full_path, values);
-	return result;
+	return copy_gstate.CreateFileStateLocked(full_path, values);
 }
 
 void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info,
