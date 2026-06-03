@@ -81,7 +81,8 @@
       {
         "id": 203,
         "name": "case_expr",
-        "type": "Expression*"
+        "type": "Expression*",
+        "nullable": true
       },
       {
         "id": 201,
