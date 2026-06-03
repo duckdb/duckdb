@@ -98,8 +98,7 @@ static unique_ptr<FunctionData> CurrentFeatureBind(ClientContext &context, Table
 	return std::move(result);
 }
 
-static unique_ptr<GlobalTableFunctionState> CurrentFeatureInit(ClientContext &context,
-                                                               TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> CurrentFeatureInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_uniq<CurrentFeatureState>();
 }
 
@@ -116,8 +115,8 @@ static void CurrentFeatureFunction(ClientContext &context, TableFunctionInput &d
 		optional_ptr<FeatureCatalogEntry> feature_entry;
 		auto schemas = Catalog::GetAllSchemas(context);
 		for (auto &schema : schemas) {
-			auto entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context),
-			                                   CatalogType::FEATURE_ENTRY, bind_data.feature_name);
+			auto entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::FEATURE_ENTRY,
+			                                   bind_data.feature_name);
 			if (entry) {
 				feature_entry = &entry->Cast<FeatureCatalogEntry>();
 				break;
@@ -128,8 +127,7 @@ static void CurrentFeatureFunction(ClientContext &context, TableFunctionInput &d
 			throw CatalogException("Feature \"%s\" does not exist", bind_data.feature_name);
 		}
 
-		auto versioned_table =
-		    bind_data.feature_name + "__v" + duckdb::to_string(feature_entry->current_version);
+		auto versioned_table = bind_data.feature_name + "__v" + duckdb::to_string(feature_entry->current_version);
 		auto query_sql = "SELECT * FROM " + SQLIdentifier::ToString(versioned_table);
 
 		auto &db = DatabaseInstance::GetDatabase(context);
@@ -157,8 +155,8 @@ static void CurrentFeatureFunction(ClientContext &context, TableFunctionInput &d
 }
 
 void CurrentFeatureFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("current_feature", {LogicalType::VARCHAR}, CurrentFeatureFunction,
-	                              CurrentFeatureBind, CurrentFeatureInit));
+	set.AddFunction(TableFunction("current_feature", {LogicalType::VARCHAR}, CurrentFeatureFunction, CurrentFeatureBind,
+	                              CurrentFeatureInit));
 }
 
 } // namespace duckdb
