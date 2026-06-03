@@ -759,7 +759,7 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 			                   if (ndistinct) {
 				                   prefix.Slice(matching, nmatch);
 			                   } else {
-				                   prefix.SetCardinality(nmatch);
+				                   prefix.SetChildCardinality(nmatch);
 			                   }
 			                   const auto m = VectorOperations::DistinctFrom(order_curr, order_prev, nullptr, nmatch,
 			                                                                 &distinct, nullptr);
@@ -951,7 +951,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 
 		//	Compute fully materialised expressions
 		if (coll_chunk.data.empty()) {
-			coll_chunk.SetCardinality(input_chunk);
+			coll_chunk.SetChildCardinality(input_chunk.size());
 		} else {
 			coll_chunk.Reset();
 			coll_exec.Execute(input_chunk, coll_chunk);
@@ -965,7 +965,7 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 
 		// Compute sink expressions
 		if (sink_chunk.data.empty()) {
-			sink_chunk.SetCardinality(input_chunk);
+			sink_chunk.SetChildCardinality(input_chunk.size());
 		} else {
 			sink_chunk.Reset();
 			sink_exec.Execute(input_chunk, sink_chunk);
@@ -1161,19 +1161,21 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 		auto &executor = *executors[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
 		if (eval_chunk.data.empty()) {
-			eval_chunk.SetCardinality(input_chunk);
+			eval_chunk.SetChildCardinality(input_chunk.size());
 		} else {
 			eval_chunk.Reset();
 			eval_exec.Execute(input_chunk, eval_chunk);
 		}
 		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
-		executor.Evaluate(context, position, eval_chunk, result, sink);
+		executor.Evaluate(context, position, eval_chunk, result, sink, input_chunk.size());
 	}
-	output_chunk.SetCardinality(input_chunk);
+	output_chunk.SetChildCardinality(input_chunk.size());
 	output_chunk.Verify(context.client.db);
 
 	idx_t out_idx = 0;
-	result.SetCardinality(input_chunk);
+	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity), so set the
+	// result cardinality explicitly here - before the references below alias input_chunk's/output_chunk's buffers.
+	result.SetChildCardinality(input_chunk.size());
 	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); col_idx++) {
 		result.data[out_idx++].Reference(input_chunk.data[col_idx]);
 	}

@@ -111,6 +111,42 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
+void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
+                                               const std::function<void(unique_ptr<Expression> filter)> &callback) {
+	if (filter.IsVolatile()) {
+		return;
+	}
+	// collect every column reference that belongs to an equivalence set
+	vector<reference<const BoundColumnRefExpression>> candidate_columns;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(filter, [&](const BoundColumnRefExpression &col) {
+		auto entry = equivalence_set_map.find(col);
+		if (entry == equivalence_set_map.end()) {
+			return;
+		}
+		for (auto &existing : candidate_columns) {
+			if (existing.get().Equals(col)) {
+				return;
+			}
+		}
+		candidate_columns.push_back(col);
+	});
+	// for each such column, generate an equivalent filter with the columns swapped
+	for (auto &col_ref : candidate_columns) {
+		auto &col = col_ref.get();
+		auto set_id = equivalence_set_map.find(col)->second;
+		for (auto &item : equivalence_map[set_id]) {
+			auto copy = filter.Copy();
+			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+			    copy, [&](BoundColumnRefExpression &cref, unique_ptr<Expression> &child) {
+				    if (cref.Equals(col)) {
+					    child = item.get().Copy();
+				    }
+			    });
+			callback(std::move(copy));
+		}
+	}
+}
+
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	// first loop over the remaining filters
 	for (auto &filter : remaining_filters) {
@@ -149,6 +185,10 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					auto constant = make_uniq<BoundConstantExpression>(info.constant);
 					auto comparison = BoundComparisonExpression::Create(info.comparison_type, entries[i].get().Copy(),
 					                                                    std::move(constant));
+					// column refs are already covered above
+					if (entries[i].get().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+						GenerateEquivalentFilters(*comparison, callback);
+					}
 					callback(std::move(comparison));
 				}
 			}

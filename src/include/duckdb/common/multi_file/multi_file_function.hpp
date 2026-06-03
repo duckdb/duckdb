@@ -699,7 +699,7 @@ public:
 				}
 			}
 
-			output.SetCardinality(scan_chunk.size());
+			output.SetChildCardinality(scan_chunk.size());
 
 			if (scan_chunk.size() > 0) {
 				data.rows_scanned += scan_chunk.size();

@@ -81,10 +81,10 @@ struct BindReplaceDemoFun {
 		if (!state.done) {
 			output.data[0].Append(Value(state.current_depth));
 			output.data[1].Append(Value(state.current_name));
-			output.SetCardinality(1);
+			output.SetChildCardinality(1);
 			state.done = true;
 		} else {
-			output.SetCardinality(0);
+			output.SetChildCardinality(0);
 		}
 	}
 

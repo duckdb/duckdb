@@ -47,7 +47,7 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 	for (idx_t val_idx = 0; val_idx < bind_data.values.size(); val_idx++) {
 		output.data[val_idx].Reference(bind_data.values[val_idx], count_t(remaining));
 	}
-	output.SetCardinality(remaining);
+	output.SetChildCardinality(remaining);
 	state.current_count += remaining;
 }
 
