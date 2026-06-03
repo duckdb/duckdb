@@ -109,6 +109,7 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			exprs.push_back(expr);
+			return;
 		}
 	}
 
