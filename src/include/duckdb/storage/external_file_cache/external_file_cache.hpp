@@ -18,6 +18,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
@@ -72,7 +73,7 @@ public:
 	void SetEnabled(bool enable);
 	idx_t GetGeneration() const;
 	vector<CachedFileInformation> GetCachedFileInformation() const;
-	//! Number of files tracked in the cache map, expose for testing purpose.
+	//! Number of files tracked in the ObjectCache, exposed for testing.
 	idx_t GetCachedFileCount() const;
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
@@ -97,12 +98,8 @@ private:
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
-	//! Register a cached file entry in ObjectCache.
-	void RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file);
-	//! Access a cached file entry in ObjectCache.
-	void AccessObjectCacheEntry(const string &path);
-	//! Attempts to erase the cached file entry at ObjectCache eviction.
-	void EraseCachedFile(const string &path);
+	//! Removes an external file cache ObjectCache key from the tracked key set.
+	void EraseCachedFileKey(const string &object_cache_key);
 	//! Delete ObjectCache entries.
 	void DeleteObjectCacheEntries(const vector<string> &object_cache_keys);
 
@@ -112,10 +109,9 @@ private:
 	atomic<bool> enable;
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
-	//! Mapping from file path to cached file with cached blocks
-	//! Invariant: all entry keys are stored in ObjectCache, which are evicted by buffer pool manager.
-	unordered_map<string, shared_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
-	//! Lock for accessing cached_files.
+	//! ObjectCache keys for external file cache entries.
+	unordered_set<string> cached_file_keys DUCKDB_GUARDED_BY(lock);
+	//! Lock for accessing cached_file_keys.
 	mutable annotated_mutex lock;
 };
 

@@ -248,7 +248,7 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
 }
 
-TEST_CASE("Disabled external file cache does not insert into cached_files", "[external_file_cache]") {
+TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto &cache = db_instance.GetExternalFileCache();
@@ -412,7 +412,7 @@ TEST_CASE("ObjectCache eviction removes zero-ref external file cache entry", "[e
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
-TEST_CASE("ObjectCache eviction removes active external file cache map entry", "[external_file_cache]") {
+TEST_CASE("ObjectCache eviction removes active external file cache entry", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();

@@ -16,12 +16,14 @@ namespace duckdb {
 
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
-	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p)
-	    : cache(cache_p), path(std::move(path_p)) {
+	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string object_cache_key_p, string path_p,
+	                                  idx_t generation_p)
+	    : cache(cache_p), object_cache_key(std::move(object_cache_key_p)),
+	      cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p)) {
 	}
 
 	~ExternalFileCacheObjectCacheEntry() override {
-		cache.TryEraseCachedFile(path);
+		cache.EraseCachedFileKey(object_cache_key);
 	}
 
 	static string ObjectType() {
@@ -33,13 +35,17 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		// Filepath is stored as both cache entry key and in external file.
-		return path.size() * 2;
+		return object_cache_key.size() * 2 + cached_file->path.size();
+	}
+
+	shared_ptr<CachedFile> GetCachedFile() const {
+		return cached_file;
 	}
 
 private:
 	ExternalFileCache &cache;
-	string path;
+	string object_cache_key;
+	shared_ptr<CachedFile> cached_file;
 };
 
 idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
@@ -239,11 +245,10 @@ void ExternalFileCache::SetEnabled(bool enable_p) {
 		enable = enable_p;
 		generation++;
 		if (!enable) {
-			keys_to_delete.reserve(cached_files.size());
-			for (auto &file : cached_files) {
-				keys_to_delete.emplace_back(ObjectCacheKey(file.first));
+			keys_to_delete.reserve(cached_file_keys.size());
+			for (auto &key : cached_file_keys) {
+				keys_to_delete.emplace_back(key);
 			}
-			cached_files.clear();
 		}
 	}
 	DeleteObjectCacheEntries(keys_to_delete);
@@ -254,13 +259,27 @@ idx_t ExternalFileCache::GetGeneration() const {
 }
 
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
-	const annotated_lock_guard<annotated_mutex> files_guard(lock);
+	vector<string> keys;
+	{
+		const annotated_lock_guard<annotated_mutex> files_guard(lock);
+		keys.reserve(cached_file_keys.size());
+		for (auto &key : cached_file_keys) {
+			keys.emplace_back(key);
+		}
+	}
+
+	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	vector<CachedFileInformation> result;
-	for (const auto &file : cached_files) {
-		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
-		const idx_t block_size = file.second->cached_block_size.IsValid() ? file.second->cached_block_size.GetIndex()
-		                                                                  : GetCacheBlockSize(file.first);
-		for (const auto &block_entry : file.second->blocks) {
+	for (const auto &key : keys) {
+		auto entry = object_cache.Get<ExternalFileCacheObjectCacheEntry>(key);
+		if (!entry) {
+			continue;
+		}
+		auto file = entry->GetCachedFile();
+		const annotated_lock_guard<annotated_mutex> map_guard(file->map_lock);
+		const idx_t block_size =
+		    file->cached_block_size.IsValid() ? file->cached_block_size.GetIndex() : GetCacheBlockSize(file->path);
+		for (const auto &block_entry : file->blocks) {
 			const idx_t block_idx = block_entry.first;
 			const auto &block = *block_entry.second;
 
@@ -270,7 +289,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 			}
 			const idx_t location = block_idx * block_size;
 			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
-			result.push_back({file.first, block.nr_bytes, location, loaded});
+			result.push_back({file->path, block.nr_bytes, location, loaded});
 		}
 	}
 	return result;
@@ -278,7 +297,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 
 idx_t ExternalFileCache::GetCachedFileCount() const {
 	const annotated_lock_guard<annotated_mutex> files_guard(lock);
-	return cached_files.size();
+	return cached_file_keys.size();
 }
 
 ExternalFileCache &ExternalFileCache::Get(DatabaseInstance &db) {
@@ -297,20 +316,6 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-void ExternalFileCache::RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file) {
-	auto key = ObjectCacheKey(path);
-	auto entry = make_shared_ptr<ExternalFileCacheObjectCacheEntry>(*this, path);
-	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
-	object_cache.Put(std::move(key), std::move(entry));
-}
-
-void ExternalFileCache::AccessObjectCacheEntry(const string &path) {
-	auto key = ObjectCacheKey(path);
-	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
-	auto entry = object_cache.Get(key);
-	ALWAYS_ASSERT(entry != nullptr);
-}
-
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_cache_keys_p) {
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	for (auto &key : object_cache_keys_p) {
@@ -319,38 +324,43 @@ void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_ca
 }
 
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
-	bool register_object_cache_entry = false;
-	shared_ptr<CachedFile> result;
-	{
-		const annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!enable) {
-			return make_shared_ptr<CachedFile>(path, generation);
-		}
-		auto existing = cached_files.find(path);
-		if (existing != cached_files.end()) {
-			result = existing->second;
-		} else {
-			result = make_shared_ptr<CachedFile>(path, generation);
-			cached_files.emplace(path, result);
-			register_object_cache_entry = true;
-		}
-	}
+	const auto object_cache_key = ObjectCacheKey(path);
+	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 
-	// Update object cache entry.
-	if (register_object_cache_entry) {
-		RegisterObjectCacheEntry(path, result);
-	} else {
-		// Used to access object cache entry to prevent and delay eviction.
-		AccessObjectCacheEntry(path);
+	// Loop until stale entries are removed and fresh entry is created.
+	while (true) {
+		const auto current_generation = generation.load();
+		if (!enable) {
+			return make_shared_ptr<CachedFile>(path, current_generation);
+		}
+
+		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(
+		    object_cache_key, *this, object_cache_key, path, current_generation);
+		auto cached_file = entry->GetCachedFile();
+
+		bool delete_stale_entry = false;
+		{
+			const annotated_lock_guard<annotated_mutex> guard(lock);
+			if (!enable) {
+				delete_stale_entry = true;
+			} else if (cached_file->generation != generation.load()) {
+				delete_stale_entry = true;
+			} else {
+				cached_file_keys.insert(object_cache_key);
+				return cached_file;
+			}
+		}
+		if (delete_stale_entry) {
+			object_cache.Delete(object_cache_key);
+		}
 	}
-	return result;
 }
 
-void ExternalFileCache::EraseCachedFile(const string &path) {
+void ExternalFileCache::EraseCachedFileKey(const string &object_cache_key) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto entry = cached_files.find(path);
-	ALWAYS_ASSERT(entry != cached_files.end());
-	cached_files.erase(entry);
+	auto entry = cached_file_keys.find(object_cache_key);
+	ALWAYS_ASSERT(entry != cached_file_keys.end());
+	cached_file_keys.erase(entry);
 }
 
 } // namespace duckdb
