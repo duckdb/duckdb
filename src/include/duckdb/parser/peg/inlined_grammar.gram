@@ -1,4 +1,6 @@
-Program <- Statement? (';'+ Statement)* ';'* EndOfInput
+Program <- TopLevelStatement*
+
+TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	CreateStatement /
