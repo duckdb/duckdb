@@ -123,7 +123,7 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 
 	// Only allowed if the macro body has a single aggregate expression
 	if (aggregate_exprs.size() != 1) {
-		throw BinderException("Window function macros bodies must one aggregate function expression");
+		throw BinderException("Window function macro bodies must contain exactly one aggregate function");
 	}
 
 	// The window spec is pushed down to the aggregate function target within the macro body
