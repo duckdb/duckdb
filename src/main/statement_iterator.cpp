@@ -30,9 +30,18 @@ StatementIterator::~StatementIterator() = default;
 StatementIterator::StatementIterator(StatementIterator &&) noexcept = default;
 StatementIterator &StatementIterator::operator=(StatementIterator &&) noexcept = default;
 
+void StatementIterator::EnablePreprocessing() {
+	preprocess_on_peek = true;
+}
+
 bool StatementIterator::Peek(ClientContext &context) {
 	// Already buffered from a prior Peek — just report it.
 	if (current_statement) {
+		return true;
+	}
+	// Drain any preprocessed leftovers first.
+	if (preprocess_buffer_cursor < preprocess_buffer.size()) {
+		current_statement = std::move(preprocess_buffer[preprocess_buffer_cursor++]);
 		return true;
 	}
 	if (exhausted) {
@@ -136,6 +145,22 @@ bool StatementIterator::Peek(ClientContext &context) {
 			if (stmt->type == StatementType::CREATE_STATEMENT) {
 				auto &create = stmt->Cast<CreateStatement>();
 				create.info->sql = stmt->query;
+			}
+			if (preprocess_on_peek) {
+				// Drive PRAGMA reparse / MULTI_STATEMENT unpacking / transaction wrapping. One
+				// peeled statement can expand into multiple; we park the tail in preprocess_buffer
+				// and yield them across subsequent Peek calls.
+				preprocess_buffer.clear();
+				preprocess_buffer_cursor = 0;
+				preprocess_buffer.push_back(std::move(stmt));
+				context.PreprocessStatements(preprocess_buffer);
+				if (preprocess_buffer.empty()) {
+					// Preprocessor swallowed the statement; loop and parse the next.
+					continue;
+				}
+				current_statement = std::move(preprocess_buffer[0]);
+				preprocess_buffer_cursor = 1;
+				return true;
 			}
 			current_statement = std::move(stmt);
 			return true;

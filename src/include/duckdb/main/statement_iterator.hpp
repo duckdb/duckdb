@@ -51,6 +51,12 @@ public:
 	//! statement is buffered — the caller should call Peek(context) first.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatement();
 
+	//! Run each peeled statement through the StatementPreprocessor (PRAGMA reparse,
+	//! MULTI_STATEMENT unpack, transaction wrapping). Off by default — internal callers that
+	//! drive their own preprocessor leave it off. ClientContext::ExtractStatements turns it on so
+	//! external callers get ready-to-execute statements (PR3 eager-API parity).
+	DUCKDB_API void EnablePreprocessing();
+
 private:
 	string sql;
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
@@ -75,6 +81,12 @@ private:
 	idx_t override_cursor = 0;
 	//! True once we've consulted parser_override extensions for this query.
 	bool override_resolved = false;
+	//! See EnablePreprocessing().
+	bool preprocess_on_peek = false;
+	//! Buffer for statements produced by preprocessing one peeled statement. Drained
+	//! one-at-a-time across subsequent Peek calls before parsing the next raw statement.
+	vector<unique_ptr<SQLStatement>> preprocess_buffer;
+	idx_t preprocess_buffer_cursor = 0;
 };
 
 } // namespace duckdb

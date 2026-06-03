@@ -785,7 +785,11 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 }
 
 StatementIterator ClientContext::ExtractStatements(const string &query) {
-	return StatementIterator(query);
+	StatementIterator iterator(query);
+	// Yield ready-to-execute statements: drive PRAGMA reparse, MULTI_STATEMENT unpack and
+	// transaction wrapping per peel — matches the eager API users expect.
+	iterator.EnablePreprocessing();
+	return iterator;
 }
 
 unique_ptr<SQLStatement> ClientContext::ParseStatementRaw(const string &query) {
