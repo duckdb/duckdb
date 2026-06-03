@@ -47,7 +47,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	for (auto &function : macros) {
 		info->macros.push_back(function->Copy());
 	}
-	info->extension_name = extension_name;
+	info->extension_name = extension_name.GetName();
 	info->dependencies = dependencies;
 	info->comment = comment;
 	info->tags = tags;

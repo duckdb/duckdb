@@ -35,17 +35,17 @@ string ParseInfo::TypeToString(CatalogType type) {
 	}
 }
 
-string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
+string ParseInfo::QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name) {
 	string result;
 	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+		result += SQLIdentifier(catalog.GetName()) + ".";
 		if (!schema.empty()) {
-			result += SQLIdentifier(schema) + ".";
+			result += SQLIdentifier(schema.GetName()) + ".";
 		}
 	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += SQLIdentifier(schema) + ".";
+		result += SQLIdentifier(schema.GetName()) + ".";
 	}
-	result += SQLIdentifier(name);
+	result += SQLIdentifier(name.GetName());
 	return result;
 }
 

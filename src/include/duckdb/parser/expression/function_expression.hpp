@@ -21,12 +21,12 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
-	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
+	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
+	DUCKDB_API FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);

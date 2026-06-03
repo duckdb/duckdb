@@ -73,7 +73,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
                                                          unique_ptr<AlterTableInfo> alter_table_info) {
 	// Add the dependencies.
 	auto &dependencies = create_index_info->dependencies;
-	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog.GetName());
+	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
 	SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 		if (&catalog != &entry.ParentCatalog()) {
 			return;

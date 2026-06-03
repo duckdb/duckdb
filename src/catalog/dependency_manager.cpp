@@ -326,12 +326,12 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 	auto &name = info.name;
 
 	// Lookup the schema
-	auto schema_entry = catalog.GetSchema(transaction, schema.GetName(), OnEntryNotFound::RETURN_NULL);
+	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
 		// This is a schema entry, perform the callback only providing the schema
 		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto entry = schema_entry->GetEntry(transaction, type, name.GetName());
+	auto entry = schema_entry->GetEntry(transaction, type, name);
 	return entry;
 }
 
@@ -459,7 +459,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	auto &schema_catalog_set = duck_catalog.GetSchemaCatalogSet();
 
 	CatalogSet::EntryLookup lookup_result;
-	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema.GetName());
+	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
 
 	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
 		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();

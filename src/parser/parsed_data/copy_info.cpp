@@ -78,7 +78,7 @@ string CopyInfo::TablePartToString() const {
 	string result;
 
 	D_ASSERT(!table.empty());
-	result += QualifierToString(catalog.GetName(), schema.GetName(), table.GetName());
+	result += QualifierToString(catalog, schema, table);
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

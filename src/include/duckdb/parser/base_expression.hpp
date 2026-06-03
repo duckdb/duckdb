@@ -68,12 +68,7 @@ public:
 	}
 
 	//! Sets the alias of the expression
-	void SetAlias(const string &alias_p) {
-		alias = alias_p;
-	}
-
-	//! Sets the alias of the expression
-	void SetAlias(string &&alias_p) {
+	void SetAlias(Identifier alias_p) {
 		alias = std::move(alias_p);
 	}
 

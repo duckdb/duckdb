@@ -21,7 +21,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? "" : catalog.GetName(), schema.GetName(), view_name.GetName());
+	result += QualifierToString(temporary ? "" : catalog, schema, view_name);
 	if (!aliases.empty()) {
 		result += " (";
 		result +=

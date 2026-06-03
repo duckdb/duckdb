@@ -24,7 +24,7 @@ namespace duckdb {
 constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table.GetName()), columns(std::move(info.columns)),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;

@@ -29,30 +29,30 @@ public:
 public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, ScalarFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, ScalarFunctionSet &functions,
 	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, ScalarFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, ScalarFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, AggregateFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, AggregateFunctionSet &functions,
 	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, AggregateFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, AggregateFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, TableFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, TableFunctionSet &functions,
 	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, TableFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, TableFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API optional_idx BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-	                                     ErrorData &error);
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, PragmaFunctionSet &functions,
+	                                     vector<Value> &parameters, ErrorData &error);
 	//! Bind a window function from the set of functions and input arguments
-	DUCKDB_API optional_idx BindFunction(const string &name, WindowFunctionSet &functions,
+	DUCKDB_API optional_idx BindFunction(const Identifier &name, WindowFunctionSet &functions,
 	                                     const vector<LogicalType> &arguments, ErrorData &error);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
@@ -107,16 +107,17 @@ private:
 	optional_idx BindFunctionCost(const SimpleNamedParameterFunction &func, const vector<LogicalType> &arguments);
 
 	template <class T>
-	vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
+	vector<idx_t> BindFunctionsFromArguments(const Identifier &name, FunctionSet<T> &functions,
 	                                         const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
-	                                        FunctionSet<T> &functions, vector<idx_t> &candidate_functions,
-	                                        const vector<LogicalType> &arguments, ErrorData &error);
+	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name,
+	                                        const Identifier &name, FunctionSet<T> &functions,
+	                                        vector<idx_t> &candidate_functions, const vector<LogicalType> &arguments,
+	                                        ErrorData &error);
 
 	template <class T>
-	optional_idx BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
+	optional_idx BindFunctionFromArguments(const Identifier &name, FunctionSet<T> &functions,
 	                                       const vector<LogicalType> &arguments, ErrorData &error);
 
 	vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments);

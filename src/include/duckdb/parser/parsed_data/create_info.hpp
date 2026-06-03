@@ -24,7 +24,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_INFO;
 
 public:
-	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
+	explicit CreateInfo(CatalogType type, Identifier schema = DEFAULT_SCHEMA, Identifier catalog_p = INVALID_CATALOG)
 	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}

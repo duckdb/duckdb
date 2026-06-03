@@ -8,17 +8,18 @@ namespace duckdb {
 BindingAlias::BindingAlias() {
 }
 
-BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(Identifier alias_p) : alias(std::move(alias_p)) {
 }
 
-BindingAlias::BindingAlias(string schema_p, string alias_p) : schema(std::move(schema_p)), alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(Identifier schema_p, Identifier alias_p)
+    : schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 
 BindingAlias::BindingAlias(const StandardEntry &entry)
     : catalog(entry.ParentCatalog().GetName()), schema(entry.schema.name), alias(entry.name) {
 }
 
-BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p)
+BindingAlias::BindingAlias(Identifier catalog_p, Identifier schema_p, Identifier alias_p)
     : catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 

@@ -88,8 +88,8 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	if (catalog_name == SYSTEM_CATALOG) {
 		return &GetSystemCatalog(context);
 	}
-	auto entry = db_manager.GetDatabase(context, IsInvalidCatalog(catalog_name.GetName()) ? GetDefaultCatalog(retriever)
-	                                                                                      : catalog_name.GetName());
+	auto entry = db_manager.GetDatabase(context, IsInvalidCatalog(catalog_name) ? GetDefaultCatalog(retriever)
+	                                                                            : catalog_name.GetName());
 	if (!entry) {
 		return nullptr;
 	}
@@ -164,7 +164,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto &schema = GetSchema(transaction, info.base->schema.GetName());
+	auto &schema = GetSchema(transaction, info.base->schema);
 	return CreateTable(transaction, schema, info);
 }
 
@@ -338,8 +338,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction tr
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
 	auto &schema = GetSchema(transaction, info.schema);
-	auto &table =
-	    schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table.GetName())->Cast<TableCatalogEntry>();
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
 	return schema.CreateIndex(transaction, info, table);
 }
 

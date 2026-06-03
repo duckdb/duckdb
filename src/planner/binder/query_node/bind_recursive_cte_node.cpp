@@ -69,14 +69,13 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	}
 
 	// This allows the right side to reference the CTE recursively
-	bind_context.AddGenericBinding(setop_index, statement.ctename.GetName(), result.names, result.types);
+	bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 
 	// Create temporary binder to bind expressions
 	auto aggregate_binder = Binder::CreateBinder(context, nullptr);
 	ErrorData error;
 	FunctionBinder function_binder(*aggregate_binder);
-	aggregate_binder->bind_context.AddGenericBinding(setop_index, statement.ctename.GetName(), result.names,
-	                                                 result.types);
+	aggregate_binder->bind_context.AddGenericBinding(setop_index, statement.ctename, result.names, result.types);
 	ExpressionBinder expression_binder(*aggregate_binder, context);
 
 	// Set contains column indices that are already bound
@@ -172,7 +171,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Find the best matching aggregate function
 			auto best_function_idx =
-			    function_binder.BindFunction(func.name.GetName(), func.functions, aggregation_input_types, error);
+			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
 			if (!best_function_idx.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}

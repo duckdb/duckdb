@@ -34,7 +34,7 @@ enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
+	AlterEntryData(Identifier catalog_p, Identifier schema_p, Identifier name_p, OnEntryNotFound if_not_found)
 	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
 	      if_not_found(if_not_found) {
 	}
@@ -50,7 +50,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
-	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;

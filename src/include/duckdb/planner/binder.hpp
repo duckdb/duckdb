@@ -311,11 +311,13 @@ public:
 
 	void BindLogicalType(LogicalType &type);
 
-	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
-	                                         const string &column_name, ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &catalog_name, const string &schema_name,
-	                                         const string &table_name, const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
+	                                         const Identifier &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
+	                                         const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();

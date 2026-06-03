@@ -28,7 +28,7 @@ string SetColumnCommentInfo::ToString() const {
 
 	D_ASSERT(catalog_entry_type == CatalogType::INVALID);
 	result += "COMMENT ON COLUMN ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += "." + SQLIdentifier(column_name.GetName());
 	result += " IS ";
 	result += comment_value.ToSQLString();
@@ -38,7 +38,7 @@ string SetColumnCommentInfo::ToString() const {
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
 	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name.GetName());
-	auto entry = retriever.GetEntry(catalog.GetName(), schema.GetName(), lookup_info, if_not_found);
+	auto entry = retriever.GetEntry(catalog, schema, lookup_info, if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;

@@ -134,10 +134,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto index = GenerateTableIndex();
 
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias.GetName();
-		auto names = BindContext::AliasColumnNames(alias.GetName(), IdentifiersToStrings(ctebinding->GetColumnNames()),
+		auto names = BindContext::AliasColumnNames(alias, IdentifiersToStrings(ctebinding->GetColumnNames()),
 		                                           ref.column_name_alias);
 
-		bind_context.AddGenericBinding(index, alias.GetName(), names, ctebinding->GetColumnTypes());
+		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
 		bool is_recurring = ref.schema_name == "recurring";
 
@@ -155,8 +155,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name.GetName(), entry_at_clause, error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.catalog_name.GetNameMutable(), ref.schema_name.GetNameMutable());
-	auto table_or_view = entry_retriever.GetEntry(ref.catalog_name.GetName(), ref.schema_name.GetName(), table_lookup,
-	                                              OnEntryNotFound::RETURN_NULL);
+	auto table_or_view =
+	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -172,7 +172,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			auto ref_alias = ref.alias.empty() ? ref.table_name : ref.alias.GetName();
 			vector<LogicalType> types {LogicalType::INTEGER};
 			vector<string> names {"__dummy_col" + to_string(table_index.index)};
-			bind_context.AddGenericBinding(table_index, ref_alias.GetName(), names, types);
+			bind_context.AddGenericBinding(table_index, ref_alias, names, types);
 
 			BoundStatement result;
 			result.types = std::move(types);
@@ -222,8 +222,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
-		table_or_view = entry_retriever.GetEntry(ref.catalog_name.GetName(), ref.schema_name.GetName(), table_lookup,
-		                                         OnEntryNotFound::THROW_EXCEPTION);
+		table_or_view =
+		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
@@ -252,7 +252,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			return_types.push_back(col.Type());
 			return_names.push_back(col.Name());
 		}
-		table_names = BindContext::AliasColumnNames(ref.table_name.GetName(), table_names, ref.column_name_alias);
+		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
 		virtual_column_map_t virtual_columns;
 		if (scan_function.get_virtual_columns) {
@@ -266,11 +266,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
-			bind_context.AddBaseTable(table_index, ref.alias.GetName(), table_names, table_types, col_ids,
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids,
 			                          ref.table_name.GetName());
 		} else {
-			bind_context.AddBaseTable(table_index, ref.alias.GetName(), table_names, table_types, col_ids,
-			                          *table_entry);
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry);
 		}
 		BoundStatement result;
 		result.types = table_types;

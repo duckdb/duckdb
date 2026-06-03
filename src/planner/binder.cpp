@@ -288,20 +288,20 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
 	string empty_schema;
 	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name,
-                                                 const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
+                                                 const Identifier &column_name, ErrorData &error) {
 	string empty_catalog;
 	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name,
-                                                 const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
+                                                 const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
 	if (macro_binding && table_name == macro_binding->GetAlias()) {

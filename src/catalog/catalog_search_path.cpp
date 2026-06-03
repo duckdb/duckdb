@@ -213,24 +213,24 @@ vector<CatalogSearchEntry> CatalogSearchPath::Get() const {
 	return res;
 }
 
-string CatalogSearchPath::GetDefaultSchema(const string &catalog) const {
+string CatalogSearchPath::GetDefaultSchema(const Identifier &catalog) const {
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path.catalog, catalog)) {
+		if (path.catalog == catalog) {
 			return path.schema;
 		}
 	}
 	return DEFAULT_SCHEMA;
 }
 
-string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string &catalog) const {
+string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const Identifier &catalog) const {
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path.catalog, catalog)) {
+		if (path.catalog == catalog) {
 			return path.schema;
 		}
 	}
@@ -241,28 +241,28 @@ string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string 
 	return DEFAULT_SCHEMA;
 }
 
-string CatalogSearchPath::GetDefaultCatalog(const string &schema) const {
-	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+string CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema.GetName())) {
 		return SYSTEM_CATALOG;
 	}
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path.schema, schema)) {
+		if (path.schema == schema) {
 			return path.catalog;
 		}
 	}
 	return INVALID_CATALOG;
 }
 
-vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) const {
+vector<string> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {
 	vector<string> catalogs;
-	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema.GetName())) {
 		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {
-			if (StringUtil::CIEquals(path.schema, schema) || path.schema.empty()) {
+			if (path.schema == schema || path.schema.empty()) {
 				catalogs.push_back(path.catalog);
 			}
 		}
@@ -270,10 +270,10 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 	return catalogs;
 }
 
-vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) const {
+vector<string> CatalogSearchPath::GetSchemasForCatalog(const Identifier &catalog) const {
 	vector<string> schemas;
 	for (auto &path : paths) {
-		if (!path.schema.empty() && StringUtil::CIEquals(path.catalog, catalog)) {
+		if (!path.schema.empty() && path.catalog == catalog) {
 			schemas.push_back(path.schema);
 		}
 	}
@@ -304,17 +304,16 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	}
 }
 
-bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,
-                                           const string &schema_name) const {
+bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const Identifier &catalog_name,
+                                           const Identifier &schema_name) const {
 	for (auto &path : paths) {
-		if (!StringUtil::CIEquals(path.schema, schema_name)) {
+		if (path.schema != schema_name) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path.catalog, catalog_name)) {
+		if (path.catalog == catalog_name) {
 			return true;
 		}
-		if (IsInvalidCatalog(path.catalog) &&
-		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		if (IsInvalidCatalog(path.catalog) && catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
 			return true;
 		}
 	}

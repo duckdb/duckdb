@@ -607,7 +607,7 @@
       {
         "id": 202,
         "name": "type_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,

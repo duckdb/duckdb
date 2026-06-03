@@ -79,7 +79,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	for (const auto &child : children) {
 		types.emplace_back(child->GetReturnType());
 	}
-	auto best_function = binder.BindFunction(func.name.GetName(), func.functions, types, error);
+	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
 	if (!best_function.IsValid()) {
 		error.Throw();
 	}

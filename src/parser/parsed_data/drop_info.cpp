@@ -29,7 +29,7 @@ string DropInfo::ToString() const {
 			result += " IF EXISTS";
 		}
 		result += " ";
-		result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+		result += QualifierToString(catalog, schema, name);
 		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
 			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
 			if (trigger_info.base_table) {

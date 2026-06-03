@@ -16,9 +16,9 @@ class StandardEntry;
 
 struct BindingAlias {
 	BindingAlias();
-	explicit BindingAlias(string alias);
-	BindingAlias(string schema, string alias);
-	BindingAlias(string catalog, string schema, string alias);
+	explicit BindingAlias(Identifier alias);
+	BindingAlias(Identifier schema, Identifier alias);
+	BindingAlias(Identifier catalog, Identifier schema, Identifier alias);
 	explicit BindingAlias(const StandardEntry &entry);
 
 	bool IsSet() const;

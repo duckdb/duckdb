@@ -723,7 +723,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema.GetName());
+	auto &schema = catalog.GetSchema(context, info->schema);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);

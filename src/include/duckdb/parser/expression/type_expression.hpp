@@ -19,12 +19,13 @@ class TypeExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::TYPE;
 
-	TypeExpression(string catalog, string schema, string type_name, vector<unique_ptr<ParsedExpression>> children);
-	TypeExpression(string type_name, vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
+	               vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
 	const string &GetTypeName() const {
-		return type_name;
+		return type_name.GetName();
 	}
 	const string &GetSchema() const {
 		return schema.GetName();
@@ -64,7 +65,7 @@ private:
 	//! Qualified name parts
 	Identifier catalog;
 	Identifier schema;
-	string type_name;
+	Identifier type_name;
 
 	//! Children of the type expression (e.g. type parameters)
 	vector<unique_ptr<ParsedExpression>> children;

@@ -351,7 +351,7 @@ void TypeExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", catalog);
 	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "type_name", type_name);
+	serializer.WritePropertyWithDefault<Identifier>(202, "type_name", type_name);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
 }
 
@@ -359,7 +359,7 @@ unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deseriali
 	auto result = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog", result->catalog);
 	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(202, "type_name", result->type_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name", result->type_name);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
 	return std::move(result);
 }

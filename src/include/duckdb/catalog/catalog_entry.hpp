@@ -35,8 +35,8 @@ struct CreateInfo;
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog &catalog, string name);
-	CatalogEntry(CatalogType type, string name, idx_t oid);
+	CatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
+	CatalogEntry(CatalogType type, Identifier name, idx_t oid);
 	virtual ~CatalogEntry();
 
 	//! The oid of the entry
@@ -54,7 +54,7 @@ public:
 	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
-	string extension_name;
+	Identifier extension_name;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
 	//! (optional) comment on this entry
@@ -120,7 +120,7 @@ public:
 
 class InCatalogEntry : public CatalogEntry {
 public:
-	InCatalogEntry(CatalogType type, Catalog &catalog, string name);
+	InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
 	~InCatalogEntry() override;
 
 	//! The catalog the entry belongs to

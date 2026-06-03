@@ -39,10 +39,10 @@ struct Binding {
 	virtual ~Binding() = default;
 
 public:
-	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
-	column_t GetBindingIndex(const string &column_name);
-	bool HasMatchingBinding(const string &column_name);
-	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
+	bool TryGetBindingIndex(const Identifier &column_name, column_t &column_index);
+	column_t GetBindingIndex(const Identifier &column_name);
+	bool HasMatchingBinding(const Identifier &column_name);
+	virtual ErrorData ColumnNotFoundError(const Identifier &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
 	string GetAlias() const;
@@ -55,8 +55,8 @@ public:
 	idx_t GetColumnCount();
 	void SetColumnType(idx_t col_idx, LogicalType type);
 
-	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
-	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
+	static BindingAlias GetAlias(const Identifier &explicit_alias, const StandardEntry &entry);
+	static BindingAlias GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>
@@ -98,7 +98,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
 
 public:
-	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+	EntryBinding(const Identifier &alias, vector<LogicalType> types, vector<string> names, TableIndex index,
 	             StandardEntry &entry);
 	StandardEntry &entry;
 
@@ -113,7 +113,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::TABLE;
 
 public:
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
+	TableBinding(const Identifier &alias, vector<LogicalType> types, vector<string> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
 	             virtual_column_map_t virtual_columns);
 
@@ -125,10 +125,10 @@ public:
 	virtual_column_map_t virtual_columns;
 
 public:
-	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const Identifier &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
-	ErrorData ColumnNotFoundError(const string &column_name) const override;
+	ErrorData ColumnNotFoundError(const Identifier &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
 	const vector<ColumnIndex> &GetBoundColumnIds() const;
 

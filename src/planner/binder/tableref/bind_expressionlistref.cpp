@@ -68,7 +68,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		}
 	}
 	auto bind_index = GenerateTableIndex();
-	bind_context.AddGenericBinding(bind_index, expr.alias.GetName(), result.names, result.types);
+	bind_context.AddGenericBinding(bind_index, expr.alias, result.names, result.types);
 
 	// values list, first plan any subqueries in the list
 	auto root = make_uniq_base<LogicalOperator, LogicalDummyScan>(GenerateTableIndex());

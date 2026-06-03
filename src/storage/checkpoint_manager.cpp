@@ -554,8 +554,7 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	auto &schema = catalog.GetSchema(transaction, trigger_info.schema);
-	auto table_entry =
-	    schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name.GetName());
+	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name);
 	if (!table_entry) {
 		throw IOException("corrupt database file - trigger entry without table entry");
 	}
@@ -601,8 +600,8 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// create the index in the catalog
 
 	// look for the table in the catalog
-	auto &schema = catalog.GetSchema(transaction, create_info->schema.GetName());
-	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table.GetName());
+	auto &schema = catalog.GetSchema(transaction, create_info->schema);
+	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
 	if (!catalog_table) {
 		// See internal issue 3663.
 		throw IOException("corrupt database file - index entry without table entry");
@@ -703,7 +702,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
-	auto &schema = catalog.GetSchema(transaction, info->schema.GetName());
+	auto &schema = catalog.GetSchema(transaction, info->schema);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	for (auto &dep : bound_info->Base().dependencies.Set()) {

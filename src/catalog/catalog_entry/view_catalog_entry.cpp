@@ -42,8 +42,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
-    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name.GetName()),
-      bind_state(ViewBindState::UNBOUND) {
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name), bind_state(ViewBindState::UNBOUND) {
 	Initialize(info);
 }
 

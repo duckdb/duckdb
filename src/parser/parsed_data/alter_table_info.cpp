@@ -38,9 +38,9 @@ string ChangeOwnershipInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " OWNED BY ";
-	result += QualifierToString(catalog.GetName(), owner_schema, owner_name);
+	result += QualifierToString(catalog, owner_schema, owner_name);
 	result += ";";
 	return result;
 }
@@ -70,7 +70,7 @@ string SetCommentInfo::ToString() const {
 	result += "COMMENT ON ";
 	result += ParseInfo::TypeToString(entry_catalog_type);
 	result += " ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " IS ";
 	result += comment_value.ToSQLString();
 
@@ -122,7 +122,7 @@ string RenameColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
 	result += SQLIdentifier(old_name.GetName());
 	result += " TO ";
@@ -155,7 +155,7 @@ string RenameFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
 	for (idx_t i = 0; i < column_path.size(); i++) {
 		if (i > 0) {
@@ -192,7 +192,7 @@ string RenameTableInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
 	result += SQLIdentifier(new_table_name.GetName());
 	result += ";";
@@ -224,7 +224,7 @@ string AddColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
@@ -265,7 +265,7 @@ string AddFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN ";
 	if (if_field_not_exists) {
 		result += "IF NOT EXISTS ";
@@ -303,7 +303,7 @@ string RemoveColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -339,7 +339,7 @@ string RemoveFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -382,7 +382,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name.GetName());
 	result += " TYPE ";
@@ -428,7 +428,7 @@ string SetDefaultInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name.GetName());
 	if (expression) {
@@ -463,7 +463,7 @@ string SetNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name.GetName());
 	result += " SET NOT NULL";
@@ -493,7 +493,7 @@ string DropNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name.GetName());
 	result += " DROP NOT NULL";
@@ -565,7 +565,7 @@ string RenameViewInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
 	result += SQLIdentifier(new_view_name);
 	result += ";";
@@ -591,7 +591,7 @@ unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
 
 string AddConstraintInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " ADD ";
 	result += constraint->ToString();
 	result += ";";
@@ -621,7 +621,7 @@ unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
 
 string SetPartitionedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	if (partition_keys.empty()) {
 		result += " RESET PARTITIONED BY";
 	} else {
@@ -660,7 +660,7 @@ unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
 
 string SetSortedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	if (orders.empty()) {
 		result += " RESET SORTED BY";
 	} else {
@@ -700,7 +700,7 @@ unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
 
 string SetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " SET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {
@@ -737,7 +737,7 @@ unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
 
 string ResetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	result += QualifierToString(catalog, schema, name);
 	result += " RESET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {

@@ -700,7 +700,7 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.data[col++].Append(Value::BOOLEAN(function.internal));
 
 	// extension_name, LogicalType::VARCHAR - display empty as NULL
-	output.data[col++].Append(function.extension_name.empty() ? Value() : Value(function.extension_name));
+	output.data[col++].Append(function.extension_name.empty() ? Value() : Value(function.extension_name.GetName()));
 
 	// function_oid, LogicalType::BIGINT
 	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.oid)));

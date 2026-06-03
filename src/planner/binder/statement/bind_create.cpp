@@ -126,20 +126,20 @@ const string Binder::BindCatalog(string &catalog) {
 
 void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog.GetNameMutable(), info.schema.GetNameMutable());
-	if (IsInvalidCatalog(info.catalog.GetName()) && info.temporary) {
+	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (IsInvalidCatalog(info.catalog.GetName()) && IsInvalidSchema(info.schema.GetName())) {
+	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
 		auto &default_entry = search_path->GetDefault();
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
-	} else if (IsInvalidSchema(info.schema.GetName())) {
+	} else if (IsInvalidSchema(info.schema)) {
 		info.schema = search_path->GetDefaultSchema(context, info.catalog.GetName());
-	} else if (IsInvalidCatalog(info.catalog.GetName())) {
+	} else if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = search_path->GetDefaultCatalog(info.schema.GetName());
 	}
-	if (IsInvalidCatalog(info.catalog.GetName())) {
+	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!info.temporary) {
@@ -157,7 +157,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	SearchSchema(info);
 	// fetch the schema in which we want to create the object
-	auto &schema_obj = Catalog::GetSchema(context, info.catalog.GetName(), info.schema.GetName());
+	auto &schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
@@ -264,7 +264,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// Bind the catalog/schema
 	SearchSchema(info);
-	auto &catalog = Catalog::GetCatalog(context, info.catalog.GetName());
+	auto &catalog = Catalog::GetCatalog(context, info.catalog);
 
 	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
@@ -500,7 +500,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &schema = BindCreateSchema(create_trigger_info);
 
 	// Block trigger creation on databases with an older storage version
-	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog.GetName());
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
@@ -599,7 +599,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			CatalogTransaction transaction(schema.ParentCatalog(), context);
-			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name.GetName());
+			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name);
 			if (existing_entry && existing_entry->type == CatalogType::VIEW_ENTRY) {
 				// IF EXISTS and the view already exists - avoid binding
 				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;

@@ -115,7 +115,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	auto &set = GetCatalogSet(entry_type);
 	dependencies.AddDependency(*this);
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		auto old_entry = set.GetEntry(transaction, entry_name.GetName());
+		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
 			return nullptr;
 		}
@@ -123,7 +123,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
-		auto old_entry = set.GetEntry(transaction, entry_name.GetName());
+		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
 			if (dependencies.Contains(*old_entry)) {
 				throw CatalogException("CREATE OR REPLACE is not allowed to depend on itself");
@@ -133,14 +133,14 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
 			OnDropEntry(transaction, *old_entry);
-			(void)set.DropEntry(transaction, entry_name.GetName(), false, entry->internal);
+			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
 		}
 	}
 	// now try to add the entry
 	if (!set.CreateEntry(transaction, entry_name.GetName(), std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			auto existing_entry = set.GetEntry(transaction, entry_name.GetName());
+			auto existing_entry = set.GetEntry(transaction, entry_name);
 			auto existing_type = existing_entry ? existing_entry->type : entry_type;
 			throw CatalogException::EntryAlreadyExists(existing_type, entry_name.GetName());
 		} else {
@@ -163,7 +163,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name.GetName()));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
 	}
 	for (auto &dep : info.dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
@@ -181,7 +181,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	if (info.on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info.type);
-		auto current_entry = catalog_set.GetEntry(transaction, info.name.GetName());
+		auto current_entry = catalog_set.GetEntry(transaction, info.name);
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
@@ -333,7 +333,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
-	auto existing_entry = set.GetEntry(transaction, info.name.GetName());
+	auto existing_entry = set.GetEntry(transaction, info.name);
 	if (!existing_entry) {
 		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
@@ -350,7 +350,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	}
 
 	OnDropEntry(transaction, *existing_entry);
-	if (!set.DropEntry(transaction, info.name.GetName(), info.cascade, info.allow_drop_internal)) {
+	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 string QualifiedName::ToString() const {
-	return ParseInfo::QualifierToString(catalog.GetName(), schema.GetName(), name.GetName());
+	return ParseInfo::QualifierToString(catalog, schema, name);
 }
 
 vector<string> QualifiedName::ParseComponents(const string &input) {

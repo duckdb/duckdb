@@ -10,12 +10,12 @@ namespace duckdb {
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
 }
 
-FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,
+FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, const Identifier &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog)),
-      schema(std::move(schema)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
+      schema(std::move(schema)), function_name(StringUtil::Lower(function_name.GetName())), is_operator(is_operator),
       children(std::move(children_p)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
       export_state(export_state_p) {
 	D_ASSERT(!function_name.empty());
@@ -24,7 +24,7 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
 	}
 }
 
-FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
+FunctionExpression::FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
     : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children_p), std::move(filter),

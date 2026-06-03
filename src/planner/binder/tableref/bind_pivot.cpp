@@ -1022,14 +1022,14 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
 		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
 		child_binder = Binder::CreateBinder(context, this);
-		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias.GetName(), subquery_ref, result);
+		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result);
 		auto where_query = make_uniq<SelectNode>();
 		where_query->select_list.push_back(make_uniq<StarExpression>());
 		where_query->where_clause = std::move(where_clause);
 		result = child_binder->BindSelectNode(*where_query, std::move(result));
 		root_index = result.plan->GetRootIndex();
 	}
-	bind_context.AddSubquery(root_index, subquery_ref.alias.GetName(), subquery_ref, result);
+	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, result);
 	return result;
 }
 

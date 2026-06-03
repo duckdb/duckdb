@@ -1383,20 +1383,20 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 	auto entry_name = trigger->name;
 	LogicalDependencyList dependencies = trigger->dependencies;
 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		auto old_entry = triggers->GetEntry(transaction, entry_name.GetName());
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
 		if (old_entry) {
 			return nullptr;
 		}
 	} else if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		auto old_entry = triggers->GetEntry(transaction, entry_name.GetName());
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
 		if (old_entry) {
-			triggers->DropEntry(transaction, entry_name.GetName(), false);
+			triggers->DropEntry(transaction, entry_name, false);
 		}
 	}
 	if (!triggers->CreateEntry(transaction, entry_name.GetName(), std::move(trigger), dependencies)) {
 		throw CatalogException::EntryAlreadyExists(CatalogType::TRIGGER_ENTRY, entry_name.GetName());
 	}
-	return triggers->GetEntry(transaction, entry_name.GetName());
+	return triggers->GetEntry(transaction, entry_name);
 }
 
 void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,

@@ -26,7 +26,7 @@ struct FunctionDescription {
 };
 
 struct CreateFunctionInfo : public CreateInfo {
-	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA);
+	explicit CreateFunctionInfo(CatalogType type, Identifier schema = DEFAULT_SCHEMA);
 
 	//! Function name
 	Identifier name;

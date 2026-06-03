@@ -69,7 +69,7 @@ string Binding::GetAlias() const {
 	return alias.GetAlias();
 }
 
-bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
+bool Binding::TryGetBindingIndex(const Identifier &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		return false;
@@ -79,7 +79,7 @@ bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	return true;
 }
 
-column_t Binding::GetBindingIndex(const string &column_name) {
+column_t Binding::GetBindingIndex(const Identifier &column_name) {
 	column_t result;
 	if (!TryGetBindingIndex(column_name, result)) {
 		throw InternalException("Binding index for column \"%s\" not found", column_name);
@@ -87,12 +87,12 @@ column_t Binding::GetBindingIndex(const string &column_name) {
 	return result;
 }
 
-bool Binding::HasMatchingBinding(const string &column_name) {
+bool Binding::HasMatchingBinding(const Identifier &column_name) {
 	column_t result;
 	return TryGetBindingIndex(column_name, result);
 }
 
-ErrorData Binding::ColumnNotFoundError(const string &column_name) const {
+ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"",
 	                                                           GetAlias(), column_name));
 }
@@ -109,7 +109,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
 	if (colref.GetAlias().empty()) {
-		colref.SetAlias(names[column_index].GetName());
+		colref.SetAlias(names[column_index]);
 	}
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
@@ -118,7 +118,7 @@ optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
-BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
+BindingAlias Binding::GetAlias(const Identifier &explicit_alias, const StandardEntry &entry) {
 	if (!explicit_alias.empty()) {
 		return BindingAlias(explicit_alias);
 	}
@@ -126,7 +126,7 @@ BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry
 	return BindingAlias(entry);
 }
 
-BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
+BindingAlias Binding::GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry) {
 	if (!explicit_alias.empty()) {
 		return BindingAlias(explicit_alias);
 	}
@@ -137,8 +137,8 @@ BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<Standa
 	return BindingAlias(*entry);
 }
 
-EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, TableIndex index,
-                           StandardEntry &entry)
+EntryBinding::EntryBinding(const Identifier &alias, vector<LogicalType> types_p, vector<string> names_p,
+                           TableIndex index, StandardEntry &entry)
     : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
       entry(entry) {
 }
@@ -147,7 +147,7 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 	return &entry;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
+TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
                            virtual_column_map_t virtual_columns_p)
     : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
@@ -200,7 +200,7 @@ static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &bindi
 	});
 }
 
-unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
+unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifier &column_name) {
 	auto catalog_entry = GetStandardEntry();
 	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
 
@@ -289,7 +289,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
 		if (colref.GetAlias().empty()) {
-			colref.SetAlias(names[column_index].GetName());
+			colref.SetAlias(names[column_index]);
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
@@ -300,9 +300,9 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 	return entry;
 }
 
-ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
+ErrorData TableBinding::ColumnNotFoundError(const Identifier &column_name) const {
 	auto candidate_message =
-	    StringUtil::CandidatesErrorMessage(IdentifiersToStrings(names), column_name, "Candidate bindings: ");
+	    StringUtil::CandidatesErrorMessage(IdentifiersToStrings(names), column_name.GetName(), "Candidate bindings: ");
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
