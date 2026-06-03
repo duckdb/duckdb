@@ -19,8 +19,8 @@ const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &c
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -60,8 +60,8 @@ const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientCont
 				return func;
 			}
 		}
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -82,8 +82,8 @@ const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &c
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -101,8 +101,8 @@ const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &con
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }

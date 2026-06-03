@@ -740,7 +740,7 @@ ParseResult &PEGTransformerFactory::ExtractResultFromParens(ParseResult &parse_r
 	return list_pr.GetChild(1);
 }
 
-bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
+bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
@@ -805,25 +805,25 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 		if (function.FunctionName() == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.GetChildren().size());
-			for (const auto &child : function.GetChildren()) {
-				if (!unique_names.insert(child->GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
+				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
 				}
 				Value child_value;
-				if (!ConstructConstantFromExpression(*child, child_value)) {
+				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
 					return false;
 				}
-				values.emplace_back(child->GetAlias(), std::move(child_value));
+				values.emplace_back(child.GetExpression().GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
 		} else if (function.FunctionName() == "list_value") {
 			vector<Value> values;
-			values.reserve(function.GetChildren().size());
-			for (const auto &child : function.GetChildren()) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				Value child_value;
-				if (!ConstructConstantFromExpression(*child, child_value)) {
+				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
 					return false;
 				}
 				values.emplace_back(std::move(child_value));
@@ -840,12 +840,12 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return true;
 		} else if (function.FunctionName() == "map") {
 			Value keys;
-			if (!ConstructConstantFromExpression(*function.GetChildren()[0], keys)) {
+			if (!ConstructConstantFromExpression(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!ConstructConstantFromExpression(*function.GetChildren()[1], values)) {
+			if (!ConstructConstantFromExpression(function.GetArguments()[1].GetExpression(), values)) {
 				return false;
 			}
 

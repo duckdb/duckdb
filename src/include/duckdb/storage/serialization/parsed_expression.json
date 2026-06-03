@@ -247,9 +247,9 @@
       {
         "id": 202,
         "name": "children",
-        "type": "vector<ParsedExpression*>",
-        "accessor_mut": "GetChildrenMutable()",
-        "accessor": "GetChildren()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 203,
@@ -296,8 +296,16 @@
         "type": "string",
         "accessor_mut": "CatalogMutable()",
         "accessor": "Catalog()"
+      },
+      {
+        "id": 209,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LambdaExpression",

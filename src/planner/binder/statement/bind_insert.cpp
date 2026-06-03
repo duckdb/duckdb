@@ -98,15 +98,15 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.GetChildrenMutable()) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			DoUpdateSetQualify(child, table_name, lambda_params);
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not qualify them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
