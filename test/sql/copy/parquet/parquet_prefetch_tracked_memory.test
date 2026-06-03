@@ -1,0 +1,27 @@
+# name: test/sql/copy/parquet/parquet_prefetch_tracked_memory.test
+# description: Parquet prefetch must materialize into buffer tracked memory
+# group: [parquet]
+
+require parquet
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+statement ok
+copy (select range i from range(8000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet';
+
+statement ok
+set memory_limit='32mb';
+
+statement error
+select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
+----
+Out of Memory
+
+statement ok
+set prefetch_all_parquet_files=false;
+
+query II
+select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
+----
+8000000	31999996000000
