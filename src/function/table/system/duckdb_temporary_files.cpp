@@ -50,7 +50,6 @@ void DuckDBTemporaryFilesFunction(ClientContext &context, TableFunctionInput &da
 		size.Append(Value::BIGINT(NumericCast<int64_t>(entry.size)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBTemporaryFilesFun::RegisterFunction(BuiltinFunctions &set) {

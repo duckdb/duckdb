@@ -1055,7 +1055,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		}
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
-	result_chunk.SetCardinality(fetch_chunk);
 
 	DataChunk remaining_result_chunk;
 	unique_ptr<Vector> remaining_row_ids;
@@ -1120,7 +1119,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			auto col_id = column_ids[i].GetPrimaryIndex();
 			index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
 		}
-		index_column_chunk.SetCardinality(result_chunk.size());
 		auto &unbound_index = index.Cast<UnboundIndex>();
 		unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
 	}

@@ -166,6 +166,9 @@ public:
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
 	DataChunk shifted;
+	//! Set when `delayed` has been flushed into the output by reference - we must defer resetting (resizing) it
+	//! until the next call, by which point the referencing output chunk has been consumed.
+	bool flushed_delayed = false;
 };
 
 StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
@@ -343,7 +346,6 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 		output.data[col_idx].Reference(input.data[col_idx]);
 		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
-	output.SetCardinality(count);
 
 	ExecuteFunctions(context, output, state.delayed, gstate_p);
 }
@@ -374,7 +376,6 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 		VectorOperations::Copy(input.data[col_idx], delayed.data[col_idx], in, 0, delay - out);
 		FlatVector::SetSize(delayed.data[col_idx], count_t(new_delayed_count));
 	}
-	delayed.SetCardinality(new_delayed_count);
 
 	ExecuteFunctions(context, output, delayed, gstate_p);
 }
@@ -387,7 +388,6 @@ void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChun
 		output.data[col_idx].Reference(delayed.data[col_idx]);
 		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
-	output.SetCardinality(count);
 
 	ExecuteFunctions(context, output, input, gstate_p);
 }
@@ -401,8 +401,17 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	}
 
 	auto &delayed = state.delayed;
-	// We can Reset delayed now that no one can be referencing it.
-	if (!delayed.size()) {
+	if (!state.lead_count) {
+		// Without LEAD nothing is ever delayed (the delayed buffer is not even initialized), so emit the input
+		// directly.
+		ExecuteInput(context, delayed, input, output, gstate_p);
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+	// We can Reset delayed now that no one can be referencing it (the previous output has been consumed).
+	if (state.flushed_delayed) {
+		state.ResetChunk(delayed);
+		state.flushed_delayed = false;
+	} else if (!delayed.size()) {
 		state.ResetChunk(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
@@ -410,20 +419,21 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		//	then just delay more rows, return nothing
 		//	and ask for more data.
 		delayed.Append(input);
-		output.SetCardinality(0);
+		output.SetChildCardinality(0);
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
-		output.SetCardinality(input.size());
+		output.SetChildCardinality(input.size());
 		ExecuteShifted(context, delayed, input, output, gstate_p);
 		// We delayed the unused input so ask for more
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
-		// Defer resetting delayed as it may be referenced.
-		delayed.SetCardinality(0);
+		// delayed has been flushed into the output by reference. Defer resetting it until the next call (when the
+		// output has been consumed), since resizing its buffers now would corrupt the referencing output chunk.
+		state.flushed_delayed = true;
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
@@ -446,7 +456,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 
 		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can
-			output.SetCardinality(STANDARD_VECTOR_SIZE);
+			output.SetChildCardinality(STANDARD_VECTOR_SIZE);
 			ExecuteShifted(context, delayed, input, output, gstate_p);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}

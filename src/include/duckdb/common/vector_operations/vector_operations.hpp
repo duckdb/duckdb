@@ -168,11 +168,13 @@ struct VectorOperations {
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// hashes = HASH(input)
+	// FIXME: this "count" needs to go
 	static void Hash(const Vector &input, Vector &hashes, idx_t count);
 	static void Hash(const Vector &input, Vector &hashes, const SelectionVector &rsel, idx_t count);
 	//! Convenience overload without explicit count - count is derived from input.size()
 	static void Hash(const Vector &input, Vector &hashes);
 	// hashes ^= HASH(input)
+	// FIXME: this "count" needs to go
 	static void CombineHash(Vector &hashes, const Vector &input, idx_t count);
 	static void CombineHash(Vector &hashes, const Vector &input, const SelectionVector &rsel, idx_t count);
 	//! Convenience overload without explicit count - count is derived from the input vectors (with mismatch check)

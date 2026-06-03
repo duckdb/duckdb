@@ -388,7 +388,7 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
-	payload_chunk.SetCardinality(input_chunk);
+	payload_chunk.SetChildCardinality(input_chunk.size());
 
 	// OVER(PARTITION BY...)
 	auto &hash_vector = payload_chunk.data.back();
