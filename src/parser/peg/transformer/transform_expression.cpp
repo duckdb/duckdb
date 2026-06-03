@@ -159,9 +159,8 @@ PEGTransformerFactory::TransformSchemaReservedTableColumnName(PEGTransformer &tr
 }
 
 string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier;
+                                                                  const string &reserved_table_name) {
+	return reserved_table_name;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
@@ -1715,9 +1714,8 @@ unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformTableReservedCol
 	return make_uniq<ColumnRefExpression>(column, table);
 }
 
-string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier;
+string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer, const string &table_name) {
+	return table_name;
 }
 
 string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result) {

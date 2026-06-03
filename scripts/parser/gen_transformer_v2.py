@@ -264,10 +264,10 @@ def classify_choice_alternatives(alternatives, rule_types, excluded_rules, ident
     for ref in alternatives:
         assert isinstance(ref, ReferenceNode)
         name = ref.name
-        if name in rule_types:
-            transformer_alts.append(name)
-        elif name in identifier_override_rules:
+        if name in identifier_override_rules:
             identifier_alts.append(name)
+        elif name in rule_types:
+            transformer_alts.append(name)
         elif name in excluded_rules:
             excluded_alts.append(name)
         else:
@@ -286,6 +286,21 @@ def _box_result(return_type, return_by_value):
     return f"\treturn make_uniq<TypedTransformResult<{return_type}>>({arg});\n"
 
 
+def _emit_string_result_extraction(var_name, source_expr):
+    return (
+        f"\tstring {var_name};\n"
+        f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
+        f"\t\t{var_name} = {source_expr}.Cast<IdentifierParseResult>().identifier;\n"
+        f"\t}} else if ({source_expr}.type == ParseResultType::KEYWORD) {{\n"
+        f"\t\t{var_name} = {source_expr}.Cast<KeywordParseResult>().keyword;\n"
+        f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
+        f"\t\t{var_name} = {source_expr}.Cast<StringLiteralParseResult>().result;\n"
+        f"\t}} else {{\n"
+        f"\t\t{var_name} = transformer.Transform<string>({source_expr});\n"
+        f"\t}}\n"
+    )
+
+
 def generate_choice_internal_full(rule_name, return_type, return_by_value):
     """
     Fully auto-generated Internal for a pure-transformer choice rule.
@@ -297,6 +312,22 @@ def generate_choice_internal_full(rule_name, return_type, return_by_value):
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
         f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        + _box_result(return_type, return_by_value)
+        + f"}}\n"
+    )
+
+
+def generate_string_terminal_choice_internal(rule_name, return_type, return_by_value):
+    """
+    Choice wrapper for string-valued alternatives that can include matcher-provided
+    terminal parse results, such as Identifier or ReservedIdentifier.
+    """
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
+        f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
+        + _emit_string_result_extraction("result", "choice_pr.GetResult()")
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -341,13 +372,19 @@ def generate_choice_internal_with_typed_body(rule_name, return_type, return_by_v
     child value and the manual body performs the type conversion.
     """
     arg = "std::move(child)" if child_by_value else "child"
+    child_extraction = (
+        "\tauto &choice_result = choice_pr.GetResult();\n"
+        + _emit_string_result_extraction("child", "choice_result")
+        if child_type == "string"
+        else f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
+    )
     return (
         f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
-        f"\tauto result = Transform{rule_name}(transformer, {arg});\n"
+        + child_extraction
+        + f"\tauto result = Transform{rule_name}(transformer, {arg});\n"
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -852,15 +889,40 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
                     )
                     body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             else:
-                declarations.append(generate_choice_body_declaration(rule_name, return_type))
-                implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
-                reason_parts = []
-                if identifier_alts:
-                    reason_parts.append(f"identifier alternatives: {identifier_alts}")
-                if excluded_alts:
-                    reason_parts.append(f"syntax-only alternatives: {excluded_alts}")
-                manual_bodies.append((rule_name, f"choice body; {', '.join(reason_parts)}"))
-                body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
+                alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
+                if identifier_alts and not excluded_alts and alt_types <= {"string"}:
+                    if return_type == "string":
+                        implementations.append(
+                            generate_string_terminal_choice_internal(rule_name, return_type, return_by_value)
+                        )
+                    else:
+                        child_type = "string"
+                        child_by_value = False
+                        declarations.append(
+                            generate_typed_choice_body_declaration(rule_name, return_type, child_type, child_by_value)
+                        )
+                        implementations.append(
+                            generate_choice_internal_with_typed_body(
+                                rule_name, return_type, return_by_value, child_type, child_by_value
+                            )
+                        )
+                        manual_bodies.append((rule_name, "choice body; wraps string terminal alternatives"))
+                        body_stubs.append(
+                            (
+                                rule_name,
+                                generate_typed_choice_body_stub(rule_name, return_type, child_type, child_by_value),
+                            )
+                        )
+                else:
+                    declarations.append(generate_choice_body_declaration(rule_name, return_type))
+                    implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
+                    reason_parts = []
+                    if identifier_alts:
+                        reason_parts.append(f"identifier alternatives: {identifier_alts}")
+                    if excluded_alts:
+                        reason_parts.append(f"syntax-only alternatives: {excluded_alts}")
+                    manual_bodies.append((rule_name, f"choice body; {', '.join(reason_parts)}"))
+                    body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             continue
 
         # Normalize a single token or syntax-only choice to a one-element sequence so
@@ -1230,7 +1292,7 @@ def main():
         'create_schema.gram',
         'create_secret.gram',
         'create_sequence.gram',
-        # 'create_table.gram',
+        'create_table.gram',
         'create_trigger.gram',
         'create_type.gram',
         'create_view.gram',

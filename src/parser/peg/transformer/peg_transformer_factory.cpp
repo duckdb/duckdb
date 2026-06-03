@@ -164,60 +164,9 @@ void PEGTransformerFactory::RegisterCreateMacro() {
 
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
-	REGISTER_TRANSFORM(TransformCreateStatement);
-	REGISTER_TRANSFORM(TransformTemporary);
-	REGISTER_TRANSFORM(TransformCreateStatementVariation);
-	REGISTER_TRANSFORM(TransformCreateTableStmt);
-	REGISTER_TRANSFORM(TransformCreateTableAs);
-	REGISTER_TRANSFORM(TransformIdentifierList);
-	REGISTER_TRANSFORM(TransformCreateColumnList);
-	REGISTER_TRANSFORM(TransformCreateTableColumnList);
-	REGISTER_TRANSFORM(TransformPartitionSortedOptions);
-	REGISTER_TRANSFORM(TransformPartitionOptSortedOptions);
-	REGISTER_TRANSFORM(TransformSortedOptPartitionOptions);
-	REGISTER_TRANSFORM(TransformPartitionOptions);
-	REGISTER_TRANSFORM(TransformSortedOptions);
-	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
-	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
-	REGISTER_TRANSFORM(TransformColId);
-	REGISTER_TRANSFORM(TransformColumnIdList);
-	REGISTER_TRANSFORM(TransformTypeFuncName);
 	REGISTER_TRANSFORM(TransformIdentifier);
-	REGISTER_TRANSFORM(TransformDottedIdentifier);
-	REGISTER_TRANSFORM(TransformColumnDefinition);
-	REGISTER_TRANSFORM(TransformColumnConstraint);
-	REGISTER_TRANSFORM(TransformTopLevelConstraint);
-	REGISTER_TRANSFORM(TransformTopLevelConstraintList);
-	REGISTER_TRANSFORM(TransformTopPrimaryKeyConstraint);
-	REGISTER_TRANSFORM(TransformTopUniqueConstraint);
-	REGISTER_TRANSFORM(TransformCheckConstraint);
-	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
-	REGISTER_TRANSFORM(TransformForeignKeyConstraint);
-	REGISTER_TRANSFORM(TransformDefaultValue);
-	REGISTER_TRANSFORM(TransformGeneratedColumn);
-	REGISTER_TRANSFORM(TransformColumnCompression);
-	REGISTER_TRANSFORM(TransformPrimaryKeyConstraint);
-	REGISTER_TRANSFORM(TransformUniqueConstraint);
-	REGISTER_TRANSFORM(TransformNotNullConstraint);
-	REGISTER_TRANSFORM(TransformKeyActions);
-	REGISTER_TRANSFORM(TransformKeyAction);
-	REGISTER_TRANSFORM(TransformNoKeyAction);
-	REGISTER_TRANSFORM(TransformRestrictKeyAction);
-	REGISTER_TRANSFORM(TransformCascadeKeyAction);
-	REGISTER_TRANSFORM(TransformSetNullKeyAction);
-	REGISTER_TRANSFORM(TransformSetDefaultKeyAction);
 	REGISTER_TRANSFORM(TransformCubeOrRollup);
-
-	REGISTER_TRANSFORM(TransformUpdateAction);
-	REGISTER_TRANSFORM(TransformDeleteAction);
-	REGISTER_TRANSFORM(TransformColumnCollation);
-	REGISTER_TRANSFORM(TransformWithData);
-	REGISTER_TRANSFORM(TransformCommitAction);
-	REGISTER_TRANSFORM(TransformPreserveOrDelete);
-	REGISTER_TRANSFORM(TransformGeneratedColumnType);
-	REGISTER_TRANSFORM(TransformIfNotExists);
-	REGISTER_TRANSFORM(TransformOrReplace);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -276,7 +225,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTableColumnName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
-	REGISTER_TRANSFORM(TransformReservedTableQualification);
 
 	REGISTER_TRANSFORM(TransformParameter);
 	REGISTER_TRANSFORM(TransformAnonymousParameter);
@@ -317,7 +265,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformStepSliceBound);
 
 	REGISTER_TRANSFORM(TransformTableReservedColumnName);
-	REGISTER_TRANSFORM(TransformTableQualification);
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);
 	REGISTER_TRANSFORM(TransformExcludeList);
@@ -449,12 +396,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTable);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTable);
-	REGISTER_TRANSFORM(TransformSchemaQualification);
-	REGISTER_TRANSFORM(TransformCatalogQualification);
-	REGISTER_TRANSFORM(TransformQualifiedName);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
-	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
-	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformWhereClause);
 	REGISTER_TRANSFORM(TransformTableFunctionArguments);
 
@@ -574,14 +515,9 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
 	Register("SettingName", &TransformIdentifierOrKeyword);
 	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
-	Register("ReservedSchemaQualification", &TransformSchemaQualification);
 }
 
 void PEGTransformerFactory::RegisterEnums() {
-	RegisterEnum<SecretPersistType>("TempPersistent", SecretPersistType::TEMPORARY);
-	RegisterEnum<SecretPersistType>("TemporaryPersistent", SecretPersistType::TEMPORARY);
-	RegisterEnum<SecretPersistType>("Persistent", SecretPersistType::PERSISTENT);
-
 	RegisterEnum<CatalogType>("MaterializedViewEntry", CatalogType::VIEW_ENTRY);
 
 	RegisterEnum<string>("MinusPrefixOperator", "-");

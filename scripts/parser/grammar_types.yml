@@ -338,6 +338,7 @@ Expression:
   by_value: true
   rules:
     - Expression
+    - ColumnDefaultExpr
     - SingleExpression
     - BaseExpression
     - LambdaArrowExpression
@@ -842,7 +843,7 @@ SettingInfo:
 
 PartitionSortedOptions:
   type: "PartitionSortedOptions"
-  by_value: false
+  by_value: true
   rules:
     - PartitionSortedOptions
     - PartitionOptSortedOptions
@@ -850,10 +851,25 @@ PartitionSortedOptions:
 
 ColumnElements:
   type: "ColumnElements"
-  by_value: false
+  by_value: true
   rules:
-    - CreateColumnList
     - CreateTableColumnList
+
+CreateTableDefinition:
+  type: "CreateTableDefinition"
+  by_value: true
+  rules:
+    - CreateTableDefinition
+    - CreateTableAs
+    - CreateColumnList
+
+CreateTableColumnElement:
+  type: "CreateTableColumnElement"
+  by_value: true
+  rules:
+    - CreateTableColumnElement
+    - CreateTableColumnDefinition
+    - CreateTableConstraint
 
 # ---------------------------------------------------------------------------
 # Primitive types
@@ -871,6 +887,12 @@ String:
     - IndexType
     - RelOptionName
     - DottedIdentifierString
+    - DotColLabel
+    - ColLabel
+    - UnreservedKeyword
+    - ColumnNameKeyword
+    - FuncNameKeyword
+    - TypeNameKeyword
     - IndexName
     - ColId
     - ColIdOrString
@@ -955,9 +977,17 @@ Bool:
     - FromOrTo
     - CastOrTryCast
     - WithData
+    - WithDataOnly
+    - WithNoData
     - CommitAction
     - PreserveOrDelete
     - GeneratedColumnType
+    - VirtualGeneratedColumn
+    - StoredGeneratedColumn
+    - NullConstraint
+    - NotNullColumnConstraint
+    - PreserveRows
+    - DeleteRows
     - DistinctOrAll
     - Materialized
     - SampleUnit
@@ -1149,12 +1179,20 @@ overrides:
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   # create_table.gram
-  ColumnDefinition: "ConstraintColumnDefinition"
+  ColumnDefinition:
+    type: "ConstraintColumnDefinition"
+    by_value: true
   KeyActions: "KeyActions"
-  GeneratedColumn: "GeneratedColumnDefinition"
-  CreateTableAs: "CreateTableAs"
-  IdentifierList: "ColumnList"
+  GeneratedColumn:
+    type: "GeneratedColumnDefinition"
+    by_value: true
+  IdentifierList:
+    type: "ColumnList"
+    by_value: true
   Temporary: "SecretPersistType"
+  Persistent: "SecretPersistType"
+  TempPersistent: "SecretPersistType"
+  TemporaryPersistent: "SecretPersistType"
   # create_trigger.gram
   ForEachClause: "TriggerForEach"
   TriggerTiming: "TriggerTiming"
@@ -1371,13 +1409,13 @@ excluded_rules:
   - Transaction
   - VariableAssign
   - ColLabel
+  - ColLabelOrString
   - GroupingOrGroupingId
   - RowOrRows
   - Recursive
   - StarSymbol
   - PlainIdentifier
   - QuotedIdentifier
-  - CreateTableColumnElement
   - IntervalNumber
   - AtTimeZoneOperator
   - Generated
