@@ -434,7 +434,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			unordered_set<string> set_columns;
+			case_insensitive_set_t set_columns;
 			for (auto &set_col : node.columns) {
 				set_columns.insert(set_col);
 			}
