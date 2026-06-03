@@ -25,6 +25,16 @@ struct RandomFun {
 	static ScalarFunction GetFunction();
 };
 
+struct HashToUnitFun {
+	static constexpr const char *Name = "hash_to_unit";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Returns a deterministic pseudo-random number in [0, 1) derived from hash(x). Same input always produces the same output. Useful for reproducible sampling: WHERE hash_to_unit(id) < 0.01.";
+	static constexpr const char *Example = "hash_to_unit(7)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct SetseedFun {
 	static constexpr const char *Name = "setseed";
 	static constexpr const char *Parameters = "";

@@ -44,13 +44,10 @@ explain select a,rowid, row_number() over() as x from foo order by a desc limit 
 physical_plan	<!REGEX>:.*WINDOW.*
 
 statement ok
-select setseed(0.1);
+create or replace table test as select (hash_to_unit([range, 0])*10)::INT a, (hash_to_unit([range, 1])*5)::INT b  from range(10);
 
 statement ok
-create or replace table test as select (random()*10)::INT a, (random()*5)::INT b  from range(10);
-
-statement ok
-create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
+create or replace table test2 as select (hash_to_unit([range, 2])*100)::INT c, (hash_to_unit([range, 3])*5)::INT b  from range(10);
 
 # Try with a window function and a Join
 
