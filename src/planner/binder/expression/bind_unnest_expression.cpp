@@ -205,7 +205,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
-		result->child = std::move(unnest_expr);
+		result->ChildMutable() = std::move(unnest_expr);
 		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias();
 
 		auto current_level = unnest_level + list_unnests - current_depth - 1;

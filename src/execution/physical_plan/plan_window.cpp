@@ -40,8 +40,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		Columns partition_columns;
 		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
-		} else if (!wexpr.partitions.empty() &&
-		           HasSingleValuePartitions(context, wexpr.partitions, plan, partition_columns)) {
+		} else if (!wexpr.Partitions().empty() &&
+		           HasSingleValuePartitions(context, wexpr.Partitions(), plan, partition_columns)) {
 			partitioned_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);
@@ -129,14 +129,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 			// Is there a common sort prefix?
 			const auto prefix = over_expr.GetSharedOrders(wexpr);
-			if (prefix != MinValue<idx_t>(over_expr.orders.size(), wexpr.orders.size())) {
+			if (prefix != MinValue<idx_t>(over_expr.OrderBy().size(), wexpr.OrderBy().size())) {
 				unprocessed.emplace_back(expr_idx);
 				continue;
 			}
 			matching.emplace_back(expr_idx);
 
 			// Switch to the longer prefix
-			if (prefix < wexpr.orders.size()) {
+			if (prefix < wexpr.OrderBy().size()) {
 				over_idx = expr_idx;
 			}
 		}

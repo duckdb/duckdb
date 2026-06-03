@@ -80,7 +80,6 @@ static void PragmaMetadataInfoFunction(ClientContext &context, TableFunctionInpu
 		free_list.Append(Value::LIST(LogicalType::BIGINT, std::move(list_values)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void PragmaMetadataInfo::RegisterFunction(BuiltinFunctions &set) {

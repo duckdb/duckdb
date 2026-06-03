@@ -155,7 +155,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	// create the input chunk
 	DataChunk input_chunk;
 	input_chunk.InitializeEmpty(execute_info.input_types);
-	input_chunk.SetCardinality(reduced_row_idx);
+	input_chunk.SetChildCardinality(reduced_row_idx);
 
 	const idx_t element_offset = info.has_index ? 1 : 0;
 	const idx_t accumulator_offset = element_offset + 1;
@@ -190,7 +190,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	}
 
 	result_chunk.Reset();
-	result_chunk.SetCardinality(reduced_row_idx);
+	result_chunk.SetChildCardinality(reduced_row_idx);
 	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
 	// We need to copy the result into left_slice to avoid data loss due to vector.Reference(...).

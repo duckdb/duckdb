@@ -1,8 +1,92 @@
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 1a9c466..973a3a5 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -365,6 +365,19 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+ 	auto response = http_util.Request(get_request, http_client);
+ 
+ 	hfh.StoreClient(std::move(http_client));
++
++	// Feed the prefetch cost model a network measurement for this ranged GET
++	if (response && (response->Success() || response->status == HTTPStatusCode::PartialContent_206 ||
++	                 response->status == HTTPStatusCode::Accepted_202)) {
++		double total_seconds = 0;
++		if (get_request.request_end.value > get_request.request_start.value) {
++			total_seconds =
++			    static_cast<double>(get_request.request_end.value - get_request.request_start.value) / 1e6;
++		}
++		const idx_t bytes = get_request.bytes_received != 0 ? get_request.bytes_received : buffer_out_len;
++		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_time_to_fst_byte,
++		                        get_request.time_to_fst_byte_sec);
++	}
+ 	return response;
+ }
+ 
+@@ -462,9 +475,42 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
+ }
+ 
+ void HTTPFileHandle::AddStatistics(idx_t read_offset, idx_t read_length, idx_t read_duration) {
++	lock_guard<mutex> guard(throughput_lock);
+ 	range_request_statistics.push_back({read_offset, read_length, read_duration});
+ }
+ 
++void HTTPFileHandle::RecordNetworkSample(double total_seconds, idx_t bytes, bool sample_has_ttfb,
++                                         double ttfb_seconds) {
++	if (!(total_seconds > 0)) {
++		return;
++	}
++	lock_guard<mutex> guard(throughput_lock);
++	const idx_t n = tp_sample_count + 1;
++	const double alpha = MaxValue<double>(0.2, 1.0 / static_cast<double>(n));
++
++	if (sample_has_ttfb && ttfb_seconds > 0) {
++		tp_latency_seconds =
++		    tp_latency_seconds <= 0 ? ttfb_seconds : alpha * ttfb_seconds + (1.0 - alpha) * tp_latency_seconds;
++	}
++
++	const double transfer_seconds = sample_has_ttfb ? (total_seconds - ttfb_seconds) : total_seconds;
++	if (bytes >= MIN_BANDWIDTH_SAMPLE_BYTES && transfer_seconds > 0) {
++		const double bandwidth = static_cast<double>(bytes) / transfer_seconds;
++		tp_bandwidth_bps = tp_bandwidth_bps <= 0 ? bandwidth : alpha * bandwidth + (1.0 - alpha) * tp_bandwidth_bps;
++	}
++	tp_sample_count = n;
++}
++
++bool HTTPFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
++	lock_guard<mutex> guard(throughput_lock);
++	if (tp_sample_count == 0 || tp_latency_seconds <= 0 || tp_bandwidth_bps <= 0) {
++		return false;
++	}
++	result.latency_seconds = tp_latency_seconds;
++	result.bandwidth_bytes_per_s = tp_bandwidth_bps;
++	return true;
++}
++
+ void HTTPFileHandle::AdaptReadBufferSize(idx_t next_read_offset) {
+ 	D_ASSERT(!SkipBuffer());
+ 	if (range_request_statistics.empty()) {
 diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
-index efdc87d..c893468 100644
+index efdc87d..3852958 100644
 --- a/src/httpfs_curl_client.cpp
 +++ b/src/httpfs_curl_client.cpp
-@@ -409,6 +409,34 @@ public:
+@@ -254,6 +254,16 @@ public:
+ 		curl_easy_getinfo(*curl, CURLINFO_RESPONSE_CODE, &request_info->response_code);
+ 
+ 		const idx_t bytes_received = request_info->body.size();
++
++		//  libcurl reports latency via CURLINFO_STARTTRANSFER_TIME
++		info.bytes_received = bytes_received;
++		double starttransfer_seconds = 0;
++		if (curl_easy_getinfo(*curl, CURLINFO_STARTTRANSFER_TIME, &starttransfer_seconds) == CURLE_OK &&
++		    starttransfer_seconds > 0) {
++			info.have_time_to_fst_byte = true;
++			info.time_to_fst_byte_sec = starttransfer_seconds;
++		}
++
+ 		if (!request_info->header_collection.empty() &&
+ 		    request_info->header_collection.back().HasHeader("content-length")) {
+ 			const idx_t content_length_received =
+@@ -409,6 +419,34 @@ public:
  		return TransformResponseCurl(res);
  	}
  
@@ -38,10 +122,44 @@ index efdc87d..c893468 100644
  		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index f4e01f7..21becf7 100644
+index f4e01f7..9e197d1 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
-@@ -94,6 +94,11 @@ public:
+@@ -54,18 +54,32 @@ public:
+ 		if (!info.response_handler && !info.content_handler) {
+ 			return TransformResult(client->Get(info.path, headers));
+ 		} else {
+-			return TransformResult(client->Get(
++			// The httplib client streams per chunk, so the first chunk gives us TTFB, used by the prefetch cost model as the latency estimate.
++			const auto request_start = Timestamp::GetCurrentTimestamp();
++			idx_t total_bytes = 0;
++			bool first_chunk = true;
++			auto result = TransformResult(client->Get(
+ 			    info.path.c_str(), headers,
+ 			    [&](const duckdb_httplib_openssl::Response &response) {
+ 				    auto http_response = TransformResponse(response);
+ 				    return info.response_handler(*http_response);
+ 			    },
+ 			    [&](const char *data, size_t data_length) {
++				    if (first_chunk) {
++					    first_chunk = false;
++					    info.have_time_to_fst_byte = true;
++			            // We calculate the time to first byte as the time from when the request was issues to the chunk arrived.
++					    info.time_to_fst_byte_sec =
++					        static_cast<double>(Timestamp::GetCurrentTimestamp().value - request_start.value) / 1e6;
++				    }
++				    total_bytes += data_length;
+ 				    if (state) {
+ 					    state->total_bytes_received += data_length;
+ 				    }
+ 				    return info.content_handler(const_data_ptr_cast(data), data_length);
+ 			    }));
++			info.bytes_received = total_bytes;
++			return result;
+ 		}
+ 	}
+ 	unique_ptr<HTTPResponse> Put(PutRequestInfo &info) override {
+@@ -94,6 +108,11 @@ public:
  		return TransformResult(client->Delete(info.path, headers));
  	}
  
@@ -53,6 +171,47 @@ index f4e01f7..21becf7 100644
  	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
  		if (state) {
  			state->post_count++;
+diff --git a/src/include/httpfs.hpp b/src/include/httpfs.hpp
+index 7d0f9b7..084405e 100644
+--- a/src/include/httpfs.hpp
++++ b/src/include/httpfs.hpp
+@@ -115,6 +115,11 @@ public:
+ 	void AddStatistics(idx_t read_offset, idx_t read_length, idx_t read_duration);
+ 	void AdaptReadBufferSize(idx_t next_read_offset);
+ 
++	// Record a completed range request into the network throughput estimate (latency + bandwidth)
++	void RecordNetworkSample(double total_seconds, idx_t bytes, bool sample_has_ttfb, double ttfb_seconds);
++	// Expose the measured network throughput estimate to the (parquet) prefetch cost model.
++	bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
++
+ 	void AddHeaders(HTTPHeaders &map);
+ 
+ 	// Get a Client to run requests over
+@@ -138,6 +143,14 @@ private:
+ 	};
+ 	vector<RangeRequestStatistics> range_request_statistics;
+ 
++	// throughput_lock guards the throughput estimate (fed by RecordNetworkSample) and range_request_statistics against concurrent prefetch reads.
++	mutex throughput_lock;
++	double tp_latency_seconds = 0;
++	double tp_bandwidth_bps = 0;
++	idx_t tp_sample_count = 0;
++	// Minimum payload size for a request to contribute a bandwidth sample
++	constexpr static idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16; // 64 KiB
++
+ public:
+ 	void Close() override {
+ 	}
+@@ -210,6 +223,9 @@ public:
+ 	bool OnDiskFile(FileHandle &handle) override {
+ 		return false;
+ 	}
++	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override {
++		return handle.Cast<HTTPFileHandle>().TryGetNetworkThroughput(result);
++	}
+ 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
+ 		return false;
+ 	}
 diff --git a/src/include/s3_multi_part_upload.hpp b/src/include/s3_multi_part_upload.hpp
 index c1020e7..2425342 100644
 --- a/src/include/s3_multi_part_upload.hpp

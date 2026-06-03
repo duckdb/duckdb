@@ -707,6 +707,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 }
 
 bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry) {
+	auto initial_size = entry.values.size();
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -723,6 +724,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		}
 		for (auto &child : function.GetArgumentsMutable()) {
 			if (!TransformPivotInList(child.GetExpressionMutable(), entry)) {
+				entry.values.resize(initial_size);
 				return false;
 			}
 		}
@@ -737,6 +739,17 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		return true;
 	}
 	}
+}
+
+static bool PivotEntryIsTuple(const PivotColumnEntry &entry) {
+	if (entry.values.size() > 1) {
+		return true;
+	}
+	if (!entry.expr || entry.expr->GetExpressionType() != ExpressionType::FUNCTION) {
+		return false;
+	}
+	auto &function = entry.expr->Cast<FunctionExpression>();
+	return function.FunctionName() == "row";
 }
 
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
@@ -810,7 +823,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 	// so pivot_expressions.size() matches entry.values.size() (both 1).
 	bool has_tuple_entries = false;
 	for (auto &entry : result.entries) {
-		if (entry.values.size() > 1) {
+		if (PivotEntryIsTuple(entry)) {
 			has_tuple_entries = true;
 			break;
 		}
@@ -1292,13 +1305,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
-	if (limit.is_percent) {
-		auto result = make_uniq<LimitPercentModifier>();
-		result->limit = std::move(limit.expression);
-		result->offset = std::move(offset.expression);
-		return std::move(result);
-	}
 	auto result = make_uniq<LimitModifier>();
+	result->limit_type = limit.is_percent ? LimitValueType::PERCENTAGE : LimitValueType::ROW_COUNT;
 	if (limit.expression) {
 		result->limit = std::move(limit.expression);
 	}

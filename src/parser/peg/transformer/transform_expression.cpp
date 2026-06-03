@@ -2671,12 +2671,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	auto filter_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_comprehension_filter.GetResult());
 
 	// STAGE 1: list_apply(in_expr, x -> struct_pack(filter := ..., result := ...))
-	filter_expr->SetAlias("filter");
-	result_expr->SetAlias("result");
-
-	vector<unique_ptr<ParsedExpression>> struct_children;
-	struct_children.push_back(std::move(filter_expr));
-	struct_children.push_back(std::move(result_expr));
+	vector<FunctionArgument> struct_children;
+	struct_children.emplace_back("filter", std::move(filter_expr));
+	struct_children.emplace_back("result", std::move(result_expr));
 	auto struct_pack =
 	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_pack", std::move(struct_children));
 

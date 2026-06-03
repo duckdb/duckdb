@@ -181,7 +181,7 @@ public:
 
 	static string ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
 	                                  const char *strategy, const vector<vector<string>> &prefetch_groups,
-	                                  const vector<string> &minimal_filters);
+	                                  const vector<string> &minimal_filters, uint64_t accepted_column_gap);
 };
 
 } // namespace duckdb

@@ -78,7 +78,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		break;
 	}
 	if (is_equality) {
-		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		res = LogicalType::ForceMaxLogicalType(context, left_type, right_type);
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, left_type, right_type, res)) {
 			return false;

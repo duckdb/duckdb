@@ -6,6 +6,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -289,7 +290,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
 	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias : node.table;
-	merge_into->target = std::move(node.table_ref);
+	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
 	auto &columns = table.GetColumns();
@@ -343,7 +344,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			join_condition =
 			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(join_conditions));
 		}
-		merge_into->join_condition = std::move(join_condition);
+		merge_into->node->join_condition = std::move(join_condition);
 
 		if (!found_matching_indexes) {
 			throw BinderException("There are no UNIQUE/PRIMARY KEY constraints that refer to this table, specify ON "
@@ -397,7 +398,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			                      "CONSTRAINT or INDEX");
 		}
 		all_distinct_on_columns.push_back(on_conflict_info.indexed_columns);
-		merge_into->using_columns = std::move(on_conflict_info.indexed_columns);
+		merge_into->node->using_columns = std::move(on_conflict_info.indexed_columns);
 	}
 
 	// expand any default values
@@ -479,7 +480,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		source = make_uniq<SubqueryRef>(std::move(distinct_stmt), "excluded");
 	}
 
-	merge_into->source = std::move(source);
+	merge_into->node->source = std::move(source);
 
 	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
 		D_ASSERT(!on_conflict_info.set_info);
@@ -496,7 +497,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	insert_action->action_type = MergeActionType::MERGE_INSERT;
 	insert_action->column_order = node.column_order;
 
-	merge_into->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
+	merge_into->node->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
 
 	if (on_conflict_info.condition) {
 		throw BinderException("ON CONFLICT WHERE clause is only supported in DO UPDATE SET ... WHERE ...\nThe WHERE "
@@ -521,12 +522,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			update_action->update_info = std::move(on_conflict_info.set_info);
 		}
 
-		merge_into->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
+		merge_into->node->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
 	}
 
 	// move over extra properties
-	merge_into->cte_map = std::move(node.cte_map);
-	merge_into->returning_list = std::move(node.returning_list);
+	merge_into->node->returning_list = std::move(node.returning_list);
 	return merge_into;
 }
 

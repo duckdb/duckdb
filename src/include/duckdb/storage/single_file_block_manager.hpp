@@ -10,12 +10,15 @@
 
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/database_handle.hpp"
 
 namespace duckdb {
 
@@ -44,7 +47,9 @@ struct EncryptionOptions {
 
 struct StorageManagerOptions {
 	bool read_only = false;
-	bool use_direct_io = false;
+	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
+	//! Reserve size for MMAP mode; empty uses the built-in default.
+	optional_idx mmap_reserve_size;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
 	StorageVersion storage_version = StorageVersion::INVALID;
@@ -65,7 +70,6 @@ public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
 	~SingleFileBlockManager() override;
 
-	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
 	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
@@ -193,8 +197,8 @@ private:
 	uint8_t active_header;
 	//! The path where the file is stored
 	string path;
-	//! The file handle
-	unique_ptr<FileHandle> handle;
+	//! The database handle
+	unique_ptr<DatabaseHandle> handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently

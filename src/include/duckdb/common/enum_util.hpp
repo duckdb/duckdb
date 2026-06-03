@@ -224,6 +224,8 @@ enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
 
+enum class FileIOMode : uint8_t;
+
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
@@ -275,6 +277,8 @@ enum class LambdaSyntax : uint8_t;
 enum class LambdaSyntaxType : uint8_t;
 
 enum class LimitNodeType : uint8_t;
+
+enum class LimitValueType : uint8_t;
 
 enum class LoadType : uint8_t;
 
@@ -398,6 +402,8 @@ enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RelationType : uint8_t;
 
+enum class RemoteCapability : uint8_t;
+
 enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
@@ -419,6 +425,8 @@ enum class SecretDisplayType : uint8_t;
 enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
+
+enum class SegmentTreeVerifyMode : uint8_t;
 
 enum class SelectivityOptionalFilterType : uint8_t;
 
@@ -487,6 +495,8 @@ enum class TableReferenceType : uint8_t;
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
+
+enum class TaskSchedulerType : uint8_t;
 
 enum class TemporaryBufferSize : uint64_t;
 
@@ -834,6 +844,9 @@ template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
 
 template<>
+const char* EnumUtil::ToChars<FileIOMode>(FileIOMode value);
+
+template<>
 const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
@@ -910,6 +923,9 @@ const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value);
 
 template<>
 const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
+
+template<>
+const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
@@ -1095,6 +1111,9 @@ template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
+const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
+
+template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
@@ -1126,6 +1145,9 @@ const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
+
+template<>
+const char* EnumUtil::ToChars<SegmentTreeVerifyMode>(SegmentTreeVerifyMode value);
 
 template<>
 const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value);
@@ -1228,6 +1250,9 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
@@ -1603,6 +1628,9 @@ template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);
 
 template<>
+FileIOMode EnumUtil::FromString<FileIOMode>(const char *value);
+
+template<>
 FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
@@ -1679,6 +1707,9 @@ LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value);
 
 template<>
 LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
+
+template<>
+LimitValueType EnumUtil::FromString<LimitValueType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
@@ -1864,6 +1895,9 @@ template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
+RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);
+
+template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
@@ -1895,6 +1929,9 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
+SegmentTreeVerifyMode EnumUtil::FromString<SegmentTreeVerifyMode>(const char *value);
 
 template<>
 SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value);
@@ -1997,6 +2034,9 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
+
+template<>
+TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value);
 
 template<>
 TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value);

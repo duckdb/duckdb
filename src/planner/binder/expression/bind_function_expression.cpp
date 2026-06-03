@@ -343,6 +343,11 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			bound_arg->SetAlias(arg.GetName());
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
+			// For new function calls, we preserve the argument names, but also alias them by their name for backward
+			// compatibility with functions that capture by alias (e.g. struct_pack).
+			if (!arg.GetName().empty()) {
+				bound_arg->SetAlias(arg.GetName());
+			}
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
 	}

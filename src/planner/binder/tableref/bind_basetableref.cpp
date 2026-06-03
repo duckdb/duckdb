@@ -281,7 +281,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
-		view_binder->can_contain_nulls = true;
+		view_binder->SetCanContainNulls(true);
 
 		// The view may contain CTEs, but maybe only in the cte_map, so we need create CTE nodes for them
 		auto query = view_catalog_entry.GetQuery().Copy();

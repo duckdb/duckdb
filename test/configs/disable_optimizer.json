@@ -35,7 +35,8 @@
         "test/parquet/variant/variant_stats_propagation.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
-        "test/optimizer/joins/fkpk_composite_key_ce.test"
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/sql/cast/signed_cast_repro.test"
       ]
     },
     {
@@ -78,7 +79,9 @@
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
-        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test"
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test"
       ]
     },
     {

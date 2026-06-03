@@ -266,6 +266,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			bound_arg->SetAlias(arg.GetName());
 			arguments.emplace_back(string(), std::move(bound_arg));
 		} else {
+			if (!arg.GetName().empty()) {
+				bound_arg->SetAlias(arg.GetName());
+			}
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
 	}
