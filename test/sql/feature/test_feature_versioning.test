@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_versioning.test
-# description: Test feature versioning — version increments on refresh, RETAIN controls GC
+# description: Test feature versioning — each refresh creates a new version table, RETAIN controls GC
 # group: [feature]
 
 require noforcestorage
@@ -35,18 +35,18 @@ CREATE FEATURE versioned_full ON events
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Initial materialization is version 1
+# Initial materialization creates version table __v1
 query I
-SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+SELECT COUNT(*) FROM versioned_full__v1;
 ----
-1
+3
 
-# All rows are version 1
-query III rowsort
-SELECT customer, total_value, __feature_version FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+# The view resolves to current version (v1)
+query II rowsort
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
 ----
-x	10	1
-y	30	1
+x	10
+y	30
 
 # First refresh -> version 2
 query I
@@ -54,11 +54,23 @@ REFRESH FEATURE versioned_full;
 ----
 3
 
+# Both v1 and v2 tables exist
 query I
-SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+SELECT COUNT(*) FROM versioned_full__v1;
 ----
-1
-2
+3
+
+query I
+SELECT COUNT(*) FROM versioned_full__v2;
+----
+3
+
+# View shows current (v2) data
+query II rowsort
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+----
+x	10
+y	30
 
 # Second refresh -> version 3 (now we have 3 versions, at RETAIN limit)
 query I
@@ -67,10 +79,8 @@ REFRESH FEATURE versioned_full;
 3
 
 query I
-SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+SELECT COUNT(*) FROM versioned_full__v3;
 ----
-1
-2
 3
 
 # Third refresh -> version 4, GC removes version 1 (retain 3 means keep 2,3,4)
@@ -80,21 +90,25 @@ REFRESH FEATURE versioned_full;
 3
 
 query I
-SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+SELECT COUNT(*) FROM versioned_full__v4;
 ----
-2
 3
-4
 
-# Version 1 rows are gone
-query I
-SELECT COUNT(*) FROM versioned_full WHERE __feature_version = 1;
+# Version 1 table is gone (GC'd)
+statement error
+SELECT COUNT(*) FROM versioned_full__v1;
 ----
-0
+<REGEX>:.*does not exist.*
+
+# Version 2 still exists (within retain window)
+query I
+SELECT COUNT(*) FROM versioned_full__v2;
+----
+3
 
 # Latest version has correct data
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE __feature_version = 4 AND feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
 ----
 x	10
 y	30
@@ -115,11 +129,11 @@ CREATE FEATURE versioned_retain1 ON events
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Version 1 initially
+# Version 1 table exists initially
 query I
-SELECT DISTINCT __feature_version FROM versioned_retain1;
+SELECT COUNT(*) FROM versioned_retain1__v1;
 ----
-1
+3
 
 # Refresh -> version 2, GC removes version 1
 query I
@@ -128,15 +142,15 @@ REFRESH FEATURE versioned_retain1;
 3
 
 query I
-SELECT DISTINCT __feature_version FROM versioned_retain1;
+SELECT COUNT(*) FROM versioned_retain1__v2;
 ----
-2
+3
 
-# Only version 2 rows exist
-query I
-SELECT COUNT(*) FROM versioned_retain1 WHERE __feature_version = 1;
+# Version 1 is gone
+statement error
+SELECT COUNT(*) FROM versioned_retain1__v1;
 ----
-0
+<REGEX>:.*does not exist.*
 
 statement ok
 DROP FEATURE versioned_retain1;
@@ -154,11 +168,11 @@ CREATE FEATURE versioned_incr ON events
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Initial: version 1
+# Initial: version 1 with 3 rows
 query I
-SELECT DISTINCT __feature_version FROM versioned_incr;
+SELECT COUNT(*) FROM versioned_incr__v1;
 ----
-1
+3
 
 query I
 SELECT COUNT(*) FROM versioned_incr;
@@ -178,24 +192,23 @@ REFRESH FEATURE versioned_incr;
 ----
 2
 
+# Both v1 and v2 exist (RETAIN 2)
 query I
-SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
+SELECT COUNT(*) FROM versioned_incr__v1;
 ----
-1
-2
+3
 
-# Version 2 has the new bucket (01-03) plus copied-forward old rows
+query I
+SELECT COUNT(*) FROM versioned_incr__v2;
+----
+5
+
+# View shows current version (v2) which has the new bucket
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE __feature_version = 2 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
 ----
 x	70
 y	80
-
-# Version 1 still has original data (RETAIN 2 keeps both)
-query I
-SELECT COUNT(*) FROM versioned_incr WHERE __feature_version = 1;
-----
-3
 
 # Add more data and refresh again -> version 3, GC removes version 1
 statement ok
@@ -207,17 +220,23 @@ REFRESH FEATURE versioned_incr;
 ----
 1
 
-query I
-SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
+# Version 1 is gone (GC'd, only retain 2)
+statement error
+SELECT COUNT(*) FROM versioned_incr__v1;
 ----
-2
-3
+<REGEX>:.*does not exist.*
 
-# Version 1 is gone (GC'd)
+# Version 2 still exists
 query I
-SELECT COUNT(*) FROM versioned_incr WHERE __feature_version = 1;
+SELECT COUNT(*) FROM versioned_incr__v2;
 ----
-0
+5
+
+# Version 3 exists with new data
+query I
+SELECT COUNT(*) FROM versioned_incr__v3;
+----
+6
 
 statement ok
 DROP FEATURE versioned_incr;
@@ -247,7 +266,7 @@ CREATE FEATURE stable_feat ON stable_src
 
 # Version 1 after creation
 query I
-SELECT DISTINCT __feature_version FROM stable_feat;
+SELECT COUNT(*) FROM stable_feat__v1;
 ----
 1
 
@@ -257,10 +276,16 @@ REFRESH FEATURE stable_feat;
 ----
 0
 
+# Still only v1 (no v2 created)
 query I
-SELECT DISTINCT __feature_version FROM stable_feat;
+SELECT COUNT(*) FROM stable_feat__v1;
 ----
 1
+
+statement error
+SELECT COUNT(*) FROM stable_feat__v2;
+----
+<REGEX>:.*does not exist.*
 
 # Add data, refresh -> version 2
 statement ok
@@ -272,22 +297,20 @@ REFRESH FEATURE stable_feat;
 1
 
 query I
-SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
+SELECT COUNT(*) FROM stable_feat__v2;
 ----
-1
 2
 
-# No-op again -> still versions 1 and 2
+# No-op again -> still at version 2, no v3
 query I
 REFRESH FEATURE stable_feat;
 ----
 0
 
-query I
-SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
+statement error
+SELECT COUNT(*) FROM stable_feat__v3;
 ----
-1
-2
+<REGEX>:.*does not exist.*
 
 statement ok
 DROP FEATURE stable_feat;

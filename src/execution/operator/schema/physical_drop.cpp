@@ -7,6 +7,9 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
@@ -76,8 +79,34 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	case CatalogType::FEATURE_ENTRY: {
-		// Drop the feature catalog entry; ownership cascades to the view and all version tables
+		// First, explicitly drop all version tables owned by this feature
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		auto schema_ptr = catalog.GetSchema(context.client, info->schema, OnEntryNotFound::RETURN_NULL);
+		if (schema_ptr) {
+			auto transaction = catalog.GetCatalogTransaction(context.client);
+			auto &duck_schema = schema_ptr->Cast<DuckSchemaEntry>();
+			auto &feature_set = duck_schema.GetCatalogSet(CatalogType::FEATURE_ENTRY);
+			auto feat_entry = feature_set.GetEntry(transaction, info->name);
+			if (feat_entry) {
+				auto &feature = feat_entry->Cast<FeatureCatalogEntry>();
+				for (int64_t v = feature.current_version; v >= 1; v--) {
+					auto version_table_name = info->name + "__v" + to_string(v);
+					DropInfo table_drop;
+					table_drop.type = CatalogType::TABLE_ENTRY;
+					table_drop.catalog = info->catalog;
+					table_drop.schema = info->schema;
+					table_drop.name = version_table_name;
+					table_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
+					table_drop.cascade = false;
+					try {
+						catalog.DropEntry(context.client, table_drop);
+					} catch (...) {
+						// Ignore errors for version tables that may already be gone
+					}
+				}
+			}
+		}
+		// Now drop the feature entry itself (cascades to the view via ownership)
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

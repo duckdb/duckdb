@@ -32,14 +32,14 @@ CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARI
 # user 2 @ 01-01: only 50.0
 # user 2 @ 01-03: 50.0 + 75.0 = 125.0
 # user 3 @ 01-02: 300.0
-query ITRI rowsort
+query ITR rowsort
 SELECT * FROM total_spend;
 ----
-1	2024-01-01 00:00:00	100.0	1
-1	2024-01-02 00:00:00	300.0	1
-2	2024-01-01 00:00:00	50.0	1
-2	2024-01-03 00:00:00	125.0	1
-3	2024-01-02 00:00:00	300.0	1
+1	2024-01-01 00:00:00	100.0
+1	2024-01-02 00:00:00	300.0
+2	2024-01-01 00:00:00	50.0
+2	2024-01-03 00:00:00	125.0
+3	2024-01-02 00:00:00	300.0
 
 # Row count
 query I
@@ -53,14 +53,14 @@ SELECT COUNT(*) FROM total_spend;
 statement ok
 CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
-query ITRI rowsort
+query ITR rowsort
 SELECT * FROM avg_spend;
 ----
-1	2024-01-01 00:00:00	100.0	1
-1	2024-01-02 00:00:00	150.0	1
-2	2024-01-01 00:00:00	50.0	1
-2	2024-01-03 00:00:00	62.5	1
-3	2024-01-02 00:00:00	300.0	1
+1	2024-01-01 00:00:00	100.0
+1	2024-01-02 00:00:00	150.0
+2	2024-01-01 00:00:00	50.0
+2	2024-01-03 00:00:00	62.5
+3	2024-01-02 00:00:00	300.0
 
 # ============================================================
 # Multiple aggregates in one feature
@@ -69,10 +69,10 @@ statement ok
 CREATE FEATURE multi_agg ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
 # user 1 @ 01-02: total=300, cnt=2, avg=150
-query ITRIRI
+query ITRIR
 SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
-1	2024-01-02 00:00:00	300.0	2	150.0	1
+1	2024-01-02 00:00:00	300.0	2	150.0
 
 # ============================================================
 # Window boundary: data outside window excluded
