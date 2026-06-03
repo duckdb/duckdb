@@ -128,11 +128,12 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 
 	// We found the table, now create the struct_pack expression
 	auto &column_names = binding->GetColumnNames();
-	vector<unique_ptr<ParsedExpression>> child_expressions;
+	vector<FunctionArgument> child_expressions;
 	child_expressions.reserve(column_names.size());
 	for (const auto &column_name : column_names) {
-		child_expressions.push_back(binder.bind_context.CreateColumnReference(
-		    binding->GetBindingAlias(), column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+		auto ref = binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name,
+		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+		child_expressions.emplace_back(column_name, std::move(ref));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
