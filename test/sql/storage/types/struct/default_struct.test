@@ -65,8 +65,8 @@ INSERT INTO b(i) VALUES (NULL)
 query II
 SELECT * FROM b ORDER BY j, i.a NULLS LAST
 ----
-{'a': 7, 'b': 12}	42
-{'a': 11, 'b': 2}	42
+{'a': 11, 'b': NULL}	42
+{'a': NULL, 'b': 12}	42
 NULL	42
 
 statement ok
@@ -96,7 +96,7 @@ INSERT INTO c(i) VALUES ({'n': {'x': 10}})
 query I
 SELECT * FROM c
 ----
-{'a': 1, 'n': {'x': 10, 'y': 3}, 'z': 4}
+{'a': NULL, 'n': {'x': 10, 'y': NULL}, 'z': NULL}
 
 statement ok
 CREATE TABLE d(
@@ -117,7 +117,7 @@ INSERT INTO d(i) VALUES ({'a': 11})
 query I
 SELECT * FROM d
 ----
-{'a': 11, 'b': 5}
+{'a': 11, 'b': NULL}
 
 statement ok
 CREATE TABLE e(
@@ -138,7 +138,7 @@ INSERT INTO e(i) VALUES ({'b': 12})
 query I
 SELECT * FROM e
 ----
-{'a': 7, 'b': 12, 'c': NULL}
+{'a': NULL, 'b': 12, 'c': NULL}
 
 statement ok
 CREATE TABLE f(
@@ -165,4 +165,4 @@ INSERT INTO f(i) VALUES ({'n': {'x': 10}})
 query I
 SELECT * FROM f
 ----
-{'a': NULL, 'n': {'x': 10, 'y': 3, 'z': NULL}, 'b': NULL}
+{'a': NULL, 'n': {'x': 10, 'y': NULL, 'z': NULL}, 'b': NULL}

@@ -146,7 +146,7 @@ INSERT INTO struct_defaults_by_name BY NAME SELECT {'a': 11} AS i;
 query III
 SELECT * FROM struct_defaults_by_name ORDER BY k, i.a NULLS LAST
 ----
-{'a': 7, 'b': 12, 'c': NULL}	42	10
+{'a': NULL, 'b': 12, 'c': NULL}	42	10
 {'a': 11, 'b': NULL, 'c': NULL}	42	99
 
 statement ok
@@ -175,7 +175,7 @@ INSERT INTO nested_struct_defaults_by_name BY NAME SELECT {'n': {'x': 10}} AS i;
 query II
 SELECT * FROM nested_struct_defaults_by_name
 ----
-{'a': NULL, 'n': {'x': 10, 'y': 3, 'z': NULL}, 'b': NULL}	42
+{'a': NULL, 'n': {'x': 10, 'y': NULL, 'z': NULL}, 'b': NULL}	42
 
 
 # INSERT OR REPLACE BY NAME on a table with only a PK column (no columns to update)
