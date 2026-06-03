@@ -98,6 +98,8 @@ private:
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
+	//! Registers an external file cache ObjectCache key in the tracked key set.
+	void InsertCachedFileKey(const string &object_cache_key);
 	//! Removes an external file cache ObjectCache key from the tracked key set.
 	void EraseCachedFileKey(const string &object_cache_key);
 	//! Delete ObjectCache entries.

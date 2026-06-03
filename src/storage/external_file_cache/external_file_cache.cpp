@@ -20,6 +20,7 @@ public:
 	                                  idx_t generation_p)
 	    : cache(cache_p), object_cache_key(std::move(object_cache_key_p)),
 	      cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p)) {
+		cache.InsertCachedFileKey(object_cache_key);
 	}
 
 	~ExternalFileCacheObjectCacheEntry() override {
@@ -326,34 +327,24 @@ void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_ca
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	const auto object_cache_key = ObjectCacheKey(path);
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	const auto current_generation = generation.load();
 
-	// Loop until stale entries are removed and fresh entry is created.
-	while (true) {
-		const auto current_generation = generation.load();
-		if (!enable) {
-			return make_shared_ptr<CachedFile>(path, current_generation);
-		}
-
-		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(
-		    object_cache_key, *this, object_cache_key, path, current_generation);
-		auto cached_file = entry->GetCachedFile();
-
-		bool delete_stale_entry = false;
-		{
-			const annotated_lock_guard<annotated_mutex> guard(lock);
-			if (!enable) {
-				delete_stale_entry = true;
-			} else if (cached_file->generation != generation.load()) {
-				delete_stale_entry = true;
-			} else {
-				cached_file_keys.insert(object_cache_key);
-				return cached_file;
-			}
-		}
-		if (delete_stale_entry) {
-			object_cache.Delete(object_cache_key);
-		}
+	if (!enable) {
+		return make_shared_ptr<CachedFile>(path, current_generation);
 	}
+
+	// When external file cache is disabled, all object cache entries are deleted.
+	auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(object_cache_key, *this, object_cache_key,
+	                                                                         path, current_generation);
+	auto cached_file = entry->GetCachedFile();
+	ALWAYS_ASSERT(cached_file->generation == current_generation);
+	return entry->GetCachedFile();
+}
+
+void ExternalFileCache::InsertCachedFileKey(const string &object_cache_key) {
+	const annotated_lock_guard<annotated_mutex> guard(lock);
+	auto inserted = cached_file_keys.insert(object_cache_key);
+	ALWAYS_ASSERT(inserted.second);
 }
 
 void ExternalFileCache::EraseCachedFileKey(const string &object_cache_key) {
