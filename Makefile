@@ -826,7 +826,10 @@ generate-files-deps:
 	pip install cxxheaderparser pcpp
 
 generate-files:
-	$(PYTHON) scripts/generate_c_api.py
+	# NOTE: temporarily disabled to use new-gen duckdb.h and leave duckdb_extension.h
+	# see scripts/generate_c_api.py for verbose warning
+	# $(PYTHON) scripts/generate_c_api.py
+	echo "🚧 SKIPPING scripts/generate_c_api.py -- see scripts/generate_c_api.py for commentary."
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
