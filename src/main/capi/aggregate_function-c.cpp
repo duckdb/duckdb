@@ -96,7 +96,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 		inputs[c].Flatten();
 		chunk.data.emplace_back(Vector::Ref(inputs[c]));
 	}
-	chunk.SetCardinality(count);
+	chunk.SetChildCardinality(count);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto state_data = FlatVector::GetDataMutableUnsafe<duckdb_aggregate_state>(state);

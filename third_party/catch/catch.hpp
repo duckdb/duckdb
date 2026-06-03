@@ -13477,10 +13477,16 @@ namespace Catch {
             return reporter;
         }
 
-        void renderTestProgress(int current_test, int total_tests, std::string next_test) {
+        void renderTestProgress(int current_test, int total_tests, std::string next_test, double elapsed_seconds = -1) {
             double progress = (double) current_test / (double) total_tests;
             std::string prefix = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): ";
-            std::string result = prefix + next_test;
+            std::string test_label = next_test;
+            if (elapsed_seconds >= 0) {
+                char elapsed_buffer[64];
+                snprintf(elapsed_buffer, sizeof(elapsed_buffer), " took %.3fs", elapsed_seconds);
+                test_label += elapsed_buffer;
+            }
+            std::string result = prefix + test_label;
 
             if (IsTerminal()) {
                 // For terminals, we want to overwrite the previous line to not flood the window with successful tests.
@@ -13495,9 +13501,9 @@ namespace Catch {
                     result += std::string(render_width - result.size(), ' ');
                 } else if (result.size() > static_cast<size_t>(render_width)) {
                     int available_for_test = render_width - prefix.size() - 3; // 3 for "..."
-                    if (available_for_test > 0 && next_test.size() > static_cast<size_t>(available_for_test)) {
+                    if (available_for_test > 0 && test_label.size() > static_cast<size_t>(available_for_test)) {
                         // Replace the start of the test name with "..." to indicate truncation
-                        result = prefix + "..." + next_test.substr(next_test.size() - available_for_test);
+                        result = prefix + "..." + test_label.substr(test_label.size() - available_for_test);
                     } else {
                         // If prefix is too long for terminal width, fall back to simple truncation
                         result = result.substr(0, render_width - 3) + "...";
@@ -13560,6 +13566,7 @@ namespace Catch {
 
                 int total_tests_run = m_tests.size();
                 int current_test = 0;
+                bool rendered_initial_progress = false;
 
                 int start_offset = 0;
                 int end_offset = total_tests_run;
@@ -13580,14 +13587,20 @@ namespace Catch {
                             current_test++;
                             continue;
                         }
-                        if (!m_config->printFailingTests()) {
+                        if (!m_config->printFailingTests() && !rendered_initial_progress) {
                             renderTestProgress(current_test, total_tests_run, testCase->name);
+                            rendered_initial_progress = true;
                         }
+                        Timer timer;
+                        timer.start();
                         totals += m_context.runTest(*testCase);
+                        double elapsed_seconds = timer.getElapsedSeconds();
                         current_test++;
-                        if (current_test == total_tests_run && !m_config->printFailingTests()) {
-                            renderTestProgress(current_test, total_tests_run, testCase->name);
-                            std::cout << std::endl;
+                        if (!m_config->printFailingTests()) {
+                            renderTestProgress(current_test, total_tests_run, testCase->name, elapsed_seconds);
+                            if (current_test == total_tests_run) {
+                                std::cout << std::endl;
+                            }
                         }
                     } else {
                         m_context.reporter().skipTest(*testCase);

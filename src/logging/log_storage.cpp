@@ -141,7 +141,7 @@ void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.data.size(); i++) {
 		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
 	}
-	cast_buffer.SetCardinality(count);
+	cast_buffer.SetChildCardinality(count);
 }
 
 void CSVLogStorage::ResetAllBuffers() {
@@ -626,7 +626,7 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
-	chunk.SetCardinality(size + 1);
+	chunk.SetChildCardinality(size + 1);
 }
 
 void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -669,7 +669,7 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	auto message_data = FlatVector::GetDataMutable<string_t>(log_entries_buffer->data[col]);
 	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
 
-	log_entries_buffer->SetCardinality(size + 1);
+	log_entries_buffer->SetChildCardinality(size + 1);
 
 	if (size + 1 >= buffer_limit) {
 		if (normalize_contexts) {

@@ -56,11 +56,11 @@ static BoundCastExpression *GetTimestampCast(Expression &expr) {
 unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                   bool &changes_made, bool is_root) {
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
-	D_ASSERT(comparison.children.size() == 2);
+	D_ASSERT(comparison.GetChildren().size() == 2);
 
 	BoundCastExpression *cast_expr = nullptr;
 	Expression *constant_expr = nullptr;
-	for (auto &child : comparison.children) {
+	for (auto &child : comparison.GetChildren()) {
 		if (auto timestamp_cast = GetTimestampCast(*child)) {
 			cast_expr = timestamp_cast;
 		} else if (child->IsFoldable() && child->GetReturnType().id() == LogicalTypeId::DATE) {
@@ -108,8 +108,8 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		                                                    std::move(val_for_comparison));
 		auto gt_eq_expr = BoundComparisonExpression::Create(
 		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(left_copy), std::move(original_val_for_comparison));
-		new_expr->children.push_back(std::move(gt_eq_expr));
-		new_expr->children.push_back(std::move(lt_eq_expr));
+		new_expr->GetChildrenMutable().push_back(std::move(gt_eq_expr));
+		new_expr->GetChildrenMutable().push_back(std::move(lt_eq_expr));
 		return std::move(new_expr);
 	}
 	return nullptr;

@@ -214,7 +214,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// get the aggregate function
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();

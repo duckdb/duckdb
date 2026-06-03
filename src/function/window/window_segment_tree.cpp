@@ -11,16 +11,16 @@ namespace duckdb {
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
 bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
 	//	We can't handle DISTINCT, ORDER BY args or () args (COUNT(*))
-	return !wexpr.distinct && wexpr.arg_orders.empty() && !wexpr.children.empty();
+	return !wexpr.Distinct() && wexpr.ArgOrders().empty() && !wexpr.GetChildren().empty();
 }
 
 WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -293,7 +293,7 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
                                                            idx_t group_count)
     : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
-	D_ASSERT(!aggregator.wexpr.children.empty());
+	D_ASSERT(!aggregator.wexpr.GetChildren().empty());
 
 	// compute space required to store internal nodes of segment tree
 	levels_flat_start.push_back(0);

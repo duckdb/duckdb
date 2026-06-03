@@ -131,7 +131,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, [&](TA left, TB right) {
@@ -144,7 +144,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		TernaryExecutor::Execute<TA, TB, TC, TR>(
@@ -364,7 +364,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
 
@@ -417,7 +417,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
 
@@ -479,7 +479,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 		SetTimeZone(calendar.GetICUCalendar(), string_t("UTC"));
 
@@ -545,7 +545,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		const auto &bucket_width_arg = args.data[0];

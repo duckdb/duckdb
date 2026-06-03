@@ -428,7 +428,6 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 		}
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {

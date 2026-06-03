@@ -92,7 +92,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 		// Shortcut for constant expressions
 		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetAlias(), const_expr.value);
+			bound_parameters.emplace_back(param->GetAlias(), const_expr.GetValue());
 			continue;
 		}
 

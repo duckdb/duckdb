@@ -83,6 +83,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
@@ -214,6 +215,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "worker_threads",
 	    "tracked_metrics",
 	    "debug_verification_mode",
+	    "standard_vector_size",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;

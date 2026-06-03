@@ -2883,13 +2883,11 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
-		chunk.SetCardinality(count);
 		source_state.offset += count;
 		return source_state.offset < gstate.written_files.size() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                         : SourceResultType::FINISHED;
 	}
 
-	chunk.SetCardinality(1);
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));

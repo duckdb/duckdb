@@ -135,7 +135,7 @@ OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChu
 	auto &constant_chunk = scan_input_chunk ? scan_chunk : input;
 	auto col_count = constant_chunk.ColumnCount();
 	auto col_offset = scan_input_chunk ? input.ColumnCount() : 0;
-	output.SetCardinality(constant_chunk.size());
+	output.SetChildCardinality(constant_chunk.size());
 	for (idx_t i = 0; i < col_count; i++) {
 		output.data[col_offset + i].Reference(constant_chunk.data[i]);
 	}

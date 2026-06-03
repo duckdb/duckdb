@@ -74,7 +74,7 @@ static bool PartitionedExecutionGetColumns(LogicalOperator &op, vector<Partition
 				return false;
 			}
 		}
-		for (auto &partition : expr.partitions) {
+		for (auto &partition : expr.Partitions()) {
 			if (partition->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				columns.emplace_back(columns.size(), *partition);
 			}

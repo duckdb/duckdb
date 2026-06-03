@@ -7,7 +7,6 @@ SourceResultType PhysicalDummyScan::GetDataInternal(ExecutionContext &context, D
                                                     OperatorSourceInput &input) const {
 	// return a single row on the first call to the dummy scan
 	FlatVector::SetSize(chunk.data[0], 1);
-	chunk.SetCardinality(1);
 
 	return SourceResultType::FINISHED;
 }
