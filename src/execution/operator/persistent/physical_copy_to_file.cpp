@@ -1232,13 +1232,16 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 		} else if (acquire_write_info) {
 			partition_values = batch_state->values;
 			prepare_batch = true;
-		} else {
-			batch_state->StoreCollection(task.batch_idx, std::move(batch));
 		}
 	}
 
 	const auto row_count = task.end_idx - task.begin_idx;
 	if (!prepare_batch) {
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			auto &current_batch_state = *batch_states[task.thread_idx];
+			current_batch_state.StoreCollection(task.batch_idx, std::move(batch));
+		}
 		batched += row_count;
 		return;
 	}
