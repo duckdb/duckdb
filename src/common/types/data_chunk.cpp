@@ -344,7 +344,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
-	count = optional_idx();
+	count = count_p;
 }
 
 void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
@@ -354,7 +354,7 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		data[c].Slice(other.data[c], offset, end);
 	}
-	count = optional_idx();
+	count = end - offset;
 }
 
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
@@ -369,7 +369,7 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
 	}
-	count = optional_idx();
+	count = count_p;
 }
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
