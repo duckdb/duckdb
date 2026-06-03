@@ -75,6 +75,51 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
+static Value CreateStructMapping(const LogicalType &struct_type, const string &name) {
+	child_list_t<Value> field_mapping;
+
+	auto &struct_children = StructType::GetChildTypes(struct_type);
+	for (auto &[field_name, field_type] : struct_children) {
+		Value mapping;
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			mapping = CreateStructMapping(field_type, field_name);
+		} else {
+			mapping = Value(field_name);
+		}
+		field_mapping.emplace_back(field_name, mapping);
+	}
+	auto struct_value = Value::STRUCT(field_mapping);
+	if (name.empty()) {
+		//! Root column
+		return struct_value;
+	}
+	return Value::STRUCT({{"", Value(name)}, {"", struct_value}});
+}
+
+static Value CreateStructDefault(const Value &value) {
+	child_list_t<Value> field_defaults;
+	auto &field_values = StructValue::GetChildren(value);
+	auto &struct_children = StructType::GetChildTypes(value.type());
+	for (idx_t j = 0; j < field_values.size(); j++) {
+		auto &field_name = struct_children[j].first;
+		auto &field_type = struct_children[j].second;
+		auto &field_value = field_values[j];
+
+		if (field_name == "d") {
+			continue;
+		}
+
+		Value field_default;
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			field_default = CreateStructDefault(field_value);
+		} else {
+			field_default = field_value;
+		}
+		field_defaults.emplace_back(field_name, field_default);
+	}
+	return Value::STRUCT(field_defaults);
+}
+
 PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child) {
 	if (op.column_index_map.empty()) {
 		throw InternalException("No defaults to push");
@@ -103,23 +148,7 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 					children.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
 
 					//! mapping
-					//! FIXME: this needs to be recursive
-					child_list_t<Value> mapping_children;
-					for (auto &[child_name, child_type] : struct_children) {
-						Value child_value;
-						if (child_type.id() == LogicalTypeId::STRUCT) {
-							auto &child_struct_types = StructType::GetChildTypes(child_type);
-							child_list_t<Value> nested_child_values;
-							for (auto &[child_struct_name, _] : child_struct_types) {
-								nested_child_values.emplace_back(child_struct_name, Value(child_struct_name));
-							}
-							child_value = Value::STRUCT({{"", Value(child_name)}, {"", Value::STRUCT(nested_child_values)}});
-						} else {
-							child_value = Value(child_name);
-						}
-						mapping_children.emplace_back(child_name, child_value);
-					}
-					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(mapping_children))));
+					children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "")));
 
 					//! defaults
 					child_list_t<Value> default_children;
@@ -128,20 +157,8 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 					for (idx_t i = 0; i < struct_default_children.size(); i++) {
 						auto &child_default = struct_default_children[i];
 						auto &child_name = struct_default_type_children[i].first;
-						auto &child_type = struct_default_type_children[i].second;
 						if (child_default.type().id() == LogicalTypeId::STRUCT) {
-							child_list_t<Value> nested_default_children;
-							auto &nested_struct_children = StructValue::GetChildren(child_default);
-							auto &nested_struct_type_children = StructType::GetChildTypes(child_default.type());
-							for (idx_t j = 0; j < nested_struct_children.size(); j++) {
-								auto &nested_child_name = nested_struct_type_children[j].first;
-								auto &nested_child_default = nested_struct_children[j];
-								if (nested_child_name == "d") {
-									continue;
-								}
-								nested_default_children.emplace_back(nested_child_name, nested_child_default);
-							}
-							default_children.emplace_back(child_name, Value::STRUCT(nested_default_children));
+							default_children.emplace_back(child_name, CreateStructDefault(child_default));
 						} else {
 							default_children.emplace_back(child_name, child_default);
 						}
