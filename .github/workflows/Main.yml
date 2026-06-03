@@ -443,7 +443,7 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - uses: mymindstorm/setup-emsdk@v16
+    - uses: emscripten-core/setup-emsdk@v16
       with:
         version: latest
 
