@@ -84,14 +84,15 @@ struct StructFieldMapping {
 
 } // namespace
 
-static Value CreateStructMapping(const LogicalType &struct_type, const string &name) {
+static Value CreateStructMapping(const LogicalType &struct_type, const string &name, case_insensitive_map_t<StructFieldMapping> &out_mapping) {
 	child_list_t<Value> field_mapping;
 
 	auto &struct_children = StructType::GetChildTypes(struct_type);
 	for (auto &[field_name, field_type] : struct_children) {
+		auto &child_mapping = out_mapping[field_name];
 		Value mapping;
 		if (field_type.id() == LogicalTypeId::STRUCT) {
-			mapping = CreateStructMapping(field_type, field_name);
+			mapping = CreateStructMapping(field_type, field_name, child_mapping.child_mapping);
 		} else {
 			mapping = Value(field_name);
 		}
@@ -173,11 +174,10 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 					children.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
 
 					//! mapping
-					children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "")));
+					case_insensitive_map_t<StructFieldMapping> mapping;
+					children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "", mapping)));
 
 					//! defaults
-					case_insensitive_map_t<StructFieldMapping> mapping;
-					mapping["b"].child_mapping["d"];
 					children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(bound_default.value, mapping)));
 					select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
 				} else {
