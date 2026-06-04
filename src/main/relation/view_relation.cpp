@@ -44,7 +44,7 @@ unique_ptr<TableRef> ViewRelation::GetTableRef() {
 
 string ViewRelation::GetAlias() {
 	D_ASSERT(!view_name.empty());
-	return view_name;
+	return view_name.GetName();
 }
 
 const vector<ColumnDefinition> &ViewRelation::Columns() {

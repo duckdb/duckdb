@@ -25,7 +25,7 @@ public:
 	~TableFunctionRelation() override {
 	}
 
-	string name;
+	Identifier name;
 	vector<Value> parameters;
 	named_parameter_map_t named_parameters;
 	vector<ColumnDefinition> columns;

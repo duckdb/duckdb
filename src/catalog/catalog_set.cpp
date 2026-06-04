@@ -261,7 +261,8 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		}
 	}
 	if (!owner_entry) {
-		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema, info.owner_name);
+		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema.GetName(),
+		                       info.owner_name.GetName());
 	}
 	write_lock.unlock();
 	catalog.GetDependencyManager()->AddOwnership(transaction, *owner_entry, *entry);

@@ -94,7 +94,8 @@ static void FillFunctionDescriptions(const FunctionDefinition &function, T &info
 		} else if (!examples.empty()) {
 			throw InternalException("Incorrect number of function examples for function '%s'", function.name);
 		}
-		function_description.examples = GetExamplesForFunctionAlias(function.name, info.alias_of, variant_examples);
+		function_description.examples =
+		    GetExamplesForFunctionAlias(function.name, info.alias_of.GetName(), variant_examples);
 		// categories
 		if (variant_index < categories.size()) {
 			function_description.categories = StringUtil::Split(categories[variant_index], ',');

@@ -1,0 +1,191 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/identifier.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb {
+
+//! An Identifier represents a SQL identifier (e.g. a column name, table name, alias, ...).
+//! Unlike a regular string, identifiers compare case-insensitively (using StringUtil::CIEquals).
+//! Internally the identifier is stored as-is (preserving the original casing), but all comparisons,
+//! hashing and ordering are case-insensitive.
+class Identifier {
+public:
+	Identifier() = default;
+	//! Construction from a string is implicit: promoting a raw string to an Identifier is always safe (it never
+	//! loses information). This mirrors std::string (implicit from const char *) and std::filesystem::path.
+	// NOLINTNEXTLINE: implicit construction is intentional
+	Identifier(const char *str) : value(str) { // NOLINT: implicit
+	}
+	// NOLINTNEXTLINE: implicit construction is intentional
+	Identifier(const string &str) : value(str) { // NOLINT: implicit
+	}
+	// NOLINTNEXTLINE: implicit construction is intentional
+	Identifier(string &&str) : value(std::move(str)) { // NOLINT: implicit
+	}
+
+	//! Conversion back to a string is explicit: it discards the case-insensitive semantics, so callers must opt in
+	//! (use GetName() for the raw value). Keeping this explicit is what makes the Identifier type safe.
+	explicit operator const string &() const {
+		return value;
+	}
+
+	//! The raw underlying string (preserving original casing)
+	const string &GetName() const {
+		return value;
+	}
+	string &GetNameMutable() {
+		return value;
+	}
+
+	bool empty() const { // NOLINT: match std::string interface
+		return value.empty();
+	}
+	void clear() { // NOLINT: match std::string interface
+		value.clear();
+	}
+	idx_t size() const { // NOLINT: match std::string interface
+		return value.size();
+	}
+	const char *c_str() const { // NOLINT: match std::string interface
+		return value.c_str();
+	}
+
+	//! Case-insensitive hash of the identifier
+	hash_t Hash() const {
+		return StringUtil::CIHash(value);
+	}
+
+private:
+	string value;
+};
+
+//! Equality (case-insensitive)
+inline bool operator==(const Identifier &a, const Identifier &b) {
+	return StringUtil::CIEquals(a.GetName(), b.GetName());
+}
+inline bool operator==(const Identifier &a, const string &b) {
+	return StringUtil::CIEquals(a.GetName(), b);
+}
+inline bool operator==(const string &a, const Identifier &b) {
+	return StringUtil::CIEquals(a, b.GetName());
+}
+inline bool operator==(const Identifier &a, const char *b) {
+	return StringUtil::CIEquals(a.GetName(), string(b));
+}
+inline bool operator==(const char *a, const Identifier &b) {
+	return StringUtil::CIEquals(string(a), b.GetName());
+}
+
+inline bool operator!=(const Identifier &a, const Identifier &b) {
+	return !(a == b);
+}
+inline bool operator!=(const Identifier &a, const string &b) {
+	return !(a == b);
+}
+inline bool operator!=(const string &a, const Identifier &b) {
+	return !(a == b);
+}
+inline bool operator!=(const Identifier &a, const char *b) {
+	return !(a == b);
+}
+inline bool operator!=(const char *a, const Identifier &b) {
+	return !(a == b);
+}
+
+//! Ordering (case-insensitive)
+inline bool operator<(const Identifier &a, const Identifier &b) {
+	return StringUtil::CILessThan(a.GetName(), b.GetName());
+}
+
+//! String concatenation (std::operator+ is a template and cannot use the implicit conversion, so we provide our own)
+inline string operator+(const Identifier &a, const string &b) {
+	return a.GetName() + b;
+}
+inline string operator+(const string &a, const Identifier &b) {
+	return a + b.GetName();
+}
+inline string operator+(const Identifier &a, const char *b) {
+	return a.GetName() + b;
+}
+inline string operator+(const char *a, const Identifier &b) {
+	return a + b.GetName();
+}
+inline string operator+(const Identifier &a, const Identifier &b) {
+	return a.GetName() + b.GetName();
+}
+inline string operator+(const Identifier &a, char b) {
+	return a.GetName() + b;
+}
+inline string operator+(char a, const Identifier &b) {
+	return a + b.GetName();
+}
+
+struct IdentifierHashFunction {
+	uint64_t operator()(const Identifier &id) const {
+		return id.Hash();
+	}
+};
+
+struct IdentifierEquality {
+	bool operator()(const Identifier &a, const Identifier &b) const {
+		return a == b;
+	}
+};
+
+struct IdentifierCompare {
+	bool operator()(const Identifier &a, const Identifier &b) const {
+		return StringUtil::CILessThan(a.GetName(), b.GetName());
+	}
+};
+
+template <typename T>
+using identifier_map_t = unordered_map<Identifier, T, IdentifierHashFunction, IdentifierEquality>;
+
+using identifier_set_t = unordered_set<Identifier, IdentifierHashFunction, IdentifierEquality>;
+
+template <typename T>
+using identifier_tree_t = map<Identifier, T, IdentifierCompare>;
+
+//! Helper to convert a vector of identifiers to a vector of (raw) strings (for interop with string-based APIs)
+inline vector<string> IdentifiersToStrings(const vector<Identifier> &identifiers) {
+	vector<string> result;
+	result.reserve(identifiers.size());
+	for (auto &identifier : identifiers) {
+		result.push_back(identifier.GetName());
+	}
+	return result;
+}
+
+//! Helper to convert a vector of (raw) strings to a vector of identifiers (to be removed at the end of the rework)
+inline vector<Identifier> StringsToIdentifiers(const vector<string> &strings) {
+	vector<Identifier> result;
+	result.reserve(strings.size());
+	for (auto &str : strings) {
+		result.push_back(str);
+	}
+	return result;
+}
+
+//! Identifier-aware overloads of the invalid-catalog/schema checks. These live here (rather than next to the
+//! string versions in constants.hpp) because constants.hpp is a dependency of this header.
+inline bool IsInvalidCatalog(const Identifier &catalog) {
+	return catalog.empty();
+}
+inline bool IsInvalidSchema(const Identifier &schema) {
+	return schema.empty();
+}
+
+} // namespace duckdb

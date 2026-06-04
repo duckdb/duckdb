@@ -99,7 +99,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 }
 
 string TableFunctionRelation::GetAlias() {
-	return name;
+	return name.GetName();
 }
 
 const vector<ColumnDefinition> &TableFunctionRelation::Columns() {

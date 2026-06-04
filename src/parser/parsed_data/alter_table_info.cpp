@@ -26,7 +26,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog.GetName(), schema.GetName(),
-	                                                      name.GetName(), owner_schema, owner_name, if_not_found);
+	                                                      name.GetName(), owner_schema.GetName(), owner_name.GetName(),
+	                                                      if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -518,8 +519,8 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
-	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
-	                                                      pk_keys, fk_keys, type);
+	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table.GetName(), pk_columns,
+	                                                      fk_columns, pk_keys, fk_keys, type);
 }
 
 string AlterForeignKeyInfo::ToString() const {
@@ -556,7 +557,7 @@ RenameViewInfo::~RenameViewInfo() {
 }
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
+	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name.GetName());
 }
 
 string RenameViewInfo::ToString() const {

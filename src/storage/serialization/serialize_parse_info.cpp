@@ -273,7 +273,7 @@ unique_ptr<AlterTableInfo> AddFieldInfo::Deserialize(Deserializer &deserializer)
 
 void AlterForeignKeyInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(400, "fk_table", fk_table);
+	serializer.WritePropertyWithDefault<Identifier>(400, "fk_table", fk_table);
 	serializer.WritePropertyWithDefault<vector<string>>(401, "pk_columns", pk_columns);
 	serializer.WritePropertyWithDefault<vector<string>>(402, "fk_columns", fk_columns);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(403, "pk_keys", pk_keys);
@@ -283,7 +283,7 @@ void AlterForeignKeyInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<AlterTableInfo> AlterForeignKeyInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<AlterForeignKeyInfo>(new AlterForeignKeyInfo());
-	deserializer.ReadPropertyWithDefault<string>(400, "fk_table", result->fk_table);
+	deserializer.ReadPropertyWithDefault<Identifier>(400, "fk_table", result->fk_table);
 	deserializer.ReadPropertyWithDefault<vector<string>>(401, "pk_columns", result->pk_columns);
 	deserializer.ReadPropertyWithDefault<vector<string>>(402, "fk_columns", result->fk_columns);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(403, "pk_keys", result->pk_keys);
@@ -340,15 +340,15 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &deser
 void ChangeOwnershipInfo::Serialize(Serializer &serializer) const {
 	AlterInfo::Serialize(serializer);
 	serializer.WriteProperty<CatalogType>(300, "entry_catalog_type", entry_catalog_type);
-	serializer.WritePropertyWithDefault<string>(301, "owner_schema", owner_schema);
-	serializer.WritePropertyWithDefault<string>(302, "owner_name", owner_name);
+	serializer.WritePropertyWithDefault<Identifier>(301, "owner_schema", owner_schema);
+	serializer.WritePropertyWithDefault<Identifier>(302, "owner_name", owner_name);
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ChangeOwnershipInfo>(new ChangeOwnershipInfo());
 	deserializer.ReadProperty<CatalogType>(300, "entry_catalog_type", result->entry_catalog_type);
-	deserializer.ReadPropertyWithDefault<string>(301, "owner_schema", result->owner_schema);
-	deserializer.ReadPropertyWithDefault<string>(302, "owner_name", result->owner_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(301, "owner_schema", result->owner_schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(302, "owner_name", result->owner_name);
 	return std::move(result);
 }
 
@@ -369,13 +369,13 @@ unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
 
 void CopyDatabaseInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "target_database", target_database);
+	serializer.WritePropertyWithDefault<Identifier>(200, "target_database", target_database);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", entries);
 }
 
 unique_ptr<ParseInfo> CopyDatabaseInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CopyDatabaseInfo>(new CopyDatabaseInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "target_database", result->target_database);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "target_database", result->target_database);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", result->entries);
 	return std::move(result);
 }
@@ -585,12 +585,12 @@ unique_ptr<AlterTableInfo> RenameTableInfo::Deserialize(Deserializer &deserializ
 
 void RenameViewInfo::Serialize(Serializer &serializer) const {
 	AlterViewInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(400, "new_view_name", new_view_name);
+	serializer.WritePropertyWithDefault<Identifier>(400, "new_view_name", new_view_name);
 }
 
 unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RenameViewInfo>(new RenameViewInfo());
-	deserializer.ReadPropertyWithDefault<string>(400, "new_view_name", result->new_view_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(400, "new_view_name", result->new_view_name);
 	return std::move(result);
 }
 

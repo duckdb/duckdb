@@ -551,7 +551,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
-	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
+	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name.GetName();
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {

@@ -1067,7 +1067,7 @@
       {
         "id": 3,
         "name": "database_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 4,

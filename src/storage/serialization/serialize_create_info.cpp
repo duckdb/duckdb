@@ -209,7 +209,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 
 void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "trigger_name", trigger_name);
+	serializer.WritePropertyWithDefault<Identifier>(200, "trigger_name", trigger_name);
 	serializer.WritePropertyWithDefault<unique_ptr<BaseTableRef>>(201, "base_table", base_table);
 	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
 	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
@@ -222,7 +222,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "trigger_name", result->trigger_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "trigger_name", result->trigger_name);
 	auto base_table = deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table");
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
 	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);

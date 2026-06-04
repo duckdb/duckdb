@@ -23,7 +23,7 @@ struct ExportedTableData {
 	Identifier schema_name;
 
 	//! Name of the database
-	string database_name;
+	Identifier database_name;
 
 	//! Path to be exported
 	string file_path;

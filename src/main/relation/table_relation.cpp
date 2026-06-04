@@ -35,7 +35,7 @@ unique_ptr<TableRef> TableRelation::GetTableRef() {
 }
 
 string TableRelation::GetAlias() {
-	return description->table;
+	return description->table.GetName();
 }
 
 const vector<ColumnDefinition> &TableRelation::Columns() {

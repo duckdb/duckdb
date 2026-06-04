@@ -248,7 +248,7 @@
       {
         "id": 400,
         "name": "fk_table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -332,12 +332,12 @@
       {
         "id": 301,
         "name": "owner_schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 302,
         "name": "owner_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -387,7 +387,7 @@
       {
         "id": 400,
         "name": "new_view_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -461,7 +461,7 @@
       {
         "id": 200,
         "name": "target_database",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

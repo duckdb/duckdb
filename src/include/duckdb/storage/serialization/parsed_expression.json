@@ -379,7 +379,7 @@
       {
         "id": 200,
         "name": "relation_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

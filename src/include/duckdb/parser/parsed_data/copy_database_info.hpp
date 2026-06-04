@@ -27,7 +27,7 @@ public:
 	}
 
 	// The destination database to which catalog entries are being copied
-	string target_database;
+	Identifier target_database;
 
 	// The catalog entries that are going to be created in the destination DB
 	vector<unique_ptr<CreateInfo>> entries;

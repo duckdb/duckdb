@@ -29,8 +29,8 @@ struct ChangeOwnershipInfo : public AlterInfo {
 	// here it is only possible to know the type of who is to be owned
 	CatalogType entry_catalog_type;
 
-	string owner_schema;
-	string owner_name;
+	Identifier owner_schema;
+	Identifier owner_name;
 
 public:
 	CatalogType GetCatalogType() const override;
@@ -338,7 +338,7 @@ struct AlterForeignKeyInfo : public AlterTableInfo {
 	                    vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys, AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
 
-	string fk_table;
+	Identifier fk_table;
 	vector<string> pk_columns;
 	vector<string> fk_columns;
 	vector<PhysicalIndex> pk_keys;
@@ -423,7 +423,7 @@ struct RenameViewInfo : public AlterViewInfo {
 	~RenameViewInfo() override;
 
 	//! Relation new name
-	string new_view_name;
+	Identifier new_view_name;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

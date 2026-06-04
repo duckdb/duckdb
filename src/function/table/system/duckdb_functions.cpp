@@ -662,7 +662,7 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 
 	// alias_of, LogicalType::VARCHAR
 	output.data[col++].Append(
-	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of));
+	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of.GetName()));
 
 	// function_type, LogicalType::VARCHAR
 	output.data[col++].Append(Value(OP::GetFunctionType()));

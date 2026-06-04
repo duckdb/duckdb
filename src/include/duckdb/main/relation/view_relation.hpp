@@ -18,8 +18,8 @@ public:
 	ViewRelation(const shared_ptr<RelationContextWrapper> &context, string schema_name, string view_name);
 	ViewRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableRef> ref, const string &view_name);
 
-	string schema_name;
-	string view_name;
+	Identifier schema_name;
+	Identifier view_name;
 	vector<ColumnDefinition> columns;
 	unique_ptr<TableRef> premade_tableref;
 

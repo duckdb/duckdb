@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -21,11 +22,11 @@ public:
 
 public:
 	//! The database of the table.
-	string database;
+	Identifier database;
 	//! The schema of the table.
-	string schema;
+	Identifier schema;
 	//! The name of the table.
-	string table;
+	Identifier table;
 	//! True, if the catalog is readonly.
 	bool readonly;
 	//! The columns of the table.

@@ -350,7 +350,7 @@
       {
         "id": 200,
         "name": "trigger_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

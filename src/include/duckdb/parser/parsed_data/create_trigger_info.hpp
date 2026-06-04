@@ -19,7 +19,7 @@ struct CreateTriggerInfo : public CreateInfo {
 	CreateTriggerInfo();
 
 	//! Trigger name
-	string trigger_name;
+	Identifier trigger_name;
 	//! The table the trigger is on
 	unique_ptr<BaseTableRef> base_table;
 	//! When the trigger fires (BEFORE/AFTER/INSTEAD OF)
