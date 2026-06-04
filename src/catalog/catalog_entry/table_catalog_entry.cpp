@@ -355,7 +355,6 @@ bool TableCatalogEntry::HasPrimaryKey() const {
 
 LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &column) const {
 	return column.Type();
-	// return LogicalType::INVALID;
 }
 
 unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientContext &context,
