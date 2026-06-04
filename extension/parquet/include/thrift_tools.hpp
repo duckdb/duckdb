@@ -39,27 +39,33 @@ struct ReadHead {
 
 	// Materialize [buffer_ptr], should call before access.
 	// TODO(hjiang): Currently it's only used for `Prefetch` operation, should be able to save one copy.
-	void Materialize() {
+	void Materialize(Allocator &allocator) {
 		if (handle_group.GetHandles().size() == 1) {
 			buffer_ptr = handle_group.Ptr();
 		} else {
-			local_buffer = Allocator::DefaultAllocator().Allocate(size);
+			local_buffer = allocator.Allocate(size);
 			handle_group.CopyTo(local_buffer.get(), size);
 			buffer_ptr = local_buffer.get();
 		}
 	}
 };
 
-// Comparator for ReadHeads that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
 struct ReadHeadComparator {
-	static constexpr uint64_t ALLOW_GAP = 1 << 14; // 16 KiB
+	static constexpr uint64_t DEFAULT_ACCEPTED_COLUMN_GAP = 1 << 14; // 16 KiB
+
+	ReadHeadComparator() = default;
+	explicit ReadHeadComparator(uint64_t accepted_column_gap_p) : accepted_column_gap(accepted_column_gap_p) {
+	}
+
+	uint64_t accepted_column_gap = DEFAULT_ACCEPTED_COLUMN_GAP;
+
 	bool operator()(const ReadHead *a, const ReadHead *b) const {
 		auto a_start = a->location;
 		auto a_end = a->location + a->size;
 		auto b_start = b->location;
 
-		if (a_end <= NumericLimits<idx_t>::Maximum() - ALLOW_GAP) {
-			a_end += ALLOW_GAP;
+		if (a_end <= NumericLimits<idx_t>::Maximum() - accepted_column_gap) {
+			a_end += accepted_column_gap;
 		}
 
 		return a_start < b_start && a_end < b_start;
@@ -70,7 +76,9 @@ struct ReadHeadComparator {
 // 1: register all ranges that will be read, merging ranges that are consecutive
 // 2: prefetch all registered ranges
 struct ReadAheadBuffer {
-	explicit ReadAheadBuffer(CachingFileHandle &file_handle_p) : file_handle(file_handle_p) {
+	explicit ReadAheadBuffer(CachingFileHandle &file_handle_p,
+	                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
+	    : merge_set(ReadHeadComparator(accepted_column_gap)), file_handle(file_handle_p) {
 	}
 
 	// The list of read heads
@@ -81,6 +89,11 @@ struct ReadAheadBuffer {
 	CachingFileHandle &file_handle;
 
 	idx_t total_size = 0;
+
+	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
+		D_ASSERT(merge_set.empty());
+		merge_set = std::set<ReadHead *, ReadHeadComparator>(ReadHeadComparator(accepted_column_gap));
+	}
 
 	// Add a read head to the prefetching list
 	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true) {
@@ -131,7 +144,7 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
-			read_head.Materialize();
+			read_head.Materialize(file_handle.GetBufferAllocator());
 			read_head.data_isset = true;
 		}
 	}
@@ -141,9 +154,19 @@ class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTra
 public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
-	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p)
+	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p,
+	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
 	    : file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
-	      ra_buffer(ReadAheadBuffer(file_handle)), prefetch_mode(prefetch_mode_p) {
+	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), prefetch_mode(prefetch_mode_p) {
+	}
+
+	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
+		ra_buffer.SetAcceptedColumnGap(accepted_column_gap);
+	}
+
+	// The accepted column gap currently used to coalesce adjacent ranges.
+	uint64_t GetAcceptedColumnGap() const {
+		return ra_buffer.merge_set.key_comp().accepted_column_gap;
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -153,7 +176,7 @@ public:
 
 			if (!prefetch_buffer->data_isset) {
 				prefetch_buffer->handle_group = file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
-				prefetch_buffer->Materialize();
+				prefetch_buffer->Materialize(file_handle.GetBufferAllocator());
 				prefetch_buffer->data_isset = true;
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);

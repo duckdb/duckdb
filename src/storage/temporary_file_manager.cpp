@@ -6,6 +6,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -140,6 +141,10 @@ bool BlockIndexManager::RemoveIndex(idx_t index, const TemporaryBufferSize size)
 
 idx_t BlockIndexManager::GetMaxIndex() const {
 	return max_index;
+}
+
+idx_t BlockIndexManager::GetUsedBlockCount() const {
+	return indexes_in_use.size();
 }
 
 bool BlockIndexManager::HasFreeBlocks() const {
@@ -318,7 +323,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetMaxIndex());
+	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
 	return info;
 }
 
@@ -328,7 +333,8 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	if (db.config.options.use_direct_io) {
+	// Temp files have no per-file IO_MODE; they follow the global default_io_mode setting.
+	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
 		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	handle = fs.OpenFile(path, open_flags);

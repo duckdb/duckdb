@@ -11,7 +11,7 @@ static vector<LogicalType> GetPayloadTypes(const vector<unique_ptr<Expression>> 
 	vector<LogicalType> payload_types;
 	for (auto &aggr_expr : aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-		for (auto &child : aggr.children) {
+		for (auto &child : aggr.GetChildren()) {
 			payload_types.push_back(child->GetReturnType());
 		}
 	}
@@ -69,7 +69,7 @@ struct LimitedDistinctLocalSinkState : public LocalSinkState {
 		// Build payload executor for aggregate children
 		for (auto &aggr_expr : op.aggregates) {
 			auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-			for (auto &child : aggr.children) {
+			for (auto &child : aggr.GetChildren()) {
 				payload_executor.AddExpression(*child);
 			}
 		}
@@ -216,7 +216,6 @@ SourceResultType PhysicalLimitedDistinct::GetDataInternal(ExecutionContext &cont
 		chunk.data[col].Reference(gstate_source.payload_chunk.data[i]);
 		col++;
 	}
-	chunk.SetCardinality(gstate_source.group_chunk.size());
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

@@ -27,5 +27,13 @@
         "example": "bitstring('1010'::BIT, 7)",
         "struct": "BitStringFun",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "bitstring_byte_comparable",
+        "parameters": "bitstring",
+        "description": "Converts a BIT to a binary comparable sort key",
+        "example": "bitstring_byte_comparable('1010'::BIT)",
+        "struct": "BitStringSortKeyFun",
+        "type": "scalar_function"
     }
 ]

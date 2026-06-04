@@ -141,7 +141,7 @@ struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
 
 	RequestType type;
-	const string &url;
+	string url;
 	string path;
 	string proto_host_port;
 	HTTPHeaders headers;
@@ -149,10 +149,15 @@ struct BaseRequest {
 	//! Whether or not to return failed requests (instead of throwing)
 	bool try_request = false;
 
-	// Requests will optionally contain their timings
+	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
 	timestamp_t request_start;
 	timestamp_t request_end;
+
+	//! Optional per-request network measurements, populated by clients that measure them.
+	bool have_time_to_fst_byte = false;
+	double time_to_fst_byte_sec = 0;
+	idx_t bytes_received = 0;
 
 	template <class TARGET>
 	TARGET &Cast() {

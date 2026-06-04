@@ -144,6 +144,23 @@ SELECT 7.4e-323::BIT;
 ----
 0000000000000000000000000000000000000000000000000000000000001111
 
+#              casting from string type
+# ---------------------------------------------------
+query I
+SELECT ''::BIT;
+----
+0
+
+query I
+SELECT bit_length(''::BIT);
+----
+1
+
+query I
+SELECT TRY_CAST('' AS BIT);
+----
+0
+
 #  bitstrings that are too large for casted-to type
 # ---------------------------------------------------
 statement error

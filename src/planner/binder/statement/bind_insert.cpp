@@ -6,6 +6,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -127,26 +128,26 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.children) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			DoUpdateSetQualify(child, table_name, lambda_params);
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not qualify them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, qualify both LHS and RHS.
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.LeftMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.RightMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 			continue;
 		}
 
@@ -158,9 +159,9 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 		}
 
 		// Only qualify in the RHS of the expression.
-		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-			DoUpdateSetQualify(child, table_name, lambda_params);
-		});
+		ParsedExpressionIterator::EnumerateChildren(
+		    *lambda_expr.RightMutable(),
+		    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 
 		lambda_params.pop_back();
 	}
@@ -319,7 +320,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
 	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias : node.table;
-	merge_into->target = std::move(node.table_ref);
+	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
 	auto &columns = table.GetColumns();
@@ -373,7 +374,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			join_condition =
 			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(join_conditions));
 		}
-		merge_into->join_condition = std::move(join_condition);
+		merge_into->node->join_condition = std::move(join_condition);
 
 		if (!found_matching_indexes) {
 			throw BinderException("There are no UNIQUE/PRIMARY KEY constraints that refer to this table, specify ON "
@@ -427,7 +428,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			                      "CONSTRAINT or INDEX");
 		}
 		all_distinct_on_columns.push_back(on_conflict_info.indexed_columns);
-		merge_into->using_columns = std::move(on_conflict_info.indexed_columns);
+		merge_into->node->using_columns = std::move(on_conflict_info.indexed_columns);
 	}
 
 	// expand any default values
@@ -463,7 +464,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			unordered_set<string> set_columns;
+			case_insensitive_set_t set_columns;
 			for (auto &set_col : node.columns) {
 				set_columns.insert(set_col);
 			}
@@ -509,7 +510,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		source = make_uniq<SubqueryRef>(std::move(distinct_stmt), "excluded");
 	}
 
-	merge_into->source = std::move(source);
+	merge_into->node->source = std::move(source);
 
 	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
 		D_ASSERT(!on_conflict_info.set_info);
@@ -526,7 +527,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	insert_action->action_type = MergeActionType::MERGE_INSERT;
 	insert_action->column_order = node.column_order;
 
-	merge_into->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
+	merge_into->node->actions[MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET].push_back(std::move(insert_action));
 
 	if (on_conflict_info.condition) {
 		throw BinderException("ON CONFLICT WHERE clause is only supported in DO UPDATE SET ... WHERE ...\nThe WHERE "
@@ -551,12 +552,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			update_action->update_info = std::move(on_conflict_info.set_info);
 		}
 
-		merge_into->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
+		merge_into->node->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
 	}
 
 	// move over extra properties
-	merge_into->cte_map = std::move(node.cte_map);
-	merge_into->returning_list = std::move(node.returning_list);
+	merge_into->node->returning_list = std::move(node.returning_list);
 	return merge_into;
 }
 

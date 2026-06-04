@@ -9,7 +9,7 @@ void BoxRendererContext::CastToVarchar(const Vector &source, Vector &result, idx
 	DataChunk source_chunk;
 	source_chunk.InitializeEmpty({source.GetType()});
 	source_chunk.data[0].Reference(source);
-	source_chunk.SetCardinality(count);
+	source_chunk.SetChildCardinality(count);
 
 	DataChunk result_chunk;
 	result_chunk.Initialize(GetAllocator(), {LogicalType::VARCHAR});

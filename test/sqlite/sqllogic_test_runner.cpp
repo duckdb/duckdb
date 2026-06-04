@@ -175,6 +175,31 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 	return linked_result;
 }
 
+NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, bool load_extensions) {
+	NewDatabaseConnection result;
+	try {
+		result.db = make_uniq<DuckDB>(db_path, config.get());
+
+		// always load core functions
+		auto &test_config = TestConfiguration::Get();
+		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
+			SQLLogicTestRunner::LoadExtension(*result.db, ext);
+		}
+	} catch (std::exception &ex) {
+		ErrorData err(ex);
+		SQLLogicTestLogger::LoadDatabaseFail(file_name, db_path, err.Message());
+		FAIL();
+	}
+	result.con = ConnectToDatabase(*result.db);
+	// load any previously loaded extensions again
+	if (load_extensions) {
+		for (auto &extension : extensions) {
+			SQLLogicTestRunner::LoadExtension(*result.db, extension);
+		}
+	}
+	return result;
+}
+
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
@@ -184,55 +209,42 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	try {
-		db = make_uniq<DuckDB>(dbpath, config.get());
-		// always load core functions
-
-		auto &test_config = TestConfiguration::Get();
-		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
-			SQLLogicTestRunner::LoadExtension(*db, ext);
-		}
-	} catch (std::exception &ex) {
-		ErrorData err(ex);
-		SQLLogicTestLogger::LoadDatabaseFail(file_name, dbpath, err.Message());
-		FAIL();
-	}
-	Reconnect();
-
-	// load any previously loaded extensions again
-	if (load_extensions) {
-		for (auto &extension : extensions) {
-			SQLLogicTestRunner::LoadExtension(*db, extension);
-		}
-	}
+	auto result = CreateDatabase(dbpath, load_extensions);
+	db = std::move(result.db);
+	con = std::move(result.con);
 }
 
-void SQLLogicTestRunner::Reconnect() {
-	con = make_uniq<Connection>(*db);
+unique_ptr<Connection> SQLLogicTestRunner::ConnectToDatabase(DuckDB &db_ref) {
+	auto result = make_uniq<Connection>(db_ref);
 	if (original_sqlite_test) {
-		con->Query("SET integer_division=true");
+		result->Query("SET integer_division=true");
 	}
-	con->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
+	result->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	con->Query("SET pivot_filter_threshold=0");
+	result->Query("SET pivot_filter_threshold=0");
 #endif
-	auto &client_config = ClientConfig::GetConfig(*con->context);
+	auto &client_config = ClientConfig::GetConfig(*result->context);
 	client_config.enable_progress_bar = true;
 	client_config.print_progress_bar = false;
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
-		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
+		auto res1 = result->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
 	}
 
 	auto &test_config = TestConfiguration::Get();
 	auto init_cmd = test_config.OnInitCommand() + ";" + test_config.OnConnectionCommand();
 	if (!init_cmd.empty()) {
 		test_config.ProcessPath(init_cmd, file_name);
-		auto res = con->Query(ReplaceKeywords(init_cmd));
+		auto res = result->Query(ReplaceKeywords(init_cmd));
 		if (res->HasError()) {
 			FAIL("Startup queries provided via on_init failed: " + res->GetError());
 		}
 	}
+	return result;
+}
+
+void SQLLogicTestRunner::Reconnect() {
+	con = ConnectToDatabase(*db);
 }
 
 void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement,
@@ -665,6 +677,16 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 	}
 }
 
+void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string &script) {
+	if (!dbpath.empty() || !config->options.use_temporary_directory || config->options.temporary_directory != ".tmp") {
+		return;
+	}
+	auto normalized_script = StringUtil::Replace(script, "\\", "/");
+	auto temp_directory_name = StringUtil::Replace(normalized_script, "/", "_");
+	auto temp_directory = TestJoinPath(TestJoinPath(TestDirectoryPath(), "sqllogic_temp"), temp_directory_name);
+	config->SetOptionByName("temp_directory", temp_directory);
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
@@ -697,6 +719,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
 		ignore_error_messages.insert(ignore);
 	}
+
+	// In-memory sqllogictests otherwise share ".tmp" across unittest processes.
+	// Give each script its own spill directory under the per-process TEST_DIR.
+	ConfigureDefaultInMemoryTemporaryDirectory(script);
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
@@ -966,6 +992,18 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					parser.Fail("Failed to set seed: %s", res->GetError());
 				}
 				skip_reload = true;
+			} else if (token.parameters[0] == "variable") {
+				if (token.parameters.size() != 3) {
+					parser.Fail("set variable requires two parameters (name value)");
+				}
+				auto &var_name = token.parameters[1];
+				auto var_value = token.parameters[2];
+				if (IsVariableReplacement(var_value)) {
+					string variable_name;
+					auto val = GetVariableReplacement(var_value, variable_name);
+					var_value = val.ToString();
+				}
+				environment_variables[var_name] = var_value;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
@@ -1200,6 +1238,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto command = make_uniq<ContinueCommand>(*this);
 			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_INCLUDE) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("Expected include <path>");
+			}
+			parser.IncludeFile(token.parameters[0]);
 		}
 	}
 	if (InLoop()) {

@@ -557,6 +557,29 @@ ParquetVersion EnumUtil::FromString<ParquetVersion>(const char *value) {
 }
 
 template <>
+const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStrategyOption value) {
+	switch (value) {
+	case ParquetPrefetchStrategyOption::AUTO:
+		return "AUTO";
+	case ParquetPrefetchStrategyOption::WHOLE_GROUP:
+		return "WHOLE_GROUP";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO")) {
+		return ParquetPrefetchStrategyOption::AUTO;
+	}
+	if (StringUtil::Equals(value, "WHOLE_GROUP")) {
+		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 	switch (value) {
 	case GeoParquetVersion::NONE:
@@ -937,7 +960,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	CopyFunction function("parquet");
-	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;

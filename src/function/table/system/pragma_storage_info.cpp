@@ -224,7 +224,6 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &context,

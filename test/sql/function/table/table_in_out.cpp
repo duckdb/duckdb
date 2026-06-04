@@ -53,10 +53,10 @@ struct ThrottlingSum {
 		if (PhysicalOperator::SelectOperatorCachingMode(context) == OperatorCachingMode::UNORDERED) {
 			// Caching is allowed
 			if (local_state.current_idx < local_state.row_sums.size()) {
-				output.SetCardinality(1);
 				output.data[0].Append(Value(local_state.row_sums[local_state.current_idx++]));
+				output.SetChildCardinality(1);
 			} else {
-				output.SetCardinality(0);
+				output.SetChildCardinality(0);
 			}
 		} else {
 			// Caching is not allowed, we should emit everything!
@@ -66,7 +66,7 @@ struct ThrottlingSum {
 				sum_col.Append(Value(local_state.row_sums[local_state.current_idx + i]));
 			}
 			local_state.current_idx += to_emit;
-			output.SetCardinality(to_emit);
+			output.SetChildCardinality(to_emit);
 		}
 
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -77,8 +77,8 @@ struct ThrottlingSum {
 		auto &local_state = data_p.local_state->Cast<ThrottlingSum::ThrottlingSumLocalData>();
 
 		if (local_state.current_idx < local_state.row_sums.size()) {
-			output.SetCardinality(1);
 			output.data[0].Append(Value(local_state.row_sums[local_state.current_idx++]));
+			output.SetChildCardinality(1);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		} else {
 			return OperatorFinalizeResultType::FINISHED;
@@ -123,7 +123,7 @@ struct LateralStructEcho {
 			output.data[1].Append(children[1]);
 			output.data[2].Append(children[2]);
 		}
-		output.SetCardinality(input.size());
+		output.SetChildCardinality(input.size());
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 

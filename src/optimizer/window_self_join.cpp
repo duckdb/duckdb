@@ -8,49 +8,47 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 namespace duckdb {
 
 static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
-	auto agg_func = *w_expr.aggregate;
+	auto agg_func = *w_expr.AggregateFunction();
 	unique_ptr<FunctionData> bind_info;
-	if (w_expr.bind_info) {
-		bind_info = w_expr.bind_info->Copy();
+	if (w_expr.BindInfo()) {
+		bind_info = w_expr.BindInfo()->Copy();
 	} else {
 		bind_info = nullptr;
 	}
 
 	vector<unique_ptr<Expression>> children;
-	for (auto &child : w_expr.children) {
+	for (auto &child : w_expr.GetChildren()) {
 		auto child_copy = child->Copy();
 		children.push_back(std::move(child_copy));
 	}
 
 	unique_ptr<Expression> filter;
-	if (w_expr.filter_expr) {
-		filter = w_expr.filter_expr->Copy();
+	if (w_expr.Filter()) {
+		filter = w_expr.Filter()->Copy();
 	}
 
-	auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+	auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
 
 	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
 	                                                  std::move(bind_info), aggr_type);
 
-	if (!w_expr.arg_orders.empty()) {
-		result->order_bys = make_uniq<BoundOrderModifier>();
-		auto &orders = result->order_bys->orders;
-		for (auto &order : w_expr.arg_orders) {
+	if (!w_expr.ArgOrders().empty()) {
+		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+		auto &orders = result->GetOrderBysMutable()->orders;
+		for (auto &order : w_expr.ArgOrders()) {
 			auto order_copy = order.Copy();
 			orders.emplace_back(std::move(order_copy));
 		}
-	} else if (!w_expr.orders.empty()) {
+	} else if (!w_expr.OrderBy().empty()) {
 		//	If the frame was ordered, copy the frame ordering to the aggregate function
-		result->order_bys = make_uniq<BoundOrderModifier>();
-		auto &orders = result->order_bys->orders;
-		for (auto &order : w_expr.orders) {
+		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+		auto &orders = result->GetOrderBysMutable()->orders;
+		for (auto &order : w_expr.OrderBy()) {
 			auto order_copy = order.Copy();
 			orders.emplace_back(std::move(order_copy));
 		}
@@ -79,12 +77,12 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	//	We can only accept ORDER BY clauses if the frame is the entire partition
 	//	In that case, we will have to move the ordering clauses into the aggregate.
 	//	ROWS framing is excluded because the frame depends on physical row position even without ORDER BY.
-	switch (w_expr.start) {
+	switch (w_expr.WindowStart()) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
 	case WindowBoundary::CURRENT_ROW_GROUPS:
-		if (!w_expr.orders.empty()) {
+		if (!w_expr.OrderBy().empty()) {
 			return false;
 		}
 		break;
@@ -92,22 +90,22 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 		return false;
 	}
 
-	switch (w_expr.end) {
+	switch (w_expr.WindowEnd()) {
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
 	case WindowBoundary::CURRENT_ROW_GROUPS:
-		if (!w_expr.orders.empty()) {
+		if (!w_expr.OrderBy().empty()) {
 			return false;
 		}
 		break;
 	default:
 		return false;
 	}
-	if (w_expr.partitions.empty()) {
+	if (w_expr.Partitions().empty()) {
 		return false;
 	}
-	if (w_expr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+	if (w_expr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
@@ -115,6 +113,24 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	}
 
 	return true;
+}
+
+bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		if (!op.children.empty()) {
+			return CanOptimize(*op.children[0]);
+		}
+		return true;
+	default:
+		break;
+	}
+	return false;
 }
 
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
@@ -125,6 +141,10 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
 
+		if (!CanOptimize(*window.children[0])) {
+			return op;
+		}
+
 		auto &w_expr0 = window.expressions[0]->Cast<BoundWindowExpression>();
 		for (auto &expr : window.expressions) {
 			auto &w_expr = expr->Cast<BoundWindowExpression>();
@@ -132,7 +152,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 				return op;
 			}
 		}
-		auto &partitions = w_expr0.partitions;
+		auto &partitions = w_expr0.Partitions();
 
 		// --- Transformation ---
 		// try to copy the LHS
@@ -142,7 +162,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		LogicalOperatorDeepCopy deep_copy(optimizer.binder, nullptr);
 		try {
 			copy_child = deep_copy.DeepCopy(window.children[0]);
-		} catch (NotImplementedException &ex) {
+		} catch (std::exception &ex) {
 			// failed to copy the LHS - cannot run this optimizer
 			return op;
 		}

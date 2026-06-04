@@ -24,6 +24,7 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
@@ -79,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetCardinality(chunk.size() + 1);
+	chunk.SetChildCardinality(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -368,7 +369,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
 	cast_chunk.Initialize(allocator, appender_types);
-	cast_chunk.SetCardinality(size);
+	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
 		if (chunk_p.data[i].GetType() == appender_types[i]) {
@@ -458,7 +459,7 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	case StatementType::UPDATE_STATEMENT:
 		return statement.Cast<UpdateStatement>().node->cte_map;
 	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
+		return statement.Cast<MergeIntoStatement>().node->cte_map;
 	default:
 		throw InvalidInputException(
 		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");

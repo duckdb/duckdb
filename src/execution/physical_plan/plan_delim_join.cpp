@@ -45,7 +45,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 		D_ASSERT(delim_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = delim_expr->Cast<BoundReferenceExpression>();
 		delim_types.push_back(bound_ref.GetReturnType());
-		distinct_groups.push_back(make_uniq<BoundReferenceExpression>(bound_ref.GetReturnType(), bound_ref.index));
+		distinct_groups.push_back(make_uniq<BoundReferenceExpression>(bound_ref.GetReturnType(), bound_ref.Index()));
 	}
 
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk

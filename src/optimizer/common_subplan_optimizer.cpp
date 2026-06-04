@@ -332,17 +332,17 @@ private:
 
 		// Replace column binding
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+			auto &col_ref = expr.Cast<BoundColumnRefExpression>();
 			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-			                            ? column_binding.table_index
-			                            : restore_original_table_index.at(column_binding.table_index);
+			                            ? col_ref.Binding().table_index
+			                            : restore_original_table_index.at(col_ref.Binding().table_index);
 			auto &table_map = table_index_map.at(lookup_idx);
 			if (!table_map.Empty<TYPE>()) {
 				// Replace column index
-				column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
+				col_ref.BindingMutable().column_index = table_map.Get<TYPE>(col_ref.Binding().column_index);
 			}
 			// Replace table index
-			column_binding.table_index = table_index_mapping.at(column_binding.table_index);
+			col_ref.BindingMutable().table_index = table_index_mapping.at(col_ref.Binding().table_index);
 		}
 
 		// Replace default fields
