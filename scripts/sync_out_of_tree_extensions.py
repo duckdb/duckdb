@@ -146,7 +146,7 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
-        run_cmd(['git', 'apply', '--index', str(patch_file)], cwd=ext_dir)
+        run_cmd(['git', 'apply', '--index', '--whitespace=fix', str(patch_file)], cwd=ext_dir)
         run_cmd(
             [
                 'git',

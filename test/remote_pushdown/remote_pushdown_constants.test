@@ -1,0 +1,43 @@
+# name: test/remote_pushdown/remote_pushdown_constants.test
+# description: Test basic remote pushdown of constants into MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+# create a table
+statement ok
+CREATE OR REPLACE TABLE s.small_tbl AS FROM range(10) t(i)
+
+# SUM is supported, so we can push it down, but not if there are unsupported literals attached to it
+# small numbers can be pushed down
+query II
+SELECT SUM(i), 1000000 FROM s.small_tbl
+----
+45	1000000
+
+query II
+explain SELECT SUM(i), 1000000 FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# large numbers cannot be
+query II
+SELECT SUM(i), 100000000000000000000000000000 FROM s.small_tbl
+----
+45	100000000000000000000000000000
+
+# unsupported types
+query II
+SELECT SUM(i), interval '1 day' FROM s.small_tbl
+----
+45	1 day
+
+query II
+SELECT SUM(i), date '2000-01-01' FROM s.small_tbl
+----
+45	2000-01-01

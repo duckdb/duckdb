@@ -1,0 +1,36 @@
+# name: test/remote_pushdown/remote_pushdown_cast.test
+# description: Test basic remote pushdown of casts into MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+# create a table
+statement ok
+CREATE OR REPLACE TABLE s.small_tbl AS SELECT i::INTEGER i, concat(2000 + i, '-01-01') d FROM range(10) t(i)
+
+# we can pushdown in some situations
+query I
+SELECT MIN(CAST(d AS DATE)) FROM s.small_tbl
+----
+2000-01-01
+
+query II
+explain SELECT MIN(CAST(d AS DATE)) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# not many though!
+query I
+SELECT SUM(CAST(i AS BIGINT)) FROM s.small_tbl
+----
+45
+
+query I
+SELECT MIN(CAST(i AS VARCHAR)) FROM s.small_tbl
+----
+0

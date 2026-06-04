@@ -1,0 +1,25 @@
+# name: test/remote_pushdown/remote_pushdown_join.test
+# description: Test remote pushdown of joins into MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+# create a table
+statement ok
+CREATE OR REPLACE TABLE s.overflow_tbl AS SELECT 9223372036854775807::BIGINT i UNION ALL SELECT 42
+
+# arithmetic is pushed down, also when it overflows
+statement error
+SELECT i + 10 FROM s.overflow_tbl
+----
+value is out of range
+
+query I
+SELECT i + 10 FROM s.overflow_tbl WHERE i < 100
+----
+52

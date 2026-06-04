@@ -29,6 +29,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
@@ -39,6 +40,24 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
+
+CatalogPushdownResult::CatalogPushdownResult(CatalogReferenceType reference_type_p) : reference_type(reference_type_p) {
+}
+
+CatalogPushdownResult CatalogPushdownResult::Unknown() {
+	return CatalogPushdownResult(CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE);
+}
+
+CatalogPushdownResult CatalogPushdownResult::NoCatalogReference() {
+	return CatalogPushdownResult(CatalogReferenceType::NO_CATALOG_REFERENCED);
+}
+
+CatalogPushdownResult CatalogPushdownResult::RemoteReference(Catalog &catalog) {
+	CatalogPushdownResult result(CatalogReferenceType::SINGLE_REMOTE_CATALOG);
+	result.catalog = catalog;
+	return result;
+}
+
 RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder)
     : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
 }
@@ -75,21 +94,46 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, CatalogPushdownResult b) {
-	if (a.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
-		return b;
+	if (a.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED && b.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
+		// both sides refer to no catalog - result is no catalog reference, but with unified references
+		auto result = CatalogPushdownResult::NoCatalogReference();
+		result.used_expressions.insert(result.used_expressions.end(), a.used_expressions.begin(), a.used_expressions.end());
+		result.used_expressions.insert(result.used_expressions.end(), b.used_expressions.begin(), b.used_expressions.end());
+		result.used_table_constructs.insert(result.used_table_constructs.end(), a.used_table_constructs.begin(), a.used_table_constructs.end());
+		result.used_table_constructs.insert(result.used_table_constructs.end(), b.used_table_constructs.begin(), b.used_table_constructs.end());
+		return result;
 	}
-	if (b.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
-		return a;
+	if (a.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && b.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
+		// swap "a" and "b" so the merge happens below
+		return Merge(b, a);
+	}
+	if (a.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED && b.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// "a" refers to no catalog, "b" refers to a single remote catalog
+		// check if "b" supports all constructs referenced in "a"
+		auto &remote_catalog = *b.catalog;
+		for(auto &expr : a.used_expressions) {
+			if (!remote_catalog.SupportsPushdown(expr.get())) {
+				// pushdown not supported - result is UNKNOWN_CATALOG_REFERENCE
+				return CatalogPushdownResult::Unknown();
+			}
+		}
+		for(auto &table_construct : a.used_table_constructs) {
+			if (!remote_catalog.SupportsPushdown(table_construct.get())) {
+				// pushdown not supported - result is UNKNOWN_CATALOG_REFERENCE
+				return CatalogPushdownResult::Unknown();
+			}
+		}
+		return b;
 	}
 	if (a.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE ||
 	    b.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 	// Both are SINGLE_REMOTE_CATALOG - only valid if they refer to the same catalog
 	if (a.catalog == b.catalog) {
 		return a;
 	}
-	return {};
+	return CatalogPushdownResult::Unknown();
 }
 
 void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
@@ -129,7 +173,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 			RemotePushdownOptimizer child_optimizer(this);
 			cte_result = child_optimizer.Rewrite(*cte_info.query_node);
 		} else {
-			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+			cte_result = CatalogPushdownResult::Unknown();
 		}
 		for (auto &key : cte_info.key_targets) {
 			cte_result = Merge(cte_result, Rewrite(*key));
@@ -157,7 +201,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		result = Rewrite(node.Cast<RecursiveCTENode>());
 		break;
 	default:
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 
 	// Merge results of all CTEs defined in this scope
@@ -222,7 +266,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
-	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto from_result = CatalogPushdownResult::NoCatalogReference();
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 	}
@@ -340,7 +384,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	auto result = Rewrite(node.table);
-	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto from_result = CatalogPushdownResult::NoCatalogReference();
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 		result = Merge(result, from_result);
@@ -368,7 +412,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto result = CatalogPushdownResult::NoCatalogReference();
 	for (auto &child : node.children) {
 		RemotePushdownOptimizer child_optimizer(this);
 		auto child_result = child_optimizer.Rewrite(*child);
@@ -443,14 +487,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref
 		return Rewrite(ref->Cast<TableFunctionRef>());
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::COLUMN_DATA:
-		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+		return CatalogPushdownResult::NoCatalogReference();
 	default:
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto result = CatalogPushdownResult::NoCatalogReference();
 	for (auto &row : ref.values) {
 		for (auto &expr : row) {
 			result = Merge(result, Rewrite(*expr));
@@ -468,9 +512,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFunctionRef &ref) {
 	if (ref.function->GetExpressionClass() != ExpressionClass::FUNCTION) {
-		return {};
+		throw InternalException("eek");
 	}
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
@@ -479,44 +523,61 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	string schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
-	// If the function has an explicit catalog prefix, skip pushdown for now
+	// If the function has an explicit catalog prefix, check if it's remote
 	if (!catalog_name.empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
+		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE) && catalog->SupportsPushdown(ref)) {
+			// "catalog" is remote and we can pushdown this function
+			return CatalogPushdownResult::RemoteReference(*catalog);
+		}
+		// catalog was not found or catalog does not support pushdown - bail on pushdown for now
 		TrackLocalTable(ref);
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 
 	// we have an unqualified table function
+	// this function can either live in a local / system catalog, or in a remote (if it is in the search path)
+	// check the search path
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const string &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
-		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
-			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
-			bool is_set_returning = false;
-			for (auto &func : tf_entry.functions.functions) {
-				if (func.return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
-					is_set_returning = true;
-					break;
-				}
-			}
-			if (!is_set_returning) {
-				// TABLE_RETURNING_FUNCTION - blocks pushdown; track alias so correlated
-				// refs from nested lateral subqueries are detected
-				TrackLocalTable(ref);
-				return {};
-			}
-			// SET_RETURNING_FUNCTION: neutral, recurse into args
-			CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &arg : func_expr.GetChildren()) {
-				result = Merge(result, Rewrite(*arg));
-			}
+		if (entry) {
+			// we found it in a local catalog - annotate as "no catalog referenced" with the table function
+			auto result = CatalogPushdownResult::NoCatalogReference();
+			result.used_table_constructs.push_back(ref);
 			return result;
 		}
 	}
+	// we did not find the table function in a local catalog
+	if (pushdown_state.remote_catalogs_in_search_path.size() == 1) {
+		// if we have a single catalog in the remote search path - assume the function lives there
+		auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path[0].get();
+		if (remote_catalog.Supports(RemoteCapability::EXECUTE_QUERY_NODE) && remote_catalog.SupportsPushdown(ref)) {
+			// "catalog" is remote and we can pushdown this function
+			return CatalogPushdownResult::RemoteReference(remote_catalog);
+		}
+	}
+	// we couldn't find the function locally or remotely - skip pushing down
 	TrackLocalTable(ref);
-	return {};
+	return CatalogPushdownResult::Unknown();
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
+	// rewrite the table function only
+	auto result = RewriteTableFunctionOnly(ref);
+	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+		// don't bother recursing - we can never pushdown
+		return result;
+	}
+	// recurse into children
+	auto &func_expr = ref.function->Cast<FunctionExpression>();
+	for (auto &arg : func_expr.GetChildren()) {
+		result = Merge(result, Rewrite(*arg));
+	}
+	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
@@ -634,13 +695,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
+			return CatalogPushdownResult::RemoteReference(*catalog);
 		}
 		// A local table always blocks pushdown of any query that contains it.
 		// Returning UNKNOWN (not NO_CATALOG) ensures Merge(SINGLE_REMOTE, UNKNOWN) = UNKNOWN
 		// rather than the otherwise-neutral SINGLE_REMOTE.
 		TrackLocalTable(ref);
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
@@ -650,7 +711,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
 		TrackLocalTable(ref);
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
 
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
@@ -661,12 +722,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		if (entry) {
 			TrackLocalTable(ref);
 			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
-			return {};
+			return CatalogPushdownResult::Unknown();
 		}
 	}
 
 	// Not found in any local catalog - push to the single remote catalog in the search path
-	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, pushdown_state.remote_catalogs_in_search_path.front().get()};
+	return CatalogPushdownResult::RemoteReference(pushdown_state.remote_catalogs_in_search_path.front().get());
 }
 
 bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_ref) const {
@@ -695,7 +756,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const SubqueryExpression 
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cast_expr) {
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	result.used_expressions.push_back(cast_expr);
 	auto &target_type = cast_expr.TargetType();
 	if (target_type.id() == LogicalTypeId::UNBOUND) {
 		result = Merge(result, Rewrite(target_type));
@@ -703,49 +765,60 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cas
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const string &catalog_p,
+CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_p,
                                                                          const string &schema_p) {
 	string catalog_name = catalog_p;
 	string schema_name = schema_p;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
+		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE) && catalog->SupportsPushdown(expr)) {
+			return CatalogPushdownResult::RemoteReference(*catalog);
 		}
 		// Explicitly local-catalog: block pushdown.
-		return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		return CatalogPushdownResult::Unknown();
 	}
-	return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	result.used_expressions.push_back(expr);
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ConstantExpression &expr) {
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	result.used_expressions.push_back(expr);
+	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const FunctionExpression &func) {
 	if (IsLocalMacro(func)) {
 		// local macros can't be pushed to remote
-		return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		return CatalogPushdownResult::Unknown();
 	}
-	return CheckCatalogQualification(func.Catalog(), func.Schema());
+	return CheckCatalogQualification(func, func.Catalog(), func.Schema());
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const WindowExpression &func) {
-	return CheckCatalogQualification(func.Catalog(), func.Schema());
+	return CheckCatalogQualification(func, func.Catalog(), func.Schema());
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const TypeExpression &type_expr) {
-	return CheckCatalogQualification(type_expr.GetCatalog(), type_expr.GetSchema());
+	return CheckCatalogQualification(type_expr, type_expr.GetCatalog(), type_expr.GetSchema());
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ColumnRefExpression &col_ref) {
 	if (RefersToLocalTable(col_ref)) {
 		// column refers to local table - bail
-		return {};
+		return CatalogPushdownResult::Unknown();
 	}
-	return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	return CatalogPushdownResult::NoCatalogReference();
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 	CatalogPushdownResult result;
 	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::CONSTANT:
+		result = Rewrite(expr.Cast<ConstantExpression>());
+		break;
 	case ExpressionClass::SUBQUERY:
 		result = Rewrite(expr.Cast<SubqueryExpression>());
 		break;
@@ -765,7 +838,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		result = Rewrite(expr.Cast<ColumnRefExpression>());
 		break;
 	default:
-		result = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+		result = CatalogPushdownResult::NoCatalogReference();
 		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(

@@ -1,0 +1,43 @@
+diff --git a/vcpkg_ports/libmariadb/fix-const-array.diff b/vcpkg_ports/libmariadb/fix-const-array.diff
+new file mode 100644
+index 0000000..c523de9
+--- /dev/null
++++ b/vcpkg_ports/libmariadb/fix-const-array.diff
+@@ -0,0 +1,13 @@
++diff --git a/libmariadb/ma_tls.c b/libmariadb/ma_tls.c
++index b2de93e..042b11d 100644
++--- a/libmariadb/ma_tls.c
+++++ b/libmariadb/ma_tls.c
++@@ -224,7 +224,7 @@ static my_bool ma_pvio_tls_compare_fp(MARIADB_TLS *ctls,
++                                      const char *cert_fp,
++                                      unsigned int cert_fp_len)
++ {
++-  const char fp[EVP_MAX_MD_SIZE];
+++  char fp[EVP_MAX_MD_SIZE];
++   unsigned int fp_len= EVP_MAX_MD_SIZE;
++   unsigned int hash_type;
++ 
+diff --git a/vcpkg_ports/libmariadb/portfile.cmake b/vcpkg_ports/libmariadb/portfile.cmake
+index df98673..bac1a98 100644
+--- a/vcpkg_ports/libmariadb/portfile.cmake
++++ b/vcpkg_ports/libmariadb/portfile.cmake
+@@ -16,12 +16,13 @@ vcpkg_from_github(
+         compiler-flags.diff
+         dependencies.diff
+         disable-mariadb_config.diff
+-        library-linkage.diff
+-        cmake-export.diff
+-        no-abs-path.diff
+-)
+-file(REMOVE_RECURSE
+-    "${SOURCE_PATH}/cmake/FindIconv.cmake"
++        library-linkage.diff
++        cmake-export.diff
++        no-abs-path.diff
++        fix-const-array.diff
++)
++file(REMOVE_RECURSE
++    "${SOURCE_PATH}/cmake/FindIconv.cmake"
+     "${SOURCE_PATH}/external/zlib"
+ )
+ 

@@ -1,0 +1,238 @@
+diff --git a/src/include/mysql_connection.hpp b/src/include/mysql_connection.hpp
+index 719573c..72fb189 100644
+--- a/src/include/mysql_connection.hpp
++++ b/src/include/mysql_connection.hpp
+@@ -22,7 +22,7 @@ class MySQLTextWriter;
+ struct MySQLBinaryReader;
+ class MySQLSchemaEntry;
+ class MySQLTableEntry;
+-class MySQLStatement;
++struct MySQLStatement;
+ class MySQLResult;
+ struct IndexInfo;
+ 
+diff --git a/src/include/storage/mysql_catalog.hpp b/src/include/storage/mysql_catalog.hpp
+index 817414e..ca35060 100644
+--- a/src/include/storage/mysql_catalog.hpp
++++ b/src/include/storage/mysql_catalog.hpp
+@@ -61,6 +61,20 @@ public:
+ 	//! Whether or not this is an in-memory MySQL database
+ 	bool InMemory() override;
+ 	string GetDBPath() override;
++	bool Supports(RemoteCapability capability) const override {
++		switch (capability) {
++		case RemoteCapability::IS_REMOTE:
++		case RemoteCapability::EXECUTE_QUERY_NODE:
++		case RemoteCapability::CONNECT:
++			return true;
++		default:
++			return false;
++		}
++	}
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) override;
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override;
++	bool SupportsPushdown(const ParsedExpression &expression) override;
++	bool SupportsPushdown(const TableRef &ref) override;
+ 
+ 	void ClearCache();
+ 
+diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
+index d2427fc..44e762e 100644
+--- a/src/mysql_extension.cpp
++++ b/src/mysql_extension.cpp
+@@ -249,9 +249,9 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("mysql_order_pushdown_enabled",
+ 	                          "Push ORDER BY and LIMIT clauses to MySQL (default: true)", LogicalType::BOOLEAN,
+ 	                          Value::BOOLEAN(true));
+-	OptimizerExtension mysql_optimizer;
+-	mysql_optimizer.optimize_function = MySQLOptimizer::Optimize;
+-	OptimizerExtension::Register(config, std::move(mysql_optimizer));
++	// OptimizerExtension mysql_optimizer;
++	// mysql_optimizer.optimize_function = MySQLOptimizer::Optimize;
++	// OptimizerExtension::Register(config, std::move(mysql_optimizer));
+ }
+ 
+ void MysqlScannerExtension::Load(ExtensionLoader &loader) {
+diff --git a/src/mysql_result.cpp b/src/mysql_result.cpp
+index 9e3123b..0497674 100644
+--- a/src/mysql_result.cpp
++++ b/src/mysql_result.cpp
+@@ -147,8 +147,17 @@ bool MySQLResult::FetchNext() {
+ 	int res = mysql_stmt_fetch(stmt.get());
+ 
+ 	if (res == 1) {
++		// error might be in connect or stmt
++		auto stmt_error = mysql_stmt_error(stmt.get());
++		if (!stmt_error || strlen(stmt_error) == 0) {
++			// try to get it from the connection
++			auto conn_err = mysql_error(stmt->mysql);
++			if (conn_err) {
++				stmt_error = conn_err;
++			}
++		}
+ 		throw IOException("Failed to fetch result row for MySQL query \"%s\": %s\n", query.c_str(),
+-		                  mysql_stmt_error(stmt.get()));
++		                  stmt_error ? stmt_error : "<unknown error>");
+ 	}
+ 
+ 	HandleTruncatedData();
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index af9ffd7..e812f1d 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -5,11 +5,15 @@
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/parser/parsed_data/drop_info.hpp"
+ #include "duckdb/parser/parsed_data/create_schema_info.hpp"
++#include "duckdb/parser/tableref/table_function_ref.hpp"
++#include "duckdb/parser/expression/constant_expression.hpp"
++#include "duckdb/parser/expression/function_expression.hpp"
+ #include "duckdb/storage/database_size.hpp"
+ 
+ #include "mysql_connection.hpp"
+ #include "mysql_scanner.hpp"
+ #include "mysql_types.hpp"
++#include "duckdb/parser/expression/cast_expression.hpp"
+ #include "storage/mysql_schema_entry.hpp"
+ #include "storage/mysql_transaction.hpp"
+ 
+@@ -503,6 +507,139 @@ WHERE table_schema = ${SCHEMA_NAME};
+ 	return size;
+ }
+ 
++
++unique_ptr<TableRef> MySQLCatalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
++	return RemoteExecute(context, node->ToString());
++}
++
++unique_ptr<TableRef> MySQLCatalog::RemoteExecute(ClientContext &context, const string &sql) {
++	vector<unique_ptr<ParsedExpression>> args;
++	args.push_back(make_uniq<ConstantExpression>(Value(GetName())));
++	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
++	auto func_ref = make_uniq<TableFunctionRef>();
++	func_ref->function = make_uniq<FunctionExpression>("mysql_query", std::move(args));
++	return func_ref;
++}
++
++bool MySQLSupportsType(const LogicalType &type, bool for_cast) {
++	switch(type.id()) {
++	case LogicalTypeId::BOOLEAN: // not supported for cast
++	case LogicalTypeId::BIGINT: // not supported for cast
++		// FIXME: need to rewrite for CAST, but supported as literal
++	case LogicalTypeId::INTEGER: // SIGNED
++	case LogicalTypeId::VARCHAR: // CHAR
++	case LogicalTypeId::UINTEGER: // UNSIGNED
++	case LogicalTypeId::TIMESTAMP: // TIMESTAMP -> DATETIME
++		// mysql is extremely strict in types accepted in casts for some reason
++		return !for_cast;
++	case LogicalTypeId::DATE:
++	case LogicalTypeId::TIME:
++	case LogicalTypeId::DECIMAL:
++	case LogicalTypeId::FLOAT:
++	case LogicalTypeId::DOUBLE:
++		return true;
++	case LogicalTypeId::UNBOUND: {
++		auto try_bind = UnboundType::TryDefaultBind(type);
++		if (try_bind.id() == LogicalTypeId::UNBOUND) {
++			return false;
++		}
++		return MySQLSupportsType(try_bind, for_cast);
++	}
++	default:
++		return false;
++	}
++}
++
++bool MySQLSupportsFunction(const FunctionExpression &func) {
++	auto &function_name = func.FunctionName();
++
++	// Whitelist of functions with identical name and semantics in MySQL 8.0+ and DuckDB.
++	// Excluded:
++	//   "length"     — MySQL counts bytes, DuckDB counts characters (multibyte differs)
++	//   "log"        — DuckDB log(x) = log10; MySQL log(x) = ln(x)
++	//   "trunc"      — MySQL spells it truncate(x, d)
++	//   "truncate"   — DuckDB doesn't register this name (uses trunc)
++	//   "random"     — MySQL uses rand()
++	//   "translate"  — not available in MySQL
++	//   "format"     — different semantics (MySQL: number formatting; DuckDB: printf-style)
++	//   "ln"         — DuckDB name for natural log; MySQL spells it log(x)
++	//   "make_date"/"make_time"/"make_timestamp" — MySQL spells these makedate/maketime
++	static const case_insensitive_set_t MYSQL_SCALAR_FUNCTIONS = {
++	    // String
++	    "concat",     "concat_ws",        "char_length",   "character_length",
++	    "octet_length", "bit_length",     "substring",     "substr",
++	    "upper",      "ucase",            "lower",         "lcase",
++	    "trim",       "ltrim",            "rtrim",         "left",
++	    "right",      "repeat",           "replace",       "reverse",
++	    "lpad",       "rpad",             "instr",         "ascii",
++	    "hex",        "unhex",            "bin",           "md5",
++	    "sha1",       "regexp_replace",
++	    // Math
++	    "abs",        "ceil",             "ceiling",       "floor",
++	    "round",      "sqrt",             "pow",           "power",
++	    "exp",        "log10",            "log2",
++	    "sin",        "cos",              "tan",           "cot",
++	    "asin",       "acos",             "atan",          "atan2",
++	    "degrees",    "radians",          "pi",            "sign",
++	    "mod",        "greatest",         "least",
++		"+", "-", "*", "/",
++	    // Date / time
++	    "year",       "month",            "day",           "hour",
++	    "minute",     "second",           "microsecond",
++	    "dayofweek",  "dayofmonth",       "dayofyear",
++	    "weekday",    "weekofyear",       "week",          "quarter",
++	    "monthname",  "dayname",          "last_day",      "now",
++	    // Conditional / NULL handling
++	    "coalesce",   "nullif",           "ifnull",        "if",
++	    // Aggregate
++	    "count",      "sum",              "avg",           "min",
++	    "max",        "group_concat",
++	    "stddev",     "stddev_pop",       "stddev_samp",
++	    "variance",   "var_pop",          "var_samp",
++	    "bit_and",    "bit_or",           "bit_xor",
++	    "any_value",  "corr",             "covar_pop",     "covar_samp",
++	    // Window (MySQL 8.0+)
++	    "row_number", "rank",             "dense_rank",    "percent_rank",
++	    "cume_dist",  "ntile",
++	    "lag",        "lead",             "first_value",   "last_value",
++	    "nth_value",
++	};
++	return MYSQL_SCALAR_FUNCTIONS.count(function_name) > 0;
++}
++
++bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
++	switch(expr.GetExpressionClass()) {
++	case ExpressionClass::CAST: {
++		auto &cast_expr = expr.Cast<CastExpression>();
++		if (!MySQLSupportsType(cast_expr.TargetType(), true)) {
++			return false;
++		}
++		// FIXME: try cast
++		return true;
++	}
++	case ExpressionClass::CONSTANT: {
++		auto &constant = expr.Cast<ConstantExpression>();
++		return MySQLSupportsType(constant.GetValue().type(), false);
++	}
++	case ExpressionClass::FUNCTION: {
++		auto &func = expr.Cast<FunctionExpression>();
++		return MySQLSupportsFunction(func);
++	}
++	default:
++		return true;
++	}
++}
++
++bool MySQLCatalog::SupportsPushdown(const TableRef &ref) {
++	switch(ref.type) {
++	case TableReferenceType::TABLE_FUNCTION:
++		// mysql doesn't support any table functions
++		return false;
++	default:
++		return true;
++	}
++}
++
+ void MySQLCatalog::ClearCache() {
+ 	schemas.ClearEntries();
+ 	plan_cache_.Clear();
