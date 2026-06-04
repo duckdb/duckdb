@@ -78,15 +78,9 @@ idx_t ExpressionHeuristics::BetweenExpressionCost(const BoundFunctionExpression 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
 	idx_t case_cost = 0;
-	if (expr.CaseExpr()) {
-		case_cost += Cost(*expr.CaseExpr());
-	}
 	for (auto &case_check : expr.CaseChecks()) {
 		case_cost += Cost(*case_check.then_expr);
 		case_cost += Cost(*case_check.when_expr);
-		if (case_check.compare_expr) {
-			case_cost += Cost(*case_check.compare_expr);
-		}
 	}
 	case_cost += Cost(expr.Else());
 	return case_cost;

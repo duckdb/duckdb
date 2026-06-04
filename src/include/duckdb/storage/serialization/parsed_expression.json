@@ -75,21 +75,11 @@
     "enum": "CASE",
     "members": [
       {
-        "id": 202,
-        "name": "case_expr",
-        "type": "ParsedExpression*",
-        "accessor_mut": "CaseExprMutable()",
-        "accessor": "CaseExpr()",
-        "version": "v2.0.0",
-        "nullable": true
-      },
-      {
         "id": 200,
         "name": "case_checks",
         "type": "vector<CaseCheck>",
         "accessor_mut": "CaseChecksMutable()",
-        "accessor": "CaseChecks()",
-        "serialize_property": "CaseChecksForSerialization(serializer)"
+        "accessor": "CaseChecks()"
       },
       {
         "id": 201,

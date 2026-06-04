@@ -51,9 +51,6 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		if (cast_expr.CaseExpr()) {
-			result.Append(*cast_expr.CaseExpr());
-		}
 		for (auto &check : cast_expr.CaseChecks()) {
 			result.Append(*check.when_expr);
 			result.Append(*check.then_expr);
@@ -188,9 +185,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		if (cast_expr.CaseExprMutable()) {
-			result.Append(cast_expr.CaseExprMutable());
-		}
 		for (auto &check : cast_expr.CaseChecksMutable()) {
 			result.Append(check.when_expr);
 			result.Append(check.then_expr);
@@ -352,9 +346,6 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<CaseExpression>();
-	if (!ParsedExpression::Equals(case_expr, other_p.case_expr)) {
-		return false;
-	}
 	if (case_checks.size() != other_p.case_checks.size()) {
 		return false;
 	}
@@ -375,7 +366,6 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
-	copy->case_expr = case_expr ? case_expr->Copy() : nullptr;
 	for (auto &check : case_checks) {
 		CaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();

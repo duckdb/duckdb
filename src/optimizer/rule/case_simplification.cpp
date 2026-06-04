@@ -14,9 +14,6 @@ CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundCaseExpression>();
-	if (root.CaseExpr()) {
-		return nullptr;
-	}
 	for (idx_t i = 0; i < root.CaseChecksMutable().size(); i++) {
 		auto &case_check = root.CaseChecksMutable()[i];
 		if (case_check.when_expr->IsFoldable()) {

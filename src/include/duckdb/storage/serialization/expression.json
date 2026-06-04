@@ -79,17 +79,9 @@
         "type": "LogicalType"
       },
       {
-        "id": 203,
-        "name": "case_expr",
-        "type": "Expression*",
-        "version": "v2.0.0",
-        "nullable": true
-      },
-      {
         "id": 201,
         "name": "case_checks",
-        "type": "vector<BoundCaseCheck>",
-        "serialize_property": "CaseChecksForSerialization(serializer)"
+        "type": "vector<BoundCaseCheck>"
       },
       {
         "id": 202,

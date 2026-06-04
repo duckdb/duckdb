@@ -107,16 +107,12 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(Deserializer &deseri
 
 void CaseExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "case_expr", case_expr);
-	}
-	serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", CaseChecksForSerialization(serializer));
+	serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", case_checks);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", else_expr);
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "case_expr", result->case_expr);
 	deserializer.ReadPropertyWithDefault<vector<CaseCheck>>(200, "case_checks", result->case_checks);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", result->else_expr);
 	return std::move(result);
