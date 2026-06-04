@@ -97,6 +97,16 @@ SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
 ----
 hit
 
+query I
+SELECT CASE 1 WHEN 1 THEN (SELECT 2) ELSE 0 END
+----
+2
+
+query I
+SELECT CASE (SELECT 1) WHEN 1 THEN 2 ELSE 0 END
+----
+2
+
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)
