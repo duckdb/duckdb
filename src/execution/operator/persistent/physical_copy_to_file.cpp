@@ -762,14 +762,6 @@ public:
 	    DUCKDB_REQUIRES(active_writes_lock);
 	unique_ptr<GlobalFileState> CreatePartitionFileStateFromReservation(const vector<Value> &values, idx_t offset)
 	    DUCKDB_EXCLUDES(active_writes_lock);
-	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
-	void EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
-	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to initialize the replacement file.
-	//! Callers that can reach the swap path must serialize the full partition writer run for this write_info.
-	void EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
-	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
@@ -779,6 +771,14 @@ private:
 	void CreateNextState();
 	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
+	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
+	    DUCKDB_EXCLUDES(active_writes_lock);
+	void EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values)
+	    DUCKDB_EXCLUDES(active_writes_lock);
+	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to initialize the replacement file.
+	//! Callers that can reach the swap path must serialize the full partition writer run for this write_info.
+	void EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
+	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock);
 	template <class FUNC>
 	void WithSerializedPartitionWriteRun(PartitionWriteInfo &write_info, FUNC &&func) {
 		annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
