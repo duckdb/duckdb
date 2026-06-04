@@ -660,8 +660,8 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ErrorData error;
 
 	FunctionBinder function_binder(context);
-	auto best_function =
-	    function_binder.BindFunction(aggr_entry.name.GetName(), aggr_entry.functions, state_type.bound_argument_types, error);
+	auto best_function = function_binder.BindFunction(aggr_entry.name.GetName(), aggr_entry.functions,
+	                                                  state_type.bound_argument_types, error);
 	if (!best_function.IsValid()) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());
@@ -879,7 +879,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	aggregate_state_t state_type(child_aggregate->Function().GetName(), child_aggregate->Function().GetReturnType(),
+	aggregate_state_t state_type(child_aggregate->Function().GetName().GetName(),
+	                             child_aggregate->Function().GetReturnType(),
 	                             child_aggregate->Function().GetArguments());
 
 	LogicalType return_type;

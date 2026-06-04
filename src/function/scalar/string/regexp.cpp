@@ -385,8 +385,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(context, bound_function.GetName(), *arguments[2], constant_string, options,
-			                                constant_pattern, dummy_names, struct_children);
+			regexp_util::ParseGroupNameList(context, bound_function.GetName().GetName(), *arguments[2], constant_string,
+			                                options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {
 			int32_t group_idx = group.GetValue<int32_t>();

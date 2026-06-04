@@ -595,7 +595,7 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	}
 	// this catalog set has a default map defined
 	// check if there is a default entry that we can create with this name
-	auto entry = defaults->CreateDefaultEntry(transaction, name.GetName());
+	auto entry = defaults->CreateDefaultEntry(transaction, name);
 
 	if (unlock) {
 		read_lock.lock();

@@ -431,7 +431,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &context = input.GetClientContext();
 		auto &arguments = input.GetArguments();
 
-		const auto part_code = GetDatePartSpecifier(bound_function.GetName());
+		const auto part_code = GetDatePartSpecifier(bound_function.GetName().GetName());
 		if (IsBigintDatepart(part_code)) {
 			using data_t = BindAdapterData<int64_t>;
 			auto adapter = PartCodeBigintFactory(part_code);

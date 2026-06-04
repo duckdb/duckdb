@@ -275,7 +275,7 @@ public:
 	//! Generates an unused index for a table
 	TableIndex GenerateTableIndex();
 
-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
@@ -344,7 +344,7 @@ public:
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
-	void SetSearchPath(Catalog &catalog, const string &schema);
+	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");

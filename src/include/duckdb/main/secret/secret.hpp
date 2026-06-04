@@ -131,8 +131,8 @@ public:
 	const vector<string> &GetScope() const {
 		return prefix_paths;
 	}
-	const string &GetType() const {
-		return type.GetName();
+	const Identifier &GetType() const {
+		return type;
 	}
 	const string &GetProvider() const {
 		return provider.GetName();
@@ -182,8 +182,8 @@ public:
 		serializable = true;
 	};
 	KeyValueSecret(KeyValueSecret &&secret) noexcept
-	    : BaseSecret(std::move(secret.prefix_paths), secret.type.GetName(), secret.provider.GetName(),
-	                 secret.name.GetName()) {
+	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider),
+	                 std::move(secret.name)) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;

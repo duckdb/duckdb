@@ -85,7 +85,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &conte
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEntry &table) {
-	return BindConstraints(table.GetConstraints(), table.name.GetName(), table.GetColumns());
+	return BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
@@ -407,7 +407,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			auto &constraint = constr->Cast<UniqueConstraint>();
 			if (!constraint.HasIndex()) {
 				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col)) {
+					if (generated_columns.count(col.GetName())) {
 						return true;
 					}
 				}
@@ -430,13 +430,13 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	return false;
 }
 
-static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names,
+static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identifier> &names,
                                   vector<PhysicalIndex> &indexes) {
 	D_ASSERT(indexes.empty());
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
 		if (!columns.ColumnExists(name)) {
-			throw BinderException("column \"%s\" named in key does not exist", name);
+			throw BinderException("column \"%s\" named in key does not exist", name.GetName());
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
@@ -463,7 +463,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		}
 		found_constraint = true;
 
-		vector<string> pk_names;
+		vector<Identifier> pk_names;
 		if (unique.HasIndex()) {
 			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
 		} else {
@@ -472,8 +472,8 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (find_primary_key) {
 			// found matching primary key
 			if (pk_names.size() != fk.fk_columns.size()) {
-				auto pk_name_str = StringUtil::Join(pk_names, ",");
-				auto fk_name_str = StringUtil::Join(fk.fk_columns, ",");
+				auto pk_name_str = StringUtil::Join(IdentifiersToStrings(pk_names), ",");
+				auto fk_name_str = StringUtil::Join(IdentifiersToStrings(fk.fk_columns), ",");
 				throw BinderException(
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
@@ -487,7 +487,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		}
 		bool equals = true;
 		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (!StringUtil::CIEquals(fk.pk_columns[i], pk_names[i])) {
+			if (fk.pk_columns[i] != pk_names[i]) {
 				equals = false;
 				break;
 			}
@@ -514,7 +514,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			    fk.info.table.GetName(), name);
 		}
 	}
-	auto fk_names = StringUtil::Join(fk.pk_columns, ",");
+	auto fk_names = StringUtil::Join(IdentifiersToStrings(fk.pk_columns), ",");
 	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
 	                      "constraint on the columns %s",
 	                      fk.info.table.GetName(), fk_names);
@@ -584,7 +584,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 			auto &storage = pk_table_entry_ptr.GetStorage();
 
 			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+				auto fk_column_names = StringUtil::Join(IdentifiersToStrings(fk.pk_columns), ",");
 				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
 				                      "present on these columns",
 				                      pk_table_entry_ptr.name, fk_column_names);
@@ -611,7 +611,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 
 	// Bind all types by first looking into the same catalog/schema as the table
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(result->schema.catalog, result->schema.name.GetName());
+	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {

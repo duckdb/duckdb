@@ -95,7 +95,7 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	}
 }
 
-void TableIndexList::RemoveIndex(const string &name) {
+void TableIndexList::RemoveIndex(const Identifier &name) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (idx_t i = 0; i < index_entries.size(); i++) {
 		auto &index = *index_entries[i]->index;

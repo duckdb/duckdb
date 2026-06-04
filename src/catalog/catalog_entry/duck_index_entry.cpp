@@ -18,7 +18,7 @@ void DuckIndexEntry::Rollback(CatalogEntry &) {
 	if (!info->info) {
 		return;
 	}
-	info->info->GetIndexes().RemoveIndex(name.GetName());
+	info->info->GetIndexes().RemoveIndex(name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -58,7 +58,7 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop(CommitDropState &drop_state) {
 	D_ASSERT(info);
-	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), name.GetName());
+	drop_state.RemoveIndex(GetDataTableInfo().GetIndexes(), name);
 }
 
 } // namespace duckdb

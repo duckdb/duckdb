@@ -77,7 +77,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 
-	virtual string GetColumnName() const {
+	virtual Identifier GetColumnName() const {
 		return "";
 	};
 

@@ -76,7 +76,7 @@ private:
 	CatalogPushdownResult Rewrite(const ColumnRefExpression &expr);
 
 	CatalogPushdownResult Rewrite(const LogicalType &type);
-	CatalogPushdownResult CheckCatalogQualification(const string &catalog_name, const string &schema_name);
+	CatalogPushdownResult CheckCatalogQualification(const Identifier &catalog_name, const Identifier &schema_name);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref);

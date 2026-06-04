@@ -223,7 +223,7 @@ protected:
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();
 	virtual string UnsupportedUnnestMessage();
-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	Binder &binder;

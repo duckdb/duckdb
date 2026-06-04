@@ -16,7 +16,7 @@ UniqueConstraint::UniqueConstraint(const LogicalIndex index, string column_name_
 	columns.push_back(std::move(column_name_p));
 }
 
-UniqueConstraint::UniqueConstraint(vector<string> columns, const bool is_primary_key)
+UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
       is_primary_key(is_primary_key) {
 }
@@ -37,7 +37,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	}
 
-	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? string() : columns[0], is_primary_key);
+	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? string() : columns[0].GetName(), is_primary_key);
 	return std::move(result);
 }
 
@@ -61,12 +61,12 @@ void UniqueConstraint::SetIndex(const LogicalIndex new_index) {
 	index = new_index;
 }
 
-const vector<string> &UniqueConstraint::GetColumnNames() const {
+const vector<Identifier> &UniqueConstraint::GetColumnNames() const {
 	D_ASSERT(!columns.empty());
 	return columns;
 }
 
-vector<string> &UniqueConstraint::GetColumnNamesMutable() {
+vector<Identifier> &UniqueConstraint::GetColumnNamesMutable() {
 	D_ASSERT(!columns.empty());
 	return columns;
 }

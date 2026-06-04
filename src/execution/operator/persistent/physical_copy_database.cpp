@@ -74,7 +74,7 @@ SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context
 		catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
 
 		auto &create_index_info = create_info->Cast<CreateIndexInfo>();
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context.client, create_index_info.schema.GetName(),
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context.client, create_index_info.schema,
 		                                                        create_index_info.table.GetName());
 		auto &data_table = table_entry.GetStorage();
 

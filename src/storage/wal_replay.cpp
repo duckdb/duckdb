@@ -805,8 +805,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, table_info.schema.GetName(), table_info.name.GetName())
-	                  .Cast<DuckTableEntry>();
+	auto &table =
+	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -1065,7 +1065,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	const auto schema_name = create_info->schema;
 	const auto table_name = info.table;
 
-	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name.GetName(), table_name.GetName());
+	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);

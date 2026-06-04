@@ -269,9 +269,18 @@ index 0ce84c8..1949f4d 100644
  	result->attach_path = pg_catalog.attach_path;
  	result->SetCatalog(pg_catalog);
 diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
-index 624e137..77bb654 100644
+index 624e137..f50d9b7 100644
 --- a/src/storage/postgres_table_set.cpp
 +++ b/src/storage/postgres_table_set.cpp
+@@ -104,7 +104,7 @@ void PostgresTableSet::AddConstraint(PostgresResult &result, idx_t row, Postgres
+ 		columns.push_back(create_info.columns.GetColumn(LogicalIndex(index - 1)).Name());
+ 	}
+ 
+-	create_info.constraints.push_back(make_uniq<UniqueConstraint>(std::move(columns), constraint_type == "p"));
++	create_info.constraints.push_back(make_uniq<UniqueConstraint>(StringsToIdentifiers(columns), constraint_type == "p"));
+ }
+ 
+ void PostgresTableSet::AddColumnOrConstraint(optional_ptr<PostgresTransaction> transaction,
 @@ -148,7 +148,7 @@ void PostgresTableSet::LoadEntries(ClientContext &context, PostgresTransaction &
  		CreateEntries(transaction, table_result->GetResult(), table_result->start, table_result->end);
  		table_result.reset();
@@ -290,6 +299,33 @@ index 624e137..77bb654 100644
  	auto result = transaction.Query(query);
  	auto rows = result->Count();
  	if (rows == 0) {
+@@ -217,7 +217,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 			not_null_columns.insert(not_null.index);
+ 		} else if (constraint->type == ConstraintType::UNIQUE) {
+ 			auto &pk = constraint->Cast<UniqueConstraint>();
+-			vector<string> constraint_columns = pk.columns;
++			auto constraint_columns = IdentifiersToStrings(pk.columns);
+ 			if (pk.index.index != DConstants::INVALID_INDEX) {
+ 				// no columns specified: single column constraint
+ 				if (pk.is_primary_key) {
+@@ -231,7 +231,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 				if (pk.is_primary_key) {
+ 					// multi key pk column: insert set of columns into multi_key_pks
+ 					for (auto &col : pk.columns) {
+-						multi_key_pks.insert(col);
++						multi_key_pks.insert(col.GetName());
+ 					}
+ 				}
+ 				string base = pk.is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
+@@ -239,7 +239,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 					if (i > 0) {
+ 						base += ", ";
+ 					}
+-					base += KeywordHelper::WriteQuoted(pk.columns[i], '"');
++					base += KeywordHelper::WriteQuoted(pk.columns[i].GetName(), '"');
+ 				}
+ 				extra_constraints.push_back(base + ")");
+ 			}
 @@ -304,10 +304,10 @@ string GetPostgresCreateTable(CreateTableInfo &info) {
  		ss << "IF NOT EXISTS ";
  	}

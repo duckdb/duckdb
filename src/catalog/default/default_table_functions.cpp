@@ -129,9 +129,10 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &input_schema, const string &input_name) {
-	auto schema = StringUtil::Lower(input_schema);
-	auto name = StringUtil::Lower(input_name);
+static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
+                                                              const Identifier &input_name) {
+	auto schema = StringUtil::Lower(input_schema.GetName());
+	auto name = StringUtil::Lower(input_name.GetName());
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (internal_table_macros[index].schema == schema && internal_table_macros[index].name == name) {
 			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index]);
@@ -141,8 +142,8 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &inpu
 }
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                           const string &entry_name) {
-	auto info = GetDefaultTableFunction(schema.name.GetName(), entry_name);
+                                                                           const Identifier &entry_name) {
+	auto info = GetDefaultTableFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}

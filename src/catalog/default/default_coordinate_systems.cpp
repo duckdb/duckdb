@@ -44,7 +44,7 @@ DefaultCoordinateSystemGenerator::DefaultCoordinateSystemGenerator(Catalog &cata
 }
 
 unique_ptr<CatalogEntry> DefaultCoordinateSystemGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                              const string &entry_name) {
+                                                                              const Identifier &entry_name) {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}

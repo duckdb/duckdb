@@ -18,9 +18,9 @@ public:
 	}
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override {
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override {
 		for (auto &entry : view_names) {
-			if (StringUtil::CIEquals(entry_name, entry)) {
+			if (entry_name == entry) {
 				auto result = make_uniq<CreateViewInfo>();
 				result->schema = DEFAULT_SCHEMA;
 				result->view_name = entry;

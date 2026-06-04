@@ -524,7 +524,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	auto fname = StringUtil::Upper(bound_function.GetName());
+	auto fname = StringUtil::Upper(bound_function.GetName().GetName());
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}

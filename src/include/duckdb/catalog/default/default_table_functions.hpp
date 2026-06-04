@@ -34,7 +34,7 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);

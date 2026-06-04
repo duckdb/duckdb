@@ -508,8 +508,8 @@ string DropNotNullInfo::ToString() const {
 AlterForeignKeyInfo::AlterForeignKeyInfo() : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT) {
 }
 
-AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<string> pk_columns,
-                                         vector<string> fk_columns, vector<PhysicalIndex> pk_keys,
+AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<Identifier> pk_columns,
+                                         vector<Identifier> fk_columns, vector<PhysicalIndex> pk_keys,
                                          vector<PhysicalIndex> fk_keys, AlterForeignKeyType type_p)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, std::move(data)), fk_table(std::move(fk_table)),
       pk_columns(std::move(pk_columns)), fk_columns(std::move(fk_columns)), pk_keys(std::move(pk_keys)),

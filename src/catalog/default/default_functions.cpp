@@ -254,9 +254,9 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const string &sche
 	return macro.schema == schema && macro.name == name;
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
-	auto schema = StringUtil::Lower(input_schema);
-	auto name = StringUtil::Lower(input_name);
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
+	auto schema = StringUtil::Lower(input_schema.GetName());
+	auto name = StringUtil::Lower(input_name.GetName());
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
 			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
@@ -270,8 +270,8 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
 }
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                      const string &entry_name) {
-	auto info = GetDefaultFunction(schema.name.GetName(), entry_name);
+                                                                      const Identifier &entry_name) {
+	auto info = GetDefaultFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}

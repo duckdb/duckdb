@@ -565,7 +565,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	return result;
 }
 
-optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);

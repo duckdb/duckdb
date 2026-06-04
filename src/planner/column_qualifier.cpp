@@ -99,25 +99,23 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	switch (col_ref.ColumnNames().size()) {
 	case 1: {
 		// single entry - this must be the table name
-		BindingAlias alias(col_ref.ColumnNames()[0].GetName());
+		BindingAlias alias(col_ref.ColumnNames()[0]);
 		binding = binder.bind_context.GetBinding(alias, error);
 		break;
 	}
 	case 2: {
 		// two entries - this can either be "catalog.table" or "schema.table" - try both
-		BindingAlias alias(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName());
+		BindingAlias alias(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1]);
 		binding = binder.bind_context.GetBinding(alias, error);
 		if (!binding) {
-			alias =
-			    BindingAlias(col_ref.ColumnNames()[0].GetName(), INVALID_SCHEMA, col_ref.ColumnNames()[1].GetName());
+			alias = BindingAlias(col_ref.ColumnNames()[0], INVALID_SCHEMA, col_ref.ColumnNames()[1]);
 			binding = binder.bind_context.GetBinding(alias, error);
 		}
 		break;
 	}
 	case 3: {
 		// three entries - this must be "catalog.schema.table"
-		BindingAlias alias(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName(),
-		                   col_ref.ColumnNames()[2].GetName());
+		BindingAlias alias(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], col_ref.ColumnNames()[2]);
 		binding = binder.bind_context.GetBinding(alias, error);
 		break;
 	}
@@ -290,9 +288,9 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	ErrorData error;
 	unique_ptr<ColumnRefExpression> colref;
 	if (function.Catalog().empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.Schema());
+		colref = make_uniq<ColumnRefExpression>(function.Schema().GetName());
 	} else {
-		colref = make_uniq<ColumnRefExpression>(function.Schema(), function.Catalog());
+		colref = make_uniq<ColumnRefExpression>(function.Schema().GetName(), function.Catalog().GetName());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {
@@ -367,46 +365,39 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 	ErrorData fully_qualified_error;
 	optional_ptr<Binding> binding;
 	if (col_ref.ColumnNames().size() > 3) {
-		binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName(),
-		                                    col_ref.ColumnNames()[2].GetName(), col_ref.ColumnNames()[3].GetName(),
-		                                    fully_qualified_error);
+		binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1],
+		                                    col_ref.ColumnNames()[2], col_ref.ColumnNames()[3], fully_qualified_error);
 		if (binding) {
 			// part1 is a catalog - the column reference is "catalog.schema.table.column"
 			struct_extract_start = 4;
-			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(),
-			                                                 col_ref.ColumnNames()[3].GetName());
+			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[3]);
 		}
 	}
 	ErrorData catalog_table_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0].GetName(), INVALID_SCHEMA,
-	                                    col_ref.ColumnNames()[1].GetName(), col_ref.ColumnNames()[2].GetName(),
-	                                    catalog_table_error);
+	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], INVALID_SCHEMA, col_ref.ColumnNames()[1],
+	                                    col_ref.ColumnNames()[2], catalog_table_error);
 	if (binding) {
 		// part1 is a catalog - the column reference is "catalog.table.column"
 		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(),
-		                                                 col_ref.ColumnNames()[2].GetName());
+		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[2]);
 	}
 	ErrorData schema_table_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName(),
-	                                    col_ref.ColumnNames()[2].GetName(), schema_table_error);
+	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], col_ref.ColumnNames()[2],
+	                                    schema_table_error);
 	if (binding) {
 		// part1 is a schema - the column reference is "schema.table.column"
 		// any additional fields are turned into struct_extract calls
 		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(),
-		                                                 col_ref.ColumnNames()[2].GetName());
+		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[2]);
 	}
 	ErrorData table_column_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName(),
-	                                    table_column_error);
+	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], table_column_error);
 	if (binding) {
 		// part1 is a table
 		// the column reference is "table.column"
 		// any additional fields are turned into struct_extract calls
 		struct_extract_start = 2;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(),
-		                                                 col_ref.ColumnNames()[1].GetName());
+		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[1]);
 	}
 	// part1 could be a column
 	ErrorData unused_error;
@@ -569,8 +560,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
 		// first check if part1 is a table, and part2 is a standard column name
-		auto binding =
-		    binder.GetMatchingBinding(col_ref.ColumnNames()[0].GetName(), col_ref.ColumnNames()[1].GetName(), error);
+		auto binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], error);
 		if (binding) {
 			// it is! return the column reference directly
 			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.GetColumnName());

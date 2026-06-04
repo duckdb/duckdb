@@ -27,8 +27,8 @@ public:
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
-		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName(), "");
-		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName(), "");
+		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName().GetName(), "");
+		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName().GetName(), "");
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);

@@ -59,7 +59,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (colref.ColumnNames().size() > 1) {
 		return BindQualifiedColumnName(colref, table);
 	}
-	if (!columns.ColumnExists(colref.ColumnNames()[0].GetName())) {
+	if (!columns.ColumnExists(colref.ColumnNames()[0])) {
 		throw BinderException("Table does not contain column %s referenced in check constraint!",
 		                      colref.ColumnNames()[0]);
 	}

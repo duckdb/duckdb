@@ -282,11 +282,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(right.types, internal_types, std::move(right_node));
 
-	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename.GetName()));
+	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename));
 	bool ref_recurring = recurring_binding && recurring_binding->IsReferenced();
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
-	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename.GetName()));
+	auto cte_binding = right_binder->GetCTEBinding(BindingAlias(ctename));
 	bool ref_cte = cte_binding && cte_binding->IsReferenced();
 	if (!ref_cte && !ref_recurring) {
 		auto root =

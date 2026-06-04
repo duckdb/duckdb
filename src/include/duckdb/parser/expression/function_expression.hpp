@@ -99,14 +99,14 @@ public:
 	                              bool is_operator = false, bool export_state = false);
 
 public:
-	const string &Catalog() const {
-		return catalog.GetName();
+	const Identifier &Catalog() const {
+		return catalog;
 	}
 	string &CatalogMutable() {
 		return catalog.GetNameMutable();
 	}
-	const string &Schema() const {
-		return schema.GetName();
+	const Identifier &Schema() const {
+		return schema;
 	}
 	string &SchemaMutable() {
 		return schema.GetNameMutable();

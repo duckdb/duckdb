@@ -31,7 +31,7 @@ static void CreateTPCDSTable(ClientContext &context, string catalog_name, string
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
 	if (keys) {
-		duckdb::vector<string> pk_columns;
+		duckdb::vector<duckdb::Identifier> pk_columns;
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
 			pk_columns.push_back(T::PrimaryKeyColumns[i]);
 		}

@@ -570,7 +570,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	for (auto &entry : to_drop) {
 		auto set = entry.get().set;
 		D_ASSERT(set);
-		set->DropEntry(transaction, entry.get().name.GetName(), cascade);
+		set->DropEntry(transaction, entry.get().name, cascade);
 	}
 }
 

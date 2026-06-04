@@ -47,12 +47,12 @@
       {
         "id": 200,
         "name": "pk_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 201,
         "name": "fk_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
@@ -104,7 +104,7 @@
       {
         "id": 202,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   }

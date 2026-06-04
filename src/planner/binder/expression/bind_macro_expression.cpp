@@ -120,8 +120,8 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		auto &macro_expr = macro_copy->Cast<FunctionExpression>();
 		// Transfer the macro function attributes
 		auto &window_expr = expr->Cast<WindowExpression>();
-		window_expr.CatalogMutable() = macro_expr.Catalog();
-		window_expr.SchemaMutable() = macro_expr.Schema();
+		window_expr.CatalogMutable() = macro_expr.Catalog().GetName();
+		window_expr.SchemaMutable() = macro_expr.Schema().GetName();
 		window_expr.FunctionNameMutable() = macro_expr.FunctionName();
 
 		window_expr.GetChildrenMutable().clear();

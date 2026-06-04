@@ -321,7 +321,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
-			row_number->SetAlias(column_name_alias[return_names.size()].GetName());
+			row_number->SetAlias(column_name_alias[return_names.size()]);
 			ordinality_alias = column_name_alias[return_names.size()].GetName();
 		} else {
 			row_number->SetAlias(ordinality_column_name);
@@ -367,8 +367,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	string catalog = fexpr.Catalog();
-	string schema = fexpr.Schema();
+	string catalog = fexpr.Catalog().GetName();
+	string schema = fexpr.Schema().GetName();
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
@@ -425,7 +425,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(*this);
-	auto best_function_idx = function_binder.BindFunction(function.name.GetName(), function.functions, arguments, error);
+	auto best_function_idx =
+	    function_binder.BindFunction(function.name.GetName(), function.functions, arguments, error);
 	if (!best_function_idx.IsValid()) {
 		error.AddQueryLocation(ref);
 		error.Throw();

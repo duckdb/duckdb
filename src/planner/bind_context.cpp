@@ -393,13 +393,12 @@ BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
 		throw InternalException("Cannot get binding alias from column ref unless it has 2..4 entries");
 	}
 	if (colref.ColumnNames().size() >= 4) {
-		return BindingAlias(colref.ColumnNames()[0].GetName(), colref.ColumnNames()[1].GetName(),
-		                    colref.ColumnNames()[2].GetName());
+		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1], colref.ColumnNames()[2]);
 	}
 	if (colref.ColumnNames().size() == 3) {
-		return BindingAlias(colref.ColumnNames()[0].GetName(), colref.ColumnNames()[1].GetName());
+		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1]);
 	}
-	return BindingAlias(colref.ColumnNames()[0].GetName());
+	return BindingAlias(colref.ColumnNames()[0]);
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
@@ -543,8 +542,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				auto new_expr = CreateColumnReference(binding_alias, column_name.GetName(),
-				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr =
+				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
@@ -595,8 +594,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				auto new_expr = CreateColumnReference(binding_alias, column_name.GetName(),
-				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr =
+				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}

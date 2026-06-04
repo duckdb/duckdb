@@ -136,7 +136,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				if (pk.IsPrimaryKey()) {
 					// multi key pk column: insert set of columns into multi_key_pks
 					for (auto &col : pk.GetColumnNames()) {
-						multi_key_pks.insert(col);
+						multi_key_pks.insert(col.GetName());
 					}
 				}
 				extra_constraints.push_back(constraint->ToString());
@@ -285,7 +285,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	auto bound_constraints = binder.BindConstraints(constraints, name.GetName(), columns);
+	auto bound_constraints = binder.BindConstraints(constraints, name, columns);
 	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();

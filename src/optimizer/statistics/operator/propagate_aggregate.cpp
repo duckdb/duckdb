@@ -145,7 +145,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate has a filter - bail
 			return;
 		}
-		const string &fun_name = aggr_expr.Function().GetName();
+		auto &fun_name = aggr_expr.Function().GetName().GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.GetChildren().size() != 1 ||
 			    aggr_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -334,7 +334,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		vector<unique_ptr<Expression>> proj_expressions;
 		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			const string &fun_name = aggr_expr.Function().GetName();
+			auto &fun_name = aggr_expr.Function().GetName().GetName();
 
 			// Reference to the aggregate output column
 			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(

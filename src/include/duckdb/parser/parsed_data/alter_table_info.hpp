@@ -143,7 +143,7 @@ struct RenameFieldInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
-	string GetColumnName() const override {
+	Identifier GetColumnName() const override {
 		return column_path[0];
 	}
 
@@ -215,7 +215,7 @@ struct AddFieldInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
-	string GetColumnName() const override {
+	Identifier GetColumnName() const override {
 		return column_path[0];
 	}
 
@@ -245,7 +245,7 @@ public:
 	string ToString() const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
-	string GetColumnName() const override {
+	Identifier GetColumnName() const override {
 		return removed_column.GetName();
 	}
 
@@ -270,7 +270,7 @@ struct RemoveFieldInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
-	string GetColumnName() const override {
+	Identifier GetColumnName() const override {
 		return column_path[0];
 	}
 
@@ -300,7 +300,7 @@ public:
 	string ToString() const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
-	string GetColumnName() const override {
+	Identifier GetColumnName() const override {
 		return column_name.GetName();
 	}
 
@@ -334,13 +334,14 @@ private:
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
 struct AlterForeignKeyInfo : public AlterTableInfo {
-	AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<string> pk_columns, vector<string> fk_columns,
-	                    vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys, AlterForeignKeyType type);
+	AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<Identifier> pk_columns,
+	                    vector<Identifier> fk_columns, vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys,
+	                    AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
 
 	Identifier fk_table;
-	vector<string> pk_columns;
-	vector<string> fk_columns;
+	vector<Identifier> pk_columns;
+	vector<Identifier> fk_columns;
 	vector<PhysicalIndex> pk_keys;
 	vector<PhysicalIndex> fk_keys;
 	AlterForeignKeyType type;

@@ -557,7 +557,7 @@ string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                              const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);

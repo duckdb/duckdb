@@ -274,8 +274,8 @@ unique_ptr<AlterTableInfo> AddFieldInfo::Deserialize(Deserializer &deserializer)
 void AlterForeignKeyInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(400, "fk_table", fk_table);
-	serializer.WritePropertyWithDefault<vector<string>>(401, "pk_columns", pk_columns);
-	serializer.WritePropertyWithDefault<vector<string>>(402, "fk_columns", fk_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(401, "pk_columns", pk_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(402, "fk_columns", fk_columns);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(403, "pk_keys", pk_keys);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(404, "fk_keys", fk_keys);
 	serializer.WriteProperty<AlterForeignKeyType>(405, "alter_fk_type", type);
@@ -284,8 +284,8 @@ void AlterForeignKeyInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> AlterForeignKeyInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<AlterForeignKeyInfo>(new AlterForeignKeyInfo());
 	deserializer.ReadPropertyWithDefault<Identifier>(400, "fk_table", result->fk_table);
-	deserializer.ReadPropertyWithDefault<vector<string>>(401, "pk_columns", result->pk_columns);
-	deserializer.ReadPropertyWithDefault<vector<string>>(402, "fk_columns", result->fk_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(401, "pk_columns", result->pk_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(402, "fk_columns", result->fk_columns);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(403, "pk_keys", result->pk_keys);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(404, "fk_keys", result->fk_keys);
 	deserializer.ReadProperty<AlterForeignKeyType>(405, "alter_fk_type", result->type);

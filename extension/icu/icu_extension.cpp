@@ -161,7 +161,7 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &
 		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 
-	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName());
+	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName().GetName());
 	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");

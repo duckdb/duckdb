@@ -1,3 +1,16 @@
+diff --git a/src/sqlite_db.cpp b/src/sqlite_db.cpp
+index 27eaf27..2139358 100644
+--- a/src/sqlite_db.cpp
++++ b/src/sqlite_db.cpp
+@@ -174,7 +174,7 @@ void SQLiteDB::GetTableInfo(const string &table_name, ColumnList &columns, vecto
+ 	SQLiteStatement stmt;
+ 
+ 	idx_t primary_key_index = idx_t(-1);
+-	vector<string> primary_keys;
++	vector<Identifier> primary_keys;
+ 
+ 	bool found = false;
+ 
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
 index a35686e..582b3ce 100644
 --- a/src/storage/sqlite_delete.cpp

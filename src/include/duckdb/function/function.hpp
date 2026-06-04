@@ -103,11 +103,11 @@ struct FunctionParameters {
 
 class FunctionParameter {
 public:
-	FunctionParameter(string name, LogicalType type)
+	FunctionParameter(Identifier name, LogicalType type)
 	    : name(std::move(name)), type(std::move(type)), default_value(nullptr) {
 	}
 
-	FunctionParameter(string name, LogicalType type, Value value)
+	FunctionParameter(Identifier name, LogicalType type, Value value)
 	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
 	}
 
@@ -119,7 +119,7 @@ public:
 	auto GetName() const -> const string & {
 		return name.GetName();
 	}
-	auto SetName(string name_p) -> void {
+	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
 	}
 
@@ -198,12 +198,12 @@ public:
 		varargs = std::move(varargs_p);
 	}
 
-	auto AddParameter(string name, LogicalType type, Value default_value) -> FunctionSignature & {
+	auto AddParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value));
 		return *this;
 	}
 
-	auto AddParameter(string name, LogicalType type) -> FunctionSignature & {
+	auto AddParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type));
 		return *this;
 	}
@@ -214,10 +214,10 @@ public:
 		return *this;
 	}
 
-	auto GetParameterIndexByName(const string &name) const -> optional_idx {
+	auto GetParameterIndexByName(const Identifier &name) const -> optional_idx {
 		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
-			if (StringUtil::CIEquals(parameters[i].GetName(), name)) {
+			if (parameters[i].GetName() == name) {
 				return i;
 			}
 		}
@@ -284,24 +284,24 @@ public:
 	Identifier schema_name;
 
 public:
-	auto SetName(string name_p) -> void {
+	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
 	}
-	auto SetSchemaName(string schema_name_p) -> void {
+	auto SetSchemaName(Identifier schema_name_p) -> void {
 		schema_name = std::move(schema_name_p);
 	}
-	auto SetCatalogName(string catalog_name_p) -> void {
+	auto SetCatalogName(Identifier catalog_name_p) -> void {
 		catalog_name = std::move(catalog_name_p);
 	}
 
-	const string &GetName() const {
-		return name.GetName();
+	const Identifier &GetName() const {
+		return name;
 	}
-	const string &GetSchemaName() const {
-		return schema_name.GetName();
+	const Identifier &GetSchemaName() const {
+		return schema_name;
 	}
-	const string &GetCatalogName() const {
-		return catalog_name.GetName();
+	const Identifier &GetCatalogName() const {
+		return catalog_name;
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
@@ -492,18 +492,18 @@ protected:
 	LogicalType return_type;
 
 public:
-	void SetName(string name_p) {
+	void SetName(Identifier name_p) {
 		name = std::move(name_p);
 	}
 
-	const string &GetName() const {
-		return name.GetName();
+	const Identifier &GetName() const {
+		return name;
 	}
-	const string &GetSchemaName() const {
-		return schema_name.GetName();
+	const Identifier &GetSchemaName() const {
+		return schema_name;
 	}
-	const string &GetCatalogName() const {
-		return catalog_name.GetName();
+	const Identifier &GetCatalogName() const {
+		return catalog_name;
 	}
 
 	const string &GetExtraInfo() const {

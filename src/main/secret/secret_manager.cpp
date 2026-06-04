@@ -152,7 +152,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
                                                               OnCreateConflict on_conflict,
                                                               SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(secret->GetType());
+	LookupTypeInternal(secret->GetType().GetName());
 
 	//! Handle default for persist type
 	if (persist_type == SecretPersistType::DEFAULT) {
@@ -713,12 +713,13 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 }
 
 unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(CatalogTransaction transaction,
-                                                                    const string &entry_name) {
-	return CreateDefaultEntryInternal(entry_name);
+                                                                    const Identifier &entry_name) {
+	return CreateDefaultEntryInternal(entry_name.GetName());
 }
 
-unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	return CreateDefaultEntryInternal(entry_name);
+unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContext &context,
+                                                                    const Identifier &entry_name) {
+	return CreateDefaultEntryInternal(entry_name.GetName());
 }
 
 vector<string> DefaultSecretGenerator::GetDefaultEntries() {

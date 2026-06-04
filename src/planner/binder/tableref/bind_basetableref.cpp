@@ -111,7 +111,7 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 	return view_search_path;
 }
 
-void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
+void Binder::SetSearchPath(Catalog &catalog, const Identifier &schema) {
 	auto search_path = GetSearchPath(catalog, schema);
 	entry_retriever.SetSearchPath(std::move(search_path));
 }

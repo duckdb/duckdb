@@ -301,7 +301,7 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	// Named struct case
 	D_ASSERT(all_name);
 	child_list_t<LogicalType> children;
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	for (auto &arg : arguments) {
 		auto &child_name = arg.GetName();
@@ -359,7 +359,7 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 	}
 
 	child_list_t<LogicalType> children;
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	for (auto &arg : arguments) {
 		if (!arg.HasName()) {
@@ -598,11 +598,12 @@ DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry 
     : DefaultGenerator(catalog), schema(schema) {
 }
 
-unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
+unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext &context,
+                                                                  const Identifier &entry_name) {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}
-	auto entry = TryGetDefaultTypeEntry(entry_name);
+	auto entry = TryGetDefaultTypeEntry(entry_name.GetName());
 	if (!entry || entry->type == LogicalTypeId::INVALID) {
 		return nullptr;
 	}

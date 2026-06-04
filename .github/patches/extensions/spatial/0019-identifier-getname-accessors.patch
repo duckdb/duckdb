@@ -11,6 +11,19 @@ index b4d5601..b7c1e6f 100644
  	                          info->options, context, IndexStorageInfo(), estimated_cardinality);
  
  	gstate->max_node_capacity = gstate->rtree->tree->GetConfig().max_node_capacity;
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 687f129..860dae0 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -94,7 +94,7 @@ public:
+ 
+ 	static bool IsSpatialPredicate(const BoundScalarFunction &function, const unordered_set<string> &predicates) {
+ 
+-		if (predicates.find(function.GetName()) == predicates.end()) {
++		if (predicates.find(function.GetName().GetName()) == predicates.end()) {
+ 			return false;
+ 		}
+ 		if (function.GetArguments().size() < 2) {
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 index 44790d8..bd2270e 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
@@ -52,3 +65,64 @@ index a1bfbe3..8685bee 100644
  	return result;
  }
  
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index 8262a8c..c63e0a5 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -1579,14 +1579,14 @@ public:
+ 	}
+ 
+ public:
+-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override {
++	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override {
+ 
+ 		if (schema.name != DEFAULT_SCHEMA) {
+ 			return nullptr;
+ 		}
+ 
+ 		// Try to split name by ":"
+-		auto parts = StringUtil::Split(entry_name, ":");
++		auto parts = StringUtil::Split(entry_name.GetName(), ":");
+ 		if (parts.size() != 2) {
+ 			return nullptr;
+ 		}
+@@ -1624,7 +1624,7 @@ public:
+ 
+ 		proj_destroy(crs);
+ 
+-		auto info = CreateCoordinateSystemInfo(entry_name, auth_name, auth_code, projjson_text, wkt_text);
++		auto info = CreateCoordinateSystemInfo(entry_name.GetName(), auth_name, auth_code, projjson_text, wkt_text);
+ 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+ 
+ 		auto result = make_uniq<CoordinateSystemCatalogEntry>(catalog, schema, info);
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index cabbe23..3cdbab4 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -56,7 +56,7 @@ static bool HasInversePredicate(const string &func_name) {
+ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique_ptr<Expression> expr) {
+ 	auto &func = expr->Cast<BoundFunctionExpression>();
+ 
+-	const auto it = spatial_predicate_inverse_map.find(func.Function().GetName());
++	const auto it = spatial_predicate_inverse_map.find(func.Function().GetName().GetName());
+ 	D_ASSERT(it != spatial_predicate_inverse_map.end());
+ 
+ 	// Swap the arguments
+@@ -104,7 +104,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	// The function must be a recognized spatial predicate
+-	if (spatial_predicate_map.count(func.Function().GetName()) == 0) {
++	if (spatial_predicate_map.count(func.Function().GetName().GetName()) == 0) {
+ 		return false;
+ 	}
+ 
+@@ -117,7 +117,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	if (left_side == JoinSide::RIGHT) {
+-		if (!HasInversePredicate(func.Function().GetName())) {
++		if (!HasInversePredicate(func.Function().GetName().GetName())) {
+ 			return false;
+ 		}
+ 		needs_flipping = true;

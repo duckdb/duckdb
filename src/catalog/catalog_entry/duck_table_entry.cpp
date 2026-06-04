@@ -383,7 +383,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		case ConstraintType::FOREIGN_KEY: {
 			// FOREIGN KEY constraint: possibly need to rename columns
 			auto &fk = copy->Cast<ForeignKeyConstraint>();
-			vector<string> columns = fk.pk_columns;
+			vector<Identifier> columns = fk.pk_columns;
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				columns = fk.fk_columns;
 			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
@@ -431,7 +431,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	binder->SetSearchPath(catalog, schema.name.GetName());
+	binder->SetSearchPath(catalog, schema.name);
 	binder->BindLogicalType(info.new_column.TypeMutable());
 
 	// Check if type is supported in this database version
@@ -687,7 +687,8 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 				for (const auto &col_name : unique.GetColumnNames()) {
 					if (col_name == info.removed_column) {
 						// Build constraint string for error message: UNIQUE(col1, col2, ...)
-						auto constraint_str = "UNIQUE(" + StringUtil::Join(unique.GetColumnNames(), ", ") + ")";
+						auto constraint_str =
+						    "UNIQUE(" + StringUtil::Join(IdentifiersToStrings(unique.GetColumnNames()), ", ") + ")";
 						throw CatalogException(
 						    "Cannot drop column \"%s\" because it is referenced in unique constraint %s",
 						    info.removed_column, constraint_str);
@@ -700,7 +701,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 		case ConstraintType::FOREIGN_KEY: {
 			auto copy = constraint->Copy();
 			auto &fk = copy->Cast<ForeignKeyConstraint>();
-			vector<string> columns = fk.pk_columns;
+			vector<Identifier> columns = fk.pk_columns;
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				columns = fk.fk_columns;
 			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
@@ -761,7 +762,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_constraints = binder->BindConstraints(constraints, name.GetName(), columns);
+	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 
 	UpdateConstraintsOnColumnDrop(removed_index, adjusted_indices, info, *create_info, bound_constraints,
 	                              dropped_column_is_generated);
@@ -1059,7 +1060,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	// Bind type
 	auto type_binder = Binder::CreateBinder(context);
-	type_binder->SetSearchPath(catalog, schema.name.GetName());
+	type_binder->SetSearchPath(catalog, schema.name);
 	type_binder->BindLogicalType(info.target_type);
 
 	auto change_idx = GetColumnIndex(info.column_name.GetNameMutable());
@@ -1083,7 +1084,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	// Check if type is supported in this database version
 	CheckTypeIsSupported(info.target_type, catalog.GetAttached());
 
-	auto bound_constraints = binder->BindConstraints(constraints, name.GetName(), columns);
+	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
 		if (change_idx == col.Logical()) {
@@ -1391,8 +1392,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 			triggers->DropEntry(transaction, entry_name, false);
 		}
 	}
-	if (!triggers->CreateEntry(transaction, entry_name.GetName(), std::move(trigger), dependencies)) {
-		throw CatalogException::EntryAlreadyExists(CatalogType::TRIGGER_ENTRY, entry_name.GetName());
+	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {
+		throw CatalogException::EntryAlreadyExists(CatalogType::TRIGGER_ENTRY, entry_name);
 	}
 	return triggers->GetEntry(transaction, entry_name);
 }

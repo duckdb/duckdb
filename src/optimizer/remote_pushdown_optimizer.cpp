@@ -475,8 +475,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	string catalog_name = func_expr.Catalog();
-	string schema_name = func_expr.Schema();
+	string catalog_name = func_expr.Catalog().GetName();
+	string schema_name = func_expr.Schema().GetName();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// If the function has an explicit catalog prefix, skip pushdown for now
@@ -567,7 +567,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 			return false;
 		}
 		// Local catalog - check if the function is a macro
-		const string &schema = func.Schema().empty() ? DEFAULT_SCHEMA : func.Schema();
+		const string &schema = func.Schema().empty() ? DEFAULT_SCHEMA : func.Schema().GetName();
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
 		auto entry =
 		    Catalog::GetEntry(binder.context, func.Catalog(), schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
@@ -583,7 +583,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	// Unqualified function - search local catalogs for a macro with this name
 	FindRemoteCatalogsInSearchPath();
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const string &schema = func.Schema().empty() ? local_entry.schema : func.Schema();
+		const string &schema = func.Schema().empty() ? local_entry.schema : func.Schema().GetName();
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
@@ -703,10 +703,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cas
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const string &catalog_p,
-                                                                         const string &schema_p) {
-	string catalog_name = catalog_p;
-	string schema_name = schema_p;
+CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const Identifier &catalog_p,
+                                                                         const Identifier &schema_p) {
+	string catalog_name = catalog_p.GetName();
+	string schema_name = schema_p.GetName();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
@@ -854,9 +854,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
-		if (StringUtil::CIEquals(func.Catalog(), catalog_name)) {
+		if (func.Catalog() == catalog_name) {
 			func.CatalogMutable() = "";
-		} else if (func.Catalog().empty() && StringUtil::CIEquals(func.Schema(), catalog_name)) {
+		} else if (func.Catalog().empty() && func.Schema() == catalog_name) {
 			func.SchemaMutable() = "";
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments

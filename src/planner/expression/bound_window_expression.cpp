@@ -18,7 +18,7 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 }
 
 string BoundWindowExpression::ToString() const {
-	string function_name = aggregate.get() ? aggregate->GetName() : window->GetName();
+	string function_name = aggregate.get() ? aggregate->GetName().GetName() : window->GetName().GetName();
 	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
 	                                                                                       function_name);
 }

@@ -23,7 +23,7 @@ struct ConstraintEntry {
 			return;
 		}
 		auto binder = Binder::CreateBinder(context);
-		bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name.GetName(), table.GetColumns());
+		bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
 	}
 
 	TableCatalogEntry &table;
@@ -147,15 +147,15 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 		if (unique.HasIndex()) {
 			result.column_indexes.push_back(unique.GetIndex());
 		} else {
-			result.column_names = unique.GetColumnNames();
+			result.column_names = IdentifiersToStrings(unique.GetColumnNames());
 		}
 		break;
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
-		result.referenced_columns = fk.pk_columns;
+		result.referenced_columns = IdentifiersToStrings(fk.pk_columns);
 		result.referenced_table = fk.info.table.GetName();
-		result.column_names = fk.fk_columns;
+		result.column_names = IdentifiersToStrings(fk.fk_columns);
 		break;
 	}
 	default:

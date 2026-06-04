@@ -220,10 +220,10 @@ static const DefaultView internal_views[] = {
      "is_trigger_updatable, 'NO' AS is_trigger_deletable, 'NO' AS is_trigger_insertable_into FROM duckdb_views();"},
     {nullptr, nullptr, nullptr}};
 
-static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const string &input_schema,
-                                                 const string &input_name) {
-	auto schema = StringUtil::Lower(input_schema);
-	auto name = StringUtil::Lower(input_name);
+static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const Identifier &input_schema,
+                                                 const Identifier &input_name) {
+	auto schema = StringUtil::Lower(input_schema.GetName());
+	auto name = StringUtil::Lower(input_name.GetName());
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_uniq<CreateViewInfo>();
@@ -243,8 +243,9 @@ DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry 
     : DefaultGenerator(catalog), schema(schema) {
 }
 
-unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	auto info = GetDefaultView(context, schema.name.GetName(), entry_name);
+unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context,
+                                                                  const Identifier &entry_name) {
+	auto info = GetDefaultView(context, schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(catalog, schema, *info);
 	}

@@ -29,7 +29,7 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	auto &table_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.table_name.GetName());
 	stmt.info->catalog = table_entry.ParentCatalog().GetName();
-	stmt.info->schema = table_entry.ParentSchema().name.GetName();
+	stmt.info->schema = table_entry.ParentSchema().name;
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 }
 

@@ -357,7 +357,7 @@ index bb6d76f..e334d0d 100644
  }
  
 diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
-index e2e893e..11c9bef 100644
+index e2e893e..e983da2 100644
 --- a/src/storage/mysql_table_set.cpp
 +++ b/src/storage/mysql_table_set.cpp
 @@ -56,7 +56,7 @@ FROM information_schema.columns
@@ -378,6 +378,24 @@ index e2e893e..11c9bef 100644
  	auto result = transaction.Query(query);
  	auto table_info = make_uniq<MySQLTableInfo>(schema, table_name);
  	while (result->Next()) {
+@@ -134,7 +134,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
+ 			not_null_columns.insert(not_null.index);
+ 		} else if (constraint->type == ConstraintType::UNIQUE) {
+ 			auto &pk = constraint->Cast<UniqueConstraint>();
+-			vector<string> constraint_columns = pk.columns;
++			auto constraint_columns = IdentifiersToStrings(pk.columns);
+ 			if (pk.index.index != DConstants::INVALID_INDEX) {
+ 				// no columns specified: single column constraint
+ 				if (pk.is_primary_key) {
+@@ -148,7 +148,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
+ 				if (pk.is_primary_key) {
+ 					// multi key pk column: insert set of columns into multi_key_pks
+ 					for (auto &col : pk.columns) {
+-						multi_key_pks.insert(col);
++						multi_key_pks.insert(col.GetName());
+ 					}
+ 				}
+ 				extra_constraints.push_back(constraint->ToString());
 @@ -215,10 +215,10 @@ string GetMySQLCreateTable(ClientContext &context, CreateTableInfo &info) {
  		ss << "IF NOT EXISTS ";
  	}
@@ -441,3 +459,16 @@ index e2e893e..11c9bef 100644
  	transaction.Query(sql);
  }
  
+diff --git a/database-connector/src/optimizer/aggregate_optimizer.cpp b/database-connector/src/optimizer/aggregate_optimizer.cpp
+index 0332bcc..510c9a3 100644
+--- a/database-connector/src/optimizer/aggregate_optimizer.cpp
++++ b/database-connector/src/optimizer/aggregate_optimizer.cpp
+@@ -72,7 +72,7 @@ static bool CanPushAggregate(LogicalAggregate &aggr) {
+ 		if (agg_expr.GetOrderBysMutable() && !agg_expr.GetOrderBysMutable()->orders.empty()) {
+ 			return false;
+ 		}
+-		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName()) == PUSHABLE_AGGREGATES.end()) {
++		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName().GetName()) == PUSHABLE_AGGREGATES.end()) {
+ 			return false;
+ 		}
+ 		if (agg_expr.FunctionMutable().GetName() != "count_star") {

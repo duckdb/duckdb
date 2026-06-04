@@ -414,7 +414,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(P
                                                                                ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
-	auto result = make_uniq<UniqueConstraint>(column_list, true);
+	auto result = make_uniq<UniqueConstraint>(StringsToIdentifiers(column_list), true);
 	return std::move(result);
 }
 
@@ -422,7 +422,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
-	return make_uniq<UniqueConstraint>(column_list, false);
+	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_list), false);
 }
 
 ColumnConstraintEntry PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
@@ -446,7 +446,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 
 	auto cc_entry = transformer.Transform<ColumnConstraintEntry>(list_pr.Child<ListParseResult>(3));
 	auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
-	fk_constraint.fk_columns = pk_list;
+	fk_constraint.fk_columns = StringsToIdentifiers(pk_list);
 	if (!fk_constraint.pk_columns.empty() && fk_constraint.fk_columns.size() != fk_constraint.pk_columns.size()) {
 		throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 	}
@@ -501,7 +501,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "ForeignKeyConstraint";
-	entry.constraint = make_uniq<ForeignKeyConstraint>(pk_list, vector<string>(), fk_info);
+	entry.constraint = make_uniq<ForeignKeyConstraint>(StringsToIdentifiers(pk_list), vector<Identifier>(), fk_info);
 	return entry;
 }
 

@@ -44,7 +44,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
-	create_index_info->table = table_info.name.GetName();
+	create_index_info->table = table_info.name;
 	create_index_info->index_type = ART::TYPE_NAME;
 	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
 
@@ -146,7 +146,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	// Bind types in the same catalog as the entry
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(catalog, stmt.info->schema.GetName());
+	type_binder->SetSearchPath(catalog, stmt.info->schema);
 
 	BindAlterTypes(*type_binder, stmt);
 

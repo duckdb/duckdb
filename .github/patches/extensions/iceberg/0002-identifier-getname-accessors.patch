@@ -161,7 +161,7 @@ index ce20f92f..6125cd1b 100644
  		} else {
  			throw NotImplementedException("Unsupported partition key type: %s", key->ToString());
 diff --git a/src/catalog/rest/iceberg_catalog.cpp b/src/catalog/rest/iceberg_catalog.cpp
-index 5e636af6..1183248b 100644
+index 5e636af6..ee79ae83 100644
 --- a/src/catalog/rest/iceberg_catalog.cpp
 +++ b/src/catalog/rest/iceberg_catalog.cpp
 @@ -78,19 +78,19 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
@@ -226,6 +226,15 @@ index 5e636af6..1183248b 100644
  }
  
  unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+@@ -177,7 +177,7 @@ unique_ptr<SecretEntry> IcebergCatalog::GetStorageSecret(ClientContext &context,
+ 		auto secret_entry = context.db->GetSecretManager().GetSecretByName(transaction, secret_name);
+ 		if (secret_entry) {
+ 			auto secret_type = secret_entry->secret->GetType();
+-			if (accepted_secret_types.count(secret_type)) {
++			if (accepted_secret_types.count(secret_type.GetName())) {
+ 				return secret_entry;
+ 			}
+ 			throw InvalidConfigurationException(
 diff --git a/src/catalog/rest/iceberg_table_set.cpp b/src/catalog/rest/iceberg_table_set.cpp
 index d935a578..e0a592e2 100644
 --- a/src/catalog/rest/iceberg_table_set.cpp
