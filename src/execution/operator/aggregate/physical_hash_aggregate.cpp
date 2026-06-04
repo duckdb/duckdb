@@ -450,6 +450,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		}
 	}
 
+	aggregate_input_chunk.SetChildCardinality(chunk.size());
 	aggregate_input_chunk.Verify(context.client.db);
 
 	// For every grouping set there is one radix_table
