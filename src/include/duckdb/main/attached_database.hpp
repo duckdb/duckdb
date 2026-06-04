@@ -39,6 +39,13 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 //!  - ENABLE: provides tables (asserted); surfaced normally. Errors if backend can't.
 enum class CatalogMode : uint8_t { NONE, AUTO, HIDDEN, ENABLE };
 
+//! Controls whether the attached database accepts `CONNECT`.
+//!  - NONE:   explicitly disabled — `CONNECT` to this catalog errors, even if backend supports it.
+//!  - AUTO:   backend's default — checked via `Supports(RemoteCapability::CONNECT)`.
+//!  - ENABLE: explicitly required — `CONNECT` is allowed; if backend doesn't support it, the
+//!            ATTACH itself errors so the user finds out at attach time rather than at first use.
+enum class ConnectMode : uint8_t { NONE, AUTO, ENABLE };
+
 //! DEFAULT is the standard ACID crash recovery mode.
 //! NO_WAL_WRITES disables the WAL for the attached database, i.e., disabling the D in ACID.
 //! Use this mode with caution, as it disables recovery from crashes for the file.
@@ -89,6 +96,9 @@ struct AttachOptions {
 	//! enumeration. Defaults to AUTO (backend's choice; today equivalent to ENABLE for all
 	//! current backends).
 	CatalogMode catalog_mode = CatalogMode::AUTO;
+	//! Whether `CONNECT` to this attached database is allowed. Defaults to AUTO (the
+	//! backend's `Supports(RemoteCapability::CONNECT)` declaration decides).
+	ConnectMode connect_mode = ConnectMode::AUTO;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
@@ -153,6 +163,9 @@ public:
 	CatalogMode GetCatalogMode() const {
 		return catalog_mode;
 	}
+	ConnectMode GetConnectMode() const {
+		return connect_mode;
+	}
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
@@ -175,6 +188,7 @@ private:
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	CatalogMode catalog_mode = CatalogMode::AUTO;
+	ConnectMode connect_mode = ConnectMode::AUTO;
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;

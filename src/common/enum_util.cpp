@@ -1376,6 +1376,25 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConnectModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(ConnectMode::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ConnectMode::ENABLE), "ENABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectMode>(ConnectMode value) {
+	return StringUtil::EnumToString(GetConnectModeValues(), 3, "ConnectMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectMode EnumUtil::FromString<ConnectMode>(const char *value) {
+	return static_cast<ConnectMode>(StringUtil::StringToEnum(GetConnectModeValues(), 3, "ConnectMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },

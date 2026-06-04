@@ -146,6 +146,8 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
+enum class ConnectMode : uint8_t;
+
 enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
@@ -727,6 +729,9 @@ const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
 
 template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
+
+template<>
+const char* EnumUtil::ToChars<ConnectMode>(ConnectMode value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
@@ -1514,6 +1519,9 @@ CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value)
 
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
+
+template<>
+ConnectMode EnumUtil::FromString<ConnectMode>(const char *value);
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);

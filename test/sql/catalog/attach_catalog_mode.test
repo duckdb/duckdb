@@ -1,6 +1,5 @@
 # name: test/sql/catalog/attach_catalog_mode.test
-# description: CATALOG_MODE option on ATTACH. NONE makes tables unreachable; HIDDEN hides
-#              the database from enumeration but keeps tables queryable.
+# description: CATALOG_MODE option on ATTACH. NONE makes tables unreachable; HIDDEN hides the database from enumeration but keeps tables queryable.
 # group: [catalog]
 
 # Baseline: regular ATTACH — table is reachable, db is listed.
