@@ -57,3 +57,43 @@ GROUP BY sym
 ORDER BY sym;
 ----
 physical_plan	<!REGEX>:.*AS VARCHAR.*
+
+query II
+explain
+SELECT sym, 
+    SUM(asize * ask) AS wsumAsk, 
+    SUM(bid * bsize) AS wsumBid, 
+    STDDEV(asize) AS sdevasksize, 
+    STDDEV(bid) AS sdevbid, 
+    CORR(ask, bid) AS corPrice, 
+    CORR(asize, bsize) AS corSize 
+FROM quote
+WHERE sym IN (
+	'10',
+	'11',
+	'12',
+)
+GROUP BY sym 
+ORDER BY sym;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+explain
+SELECT sym, 
+    SUM(asize * ask) AS wsumAsk, 
+    SUM(bid * bsize) AS wsumBid, 
+    STDDEV(asize) AS sdevasksize, 
+    STDDEV(bid) AS sdevbid, 
+    CORR(ask, bid) AS corPrice, 
+    CORR(asize, bsize) AS corSize 
+FROM quote
+WHERE sym NOT IN (
+	'10',
+	'11',
+	'12',
+)
+GROUP BY sym 
+ORDER BY sym;
+----
+physical_plan	<!REGEX>:.*NOT.*
