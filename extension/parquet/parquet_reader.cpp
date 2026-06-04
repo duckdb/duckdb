@@ -1738,6 +1738,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
 	}
 
+	vector<unique_ptr<AsyncTask>> io_tasks;
 	if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 		uint64_t total_row_group_span = GetGroupSpan(state);
 
@@ -1774,16 +1775,16 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 			}
 		}
 		if (strategy != ParquetPrefetchStrategy::PREFETCH_FILTERS) {
-			// If it's not filers, we fetch the whole shebang
-			for (auto &io_task : CollectIOTasks(trans)) {
-				io_task->Execute();
-			}
+			io_tasks = CollectIOTasks(trans);
 		}
 		if (log_prefetch) {
 			state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
 		}
 	}
 	result.Reset();
+	if (!io_tasks.empty()) {
+		return AsyncResult(std::move(io_tasks));
+	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
