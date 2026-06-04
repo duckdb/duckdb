@@ -127,6 +127,18 @@ SELECT decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1), 10);
 ----
 3.5257142857
 
+# INT16 inputs with large explicit scale: scale_exp exceeds int64_t safe range (4+|exp|>=19),
+# must fall back to hugeint_t compute path — previously caused out-of-bounds POWERS_OF_TEN access
+query I
+SELECT decimal_division(1.00::DECIMAL(3,2), 3.00::DECIMAL(3,2), 17);
+----
+0.33333333333333333
+
+query I
+SELECT decimal_division(1.00::DECIMAL(3,2), 3.00::DECIMAL(3,2), 35);
+----
+0.33333333333333333333333333333333333
+
 statement error
 SELECT decimal_division(1.0::DECIMAL(4,1), 3.0::DECIMAL(4,1), -1);
 ----

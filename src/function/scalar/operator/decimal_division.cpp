@@ -36,8 +36,7 @@ struct DecimalDivBindData : public FunctionData {
 // Execute functions
 //
 // COMPUTE_TYPE controls intermediate arithmetic:
-//   int64_t   -- when input_max_width + |scale_exp| < 19 (product fits in int64_t);
-//                always for INT16, conditionally for INT32 when |scale_exp| <= 9
+//   int64_t   -- when input_max_width + |scale_exp| < CACHED_POWERS_OF_TEN (product fits in int64_t)
 //   hugeint_t -- otherwise
 //===--------------------------------------------------------------------===//
 
@@ -213,7 +212,11 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	case PhysicalType::INT16:
 		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s1);
 		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s2);
-		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t, int64_t>(result_physical));
+		if (Decimal::MAX_WIDTH_INT16 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t, int64_t>(result_physical));
+		} else {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t, hugeint_t>(result_physical));
+		}
 		break;
 	case PhysicalType::INT32:
 		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, s1);
