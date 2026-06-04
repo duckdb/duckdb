@@ -317,7 +317,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformDefaultValue(PEGTransforme
 unique_ptr<Constraint>
 PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer,
                                                    unique_ptr<Constraint> top_level_constraint_list) {
-	return std::move(top_level_constraint_list);
+	return top_level_constraint_list;
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
@@ -505,13 +505,13 @@ void PEGTransformerFactory::VerifyColumnRefs(const ParsedExpression &expr) {
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformPartitionOptions(PEGTransformer &transformer,
                                                  vector<unique_ptr<ParsedExpression>> expression) {
-	return std::move(expression);
+	return expression;
 }
 
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformSortedOptions(PEGTransformer &transformer,
                                               vector<unique_ptr<ParsedExpression>> expression) {
-	return std::move(expression);
+	return expression;
 }
 
 PartitionSortedOptions

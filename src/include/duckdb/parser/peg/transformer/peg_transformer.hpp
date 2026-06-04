@@ -1116,7 +1116,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformBitTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformBitType(PEGTransformer &transformer,
-	                                                     vector<unique_ptr<ParsedExpression>> expression);
+	                                                     const vector<unique_ptr<ParsedExpression>> &expression);
 	static unique_ptr<TransformResultValue> TransformGeometryTypeInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformGeometryType(PEGTransformer &transformer,
