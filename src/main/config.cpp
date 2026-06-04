@@ -110,6 +110,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
     DUCKDB_GLOBAL(DebugVerificationModeSetting),
     DUCKDB_SETTING(DebugVerificationProjectionSetting),
+    DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
@@ -237,12 +238,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 28),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 28),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 120),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 54),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 141),
-                                                     DUCKDB_SETTING_ALIAS("user", 158),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 121),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 55),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 142),
+                                                     DUCKDB_SETTING_ALIAS("user", 159),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 27),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 156),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 157),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

@@ -356,6 +356,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
