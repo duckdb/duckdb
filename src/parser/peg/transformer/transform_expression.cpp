@@ -2462,8 +2462,7 @@ bool PEGTransformerFactory::TransformCastOrTryCast(PEGTransformer &transformer, 
 }
 
 static string SimpleCaseParameterName() {
-	const char internal_name[] = "\0__duckdb_simple_case_subject";
-	return string(internal_name, sizeof(internal_name) - 1);
+	return "__duckdb_simple_case_subject";
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGTransformer &transformer,
@@ -2474,12 +2473,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
 	auto has_case_expr = opt_expr != nullptr;
 	auto case_expr_name = SimpleCaseParameterName();
+	string simple_case_alias;
+	if (has_case_expr) {
+		simple_case_alias = "CASE " + opt_expr->ToString();
+	}
 
 	auto cases_pr = list_pr.Child<RepeatParseResult>(2).GetChildren();
 	for (auto &case_pr : cases_pr) {
 		auto case_expr = transformer.Transform<CaseCheck>(case_pr);
 		CaseCheck new_case;
 		if (has_case_expr) {
+			simple_case_alias += " WHEN (" + case_expr.when_expr->ToString() + ")";
+			simple_case_alias += " THEN (" + case_expr.then_expr->ToString() + ")";
 			new_case.when_expr = make_uniq<ComparisonExpression>(
 			    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(case_expr_name),
 			    std::move(case_expr.when_expr));
@@ -2496,13 +2501,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
 	}
 	if (has_case_expr) {
+		simple_case_alias += " ELSE " + result->Else().ToString();
+		simple_case_alias += " END";
+
 		vector<string> parameters;
 		parameters.push_back(std::move(case_expr_name));
 
 		vector<unique_ptr<ParsedExpression>> arguments;
 		arguments.push_back(make_uniq<LambdaExpression>(std::move(parameters), std::move(result)));
 		arguments.push_back(std::move(opt_expr));
-		return make_uniq<FunctionExpression>("invoke", std::move(arguments));
+		auto invoke_expr = make_uniq<FunctionExpression>("invoke", std::move(arguments));
+		invoke_expr->SetAlias(std::move(simple_case_alias));
+		return std::move(invoke_expr);
 	}
 	return std::move(result);
 }
