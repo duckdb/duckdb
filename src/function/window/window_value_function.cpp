@@ -565,12 +565,13 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	auto finalize = WindowLeadLagLocalState::Finalizer;
 	auto evaluate = WindowLeadLagExecutor::GetData;
 
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, sharing, global, local, sink, finalize, evaluate));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds,
-	                                 sharing, global, local, sink, finalize, evaluate));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global, local,
-	                                 sink, finalize, evaluate));
+	WindowFunction func({}, LogicalType::ANY, type, bind, bounds, sharing, global, local, sink, finalize, evaluate);
+	auto &sig = func.GetSignature();
+
+	sig.AddParameter("col", LogicalTypeId::ANY);
+	sig.AddParameter("offset", LogicalType::BIGINT, Value::BIGINT(1));
+	sig.AddParameter("default", LogicalTypeId::ANY, Value(LogicalTypeId::SQLNULL));
+	funcs.AddFunction(func);
 
 	for (auto &f : funcs.functions) {
 		f.SetCanStreamCallback(WindowLeadLagExecutor::CanStream);

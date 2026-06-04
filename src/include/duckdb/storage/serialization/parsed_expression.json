@@ -493,10 +493,9 @@
       {
         "id": 203,
         "name": "children",
-        "type": "vector<ParsedExpression*>",
-        "serialize_property": "SerializedChildren(serializer)",
-        "accessor_mut": "GetChildrenMutable()",
-        "accessor": "GetChildren()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 204,
@@ -588,14 +587,16 @@
         "name": "has_ignore_nulls",
         "type": "bool",
         "version": "v2.0.0"
+      },
+      {
+        "id": 218,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
     ],
-    "constructor": [
-      "type",
-      "children",
-      "offset_expr",
-      "default_expr"
-    ]
+    "custom_implementation": true
   },
   {
     "class": "TypeExpression",

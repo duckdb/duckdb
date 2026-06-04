@@ -128,9 +128,6 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.GetChildren()) {
-			result.Append(*child);
-		}
 		for (auto &child : cast_expr.Partitions()) {
 			result.Append(*child);
 		}
@@ -148,6 +145,9 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		for (auto &order : cast_expr.ArgOrders()) {
 			result.Append(*order.expression);
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
@@ -262,9 +262,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.GetChildrenMutable()) {
-			result.Append(child);
-		}
 		for (auto &child : cast_expr.PartitionsMutable()) {
 			result.Append(child);
 		}
@@ -282,6 +279,9 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		for (auto &order : cast_expr.ArgOrdersMutable()) {
 			result.Append(order.expression);
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
@@ -841,9 +841,6 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 	if (catalog != other_p.catalog) {
 		return false;
 	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
-		return false;
-	}
 	if (!ParsedExpression::ListEquals(partitions, other_p.partitions)) {
 		return false;
 	}
@@ -902,6 +899,14 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 	if (has_ignore_nulls != other_p.has_ignore_nulls) {
 		return false;
 	}
+	if (arguments.size() != other_p.arguments.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -929,12 +934,10 @@ hash_t WindowExpression::Hash() const {
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
+	copy->is_legacy_function_call = is_legacy_function_call;
 	copy->function_name = function_name;
 	copy->schema = schema;
 	copy->catalog = catalog;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
-	}
 	for (auto &child : partitions) {
 		copy->partitions.push_back(child->Copy());
 	}
@@ -953,6 +956,9 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 		copy->arg_orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	copy->has_ignore_nulls = has_ignore_nulls;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
