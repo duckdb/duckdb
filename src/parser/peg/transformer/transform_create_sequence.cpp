@@ -4,30 +4,24 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer, const bool &if_not_exists,
+                                                   const QualifiedName &qualified_name,
+                                                   vector<pair<string, unique_ptr<SequenceOption>>> sequence_option) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->name = qualified_name.name;
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	auto &opt_sequence_options = list_pr.Child<OptionalParseResult>(3);
 	case_insensitive_map_t<unique_ptr<SequenceOption>> sequence_options;
-	if (opt_sequence_options.HasResult()) {
-		auto &repeat_seq_options = opt_sequence_options.GetResult().Cast<RepeatParseResult>();
-		for (auto seq_option : repeat_seq_options.GetChildren()) {
-			auto seq_result = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(seq_option);
-			if (sequence_options.find(seq_result.first) != sequence_options.end()) {
-				auto seq_option_capital = StringUtil::Lower(seq_result.first);
-				seq_option_capital[0] = StringUtil::CharacterToUpper(seq_option_capital[0]);
-				throw ParserException("%s should be passed at most once", seq_option_capital);
-			}
-			sequence_options.insert(std::move(seq_result));
+	for (auto &seq_option : sequence_option) {
+		if (sequence_options.find(seq_option.first) != sequence_options.end()) {
+			auto seq_option_capital = StringUtil::Lower(seq_option.first);
+			seq_option_capital[0] = StringUtil::CharacterToUpper(seq_option_capital[0]);
+			throw ParserException("%s should be passed at most once", seq_option_capital);
 		}
+		sequence_options.insert(std::move(seq_option));
 	}
 	bool no_min = false;
 	bool no_max = false;
@@ -117,103 +111,88 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	return result;
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSequenceOption(PEGTransformer &transformer,
-                                                                                        ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(
-	    list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetCycle(PEGTransformer &transformer,
-                                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
-		return make_pair("cycle", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_CYCLE, Value(false)));
-	}
+pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqCycle(PEGTransformer &transformer) {
 	return make_pair("cycle", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_CYCLE, Value(true)));
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer,
-                                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expr));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqNoCycle(PEGTransformer &transformer) {
+	return make_pair("cycle", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_CYCLE, Value(false)));
+}
+
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
+	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
-		const auto const_value = func_expr->children[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
-		expr = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
+		const auto const_value =
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
-	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");
 	}
-	auto const_expr = expr->Cast<ConstantExpression>();
+	auto const_expr = expression->Cast<ConstantExpression>();
 	return make_pair("increment", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_INC, const_expr.GetValue()));
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-	auto rule_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-
-	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expr));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, const string &seq_min_or_max,
+                                             unique_ptr<ParsedExpression> expression) {
+	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
-		const auto const_value = func_expr->children[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
-		expr = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
+		const auto const_value =
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 
-	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");
 	}
-	auto const_expr = expr->Cast<ConstantExpression>();
-	auto seq_info = rule_name == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
-	return make_pair(rule_name, make_uniq<ValueSequenceOption>(seq_info, const_expr.GetValue()));
-}
-
-string PEGTransformerFactory::TransformSeqMinOrMax(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<string>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto const_expr = expression->Cast<ConstantExpression>();
+	auto seq_info = seq_min_or_max == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
+	return make_pair(seq_min_or_max, make_uniq<ValueSequenceOption>(seq_info, const_expr.GetValue()));
 }
 
 pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqNoMinMax(PEGTransformer &transformer,
-                                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto rule_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
-	auto seq_info = rule_name == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
-	return make_pair("no" + rule_name, make_uniq<ValueSequenceOption>(seq_info, true));
+                                                                                     const string &seq_min_or_max) {
+	auto seq_info = seq_min_or_max == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
+	return make_pair("no" + seq_min_or_max, make_uniq<ValueSequenceOption>(seq_info, true));
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-
-	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
+	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");
 	}
-	auto const_expr = expr->Cast<ConstantExpression>();
+	auto const_expr = expression->Cast<ConstantExpression>();
 	return make_pair("start", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_START, const_expr.GetValue()));
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqOwnedBy(PEGTransformer &transformer,
-                                                                                    ParseResult &parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqOwnedBy(PEGTransformer &transformer, const QualifiedName &qualified_name) {
 	// Unused by old transformer
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	return make_pair("owned", make_uniq<QualifiedSequenceOption>(SequenceInfo::SEQ_OWN, qualified_name));
+}
+
+string PEGTransformerFactory::TransformMinValue(PEGTransformer &transformer) {
+	return "minvalue";
+}
+
+string PEGTransformerFactory::TransformMaxValue(PEGTransformer &transformer) {
+	return "maxvalue";
 }
 
 } // namespace duckdb

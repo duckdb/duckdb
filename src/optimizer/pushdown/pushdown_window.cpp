@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 			continue;
 		}
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
-		auto &partitions = window_expr.partitions;
+		auto &partitions = window_expr.Partitions();
 		if (partitions.empty()) {
 			// If any window expression does not have partitions, we cannot push any filters.
 			// all window expressions need to be partitioned by the same column
@@ -57,7 +57,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 			// TODO: Add expressions for function expressions like FLOOR, CEIL etc.
 			case ExpressionType::BOUND_COLUMN_REF: {
 				auto &partition_col = partition_expr->Cast<BoundColumnRefExpression>();
-				partition_bindings.insert(partition_col.binding);
+				partition_bindings.insert(partition_col.Binding());
 				break;
 			}
 			default:

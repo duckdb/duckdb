@@ -315,6 +315,14 @@ supported_member_entries = [
     'default',
     'status',
     'version',
+    # equality/hash generation annotations (used by generate_util.py)
+    'equals_skip',
+    'hash_skip',
+    # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
+    'accessor_mut',
+    'accessor',
+    # nullable annotation (used by generate_util.py)
+    'nullable',
 ]
 
 
@@ -334,11 +342,20 @@ def has_default_by_default(type):
     return False
 
 
+def normalize_json_type(type_str):
+    """Map JSON-only type names to their C++ equivalents for serialization."""
+    if type_str == 'Identifier':
+        return 'string'
+    if type_str == 'vector<Identifier>':
+        return 'vector<string>'
+    return type_str
+
+
 class MemberVariable:
     def __init__(self, entry):
         self.id = entry['id']
         self.name = entry['name']
-        self.type = entry['type']
+        self.type = normalize_json_type(entry['type'])
         self.base = None
         self.has_default = False
         self.default = None
@@ -371,6 +388,7 @@ class MemberVariable:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}"
                 )
+                exit(1)
 
 
 supported_serialize_entries = [
@@ -389,6 +407,8 @@ supported_serialize_entries = [
     'includes',
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
+    'functions',
+    'use_legacy_serialization',
 ]
 
 
@@ -428,7 +448,10 @@ class SerializableClass:
         self.return_type = self.name
         self.return_class = self.name
         self.finalize_deserialization = None
+        self.use_legacy_serialization = None
         self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
+        if 'use_legacy_serialization' in entry:
+            self.use_legacy_serialization = entry['use_legacy_serialization']
         if 'ignore_clang_tidy_rules' in entry:
             self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
         if 'finalize_deserialization' in entry:
@@ -476,6 +499,7 @@ class SerializableClass:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}"
                 )
+                exit(1)
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -799,8 +823,18 @@ def generate_class_code(class_entry: SerializableClass):
     if is_templated:
         templated_type = TEMPLATED_BASE_FORMAT.format(template_name=is_templated.group()[1:-1])
 
+    legacy_serialize_preamble = ''
+    if class_entry.use_legacy_serialization is not None:
+        storage_version_enum = version_string_to_storage_version_enum(class_entry.use_legacy_serialization)
+        legacy_serialize_preamble = (
+            f'\tif (!serializer.ShouldSerialize({storage_version_enum}) && UseLegacySerialization()) {{\n'
+            f'\t\tLegacySerialize(serializer);\n'
+            f'\t\treturn;\n'
+            f'\t}}\n'
+        )
+
     class_generation += templated_type + SERIALIZE_BASE_FORMAT.format(
-        class_name=class_entry.name, members=class_serialize
+        class_name=class_entry.name, members=legacy_serialize_preamble + class_serialize
     )
 
     class_generation += templated_type + DESERIALIZE_BASE_FORMAT.format(

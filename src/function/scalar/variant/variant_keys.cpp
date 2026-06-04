@@ -3,12 +3,12 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
-static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_ids, VariantNestedData *nested_data,
-                           const ValidityMask &object_validity, const idx_t count) {
+static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_ids,
+                           array_ptr<VariantNestedData> nested_data, const ValidityMask &object_validity,
+                           const idx_t count) {
 	auto writer = FlatVector::Writer<VectorListType<idx_t>>(key_ids, count);
 	const auto &list_validity = FlatVector::Validity(key_ids);
 
@@ -41,9 +41,8 @@ static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
 	Vector key_ids(LogicalType::LIST(LogicalType::UBIGINT), count);
 	VariantPathSelection path_selection(count);
 
-	auto &allocator = Allocator::DefaultAllocator();
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr nested_data(owned_nested_data.get(), count);
 
 	auto &list_validity = FlatVector::ValidityMutable(key_ids);
 	VariantUtils::TraversePath(variant, components, count, nested_data, list_validity, path_selection);

@@ -1,0 +1,83 @@
+# name: test/optimizer/joins/left_join_reordering/left_join_cardinality_estimation.test
+# description: Cardinality Estimation Left Join Reordering
+# group: [left_join_reordering]
+
+statement ok
+create table large as select range l_id from range(100000);
+
+statement ok
+create table medium as select range m_id from range(10000);
+
+statement ok
+create table small as select range s_id from range(150);
+
+# reorder so that large is first left joined with small, then left joined with medium
+query II
+explain select * from large left join medium on (l_id = m_id) left join small on (l_id = s_id);
+----
+physical_plan	<REGEX>:.*l_id = m_id.*l_id = s_id.*
+
+
+# cardinality estimate of the result should reflect the large table size (~100000 rows)
+query II
+explain select * from large left join medium on (l_id = m_id) left join small on (l_id = s_id);
+----
+physical_plan	<REGEX>:.*~100.000 rows.*
+
+# multi-condition LEFT join: large LEFT JOIN medium ON (l_id=m_id AND l_x=m_x)
+# With the old product formula, D = D_id * D_x = 10K * 5K = 50M >> |medium|=10K, so
+# left_join_extra would be ~5000 to compensate — astronomically large intermediate values.
+# With min(D, |RHS|), denom = min(10K, 10K) = 10K, estimate = |large| * |medium| / 10K = |large|.
+
+statement ok
+create table large_mc as select range l_id, range % 5000 l_x from range(100000);
+
+statement ok
+create table medium_mc as select range m_id, range % 5000 m_x from range(10000);
+
+# cardinality estimate should still reflect the large table size (~100000 rows)
+query II
+explain select * from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+physical_plan	<REGEX>:.*~100.000 rows.*
+
+# --------------------------------------------------------------------------
+# Two independent ON predicates on the same RHS (reviewer test case #1).
+# A LEFT JOIN always preserves all LHS rows, so the estimate must be >= |LHS|
+# regardless of how many join conditions there are. The accumulated-cap logic
+# ensures that even with two conditions the product of their effective_d values
+# is capped at |RHS|, keeping the estimate at ~|LHS| = 100,000 rows.
+# --------------------------------------------------------------------------
+
+# Two conditions with independent columns — estimate must stay at ~100,000
+query II
+explain select * from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~100.000 rows.*
+
+# Correctness: result has exactly |LHS| rows (all large_mc rows, NULLs where no match)
+query I
+select count(*) from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+100000
+
+# --------------------------------------------------------------------------
+# LEFT join with mixed predicate classes: one equality + one inequality (reviewer test case #2).
+# The inequality condition (l_x < m_x) should not crash or produce wrong estimates.
+# --------------------------------------------------------------------------
+
+statement ok
+create table medium_ineq as select range m_id, (range + 1) % 5000 m_x from range(10000);
+
+# Estimate must still be >= |LHS| (the inequality condition can only filter the inner join result,
+# not reduce the LEFT join output below |LHS|)
+query II
+explain select * from large_mc left join medium_ineq on (l_id = m_id and l_x < m_x);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~100.000 rows.*
+
+# Correctness: all large_mc rows appear in the output
+query I
+select count(*) from large_mc left join medium_ineq on (l_id = m_id and l_x < m_x);
+----
+100000

@@ -40,10 +40,10 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &op = expr->Cast<BoundOperatorExpression>();
 	if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
 	     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
-	    op.children.size() != 1) {
+	    op.GetChildren().size() != 1) {
 		return false;
 	}
-	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -438,7 +438,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 		        ? state.child_states[0].current->GetNode().GetStatsMutable()
 		        : state.current->GetNode().GetStatsMutable();
-		prune_result = expr_filter.CheckStatistics(segment_stats);
+		auto context = state.context.GetClientContext();
+		prune_result =
+		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -450,14 +452,17 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
-	FilterPropagateResult update_result = expr_filter.CheckStatistics(*update_stats);
+	auto context = state.context.GetClientContext();
+	FilterPropagateResult update_result =
+	    context ? expr_filter.CheckStatistics(*context, *update_stats) : expr_filter.CheckStatistics(*update_stats);
 	if (prune_result == update_result) {
 		return prune_result;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
+                                               TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
@@ -468,10 +473,12 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
-		return expr_filter.CheckStatistics(*child_stats);
+		return context ? expr_filter.CheckStatistics(*context, *child_stats)
+		               : expr_filter.CheckStatistics(*child_stats);
 	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
-	return expr_filter.CheckStatistics(stats->statistics);
+	return context ? expr_filter.CheckStatistics(*context, stats->statistics)
+	               : expr_filter.CheckStatistics(stats->statistics);
 }
 
 const BaseStatistics &ColumnData::GetStatisticsRef() const {

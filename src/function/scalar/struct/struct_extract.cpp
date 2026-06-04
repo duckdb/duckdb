@@ -13,7 +13,7 @@ namespace duckdb {
 
 static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StructExtractBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StructExtractBindData>();
 
 	// this should be guaranteed by the binder
 	const auto &vec = args.data[0];
@@ -162,12 +162,12 @@ ScalarFunction GetKeyExtractFunction() {
 
 ScalarFunction GetIndexExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBindIndex);
+	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 
 ScalarFunction GetExtractAtFunction() {
 	return ScalarFunction("struct_extract_at", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractAtBind);
+	                      StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {

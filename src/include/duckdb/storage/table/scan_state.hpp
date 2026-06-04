@@ -228,7 +228,8 @@ private:
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
-
+	//! The query context for this scan
+	QueryContext context;
 	//! The current row_group we are scanning
 	optional_ptr<SegmentNode<RowGroup>> row_group;
 	//! The vector index within the row_group
@@ -258,7 +259,7 @@ public:
 	unique_ptr<RowGroupReorderer> reorderer;
 
 public:
-	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
+	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();

@@ -342,16 +342,17 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformDistinctOnT
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
-                                                                              ParseResult &parse_result) {
+FunctionArgument PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.name == "NamedParameter") {
 		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
 		parameter.expression->SetAlias(parameter.name);
-		return std::move(parameter.expression);
+		return FunctionArgument(parameter.name, std::move(parameter.expression));
 	}
-	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
+
+	return FunctionArgument(transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr));
 }
 
 MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -364,18 +365,19 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	return parameter;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
-                                                                                            ParseResult &parse_result) {
+vector<FunctionArgument> PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
 	// TableFunctionArguments <- Parens(List(FunctionArgument)?)
-	vector<unique_ptr<ParsedExpression>> result;
+	vector<FunctionArgument> result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &stripped_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0)).Cast<OptionalParseResult>();
 	if (stripped_parens.HasResult()) {
 		auto argument_list = ExtractParseResultsFromList(stripped_parens.GetResult());
 		for (auto &argument : argument_list) {
-			result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(argument));
+			result.push_back(transformer.Transform<FunctionArgument>(argument));
 		}
 	}
+
 	return result;
 }
 
@@ -684,20 +686,21 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
-		for (auto &col : col_ref_expr.column_names) {
+		for (auto &col : col_ref_expr.ColumnNames()) {
 			result.push_back(Value(col));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
-		if (func_expr.function_name == "row") {
-			for (auto &col : func_expr.children) {
-				GetValueFromExpression(col, result);
+		if (func_expr.FunctionName() == "row") {
+			for (auto &col : func_expr.GetArgumentsMutable()) {
+				GetValueFromExpression(col.GetExpressionMutable(), result);
 			}
 		}
 	}
 }
 
 bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry) {
+	auto initial_size = entry.values.size();
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -709,11 +712,12 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
-			if (!TransformPivotInList(child, entry)) {
+		for (auto &child : function.GetArgumentsMutable()) {
+			if (!TransformPivotInList(child.GetExpressionMutable(), entry)) {
+				entry.values.resize(initial_size);
 				return false;
 			}
 		}
@@ -728,6 +732,17 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		return true;
 	}
 	}
+}
+
+static bool PivotEntryIsTuple(const PivotColumnEntry &entry) {
+	if (entry.values.size() > 1) {
+		return true;
+	}
+	if (!entry.expr || entry.expr->GetExpressionType() != ExpressionType::FUNCTION) {
+		return false;
+	}
+	auto &function = entry.expr->Cast<FunctionExpression>();
+	return function.FunctionName() == "row";
 }
 
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
@@ -792,7 +807,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		return result;
 	}
 	auto &func_expr = pivot_expression->Cast<FunctionExpression>();
-	if (func_expr.function_name != "row") {
+	if (func_expr.FunctionName() != "row") {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 		return result;
 	}
@@ -801,13 +816,15 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 	// so pivot_expressions.size() matches entry.values.size() (both 1).
 	bool has_tuple_entries = false;
 	for (auto &entry : result.entries) {
-		if (entry.values.size() > 1) {
+		if (PivotEntryIsTuple(entry)) {
 			has_tuple_entries = true;
 			break;
 		}
 	}
 	if (has_tuple_entries) {
-		result.pivot_expressions = std::move(func_expr.children);
+		for (auto &child : func_expr.GetArgumentsMutable()) {
+			result.pivot_expressions.emplace_back(std::move(child.GetExpressionMutable()));
+		}
 	} else {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 	}
@@ -957,8 +974,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	auto result = make_uniq<TableFunctionRef>();
 
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
 	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
@@ -980,8 +996,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	auto table_alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
 
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
@@ -1225,7 +1240,7 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.GetResult());
 	}
 	auto star_expr = make_uniq<StarExpression>();
-	star_expr->columns = true;
+	star_expr->IsColumnsMutable() = true;
 	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
 	return result;
 }
@@ -1281,13 +1296,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
-	if (limit.is_percent) {
-		auto result = make_uniq<LimitPercentModifier>();
-		result->limit = std::move(limit.expression);
-		result->offset = std::move(offset.expression);
-		return std::move(result);
-	}
 	auto result = make_uniq<LimitModifier>();
+	result->limit_type = limit.is_percent ? LimitValueType::PERCENTAGE : LimitValueType::ROW_COUNT;
 	if (limit.expression) {
 		result->limit = std::move(limit.expression);
 	}
@@ -1409,9 +1419,9 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
                                                  GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
-		if (func.function_name == "row") {
-			for (auto &child : func.children) {
-				AddGroupByExpression(std::move(child), map, result, result_set);
+		if (func.FunctionName() == "row") {
+			for (auto &child : func.GetArgumentsMutable()) {
+				AddGroupByExpression(std::move(child.GetExpressionMutable()), map, result, result_set);
 			}
 			return;
 		}

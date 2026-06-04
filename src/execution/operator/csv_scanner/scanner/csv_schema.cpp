@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
+#include "duckdb/common/array.hpp"
+
 namespace duckdb {
 
 struct TypeIdxPair {
@@ -25,17 +27,26 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	case LogicalTypeId::TINYINT:
 		return destination == LogicalTypeId::SMALLINT || destination == LogicalTypeId::INTEGER ||
 		       destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
+		       destination == LogicalTypeId::HUGEINT || destination == LogicalTypeId::BIGNUM ||
 		       destination == LogicalTypeId::FLOAT || destination == LogicalTypeId::DOUBLE;
 	case LogicalTypeId::SMALLINT:
 		return destination == LogicalTypeId::INTEGER || destination == LogicalTypeId::BIGINT ||
-		       destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::FLOAT ||
+		       destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::HUGEINT ||
+		       destination == LogicalTypeId::BIGNUM || destination == LogicalTypeId::FLOAT ||
 		       destination == LogicalTypeId::DOUBLE;
 	case LogicalTypeId::INTEGER:
 		return destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
+		       destination == LogicalTypeId::HUGEINT || destination == LogicalTypeId::BIGNUM ||
 		       destination == LogicalTypeId::FLOAT || destination == LogicalTypeId::DOUBLE;
 	case LogicalTypeId::BIGINT:
-		return destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::FLOAT ||
+		return destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::HUGEINT ||
+		       destination == LogicalTypeId::BIGNUM || destination == LogicalTypeId::FLOAT ||
 		       destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		return destination == LogicalTypeId::BIGNUM || destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::BIGNUM:
+		return destination == LogicalTypeId::DOUBLE;
 	case LogicalTypeId::FLOAT:
 		return destination == LogicalTypeId::DOUBLE;
 	default:
@@ -45,8 +56,9 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 
 void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	// TODO: We could also merge names, maybe by giving preference to non-generated names?
-	const vector<LogicalType> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
-	                                                       LogicalType::DOUBLE, LogicalType::VARCHAR};
+	const array<LogicalType, 6> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
+	                                                         LogicalType::HUGEINT, LogicalType::BIGNUM,
+	                                                         LogicalType::DOUBLE,  LogicalType::VARCHAR};
 	for (idx_t i = 0; i < columns.size() && i < other.columns.size(); i++) {
 		auto this_type = columns[i].type.id();
 		auto other_type = other.columns[i].type.id();

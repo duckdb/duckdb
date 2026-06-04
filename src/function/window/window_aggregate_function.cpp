@@ -31,18 +31,18 @@ public:
 
 static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr, ClientContext &context) {
 	// Remove redundant/irrelevant modifiers (they can be serious performance cliffs)
-	if (wexpr.aggregate && ClientConfig::GetConfig(context).enable_optimizer) {
-		const auto &aggr = wexpr.aggregate;
-		auto &arg_orders = wexpr.arg_orders;
+	if (wexpr.AggregateFunction() && Settings::Get<EnableOptimizerSetting>(context)) {
+		const auto &aggr = wexpr.AggregateFunction();
+		auto &arg_orders = wexpr.ArgOrdersMutable();
 		if (aggr->GetDistinctDependent() != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
-			wexpr.distinct = false;
+			wexpr.DistinctMutable() = false;
 		}
 		if (aggr->GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT) {
 			arg_orders.clear();
 		} else {
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
-			if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
+			if (BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) == arg_orders.size()) {
 				arg_orders.clear();
 			}
 		}
@@ -56,7 +56,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
     : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared),
       mode(Settings::Get<DebugWindowModeSetting>(client)) {
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
+	if (!Settings::Get<EnableOptimizerSetting>(client) || mode == WindowAggregationMode::SEPARATE) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
 			throw InvalidInputException("Cannot use non-aggregate window function with naive window executor!");
 		}
@@ -85,9 +85,9 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 
 	// Compute the FILTER with the other eval columns.
 	// Anyone who needs it can then convert it to the form they need.
-	if (wexpr.filter_expr) {
-		const auto filter_idx = shared.RegisterSink(wexpr.filter_expr);
-		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.filter_expr->GetReturnType(), filter_idx);
+	if (wexpr.Filter()) {
+		const auto filter_idx = shared.RegisterSink(wexpr.Filter());
+		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.Filter()->GetReturnType(), filter_idx);
 	}
 }
 
@@ -237,13 +237,13 @@ void WindowAggregateExecutor::Finalize(ExecutionContext &context, CollectionPtr 
 
 	//	First entry is the frame start
 	stats[0] = FrameDelta(-count, count);
-	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
-	ApplyWindowStats(wexpr.start, stats[0], base, true);
+	auto base = wexpr.ExprStats().empty() ? nullptr : wexpr.ExprStats()[0].get();
+	ApplyWindowStats(wexpr.WindowStart(), stats[0], base, true);
 
 	//	Second entry is the frame end
 	stats[1] = FrameDelta(-count, count);
-	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
-	ApplyWindowStats(wexpr.end, stats[1], base, false);
+	base = wexpr.ExprStats().empty() ? nullptr : wexpr.ExprStats()[1].get();
+	ApplyWindowStats(wexpr.WindowEnd(), stats[1], base, false);
 
 	auto &lastate = sink.local_state.Cast<WindowAggregateExecutorLocalState>();
 	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
@@ -258,7 +258,7 @@ void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	D_ASSERT(aggregator);
 
 	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
-	aggregator->Evaluate(context, bounds, result, eval_chunk.size(), row_idx, asink);
+	aggregator->Evaluate(context, bounds, result, bounds.size(), row_idx, asink);
 }
 
 } // namespace duckdb

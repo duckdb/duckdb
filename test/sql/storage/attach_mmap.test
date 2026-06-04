@@ -1,0 +1,154 @@
+# name: test/sql/storage/attach_mmap.test
+# description: Test ATTACH with IO_MODE 'MMAP' (memory-mapped reads)
+# group: [storage]
+
+require 64bit
+
+# Reject unknown IO_MODE values
+statement error
+ATTACH '{TEST_DIR}/bogus.duckdb' AS bogus (IO_MODE 'NOPE')
+----
+<REGEX>:Binder Error:.*Unrecognized IO_MODE.*
+
+# IO_MODE 'BUFFERED_IO' is the explicit form of the default mode
+statement ok
+ATTACH '{TEST_DIR}/buffered_attach.duckdb' AS buffered_db (IO_MODE 'BUFFERED_IO')
+
+statement ok
+DETACH buffered_db
+
+# default_io_mode controls the value used when ATTACH does not specify IO_MODE
+query I
+SELECT current_setting('default_io_mode')
+----
+BUFFERED_IO
+
+statement ok
+SET default_io_mode = 'MMAP'
+
+statement ok
+ATTACH '{TEST_DIR}/default_io_mode_mmap.duckdb' AS dim_db
+
+statement ok
+CREATE TABLE dim_db.t (a INTEGER)
+
+statement ok
+INSERT INTO dim_db.t VALUES (1), (2), (3)
+
+query I
+SELECT a FROM dim_db.t ORDER BY a
+----
+1
+2
+3
+
+statement ok
+DETACH dim_db
+
+# MMAP_RESERVE_SIZE accepts both byte counts and human-readable sizes
+statement ok
+ATTACH '{TEST_DIR}/mmap_reserve_size.duckdb' AS rsize_db (IO_MODE 'MMAP', MMAP_RESERVE_SIZE '1GB')
+
+statement ok
+CREATE TABLE rsize_db.t (a INTEGER)
+
+statement ok
+INSERT INTO rsize_db.t VALUES (1), (2), (3)
+
+statement ok
+DETACH rsize_db
+
+# An invalid byte size for MMAP_RESERVE_SIZE is rejected
+statement error
+ATTACH '{TEST_DIR}/mmap_reserve_size_bad.duckdb' AS rsize_bad (IO_MODE 'MMAP', MMAP_RESERVE_SIZE 'banana')
+----
+<REGEX>:Parser Error.*
+
+statement ok
+RESET default_io_mode
+
+# An invalid value is rejected at SET time
+statement error
+SET default_io_mode = 'NOPE'
+----
+<REGEX>:.*NOPE.*FileIOMode.*
+
+# Create a database with IO_MODE 'MMAP' and write some data
+statement ok
+ATTACH '{TEST_DIR}/mmap_attach.duckdb' AS mmap_db (IO_MODE 'MMAP')
+
+statement ok
+CREATE TABLE mmap_db.t (a INTEGER, b VARCHAR);
+
+statement ok
+INSERT INTO mmap_db.t VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+query IT
+SELECT a, b FROM mmap_db.t ORDER BY a
+----
+1	one
+2	two
+3	three
+
+# Detach so we can re-open
+statement ok
+DETACH mmap_db
+
+# Re-open with mmap and verify the data is still readable
+statement ok
+ATTACH '{TEST_DIR}/mmap_attach.duckdb' AS mmap_db (IO_MODE 'MMAP')
+
+query IT
+SELECT a, b FROM mmap_db.t ORDER BY a
+----
+1	one
+2	two
+3	three
+
+# Append more data through the mmap-enabled handle (forces the file to grow + remap)
+statement ok
+INSERT INTO mmap_db.t SELECT i, 'val_' || i FROM range(4, 1000) tbl(i)
+
+query I
+SELECT COUNT(*) FROM mmap_db.t
+----
+999
+
+query IT
+SELECT a, b FROM mmap_db.t WHERE a IN (1, 500, 999) ORDER BY a
+----
+1	one
+500	val_500
+999	val_999
+
+statement ok
+CHECKPOINT mmap_db
+
+statement ok
+DETACH mmap_db
+
+# Re-open without mmap and verify the data is identical (file is portable across modes)
+statement ok
+ATTACH '{TEST_DIR}/mmap_attach.duckdb' AS mmap_db
+
+query I
+SELECT COUNT(*) FROM mmap_db.t
+----
+999
+
+statement ok
+DETACH mmap_db
+
+# Re-open in read-only mode with mmap
+statement ok
+ATTACH '{TEST_DIR}/mmap_attach.duckdb' AS mmap_db (IO_MODE 'MMAP', READ_ONLY)
+
+query IT
+SELECT a, b FROM mmap_db.t WHERE a IN (1, 500, 999) ORDER BY a
+----
+1	one
+500	val_500
+999	val_999
+
+statement ok
+DETACH mmap_db

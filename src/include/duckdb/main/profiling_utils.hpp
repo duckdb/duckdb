@@ -26,9 +26,9 @@ struct MetricsTimer;
 // Top level query metrics
 struct QueryMetrics {
 public:
-	QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
-		Reset();
-	}
+	QueryMetrics();
+	~QueryMetrics();
+
 	idx_t system_peak_buffer_memory;
 	idx_t system_peak_temp_dir_size;
 	double blocked_thread_time;

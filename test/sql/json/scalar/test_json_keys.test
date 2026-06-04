@@ -29,6 +29,12 @@ select json_keys('{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}', ['
 ----
 [[key1], [key1, key2]]
 
+query TT
+select typeof(json_keys('{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}', '$.*')),
+       json_keys('{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}', '$.*')
+----
+VARCHAR[][]	[[key1], [key1, key2]]
+
 statement ok
 create table t1 as
 select range, case when range % 2 = 0 then '{"duck": 42}' else '{"duck": 42, "goose": 43}' end j

@@ -24,7 +24,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
                                                          bool &changes_made, bool is_root) {
 	auto &date_part = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[1].get().Cast<BoundConstantExpression>();
-	auto &constant = constant_expr.value;
+	const auto &constant = constant_expr.GetValue();
 
 	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
@@ -90,7 +90,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	// found a replacement function: bind it
 	vector<unique_ptr<Expression>> children;
-	children.push_back(std::move(date_part.children[1]));
+	children.push_back(std::move(date_part.GetChildrenMutable()[1]));
 
 	ErrorData error;
 	FunctionBinder binder(rewriter.context);

@@ -82,6 +82,11 @@ select variant_exists(a, ['', 'c']) from struct_cast_data();
 [true, false]
 [true, true]
 
+statement error
+select variant_exists(a, [NULL, 'c']) from struct_cast_data();
+----
+Binder Error: 'variant_exists' does not accept NULL paths
+
 # FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce true)
 
 query I
@@ -137,10 +142,27 @@ false
 statement error
 select variant_exists({'a': 1}::VARIANT, [1]);
 ----
+<REGEX>:.*No function matches the given name and argument types 'variant_exists\(VARIANT, INTEGER\[\]\)'.*
 
 statement error
 select variant_exists({'a': 1}::VARIANT, [NULL]);
 ----
+Binder Error: 'variant_exists' does not accept NULL paths
+
+statement error
+select variant_exists({'a': 1}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_exists' does not accept NULL paths
+
+statement error
+select variant_exists({'c': 1}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_exists' does not accept NULL paths
+
+query I
+select variant_exists({'c': 1}::VARIANT, []::VARCHAR[]);
+----
+[]
 
 # FIXME: malformed JSON object should result in an error
 

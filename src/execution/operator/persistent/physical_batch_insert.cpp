@@ -691,7 +691,6 @@ SourceResultType PhysicalBatchInsert::GetDataInternal(ExecutionContext &context,
                                                       OperatorSourceInput &input) const {
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 
-	chunk.SetCardinality(1);
 	chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 
 	return SourceResultType::FINISHED;

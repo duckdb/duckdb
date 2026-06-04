@@ -83,6 +83,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
@@ -140,6 +141,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"checkpoint_on_detach", {"ENABLED"}},
 	    {"debug_verify_statement", {"copy_statement"}},
 	    {"enable_caching_operators", {false}},
+	    {"enable_optimizer", {false}},
 	    {"parallelize_sequential_sources", {false}},
 	    {"initial_column_segment_size", {4096}}};
 	// Every option that's not excluded has to be part of this map
@@ -213,6 +215,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "worker_threads",
 	    "tracked_metrics",
 	    "debug_verification_mode",
+	    "standard_vector_size",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;

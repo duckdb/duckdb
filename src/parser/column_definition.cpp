@@ -156,7 +156,7 @@ string ColumnDefinition::ToSQLString() const {
 			auto &expr = generated_expression.get();
 			D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
 			auto &cast_expr = expr.Cast<CastExpression>();
-			generated_expression = *cast_expr.child;
+			generated_expression = cast_expr.Child();
 		}
 		result += " GENERATED ALWAYS AS(" + generated_expression.get().ToString() + ")";
 	} else if (HasDefaultValue()) {

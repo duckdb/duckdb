@@ -15,15 +15,55 @@ ENABLE_PROFILING = "PRAGMA enable_profiling=json"
 PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
+RETRIES = 2
+
+
+def run_command(command, **kwargs):
+    return subprocess.run(
+        command,
+        shell=True,
+        check=False,
+        **kwargs,
+    )
 
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
-    )
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
-    print("INITIALIZATION DONE")
+    attempts = RETRIES + 1
+    if os.path.exists(dbname):
+        os.remove(dbname)
+
+    for attempt in range(1, attempts + 1):
+        schema_command = f"{cli} {dbname} < {benchmark_dir}/init/schema.sql"
+        completed = run_command(
+            schema_command,
+            stdout=subprocess.DEVNULL,
+        )
+        if completed.returncode == 0:
+            load_command = f"{cli} {dbname} < {benchmark_dir}/init/load.sql"
+            completed = run_command(
+                load_command,
+                stdout=subprocess.DEVNULL,
+            )
+            if completed.returncode == 0:
+                print("INITIALIZATION DONE")
+                return
+
+        if attempt < attempts:
+            if os.path.exists(dbname):
+                os.remove(dbname)
+            print(
+                f"Retrying failure in init db ({dbname}) "
+                f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+            )
+            continue
+
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            completed.args,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
 
 
 class PlanCost:
@@ -129,12 +169,27 @@ def op_inspect(op) -> PlanCost:
 
 def query_plan_cost(cli, dbname, query):
     try:
-        subprocess.run(
-            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
-            shell=True,
-            check=True,
-            capture_output=True,
-        )
+        command = f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\""
+        attempts = RETRIES + 1
+        for attempt in range(1, attempts + 1):
+            completed = run_command(
+                command,
+                capture_output=True,
+            )
+            if completed.returncode == 0:
+                break
+            if attempt < attempts:
+                print(
+                    f"Retrying failure in query profiling ({dbname}) "
+                    f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+                )
+                continue
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                completed.args,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
     except subprocess.CalledProcessError as e:
         print("-------------------------")
         print("--------Failure----------")

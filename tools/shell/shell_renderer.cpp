@@ -305,7 +305,7 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
 	}
-	varchar_chunk->SetCardinality(chunk.size());
+	varchar_chunk->SetChildCardinality(chunk.size());
 	varchar_chunk->Flatten();
 	return varchar_chunk;
 }
@@ -1321,7 +1321,7 @@ public:
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
 		}
-		json_chunk.SetCardinality(chunk.size());
+		json_chunk.SetChildCardinality(chunk.size());
 		json_chunk.Flatten();
 		// now convert the JSON chunk to VARCHAR
 		return ShellRenderer::ConvertChunk(json_chunk);

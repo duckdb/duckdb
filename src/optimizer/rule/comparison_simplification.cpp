@@ -22,11 +22,13 @@ static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, B
 	switch (op) {
 	case ExpressionType::COMPARE_EQUAL:
 		// d =  T   -> false, preserving NULL
-		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(false));
+		replacement =
+		    ExpressionRewriter::ConstantOrNull(std::move(cast_expression.ChildMutable()), Value::BOOLEAN(false));
 		return true;
 	case ExpressionType::COMPARE_NOTEQUAL:
 		// d != T   -> true, preserving NULL
-		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(true));
+		replacement =
+		    ExpressionRewriter::ConstantOrNull(std::move(cast_expression.ChildMutable()), Value::BOOLEAN(true));
 		return true;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		// d IS DISTINCT FROM T     -> true
@@ -139,7 +141,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-		auto child_expression = std::move(cast_expression.child);
+		auto child_expression = std::move(cast_expression.ChildMutable());
 		auto new_constant_expr = make_uniq<BoundConstantExpression>(cast_constant);
 		if (column_ref_left) {
 			left = std::move(child_expression);

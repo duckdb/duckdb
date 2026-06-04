@@ -17,6 +17,7 @@ int main(int argc_in, char *argv[]) {
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
+	bool keep_home = false;
 
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
@@ -36,6 +37,8 @@ int main(int argc_in, char *argv[]) {
 			SetTestDirectory(test_dir);
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
+		} else if (argument == "--keep-home") {
+			keep_home = true;
 		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -55,17 +58,19 @@ int main(int argc_in, char *argv[]) {
 	}
 
 	// Override the home dir so the .duckdb dir is isolated per test process.
+	if (!keep_home) {
 #ifdef DUCKDB_WINDOWS
-	if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
-		fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
-		return 1;
-	}
+		if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
+			fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
+			return 1;
+		}
 #else
-	if (setenv("HOME", dir.c_str(), 1) != 0) {
-		fprintf(stderr, "Failed to set HOME environment variable\n");
-		return 1;
-	}
+		if (setenv("HOME", dir.c_str(), 1) != 0) {
+			fprintf(stderr, "Failed to set HOME environment variable\n");
+			return 1;
+		}
 #endif
+	}
 
 	if (test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();

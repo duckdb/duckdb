@@ -39,7 +39,7 @@ void VariantUtils::ExecutePathFunction(DataChunk &input, const ExpressionState &
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantPathBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantPathBindData>();
 	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {
@@ -116,7 +116,7 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
-                                   ValidityMask &res_validity, const VariantNestedData *nested_data,
+                                   ValidityMask &res_validity, const array_ptr<VariantNestedData> &nested_data,
                                    const ValidityMask &validity, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel ? sel->get_index(i) : i;
@@ -179,7 +179,7 @@ vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &varia
 VariantNestedDataCollectionResult
 VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
                                 const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
-                                VariantNestedData *child_data, ValidityMask &validity) {
+                                array_ptr<VariantNestedData> child_data, ValidityMask &validity) {
 	VariantLogicalType wrong_type = VariantLogicalType::VARIANT_NULL;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -218,7 +218,7 @@ VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Variant
 }
 
 void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
-                                idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
+                                const idx_t count, array_ptr<VariantNestedData> nested_data, ValidityMask &validity,
                                 VariantPathSelection &path_selection) {
 	for (idx_t i = 0; i < components.size(); i++) {
 		auto &component = components[i];

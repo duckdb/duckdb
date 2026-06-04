@@ -70,7 +70,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(BindScalarFunctionInput &in
 template <bool REVERSED>
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
@@ -82,7 +82,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 template <bool REVERSED>
 static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
@@ -94,7 +94,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 template <bool REVERSED>
 static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
@@ -149,7 +149,7 @@ struct StrpTimeFunction {
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<StrpTimeBindData>();
 
 		//	There is a bizarre situation where the format column is foldable but not constant
 		//	(i.e., the statistics tell us it has only one value)
@@ -174,7 +174,7 @@ struct StrpTimeFunction {
 	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<StrpTimeBindData>();
 
 		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
 			ConstantVector::SetNull(result, count_t(args.size()));

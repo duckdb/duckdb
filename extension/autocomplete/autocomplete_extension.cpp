@@ -449,7 +449,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
@@ -517,7 +516,6 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		word.Append(Value(entry.text));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
@@ -640,7 +638,7 @@ static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
 }
 
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
+	auto &info = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<FormatSQLBindData>();
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		return heap.AddString(FormatSQL(input.GetString(), info.config));

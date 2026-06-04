@@ -154,7 +154,6 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBIndexesFun::RegisterFunction(BuiltinFunctions &set) {

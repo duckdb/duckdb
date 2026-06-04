@@ -8,6 +8,12 @@
     "includes": [
       "duckdb/parser/expression/list.hpp"
     ],
+    "functions": [
+      "Equals",
+      "Hash",
+      "Children",
+      "Copy"
+    ],
     "members": [
       {
         "id": 100,
@@ -23,13 +29,15 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "string",
+        "equals_skip": true
       },
       {
         "id": 103,
         "name": "query_location",
         "type": "optional_idx",
-        "default": "optional_idx()"
+        "default": "optional_idx()",
+        "equals_skip": true
       }
     ]
   },
@@ -41,17 +49,23 @@
       {
         "id": 200,
         "name": "input",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "InputMutable()",
+        "accessor": "Input()"
       },
       {
         "id": 201,
         "name": "lower",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "LowerBoundMutable()",
+        "accessor": "LowerBound()"
       },
       {
         "id": 202,
         "name": "upper",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "UpperBoundMutable()",
+        "accessor": "UpperBound()"
       }
     ]
   },
@@ -63,12 +77,16 @@
       {
         "id": 200,
         "name": "case_checks",
-        "type": "vector<CaseCheck>"
+        "type": "vector<CaseCheck>",
+        "accessor_mut": "CaseChecksMutable()",
+        "accessor": "CaseChecks()"
       },
       {
         "id": 201,
         "name": "else_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ElseMutable()",
+        "accessor": "Else()"
       }
     ]
   },
@@ -80,7 +98,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -102,7 +122,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -119,7 +141,7 @@
       {
         "id": 200,
         "name": "column_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   },
@@ -136,10 +158,13 @@
       {
         "id": 201,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
-    "constructor": ["lambda_idx", "column_name"]
+    "constructor": [
+      "lambda_idx",
+      "column_name"
+    ]
   },
   {
     "class": "ComparisonExpression",
@@ -149,15 +174,21 @@
       {
         "id": 200,
         "name": "left",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "LeftMutable()",
+        "accessor": "Left()"
       },
       {
         "id": 201,
         "name": "right",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "RightMutable()",
+        "accessor": "Right()"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ConjunctionExpression",
@@ -167,10 +198,14 @@
       {
         "id": 200,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ConstantExpression",
@@ -188,8 +223,7 @@
     "class": "DefaultExpression",
     "base": "ParsedExpression",
     "enum": "DEFAULT",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "FunctionExpression",
@@ -199,50 +233,79 @@
       {
         "id": 200,
         "name": "function_name",
-        "type": "string"
+        "type": "string",
+        "accessor_mut": "FunctionNameMutable()",
+        "accessor": "FunctionName()"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "string",
+        "accessor_mut": "SchemaMutable()",
+        "accessor": "Schema()"
       },
       {
         "id": 202,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 203,
         "name": "filter",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "FilterMutable()",
+        "accessor": "Filter()",
+        "nullable": true
       },
       {
         "id": 204,
         "name": "order_bys",
         "type": "OrderModifier*",
-        "base": "ResultModifier"
+        "base": "ResultModifier",
+        "accessor_mut": "OrderByMutable()",
+        "accessor": "OrderBy()",
+        "nullable": true
       },
       {
         "id": 205,
         "name": "distinct",
-        "type": "bool"
+        "type": "bool",
+        "accessor_mut": "DistinctMutable()",
+        "accessor": "Distinct()"
       },
       {
         "id": 206,
         "name": "is_operator",
-        "type": "bool"
+        "type": "bool",
+        "equals_skip": true,
+        "accessor_mut": "IsOperatorMutable()",
+        "accessor": "IsOperator()"
       },
       {
         "id": 207,
         "name": "export_state",
-        "type": "bool"
+        "type": "bool",
+        "accessor_mut": "ExportStateMutable()",
+        "accessor": "ExportState()"
       },
       {
         "id": 208,
         "name": "catalog",
-        "type": "string"
+        "type": "string",
+        "accessor_mut": "CatalogMutable()",
+        "accessor": "Catalog()"
+      },
+      {
+        "id": 209,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LambdaExpression",
@@ -252,19 +315,26 @@
       {
         "id": 200,
         "name": "lhs",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "LeftMutable()",
+        "accessor": "Left()"
       },
       {
         "id": 201,
         "name": "expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "RightMutable()",
+        "accessor": "Right()"
       },
       {
         "id": 202,
         "name": "syntax_type",
         "type": "LambdaSyntaxType",
         "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
-        "version": "v1.3.0"
+        "version": "v1.3.0",
+        "equals_skip": true,
+        "accessor_mut": "GetLambdaSyntaxTypeMutable()",
+        "accessor": "GetLambdaSyntaxType()"
       }
     ]
   },
@@ -276,10 +346,14 @@
       {
         "id": 200,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ParameterExpression",
@@ -289,7 +363,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -319,12 +393,15 @@
         "id": 201,
         "name": "exclude_list",
         "type": "case_insensitive_set_t",
-        "serialize_property": "SerializedExcludeList()"
+        "serialize_property": "SerializedExcludeList()",
+        "hash_skip": true
       },
       {
         "id": 202,
         "name": "replace_list",
-        "type": "case_insensitive_map_t<ParsedExpression*>"
+        "type": "case_insensitive_map_t<ParsedExpression*>",
+        "accessor_mut": "ReplaceListMutable()",
+        "accessor": "ReplaceList()"
       },
       {
         "id": 203,
@@ -334,7 +411,10 @@
       {
         "id": 204,
         "name": "expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ExpressionMutable()",
+        "accessor": "Expression()",
+        "nullable": true
       },
       {
         "id": 205,
@@ -348,7 +428,8 @@
         "name": "qualified_exclude_list",
         "type": "qualified_column_set_t",
         "default": "qualified_column_set_t()",
-        "serialize_property": "SerializedQualifiedExcludeList()"
+        "serialize_property": "SerializedQualifiedExcludeList()",
+        "equals_skip": true
       },
       {
         "id": 207,
@@ -377,7 +458,10 @@
       {
         "id": 202,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "GetChildMutable()",
+        "accessor": "GetChild()",
+        "nullable": true
       },
       {
         "id": 203,
@@ -410,17 +494,23 @@
         "id": 203,
         "name": "children",
         "type": "vector<ParsedExpression*>",
-        "serialize_property": "SerializedChildren(serializer)"
+        "serialize_property": "SerializedChildren(serializer)",
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
       },
       {
         "id": 204,
         "name": "partitions",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "PartitionsMutable()",
+        "accessor": "Partitions()"
       },
       {
         "id": 205,
         "name": "orders",
-        "type": "vector<OrderByNode>"
+        "type": "vector<OrderByNode>",
+        "accessor_mut": "OrderByMutable()",
+        "accessor": "OrderBy()"
       },
       {
         "id": 206,
@@ -435,24 +525,32 @@
       {
         "id": 208,
         "name": "start_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "StartExprMutable()",
+        "accessor": "StartExpr()",
+        "nullable": true
       },
       {
         "id": 209,
         "name": "end_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "EndExprMutable()",
+        "accessor": "EndExpr()",
+        "nullable": true
       },
       {
         "id": 210,
         "name": "offset_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedOffset(serializer)"
+        "serialize_property": "SerializedOffset(serializer)",
+        "equals_skip": true
       },
       {
         "id": 211,
         "name": "default_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedDefault(serializer)"
+        "serialize_property": "SerializedDefault(serializer)",
+        "equals_skip": true
       },
       {
         "id": 212,
@@ -462,7 +560,10 @@
       {
         "id": 213,
         "name": "filter_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "FilterMutable()",
+        "accessor": "Filter()",
+        "nullable": true
       },
       {
         "id": 214,
@@ -478,7 +579,9 @@
       {
         "id": 216,
         "name": "arg_orders",
-        "type": "vector<OrderByNode>"
+        "type": "vector<OrderByNode>",
+        "accessor_mut": "ArgOrdersMutable()",
+        "accessor": "ArgOrders()"
       },
       {
         "id": 217,
@@ -487,7 +590,12 @@
         "version": "v2.0.0"
       }
     ],
-    "constructor": ["type", "children", "offset_expr", "default_expr"]
+    "constructor": [
+      "type",
+      "children",
+      "offset_expr",
+      "default_expr"
+    ]
   },
   {
     "class": "TypeExpression",
@@ -500,19 +608,20 @@
         "type": "string"
       },
       {
-          "id": 201,
-          "name": "schema",
-          "type": "string"
+        "id": 201,
+        "name": "schema",
+        "type": "string"
       },
       {
-          "id": 202,
-          "name": "type_name",
-          "type": "string"
+        "id": 202,
+        "name": "type_name",
+        "type": "string"
       },
       {
-          "id": 203,
-          "name": "children",
-          "type": "vector<unique_ptr<ParsedExpression>>"
+        "id": 203,
+        "name": "children",
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "accessor_mut": "GetChildren()"
       }
     ]
   }

@@ -1,0 +1,383 @@
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 56f081f..d90d148 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -743,12 +743,12 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 		const auto &func = expr->Cast<BoundFunctionExpression>();
+-		if (func.children.size() != 2) {
++		if (func.GetChildren().size() != 2) {
+ 			continue;
+ 		}
+ 
+-		if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
+-		    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
++		if (func.GetChildren()[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
++		    func.GetChildren()[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
+ 			continue;
+ 		}
+ 
+@@ -759,7 +759,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 
+ 		auto found = false;
+ 		for (const auto &name : geometry_predicates) {
+-			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
++			if (StringUtil::CIEquals(func.Function().GetName().c_str(), name)) {
+ 				found = true;
+ 				break;
+ 			}
+@@ -769,8 +769,8 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		const auto lhs_kind = func.children[0]->GetExpressionType();
+-		const auto rhs_kind = func.children[1]->GetExpressionType();
++		const auto lhs_kind = func.GetChildren()[0]->GetExpressionType();
++		const auto rhs_kind = func.GetChildren()[1]->GetExpressionType();
+ 
+ 		const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT;
+ 		const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT;
+@@ -780,8 +780,8 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		auto &constant_expr = func.children[lhs_is_const ? 0 : 1]->Cast<BoundConstantExpression>();
+-		auto &geometry_expr = func.children[lhs_is_const ? 1 : 0];
++		auto &constant_expr = func.GetChildren()[lhs_is_const ? 0 : 1]->Cast<BoundConstantExpression>();
++		auto &geometry_expr = func.GetChildren()[lhs_is_const ? 1 : 0];
+ 
+ 		auto found_geom_expr = false;
+ 		auto multi_geom_expr = false;
+@@ -813,11 +813,11 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		if (constant_expr.value.type().id() != LogicalTypeId::GEOMETRY) {
++		if (constant_expr.GetValue().type().id() != LogicalTypeId::GEOMETRY) {
+ 			// Constant is not geometry
+ 			continue;
+ 		}
+-		if (constant_expr.value.IsNull()) {
++		if (constant_expr.GetValue().IsNull()) {
+ 			// Constant is NULL
+ 			continue;
+ 		}
+@@ -827,7 +827,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		}
+ 
+ 		auto geom_extent = GeometryExtent::Empty();
+-		auto geom_binary = string_t(StringValue::Get(constant_expr.value));
++		auto geom_binary = string_t(StringValue::Get(constant_expr.GetValue()));
+ 
+ 		if (Geometry::GetExtent(geom_binary, geom_extent)) {
+ 			bdata.has_filter = true;
+@@ -841,7 +841,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		// We can __ONLY__ do this if the filter predicate is "&&" or "st_intersects_extent"
+ 		// as other predicates may require exact geometry evaluation, the filter cannot be fully removed
+ 		for (auto &name : {"&&", "ST_Intersects_Extent"}) {
+-			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
++			if (StringUtil::CIEquals(func.Function().GetName().c_str(), name)) {
+ 				geom_filter_idx = expr_idx;
+ 				break;
+ 			}
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index c1611b8..dd74e23 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -294,7 +294,7 @@ struct ST_AsMVTGeom {
+ 
+ 		// Bind data
+ 		const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &bind_data = func_expr.bind_info->Cast<BindData>();
++		const auto &bind_data = func_expr.BindInfo()->Cast<BindData>();
+ 
+ 		// Local state
+ 		auto &lstate = LocalState::ResetAndGet(state);
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 7588abc..552d43e 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -2704,7 +2704,7 @@ struct ST_DistanceWithin {
+ 		} else {
+ 			// No distance argument, so we use the bind data
+ 			const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-			const auto &bind_data = func_expr.bind_info->Cast<BindData>();
++			const auto &bind_data = func_expr.BindInfo()->Cast<BindData>();
+ 
+ 			const auto distance = bind_data.distance;
+ 
+@@ -4628,7 +4628,7 @@ struct ST_GeomFromText {
+ 		auto &alloc = lstate.GetAllocator();
+ 
+ 		const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &bind_data = func_expr.bind_info->Cast<BindData>();
++		const auto &bind_data = func_expr.BindInfo()->Cast<BindData>();
+ 		const auto ignore_invalid = bind_data.ignore_invalid;
+ 
+ 		sgl::wkt_reader reader(alloc);
+@@ -5834,7 +5834,7 @@ struct ST_Distance_Sphere {
+ 
+ 	static void ExecuteGeometry(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+-		auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<BindData>();
++		auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<BindData>();
+ 
+ 		// Depending on the axis order setting, switch the order of coordinates for the haversine distance calculation
+ 		const auto compute = bdata.always_xy ? ComputeDistance<true> : ComputeDistance<false>;
+@@ -5868,7 +5868,7 @@ struct ST_Distance_Sphere {
+ 	static void ExecutePoint(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		D_ASSERT(args.data.size() == 2);
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<BindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<BindData>();
+ 
+ 		auto &left = args.data[0];
+ 		auto &right = args.data[1];
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index 6760597..8262a8c 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -418,7 +418,7 @@ struct ST_Transform {
+ 
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &info = func_expr.bind_info->Cast<BindData>();
++		const auto &info = func_expr.BindInfo()->Cast<BindData>();
+ 
+ 		GenericExecutor::ExecuteTernary<POINT_TYPE, PROJ_TYPE, PROJ_TYPE, POINT_TYPE>(
+ 		    args.data[0], args.data[1], args.data[2], result, args.size(),
+@@ -446,7 +446,7 @@ struct ST_Transform {
+ 
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &info = func_expr.bind_info->Cast<BindData>();
++		const auto &info = func_expr.BindInfo()->Cast<BindData>();
+ 
+ 		GenericExecutor::ExecuteTernary<BOX_TYPE, PROJ_TYPE, PROJ_TYPE, BOX_TYPE>(
+ 		    args.data[0], args.data[1], args.data[2], result, args.size(),
+@@ -472,7 +472,7 @@ struct ST_Transform {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 		auto &alloc = lstate.allocator;
+ 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &info = func_expr.bind_info->Cast<BindData>();
++		const auto &info = func_expr.BindInfo()->Cast<BindData>();
+ 
+ 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
+ 		    args.data[0], args.data[1], args.data[2], result,
+@@ -504,7 +504,7 @@ struct ST_Transform {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 		auto &alloc = lstate.allocator;
+ 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+-		const auto &info = func_expr.bind_info->Cast<TypedBindData>();
++		const auto &info = func_expr.BindInfo()->Cast<TypedBindData>();
+ 
+ 		const auto crs = lstate.GetOrCreateProjection(info.source_crs, info.target_crs, info.normalize);
+ 
+@@ -811,7 +811,7 @@ struct ST_Area_Spheroid {
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		D_ASSERT(args.data.size() == 1);
+ 
+-		auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		auto &input = args.data[0];
+ 		auto count = args.size();
+@@ -925,7 +925,7 @@ struct ST_Area_Spheroid {
+ 
+ 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 		auto &lstate = GeodesicLocalState::ResetAndGet(state);
+ 
+ 		UnaryExecutor::Execute<string_t, double>(args.data[0], result, args.size(), [&](const string_t &input) {
+@@ -1005,7 +1005,7 @@ struct ST_Perimeter_Spheroid {
+ 	static void ExecutePolygon(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		D_ASSERT(args.data.size() == 1);
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		auto &input = args.data[0];
+ 		auto count = args.size();
+@@ -1106,7 +1106,7 @@ struct ST_Perimeter_Spheroid {
+ 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+ 		auto &lstate = GeodesicLocalState::ResetAndGet(state);
+-		auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		UnaryExecutor::Execute<string_t, double>(args.data[0], result, args.size(), [&](const string_t &input) {
+ 			sgl::geometry geom;
+@@ -1185,7 +1185,7 @@ struct ST_Length_Spheroid {
+ 	static void ExecuteLineString(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		D_ASSERT(args.data.size() == 1);
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		auto &line_vec = args.data[0];
+ 		auto count = args.size();
+@@ -1262,7 +1262,7 @@ struct ST_Length_Spheroid {
+ 
+ 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result) {
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 		auto &lstate = GeodesicLocalState::ResetAndGet(state);
+ 
+ 		UnaryExecutor::Execute<string_t, double>(args.data[0], result, args.size(), [&](const string_t &input) {
+@@ -1343,7 +1343,7 @@ struct ST_Distance_Spheroid {
+ 		geod_geodesic geod = {};
+ 		geod_init(&geod, EARTH_A, EARTH_F);
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		if (bdata.always_xy) {
+ 			GenericExecutor::ExecuteBinary<POINT_TYPE, POINT_TYPE, DISTANCE_TYPE>(
+@@ -1416,7 +1416,7 @@ struct ST_DWithin_Spheroid {
+ 		geod_geodesic geod = {};
+ 		geod_init(&geod, EARTH_A, EARTH_F);
+ 
+-		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<GeodesicBindData>();
++		const auto &bdata = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<GeodesicBindData>();
+ 
+ 		if (bdata.always_xy) {
+ 			GenericExecutor::ExecuteTernary<POINT_TYPE, POINT_TYPE, DISTANCE_TYPE, BOOL_TYPE>(
+diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
+index 48596c5..34aa834 100644
+--- a/src/spatial/operators/spatial_join_logical.cpp
++++ b/src/spatial/operators/spatial_join_logical.cpp
+@@ -38,12 +38,12 @@ void LogicalSpatialJoin::ResolveColumnBindings(ColumnBindingResolver &res, vecto
+ 	auto &cond = spatial_predicate->Cast<BoundFunctionExpression>();
+ 
+ 	res.VisitOperator(*children[0]);
+-	res.VisitExpression(&cond.children[0]);
++	res.VisitExpression(&cond.GetChildrenMutable()[0]);
+ 
+ 	// TODO: Duplicate eliminated joins?
+ 
+ 	res.VisitOperator(*children[1]);
+-	res.VisitExpression(&cond.children[1]);
++	res.VisitExpression(&cond.GetChildrenMutable()[1]);
+ 
+ 	// Finally, update the bindings
+ 	bindings = GetColumnBindings();
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index b3db4c1..cabbe23 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -56,11 +56,11 @@ static bool HasInversePredicate(const string &func_name) {
+ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique_ptr<Expression> expr) {
+ 	auto &func = expr->Cast<BoundFunctionExpression>();
+ 
+-	const auto it = spatial_predicate_inverse_map.find(func.function.GetName());
++	const auto it = spatial_predicate_inverse_map.find(func.Function().GetName());
+ 	D_ASSERT(it != spatial_predicate_inverse_map.end());
+ 
+ 	// Swap the arguments
+-	std::swap(func.children[0], func.children[1]);
++	std::swap(func.GetChildrenMutable()[0], func.GetChildrenMutable()[1]);
+ 
+ 	if (it->first == it->second) {
+ 		// We've already swapped the child, so just return the expression
+@@ -71,9 +71,9 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, it->second);
+ 	const auto &inverse_func =
+-	    entry.functions.GetFunctionByArguments(context, {func.children[0]->GetReturnType(), func.children[1]->GetReturnType()});
++	    entry.functions.GetFunctionByArguments(context, {func.GetChildren()[0]->GetReturnType(), func.GetChildren()[1]->GetReturnType()});
+ 
+-	auto func_expr = inverse_func.Bind(context, std::move(func.children));
++	auto func_expr = inverse_func.Bind(context, std::move(func.GetChildrenMutable()));
+ 	return std::move(func_expr);
+ }
+ 
+@@ -94,7 +94,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	auto &func = expr->Cast<BoundFunctionExpression>();
+ 
+ 	// The function must be a binary predicate
+-	if (func.children.size() != 2) {
++	if (func.GetChildren().size() != 2) {
+ 		return false;
+ 	}
+ 
+@@ -104,12 +104,12 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	// The function must be a recognized spatial predicate
+-	if (spatial_predicate_map.count(func.function.GetName()) == 0) {
++	if (spatial_predicate_map.count(func.Function().GetName()) == 0) {
+ 		return false;
+ 	}
+ 
+-	const auto left_side = JoinSide::GetJoinSide(*func.children[0], left_bindings, right_bindings);
+-	const auto right_side = JoinSide::GetJoinSide(*func.children[1], left_bindings, right_bindings);
++	const auto left_side = JoinSide::GetJoinSide(*func.GetChildren()[0], left_bindings, right_bindings);
++	const auto right_side = JoinSide::GetJoinSide(*func.GetChildren()[1], left_bindings, right_bindings);
+ 
+ 	// Can the condition can be cleanly split into two sides?
+ 	if (left_side == JoinSide::BOTH || right_side == JoinSide::BOTH) {
+@@ -117,7 +117,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	if (left_side == JoinSide::RIGHT) {
+-		if (!HasInversePredicate(func.function.GetName())) {
++		if (!HasInversePredicate(func.Function().GetName())) {
+ 			return false;
+ 		}
+ 		needs_flipping = true;
+@@ -190,10 +190,10 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 
+ 	// If this is ST_DWithin, try to extract the constant distance value
+ 	const auto &pred_func = spatial_join->spatial_predicate->Cast<BoundFunctionExpression>();
+-	if (pred_func.function.GetName() == "ST_DWithin") {
++	if (pred_func.Function().GetName() == "ST_DWithin") {
+ 		// Try to get the constant distance value from the bind data;
+ 		spatial_join->has_const_distance =
+-		    ST_DWithinHelper::TryGetConstDistance(pred_func.bind_info, spatial_join->const_distance);
++		    ST_DWithinHelper::TryGetConstDistance(pred_func.BindInfo(), spatial_join->const_distance);
+ 	}
+ 
+ 	// Also take all the conditions from the comparison join and add them as filters
+@@ -296,10 +296,10 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 
+ 	// If this is ST_DWithin, try to extract the constant distance value
+ 	const auto &pred_func = spatial_join->spatial_predicate->Cast<BoundFunctionExpression>();
+-	if (pred_func.function.GetName() == "ST_DWithin") {
++	if (pred_func.Function().GetName() == "ST_DWithin") {
+ 		// Try to get the constant distance value from the bind data;
+ 		spatial_join->has_const_distance =
+-		    ST_DWithinHelper::TryGetConstDistance(pred_func.bind_info, spatial_join->const_distance);
++		    ST_DWithinHelper::TryGetConstDistance(pred_func.BindInfo(), spatial_join->const_distance);
+ 	}
+ 
+ 	if (spatial_join->join_type == JoinType::INNER && !extra_predicates.empty()) {
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index a04b74b..2664d41 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -415,8 +415,8 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+ 	auto &func = condition->Cast<BoundFunctionExpression>();
+ 
+ 	// Extract the probe side and build side join keys
+-	probe_side_key = func.children[0].get();
+-	build_side_key = func.children[1].get();
++	probe_side_key = func.GetChildren()[0].get();
++	build_side_key = func.GetChildren()[1].get();
+ 
+ 	// Only simple join types are supported
+ 	D_ASSERT(join_type == JoinType::INNER || join_type == JoinType::LEFT || join_type == JoinType::OUTER ||
+@@ -839,8 +839,8 @@ unique_ptr<OperatorState> PhysicalSpatialJoin::GetOperatorState(ExecutionContext
+ 	// Create a match expression using the condition, that will be used to filter the results
+ 	lstate->match_expr = condition->Copy();
+ 	auto &func_expr = lstate->match_expr->Cast<BoundFunctionExpression>();
+-	func_expr.children[0] = make_uniq<BoundReferenceExpression>(probe_side_key->GetReturnType(), 0);
+-	func_expr.children[1] = make_uniq<BoundReferenceExpression>(build_side_key->GetReturnType(), 1);
++	func_expr.GetChildrenMutable()[0] = make_uniq<BoundReferenceExpression>(probe_side_key->GetReturnType(), 0);
++	func_expr.GetChildrenMutable()[1] = make_uniq<BoundReferenceExpression>(build_side_key->GetReturnType(), 1);
+ 
+ 	lstate->join_match_executor.AddExpression(*lstate->match_expr);
+ 

@@ -21,13 +21,22 @@ public:
 	DUCKDB_API ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
 	                                unique_ptr<ParsedExpression> right);
 
-	unique_ptr<ParsedExpression> left;
-	unique_ptr<ParsedExpression> right;
-
 public:
+	const ParsedExpression &Left() const {
+		return *left;
+	}
+	unique_ptr<ParsedExpression> &LeftMutable() {
+		return left;
+	}
+	const ParsedExpression &Right() const {
+		return *right;
+	}
+	unique_ptr<ParsedExpression> &RightMutable() {
+		return right;
+	}
 	string ToString() const override;
 
-	static bool Equal(const ComparisonExpression &a, const ComparisonExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -41,6 +50,11 @@ public:
 	}
 
 private:
+	unique_ptr<ParsedExpression> left;
+	unique_ptr<ParsedExpression> right;
+
+private:
 	explicit ComparisonExpression(ExpressionType type);
+	ComparisonExpression();
 };
 } // namespace duckdb
