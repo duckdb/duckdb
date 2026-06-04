@@ -116,6 +116,8 @@ enum class CachingMode : uint8_t;
 
 enum class CatalogLookupBehavior : uint8_t;
 
+enum class CatalogMode : uint8_t;
+
 enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
@@ -680,6 +682,9 @@ const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
+
+template<>
+const char* EnumUtil::ToChars<CatalogMode>(CatalogMode value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value);
@@ -1464,6 +1469,9 @@ CachingMode EnumUtil::FromString<CachingMode>(const char *value);
 
 template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
+
+template<>
+CatalogMode EnumUtil::FromString<CatalogMode>(const char *value);
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value);

@@ -31,6 +31,14 @@ enum class AttachedDatabaseType {
 
 enum class AttachVisibility { SHOWN, HIDDEN };
 
+//! Controls whether the attached database provides any tables, and whether it surfaces in
+//! catalog enumeration (`SHOW DATABASES`, schema enumeration, etc).
+//!  - NONE:   no tables, not surfaced. Pure routing target (used by `CONNECT '<uri>'`).
+//!  - AUTO:   backend's default. For all current backends this is equivalent to ENABLE.
+//!  - HIDDEN: provides tables (asserted, same as ENABLE) but not surfaced in enumeration.
+//!  - ENABLE: provides tables (asserted); surfaced normally. Errors if backend can't.
+enum class CatalogMode : uint8_t { NONE, AUTO, HIDDEN, ENABLE };
+
 //! DEFAULT is the standard ACID crash recovery mode.
 //! NO_WAL_WRITES disables the WAL for the attached database, i.e., disabling the D in ACID.
 //! Use this mode with caution, as it disables recovery from crashes for the file.
@@ -77,6 +85,10 @@ struct AttachOptions {
 	bool is_main_database = false;
 	//! The visibility of the attached database
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	//! Whether the attached database provides tables, and whether it surfaces in catalog
+	//! enumeration. Defaults to AUTO (backend's choice; today equivalent to ENABLE for all
+	//! current backends).
+	CatalogMode catalog_mode = CatalogMode::AUTO;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
@@ -138,6 +150,9 @@ public:
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
+	CatalogMode GetCatalogMode() const {
+		return catalog_mode;
+	}
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
@@ -159,6 +174,7 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	CatalogMode catalog_mode = CatalogMode::AUTO;
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;

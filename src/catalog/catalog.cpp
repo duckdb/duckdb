@@ -93,6 +93,11 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	if (!entry) {
 		return nullptr;
 	}
+	if (entry->GetCatalogMode() == CatalogMode::NONE) {
+		// CATALOG_MODE NONE: catalog provides no tables and is unreachable from binding.
+		// Treat as if the catalog doesn't exist for lookup purposes (reads + writes both fail).
+		return nullptr;
+	}
 	return &entry->GetCatalog();
 }
 

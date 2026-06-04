@@ -1052,6 +1052,26 @@ CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *va
 	return static_cast<CatalogLookupBehavior>(StringUtil::StringToEnum(GetCatalogLookupBehaviorValues(), 3, "CatalogLookupBehavior", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCatalogModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CatalogMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(CatalogMode::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(CatalogMode::HIDDEN), "HIDDEN" },
+		{ static_cast<uint32_t>(CatalogMode::ENABLE), "ENABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CatalogMode>(CatalogMode value) {
+	return StringUtil::EnumToString(GetCatalogModeValues(), 4, "CatalogMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CatalogMode EnumUtil::FromString<CatalogMode>(const char *value) {
+	return static_cast<CatalogMode>(StringUtil::StringToEnum(GetCatalogModeValues(), 4, "CatalogMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CatalogType::INVALID), "INVALID" },

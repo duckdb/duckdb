@@ -86,8 +86,20 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		}
 
 		if (entry.first == "hidden") {
+			// Legacy bool shorthand; CATALOG_MODE HIDDEN is the new form. Keep both so existing
+			// ATTACH ... (HIDDEN) keeps working — it just sets catalog_mode under the hood.
 			auto is_hidden = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (is_hidden) {
+				visibility = AttachVisibility::HIDDEN;
+				catalog_mode = CatalogMode::HIDDEN;
+			}
+			continue;
+		}
+
+		if (entry.first == "catalog_mode") {
+			auto mode_str = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			catalog_mode = EnumUtil::FromString<CatalogMode>(mode_str);
+			if (catalog_mode == CatalogMode::HIDDEN || catalog_mode == CatalogMode::NONE) {
 				visibility = AttachVisibility::HIDDEN;
 			}
 			continue;
@@ -140,6 +152,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	catalog_mode = options.catalog_mode;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
@@ -162,6 +175,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	catalog_mode = options.catalog_mode;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
