@@ -38,10 +38,10 @@ static idx_t CapMinMaxDistinctCount(uint64_t distinct_count, idx_t base_table_ca
 		return 0;
 	}
 	if (distinct_count == 0) {
-		// Overflow means the min/max span covers the full uint64_t domain.
-		return base_table_cardinality;
+		return 0;
 	}
-	return MinValue<idx_t>(distinct_count, base_table_cardinality);
+	auto capped_distinct_count = MinValue<idx_t>(distinct_count, base_table_cardinality);
+	return capped_distinct_count == NumericLimits<idx_t>::Maximum() ? 0 : capped_distinct_count;
 }
 
 template <class T>
@@ -51,8 +51,11 @@ static idx_t GetIntegralMinMaxDistinctCount(const BaseStatistics &base_stats, id
 	if (max_value < min_value) {
 		return 0;
 	}
-	auto distinct_count = static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value) + 1;
-	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
+	auto span = static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value);
+	if (span == NumericLimits<uint64_t>::Maximum()) {
+		return 0;
+	}
+	return CapMinMaxDistinctCount(span + 1, base_table_cardinality);
 }
 
 static idx_t GetBooleanMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
