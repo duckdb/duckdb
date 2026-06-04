@@ -2880,6 +2880,11 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 
 		// Decide which file to flush to
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
+		if (!file_state_ptr) {
+			global_guard.unlock();
+			TaskScheduler::YieldThread();
+			continue;
+		}
 
 		annotated_unique_lock<annotated_mutex> file_guard(file_state_ptr->lock);
 		if (PhysicalCopyRotateNow(*this, *file_state_ptr)) {
