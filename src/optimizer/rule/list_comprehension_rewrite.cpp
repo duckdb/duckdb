@@ -59,9 +59,10 @@ optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &stru
 }
 
 bool UsesIndexParameter(Expression &expr) {
+	constexpr idx_t LIST_LAMBDA_INDEX_PARAMETER = 1;
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 		auto &ref = expr.Cast<BoundReferenceExpression>();
-		if (ref.Index() == 0) {
+		if (ref.Index() == LIST_LAMBDA_INDEX_PARAMETER) {
 			return true;
 		}
 	}
@@ -73,7 +74,7 @@ bool UsesIndexParameter(Expression &expr) {
 			}
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 				auto &ref = child.Cast<BoundReferenceExpression>();
-				if (ref.Index() == 0) {
+				if (ref.Index() == LIST_LAMBDA_INDEX_PARAMETER) {
 					uses_index = true;
 					return;
 				}
@@ -84,11 +85,14 @@ bool UsesIndexParameter(Expression &expr) {
 }
 
 void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
+	constexpr idx_t LIST_LAMBDA_INDEX_PARAMETER = 1;
 	ExpressionIterator::VisitExpressionClassMutable(expr, ExpressionClass::BOUND_REF,
 	                                                [&](unique_ptr<Expression> &child) {
 		                                                auto &ref = child->Cast<BoundReferenceExpression>();
-		                                                D_ASSERT(ref.Index() > 0);
-		                                                ref.IndexMutable()--;
+		                                                D_ASSERT(ref.Index() != LIST_LAMBDA_INDEX_PARAMETER);
+		                                                if (ref.Index() > LIST_LAMBDA_INDEX_PARAMETER) {
+			                                                ref.IndexMutable()--;
+		                                                }
 	                                                });
 }
 
