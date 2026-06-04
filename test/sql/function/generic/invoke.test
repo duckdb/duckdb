@@ -99,6 +99,11 @@ SELECT invoke(lambda x: x + x, 2, 4, 6);
 Binder Error: The number of lambda parameters does not match the number of arguments passed to the 'invoke' function, expected 1, got 3.
 
 statement error
+SELECT invoke(lambda x, y: x + y, 2);
+----
+Binder Error: The number of lambda parameters does not match the number of arguments passed to the 'invoke' function, expected at least 2, got 1.
+
+statement error
 SELECT invoke(NULL, 1);
 ----
 Binder Error: Invalid lambda expression passed to 'invoke' function.

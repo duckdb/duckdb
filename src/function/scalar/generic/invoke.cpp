@@ -88,7 +88,13 @@ LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<Logi
                                        const idx_t parameter_idx,
                                        optional_ptr<BindLambdaContext> bind_lambda_context) {
 	// The first parameter is always the lambda
-	return function_child_types[1 + parameter_idx];
+	auto child_idx = parameter_idx + 1;
+	if (child_idx >= function_child_types.size()) {
+		throw BinderException("The number of lambda parameters does not match the number of arguments passed to the "
+		                      "'invoke' function, expected at least %d, got %d.",
+		                      parameter_idx + 1, function_child_types.size() - 1);
+	}
+	return function_child_types[child_idx];
 }
 
 } // namespace
