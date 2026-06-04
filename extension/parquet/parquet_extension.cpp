@@ -17,6 +17,7 @@
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
+#include "reader/variant_column_reader.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -878,6 +879,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
+
+	// bytes_to_variant
+	loader.RegisterFunction(VariantColumnReader::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;

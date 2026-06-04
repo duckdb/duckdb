@@ -36,6 +36,10 @@ public:
 	const_data_ptr_t offsets;
 	const_data_ptr_t bytes;
 
+	//! Total byte length of the metadata region. For a full variant binary value (metadata followed by value)
+	//! the value blob begins at metadata.GetData() + total_size.
+	idx_t total_size = 0;
+
 	//! The json object keys have to be null-terminated
 	//! But we don't receive them null-terminated
 	vector<string> strings;
