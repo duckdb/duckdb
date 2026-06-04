@@ -380,12 +380,15 @@ private:
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
-	//! Whole-group prefetch strategy
-	void WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-	                        const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span, bool log_prefetch);
-	//! Column-wise prefetch strategy.
-	void ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-	                        const duckdb_parquet::RowGroup &group, bool filters_look_unselective, bool log_prefetch);
+	//! Whole-group prefetch strategy. Registers the read heads and returns the chosen prefetch strategy.
+	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
+	                                           bool log_prefetch);
+	//! Column-wise prefetch strategy. Registers the read heads and returns the chosen prefetch strategy
+	//! (PREFETCH_FILTERS is lazy — fetched on demand by read(); the others are eager).
+	ParquetPrefetchStrategy ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
+	                                           bool log_prefetch) const;
 	//! Switch to the next row group and schedule its I/O (prepare column buffers, prefetch the bytes).
 	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.

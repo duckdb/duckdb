@@ -1560,13 +1560,39 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
-void ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-                                       const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
-                                       bool log_prefetch) {
+// An I/O task that fetches the bytes of a ReadHead.
+class ParquetIOAsyncTask : public AsyncTask {
+public:
+	ParquetIOAsyncTask(ReadHead &read_head, CachingFileHandle &file_handle)
+	    : read_head(read_head), file_handle(file_handle) {
+	}
+
+	void Execute() override {
+		read_head.Fetch(file_handle);
+	}
+
+private:
+	ReadHead &read_head;
+	CachingFileHandle &file_handle;
+};
+
+static vector<unique_ptr<AsyncTask>> CollectIOTasks(ThriftFileTransport &trans) {
+	vector<unique_ptr<AsyncTask>> io_tasks;
+	auto &file_handle = trans.GetCachingFileHandle();
+	for (auto &read_head : trans.GetReadHeads()) {
+		io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(read_head, file_handle));
+	}
+	return io_tasks;
+}
+
+ParquetPrefetchStrategy ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                                          const duckdb_parquet::RowGroup &group,
+                                                          uint64_t total_row_group_span, bool log_prefetch) {
 	if (!state.current_group_prefetched) {
 		auto total_compressed_size = GetGroupCompressedSize(state);
 		if (total_compressed_size > 0) {
-			trans.Prefetch(GetGroupOffset(state), total_row_group_span);
+			trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span, false);
+			trans.FinalizeRegistration();
 		}
 		state.current_group_prefetched = true;
 	}
@@ -1580,11 +1606,12 @@ void ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFile
 		}
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
 	}
+	return ParquetPrefetchStrategy::WHOLE_GROUP;
 }
 
-void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-                                       const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
-                                       bool log_prefetch) {
+ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                                          const duckdb_parquet::RowGroup &group,
+                                                          bool filters_look_unselective, bool log_prefetch) const {
 	bool has_non_optional_filter = false;
 	if (filters) {
 		for (auto &entry : *filters) {
@@ -1639,15 +1666,13 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 		}
 	}
 	trans.FinalizeRegistration();
+	const auto strategy =
+	    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
 	if (log_prefetch) {
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
-		state.prefetch_metrics.logger.strategy =
-		    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+		state.prefetch_metrics.logger.strategy = strategy;
 	}
-
-	if (!lazy_fetch) {
-		trans.PrefetchRegistered();
-	}
+	return strategy;
 }
 
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
@@ -1725,9 +1750,10 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 			    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
 			    GetFileName());
 		}
-
+		// We basically do eager fetch if we do a whole-group or column-wise prefetch, if we do filters we do it lazily
+		ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
 		if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
-			WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+			strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 		} else {
 			bool filters_look_unselective = false;
 			if (filters) {
@@ -1742,9 +1768,15 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 
 			if ((!filters || filters_look_unselective) &&
 			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
-				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+				strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
-				ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+				strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+			}
+		}
+		if (strategy != ParquetPrefetchStrategy::PREFETCH_FILTERS) {
+			// If it's not filers, we fetch the whole shebang
+			for (auto &io_task : CollectIOTasks(trans)) {
+				io_task->Execute();
 			}
 		}
 		if (log_prefetch) {
