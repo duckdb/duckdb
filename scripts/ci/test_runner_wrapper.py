@@ -53,4 +53,4 @@ def main(
     from scripts.ci import run_tests
 
     with pushd(source_root_path):
-        return int(run_tests.main(forwarded_args, default_unittest_bin=os.fspath(unittest_path)) or 0)
+        return int(run_tests.main(build_run_tests_argv(forwarded_args, wrapper_path, unittest_name)) or 0)

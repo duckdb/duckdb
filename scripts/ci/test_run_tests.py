@@ -61,9 +61,7 @@ class RunTestsScriptTest(unittest.TestCase):
                 )
             self.assertEqual(rc, 7)
             self.assertEqual(Path.cwd(), original_cwd)
-            mock_main.assert_called_once_with(
-                ["--workers", "1", "test/sql/a.test"], default_unittest_bin=str(unittest_path.resolve())
-            )
+            mock_main.assert_called_once_with([str(unittest_path.resolve()), "--workers", "1", "test/sql/a.test"])
         finally:
             unittest_path.unlink(missing_ok=True)
             os.rmdir(wrapper_dir)

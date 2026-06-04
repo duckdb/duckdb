@@ -899,7 +899,7 @@ def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
         )
 
 
-def parse_args(argv: list[str] | None = None, default_unittest_bin: str | None = None):
+def parse_args(argv: list[str] | None = None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser()
@@ -922,10 +922,7 @@ def parse_args(argv: list[str] | None = None, default_unittest_bin: str | None =
         default="",
         help="additional flags appended to the unittest binary for listing and execution",
     )
-    if default_unittest_bin is None:
-        parser.add_argument("unittest_bin")
-    else:
-        parser.add_argument("unittest_bin", nargs="?", default=default_unittest_bin, help=argparse.SUPPRESS)
+    parser.add_argument("unittest_bin", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("patterns", nargs="*")
     parser.add_argument(
         "--test-command",
@@ -1133,21 +1130,24 @@ def run_single_config(
             generated_test_list.unlink(missing_ok=True)
 
 
-def main(argv: list[str] | None = None, default_unittest_bin: str | None = None):
+def main(argv: list[str] | None = None):
     enable_line_buffering()
     STOP_REQUESTED.clear()
     previous_sigint_handler = signal.getsignal(signal.SIGINT)
     signal.signal(signal.SIGINT, signal_stop_requested)
     try:
-        return main_impl(argv, default_unittest_bin=default_unittest_bin)
+        return main_impl(argv)
     finally:
         signal.signal(signal.SIGINT, previous_sigint_handler)
 
 
-def main_impl(argv: list[str] | None = None, default_unittest_bin: str | None = None):
-    args = parse_args(argv, default_unittest_bin=default_unittest_bin)
+def main_impl(argv: list[str] | None = None):
+    args = parse_args(argv)
     if args.changed_tests is not None and args.test_list is None:
         print("error: --changed-tests requires --test-list", file=sys.stderr)
+        return 1
+    if not args.unittest_bin:
+        print("error: missing unittest binary", file=sys.stderr)
         return 1
 
     test_list_files = [path for path in [args.test_list, args.changed_tests] if path is not None]
@@ -1232,7 +1232,7 @@ def main_impl(argv: list[str] | None = None, default_unittest_bin: str | None = 
     return 0
 
 
-def invoke(argv: list[str], cwd: Path | None = None, default_unittest_bin: str | None = None) -> InvocationResult:
+def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
     stdout_buffer = StringIO()
     stderr_buffer = StringIO()
     old_cwd = os.getcwd()
@@ -1240,7 +1240,7 @@ def invoke(argv: list[str], cwd: Path | None = None, default_unittest_bin: str |
         if cwd is not None:
             os.chdir(cwd)
         with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-            returncode = int(main(argv, default_unittest_bin=default_unittest_bin) or 0)
+            returncode = int(main(argv) or 0)
     finally:
         os.chdir(old_cwd)
     return InvocationResult(returncode=returncode, stdout=stdout_buffer.getvalue(), stderr=stderr_buffer.getvalue())
