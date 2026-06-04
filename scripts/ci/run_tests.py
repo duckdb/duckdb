@@ -31,6 +31,10 @@ STABILIZE_FAST_TOTAL_RUNS = 10
 STABILIZE_FAST_TOTAL_RUNS_LARGE = 3
 STABILIZE_CHANGED_TEST_THRESHOLD = 500
 STOP_REQUESTED = threading.Event()
+ANSI_RED = "\033[31m"
+ANSI_DARK_GRAY = "\033[90m"
+ANSI_RESET = "\033[0m"
+FAILURE_MARKER = "================================================================"
 
 
 def enable_line_buffering():
@@ -87,6 +91,8 @@ class FailureInfo:
     expected: str | None
     actual: str | None
     snippet_lines: list[str]
+    expected_result_lines: list[str]
+    actual_result_lines: list[str]
     detail_lines: list[str]
     timeout_seconds: float | None
     reproduce_batch: list[str]
@@ -351,6 +357,14 @@ def format_duration_seconds(value: float):
     return f"{value:g}"
 
 
+def format_fail_header(test_name: str):
+    return [FAILURE_MARKER, f"error: {ANSI_RED}FAIL{ANSI_RESET} {test_name}"]
+
+
+def format_dark_gray(text: str):
+    return f"{ANSI_DARK_GRAY}{text}{ANSI_RESET}"
+
+
 def render_test_snippet(test_name: str | None, line_number: int | None):
     if not test_name or line_number is None or line_number <= 0:
         return []
@@ -365,9 +379,14 @@ def render_test_snippet(test_name: str | None, line_number: int | None):
     start_idx = line_number - 1
     while start_idx > 0 and file_lines[start_idx - 1].strip():
         start_idx -= 1
-    end_idx = line_number
-    while end_idx < len(file_lines) and file_lines[end_idx].strip():
-        end_idx += 1
+    return render_snippet_window(file_lines, line_number, start_idx, None)
+
+
+def render_snippet_window(file_lines: list[str], line_number: int, start_idx: int, end_idx: int | None):
+    if end_idx is None:
+        end_idx = line_number
+        while end_idx < len(file_lines) and file_lines[end_idx].strip():
+            end_idx += 1
     window = [(idx + 1, file_lines[idx]) for idx in range(start_idx, end_idx)]
     while window and not window[0][1].strip():
         window.pop(0)
@@ -376,12 +395,47 @@ def render_test_snippet(test_name: str | None, line_number: int | None):
     if not window:
         return []
 
+    common_indent = None
+    for _, text in window:
+        if not text.strip():
+            continue
+        indent_len = len(text) - len(text.lstrip(" \t"))
+        indent = text[:indent_len]
+        if common_indent is None:
+            common_indent = indent
+            continue
+        shared_len = 0
+        max_len = min(len(common_indent), len(indent))
+        while shared_len < max_len and common_indent[shared_len] == indent[shared_len]:
+            shared_len += 1
+        common_indent = common_indent[:shared_len]
+    if common_indent:
+        window = [(lineno, text[len(common_indent) :] if text.strip() else text) for lineno, text in window]
+    window = [(lineno, text.expandtabs(4)) for lineno, text in window]
+
     width = len(str(window[-1][0]))
     rendered = []
     for lineno, text in window:
-        marker = ">" if lineno == line_number else " "
-        rendered.append(f"  {marker} {lineno:>{width}}  {text}")
+        marker = f"{ANSI_RED}>{ANSI_RESET}" if lineno == line_number else " "
+        line_number_text = f"{ANSI_DARK_GRAY}{lineno:>{width}}{ANSI_RESET}"
+        rendered.append(f"  {marker} {line_number_text}  {text}")
     return rendered
+
+
+def render_context_snippet(test_name: str | None, line_number: int | None, before: int = 3, after: int = 3):
+    if not test_name or line_number is None or line_number <= 0:
+        return []
+    test_path = Path(test_name)
+    if not test_path.exists():
+        return []
+    try:
+        file_lines = test_path.read_text(encoding="utf8").splitlines()
+    except OSError:
+        return []
+
+    start_idx = max(0, line_number - 1 - before)
+    end_idx = min(len(file_lines), line_number + after)
+    return render_snippet_window(file_lines, line_number, start_idx, end_idx)
 
 
 FAILING_TEST_PATTERN = re.compile(r"^\d+\.\s+(.+?):(\d+)$")
@@ -391,6 +445,7 @@ PROGRESS_TEST_START_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+)$")
 FATAL_ERROR_PATTERN = re.compile(r"^\s*due to a fatal error condition:\s*$")
 FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
+CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?):(\d+): FAILED:$")
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -480,6 +535,153 @@ def extract_failed_reason_line(stdout_lines: list[str]):
     return None
 
 
+def iter_stdout_failure_blocks(stdout_lines: list[str]):
+    for failure_idx, line in enumerate(stdout_lines):
+        if not FAILED_HEADER_PATTERN.match(line):
+            continue
+
+        separator_indices = []
+        for idx in range(failure_idx - 1, -1, -1):
+            stripped = stdout_lines[idx].strip()
+            if stripped and set(stripped) == {"-"}:
+                separator_indices.append(idx)
+                if len(separator_indices) == 2:
+                    break
+        start_idx = separator_indices[-1] if separator_indices else failure_idx
+
+        test_name = None
+        if len(separator_indices) >= 2:
+            name_idx = separator_indices[-1] + 1
+            if name_idx < len(stdout_lines):
+                candidate_name = stdout_lines[name_idx].strip()
+                if candidate_name:
+                    test_name = candidate_name
+
+        end_idx = len(stdout_lines)
+        for idx in range(failure_idx + 1, len(stdout_lines)):
+            stripped = stdout_lines[idx].strip()
+            if PROGRESS_TEST_START_PATTERN.match(stripped):
+                end_idx = idx
+                break
+            if stripped.startswith("test cases:") or stripped.startswith("assertions:"):
+                end_idx = idx
+                break
+            if stripped.startswith("==============================================================================="):
+                end_idx = idx
+                break
+            if stripped.startswith("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"):
+                end_idx = idx
+                break
+
+        block = [entry.rstrip() for entry in stdout_lines[start_idx:end_idx]]
+        while block and not block[0].strip():
+            block.pop(0)
+        while block and not block[-1].strip():
+            block.pop()
+        if any(FATAL_ERROR_PATTERN.match(entry) for entry in block):
+            continue
+        if any(EXPLICIT_MESSAGE_PATTERN.match(entry) for entry in block):
+            continue
+        yield test_name, block
+
+
+def extract_stdout_failure_block(stdout_lines: list[str]):
+    for test_name, block in iter_stdout_failure_blocks(stdout_lines):
+        return test_name, block
+    return None, []
+
+
+def extract_stdout_assertion_failures(stdout_lines: list[str]):
+    failures = []
+    for test_name, block in iter_stdout_failure_blocks(stdout_lines):
+        for idx, line in enumerate(block):
+            match = CATCH_ASSERTION_LOCATION_PATTERN.match(line.strip())
+            if not match:
+                continue
+
+            source_path = match.group(1)
+            source_line = int(match.group(2))
+            snippet_lines = render_context_snippet(source_path, source_line)
+            detail_lines = []
+
+            expression_line = None
+            for next_line in block[idx + 1 :]:
+                if next_line.strip():
+                    expression_line = next_line.strip()
+                    break
+            if expression_line is not None:
+                detail_lines.append(f"FAILED: {expression_line}")
+
+            expansion_idx = None
+            for lookahead_idx in range(idx + 1, len(block)):
+                if block[lookahead_idx].strip() == "with expansion:":
+                    expansion_idx = lookahead_idx
+                    break
+            if expansion_idx is not None:
+                detail_lines.append("  with expansion:")
+                for next_line in block[expansion_idx + 1 :]:
+                    if next_line.strip():
+                        detail_lines.append(next_line.strip())
+                        break
+
+            if snippet_lines or detail_lines:
+                failures.append((test_name, source_line, snippet_lines, detail_lines))
+            break
+    return failures
+
+
+def extract_stdout_assertion_failure(stdout_lines: list[str]):
+    failures = extract_stdout_assertion_failures(stdout_lines)
+    if not failures:
+        return None, None, [], []
+
+    def score_failure(entry):
+        _, _, _, detail_lines = entry
+        expression_line = detail_lines[0] if detail_lines else ""
+        score = 0
+        if expression_line.startswith("FAILED: REQUIRE("):
+            score += 3
+        elif expression_line.startswith("FAILED:"):
+            score += 2
+        if "{Unknown expression after the reported line}" not in expression_line:
+            score += 1
+        return score
+
+    return max(enumerate(failures), key=lambda item: (score_failure(item[1]), item[0]))[1]
+
+
+def extract_query_failure_diagnostics(stderr_lines: list[str]):
+    for idx, line in enumerate(stderr_lines):
+        if not line.startswith("Query failed with message:"):
+            continue
+
+        block = [line.strip()]
+        seen_stack_trace = False
+        for next_line in stderr_lines[idx + 1 :]:
+            stripped = next_line.strip()
+            if not stripped:
+                if seen_stack_trace:
+                    continue
+                continue
+            if stripped.startswith("This error signals an assertion failure within DuckDB."):
+                break
+            if stripped.startswith("For more information, see "):
+                break
+            if stripped == "Stack Trace:":
+                seen_stack_trace = True
+                block.append(stripped)
+                continue
+            if seen_stack_trace:
+                if re.match(r"^\d+\s+", stripped):
+                    block.append(stripped)
+                    continue
+                break
+            block.append(stripped)
+        return block
+
+    return []
+
+
 def extract_failing_stderr_block(stderr_lines: list[str]):
     start_idx = None
     for idx, line in enumerate(stderr_lines):
@@ -502,6 +704,41 @@ def extract_failing_stderr_block(stderr_lines: list[str]):
     while block and not block[-1].strip():
         block.pop()
     return block
+
+
+def extract_wrong_result_sections(stderr_lines: list[str]):
+    block = extract_failing_stderr_block(stderr_lines)
+    if not block:
+        return [], []
+
+    expected_lines = []
+    actual_lines = []
+    current_section = None
+
+    for line in block:
+        stripped = line.strip()
+        if stripped == "Expected result:":
+            current_section = expected_lines
+            continue
+        if stripped == "Actual result:":
+            current_section = actual_lines
+            continue
+        if current_section is None:
+            continue
+        if stripped and set(stripped) == {"="}:
+            continue
+        current_section.append(line)
+
+    while expected_lines and not expected_lines[0].strip():
+        expected_lines.pop(0)
+    while expected_lines and not expected_lines[-1].strip():
+        expected_lines.pop()
+    while actual_lines and not actual_lines[0].strip():
+        actual_lines.pop(0)
+    while actual_lines and not actual_lines[-1].strip():
+        actual_lines.pop()
+
+    return expected_lines, actual_lines
 
 
 def extract_interesting_failure_block(lines: list[str]):
@@ -536,8 +773,8 @@ def format_signal_summary(returncode: int | None):
 
 
 def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
-    stderr_lines = strip_ansi(stderr).splitlines()
-    stdout_lines = strip_ansi(stdout).splitlines()
+    stderr_lines = strip_skipped_test_summary_lines(strip_ansi(stderr).splitlines())
+    stdout_lines = strip_skipped_test_summary_lines(strip_ansi(stdout).splitlines())
     stderr_non_empty_lines = [line.strip() for line in stderr_lines if line.strip()]
     stdout_non_empty_lines = [line.strip() for line in stdout_lines if line.strip()]
     batch_test_name = batch[0] if len(batch) == 1 else None
@@ -553,6 +790,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             expected=None,
             actual=None,
             snippet_lines=[],
+            expected_result_lines=[],
+            actual_result_lines=[],
             detail_lines=[],
             timeout_seconds=float(re.search(r"after ([0-9]+(?:\.[0-9]+)?) seconds", message).group(1)),
             reproduce_batch=reproduce_batch,
@@ -578,6 +817,7 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
         expected = None
         if mismatch_line is not None:
             actual, expected = [part.strip() for part in mismatch_line.split("<>", 1)]
+        expected_result_lines, actual_result_lines = extract_wrong_result_sections(stderr_lines)
         return FailureInfo(
             kind="wrong_result",
             test_name=test_name,
@@ -586,15 +826,43 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             expected=expected,
             actual=actual,
             snippet_lines=render_test_snippet(test_name, line_number),
+            expected_result_lines=expected_result_lines,
+            actual_result_lines=actual_result_lines,
             detail_lines=[],
             timeout_seconds=None,
             reproduce_batch=reproduce_batch,
         )
 
     detail_lines = []
+    snippet_lines = []
     failing_stderr_block = extract_failing_stderr_block(stderr_lines)
     if failing_stderr_block:
         detail_lines.extend(failing_stderr_block)
+    query_failure_lines = []
+    stdout_failure_test_name, stdout_line_number, stdout_snippet_lines, stdout_failure_lines = (
+        extract_stdout_assertion_failure(stdout_lines)
+    )
+    if not detail_lines:
+        query_failure_lines = extract_query_failure_diagnostics(stderr_lines)
+    if stdout_failure_lines or stdout_snippet_lines:
+        test_name = stdout_failure_test_name or find_failing_test_from_stdout(stdout_lines, batch) or test_name
+        reproduce_batch = [test_name] if test_name else list(batch)
+        line_number = stdout_line_number or line_number
+        snippet_lines = stdout_snippet_lines
+        if query_failure_lines:
+            detail_lines.extend(query_failure_lines)
+        if stdout_failure_lines:
+            if detail_lines:
+                detail_lines.append("")
+            detail_lines.extend(stdout_failure_lines)
+    if not detail_lines:
+        stdout_failure_test_name, stdout_failure_block = extract_stdout_failure_block(stdout_lines)
+        if stdout_failure_block:
+            test_name = stdout_failure_test_name or find_failing_test_from_stdout(stdout_lines, batch) or test_name
+            reproduce_batch = [test_name] if test_name else list(batch)
+            detail_lines.extend(stdout_failure_block)
+    if not detail_lines and query_failure_lines:
+        detail_lines.extend(query_failure_lines)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
@@ -632,7 +900,9 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
         mismatch_context=None,
         expected=None,
         actual=None,
-        snippet_lines=[],
+        snippet_lines=snippet_lines,
+        expected_result_lines=[],
+        actual_result_lines=[],
         detail_lines=detail_lines,
         timeout_seconds=None,
         reproduce_batch=reproduce_batch,
@@ -646,21 +916,23 @@ def render_failure_lines(failure: FailureInfo):
 
     if failure.kind == "wrong_result":
         test_name = failure.test_name or "test batch"
-        lines = [f"error: FAIL {test_name}", ""]
-        if failure.expected is not None and failure.actual is not None and failure.mismatch_context is not None:
-            lines.append(f"expected: {failure.expected}, got {failure.actual}; {failure.mismatch_context}")
-        elif failure.expected is not None and failure.actual is not None:
-            lines.append(f"expected: {failure.expected}, got {failure.actual}")
-        elif failure.mismatch_context is not None:
-            lines.append(failure.mismatch_context)
+        lines = [*format_fail_header(test_name), ""]
         if failure.snippet_lines:
             lines.extend(["", *failure.snippet_lines])
+        if failure.mismatch_context is not None:
+            lines.extend(["", f"details: {failure.mismatch_context}"])
+        if failure.expected_result_lines:
+            lines.extend(["", "Expected result:", *failure.expected_result_lines])
+        if failure.actual_result_lines:
+            lines.extend(["", "Actual result:", *failure.actual_result_lines])
         return lines
 
     if failure.test_name:
-        lines = [f"error: FAIL {failure.test_name}"]
+        lines = format_fail_header(failure.test_name)
     else:
         lines = ["error: test batch failed"]
+    if failure.snippet_lines:
+        lines.extend(["", *failure.snippet_lines])
     if failure.detail_lines:
         lines.extend(["", *failure.detail_lines])
     return lines
@@ -682,7 +954,7 @@ def format_batch_failure(batch, config: TestRunnerConfig, attempt_summaries, rec
         reproduce_batch = last_attempt.reproduce_batch
     rerun_parts.append(",".join(reproduce_batch))
     rerun_cmd = shlex.join(rerun_parts)
-    parts.extend(["", "reproduce:", rerun_cmd, ""])
+    parts.extend(["", format_dark_gray("reproduce:"), format_dark_gray(rerun_cmd), ""])
     return "\n".join(parts)
 
 
@@ -771,6 +1043,25 @@ def parse_skipped_test_summary(output: str):
                 continue
             reasons[reason_match.group(1)] = reasons.get(reason_match.group(1), 0) + int(reason_match.group(2))
     return skipped_count, reasons
+
+
+def strip_skipped_test_summary_lines(lines: list[str]):
+    filtered_lines = []
+    in_skip_summary = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "Skipped tests for the following reasons:":
+            in_skip_summary = True
+            continue
+        if in_skip_summary:
+            if not stripped:
+                in_skip_summary = False
+                continue
+            if SKIP_REASON_PATTERN.match(stripped):
+                continue
+            in_skip_summary = False
+        filtered_lines.append(line)
+    return filtered_lines
 
 
 def extract_skipped_test_output(stdout: str, stderr: str):
@@ -1344,6 +1635,10 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
+                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 else:
                     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
                     if attempt_summaries:
@@ -1356,10 +1651,10 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                                 retry_count=batch_info["attempt"],
                             )
                         )
-                skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
-                total_skipped_tests += skipped_count
-                for reason, count in skipped_reasons.items():
-                    skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
+                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching and not stop_requested():
