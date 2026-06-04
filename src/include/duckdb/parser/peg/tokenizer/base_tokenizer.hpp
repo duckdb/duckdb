@@ -36,7 +36,7 @@ public:
 	//! True iff `TokenizeInput()` finished in a state where autocomplete could be offered (the
 	//! input wasn't truncated mid-comment / mid-dollar-quoted-string). Derived by inspecting the
 	//! trailing sentinel: the clean-exit paths append `GetTerminator()` (which becomes
-	//! `END_NOW_AUTOCOMPLETE` for autocomplete tokenizers); the dirty-exit paths always append
+	//! `END_OF_INPUT_AUTOCOMPLETE` for autocomplete tokenizers); the dirty-exit paths always append
 	//! `END_OF_INPUT`.
 	bool CanAutocomplete() const;
 
@@ -53,7 +53,7 @@ public:
 	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
 
 	//! Sentinel appended at the end of the token vector on a clean exit. Override to return
-	//! `END_NOW_AUTOCOMPLETE` in autocomplete tokenizers. Dirty exits (unterminated comment /
+	//! `END_OF_INPUT_AUTOCOMPLETE` in autocomplete tokenizers. Dirty exits (unterminated comment /
 	//! dollar-quote) always append `END_OF_INPUT` regardless of this hook.
 	virtual TokenType GetTerminator() const {
 		return TokenType::END_OF_INPUT;

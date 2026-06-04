@@ -126,7 +126,7 @@ public:
 			auto &child_matcher = matchers[child_idx].get();
 			bool at_autocomplete_cursor =
 			    list_state.token_index < list_state.tokens.size() &&
-			    list_state.tokens[list_state.token_index].type == TokenType::END_NOW_AUTOCOMPLETE;
+			    list_state.tokens[list_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				if (suppress_suggestions) {
 					// this rule should not contribute autocomplete suggestions
@@ -361,7 +361,7 @@ public:
 
 			bool at_autocomplete_cursor =
 			    repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_NOW_AUTOCOMPLETE;
+			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 			if (at_autocomplete_cursor) {
 				element.AddSuggestion(state);
 				return MatchResultType::SUCCESS;
@@ -400,7 +400,7 @@ public:
 			state.token_index = repeat_state.token_index;
 
 			if (repeat_state.token_index < state.tokens.size() &&
-			    state.tokens[repeat_state.token_index].type == TokenType::END_NOW_AUTOCOMPLETE) {
+			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 				break;
 			}
 

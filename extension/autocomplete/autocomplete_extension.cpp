@@ -510,7 +510,7 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
-		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_NOW_AUTOCOMPLETE) {
+		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 			continue;
 		}
 

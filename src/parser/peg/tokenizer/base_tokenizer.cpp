@@ -222,7 +222,7 @@ bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
 }
 
 bool BaseTokenizer::CanAutocomplete() const {
-	return !tokens.empty() && tokens.back().type == TokenType::END_NOW_AUTOCOMPLETE;
+	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
 }
 
 void BaseTokenizer::TokenizeInput() {

@@ -91,7 +91,7 @@ string SQLFormatter::Format(const string &sql) {
 	tokenizer.TokenizeInput();
 	if (!tokenizer.tokens.empty()) {
 		auto back_type = tokenizer.tokens.back().type;
-		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_NOW_AUTOCOMPLETE) {
+		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 			tokenizer.tokens.pop_back();
 		}
 	}

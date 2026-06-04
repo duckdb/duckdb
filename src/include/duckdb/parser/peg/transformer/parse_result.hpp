@@ -36,7 +36,7 @@ enum class TokenType {
 	//! Sentinel for real end of input — consumed by EndOfInputMatcher.
 	END_OF_INPUT,
 	//! Sentinel for cursor position in autocomplete mode — List/Repeat fire suggestion walk.
-	END_NOW_AUTOCOMPLETE
+	END_OF_INPUT_AUTOCOMPLETE
 };
 
 inline string TokenTypeToString(TokenType type) {
@@ -77,8 +77,8 @@ inline string TokenTypeToString(TokenType type) {
 		return "SETTING_NAME";
 	case TokenType::END_OF_INPUT:
 		return "END_OF_INPUT";
-	case TokenType::END_NOW_AUTOCOMPLETE:
-		return "END_NOW_AUTOCOMPLETE";
+	case TokenType::END_OF_INPUT_AUTOCOMPLETE:
+		return "END_OF_INPUT_AUTOCOMPLETE";
 	default:
 		return "UNKNOWN";
 	}

@@ -169,7 +169,7 @@ public:
 	}
 
 	TokenType GetTerminator() const override {
-		return TokenType::END_NOW_AUTOCOMPLETE;
+		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
