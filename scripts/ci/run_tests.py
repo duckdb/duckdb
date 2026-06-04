@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from io import StringIO
 from pathlib import Path
 
-DEFAULT_BATCH_SIZE = 10
+DEFAULT_BATCH_SIZE = 30
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
 HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
 HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
