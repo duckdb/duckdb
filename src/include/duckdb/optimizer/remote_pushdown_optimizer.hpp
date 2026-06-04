@@ -42,6 +42,7 @@ struct CatalogPushdownResult {
 	optional_ptr<Catalog> catalog;
 	vector<const_reference<ParsedExpression>> used_expressions;
 	vector<const_reference<TableRef>> used_table_constructs;
+	vector<const_reference<QueryNode>> used_nodes;
 };
 
 struct RemotePushdownState {

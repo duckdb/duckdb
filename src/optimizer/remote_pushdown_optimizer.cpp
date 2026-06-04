@@ -123,6 +123,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, Ca
 				return CatalogPushdownResult::Unknown();
 			}
 		}
+		for(auto &query_node : a.used_nodes) {
+			if (!remote_catalog.SupportsPushdown(query_node.get())) {
+				// pushdown not supported - result is UNKNOWN_CATALOG_REFERENCE
+				return CatalogPushdownResult::Unknown();
+			}
+		}
 		return b;
 	}
 	if (a.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE ||
@@ -203,7 +209,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	default:
 		return CatalogPushdownResult::Unknown();
 	}
-
 	// Merge results of all CTEs defined in this scope
 	// FIXME: this is only necessary because we push all CTEs, including unreferenced ones, to the result
 	// if we pruned unreferenced CTEs we could remove this
@@ -212,6 +217,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		if (it != cte_results.end()) {
 			result = Merge(result, it->second);
 		}
+	}
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		if (!result.catalog->SupportsPushdown(node)) {
+			// bail - referenced catalog does not support pushing down this node type
+			result = CatalogPushdownResult::Unknown();
+		}
+	} else if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
+		result.used_nodes.push_back(node);
 	}
 	return result;
 }

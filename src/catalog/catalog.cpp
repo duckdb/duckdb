@@ -361,6 +361,10 @@ bool Catalog::SupportsPushdown(const TableRef &ref) {
 	return true;
 }
 
+bool Catalog::SupportsPushdown(const QueryNode &node) {
+	return true;
+}
+
 string Catalog::GetConnectDisplay() {
 	return GetAttached().GetName();
 }
