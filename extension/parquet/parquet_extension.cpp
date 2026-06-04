@@ -69,6 +69,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "parquet_field_id.hpp"
+#include "parquet_column_kv.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
@@ -104,6 +105,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	optional_idx row_groups_per_file;
 
 	ChildFieldIDs field_ids;
+	ChildColumnKV column_kv;
 	ShreddingType shredding_types;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
@@ -135,6 +137,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["codec"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["field_ids"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["column_kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["encryption_config"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
@@ -274,6 +277,12 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 					bind_data->kv_metadata.emplace_back(key, value.ToString());
 				}
 			}
+		} else if (loption == "column_kv_metadata") {
+			case_insensitive_map_t<LogicalType> name_to_type_map;
+			for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+				name_to_type_map.emplace(names[col_idx], sql_types[col_idx]);
+			}
+			ColumnKV::GetColumnKV(option.second[0], bind_data->column_kv, name_to_type_map);
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
 		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl" ||
@@ -380,6 +389,7 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	options.sql_types = parquet_bind.sql_types;
 	options.column_names = parquet_bind.column_names;
 	options.codec = parquet_bind.codec, options.field_ids = parquet_bind.field_ids.Copy();
+	options.column_kv = parquet_bind.column_kv.Copy();
 	options.shredding_types = parquet_bind.shredding_types.Copy();
 	options.encryption_config = parquet_bind.encryption_config;
 	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
@@ -704,6 +714,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.write_timestamp_as_int96);
 	serializer.WritePropertyWithDefault<vector<bool>>(120, "not_null_columns", bind_data.not_null_columns,
 	                                                  default_value.not_null_columns);
+	serializer.WriteProperty<ChildColumnKV>(121, "column_kv", bind_data.column_kv);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -744,6 +755,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
 	data->not_null_columns =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
+	data->column_kv = deserializer.ReadPropertyWithExplicitDefault<ChildColumnKV>(121, "column_kv", ChildColumnKV());
 
 	return std::move(data);
 }

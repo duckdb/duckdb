@@ -9,8 +9,19 @@
 #include "parquet_crypto.hpp"
 #include "parquet_field_id.hpp"
 #include "parquet_shredding.hpp"
+#include "parquet_column_kv.hpp"
 
 namespace duckdb {
+
+void ChildColumnKV::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<ColumnKV>>(100, "children", children.operator*());
+}
+
+ChildColumnKV ChildColumnKV::Deserialize(Deserializer &deserializer) {
+	ChildColumnKV result;
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<ColumnKV>>(100, "children", result.children.operator*());
+	return result;
+}
 
 void ChildFieldIDs::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids.operator*());
@@ -29,6 +40,18 @@ void ChildShreddingTypes::Serialize(Serializer &serializer) const {
 ChildShreddingTypes ChildShreddingTypes::Deserialize(Deserializer &deserializer) {
 	ChildShreddingTypes result;
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<ShreddingType>>(100, "types", result.types.operator*());
+	return result;
+}
+
+void ColumnKV::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<pair<string, string>>>(100, "metadata", metadata);
+	serializer.WriteProperty<ChildColumnKV>(101, "children", children);
+}
+
+ColumnKV ColumnKV::Deserialize(Deserializer &deserializer) {
+	ColumnKV result;
+	deserializer.ReadPropertyWithDefault<vector<pair<string, string>>>(100, "metadata", result.metadata);
+	deserializer.ReadProperty<ChildColumnKV>(101, "children", result.children);
 	return result;
 }
 

@@ -1,0 +1,278 @@
+# name: test/sql/copy/parquet/writer/parquet_write_column_kv_metadata.test
+# description: Parquet writer COLUMN_KV_METADATA tests
+# group: [writer]
+
+require parquet
+
+# flat column, VARCHAR KV
+statement ok
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_flat.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k1': 'v1', 'k2': 'v2'}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_flat.parquet')
+  WHERE path_in_schema = 'col'
+)
+ORDER BY key
+----
+k1	v1
+k2	v2
+
+# flat column, BLOB value, round-trips to BLOB on read
+statement ok
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_blob.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': '\x01\x02'::BLOB}})
+
+query II
+SELECT key::VARCHAR, hex(value::BLOB)
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_blob.parquet')
+  WHERE path_in_schema = 'col'
+)
+----
+k	0102
+
+# nested STRUCT column, KV on a leaf field
+statement ok
+COPY (SELECT {'zip': 90210, 'city': 'x'} AS addr) TO '{TEST_DIR}/ckv_struct.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {addr: {zip: MAP {'pii': 'true'}}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_struct.parquet')
+  WHERE path_in_schema = 'addr, zip'
+)
+----
+pii	true
+
+# sibling leaf addr.city must not receive any KV
+query I
+SELECT cardinality(key_value_metadata)
+FROM parquet_metadata('{TEST_DIR}/ckv_struct.parquet')
+WHERE path_in_schema = 'addr, city'
+----
+0
+
+# LIST column, KV on the element leaf
+statement ok
+COPY (SELECT [1, 2, 3] AS arr) TO '{TEST_DIR}/ckv_list.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {arr: {element: MAP {'src': 'x'}}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_list.parquet')
+  WHERE path_in_schema = 'arr, list, element'
+)
+----
+src	x
+
+# ARRAY column, KV on the element leaf (shares the LIST write path)
+statement ok
+COPY (SELECT [1, 2, 3]::INTEGER[3] AS arr) TO '{TEST_DIR}/ckv_array.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {arr: {element: MAP {'src': 'y'}}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_array.parquet')
+  WHERE path_in_schema = 'arr, list, element'
+)
+----
+src	y
+
+# MAP column, KV on both key and value leaves
+statement ok
+COPY (SELECT MAP {'a': 1, 'b': 2} AS m) TO '{TEST_DIR}/ckv_map.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {m: {key: MAP {'k': 'v'}, value: MAP {'k2': 'v2'}}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_map.parquet')
+  WHERE path_in_schema = 'm, key_value, key'
+)
+----
+k	v
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_map.parquet')
+  WHERE path_in_schema = 'm, key_value, value'
+)
+----
+k2	v2
+
+# multiple row groups: KV replicated per chunk, one parquet_metadata row per chunk
+statement ok
+COPY (SELECT range AS col FROM range(10000)) TO '{TEST_DIR}/ckv_rg.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': 'v'}}, ROW_GROUP_SIZE 2048)
+
+query II
+SELECT DISTINCT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_rg.parquet')
+  WHERE path_in_schema = 'col'
+)
+----
+k	v
+
+query I
+SELECT count(*)
+FROM parquet_metadata('{TEST_DIR}/ckv_rg.parquet')
+WHERE path_in_schema = 'col' AND cardinality(key_value_metadata) > 0
+----
+5
+
+# case-insensitive column name matching
+statement ok
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_ci.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {"COL": MAP {'K': 'v'}})
+
+query II
+SELECT key::VARCHAR, value::VARCHAR
+FROM (
+  SELECT UNNEST(map_keys(key_value_metadata)) AS key,
+         UNNEST(map_values(key_value_metadata)) AS value
+  FROM parquet_metadata('{TEST_DIR}/ckv_ci.parquet')
+  WHERE path_in_schema = 'col'
+)
+----
+K	v
+
+# empty MAP: no KV emitted
+statement ok
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_empty.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {}})
+
+query I
+SELECT cardinality(key_value_metadata)
+FROM parquet_metadata('{TEST_DIR}/ckv_empty.parquet')
+WHERE path_in_schema = 'col'
+----
+0
+
+# error: MAP supplied on a nested column
+statement error
+COPY (SELECT [1, 2, 3] AS arr) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {arr: MAP {'k': 'v'}})
+----
+<REGEX>:Binder Error:.*is a nested type.*
+
+# error: STRUCT supplied on a primitive column
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: {nested: MAP {'k': 'v'}}})
+----
+<REGEX>:Binder Error:.*does not support nested.*
+
+# error: unknown column name
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {nope: MAP {'k': 'v'}})
+----
+<REGEX>:Binder Error:.*not found.*
+
+# error: non-STRUCT top-level value
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA 'not a struct')
+----
+<REGEX>:Binder Error:.*must be a STRUCT.*
+
+# error: NULL value inside a leaf MAP
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': NULL}})
+----
+<REGEX>:Binder Error:.*NULL key/value not allowed.*
+
+# error: leaf MAP on a VARIANT column
+statement error
+COPY (SELECT 'foo'::VARIANT AS v) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {v: MAP {'k':'val'}})
+----
+<REGEX>:Binder Error:.*is a nested type.*
+
+# error: leaf MAP on a UNION column
+statement error
+COPY (SELECT union_value(num := 1) AS u) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {u: MAP {'k':'val'}})
+----
+<REGEX>:Binder Error:.*is a nested type.*
+
+# error: nesting spec on a VARIANT column
+statement error
+COPY (SELECT 'foo'::VARIANT AS v) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {v: {value: MAP {'k':'val'}}})
+----
+<REGEX>:Binder Error:.*does not support nested.*
+
+# error: non-VARCHAR/BLOB MAP value (integer)
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': 42}})
+----
+<REGEX>:Binder Error:.*must be VARCHAR or BLOB.*
+
+# error: non-VARCHAR/BLOB MAP value (nested STRUCT)
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': {a: 1}}})
+----
+<REGEX>:Binder Error:.*must be VARCHAR or BLOB.*
+
+# error: non-VARCHAR/BLOB MAP key (integer)
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {42: 'v'}})
+----
+<REGEX>:Binder Error:.*must be VARCHAR or BLOB.*
+
+# error: NULL-typed leaf MAP spec
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: NULL::MAP(VARCHAR, VARCHAR)})
+----
+<REGEX>:Binder Error:.*specification for column.*must not be NULL.*
+
+# error: NULL-typed nesting STRUCT spec on a struct column
+statement error
+COPY (SELECT {'zip': 90210, 'city': 'x'} AS addr) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {addr: NULL::STRUCT(zip MAP(VARCHAR, VARCHAR))})
+----
+<REGEX>:Binder Error:.*specification for column.*must not be NULL.*
+
+# error: NULL top-level spec (rejected by the generic COPY-option binder)
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA NULL::STRUCT(col MAP(VARCHAR, VARCHAR)))
+----
+<REGEX>:Binder Error:.*NULL is not supported.*
+
+# error: case-insensitive duplicate column names (rejected by the STRUCT literal binder)
+statement error
+COPY (SELECT range AS col FROM range(10)) TO '{TEST_DIR}/ckv_err.parquet'
+    (FORMAT parquet, COLUMN_KV_METADATA {col: MAP {'k': 'v'}, COL: MAP {'k2': 'v2'}})
+----
+<REGEX>:[\s\S]*Duplicate[\s\S]*

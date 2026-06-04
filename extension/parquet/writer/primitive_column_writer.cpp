@@ -396,6 +396,18 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 
 	// record the start position of the pages for this column
 	column_chunk.meta_data.data_page_offset = 0;
+
+	auto &kv_metadata = column_schema.kv_metadata;
+	if (!kv_metadata.empty()) {
+		for (auto &entry : kv_metadata) {
+			duckdb_parquet::KeyValue kv_pair;
+			kv_pair.__set_key(entry.first);
+			kv_pair.__set_value(entry.second);
+			column_chunk.meta_data.key_value_metadata.push_back(std::move(kv_pair));
+		}
+		column_chunk.meta_data.__isset.key_value_metadata = true;
+	}
+
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk

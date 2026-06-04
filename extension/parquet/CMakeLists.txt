@@ -23,6 +23,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_prefetch_cost_model.cpp
     parquet_reader.cpp
     parquet_field_id.cpp
+    parquet_column_kv.cpp
     parquet_statistics.cpp
     parquet_timestamp.cpp
     parquet_writer.cpp
