@@ -2,6 +2,9 @@
 # description: MAP(VARCHAR, VARIANT) -> VARIANT must read the selected rows under a filter
 # group: [variant]
 
+# Forced storage uses the default storage version, but VARIANT requires v1.5.0, so skip.
+require no_force_storage
+
 statement ok
 CREATE TABLE t AS SELECT i, MAP{'k': i::VARIANT} AS m FROM range(2) t(i);
 
