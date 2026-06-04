@@ -1,0 +1,54 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+index b4d5601..b7c1e6f 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+@@ -79,7 +79,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateRTreeIndex::GetGlobalSinkState(ClientC
+ 	auto &constraint_type = info->constraint_type;
+ 	auto &db = storage.db;
+ 	gstate->rtree =
+-	    make_uniq<RTreeIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
++	    make_uniq<RTreeIndex>(info->index_name.GetName(), constraint_type, storage_ids, table_manager, unbound_expressions, db,
+ 	                          info->options, context, IndexStorageInfo(), estimated_cardinality);
+ 
+ 	gstate->max_node_capacity = gstate->rtree->tree->GetConfig().max_node_capacity;
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index 44790d8..bd2270e 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -97,9 +97,9 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 		idx_t col = 0;
+ 
+ 		output.data[col++].SetValue(row, Value(index_entry.catalog.GetName()));
+-		output.data[col++].SetValue(row, Value(index_entry.schema.name));
+-		output.data[col++].SetValue(row, Value(index_entry.name));
+-		output.data[col++].SetValue(row, Value(table_entry.name));
++		output.data[col++].SetValue(row, Value(index_entry.schema.name.GetName()));
++		output.data[col++].SetValue(row, Value(index_entry.name.GetName()));
++		output.data[col++].SetValue(row, Value(table_entry.name.GetName()));
+ 
+ 		row++;
+ 	}
+@@ -110,7 +110,7 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 	auto qname = QualifiedName::Parse(index_name);
+ 
+ 	// look up the index name in the catalog
+-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
++	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
+ 	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
+ 	                        .Cast<IndexCatalogEntry>();
+ 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index a1bfbe3..8685bee 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -175,8 +175,8 @@ static InsertionOrderPreservingMap<string> RTreeIndexScanToString(TableFunctionT
+ 	D_ASSERT(input.bind_data);
+ 	InsertionOrderPreservingMap<string> result;
+ 	auto &bind_data = input.bind_data->Cast<RTreeIndexScanBindData>();
+-	result["Table"] = bind_data.table.name;
+-	result["Index"] = bind_data.index.GetIndexName();
++	result["Table"] = bind_data.table.name.GetName();
++	result["Index"] = bind_data.index.GetIndexName().GetName();
+ 	return result;
+ }
+ 

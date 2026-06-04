@@ -96,17 +96,9 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	return &entry->GetCatalog();
 }
 
-optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever, const string &catalog_name) {
-	return GetCatalogEntry(retriever, Identifier(catalog_name));
-}
-
 optional_ptr<Catalog> Catalog::GetCatalogEntry(ClientContext &context, const Identifier &catalog_name) {
 	CatalogEntryRetriever entry_retriever(context);
 	return GetCatalogEntry(entry_retriever, catalog_name);
-}
-
-optional_ptr<Catalog> Catalog::GetCatalogEntry(ClientContext &context, const string &catalog_name) {
-	return GetCatalogEntry(context, Identifier(catalog_name));
 }
 
 Catalog &Catalog::GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name) {
@@ -117,17 +109,9 @@ Catalog &Catalog::GetCatalog(CatalogEntryRetriever &retriever, const Identifier 
 	return *catalog;
 }
 
-Catalog &Catalog::GetCatalog(CatalogEntryRetriever &retriever, const string &catalog_name) {
-	return GetCatalog(retriever, Identifier(catalog_name));
-}
-
 Catalog &Catalog::GetCatalog(ClientContext &context, const Identifier &catalog_name) {
 	CatalogEntryRetriever entry_retriever(context);
 	return GetCatalog(entry_retriever, catalog_name);
-}
-
-Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name) {
-	return GetCatalog(context, Identifier(catalog_name));
 }
 
 //===--------------------------------------------------------------------===//
@@ -414,17 +398,9 @@ SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const Identifier 
 	return GetSchema(GetCatalogTransaction(context), schema);
 }
 
-SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const string &schema) {
-	return GetSchema(context, Identifier(schema));
-}
-
 SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const Identifier &schema) {
 	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema);
 	return GetSchema(transaction, schema_lookup);
-}
-
-SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const string &schema) {
-	return GetSchema(transaction, Identifier(schema));
 }
 
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup) {

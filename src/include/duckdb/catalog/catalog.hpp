@@ -109,20 +109,15 @@ public:
 	DUCKDB_API static Catalog &GetSystemCatalog(DatabaseInstance &db);
 	//! Get the specified Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const Identifier &catalog_name);
-	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
 	//! Get the specified Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name);
-	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const Identifier &catalog_name);
-	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const string &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(CatalogEntryRetriever &retriever,
 	                                                        const Identifier &catalog_name);
-	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(CatalogEntryRetriever &retriever,
-	                                                        const string &catalog_name);
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
@@ -251,9 +246,7 @@ public:
 	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema);
 
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &schema);
-	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const string &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const Identifier &schema);
-	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup);
 	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                const EntryLookupInfo &schema_lookup);

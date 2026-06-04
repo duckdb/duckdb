@@ -1,0 +1,69 @@
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index bd923b9..9fe0a7d 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -72,7 +72,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateHNSWIndex::GetGlobalSinkState(ClientCo
+ 	auto &constraint_type = info->constraint_type;
+ 	auto &db = storage.db;
+ 	gstate->global_index =
+-	    make_uniq<HNSWIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
++	    make_uniq<HNSWIndex>(info->index_name.GetName(), constraint_type, storage_ids, table_manager, unbound_expressions, db,
+ 	                         info->options, IndexStorageInfo(), estimated_cardinality);
+ 
+ 	return std::move(gstate);
+diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
+index 494abb3..9bdf612 100644
+--- a/src/hnsw/hnsw_index_pragmas.cpp
++++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -138,9 +138,9 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+ 		idx_t col = 0;
+ 
+ 		output.data[col++].SetValue(row, Value(index_entry.catalog.GetName()));
+-		output.data[col++].SetValue(row, Value(index_entry.schema.name));
+-		output.data[col++].SetValue(row, Value(index_entry.name));
+-		output.data[col++].SetValue(row, Value(table_entry.name));
++		output.data[col++].SetValue(row, Value(index_entry.schema.name.GetName()));
++		output.data[col++].SetValue(row, Value(index_entry.name.GetName()));
++		output.data[col++].SetValue(row, Value(table_entry.name.GetName()));
+ 
+ 		auto stats = hnsw_index->GetStats();
+ 
+@@ -188,7 +188,7 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 	auto qname = QualifiedName::Parse(index_name);
+ 
+ 	// look up the index name in the catalog
+-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
++	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
+ 	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
+ 	                        .Cast<IndexCatalogEntry>();
+ 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),
+diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
+index 8cd23f3..f4d7f10 100644
+--- a/src/hnsw/hnsw_index_scan.cpp
++++ b/src/hnsw/hnsw_index_scan.cpp
+@@ -159,8 +159,8 @@ static InsertionOrderPreservingMap<string> HNSWIndexScanToString(TableFunctionTo
+ 	D_ASSERT(input.bind_data);
+ 	InsertionOrderPreservingMap<string> result;
+ 	auto &bind_data = input.bind_data->Cast<HNSWIndexScanBindData>();
+-	result["Table"] = bind_data.table.name;
+-	result["HNSW Index"] = bind_data.index.GetIndexName();
++	result["Table"] = bind_data.table.name.GetName();
++	result["HNSW Index"] = bind_data.index.GetIndexName().GetName();
+ 	return result;
+ }
+ 
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 995a189..9b9f3bd 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -174,8 +174,8 @@ InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() cons
+ 	InsertionOrderPreservingMap<string> result;
+ 	auto table_name = table.name;
+ 	auto index_name = hnsw_index.name;
+-	result.insert("table", table_name);
+-	result.insert("index", index_name);
++	result.insert("table", table_name.GetName());
++	result.insert("index", index_name.GetName());
+ 	result.insert("limit", to_string(limit));
+ 	SetEstimatedCardinality(result, estimated_cardinality);
+ 	return result;

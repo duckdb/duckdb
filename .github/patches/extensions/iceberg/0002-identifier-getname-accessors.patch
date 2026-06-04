@@ -1,0 +1,379 @@
+diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+index 73a96505..72f14202 100644
+--- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
++++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+@@ -25,7 +25,7 @@
+ namespace duckdb {
+ 
+ IcebergSchemaEntry::IcebergSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
+-    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema)), exists(true),
++    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema.GetName())), exists(true),
+       tables(*this) {
+ }
+ 
+@@ -81,13 +81,13 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
+ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &transaction, ClientContext &context,
+                                                            BoundCreateTableInfo &info) {
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
+-	if (!exists && iceberg_transaction.created_schemas.find(name) == iceberg_transaction.created_schemas.end()) {
++	if (!exists && iceberg_transaction.created_schemas.find(name.GetName()) == iceberg_transaction.created_schemas.end()) {
+ 		throw InvalidInputException("Schema with name \"%s\" does not exist", name);
+ 	}
+ 	auto &base_info = info.Base();
+ 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
+ 	// check if we have an existing entry with this name
+-	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table, base_info.on_conflict)) {
++	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table.GetName(), base_info.on_conflict)) {
+ 		return nullptr;
+ 	}
+ 
+@@ -108,7 +108,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool delete_entry) {
+ 	auto table_name = info.name;
+ 	// find if info has a table name, if so look for it in
+-	auto table_info_it = tables.GetEntries().find(table_name);
++	auto table_info_it = tables.GetEntries().find(table_name.GetName());
+ 	if (table_info_it == tables.GetEntries().end()) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			return;
+@@ -120,7 +120,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool
+ 	}
+ 	if (delete_entry) {
+ 		// Remove the entry from the catalog
+-		tables.GetEntriesMutable().erase(table_name);
++		tables.GetEntriesMutable().erase(table_name.GetName());
+ 	} else {
+ 		// Add the table to the transaction's deleted_tables
+ 		auto &transaction = IcebergTransaction::Get(context, catalog).Cast<IcebergTransaction>();
+@@ -275,7 +275,7 @@ template <typename T>
+ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<IcebergTableSchema> &new_schema) {
+ 	auto &column_name = alter_table_info.column_name;
+ 
+-	auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
++	auto column_p = new_schema->GetMutableFromPath({column_name.GetName()}, nullptr);
+ 	if (!column_p) {
+ 		throw CatalogException("Column with name '%s' does not exist on the table '%s'", column_name,
+ 		                       alter_table_info.GetAlterEntryData().name);
+@@ -363,7 +363,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		}
+ 
+ 		optional_idx column_id;
+-		auto new_schema = current_schema.RemoveColumn(to_remove_column, column_id);
++		auto new_schema = current_schema.RemoveColumn(to_remove_column.GetName(), column_id);
+ 		const bool column_exists = column_id.IsValid();
+ 		if (!column_exists) {
+ 			if (!remove_column_info.if_column_exists) {
+@@ -444,7 +444,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			//! The table is dropped or renamed by this transaction, so it's not a conflict anymore
+ 			D_ASSERT(state && state->IsDroppedOrRenamed());
+ 		}
+-		irc_transaction.RenameTable(updated_table, new_name);
++		irc_transaction.RenameTable(updated_table, new_name.GetName());
+ 		break;
+ 	}
+ 	case AlterTableType::RENAME_COLUMN: {
+@@ -455,18 +455,18 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		auto new_schema = current_schema.Copy();
+ 		new_schema->schema_id++;
+ 
+-		auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
++		auto column_p = new_schema->GetMutableFromPath({column_name.GetName()}, nullptr);
+ 		if (!column_p) {
+ 			throw CatalogException("Column with name '%s' does not exist on the table '%s', RENAME COLUMN failed",
+ 			                       column_name, table_entry.name);
+ 		}
+-		auto collision_column_p = new_schema->GetMutableFromPath({new_name}, nullptr);
++		auto collision_column_p = new_schema->GetMutableFromPath({new_name.GetName()}, nullptr);
+ 		if (collision_column_p) {
+ 			throw CatalogException("Column with name '%s' already exists on the table '%s', RENAME COLUMN failed",
+ 			                       new_name, table_entry.name);
+ 		}
+ 		auto &column = *column_p;
+-		column.name = new_name;
++		column.name = new_name.GetName();
+ 
+ 		auto new_schema_id = new_schema->schema_id;
+ 
+@@ -555,7 +555,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		auto new_schema = current_schema.Copy();
+ 		new_schema->schema_id++;
+ 
+-		auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
++		auto column_p = new_schema->GetMutableFromPath({column_name.GetName()}, nullptr);
+ 		if (!column_p) {
+ 			throw CatalogException("Column with name '%s' does not exist on the table '%s', SET DEFAULT failed",
+ 			                       column_name, table_entry.name);
+@@ -653,7 +653,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 
+ 		auto new_path = column_path;
+ 		new_path.pop_back();
+-		new_path.push_back(new_name);
++		new_path.push_back(new_name.GetName());
+ 
+ 		auto existing_column = new_schema->GetMutableFromPath(new_path, nullptr);
+ 		if (existing_column) {
+@@ -661,7 +661,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			    "The column ('%s') already exists on the table '%s', RENAME COLUMN failed to rename the field",
+ 			    StringUtil::Join(new_path, "."), table_entry.name);
+ 		}
+-		column_p->name = new_name;
++		column_p->name = new_name.GetName();
+ 		IntroduceNewSchema(updated_table, transaction_data, new_schema);
+ 		return;
+ 	}
+@@ -748,7 +748,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::LookupEntry(CatalogTransaction tr
+ 	auto table_entry = GetCatalogSet(type).GetEntry(context, lookup_info);
+ 	if (!table_entry) {
+ 		// verify the schema exists
+-		if (!IRCAPI::VerifySchemaExistence(context, ic_catalog, name)) {
++		if (!IRCAPI::VerifySchemaExistence(context, ic_catalog, name.GetName())) {
+ 			// set exists to false here
+ 			// we would like to throw an error, but this code is also called when listing schemas,
+ 			// and throwing an error will abort the listing process.
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+index ce20f92f..6125cd1b 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+@@ -357,7 +357,7 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
+ 		auto key_type = key->GetExpressionType();
+ 		if (key_type == ExpressionType::COLUMN_REF) {
+ 			auto &colref = key->Cast<ColumnRefExpression>();
+-			column_name = colref.ColumnNames().back();
++			column_name = colref.ColumnNames().back().GetName();
+ 		} else if (key_type == ExpressionType::FUNCTION) {
+ 			auto &funcexpr = key->Cast<FunctionExpression>();
+ 			transform = funcexpr.FunctionName();
+@@ -387,14 +387,14 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
+ 					                              EnumUtil::ToChars(funcexpr.GetArguments()[1].GetExpression().GetExpressionType()));
+ 				}
+ 				auto &colref = funcexpr.GetArguments()[1].GetExpression().Cast<ColumnRefExpression>();
+-				column_name = colref.ColumnNames().back();
++				column_name = colref.ColumnNames().back().GetName();
+ 			} else {
+ 				if (funcexpr.GetArguments()[0].GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 					throw NotImplementedException("Transforms are only supported on column references, not %s",
+ 					                              EnumUtil::ToChars(funcexpr.GetArguments()[0].GetExpression().GetExpressionType()));
+ 				}
+ 				auto &colref = funcexpr.GetArguments()[0].GetExpression().Cast<ColumnRefExpression>();
+-				column_name = colref.ColumnNames().back();
++				column_name = colref.ColumnNames().back().GetName();
+ 			}
+ 		} else {
+ 			throw NotImplementedException("Unsupported partition key type: %s", key->ToString());
+diff --git a/src/catalog/rest/iceberg_catalog.cpp b/src/catalog/rest/iceberg_catalog.cpp
+index 5e636af6..1183248b 100644
+--- a/src/catalog/rest/iceberg_catalog.cpp
++++ b/src/catalog/rest/iceberg_catalog.cpp
+@@ -78,19 +78,19 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
+ 	D_ASSERT(context);
+ 
+ 	// Verify schema existence on the server first
+-	bool schema_exists = IRCAPI::VerifySchemaExistence(*context, *this, info.schema);
++	bool schema_exists = IRCAPI::VerifySchemaExistence(*context, *this, info.schema.GetName());
+ 
+ 	if (schema_exists) {
+ 		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 			// Schema already exists on the server - get or create a local entry and return it
+-			auto entry = schemas.GetEntry(*context, info.schema, OnEntryNotFound::RETURN_NULL);
++			auto entry = schemas.GetEntry(*context, info.schema.GetName(), OnEntryNotFound::RETURN_NULL);
+ 			if (entry) {
+ 				return entry;
+ 			}
+ 			auto new_schema = make_uniq<IcebergSchemaEntry>(*this, info);
+ 			auto schema_name = new_schema->name;
+-			schemas.AddEntry(schema_name, std::move(new_schema));
+-			return &schemas.GetEntry(info.schema);
++			schemas.AddEntry(schema_name.GetName(), std::move(new_schema));
++			return &schemas.GetEntry(info.schema.GetName());
+ 		}
+ 		throw CatalogException("Schema with name \"%s\" already exists", info.schema);
+ 	}
+@@ -99,9 +99,9 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
+ 	auto &iceberg_transaction = IcebergTransaction::Get(*context, *this);
+ 	auto new_schema = make_uniq<IcebergSchemaEntry>(*this, info);
+ 	auto schema_name = new_schema->name;
+-	schemas.AddEntry(schema_name, std::move(new_schema));
+-	iceberg_transaction.created_schemas.insert(info.schema);
+-	return &schemas.GetEntry(info.schema);
++	schemas.AddEntry(schema_name.GetName(), std::move(new_schema));
++	iceberg_transaction.created_schemas.insert(info.schema.GetName());
++	return &schemas.GetEntry(info.schema.GetName());
+ }
+ 
+ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+@@ -111,13 +111,13 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 	}
+ 
+ 	// Verify schema existence on the server first
+-	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name);
++	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name.GetName());
+ 
+ 	if (!schema_exists) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			// remove the entry if it exists locally
+ 			// it could have been created during the bind phase.
+-			GetSchemas().RemoveEntry(info.name);
++			GetSchemas().RemoveEntry(info.name.GetName());
+ 			return;
+ 		}
+ 		throw CatalogException("Schema with name \"%s\" does not exist", info.name);
+@@ -125,7 +125,7 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 
+ 	// Schema exists - defer the server deletion to commit
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, *this);
+-	iceberg_transaction.deleted_schemas.insert(info.name);
++	iceberg_transaction.deleted_schemas.insert(info.name.GetName());
+ }
+ 
+ unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+diff --git a/src/catalog/rest/iceberg_table_set.cpp b/src/catalog/rest/iceberg_table_set.cpp
+index d935a578..e0a592e2 100644
+--- a/src/catalog/rest/iceberg_table_set.cpp
++++ b/src/catalog/rest/iceberg_table_set.cpp
+@@ -137,7 +137,7 @@ mutex &IcebergTableSet::GetEntryLock() {
+ void IcebergTableSet::LoadEntries(ClientContext &context) {
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
+ 	bool schema_listed =
+-	    iceberg_transaction.listed_schemas.find(schema.name) != iceberg_transaction.listed_schemas.end();
++	    iceberg_transaction.listed_schemas.find(schema.name.GetName()) != iceberg_transaction.listed_schemas.end();
+ 	if (schema_listed) {
+ 		return;
+ 	}
+@@ -146,7 +146,7 @@ void IcebergTableSet::LoadEntries(ClientContext &context) {
+ 	for (auto &table : tables) {
+ 		entries.emplace(table.name, make_shared_ptr<IcebergTableInformation>(ic_catalog, schema, table.name));
+ 	}
+-	iceberg_transaction.listed_schemas.insert(schema.name);
++	iceberg_transaction.listed_schemas.insert(schema.name.GetName());
+ }
+ 
+ static Value ParseTableProperty(TableFunctionBinder &binder, ClientContext &context, const ParsedExpression &expr_ref,
+@@ -210,9 +210,9 @@ IcebergTableInformation &IcebergTableSet::CreateNewEntry(ClientContext &context,
+ 		               .GetValue<string>();
+ 	}
+ 
+-	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.table);
++	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.table.GetName());
+ 	auto &alter_update = iceberg_transaction.GetOrCreateAlter();
+-	auto &table_info = alter_update.CreateTable(key, IcebergTableInformation(catalog, schema, info.table));
++	auto &table_info = alter_update.CreateTable(key, IcebergTableInformation(catalog, schema, info.table.GetName()));
+ 	// auto &table_info = emplace_res.first->second;
+ 	auto &table_metadata = table_info.table_metadata;
+ 	auto table_entry = make_uniq<IcebergTableEntry>(table_info, catalog, schema, info, 0);
+diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
+index 4047986d..2e348da6 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -549,7 +549,7 @@ void IcebergTransaction::DoTableDeletes(IcebergTransactionDeleteUpdate &delete_u
+ 	// remove the load table result
+ 	ic_catalog.table_request_cache.Expire(context, table_key);
+ 	// remove the table entry from the catalog
+-	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key).Cast<IcebergSchemaEntry>();
++	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key.GetName()).Cast<IcebergSchemaEntry>();
+ 	DropInfo drop_info;
+ 	drop_info.name = table_name;
+ 	drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
+diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
+index dbcb29aa..e21e92ae 100644
+--- a/src/execution/operator/iceberg_delete.cpp
++++ b/src/execution/operator/iceberg_delete.cpp
+@@ -444,7 +444,7 @@ string IcebergDelete::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> IcebergDelete::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table.name;
++	result["Table Name"] = table.name.GetName();
+ 	return result;
+ }
+ 
+@@ -533,7 +533,7 @@ PhysicalOperator &IcebergCatalog::PlanDelete(ClientContext &context, PhysicalPla
+ 	if (!allows_positional_deletes) {
+ 		auto delete_table_property = updated_table_entry.table_info.table_metadata.GetTableProperty(WRITE_DELETE_MODE);
+ 		auto error_message = IcebergCatalog::GetOnlyMergeOnReadSupportedErrorMessage(
+-		    updated_table_entry.name, WRITE_DELETE_MODE, delete_table_property);
++		    updated_table_entry.name.GetName(), WRITE_DELETE_MODE, delete_table_property);
+ 		throw NotImplementedException(error_message);
+ 	}
+ 
+diff --git a/src/execution/operator/iceberg_insert.cpp b/src/execution/operator/iceberg_insert.cpp
+index 0c33b81f..bfbebcac 100644
+--- a/src/execution/operator/iceberg_insert.cpp
++++ b/src/execution/operator/iceberg_insert.cpp
+@@ -365,7 +365,7 @@ void IcebergInsert::AddWrittenFiles(IcebergInsertGlobalState &global_state, Data
+ 	D_ASSERT(table);
+ 	auto &ic_table = table->Cast<IcebergTableEntry>();
+ 	auto &table_metadata = ic_table.table_info.table_metadata;
+-	global_state.AddFiles(chunk, ic_table.name, table_metadata);
++	global_state.AddFiles(chunk, ic_table.name.GetName(), table_metadata);
+ }
+ 
+ optional_ptr<TableCatalogEntry> IcebergInsert::GetEffectiveTable() const {
+@@ -468,13 +468,13 @@ string IcebergInsert::GetName() const {
+ InsertionOrderPreservingMap<string> IcebergInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+ 	if (table) {
+-		result["Table Name"] = table->name;
++		result["Table Name"] = table->name.GetName();
+ 	} else if (info) {
+-		result["Table Name"] = info->Base().table;
++		result["Table Name"] = info->Base().table.GetName();
+ 	} else if (create_state) {
+ 		lock_guard<mutex> guard(create_state->lock);
+ 		if (create_state->table_entry) {
+-			result["Table Name"] = create_state->table_entry->name;
++			result["Table Name"] = create_state->table_entry->name.GetName();
+ 		}
+ 	}
+ 	return result;
+diff --git a/src/execution/operator/iceberg_update.cpp b/src/execution/operator/iceberg_update.cpp
+index 3a31ef6d..3500bccf 100644
+--- a/src/execution/operator/iceberg_update.cpp
++++ b/src/execution/operator/iceberg_update.cpp
+@@ -226,7 +226,7 @@ string IcebergUpdate::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> IcebergUpdate::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table.name;
++	result["Table Name"] = table.name.GetName();
+ 	return result;
+ }
+ 
+diff --git a/src/execution/operator/physical_iceberg_create_table.cpp b/src/execution/operator/physical_iceberg_create_table.cpp
+index 75f06993..b60fb0a6 100644
+--- a/src/execution/operator/physical_iceberg_create_table.cpp
++++ b/src/execution/operator/physical_iceberg_create_table.cpp
+@@ -84,7 +84,7 @@ string PhysicalIcebergCreateTable::GetName() const {
+ InsertionOrderPreservingMap<string> PhysicalIcebergCreateTable::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+ 	if (info) {
+-		result["Table Name"] = info->Base().table;
++		result["Table Name"] = info->Base().table.GetName();
+ 	}
+ 	return result;
+ }
+diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
+index 51275147..62568493 100644
+--- a/src/function/ducklake/iceberg_to_ducklake.cpp
++++ b/src/function/ducklake/iceberg_to_ducklake.cpp
+@@ -115,7 +115,7 @@ public:
+ 		}
+ 
+ 		auto &schema_entry = table_info.schema;
+-		auto &schema = GetSchema(schema_entry.name);
++		auto &schema = GetSchema(schema_entry.name.GetName());
+ 
+ 		auto &table = GetTable(table_info);
+ 		schema.tables.push_back(table.table_uuid);
+diff --git a/src/function/metadata/iceberg_load_table_response.cpp b/src/function/metadata/iceberg_load_table_response.cpp
+index f7cde017..b20a5f19 100644
+--- a/src/function/metadata/iceberg_load_table_response.cpp
++++ b/src/function/metadata/iceberg_load_table_response.cpp
+@@ -51,7 +51,7 @@ static unique_ptr<HTTPResponse> MakeRequest(ClientContext &context, const Iceber
+ 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("namespaces"));
+ 	url_builder.AddPathComponent(IRCPathComponent::NamespaceComponent(ic_schema.namespace_items));
+ 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("tables"));
+-	url_builder.AddPathComponent(IRCPathComponent::RegularComponent(ic_table_entry.name));
++	url_builder.AddPathComponent(IRCPathComponent::RegularComponent(ic_table_entry.name.GetName()));
+ 
+ 	HTTPHeaders headers(*context.db);
+ 	if (ic_catalog.attach_options.access_mode == IRCAccessDelegationMode::VENDED_CREDENTIALS) {

@@ -1,0 +1,87 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index 84d44d5..5140dc9 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
+ 		            [&](CatalogEntry &entry) { result->scalar_functions.push_back(entry); });
+ 		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+ 			// don't include fuzz functions
+-			if (entry.name.find("fuzzyduck") == std::string::npos &&
+-			    entry.name.find("fuzz_all_functions") == std::string::npos &&
+-			    entry.name.find("reduce_sql_statement") == std::string::npos &&
+-			    entry.name.find("sqlsmith") == std::string::npos) {
++			if (entry.name.GetName().find("fuzzyduck") == std::string::npos &&
++			    entry.name.GetName().find("fuzz_all_functions") == std::string::npos &&
++			    entry.name.GetName().find("reduce_sql_statement") == std::string::npos &&
++			    entry.name.GetName().find("sqlsmith") == std::string::npos) {
+ 				result->table_functions.push_back(entry);
+ 			}
+ 		});
+@@ -219,7 +219,7 @@ std::string StatementGenerator::GetRandomAttachedDataBase() {
+ 	auto state = GetDatabaseState(context);
+ 	auto &st_name = *state->attached_databases[RandomValue(state->attached_databases.size())];
+ 	auto name = st_name.name;
+-	return name;
++	return name.GetName();
+ }
+ 
+ //===--------------------------------------------------------------------===//
+@@ -762,7 +762,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
+ 		auto offset = RandomValue(scalar_entry.functions.Size());
+ 		auto actual_function = scalar_entry.functions.GetFunctionByOffset(offset);
+-		name = scalar_entry.name;
++		name = scalar_entry.name.GetName();
+ 		for (auto &arg : actual_function.GetSignature().GetParameters()) {
+ 			arguments.push_back(arg.GetType());
+ 		}
+@@ -778,7 +778,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		auto actual_function =
+ 		    aggregate_entry.functions.GetFunctionByOffset(RandomValue(aggregate_entry.functions.Size()));
+ 
+-		name = aggregate_entry.name;
++		name = aggregate_entry.name.GetName();
+ 		min_parameters = actual_function.GetSignature().GetParameterCount();
+ 		max_parameters = min_parameters;
+ 		if (actual_function.GetVarArgs().id() != LogicalTypeId::INVALID) {
+@@ -804,7 +804,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 	}
+ 	case CatalogType::MACRO_ENTRY: {
+ 		auto &macro_entry = function.Cast<MacroCatalogEntry>();
+-		name = macro_entry.name;
++		name = macro_entry.name.GetName();
+ 		idx_t macro_idx = RandomValue(macro_entry.macros.size());
+ 		min_parameters = macro_entry.macros[macro_idx]->parameters.size();
+ 		max_parameters = min_parameters;
+@@ -946,7 +946,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 	idx_t max_parameters;
+ 	if (function) {
+ 		type = ExpressionType::WINDOW_AGGREGATE;
+-		name = function->name;
++		name = function->name.GetName();
+ 		min_parameters = function->GetSignature().GetParameterCount();
+ 		max_parameters = min_parameters;
+ 	} else {
+@@ -1064,7 +1064,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+ 			if (column_name.empty()) {
+ 				break;
+ 			}
+-			result->ExcludeListMutable().insert(column_name);
++			result->ExcludeListMutable().insert(QualifiedColumnName(column_name));
+ 		}
+ 		while (RandomPercentage(20)) {
+ 			auto column_name = GenerateColumnName();
+@@ -1317,11 +1317,11 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
+ 	auto select = make_uniq<SelectStatement>();
+ 	auto node = make_uniq<SelectNode>();
+ 
+-	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
++	bool always_null = FunctionArgumentsAlwaysNull(base_function.name.GetName());
+ 
+ 	vector<unique_ptr<ParsedExpression>> children;
+ 	vector<unique_ptr<ParsedExpression>> test_vector_types;
+-	vector<string> column_aliases;
++	vector<Identifier> column_aliases;
+ 	for (auto &param : base_function.GetSignature().GetParameters()) {
+ 		unique_ptr<ParsedExpression> argument;
+ 		if (!always_null) {

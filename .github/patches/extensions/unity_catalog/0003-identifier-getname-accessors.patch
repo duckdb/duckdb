@@ -1,0 +1,65 @@
+diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
+index f56c177..03d9830 100644
+--- a/src/functions/uc_checkpoint.cpp
++++ b/src/functions/uc_checkpoint.cpp
+@@ -28,9 +28,9 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
+ 	auto &search_path = ClientData::Get(context).catalog_search_path->GetDefault();
+ 
+ 	CheckpointTableBindData result;
+-	result.catalog_name = qname.catalog.empty() ? search_path.catalog : qname.catalog;
+-	result.schema_name = qname.schema.empty() ? search_path.schema : qname.schema;
+-	result.table_name = qname.name;
++	result.catalog_name = qname.catalog.empty() ? search_path.catalog : qname.catalog.GetName();
++	result.schema_name = qname.schema.empty() ? search_path.schema : qname.schema.GetName();
++	result.table_name = qname.name.GetName();
+ 
+ 	if (result.catalog_name.empty()) {
+ 		throw InvalidInputException(
+diff --git a/src/include/storage/uc_table_entry.hpp b/src/include/storage/uc_table_entry.hpp
+index aba0ee1..72090f3 100644
+--- a/src/include/storage/uc_table_entry.hpp
++++ b/src/include/storage/uc_table_entry.hpp
+@@ -29,7 +29,7 @@ struct UCTableInfo {
+ 	}
+ 
+ 	const string &GetTableName() const {
+-		return create_info->table;
++		return create_info->table.GetName();
+ 	}
+ 
+ 	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/storage/uc_default_functions.cpp b/src/storage/uc_default_functions.cpp
+index beb3f65..c91da08 100644
+--- a/src/storage/uc_default_functions.cpp
++++ b/src/storage/uc_default_functions.cpp
+@@ -17,7 +17,7 @@ static const DefaultTableMacro uc_table_macros[] = {
+ optional_ptr<CatalogEntry> UCSchemaEntry::LoadBuiltInFunction(DefaultTableMacro macro) {
+ 	string macro_def = macro.macro;
+ 	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
+-	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name, '\''));
++	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetName(), '\''));
+ 	macro.macro = macro_def.c_str();
+ 	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
+ 	auto table_macro =
+diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
+index 5068777..fb044f2 100644
+--- a/src/storage/uc_table_set.cpp
++++ b/src/storage/uc_table_set.cpp
+@@ -191,7 +191,7 @@ void TableInformation::InternalAttach(ClientContext &context) {
+ 	if (IsCCV2()) {
+ 		auto log_tail = BuildLogTail(context);
+ 		info.options["parent_catalog"] = Value(catalog.GetName());
+-		info.options["parent_catalog_schema"] = Value(schema.name);
++		info.options["parent_catalog_schema"] = Value(schema.name.GetName());
+ 		info.options["parent_commit"] = Value(true);
+ 		if (!log_tail.IsNull()) {
+ 			info.options["log_tail"] = log_tail;
+@@ -247,7 +247,7 @@ void UCTableSet::Checkpoint(ClientContext &context, bool force) {
+ 
+ void UCTableSet::LoadEntries(ClientContext &context, const lock_guard<mutex> &_entry_lock) {
+ 	auto &unity_catalog = catalog.Cast<UnityCatalog>();
+-	auto get_tables_result = UCAPI::GetTables(context, catalog, schema.name, unity_catalog.credentials);
++	auto get_tables_result = UCAPI::GetTables(context, catalog, schema.name.GetName(), unity_catalog.credentials);
+ 
+ 	for (auto &table : get_tables_result) {
+ 		D_ASSERT(schema.name == table.schema_name);

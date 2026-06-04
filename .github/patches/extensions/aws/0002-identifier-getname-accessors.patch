@@ -1,0 +1,15 @@
+diff --git a/src/aws_secret.cpp b/src/aws_secret.cpp
+index e6e7b06..d008820 100644
+--- a/src/aws_secret.cpp
++++ b/src/aws_secret.cpp
+@@ -56,8 +56,8 @@ static void ParseCoreS3Config(CreateSecretInput &input, KeyValueSecret &secret)
+ }
+ 
+ //! This constructs the base S3 Type secret
+-static unique_ptr<KeyValueSecret> ConstructBaseS3Secret(vector<string> &prefix_paths_p, string &type, string &provider,
+-                                                        string &name) {
++static unique_ptr<KeyValueSecret> ConstructBaseS3Secret(vector<string> &prefix_paths_p, const Identifier &type,
++                                                        const Identifier &provider, const Identifier &name) {
+ 	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
+ 	return_value->redact_keys = {"secret", "session_token"};
+ 	return return_value;

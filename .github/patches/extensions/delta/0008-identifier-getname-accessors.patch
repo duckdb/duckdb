@@ -1,0 +1,13 @@
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index c2bae88..3fffd6d 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> DeltaInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name : info->Base().table;
++	result["Table Name"] = table ? table->name.GetName() : info->Base().table.GetName();
+ 	return result;
+ }
+ 

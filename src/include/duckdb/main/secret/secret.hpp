@@ -165,7 +165,8 @@ protected:
 //! for most use-cases of secrets as secrets generally tend to fit in a key value map.
 class KeyValueSecret : public BaseSecret {
 public:
-	KeyValueSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	KeyValueSecret(const vector<string> &prefix_paths, const Identifier &type, const Identifier &provider,
+	               const Identifier &name)
 	    : BaseSecret(prefix_paths, type, provider, name) {
 		D_ASSERT(!type.empty());
 		serializable = true;

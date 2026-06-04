@@ -1,0 +1,443 @@
+diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
+index 6a34aaa..db4dbe8 100644
+--- a/src/include/storage/mysql_table_entry.hpp
++++ b/src/include/storage/mysql_table_entry.hpp
+@@ -26,7 +26,7 @@ struct MySQLTableInfo {
+ 	}
+ 
+ 	const string &GetTableName() const {
+-		return create_info->table;
++		return create_info->table.GetName();
+ 	}
+ 
+ 	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
+index fea00b5..bfe3ba4 100644
+--- a/src/mysql_scanner.cpp
++++ b/src/mysql_scanner.cpp
+@@ -103,7 +103,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
+ 		fed.adaptive_cache_generation = cached.plan_generation;
+ 		fed.adaptive_estimated_rows = cached.plan.estimated_rows_from_mysql;
+ 	} else {
+-		auto table_stats = stats_collector.GetTableStats(bind_data.table.schema.name, bind_data.table.name);
++		auto table_stats = stats_collector.GetTableStats(bind_data.table.schema.name.GetName(), bind_data.table.name.GetName());
+ 		auto mysql_costs = stats_collector.FetchMySQLCostConstants();
+ 		CostModelParameters cost_params;
+ 		if (mysql_costs.loaded) {
+@@ -140,7 +140,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
+ static void ResolvePartitionPruning(FederationState &fed, const MySQLBindData &bind_data,
+                                     MySQLStatisticsCollector &stats_collector, const vector<column_t> &column_ids,
+                                     optional_ptr<TableFilterSet> filters) {
+-	auto part_stats = stats_collector.GetTableStats(bind_data.table.schema.name, bind_data.table.name);
++	auto part_stats = stats_collector.GetTableStats(bind_data.table.schema.name.GetName(), bind_data.table.name.GetName());
+ 	const auto &part_info = part_stats.partition_info;
+ 	if (!part_info.IsRangeOrList() || part_info.partitions.empty()) {
+ 		return;
+@@ -274,8 +274,8 @@ static void InjectQueryHints(ClientContext &context, string &select, const Feder
+ 			bool valid = explain_stats.ValidateWithExplain(select, fed.filter_analysis.recommended_index, true);
+ 			if (!valid) {
+ 				auto &mysql_catalog = bind_data.table.catalog.Cast<MySQLCatalog>();
+-				mysql_catalog.GetPlanCache().InvalidateTable(bind_data.table.schema.name, bind_data.table.name);
+-				mysql_catalog.GetStatsCache().Invalidate(bind_data.table.schema.name, bind_data.table.name);
++				mysql_catalog.GetPlanCache().InvalidateTable(bind_data.table.schema.name.GetName(), bind_data.table.name.GetName());
++				mysql_catalog.GetStatsCache().Invalidate(bind_data.table.schema.name.GetName(), bind_data.table.name.GetName());
+ 			}
+ 		}
+ 	}
+@@ -366,9 +366,9 @@ static string BuildAggregateQuery(MySQLBindData &bind_data) {
+ 	auto &aggr_bind_data = bind_data.aggregate_bind_data;
+ 	string sql = "SELECT " + aggr_bind_data.aggregate_select_list;
+ 	sql += " FROM ";
+-	sql += MySQLUtils::WriteIdentifier(bind_data.table.schema.name);
++	sql += MySQLUtils::WriteIdentifier(bind_data.table.schema.name.GetName());
+ 	sql += ".";
+-	sql += MySQLUtils::WriteIdentifier(bind_data.table.name);
++	sql += MySQLUtils::WriteIdentifier(bind_data.table.name.GetName());
+ 	if (!aggr_bind_data.aggregate_where_clause.empty()) {
+ 		sql += " WHERE " + aggr_bind_data.aggregate_where_clause;
+ 	}
+@@ -428,15 +428,15 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+ 		}
+ 	}
+ 	select += " FROM ";
+-	select += MySQLUtils::WriteIdentifier(bind_data.table.schema.name);
++	select += MySQLUtils::WriteIdentifier(bind_data.table.schema.name.GetName());
+ 	select += ".";
+-	select += MySQLUtils::WriteIdentifier(bind_data.table.name);
++	select += MySQLUtils::WriteIdentifier(bind_data.table.name.GetName());
+ 
+ 	string filter_string;
+ 
+ 	if (bind_data.use_predicate_analyzer && input.filters && input.filters->HasFilters()) {
+ 		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache());
+-		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name, bind_data.table.name);
++		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name.GetName(), bind_data.table.name.GetName());
+ 		ConfigurePredicateAnalyzer(context, analyzer);
+ 
+ 		fed.filter_analysis = analyzer.AnalyzeFilters(input.column_ids, input.filters, bind_data.names);
+@@ -456,7 +456,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+ 				filter_cols.push_back(analysis.column_name);
+ 				sels.push_back(analysis.estimated_selectivity);
+ 			}
+-			ExecutionPlanCacheKey cache_key(bind_data.table.schema.name, bind_data.table.name, column_names,
++			ExecutionPlanCacheKey cache_key(bind_data.table.schema.name.GetName(), bind_data.table.name.GetName(), column_names,
+ 			                                filter_cols, sels);
+ 
+ 			ResolveExecutionPlan(context, fed, bind_data, stats_collector, mysql_catalog, con, column_names, cache_key);
+@@ -595,7 +595,7 @@ static void MySQLScan(ClientContext &context, TableFunctionInput &data, DataChun
+ static InsertionOrderPreservingMap<string> MySQLScanToString(TableFunctionToStringInput &input) {
+ 	InsertionOrderPreservingMap<string> result;
+ 	auto &bind_data = input.bind_data->Cast<MySQLBindData>();
+-	result["Table"] = bind_data.table.name;
++	result["Table"] = bind_data.table.name.GetName();
+ 	return result;
+ }
+ 
+diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
+index 8b8dd64..a3d8c17 100644
+--- a/src/storage/mysql_catalog_set.cpp
++++ b/src/storage/mysql_catalog_set.cpp
+@@ -33,7 +33,7 @@ void MySQLCatalogSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 		drop_query += " IF EXISTS ";
+ 	}
+-	drop_query += MySQLUtils::WriteIdentifier(info.name);
++	drop_query += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	if (info.type != CatalogType::SCHEMA_ENTRY) {
+ 		if (info.cascade) {
+ 			drop_query += " CASCADE";
+@@ -43,7 +43,7 @@ void MySQLCatalogSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	transaction.Query(drop_query);
+ 
+ 	// erase the entry from the catalog set
+-	EraseEntryInternal(info.name);
++	EraseEntryInternal(info.name.GetName());
+ }
+ 
+ void MySQLCatalogSet::EraseEntryInternal(const string &name) {
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index c01340e..26493af 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -75,7 +75,7 @@ string MySQLExecuteQuery::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> MySQLExecuteQuery::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table.name;
++	result["Table Name"] = table.name.GetName();
+ 	return result;
+ }
+ 
+@@ -147,9 +147,9 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 
+ string ConstructDeleteStatement(LogicalDelete &op, PhysicalOperator &child) {
+ 	string result = "DELETE FROM ";
+-	result += MySQLUtils::WriteIdentifier(op.table.schema.name);
++	result += MySQLUtils::WriteIdentifier(op.table.schema.name.GetName());
+ 	result += ".";
+-	result += MySQLUtils::WriteIdentifier(op.table.name);
++	result += MySQLUtils::WriteIdentifier(op.table.name.GetName());
+ 	auto filters = ExtractFilters(child, "DELETE");
+ 	if (!filters.empty()) {
+ 		result += " WHERE " + filters;
+@@ -172,9 +172,9 @@ string ConstructUpdateStatement(LogicalUpdate &op, PhysicalOperator &child) {
+ 	// FIXME - all of this is pretty gnarly, we should provide a hook earlier on
+ 	// in the planning process to convert this into a SQL statement
+ 	string result = "UPDATE ";
+-	result += MySQLUtils::WriteIdentifier(op.table.schema.name);
++	result += MySQLUtils::WriteIdentifier(op.table.schema.name.GetName());
+ 	result += ".";
+-	result += MySQLUtils::WriteIdentifier(op.table.name);
++	result += MySQLUtils::WriteIdentifier(op.table.name.GetName());
+ 	result += " SET ";
+ 	if (child.type != PhysicalOperatorType::PROJECTION) {
+ 		throw NotImplementedException("MySQL Update not supported - Expected the "
+diff --git a/src/storage/mysql_index_entry.cpp b/src/storage/mysql_index_entry.cpp
+index f140e3a..24b04e0 100644
+--- a/src/storage/mysql_index_entry.cpp
++++ b/src/storage/mysql_index_entry.cpp
+@@ -9,7 +9,7 @@ MySQLIndexEntry::MySQLIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, C
+ }
+ 
+ string MySQLIndexEntry::GetSchemaName() const {
+-	return schema.name;
++	return schema.name.GetName();
+ }
+ 
+ string MySQLIndexEntry::GetTableName() const {
+diff --git a/src/storage/mysql_index_set.cpp b/src/storage/mysql_index_set.cpp
+index c122830..4607eba 100644
+--- a/src/storage/mysql_index_set.cpp
++++ b/src/storage/mysql_index_set.cpp
+@@ -11,7 +11,7 @@ MySQLIndexSet::MySQLIndexSet(MySQLSchemaEntry &schema) : MySQLInSchemaSet(schema
+ }
+ 
+ void MySQLIndexSet::DropEntry(ClientContext &context, DropInfo &info) {
+-	auto entry = GetEntry(context, info.name);
++	auto entry = GetEntry(context, info.name.GetName());
+ 	if (!entry) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			return;
+@@ -20,13 +20,13 @@ void MySQLIndexSet::DropEntry(ClientContext &context, DropInfo &info) {
+ 	}
+ 	auto &mysql_index = entry->Cast<MySQLIndexEntry>();
+ 	string drop_query = "DROP INDEX ";
+-	drop_query += MySQLUtils::WriteIdentifier(info.name);
++	drop_query += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	drop_query += " ON ";
+ 	drop_query += MySQLUtils::WriteIdentifier(mysql_index.table_name);
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	transaction.Query(drop_query);
+ 
+-	EraseEntryInternal(info.name);
++	EraseEntryInternal(info.name.GetName());
+ }
+ 
+ void MySQLIndexSet::LoadEntries(ClientContext &context) {
+@@ -35,7 +35,7 @@ SELECT DISTINCT TABLE_NAME, INDEX_NAME
+ FROM INFORMATION_SCHEMA.STATISTICS
+ WHERE TABLE_SCHEMA = 'mysqlscanner';
+ )",
+-	                                 "${SCHEMA_NAME}", MySQLUtils::WriteLiteral(schema.name));
++	                                 "${SCHEMA_NAME}", MySQLUtils::WriteLiteral(schema.name.GetName()));
+ 
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	auto result = transaction.Query(query);
+diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
+index fdabc68..2aa99a5 100644
+--- a/src/storage/mysql_insert.cpp
++++ b/src/storage/mysql_insert.cpp
+@@ -77,9 +77,9 @@ vector<string> GetInsertColumns(const MySQLInsert &insert, MySQLTableEntry &entr
+ string GetBaseInsertQuery(const MySQLTableEntry &table, const vector<string> &column_names) {
+ 	string query;
+ 	query += "INSERT INTO ";
+-	query += MySQLUtils::WriteIdentifier(table.schema.name);
++	query += MySQLUtils::WriteIdentifier(table.schema.name.GetName());
+ 	query += ".";
+-	query += MySQLUtils::WriteIdentifier(table.name);
++	query += MySQLUtils::WriteIdentifier(table.name.GetName());
+ 	query += " ";
+ 	if (!column_names.empty()) {
+ 		query += "(";
+@@ -268,7 +268,7 @@ string MySQLInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> MySQLInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name : info->Base().table;
++	result["Table Name"] = table ? table->name.GetName() : info->Base().table.GetName();
+ 	return result;
+ }
+ 
+diff --git a/src/storage/mysql_optimizer.cpp b/src/storage/mysql_optimizer.cpp
+index 2fb7b86..1aa539d 100644
+--- a/src/storage/mysql_optimizer.cpp
++++ b/src/storage/mysql_optimizer.cpp
+@@ -45,7 +45,7 @@ static bool ShouldPushAggregate(ClientContext &context, LogicalAggregate &aggr)
+ 	auto &catalog = bind_data->table.ParentCatalog().Cast<MySQLCatalog>();
+ 	MySQLTableStats table_stats;
+ 	bool have_stats =
+-	    catalog.GetStatsCache().GetTableStats(bind_data->table.schema.name, bind_data->table.name, table_stats);
++	    catalog.GetStatsCache().GetTableStats(bind_data->table.schema.name.GetName(), bind_data->table.name.GetName(), table_stats);
+ 
+ 	if (!have_stats) {
+ 		return true;
+@@ -77,7 +77,7 @@ static bool ShouldPushAggregate(ClientContext &context, LogicalAggregate &aggr)
+ 	double filter_selectivity = 1.0;
+ 	if (get->table_filters.HasFilters()) {
+ 		MySQLTableStats cached_filter_stats;
+-		if (catalog.GetStatsCache().GetTableStats(bind_data->table.schema.name, bind_data->table.name,
++		if (catalog.GetStatsCache().GetTableStats(bind_data->table.schema.name.GetName(), bind_data->table.name.GetName(),
+ 		                                          cached_filter_stats)) {
+ 			for (const auto &entry : get->table_filters) {
+ 				ProjectionIndex proj_idx = entry.GetIndex();
+diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
+index 66ac94d..11d3eb3 100644
+--- a/src/storage/mysql_schema_entry.cpp
++++ b/src/storage/mysql_schema_entry.cpp
+@@ -39,7 +39,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateTable(CatalogTransaction tran
+ 	auto table_name = base_info.table;
+ 	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		// CREATE OR REPLACE - drop any existing entries first (if any)
+-		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name);
++		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name.GetName());
+ 	}
+ 	return tables.CreateTable(transaction.GetContext(), info);
+ }
+@@ -66,9 +66,9 @@ string GetMySQLCreateIndex(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ 		sql += " UNIQUE";
+ 	}
+ 	sql += " INDEX ";
+-	sql += MySQLUtils::WriteIdentifier(info.index_name);
++	sql += MySQLUtils::WriteIdentifier(info.index_name.GetName());
+ 	sql += " ON ";
+-	sql += MySQLUtils::WriteIdentifier(tbl.name);
++	sql += MySQLUtils::WriteIdentifier(tbl.name.GetName());
+ 	sql += "(";
+ 	for (idx_t i = 0; i < info.parsed_expressions.size(); i++) {
+ 		if (i > 0) {
+@@ -98,7 +98,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateIndex(CatalogTransaction tran
+ string GetMySQLCreateView(CreateViewInfo &info) {
+ 	string sql;
+ 	sql = "CREATE VIEW ";
+-	sql += MySQLUtils::WriteIdentifier(info.view_name);
++	sql += MySQLUtils::WriteIdentifier(info.view_name.GetName());
+ 	sql += " ";
+ 	if (!info.aliases.empty()) {
+ 		sql += "(";
+@@ -123,18 +123,18 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
+ 	}
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT ||
+ 	    info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+-		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name);
++		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name.GetName());
+ 		if (current_entry) {
+ 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 				return current_entry;
+ 			}
+ 			// CREATE OR REPLACE - drop any existing entries first (if any)
+-			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name);
++			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name.GetName());
+ 		}
+ 	}
+ 	auto &mysql_transaction = GetMySQLTransaction(transaction);
+ 	mysql_transaction.Query(GetMySQLCreateView(info));
+-	return tables.RefreshTable(transaction.GetContext(), info.view_name);
++	return tables.RefreshTable(transaction.GetContext(), info.view_name.GetName());
+ }
+ 
+ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
+diff --git a/src/storage/mysql_schema_set.cpp b/src/storage/mysql_schema_set.cpp
+index d515600..6199ee6 100644
+--- a/src/storage/mysql_schema_set.cpp
++++ b/src/storage/mysql_schema_set.cpp
+@@ -25,7 +25,7 @@ FROM information_schema.schemata;
+ 	while (result->Next()) {
+ 		CreateSchemaInfo info;
+ 		info.schema = result->GetString(0);
+-		info.internal = MySQLSchemaIsInternal(info.schema);
++		info.internal = MySQLSchemaIsInternal(info.schema.GetName());
+ 		auto schema = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 		CreateEntry(std::move(schema));
+ 	}
+@@ -34,7 +34,7 @@ FROM information_schema.schemata;
+ optional_ptr<CatalogEntry> MySQLSchemaSet::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 
+-	string create_sql = "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.schema);
++	string create_sql = "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.schema.GetName());
+ 	transaction.Query(create_sql);
+ 	auto schema_entry = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 	return CreateEntry(std::move(schema_entry));
+diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
+index bb6d76f..e334d0d 100644
+--- a/src/storage/mysql_table_entry.cpp
++++ b/src/storage/mysql_table_entry.cpp
+@@ -69,12 +69,12 @@ static bool TableIsInternal(const SchemaCatalogEntry &schema, const string &name
+ 
+ MySQLTableEntry::MySQLTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
+     : TableCatalogEntry(catalog, schema, info) {
+-	this->internal = TableIsInternal(schema, name);
++	this->internal = TableIsInternal(schema, name.GetName());
+ }
+ 
+ MySQLTableEntry::MySQLTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, MySQLTableInfo &info)
+     : TableCatalogEntry(catalog, schema, *info.create_info) {
+-	this->internal = TableIsInternal(schema, name);
++	this->internal = TableIsInternal(schema, name.GetName());
+ }
+ 
+ unique_ptr<BaseStatistics> MySQLTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
+@@ -113,7 +113,7 @@ TableStorageInfo MySQLTableEntry::GetStorageInfo(ClientContext &context) {
+ 	auto &db = transaction.GetConnection();
+ 	TableStorageInfo result;
+ 	result.cardinality = 0;
+-	result.index_info = db.GetIndexInfo(name);
++	result.index_info = db.GetIndexInfo(name.GetName());
+ 	return result;
+ }
+ 
+diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
+index e2e893e..11c9bef 100644
+--- a/src/storage/mysql_table_set.cpp
++++ b/src/storage/mysql_table_set.cpp
+@@ -56,7 +56,7 @@ FROM information_schema.columns
+ WHERE table_schema=${SCHEMA_NAME}
+ ORDER BY table_name, ordinal_position;
+ )",
+-	                                 "${SCHEMA_NAME}", MySQLUtils::WriteLiteral(schema.name));
++	                                 "${SCHEMA_NAME}", MySQLUtils::WriteLiteral(schema.name.GetName()));
+ 
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	auto result = transaction.Query(query);
+@@ -97,7 +97,7 @@ ORDER BY table_name, ordinal_position;
+ unique_ptr<MySQLTableInfo> MySQLTableSet::GetTableInfo(ClientContext &context, MySQLSchemaEntry &schema,
+                                                        const string &table_name) {
+ 	auto &transaction = MySQLTransaction::Get(context, schema.ParentCatalog());
+-	auto query = GetTableInfoQuery(schema.name, table_name);
++	auto query = GetTableInfoQuery(schema.name.GetName(), table_name);
+ 	auto result = transaction.Query(query);
+ 	auto table_info = make_uniq<MySQLTableInfo>(schema, table_name);
+ 	while (result->Next()) {
+@@ -215,10 +215,10 @@ string GetMySQLCreateTable(ClientContext &context, CreateTableInfo &info) {
+ 		ss << "IF NOT EXISTS ";
+ 	}
+ 	if (!info.schema.empty()) {
+-		ss << MySQLUtils::WriteIdentifier(info.schema);
++		ss << MySQLUtils::WriteIdentifier(info.schema.GetName());
+ 		ss << ".";
+ 	}
+-	ss << MySQLUtils::WriteIdentifier(info.table);
++	ss << MySQLUtils::WriteIdentifier(info.table.GetName());
+ 	ss << MySQLColumnsToSQL(info.columns, info.constraints);
+ 	ss << ";";
+ 	return ss.str();
+@@ -235,20 +235,20 @@ optional_ptr<CatalogEntry> MySQLTableSet::CreateTable(ClientContext &context, Bo
+ void MySQLTableSet::AlterTable(ClientContext &context, RenameTableInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name);
++	sql += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	sql += " RENAME TO ";
+-	sql += MySQLUtils::WriteIdentifier(info.new_table_name);
++	sql += MySQLUtils::WriteIdentifier(info.new_table_name.GetName());
+ 	transaction.Query(sql);
+ }
+ 
+ void MySQLTableSet::AlterTable(ClientContext &context, RenameColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name);
++	sql += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	sql += " RENAME COLUMN  ";
+-	sql += MySQLUtils::WriteIdentifier(info.old_name);
++	sql += MySQLUtils::WriteIdentifier(info.old_name.GetName());
+ 	sql += " TO ";
+-	sql += MySQLUtils::WriteIdentifier(info.new_name);
++	sql += MySQLUtils::WriteIdentifier(info.new_name.GetName());
+ 
+ 	transaction.Query(sql);
+ }
+@@ -256,7 +256,7 @@ void MySQLTableSet::AlterTable(ClientContext &context, RenameColumnInfo &info) {
+ void MySQLTableSet::AlterTable(ClientContext &context, AddColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name);
++	sql += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	sql += " ADD COLUMN  ";
+ 	if (info.if_column_not_exists) {
+ 		sql += "IF NOT EXISTS ";
+@@ -270,12 +270,12 @@ void MySQLTableSet::AlterTable(ClientContext &context, AddColumnInfo &info) {
+ void MySQLTableSet::AlterTable(ClientContext &context, RemoveColumnInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 	string sql = "ALTER TABLE ";
+-	sql += MySQLUtils::WriteIdentifier(info.name);
++	sql += MySQLUtils::WriteIdentifier(info.name.GetName());
+ 	sql += " DROP COLUMN  ";
+ 	if (info.if_column_exists) {
+ 		throw NotImplementedException("DROP COLUMN IF EXISTS not supported in MySQL");
+ 	}
+-	sql += MySQLUtils::WriteIdentifier(info.removed_column);
++	sql += MySQLUtils::WriteIdentifier(info.removed_column.GetName());
+ 	transaction.Query(sql);
+ }
+ 
