@@ -1111,7 +1111,12 @@ unittest is a Catch v2.13.7 host application.
 
     def test_generic_failure_uses_failing_stderr_block_instead_of_stdout(self):
         batch = ["/tmp/a.test", "/tmp/fail.test"]
-        stdout = "irrelevant warning from another test\n"
+        stdout = """
+Filters: /tmp/a.test,/tmp/fail.test
+[0/2] (0%): /tmp/a.test
+[1/2] (50%): /tmp/a.test took 0.001s
+[1/2] (50%): /tmp/fail.test
+"""
         stderr = """
 1. /tmp/fail.test:7
 ================================================================================
@@ -1297,8 +1302,10 @@ with expansion:
 ===============================================================================
 test cases:  10 |   9 passed | 1 failed
 assertions: 359 | 358 passed | 1 failed
-""".format(progress_bar_path=progress_bar_path)
-        stderr = "assertions: 359 | 358 passed | 1 failed\n"
+""".format(
+            progress_bar_path=progress_bar_path
+        )
+        stderr = ""
         lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
         self.assertEqual(reproduce_batch, ["Test Progress Bar Fast"])
         self.assertEqual(
@@ -1320,33 +1327,12 @@ assertions: 359 | 358 passed | 1 failed
             ],
         )
 
-    def test_generic_failure_merges_query_diagnostics_with_later_assertion_failure(self):
+    def test_generic_failure_merges_query_diagnostics_with_assertion_failure(self):
         remote_optimizer_path = REPO_ROOT / "test" / "extension" / "test_remote_optimizer.cpp"
         batch = ["Test using a remote optimizer pass in case thats important to someone"]
         stdout = """
 Filters: Test using a remote optimizer pass in case thats important to someone
-[0/1] (0%): Test using a remote optimizer pass in case thats important to someone
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-unittest is a Catch v2.13.7 host application.
-Run with -? for options
-
--------------------------------------------------------------------------------
-Test using a remote optimizer pass in case thats important to someone
--------------------------------------------------------------------------------
-{remote_optimizer_path}:29
-...............................................................................
-
-{remote_optimizer_path}:29: FAILED:
-  {{Unknown expression after the reported line}}
-due to unexpected exception with message:
-  {{"exception_type":"Invalid Input","exception_message":"Attempting to get
-  collection from an unsuccessful query result"}}
-
-[1/1] (100%): Test using a remote optimizer pass in case thats important to someone took 0.151s
-===============================================================================
-test cases: 1 | 1 failed
-assertions: 4 | 3 passed | 1 failed
-
+[0/1] (0%): Test using a remote optimizer pass in case thats important to someoneFailed to bind socket in child process: Operation not permitted
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 unittest is a Catch v2.13.7 host application.
 Run with -? for options

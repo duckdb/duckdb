@@ -98,6 +98,38 @@ class FailureInfo:
     reproduce_batch: list[str]
 
 
+@dataclass(frozen=True)
+class StdoutAssertionFailure:
+    test_name: str | None
+    line_number: int | None
+    snippet_lines: list[str]
+    detail_lines: list[str]
+    score: int
+
+
+@dataclass(frozen=True)
+class StdoutParse:
+    last_started_test: str | None
+    last_unfinished_test: str | None
+    preferred_assertion: StdoutAssertionFailure | None
+    fallback_failure_block: tuple[str | None, list[str]] | None
+    failed_reason_line: str | None
+
+
+@dataclass(frozen=True)
+class StderrParse:
+    test_name: str | None
+    line_number: int | None
+    failing_summary_block: list[str]
+    wrong_result_line: str | None
+    mismatch_context: str | None
+    mismatch_line: str | None
+    expected_result_lines: list[str]
+    actual_result_lines: list[str]
+    query_failure_lines: list[str]
+    first_error_line: str | None
+
+
 class BatchRunState:
     def __init__(self):
         self.failed_count = 0
@@ -465,21 +497,7 @@ def find_failing_test(stderr_lines: list[str], batch):
     return test_name, line_number
 
 
-def find_failing_test_from_stdout(stdout_lines: list[str], batch):
-    test_name = batch[0] if len(batch) == 1 else None
-    for line in stdout_lines:
-        stripped = line.strip()
-        match = FAILING_TEST_PATTERN.match(stripped)
-        if match:
-            test_name = match.group(1)
-            break
-        progress_match = PROGRESS_TEST_START_PATTERN.match(stripped)
-        if progress_match and " took " not in progress_match.group(1):
-            test_name = progress_match.group(1)
-    return test_name
-
-
-def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
+def parse_stdout_progress(stdout_lines: list[str]):
     started_tests = []
     completed_tests = set()
 
@@ -493,6 +511,12 @@ def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
             completed_tests.add(progress_text.split(" took ", 1)[0])
         else:
             started_tests.append(progress_text)
+
+    return started_tests, completed_tests
+
+
+def infer_timed_out_test_from_stdout(stdout_lines: list[str], batch):
+    started_tests, completed_tests = parse_stdout_progress(stdout_lines)
 
     for test_name in started_tests:
         if test_name not in completed_tests:
@@ -591,63 +615,78 @@ def extract_stdout_failure_block(stdout_lines: list[str]):
     return None, []
 
 
-def extract_stdout_assertion_failures(stdout_lines: list[str]):
-    failures = []
-    for test_name, block in iter_stdout_failure_blocks(stdout_lines):
-        for idx, line in enumerate(block):
-            match = CATCH_ASSERTION_LOCATION_PATTERN.match(line.strip())
-            if not match:
-                continue
+def parse_stdout_assertion_failure(test_name: str | None, block: list[str]):
+    for idx, line in enumerate(block):
+        match = CATCH_ASSERTION_LOCATION_PATTERN.match(line.strip())
+        if not match:
+            continue
 
-            source_path = match.group(1)
-            source_line = int(match.group(2))
-            snippet_lines = render_context_snippet(source_path, source_line)
-            detail_lines = []
+        source_path = match.group(1)
+        source_line = int(match.group(2))
+        snippet_lines = render_context_snippet(source_path, source_line)
+        detail_lines = []
 
-            expression_line = None
-            for next_line in block[idx + 1 :]:
+        expression_line = None
+        for next_line in block[idx + 1 :]:
+            if next_line.strip():
+                expression_line = next_line.strip()
+                break
+        if expression_line is not None:
+            detail_lines.append(f"FAILED: {expression_line}")
+
+        expansion_idx = None
+        for lookahead_idx in range(idx + 1, len(block)):
+            if block[lookahead_idx].strip() == "with expansion:":
+                expansion_idx = lookahead_idx
+                break
+        if expansion_idx is not None:
+            detail_lines.append("  with expansion:")
+            for next_line in block[expansion_idx + 1 :]:
                 if next_line.strip():
-                    expression_line = next_line.strip()
+                    detail_lines.append(next_line.strip())
                     break
-            if expression_line is not None:
-                detail_lines.append(f"FAILED: {expression_line}")
 
-            expansion_idx = None
-            for lookahead_idx in range(idx + 1, len(block)):
-                if block[lookahead_idx].strip() == "with expansion:":
-                    expansion_idx = lookahead_idx
-                    break
-            if expansion_idx is not None:
-                detail_lines.append("  with expansion:")
-                for next_line in block[expansion_idx + 1 :]:
-                    if next_line.strip():
-                        detail_lines.append(next_line.strip())
-                        break
-
-            if snippet_lines or detail_lines:
-                failures.append((test_name, source_line, snippet_lines, detail_lines))
-            break
-    return failures
-
-
-def extract_stdout_assertion_failure(stdout_lines: list[str]):
-    failures = extract_stdout_assertion_failures(stdout_lines)
-    if not failures:
-        return None, None, [], []
-
-    def score_failure(entry):
-        _, _, _, detail_lines = entry
-        expression_line = detail_lines[0] if detail_lines else ""
         score = 0
-        if expression_line.startswith("FAILED: REQUIRE("):
+        expression_text = detail_lines[0] if detail_lines else ""
+        if expression_text.startswith("FAILED: REQUIRE("):
             score += 3
-        elif expression_line.startswith("FAILED:"):
+        elif expression_text.startswith("FAILED:"):
             score += 2
-        if "{Unknown expression after the reported line}" not in expression_line:
+        if "{Unknown expression after the reported line}" not in expression_text:
             score += 1
-        return score
+        return StdoutAssertionFailure(test_name, source_line, snippet_lines, detail_lines, score)
+    return None
 
-    return max(enumerate(failures), key=lambda item: (score_failure(item[1]), item[0]))[1]
+
+def parse_stdout_failure_info(stdout_lines: list[str]):
+    started_tests, completed_tests = parse_stdout_progress(stdout_lines)
+    last_started_test = started_tests[-1] if started_tests else None
+    last_unfinished_test = None
+    for test_name in started_tests:
+        if test_name not in completed_tests:
+            last_unfinished_test = test_name
+            break
+
+    preferred_assertion = None
+    preferred_assertion_key = None
+    fallback_failure_block = None
+    for idx, (test_name, block) in enumerate(iter_stdout_failure_blocks(stdout_lines)):
+        assertion = parse_stdout_assertion_failure(test_name, block)
+        if assertion is not None:
+            assertion_key = (assertion.score, idx)
+            if preferred_assertion_key is None or assertion_key >= preferred_assertion_key:
+                preferred_assertion_key = assertion_key
+                preferred_assertion = assertion
+        if fallback_failure_block is None:
+            fallback_failure_block = (test_name, block)
+
+    return StdoutParse(
+        last_started_test=last_started_test,
+        last_unfinished_test=last_unfinished_test,
+        preferred_assertion=preferred_assertion,
+        fallback_failure_block=fallback_failure_block,
+        failed_reason_line=extract_failed_reason_line(stdout_lines),
+    )
 
 
 def extract_query_failure_diagnostics(stderr_lines: list[str]):
@@ -741,6 +780,32 @@ def extract_wrong_result_sections(stderr_lines: list[str]):
     return expected_lines, actual_lines
 
 
+def parse_stderr_failure_info(stderr_lines: list[str], batch):
+    test_name, line_number = find_failing_test(stderr_lines, batch)
+    stderr_non_empty_lines = [line.strip() for line in stderr_lines if line.strip()]
+    wrong_result_line = next((line for line in stderr_non_empty_lines if WRONG_RESULT_PATTERN.match(line)), None)
+    mismatch_context = next((line for line in stderr_non_empty_lines if line.startswith("Mismatch on row ")), None)
+    mismatch_line = next((line for line in stderr_non_empty_lines if "<>" in line), None)
+    expected_result_lines, actual_result_lines = extract_wrong_result_sections(stderr_lines)
+    query_failure_lines = extract_query_failure_diagnostics(stderr_lines)
+    first_error_line = next(
+        (line.removeprefix("Error: ").strip() for line in stderr_non_empty_lines if line.startswith("Error: ")),
+        None,
+    )
+    return StderrParse(
+        test_name=test_name,
+        line_number=line_number,
+        failing_summary_block=extract_failing_stderr_block(stderr_lines),
+        wrong_result_line=wrong_result_line,
+        mismatch_context=mismatch_context,
+        mismatch_line=mismatch_line,
+        expected_result_lines=expected_result_lines,
+        actual_result_lines=actual_result_lines,
+        query_failure_lines=query_failure_lines,
+        first_error_line=first_error_line,
+    )
+
+
 def extract_interesting_failure_block(lines: list[str]):
     for idx, line in enumerate(lines):
         if not SANITIZER_OR_ASSERT_PATTERN.search(line):
@@ -778,9 +843,13 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
     stderr_non_empty_lines = [line.strip() for line in stderr_lines if line.strip()]
     stdout_non_empty_lines = [line.strip() for line in stdout_lines if line.strip()]
     batch_test_name = batch[0] if len(batch) == 1 else None
+    stdout_info = parse_stdout_failure_info(stdout_lines)
+    stderr_info = parse_stderr_failure_info(stderr_lines, batch)
 
     if message is not None and message.startswith("batch timed out after "):
-        timeout_test_name = batch_test_name or infer_timed_out_test_from_stdout(stdout_lines, batch)
+        timeout_test_name = (
+            batch_test_name or stdout_info.last_unfinished_test or infer_timed_out_test_from_stdout(stdout_lines, batch)
+        )
         reproduce_batch = [timeout_test_name] if timeout_test_name else list(batch)
         return FailureInfo(
             kind="timeout",
@@ -797,37 +866,34 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             reproduce_batch=reproduce_batch,
         )
 
-    test_name, line_number = find_failing_test(stderr_lines, batch)
+    test_name = stderr_info.test_name
+    line_number = stderr_info.line_number
     if test_name is None and returncode is not None and returncode < 0:
-        test_name = infer_timed_out_test_from_stdout(stdout_lines, batch)
+        test_name = stdout_info.last_unfinished_test or infer_timed_out_test_from_stdout(stdout_lines, batch)
     reproduce_batch = [test_name] if test_name else list(batch)
 
-    error_line = next((line for line in stderr_non_empty_lines if WRONG_RESULT_PATTERN.match(line)), None)
-    if error_line is not None:
+    if stderr_info.wrong_result_line is not None:
         if line_number is None:
-            location_match = WRONG_RESULT_PATTERN.match(error_line)
+            location_match = WRONG_RESULT_PATTERN.match(stderr_info.wrong_result_line)
             if location_match:
                 if location_match.group(1):
                     test_name = test_name or location_match.group(1)
                 if location_match.group(2):
                     line_number = int(location_match.group(2))
-        mismatch_context = next((line for line in stderr_non_empty_lines if line.startswith("Mismatch on row ")), None)
-        mismatch_line = next((line for line in stderr_non_empty_lines if "<>" in line), None)
         actual = None
         expected = None
-        if mismatch_line is not None:
-            actual, expected = [part.strip() for part in mismatch_line.split("<>", 1)]
-        expected_result_lines, actual_result_lines = extract_wrong_result_sections(stderr_lines)
+        if stderr_info.mismatch_line is not None:
+            actual, expected = [part.strip() for part in stderr_info.mismatch_line.split("<>", 1)]
         return FailureInfo(
             kind="wrong_result",
             test_name=test_name,
             line_number=line_number,
-            mismatch_context=mismatch_context,
+            mismatch_context=stderr_info.mismatch_context,
             expected=expected,
             actual=actual,
             snippet_lines=render_test_snippet(test_name, line_number),
-            expected_result_lines=expected_result_lines,
-            actual_result_lines=actual_result_lines,
+            expected_result_lines=stderr_info.expected_result_lines,
+            actual_result_lines=stderr_info.actual_result_lines,
             detail_lines=[],
             timeout_seconds=None,
             reproduce_batch=reproduce_batch,
@@ -835,34 +901,29 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     detail_lines = []
     snippet_lines = []
-    failing_stderr_block = extract_failing_stderr_block(stderr_lines)
-    if failing_stderr_block:
-        detail_lines.extend(failing_stderr_block)
-    query_failure_lines = []
-    stdout_failure_test_name, stdout_line_number, stdout_snippet_lines, stdout_failure_lines = (
-        extract_stdout_assertion_failure(stdout_lines)
-    )
-    if not detail_lines:
-        query_failure_lines = extract_query_failure_diagnostics(stderr_lines)
-    if stdout_failure_lines or stdout_snippet_lines:
-        test_name = stdout_failure_test_name or find_failing_test_from_stdout(stdout_lines, batch) or test_name
+    if stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
+
+    preferred_assertion = stdout_info.preferred_assertion
+    if preferred_assertion is not None:
+        test_name = preferred_assertion.test_name or stdout_info.last_started_test or test_name
         reproduce_batch = [test_name] if test_name else list(batch)
-        line_number = stdout_line_number or line_number
-        snippet_lines = stdout_snippet_lines
-        if query_failure_lines:
-            detail_lines.extend(query_failure_lines)
-        if stdout_failure_lines:
+        line_number = preferred_assertion.line_number or line_number
+        snippet_lines = preferred_assertion.snippet_lines
+        if not detail_lines and stderr_info.query_failure_lines:
+            detail_lines.extend(stderr_info.query_failure_lines)
+        if preferred_assertion.detail_lines:
             if detail_lines:
                 detail_lines.append("")
-            detail_lines.extend(stdout_failure_lines)
+            detail_lines.extend(preferred_assertion.detail_lines)
     if not detail_lines:
-        stdout_failure_test_name, stdout_failure_block = extract_stdout_failure_block(stdout_lines)
-        if stdout_failure_block:
-            test_name = stdout_failure_test_name or find_failing_test_from_stdout(stdout_lines, batch) or test_name
+        if stdout_info.fallback_failure_block:
+            stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
+            test_name = stdout_failure_test_name or stdout_info.last_started_test or test_name
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not detail_lines and query_failure_lines:
-        detail_lines.extend(query_failure_lines)
+    if not detail_lines and stderr_info.query_failure_lines:
+        detail_lines.extend(stderr_info.query_failure_lines)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
@@ -870,17 +931,13 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
     if message is not None:
         if not detail_lines:
             detail_lines.append(message)
+    if not detail_lines and stderr_info.first_error_line is not None:
+        detail_lines.append(stderr_info.first_error_line)
     if not detail_lines:
-        for line in stderr_non_empty_lines:
-            if line.startswith("Error: "):
-                detail_lines.append(line.removeprefix("Error: ").strip())
-                break
-    if not detail_lines:
-        failed_reason_line = extract_failed_reason_line(stdout_lines)
-        if failed_reason_line is not None:
-            test_name = find_failing_test_from_stdout(stdout_lines, batch) or test_name
+        if stdout_info.failed_reason_line is not None:
+            test_name = stdout_info.last_started_test or test_name
             reproduce_batch = [test_name] if test_name else list(batch)
-            detail_lines.append(failed_reason_line)
+            detail_lines.append(stdout_info.failed_reason_line)
     if not detail_lines:
         signal_summary = format_signal_summary(returncode)
         if signal_summary is not None:
