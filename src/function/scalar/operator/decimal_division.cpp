@@ -208,10 +208,37 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	int32_t scale_exp = s2 + result_scale - s1;
 	int32_t abs_scale_exp = scale_exp < 0 ? -scale_exp : scale_exp;
 
+	uint8_t input_max_width;
 	switch (wider) {
 	case PhysicalType::INT16:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s2);
+		input_max_width = Decimal::MAX_WIDTH_INT16;
+		break;
+	case PhysicalType::INT32:
+		input_max_width = Decimal::MAX_WIDTH_INT32;
+		break;
+	case PhysicalType::INT64:
+		input_max_width = Decimal::MAX_WIDTH_INT64;
+		break;
+	case PhysicalType::INT128:
+		input_max_width = Decimal::MAX_WIDTH_DECIMAL;
+		break;
+	default:
+		throw InternalException("decimal_division: unexpected physical type");
+	}
+
+	// For same-tier inputs, preserve the original argument type so bind is idempotent
+	// during plan deserialization (bind is re-called with the stored argument types, and
+	// changing p changes the result-width formula).
+	// For cross-tier inputs, promote the narrower argument to the wider physical tier.
+	bound_function.GetArguments()[0] = (lhs_physical != wider)
+	                                       ? LogicalType::DECIMAL(input_max_width, s1)
+	                                       : arguments[0]->GetReturnType();
+	bound_function.GetArguments()[1] = (rhs_physical != wider)
+	                                       ? LogicalType::DECIMAL(input_max_width, s2)
+	                                       : arguments[1]->GetReturnType();
+
+	switch (wider) {
+	case PhysicalType::INT16:
 		if (Decimal::MAX_WIDTH_INT16 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
 			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t, int64_t>(result_physical));
 		} else {
@@ -219,9 +246,6 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 		}
 		break;
 	case PhysicalType::INT32:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, s2);
-		// int64_t safe when MAX_WIDTH_INT32 + |scale_exp| < CACHED_POWERS_OF_TEN (19)
 		if (Decimal::MAX_WIDTH_INT32 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
 			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int32_t, int64_t>(result_physical));
 		} else {
@@ -229,21 +253,15 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 		}
 		break;
 	case PhysicalType::INT64:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT64, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT64, s2);
 		if (Decimal::MAX_WIDTH_INT64 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
 			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t, int64_t>(result_physical));
 		} else {
 			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t, hugeint_t>(result_physical));
 		}
 		break;
-	case PhysicalType::INT128:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, s2);
+	default:
 		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<hugeint_t, hugeint_t>(result_physical));
 		break;
-	default:
-		throw InternalException("decimal_division: unexpected physical type");
 	}
 
 	return make_uniq<DecimalDivBindData>(scale_exp);
