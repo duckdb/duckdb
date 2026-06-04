@@ -114,6 +114,12 @@ SELECT CASE (SELECT 1) WHEN 1 THEN 2 ELSE 0 END
 ----
 2
 
+query I
+SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
+FROM (SELECT 1 i, 42 __duckdb_simple_case_subject) tbl
+----
+42
+
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)

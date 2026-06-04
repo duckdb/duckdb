@@ -2461,8 +2461,21 @@ bool PEGTransformerFactory::TransformCastOrTryCast(PEGTransformer &transformer, 
 	return StringUtil::Lower(choice_pr.GetResult().Cast<KeywordParseResult>().keyword) == "try_cast";
 }
 
-static string SimpleCaseParameterName() {
-	return "__duckdb_simple_case_subject";
+static void CollectCaseBodyColumnNames(const ParsedExpression &expr, unordered_set<string> &column_names) {
+	ParsedExpressionIterator::VisitExpressionClass(
+	    expr, ExpressionClass::COLUMN_REF, [&](const ParsedExpression &child) {
+		    auto &column_ref = child.Cast<ColumnRefExpression>();
+		    column_names.insert(StringUtil::Lower(column_ref.GetColumnName()));
+	    });
+}
+
+static string SimpleCaseParameterName(const unordered_set<string> &column_names) {
+	constexpr const char *base_name = "__duckdb_simple_case_subject";
+	string result = base_name;
+	for (idx_t suffix = 0; column_names.find(StringUtil::Lower(result)) != column_names.end(); suffix++) {
+		result = StringUtil::Format("%s_%llu", base_name, suffix);
+	}
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGTransformer &transformer,
@@ -2473,7 +2486,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
 	auto has_case_expr = opt_expr != nullptr;
 	bool case_body_has_subquery = false;
-	auto case_expr_name = SimpleCaseParameterName();
+	unordered_set<string> case_body_column_names;
 	string simple_case_alias;
 	if (has_case_expr) {
 		simple_case_alias = "CASE " + opt_expr->ToString();
@@ -2487,6 +2500,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 			simple_case_alias += " WHEN (" + case_expr.when_expr->ToString() + ")";
 			simple_case_alias += " THEN (" + case_expr.then_expr->ToString() + ")";
 			case_body_has_subquery |= case_expr.when_expr->HasSubquery() || case_expr.then_expr->HasSubquery();
+			CollectCaseBodyColumnNames(*case_expr.when_expr, case_body_column_names);
+			CollectCaseBodyColumnNames(*case_expr.then_expr, case_body_column_names);
 		}
 		new_case.when_expr = std::move(case_expr.when_expr);
 		new_case.then_expr = std::move(case_expr.then_expr);
@@ -2500,8 +2515,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	}
 	if (has_case_expr) {
 		case_body_has_subquery |= result->Else().HasSubquery();
+		CollectCaseBodyColumnNames(result->Else(), case_body_column_names);
 		simple_case_alias += " ELSE " + result->Else().ToString();
 		simple_case_alias += " END";
+		auto case_expr_name = SimpleCaseParameterName(case_body_column_names);
 
 		for (auto &case_check : result->CaseChecksMutable()) {
 			if (case_body_has_subquery) {
