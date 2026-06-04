@@ -2469,6 +2469,26 @@ static void CollectCaseBodyColumnNames(const ParsedExpression &expr, unordered_s
 	    });
 }
 
+static bool ExpressionContainsFunction(const ParsedExpression &expr, const string &function_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function_expr = expr.Cast<FunctionExpression>();
+		if (function_expr.FunctionName() == function_name) {
+			return true;
+		}
+	}
+	bool result = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		if (!result) {
+			result = ExpressionContainsFunction(child, function_name);
+		}
+	});
+	return result;
+}
+
+static bool CaseBodyPreventsInvoke(const ParsedExpression &expr) {
+	return expr.HasSubquery() || ExpressionContainsFunction(expr, "unnest");
+}
+
 static string SimpleCaseParameterName(const unordered_set<string> &column_names) {
 	constexpr const char *base_name = "__duckdb_simple_case_subject";
 	string result = base_name;
@@ -2485,7 +2505,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	unique_ptr<ParsedExpression> opt_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
 	auto has_case_expr = opt_expr != nullptr;
-	bool case_body_has_subquery = false;
+	bool case_body_prevents_invoke = false;
 	unordered_set<string> case_body_column_names;
 	string simple_case_alias;
 	if (has_case_expr) {
@@ -2499,7 +2519,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		if (has_case_expr) {
 			simple_case_alias += " WHEN (" + case_expr.when_expr->ToString() + ")";
 			simple_case_alias += " THEN (" + case_expr.then_expr->ToString() + ")";
-			case_body_has_subquery |= case_expr.when_expr->HasSubquery() || case_expr.then_expr->HasSubquery();
+			case_body_prevents_invoke |=
+			    CaseBodyPreventsInvoke(*case_expr.when_expr) || CaseBodyPreventsInvoke(*case_expr.then_expr);
 			CollectCaseBodyColumnNames(*case_expr.when_expr, case_body_column_names);
 			CollectCaseBodyColumnNames(*case_expr.then_expr, case_body_column_names);
 		}
@@ -2514,14 +2535,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
 	}
 	if (has_case_expr) {
-		case_body_has_subquery |= result->Else().HasSubquery();
+		case_body_prevents_invoke |= CaseBodyPreventsInvoke(result->Else());
 		CollectCaseBodyColumnNames(result->Else(), case_body_column_names);
 		simple_case_alias += " ELSE " + result->Else().ToString();
 		simple_case_alias += " END";
 		auto case_expr_name = SimpleCaseParameterName(case_body_column_names);
 
 		for (auto &case_check : result->CaseChecksMutable()) {
-			if (case_body_has_subquery) {
+			if (case_body_prevents_invoke) {
 				case_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, opt_expr->Copy(),
 				                                                       std::move(case_check.when_expr));
 			} else {
@@ -2530,8 +2551,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 				                                                       std::move(case_check.when_expr));
 			}
 		}
-		if (case_body_has_subquery) {
-			// Lambda expressions currently reject subqueries. Keep the legacy searched CASE rewrite
+		if (case_body_prevents_invoke) {
+			// Lambda expressions currently reject subqueries and UNNEST. Keep the legacy searched CASE rewrite
 			// for these cases instead of turning existing valid simple CASE expressions into errors.
 			return std::move(result);
 		}
