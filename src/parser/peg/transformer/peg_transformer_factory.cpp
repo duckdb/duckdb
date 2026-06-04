@@ -74,7 +74,7 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 			error_token_idx = tokens.size() - 1;
 		}
 		// Walk back past the EOI sentinel so the error message names a real token.
-		while (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
+		if (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
 		                               tokens[error_token_idx].type == TokenType::END_NOW_AUTOCOMPLETE)) {
 			error_token_idx--;
 		}

@@ -221,7 +221,19 @@ bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
 	}
 }
 
-bool BaseTokenizer::TokenizeInput() {
+bool BaseTokenizer::CanAutocomplete() const {
+	return !tokens.empty() && tokens.back().type == TokenType::END_NOW_AUTOCOMPLETE;
+}
+
+void BaseTokenizer::TokenizeInput() {
+	if (TokenizeInputInternal()) {
+		tokens.emplace_back("", sql.size(), GetTerminator());
+	} else {
+		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
+	}
+}
+
+bool BaseTokenizer::TokenizeInputInternal() {
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
@@ -507,30 +519,19 @@ bool BaseTokenizer::TokenizeInput() {
 		}
 	}
 
-	// `append_end_of_input` always emits END_OF_INPUT (suggestions wouldn't make sense from
-	// inside an unterminated comment or string).
-	auto append_sentinel = [&]() {
-		tokens.emplace_back("", sql.size(), GetEndOfInputType());
-	};
-	auto append_end_of_input = [&]() {
-		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
-	};
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
-		append_end_of_input();
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
-		append_end_of_input();
 		return false;
 	default:
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
 	OnLastToken(state, std::move(last_word), last_pos);
-	append_sentinel();
 	return true;
 }
 

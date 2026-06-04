@@ -168,7 +168,7 @@ public:
 		last_pos = 0;
 	}
 
-	TokenType GetEndOfInputType() const override {
+	TokenType GetTerminator() const override {
 		return TokenType::END_NOW_AUTOCOMPLETE;
 	}
 
@@ -205,8 +205,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	AutoCompleteTokenizer tokenizer(sql_ref, state);
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
+	tokenizer.TokenizeInput();
+	if (!tokenizer.CanAutocomplete()) {
 		return {};
 	}
 	if (state.suggestions.empty()) {

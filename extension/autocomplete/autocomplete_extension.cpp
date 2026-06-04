@@ -536,8 +536,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
+	tokenizer.TokenizeInput();
+	if (!tokenizer.CanAutocomplete()) {
 		return nullptr;
 	}
 
