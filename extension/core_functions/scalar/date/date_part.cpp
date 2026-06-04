@@ -1989,7 +1989,7 @@ struct StructDatePart {
 	template <typename INPUT_TYPE>
 	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		D_ASSERT(args.ColumnCount() == 1);
 
 		const auto count = args.size();

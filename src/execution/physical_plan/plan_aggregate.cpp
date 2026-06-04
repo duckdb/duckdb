@@ -1,7 +1,5 @@
 #include "duckdb/main/settings.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
@@ -11,8 +9,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
@@ -44,15 +40,22 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 	}
+
+	return PhysicalPlanGenerator::HasSingleValuePartitions(context, op.groups, child, partition_columns);
+}
+
+bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
+                                                     const vector<unique_ptr<Expression>> &partitions,
+                                                     PhysicalOperator &child, vector<column_t> &partition_columns) {
 	// check if the source is partitioned by the aggregate columns
 	// figure out the columns we are grouping by
-	for (auto &group_expr : op.groups) {
+	for (auto &group_expr : partitions) {
 		// only support bound reference here
 		if (group_expr->GetExpressionType() != ExpressionType::BOUND_REF) {
 			return false;
 		}
 		auto &ref = group_expr->Cast<BoundReferenceExpression>();
-		partition_columns.push_back(ref.index);
+		partition_columns.push_back(ref.Index());
 	}
 	// traverse the children of the aggregate to find the source operator
 	reference<PhysicalOperator> child_ref(child);
@@ -70,7 +73,7 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 					return false;
 				}
 				auto &ref = expr->Cast<BoundReferenceExpression>();
-				new_columns.push_back(ref.index);
+				new_columns.push_back(ref.Index());
 			}
 			// continue into child node with new columns
 			partition_columns = std::move(new_columns);
@@ -224,7 +227,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.function.HasStateCombineCallback()) {
+		if (aggregate.IsDistinct() || !aggregate.Function().HasStateCombineCallback()) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
 		}
@@ -241,7 +244,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	bool can_use_simple_aggregation = true;
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (!aggregate.function.GetStateClusterUpdateCallback()) {
+		if (!aggregate.Function().GetStateClusterUpdateCallback()) {
 			// unsupported aggregate for simple aggregation: use hash aggregation
 			can_use_simple_aggregation = false;
 			break;
@@ -306,7 +309,7 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	// bind sorted aggregates
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		if (bound_aggr.order_bys) {
+		if (bound_aggr.GetOrderBys()) {
 			// sorted aggregate!
 			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups, grouping_sets);
 		}
@@ -319,18 +322,18 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : bound_aggr.children) {
+		for (auto &child_expr : bound_aggr.GetChildrenMutable()) {
 			auto ref = make_uniq<BoundReferenceExpression>(child_expr->GetReturnType(), expressions.size());
 			types.push_back(child_expr->GetReturnType());
 			expressions.push_back(std::move(child_expr));
 			child_expr = std::move(ref);
 		}
-		if (bound_aggr.filter) {
-			auto &filter = bound_aggr.filter;
+		if (bound_aggr.GetFilter()) {
+			auto &filter = bound_aggr.GetFilterMutable();
 			auto ref = make_uniq<BoundReferenceExpression>(filter->GetReturnType(), expressions.size());
 			types.push_back(filter->GetReturnType());
 			expressions.push_back(std::move(filter));
-			bound_aggr.filter = std::move(ref);
+			bound_aggr.GetFilterMutable() = std::move(ref);
 		}
 	}
 	if (expressions.empty()) {

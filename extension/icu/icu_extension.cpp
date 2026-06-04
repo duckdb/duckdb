@@ -131,7 +131,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<IcuBindData>();
+	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
 	duckdb::unique_ptr<char[]> buffer;
@@ -411,7 +411,6 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {

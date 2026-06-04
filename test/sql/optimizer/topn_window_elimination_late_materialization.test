@@ -85,6 +85,22 @@ ORDER BY g
 5	51
 3	31
 
+# A value-transforming partition projection must also not be reconstructed by
+# the rowid semi-join, because the join outputs the LHS group columns.
+query II
+EXPLAIN SELECT id, gp, v FROM (SELECT id, g + 1 AS gp, s, v FROM t)
+QUALIFY row_number() OVER (PARTITION BY gp ORDER BY s) = 1
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
+
+query III
+SELECT id, gp, v FROM (SELECT id, g + 1 AS gp, s, v FROM t)
+QUALIFY row_number() OVER (PARTITION BY gp ORDER BY s) = 1
+ORDER BY gp
+----
+5	1	ee
+3	2	cc
+
 # top-2 (limit > 1) with a function payload
 query II
 SELECT id, uv FROM (SELECT *, upper(v) AS uv FROM t)

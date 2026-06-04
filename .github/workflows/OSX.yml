@@ -28,14 +28,15 @@ on:
       - 'feature'
       - 'v*.*-*'
       - 'gh-readonly-queue/**'
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/OSX.yml'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!test/configs/**'
+      - '!tools/**'
+      - 'tools/shell/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/OSX.yml'
 
 
 concurrency:
@@ -53,8 +54,9 @@ jobs:
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
-      CMAKE_CXX_FLAGS: '-DDEBUG'
+      FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v6
@@ -69,14 +71,12 @@ jobs:
     - uses: ./.github/actions/ccache-action
 
     - name: Install ninja
-      shell: bash
       run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/cleanup_runner
 
     - name: Build
-      shell: bash
-      run: python3 scripts/ci/retry.py -- bash -lc 'GEN=ninja make release'
+      run: python3 scripts/ci/retry.py -- make
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -87,14 +87,12 @@ jobs:
 
     - name: Test
       if: ${{ !inputs.skip_tests }}
-      shell: bash
       run: make unittest_release
 
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-latest
-    needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -122,12 +120,15 @@ jobs:
           python3 scripts/ci/retry.py -- python -m pip install pytest
 
       - name: Build
-        shell: bash
         run: python3 scripts/ci/retry.py -- make
 
-      - name: Print platform
-        shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+      - name: CLI check
+        run: |
+          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            # Fail on non-zero major version.
+            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          fi
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries

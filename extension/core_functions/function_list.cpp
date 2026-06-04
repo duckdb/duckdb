@@ -120,6 +120,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitStringFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitstringAggFun),
+	DUCKDB_SCALAR_FUNCTION(BitStringSortKeyFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolAndFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolOrFun),
 	DUCKDB_SCALAR_FUNCTION(CanCastImplicitlyFun),

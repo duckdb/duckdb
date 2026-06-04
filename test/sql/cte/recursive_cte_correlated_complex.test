@@ -2,10 +2,9 @@
 # description: Must not report "More than one row returned by a subquery used as an expression"
 # group: [cte]
 
-require tpch
+set variable sf 0.001
 
-statement ok
-call dbgen(sf=0.001);
+include test/sql/tpch/tpch_setup.test_template
 
 query II
 SELECT s.s_name, COUNT(*) AS numwait

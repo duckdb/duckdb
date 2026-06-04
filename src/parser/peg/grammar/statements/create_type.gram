@@ -1,4 +1,5 @@
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
-CreateType <- EnumSelectType / EnumStringLiteralList / Type
+CreateType <- EnumSelectType / EnumStringLiteralList / CreateTypeFromType
+CreateTypeFromType <- Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)

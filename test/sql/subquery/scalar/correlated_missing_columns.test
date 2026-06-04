@@ -2,10 +2,9 @@
 # description: Test correlated missing columns
 # group: [scalar]
 
-require tpch
+set variable sf 0
 
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 # verify that we can grab missing columns from either the correlated subquery or the outer (uncorrelated) subquery
 statement error

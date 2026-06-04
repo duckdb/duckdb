@@ -1,0 +1,89 @@
+# name: test/sql/storage/rowid_gaps/alter_preserves_rowid_gaps.test
+# description: ALTER TABLE rowid behavior across indexed and unindexed rowid gaps
+# group: [rowid_gaps]
+
+require skip_reload
+
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE rowid_gap_alter.t AS SELECT i, CAST(i AS INTEGER) AS v, i + 10 AS drop_me FROM range(6144) tbl(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_i ON rowid_gap_alter.t(i);
+
+statement ok
+CHECKPOINT rowid_gap_alter;
+
+statement ok
+DELETE FROM rowid_gap_alter.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rowid_gap_alter;
+
+statement ok
+DETACH rowid_gap_alter;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter;
+
+# ADD COLUMN is allowed with the index present, so it must preserve the rowid gap.
+statement ok
+ALTER TABLE rowid_gap_alter.t ADD COLUMN added INTEGER DEFAULT 7;
+
+query IIII
+SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096) ORDER BY i;
+----
+2047	2047	2047	7
+4096	4096	4096	7
+
+statement ok
+DROP INDEX rowid_gap_alter.idx_i;
+
+# These ALTER operations require dropping the index. Without an index, rowids may be densely rewritten.
+statement ok
+ALTER TABLE rowid_gap_alter.t DROP COLUMN drop_me;
+
+statement ok
+ALTER TABLE rowid_gap_alter.t ALTER v SET DATA TYPE BIGINT;
+
+query IIII
+SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096) ORDER BY i;
+----
+2047	2047	2047	7
+2048	4096	4096	7
+
+statement ok
+INSERT INTO rowid_gap_alter.t VALUES (999999, 9999990, 7);
+
+query II
+SELECT rowid, i FROM rowid_gap_alter.t WHERE i = 999999;
+----
+4096	999999
+
+statement ok
+CREATE UNIQUE INDEX idx_i_after_alter ON rowid_gap_alter.t(i);
+
+statement ok
+CHECKPOINT rowid_gap_alter;
+
+statement ok
+DETACH rowid_gap_alter;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter;
+
+query IIII
+SELECT rowid, i, v, added FROM rowid_gap_alter.t WHERE i IN (2047, 4096, 999999) ORDER BY i;
+----
+2047	2047	2047	7
+2048	4096	4096	7
+4096	999999	9999990	7
+
+query I
+SELECT count(*) FROM rowid_gap_alter.t WHERE rowid >= 2048 AND rowid < 4096;
+----
+2048

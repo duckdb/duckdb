@@ -478,11 +478,6 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		char read_buf[1];
 		while (true) {
 			// check if we have data to read
-			// wait up till 1s
-			if (!HasMoreData(ifd, 1000000)) {
-				// no more data available - done
-				break;
-			}
 			if (read(ifd, read_buf, 1) != 1) {
 				break;
 			}

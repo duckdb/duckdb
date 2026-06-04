@@ -1202,7 +1202,6 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
 		target.Reference(source);
 	}
-	chunk.SetChildCardinality(lhs_match_count);
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();
@@ -1629,7 +1628,6 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 			const auto rhs_idx = op.right_projection_map[col_idx];
 			chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
 		}
-		chunk.SetCardinality(result_count);
 		return;
 	}
 

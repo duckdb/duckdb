@@ -19,8 +19,39 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
 }
 
 string BoundAggregateExpression::ToString() const {
-	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
-	    *this, string(), string(), function.GetName(), false, IsDistinct(), filter.get(), order_bys.get());
+	auto distinct = IsDistinct();
+	auto &function_name = function.GetName();
+
+	string result;
+	result += SQLIdentifier(function_name);
+	result += "(";
+	if (distinct) {
+		result += "DISTINCT ";
+	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [&](const unique_ptr<Expression> &child) { return child->ToString(); });
+
+	// ordered aggregate
+	if (order_bys && !order_bys->orders.empty()) {
+		if (children.empty()) {
+			result += ") WITHIN GROUP (";
+		}
+		result += " ORDER BY ";
+		for (idx_t i = 0; i < order_bys->orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += order_bys->orders[i].ToString();
+		}
+	}
+	result += ")";
+
+	// filtered aggregate
+	if (filter) {
+		result += " FILTER (WHERE " + filter->ToString() + ")";
+	}
+
+	return result;
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -52,7 +83,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 			return false;
 		}
 	}
-	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.BindInfo().get())) {
 		return false;
 	}
 	if (!BoundOrderModifier::Equals(order_bys, other.order_bys)) {

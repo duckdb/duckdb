@@ -16,7 +16,7 @@ void OuterJoinSimplification::HandleExpression(const Expression &expr) {
 		return;
 	}
 	auto &colref = expr.Cast<BoundColumnRefExpression>();
-	null_filtered_columns.insert(colref.binding);
+	null_filtered_columns.insert(colref.Binding());
 }
 
 void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
@@ -96,7 +96,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (null_filtered_columns.find(binding) == null_filtered_columns.end()) {
 				continue;
 			}
-			null_filtered_columns.insert(expr.Cast<BoundColumnRefExpression>().binding);
+			null_filtered_columns.insert(expr.Cast<BoundColumnRefExpression>().Binding());
 		}
 		VisitOperatorChildren(op);
 		return;
@@ -109,7 +109,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (expr->GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 			    expr->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
 				const auto &is_not_null = expr->Cast<BoundOperatorExpression>();
-				HandleExpression(*is_not_null.children[0]);
+				HandleExpression(*is_not_null.GetChildren()[0]);
 			} else if (BoundComparisonExpression::IsComparison(*expr)) {
 				if (expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {

@@ -222,7 +222,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		//	Subtract argument from current_date (at midnight)
@@ -244,7 +244,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, [&](TA left, TB right) {
