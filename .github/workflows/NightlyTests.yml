@@ -598,7 +598,7 @@ jobs:
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
-    - uses: mymindstorm/setup-emsdk@v16
+    - uses: emscripten-core/setup-emsdk@v16
       with:
         version: 'latest'
 
