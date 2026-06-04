@@ -234,12 +234,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 			               string(" version of DuckDB");
 		}
 		throw IOException(
-		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
-		    "%lld.\n"
-		    "The database file was created with %s.\n\n"
-		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
-		    "settings).\n"
-		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
+		    "This database file uses DuckDB storage format version %lld, but this version of SereneDB can only read "
+		    "versions %lld through %lld.\n"
+		    "The file was created with %s.",
 		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
 
@@ -287,7 +284,8 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			break;
 			// new versions should be added here
 		default:
-			throw InvalidInputException("Storage Version '%d' is not found!", static_cast<idx_t>(read_version));
+			throw InvalidInputException("Unsupported DuckDB storage format version '%d'",
+			                            static_cast<idx_t>(read_version));
 		}
 	} else {
 		// Before V2.0.0 the Storage Version in the main header could be written in two different ways
@@ -324,7 +322,7 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			header.storage_compatibility = StorageVersion::V1_5_0;
 			break;
 		default:
-			throw InvalidInputException("Deprecated Serialization Version '%d' is not found!",
+			throw InvalidInputException("Unsupported deprecated DuckDB serialization version '%d'",
 			                            static_cast<idx_t>(read_version));
 		}
 	}
@@ -349,8 +347,8 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		header.vector_size = DEFAULT_STANDARD_VECTOR_SIZE;
 	}
 	if (header.vector_size != STANDARD_VECTOR_SIZE) {
-		throw IOException("Cannot read database file: DuckDB's compiled vector size is %llu bytes, but the file has a "
-		                  "vector size of %llu bytes.",
+		throw IOException("Cannot read database file: SereneDB's compiled vector size is %llu bytes, but the DuckDB "
+		                  "database file has a vector size of %llu bytes.",
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
@@ -845,8 +843,9 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		auto requested_compat_version = options.storage_version;
 		if (requested_compat_version < header.storage_compatibility) {
 			throw InvalidInputException(
-			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
-			    "the database itself uses (%d). The storage version of an existing database cannot be lowered.",
+			    "Error opening \"%s\": cannot initialize database with DuckDB storage format version %d - which is "
+			    "lower than what the database file itself uses (%d). The storage format version of an existing "
+			    "DuckDB database file cannot be lowered.",
 			    path, requested_compat_version, header.storage_compatibility);
 		}
 	} else {
@@ -855,8 +854,8 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	}
 	if (header.storage_compatibility > StorageCompatibility::Latest().storage_version) {
 		throw InvalidInputException(
-		    "Error opening \"%s\": file was written with a storage version greater than the latest version supported "
-		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
+		    "Error opening \"%s\": the file uses a DuckDB storage format version newer than this version of SereneDB "
+		    "supports. Upgrade to a newer version of SereneDB to open it.",
 		    path);
 	}
 

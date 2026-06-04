@@ -179,8 +179,9 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	if (!backend) {
 		if (!config.allow_persistent_secrets &&
 		    (persist_type == SecretPersistType::PERSISTENT || storage == LOCAL_FILE_STORAGE_NAME)) {
-			throw InvalidInputException("Persistent secrets are disabled. Restart DuckDB and enable persistent secrets "
-			                            "through 'SET allow_persistent_secrets=true'");
+			throw InvalidInputException(
+			    "Persistent secrets are disabled. Restart SereneDB and enable persistent secrets "
+			    "through 'SET allow_persistent_secrets=true'");
 		}
 		throw InvalidInputException("Secret storage '%s' not found!", resolved_storage);
 	}
@@ -190,7 +191,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 		if (backend->persistent) {
 			if (!config.allow_persistent_secrets) {
 				throw InvalidInputException(
-				    "Persistent secrets are currently disabled. To enable them, restart duckdb and "
+				    "Persistent secrets are currently disabled. To enable them, restart SereneDB and "
 				    "run 'SET allow_persistent_secrets=true'");
 			}
 		} else { // backend is temp

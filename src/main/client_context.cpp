@@ -197,6 +197,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	client_data = make_uniq<ClientData>(*this);
 
 #ifdef __APPLE__
+	static_assert(false, "SereneDB does not support macOS");
 	if (OsxRosettaIsActive()) {
 		DUCKDB_LOG_WARNING(*this, "OSX binary translation ('Rosetta') detected. Running DuckDB through Rosetta will "
 		                          "cause a significant performance degradation. DuckDB is available natively on Apple "

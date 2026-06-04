@@ -1106,13 +1106,11 @@ Value ForceMbedtlsUnsafeSetting::GetSetting(const ClientContext &context) {
 // H T T P Logging Output
 //===----------------------------------------------------------------------===//
 void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
-	                              "logging for more information");
+	throw NotImplementedException("This setting is deprecated and can no longer be used.");
 }
 
 void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
-	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
-	                              "logging for more information");
+	throw NotImplementedException("This setting is deprecated and can no longer be used.");
 }
 
 Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {

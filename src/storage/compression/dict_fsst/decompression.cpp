@@ -49,8 +49,8 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
 	mode = header_ptr->mode;
 	if (mode >= DictFSSTMode::COUNT) {
-		throw FatalException("This block was written with a mode that is not recognized by this version, highest "
-		                     "available mode %d, found mode: %d",
+		throw FatalException("This block was written with a mode that is not recognized by this version of SereneDB, "
+		                     "highest available mode %d, found mode: %d",
 		                     static_cast<uint8_t>(DictFSSTMode::COUNT), static_cast<uint8_t>(mode));
 	}
 

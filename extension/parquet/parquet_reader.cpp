@@ -1183,7 +1183,7 @@ string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAl
 	if (encryption_algorithm.__isset.AES_GCM_V1) {
 		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
 	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-		throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
+		throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, which is not supported");
 	} else {
 		throw InvalidInputException("File is encrypted but no encryption algorithm is set");
 	}
@@ -1691,8 +1691,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
 				throw IOException(
-				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
-				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
+				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with the "
+				    "prefetching optimization. SereneDB may still be able to scan this file by manually disabling the "
 				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
 				    GetFileName());
 			}

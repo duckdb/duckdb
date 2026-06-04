@@ -371,8 +371,7 @@ OutOfMemoryException::OutOfMemoryException(const string &msg)
 }
 
 string OutOfMemoryException::ExtendOutOfMemoryError(const string &msg) {
-	string link = "https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads";
-	if (StringUtil::Contains(msg, link)) {
+	if (StringUtil::Contains(msg, "Possible solutions:")) {
 		// already extended
 		return msg;
 	}
@@ -380,8 +379,7 @@ string OutOfMemoryException::ExtendOutOfMemoryError(const string &msg) {
 	new_msg += "\n\nPossible solutions:\n";
 	new_msg += "* Reducing the number of threads (SET threads=X)\n";
 	new_msg += "* Disabling insertion-order preservation (SET preserve_insertion_order=false)\n";
-	new_msg += "* Increasing the memory limit (SET memory_limit='...GB')\n";
-	new_msg += "\nSee also " + link;
+	new_msg += "* Increasing the memory limit (SET memory_limit='...GB')";
 	return new_msg;
 }
 

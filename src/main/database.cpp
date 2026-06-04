@@ -612,12 +612,9 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
 		return GetMbedTLSUtil(force_mbedtls);
 	}
 
-	throw InvalidConfigurationException(" DuckDB currently has a read-only crypto module "
-	                                    "loaded. Please ensure httpfs is loaded using `LOAD httpfs`, or for DuckDB "
-	                                    "database files consider READONLY mode."
-	                                    " To write an encrypted database or parquet file that is NOT securely "
-	                                    "encrypted, one can use SET force_mbedtls_unsafe = "
-	                                    "'true'.");
+	throw InvalidConfigurationException("SereneDB currently has a read-only crypto module loaded. To write an "
+	                                    "encrypted database or parquet file that is NOT securely encrypted, one can "
+	                                    "use SET force_mbedtls_unsafe = 'true'.");
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

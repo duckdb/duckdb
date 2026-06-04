@@ -280,7 +280,7 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
+		return "Lock is already held in current process, likely another SereneDB instance";
 	}
 
 	string process_name, process_owner;
@@ -316,7 +316,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
+		return "Lock is already held in current process, likely another SereneDB instance";
 	}
 	string process_name, process_owner;
 
@@ -518,7 +518,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 					}
 				}
 				CloseFileAndAppendError(fd, extended_error);
-				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}

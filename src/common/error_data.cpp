@@ -67,9 +67,9 @@ string ErrorData::ConstructFinalMessage() const {
 	}
 	error += "Error: " + raw_message;
 	if (type == ExceptionType::INTERNAL) {
-		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
-		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
-		         "https://duckdb.org/docs/current/dev/internal_errors";
+		error += "\nThis error signals an assertion failure within SereneDB. This usually occurs due to "
+		         "unexpected conditions or errors in the program's logic.\nPlease open an issue at "
+		         "https://github.com/serenedb/serenedb/issues";
 
 		// Ensure that we print the stack trace for internal and fatal exceptions.
 		auto entry = extra_info.find("stack_trace_pointers");
