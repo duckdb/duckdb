@@ -95,14 +95,16 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 	}
 }
 
-unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
+unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert,
+                                                           const IndexVector<idx_t, PhysicalIndex> &column_index_map,
+                                                           unique_ptr<LogicalOperator> root,
                                                            const vector<LogicalType> &source_types) {
 	auto &table = insert.table;
 	auto source_bindings = root->GetColumnBindings();
 	vector<unique_ptr<Expression>> select_list;
 	for (auto &col : table.GetColumns().Physical()) {
 		auto storage_idx = col.StorageOid();
-		auto mapped_index = insert.column_index_map.empty() ? storage_idx : insert.column_index_map[col.Physical()];
+		auto mapped_index = column_index_map.empty() ? storage_idx : column_index_map[col.Physical()];
 		if (mapped_index == DConstants::INVALID_INDEX) {
 			// Push default value
 			select_list.push_back(std::move(insert.bound_defaults[storage_idx]));
@@ -611,9 +613,10 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		node.columns = root_select.names;
 	}
 
+	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	BindInsertColumnList(table, node.columns, node.default_values, named_column_map, insert->expected_types,
-	                     insert->column_index_map);
+	                     column_index_map);
 
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
@@ -641,7 +644,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 		auto source_types = root_select.types;
 		auto target_types = insert->expected_types;
-		root_select.plan = ResolveInputProjection(*insert, std::move(root_select.plan), source_types);
+		root_select.plan = ResolveInputProjection(*insert, column_index_map, std::move(root_select.plan), source_types);
 		target_types.clear();
 		for (auto &column : table.GetColumns().Physical()) {
 			target_types.push_back(column.Type());

@@ -549,7 +549,7 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
-	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
+	//serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
 	serializer.WritePropertyWithDefault<TableIndex>(204, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
@@ -572,7 +572,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 	auto table_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info");
 	auto result = duckdb::unique_ptr<LogicalInsert>(new LogicalInsert(deserializer.Get<ClientContext &>(), std::move(table_info)));
 	deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", result->insert_values);
-	deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", result->column_index_map);
+	//deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", result->column_index_map);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(203, "expected_types", result->expected_types);
 	deserializer.ReadPropertyWithDefault<TableIndex>(204, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<bool>(205, "return_chunk", result->return_chunk);

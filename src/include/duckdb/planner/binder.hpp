@@ -579,7 +579,9 @@ private:
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
 
-	unique_ptr<LogicalOperator> ResolveInputProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
+	unique_ptr<LogicalOperator> ResolveInputProjection(LogicalInsert &insert,
+	                                                   const IndexVector<idx_t, PhysicalIndex> &column_index_map,
+	                                                   unique_ptr<LogicalOperator> root,
 	                                                   const vector<LogicalType> &source_types);
 
 	unique_ptr<BoundMergeIntoAction>

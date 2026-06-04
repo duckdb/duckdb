@@ -429,20 +429,12 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
-	if (!bound_insert.column_index_map.empty()) {
-		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table.GetColumns().Physical()) {
-			auto i = col.Physical();
-			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = col.Name();
-			}
-		}
-	} else {
-		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table.GetColumns().Physical()) {
-			expected_names.push_back(col.Name());
-		}
+
+	expected_names.reserve(bound_insert.expected_types.size());
+	for (auto &col : table.GetColumns().Physical()) {
+		expected_names.push_back(col.Name());
 	}
+
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
