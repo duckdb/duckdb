@@ -639,9 +639,9 @@ static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator
 	auto dedup_cte_name = "__duckdb_delim_dedup_" + to_string(dedup_cte_index.index);
 	auto dedup_cte =
 	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
-	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
-	                                             std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                             std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	plan = std::move(cte);
 }
 
