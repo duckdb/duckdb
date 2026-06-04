@@ -1563,24 +1563,28 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 // An I/O task that fetches the bytes of a ReadHead.
 class ParquetIOAsyncTask : public AsyncTask {
 public:
-	ParquetIOAsyncTask(ReadHead &read_head, CachingFileHandle &file_handle)
-	    : read_head(read_head), file_handle(file_handle) {
+	ParquetIOAsyncTask(ReadHead &read_head, shared_ptr<CachingFileHandle> file_handle,
+	                   std::shared_ptr<duckdb_apache::thrift::transport::TTransport> transport)
+	    : read_head(read_head), file_handle(std::move(file_handle)), transport(std::move(transport)) {
 	}
 
 	void Execute() override {
-		read_head.Fetch(file_handle);
+		read_head.Fetch(*file_handle);
 	}
 
 private:
 	ReadHead &read_head;
-	CachingFileHandle &file_handle;
+	shared_ptr<CachingFileHandle> file_handle;
+	std::shared_ptr<duckdb_apache::thrift::transport::TTransport> transport;
 };
 
-static vector<unique_ptr<AsyncTask>> CollectIOTasks(ThriftFileTransport &trans) {
+static vector<unique_ptr<AsyncTask>>
+CollectIOTasks(std::shared_ptr<duckdb_apache::thrift::transport::TTransport> transport,
+               const shared_ptr<CachingFileHandle> &file_handle) {
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*transport);
 	vector<unique_ptr<AsyncTask>> io_tasks;
-	auto &file_handle = trans.GetCachingFileHandle();
 	for (auto &read_head : trans.GetReadHeads()) {
-		io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(read_head, file_handle));
+		io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(read_head, file_handle, transport));
 	}
 	return io_tasks;
 }
@@ -1775,7 +1779,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 			}
 		}
 		if (strategy != ParquetPrefetchStrategy::PREFETCH_FILTERS) {
-			io_tasks = CollectIOTasks(trans);
+			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle);
 		}
 		if (log_prefetch) {
 			state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();

@@ -197,7 +197,7 @@ public:
 	int64_t current_group;
 	idx_t offset_in_group;
 	idx_t group_offset;
-	unique_ptr<CachingFileHandle> file_handle;
+	shared_ptr<CachingFileHandle> file_handle;
 	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
