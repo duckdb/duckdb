@@ -553,61 +553,48 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &in
 	return nullptr;
 }
 
-static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const ExpressionType &type) {
-	WindowFunctionSet funcs(name);
+static WindowFunction GetLeadLagFunction(const char *name, const ExpressionType &type) {
+	const auto bind = WindowLeadLagExecutor::Bind;
+	const auto bounds = WindowLeadLagLocalState::GetBounds;
+	const auto sharing = WindowLeadLagExecutor::GetSharing;
+	const auto global = WindowLeadLagExecutor::GetGlobal;
+	const auto local = WindowLeadLagExecutor::GetLocal;
+	const auto sink = WindowLeadLagLocalState::Sinker;
+	const auto finalize = WindowLeadLagLocalState::Finalizer;
+	const auto evaluate = WindowLeadLagExecutor::GetData;
 
-	auto bind = WindowLeadLagExecutor::Bind;
-	auto bounds = WindowLeadLagLocalState::GetBounds;
-	auto sharing = WindowLeadLagExecutor::GetSharing;
-	auto global = WindowLeadLagExecutor::GetGlobal;
-	auto local = WindowLeadLagExecutor::GetLocal;
-	auto sink = WindowLeadLagLocalState::Sinker;
-	auto finalize = WindowLeadLagLocalState::Finalizer;
-	auto evaluate = WindowLeadLagExecutor::GetData;
-
-	WindowFunction func({}, LogicalType::ANY, type, bind, bounds, sharing, global, local, sink, finalize, evaluate);
+	WindowFunction func(name, {}, LogicalType::ANY, type, bind, bounds, sharing, global, local, sink, finalize,
+	                    evaluate);
 	auto &sig = func.GetSignature();
 
+	// Type of the default value is not actually T, as it is force-cast to the return type - not unified.
 	sig.AddParameter("col", LogicalType::TEMPLATE("T"));
 	sig.AddParameter("offset", LogicalType::BIGINT, Value::BIGINT(1));
-	sig.AddParameter("default", LogicalType::TEMPLATE("T"), Value(LogicalTypeId::SQLNULL));
+	sig.AddParameter("default", LogicalTypeId::ANY, Value(LogicalTypeId::SQLNULL));
 	sig.SetReturnType(LogicalType::TEMPLATE("T"));
 
-	funcs.AddFunction(func);
+	func.SetCanStreamCallback(WindowLeadLagExecutor::CanStream);
+	func.SetStreamingStateCallback(WindowLeadLagExecutor::GetStreamingState);
+	func.SetStreamingDataCallback(WindowLeadLagExecutor::StreamData);
 
-	for (auto &f : funcs.functions) {
-		f.SetCanStreamCallback(WindowLeadLagExecutor::CanStream);
-		f.SetStreamingStateCallback(WindowLeadLagExecutor::GetStreamingState);
-		f.SetStreamingDataCallback(WindowLeadLagExecutor::StreamData);
-	}
-
-	return funcs;
+	return func;
 }
 
-WindowFunctionSet LeadFun::GetFunctions() {
-	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
+WindowFunction LeadFun::GetFunction() {
+	return GetLeadLagFunction(Name, ExpressionType::WINDOW_LEAD);
 }
 
 WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
-	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
-
-	for (auto &func : funcs.functions) {
-		if (func.GetSignature().GetParameterCount() != nargs) {
-			continue;
-		}
-
-		func.GetSignature().GetParameter(0).SetType(type);
-		if (nargs > 2) {
-			func.GetSignature().GetParameter(2).SetType(type);
-		}
-		return func;
+	auto func = GetLeadLagFunction(Name, ExpressionType::WINDOW_LEAD);
+	func.GetSignature().GetParameter(0).SetType(type);
+	if (nargs > 2) {
+		func.GetSignature().GetParameter(2).SetType(type);
 	}
-
-	throw InternalException("Invalid number of arguments requested for LEAD: %lld", nargs);
+	return func;
 }
 
-WindowFunctionSet LagFun::GetFunctions() {
-	return GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LAG);
+WindowFunction LagFun::GetFunction() {
+	return GetLeadLagFunction(Name, ExpressionType::WINDOW_LAG);
 }
 
 unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobal(ClientContext &client, const WindowExecutor &executor,
