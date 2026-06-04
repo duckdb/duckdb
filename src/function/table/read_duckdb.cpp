@@ -253,7 +253,6 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		unordered_map<string, Value> attach_kv;
 		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
 		attach_options.catalog_mode = CatalogMode::HIDDEN;
-		attach_options.visibility = AttachVisibility::HIDDEN;
 
 		auto attached = db_manager.AttachDatabase(context, info, attach_options);
 		db_wrapper = make_shared_ptr<AttachedDatabaseWrapper>(context, std::move(attached));

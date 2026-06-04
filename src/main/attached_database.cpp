@@ -42,6 +42,9 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
+	// Local capture of the legacy `(HIDDEN)` option; reconciled with catalog_mode below so each
+	// individual setter stays single-purpose.
+	CatalogMode catalog_mode_hidden = CatalogMode::AUTO;
 	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
@@ -86,12 +89,9 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		}
 
 		if (entry.first == "hidden") {
-			// Legacy bool shorthand; CATALOG_MODE HIDDEN is the new form. Keep both so existing
-			// ATTACH ... (HIDDEN) keeps working — it just sets catalog_mode under the hood.
 			auto is_hidden = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (is_hidden) {
-				visibility = AttachVisibility::HIDDEN;
-				catalog_mode = CatalogMode::HIDDEN;
+				catalog_mode_hidden = CatalogMode::HIDDEN;
 			}
 			continue;
 		}
@@ -99,9 +99,6 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		if (entry.first == "catalog_mode") {
 			auto mode_str = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
 			catalog_mode = EnumUtil::FromString<CatalogMode>(mode_str);
-			if (catalog_mode == CatalogMode::HIDDEN || catalog_mode == CatalogMode::NONE) {
-				visibility = AttachVisibility::HIDDEN;
-			}
 			continue;
 		}
 		if (entry.first == "connect_mode") {
@@ -121,6 +118,19 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			continue;
 		}
 		options.emplace(entry.first, entry.second);
+	}
+
+	// Reconciliation: fold the legacy `(HIDDEN)` signal into catalog_mode. Conflict semantics:
+	//  - (HIDDEN) + CATALOG_MODE ENABLE       -> error (user asked to both hide and assert tables-shown)
+	//  - (HIDDEN) + CATALOG_MODE AUTO         -> promote catalog_mode to HIDDEN
+	//  - (HIDDEN) + CATALOG_MODE HIDDEN/NONE  -> consistent, no-op
+	if (catalog_mode_hidden == CatalogMode::HIDDEN) {
+		if (catalog_mode == CatalogMode::ENABLE) {
+			throw BinderException("ATTACH: HIDDEN option cannot be combined with CATALOG_MODE ENABLE");
+		}
+		if (catalog_mode == CatalogMode::AUTO) {
+			catalog_mode = CatalogMode::HIDDEN;
+		}
 	}
 }
 
@@ -155,7 +165,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 	recovery_mode = options.recovery_mode;
-	visibility = options.visibility;
 	catalog_mode = options.catalog_mode;
 	connect_mode = options.connect_mode;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
@@ -186,7 +195,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 	recovery_mode = options.recovery_mode;
-	visibility = options.visibility;
 	catalog_mode = options.catalog_mode;
 	connect_mode = options.connect_mode;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
