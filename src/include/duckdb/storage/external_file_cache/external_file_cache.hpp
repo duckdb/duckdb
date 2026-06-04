@@ -112,6 +112,7 @@ private:
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
 	//! ObjectCache keys for external file cache entries.
+	//! It should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
 	unordered_set<string> cached_file_keys DUCKDB_GUARDED_BY(lock);
 	//! Lock for accessing cached_file_keys.
 	mutable annotated_mutex lock;
