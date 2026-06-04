@@ -568,9 +568,11 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	WindowFunction func({}, LogicalType::ANY, type, bind, bounds, sharing, global, local, sink, finalize, evaluate);
 	auto &sig = func.GetSignature();
 
-	sig.AddParameter("col", LogicalTypeId::ANY);
+	sig.AddParameter("col", LogicalType::TEMPLATE("T"));
 	sig.AddParameter("offset", LogicalType::BIGINT, Value::BIGINT(1));
-	sig.AddParameter("default", LogicalTypeId::ANY, Value(LogicalTypeId::SQLNULL));
+	sig.AddParameter("default", LogicalType::TEMPLATE("T"), Value(LogicalTypeId::SQLNULL));
+	sig.SetReturnType(LogicalType::TEMPLATE("T"));
+
 	funcs.AddFunction(func);
 
 	for (auto &f : funcs.functions) {
