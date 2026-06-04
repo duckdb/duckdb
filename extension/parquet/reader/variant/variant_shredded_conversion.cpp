@@ -559,8 +559,8 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 	}
 }
 
-void VariantShreddedConversion::ConvertOneColumn(Vector &metadata_and_value, idx_t offset, idx_t length,
-                                                 idx_t total_size, Vector &result) {
+void VariantShreddedConversion::ConvertBinaryToVariant(Vector &metadata_and_value, idx_t offset, idx_t length,
+                                                       idx_t total_size, Vector &result) {
 	auto res = ConvertBinaryEncoding(metadata_and_value, metadata_and_value, offset, length, total_size, true);
 	VariantValue::ToVARIANT(res, result);
 }

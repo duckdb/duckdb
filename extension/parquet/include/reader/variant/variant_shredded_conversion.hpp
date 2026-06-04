@@ -11,8 +11,8 @@ public:
 
 public:
 	static vector<VariantValue> Convert(Vector &metadata, Vector &group, idx_t offset, idx_t length, idx_t total_size);
-	static void ConvertOneColumn(Vector &metadata_and_value, idx_t offset, idx_t length, idx_t total_size,
-	                             Vector &result);
+	static void ConvertBinaryToVariant(Vector &metadata_and_value, idx_t offset, idx_t length, idx_t total_size,
+	                                   Vector &result);
 	static vector<VariantValue> ConvertShreddedLeaf(Vector &metadata, Vector &value, Vector &typed_value, idx_t offset,
 	                                                idx_t length, idx_t total_size);
 	static vector<VariantValue> ConvertShreddedArray(Vector &metadata, Vector &value, Vector &typed_value, idx_t offset,

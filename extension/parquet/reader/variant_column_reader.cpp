@@ -208,7 +208,7 @@ static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector 
 	auto num_values = input.size();
 	auto &metadata_value = input.data[0];
 
-	VariantShreddedConversion::ConvertOneColumn(metadata_value, 0, num_values, num_values, result);
+	VariantShreddedConversion::ConvertBinaryToVariant(metadata_value, 0, num_values, num_values, result);
 }
 
 ScalarFunction VariantColumnReader::GetBytesToVariantFunction() {
