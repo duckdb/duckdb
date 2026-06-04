@@ -21,6 +21,7 @@
 
 namespace duckdb {
 
+class Allocator;
 class BufferHandle;
 class ClientContext;
 class DatabaseInstance;
@@ -43,6 +44,8 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
+	//! Get the buffer-manager-backed Allocator.
+	DUCKDB_API Allocator &GetBufferAllocator() const;
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);

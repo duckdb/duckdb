@@ -22,6 +22,16 @@ select list_skewness (i) from skew
 NULL
 
 query I
+select list_skewness([5, 5, 5])
+----
+NULL
+
+query I
+select list_skewness([1.5, 1.5, 1.5])
+----
+NULL
+
+query I
 select list_skewness ([1,2])
 ----
 NULL

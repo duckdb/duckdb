@@ -247,6 +247,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
+Allocator &CachingFileHandle::GetBufferAllocator() const {
+	return external_file_cache.GetBufferManager().GetBufferAllocator();
+}
+
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
 	if (nr_bytes == 0) {
 		return FileBufferHandleGroup();
@@ -273,7 +277,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
 	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
-	TaskExecutor executor(scheduler);
+	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,

@@ -21,6 +21,11 @@ FunctionLocalState::~FunctionLocalState() {
 ScalarFunctionInfo::~ScalarFunctionInfo() {
 }
 
+ScalarFunction::ScalarFunction(string name, FunctionSignature sig, scalar_function_t function)
+    : SimpleFunction(std::move(name), std::move(sig)) {
+	callbacks.function = std::move(function);
+}
+
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                function_statistics_t statistics, init_local_state_t init_local_state,

@@ -6,11 +6,12 @@
 
 namespace duckdb {
 
-TaskExecutor::TaskExecutor(TaskScheduler &scheduler)
-    : scheduler(scheduler), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
+    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
 }
 
-TaskExecutor::TaskExecutor(ClientContext &context_p) : TaskExecutor(TaskScheduler::GetScheduler(context_p)) {
+TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
+    : TaskExecutor(TaskScheduler::GetScheduler(context_p), type_p) {
 	context = context_p;
 }
 
@@ -31,7 +32,7 @@ void TaskExecutor::ThrowError() {
 
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	++total_tasks;
-	scheduler.ScheduleTask(*token, std::move(task));
+	scheduler.ScheduleTask(*token, std::move(task), type);
 }
 void TaskExecutor::FinishTask() {
 	++completed_tasks;

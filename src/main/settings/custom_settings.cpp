@@ -79,9 +79,7 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if (info.db) {
-		TaskScheduler::GetScheduler(*info.db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
-	}
+	Allocator::SetBackgroundThreads(input.GetValue<bool>());
 }
 
 //===----------------------------------------------------------------------===//
@@ -129,23 +127,8 @@ Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &co
 //===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
-void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
-	}
-}
-
-void AllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.allocator_flush_threshold = DBConfigOptions().allocator_flush_threshold;
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
-	}
-}
-
-Value AllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
+void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	StringUtil::ParseFormattedBytes(input.ToString());
 }
 
 //===----------------------------------------------------------------------===//
@@ -1613,6 +1596,34 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
+}
+
+//===----------------------------------------------------------------------===//
+// Async Threads
+//===----------------------------------------------------------------------===//
+void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 0) {
+		throw SyntaxException("Cannot have negative async_threads!");
+	}
+	auto new_async_threads = NumericCast<idx_t>(new_val);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.async_threads = new_async_threads;
+}
+
+void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.async_threads = new_async_threads;
+}
+
+Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.async_threads));
 }
 
 //===----------------------------------------------------------------------===//

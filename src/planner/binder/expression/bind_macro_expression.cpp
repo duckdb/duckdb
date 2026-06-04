@@ -12,15 +12,15 @@ namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.GetChildrenMutable()) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			ReplaceMacroParameters(child, lambda_params);
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+			ReplaceMacroParameters(child.GetExpressionMutable(), lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not replace them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
@@ -123,7 +123,12 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		window_expr.CatalogMutable() = macro_expr.Catalog();
 		window_expr.SchemaMutable() = macro_expr.Schema();
 		window_expr.FunctionNameMutable() = macro_expr.FunctionName();
-		window_expr.GetChildrenMutable() = std::move(macro_expr.GetChildrenMutable());
+
+		window_expr.GetChildrenMutable().clear();
+		for (auto &arg : macro_expr.GetArgumentsMutable()) {
+			window_expr.GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+		}
+
 		if (!window_expr.Distinct()) {
 			window_expr.DistinctMutable() = macro_expr.Distinct();
 		}

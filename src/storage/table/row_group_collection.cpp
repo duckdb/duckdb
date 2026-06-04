@@ -29,6 +29,19 @@
 
 namespace duckdb {
 
+static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDatabase &attached, idx_t total_rows) {
+	auto &indexes = info.GetIndexes();
+	if (indexes.Empty() || indexes.HasUnbound()) {
+		return false;
+	}
+	auto vacuum_rebuild_threshold = attached.GetVacuumRebuildIndexThreshold();
+	if (vacuum_rebuild_threshold == 0 || total_rows > vacuum_rebuild_threshold) {
+		return false;
+	}
+	auto index_types = indexes.DistinctIndexTypes();
+	return index_types.size() == 1 && index_types.count(ART::TYPE_NAME);
+}
+
 //===--------------------------------------------------------------------===//
 // Row Group Segment Tree
 //===--------------------------------------------------------------------===//
@@ -525,12 +538,13 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
 		D_ASSERT(last_row_group->GetRowEnd() == state.row_groups->GetBaseRowId() + next_row_id);
-		if (info->GetIndexes().Empty()) {
-			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
+		if (info->GetIndexes().Empty() || CanRebuildExistingIndexesAfterVacuum(*info, GetAttached(), GetTotalRows())) {
+			// Honor SUGGEST_NEW if vacuum can compact the table later, either because there are no indexes or because
+			// the existing indexes can be rebuilt after vacuuming.
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
 		} else {
-			// ... and if it has indexes we will ignore row_group_append_mode and try to append, unless the last row
-			// group is full already.
+			// If the table has indexes that vacuum cannot rebuild, ignore row_group_append_mode and try to append,
+			// unless the last row group is full already.
 			needs_new_row_group = row_group_size < last_row_group->GetNode().count;
 		}
 	}
@@ -1404,11 +1418,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// vacuum_rebuild_indexes allows rowid-changing vacuum for indexed tables when the table's row count is within
 	// the threshold and all indexes are bound ART indexes.
-	auto vacuum_rebuild_threshold = Settings::Get<VacuumRebuildIndexesSetting>(checkpoint_state.writer.GetDatabase());
-	auto index_types = info->GetIndexes().DistinctIndexTypes();
-	state.can_rebuild_indexes = has_indexes && !info->GetIndexes().HasUnbound() && index_types.size() == 1 &&
-	                            index_types.count(ART::TYPE_NAME) && vacuum_rebuild_threshold > 0 &&
-	                            GetTotalRows() <= vacuum_rebuild_threshold;
+	state.can_rebuild_indexes =
+	    CanRebuildExistingIndexesAfterVacuum(*info, checkpoint_state.writer.GetAttached(), GetTotalRows());
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
 	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes;
@@ -1779,16 +1790,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto write_action = row_group_write_data.write_action;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-		std::vector<bool> reuse_column;
+		vector<bool> reuse_column;
 		if (debug_verify_blocks) {
 			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
 				auto existing_column_count = entry->ReferenceNode()->GetColumnCount();
-				reuse_column.reserve(existing_column_count);
-				for (idx_t column_idx = 0; column_idx < existing_column_count; column_idx++) {
-					reuse_column[column_idx] = true;
-				}
+				reuse_column.resize(existing_column_count, true);
 			} else {
-				reuse_column.reserve(row_group_write_data.states.size());
+				reuse_column.resize(row_group_write_data.states.size());
 				for (idx_t column_idx = 0; column_idx < row_group_write_data.states.size(); column_idx++) {
 					reuse_column[column_idx] = !row_group_write_data.states[column_idx];
 				}
