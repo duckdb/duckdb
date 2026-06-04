@@ -4,6 +4,8 @@
 
 # Baseline: regular ATTACH — table is reachable, db is listed.
 
+require vector_size 2048
+
 statement ok
 ATTACH 'data/storage/wal_test_092.db' AS t (READ_ONLY);
 
