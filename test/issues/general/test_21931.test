@@ -1,0 +1,33 @@
+# name: test/issues/general/test_21931.test
+# description: Issue 21931: Regression in DuckDB 1.5.1 – VIEW with UNPIVOT fails after database reopen (JDBC / DBeaver)
+# group: [general]
+
+statement ok
+ATTACH '{TEST_DIR}/issue_21931.duckdb' AS testdb;
+
+statement ok 
+CREATE TABLE testdb.t (id INTEGER, a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO testdb.t VALUES (1, 10, 20);
+
+statement ok 
+CREATE VIEW testdb.v AS SELECT * FROM testdb.t UNPIVOT (val FOR key IN (a, b));
+
+query III 
+SELECT * FROM testdb.v;
+----
+1	a	10
+1	b	20
+
+statement ok 
+detach testdb;
+
+statement ok 
+ATTACH '{TEST_DIR}/issue_21931.duckdb' AS testdb;
+
+query III
+SELECT * FROM testdb.v;
+----
+1	a	10
+1	b	20
