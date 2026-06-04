@@ -2487,8 +2487,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 			simple_case_alias += " WHEN (" + case_expr.when_expr->ToString() + ")";
 			simple_case_alias += " THEN (" + case_expr.then_expr->ToString() + ")";
 			case_body_has_subquery |= case_expr.when_expr->HasSubquery() || case_expr.then_expr->HasSubquery();
-		} else {
-			case_body_has_subquery |= case_expr.when_expr->HasSubquery() || case_expr.then_expr->HasSubquery();
 		}
 		new_case.when_expr = std::move(case_expr.when_expr);
 		new_case.then_expr = std::move(case_expr.then_expr);
