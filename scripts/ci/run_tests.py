@@ -391,6 +391,10 @@ PROGRESS_TEST_START_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+)$")
 FATAL_ERROR_PATTERN = re.compile(r"^\s*due to a fatal error condition:\s*$")
 FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
+SANITIZER_OR_ASSERT_PATTERN = re.compile(
+    r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
+    flags=re.IGNORECASE,
+)
 
 
 def find_failing_test(stderr_lines: list[str], batch):
@@ -500,7 +504,38 @@ def extract_failing_stderr_block(stderr_lines: list[str]):
     return block
 
 
-def parse_failure_info(message: str | None, stdout: str, stderr: str, batch):
+def extract_interesting_failure_block(lines: list[str]):
+    for idx, line in enumerate(lines):
+        if not SANITIZER_OR_ASSERT_PATTERN.search(line):
+            continue
+        block = []
+        for next_line in lines[idx:]:
+            stripped = next_line.strip()
+            if not stripped:
+                if block:
+                    break
+                continue
+            block.append(stripped)
+            if len(block) >= 3:
+                break
+        if block:
+            return block
+    return []
+
+
+def format_signal_summary(returncode: int | None):
+    if returncode is None or returncode >= 0:
+        return None
+    signal_number = -returncode
+    try:
+        signal_name = signal.Signals(signal_number).name
+    except ValueError:
+        signal_name = f"SIG{signal_number}"
+    description = signal.strsignal(signal_number) or "terminated by signal"
+    return f"{signal_name} - {description}"
+
+
+def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
     stderr_lines = strip_ansi(stderr).splitlines()
     stdout_lines = strip_ansi(stdout).splitlines()
     stderr_non_empty_lines = [line.strip() for line in stderr_lines if line.strip()]
@@ -524,6 +559,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch):
         )
 
     test_name, line_number = find_failing_test(stderr_lines, batch)
+    if test_name is None and returncode is not None and returncode < 0:
+        test_name = infer_timed_out_test_from_stdout(stdout_lines, batch)
     reproduce_batch = [test_name] if test_name else list(batch)
 
     error_line = next((line for line in stderr_non_empty_lines if WRONG_RESULT_PATTERN.match(line)), None)
@@ -558,6 +595,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch):
     failing_stderr_block = extract_failing_stderr_block(stderr_lines)
     if failing_stderr_block:
         detail_lines.extend(failing_stderr_block)
+    if not detail_lines:
+        detail_lines.extend(extract_interesting_failure_block(stderr_lines))
+    if not detail_lines:
+        detail_lines.extend(extract_interesting_failure_block(stdout_lines))
     if message is not None:
         if not detail_lines:
             detail_lines.append(message)
@@ -572,6 +613,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch):
             test_name = find_failing_test_from_stdout(stdout_lines, batch) or test_name
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.append(failed_reason_line)
+    if not detail_lines:
+        signal_summary = format_signal_summary(returncode)
+        if signal_summary is not None:
+            detail_lines.append(signal_summary)
     if not detail_lines:
         first_line = next((line for line in stderr_non_empty_lines if line), None)
         if first_line is not None:
@@ -683,8 +728,8 @@ def extract_test_runtimes(stdout: str, stderr: str):
     return parse_test_runtimes(stdout) + parse_test_runtimes(stderr)
 
 
-def summarize_failure_output(message: str | None, stdout: str, stderr: str, batch):
-    failure = parse_failure_info(message, stdout, stderr, batch)
+def summarize_failure_output(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
+    failure = parse_failure_info(message, stdout, stderr, batch, returncode)
     return render_failure_lines(failure), failure.reproduce_batch
 
 
@@ -809,6 +854,7 @@ def run_batch(config: TestRunnerConfig, batch):
         "stdout": stdout,
         "stderr": stderr,
         "message": message,
+        "returncode": proc.returncode if "proc" in locals() else None,
         "peak_rss_bytes": peak_rss_bytes,
         "allow_retry": allow_retry,
     }
@@ -839,7 +885,13 @@ def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch,
 
 
 def handle_failed_batch(ctx: RunContext, batch_info, result):
-    failure = parse_failure_info(result["message"], result["stdout"], result["stderr"], batch_info["batch"])
+    failure = parse_failure_info(
+        result["message"],
+        result["stdout"],
+        result["stderr"],
+        batch_info["batch"],
+        result.get("returncode"),
+    )
     lines = render_failure_lines(failure)
     reproduce_batch = failure.reproduce_batch
     ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch)

@@ -1048,6 +1048,80 @@ Replacing deprecated string __TEST_DIR__ in path "__TEST_DIR__/hnsw_reclaim_spac
             ["/duckdb_build_dir/build/release/_deps/vss_extension_fc-src/test/sql/hnsw/hnsw_lateral_join_group.test"],
         )
 
+    def test_signal_only_failure_prefers_returncode_over_unrelated_stdout(self):
+        batch = ["test/sql/crash.test"]
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            None,
+            "before abort\n",
+            "",
+            batch,
+            returncode=-6,
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL test/sql/crash.test",
+                "",
+                run_tests.format_signal_summary(-6),
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["test/sql/crash.test"])
+
+    def test_signal_only_failure_uses_last_started_test_for_reproduce(self):
+        batch = [
+            "/tmp/first.test",
+            "/tmp/second.test",
+            "/tmp/third.test",
+        ]
+        stdout = """
+[0/3] (0%): /tmp/first.test
+[1/3] (33%): /tmp/first.test took 0.001s
+[1/3] (33%): /tmp/second.test
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            None,
+            stdout,
+            "",
+            batch,
+            returncode=-11,
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL /tmp/second.test",
+                "",
+                run_tests.format_signal_summary(-11),
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["/tmp/second.test"])
+
+    def test_sanitizer_output_is_preferred_over_signal_summary(self):
+        batch = ["test/sql/asan.test"]
+        stderr = """
+==123==ERROR: AddressSanitizer: heap-use-after-free on address 0xdeadbeef
+READ of size 4 at 0xdeadbeef thread T0
+    #0 0x123 in some_frame
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(
+            None,
+            "",
+            stderr,
+            batch,
+            returncode=-6,
+        )
+        self.assertEqual(
+            lines,
+            [
+                "error: FAIL test/sql/asan.test",
+                "",
+                "==123==ERROR: AddressSanitizer: heap-use-after-free on address 0xdeadbeef",
+                "READ of size 4 at 0xdeadbeef thread T0",
+                "#0 0x123 in some_frame",
+            ],
+        )
+        self.assertEqual(reproduce_batch, ["test/sql/asan.test"])
+        self.assertNotIn(run_tests.format_signal_summary(-6), lines)
+
     def test_stdout_failed_block_extracts_explicit_message_reason(self):
         batch = ["/tmp/a.test", "/tmp/fail.test"]
         stdout = """
