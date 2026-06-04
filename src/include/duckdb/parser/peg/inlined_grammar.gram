@@ -63,8 +63,11 @@ CopyOptionName <- ColLabel
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
+Type <- TypeVariations ArrayBounds*
+TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType
+SimpleType <- CharacterSimpleType / QualifiedSimpleType
+CharacterSimpleType <- CharacterType TypeModifiers?
+QualifiedSimpleType <- QualifiedTypeName TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
@@ -73,7 +76,19 @@ CharacterType <- ('CHARACTER' 'VARYING'?) /
                  'VARCHAR'
 
 IntervalType <- IntervalInterval / IntervalNumber
-IntervalInterval <- 'INTERVAL' Interval?
+IntervalInterval <- IntervalWithSpecifier / IntervalWithoutSpecifier
+IntervalWithSpecifier <- IntervalWithRangeSpecifier / IntervalWithSimpleSpecifier
+IntervalWithRangeSpecifier <- 'INTERVAL' IntervalToIntervalAsType
+IntervalWithSimpleSpecifier <- 'INTERVAL' Interval
+IntervalWithoutSpecifier <- 'INTERVAL'
+
+IntervalToIntervalAsType <- (YearKeyword 'TO' MonthKeyword) /
+    (DayKeyword 'TO' HourKeyword) /
+    (DayKeyword 'TO' MinuteKeyword) /
+    (DayKeyword 'TO' SecondKeyword) /
+    (HourKeyword 'TO' MinuteKeyword) /
+    (HourKeyword 'TO' SecondKeyword) /
+    (MinuteKeyword 'TO' SecondKeyword)
 IntervalNumber <- 'INTERVAL' Parens(NumberLiteral)
 
 YearKeyword         <- 'YEAR' / 'YEARS'
@@ -105,13 +120,20 @@ Interval <- IntervalToInterval /
     CenturyKeyword /
     MillenniumKeyword
 
-IntervalToInterval <- (YearKeyword 'TO' MonthKeyword) /
-    (DayKeyword 'TO' HourKeyword) /
-    (DayKeyword 'TO' MinuteKeyword) /
-    (DayKeyword 'TO' SecondKeyword) /
-    (HourKeyword 'TO' MinuteKeyword) /
-    (HourKeyword 'TO' SecondKeyword) /
-    (MinuteKeyword 'TO' SecondKeyword)
+IntervalToInterval <- YearToMonth /
+    DayToHour /
+    DayToMinute /
+    DayToSecond /
+    HourToMinute /
+    HourToSecond /
+    MinuteToSecond
+YearToMonth <- YearKeyword 'TO' MonthKeyword
+DayToHour <- DayKeyword 'TO' HourKeyword
+DayToMinute <- DayKeyword 'TO' MinuteKeyword
+DayToSecond <- DayKeyword 'TO' SecondKeyword
+HourToMinute <- HourKeyword 'TO' MinuteKeyword
+HourToSecond <- HourKeyword 'TO' SecondKeyword
+MinuteToSecond <- MinuteKeyword 'TO' SecondKeyword
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
 GeometryType <- 'GEOMETRY' Parens(Expression)?
@@ -135,7 +157,8 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeName
+QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeNameAsQualifiedName
+TypeNameAsQualifiedName <- TypeName
 CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
@@ -145,7 +168,8 @@ UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
-ArrayBounds <- SquareBracketsArray / 'ARRAY'
+ArrayBounds <- SquareBracketsArray / ArrayKeyword
+ArrayKeyword <- 'ARRAY'
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
@@ -1069,7 +1093,8 @@ Persistent <- 'PERSISTENT'
 TempPersistent <- 'TEMP'
 TemporaryPersistent <- 'TEMPORARY'
 
-CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
+CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName CreateTableDefinition CommitAction?
+CreateTableDefinition <- CreateTableAs / CreateColumnList
 
 CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?
 PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
@@ -1078,7 +1103,9 @@ SortedOptPartitionOptions <- SortedOptions PartitionOptions?
 PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
 SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
 
-WithData <- 'WITH' 'NO'? 'DATA'
+WithData <- WithDataOnly / WithNoData
+WithDataOnly <- 'WITH' 'DATA'
+WithNoData <- 'WITH' 'NO' 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
@@ -1094,10 +1121,14 @@ TableQualification <- TableName '.'
 ReservedTableQualification <- ReservedTableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
-CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
+CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
+CreateTableColumnDefinition <- ColumnDefinition
+CreateTableConstraint <- TopLevelConstraint
 ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
-NotNullConstraint <- 'NOT'? 'NULL'
+NotNullConstraint <- NullConstraint / NotNullColumnConstraint
+NullConstraint <- 'NULL'
+NotNullColumnConstraint <- 'NOT' 'NULL'
 UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
 DefaultValue <- 'DEFAULT' ColumnDefaultExpr
@@ -1126,7 +1157,8 @@ ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- Identifier ('.' ColLabel)*
+DottedIdentifier <- Identifier DotColLabel*
+DotColLabel <- '.' ColLabel
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
@@ -1139,10 +1171,14 @@ GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
-GeneratedColumnType <- 'VIRTUAL' / 'STORED'
+GeneratedColumnType <- VirtualGeneratedColumn / StoredGeneratedColumn
 
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
-PreserveOrDelete <- 'PRESERVE' / 'DELETE'
+PreserveOrDelete <- PreserveRows / DeleteRows
+PreserveRows <- 'PRESERVE'
+DeleteRows <- 'DELETE'
+VirtualGeneratedColumn <- 'VIRTUAL'
+StoredGeneratedColumn <- 'STORED'
 
 CreateIndexStmt <- UniqueIndex? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 
@@ -1747,7 +1783,9 @@ DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
 UseStatement <- 'USE' UseTarget
 
-UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTarget <- UseTargetCatalogSchema / SchemaNameAsUseTarget / CatalogNameAsUseTarget
+SchemaNameAsUseTarget <- SchemaName
+CatalogNameAsUseTarget <- CatalogName
 UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier
 

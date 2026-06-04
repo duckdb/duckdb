@@ -18,13 +18,18 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 }
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result;
-		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
-		return result;
-	}
-	return transformer.Transform<QualifiedName>(choice_result);
+QualifiedName PEGTransformerFactory::TransformSchemaNameAsUseTarget(PEGTransformer &transformer,
+                                                                    const string &schema_name) {
+	QualifiedName result;
+	result.name = schema_name;
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransformer &transformer,
+                                                                     const string &catalog_name) {
+	QualifiedName result;
+	result.name = catalog_name;
+	return result;
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
