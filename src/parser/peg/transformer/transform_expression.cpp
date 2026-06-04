@@ -225,10 +225,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in window functions");
-			}
-			expr->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+			expr->GetArgumentsMutable().push_back(std::move(arg));
 		}
 
 		expr->HasIgnoreNullsMutable() = has_ignore_nulls_result;

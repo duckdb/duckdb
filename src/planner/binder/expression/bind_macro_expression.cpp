@@ -124,9 +124,9 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		window_expr.SchemaMutable() = macro_expr.Schema();
 		window_expr.FunctionNameMutable() = macro_expr.FunctionName();
 
-		window_expr.GetChildrenMutable().clear();
+		window_expr.GetArgumentsMutable().clear();
 		for (auto &arg : macro_expr.GetArgumentsMutable()) {
-			window_expr.GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+			window_expr.GetArgumentsMutable().push_back(std::move(arg));
 		}
 
 		if (!window_expr.Distinct()) {
