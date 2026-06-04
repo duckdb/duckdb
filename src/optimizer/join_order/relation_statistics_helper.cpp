@@ -6,6 +6,9 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -44,18 +47,42 @@ static idx_t CapMinMaxDistinctCount(uint64_t distinct_count, idx_t base_table_ca
 	return capped_distinct_count == NumericLimits<idx_t>::Maximum() ? 0 : capped_distinct_count;
 }
 
+static idx_t GetMinMaxSpanDistinctCount(uint64_t span, idx_t base_table_cardinality) {
+	uint64_t distinct_count;
+	if (!TryAddOperator::Operation<uint64_t, uint64_t, uint64_t>(span, 1, distinct_count)) {
+		return 0;
+	}
+	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
+}
+
 template <class T>
-static idx_t GetIntegralMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+static idx_t GetSignedMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
 	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<T>();
 	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<T>();
 	if (max_value < min_value) {
 		return 0;
 	}
-	auto span = static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value);
-	if (span == NumericLimits<uint64_t>::Maximum()) {
+	hugeint_t span;
+	if (!TrySubtractOperator::Operation(hugeint_t(static_cast<int64_t>(max_value)),
+	                                    hugeint_t(static_cast<int64_t>(min_value)), span)) {
 		return 0;
 	}
-	return CapMinMaxDistinctCount(span + 1, base_table_cardinality);
+	uint64_t unsigned_span;
+	if (!Hugeint::TryCast(span, unsigned_span)) {
+		return 0;
+	}
+	return GetMinMaxSpanDistinctCount(unsigned_span, base_table_cardinality);
+}
+
+template <class T>
+static idx_t GetUnsignedMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<T>();
+	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<T>();
+	T span;
+	if (!TrySubtractOperator::Operation(max_value, min_value, span)) {
+		return 0;
+	}
+	return GetMinMaxSpanDistinctCount(static_cast<uint64_t>(span), base_table_cardinality);
 }
 
 static idx_t GetBooleanMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
@@ -71,8 +98,11 @@ static idx_t GetDateMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t 
 	if (max_value < min_value) {
 		return 0;
 	}
-	auto distinct_count = static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value) + 1;
-	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
+	int64_t span;
+	if (!TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(max_value, min_value, span)) {
+		return 0;
+	}
+	return GetMinMaxSpanDistinctCount(static_cast<uint64_t>(span), base_table_cardinality);
 }
 
 static idx_t GetMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
@@ -85,21 +115,21 @@ static idx_t GetMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base
 	case LogicalTypeId::BOOLEAN:
 		return GetBooleanMinMaxDistinctCount(base_stats, base_table_cardinality);
 	case LogicalTypeId::TINYINT:
-		return GetIntegralMinMaxDistinctCount<int8_t>(base_stats, base_table_cardinality);
+		return GetSignedMinMaxDistinctCount<int8_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::SMALLINT:
-		return GetIntegralMinMaxDistinctCount<int16_t>(base_stats, base_table_cardinality);
+		return GetSignedMinMaxDistinctCount<int16_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::INTEGER:
-		return GetIntegralMinMaxDistinctCount<int32_t>(base_stats, base_table_cardinality);
+		return GetSignedMinMaxDistinctCount<int32_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::BIGINT:
-		return GetIntegralMinMaxDistinctCount<int64_t>(base_stats, base_table_cardinality);
+		return GetSignedMinMaxDistinctCount<int64_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::UTINYINT:
-		return GetIntegralMinMaxDistinctCount<uint8_t>(base_stats, base_table_cardinality);
+		return GetUnsignedMinMaxDistinctCount<uint8_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::USMALLINT:
-		return GetIntegralMinMaxDistinctCount<uint16_t>(base_stats, base_table_cardinality);
+		return GetUnsignedMinMaxDistinctCount<uint16_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::UINTEGER:
-		return GetIntegralMinMaxDistinctCount<uint32_t>(base_stats, base_table_cardinality);
+		return GetUnsignedMinMaxDistinctCount<uint32_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::UBIGINT:
-		return GetIntegralMinMaxDistinctCount<uint64_t>(base_stats, base_table_cardinality);
+		return GetUnsignedMinMaxDistinctCount<uint64_t>(base_stats, base_table_cardinality);
 	case LogicalTypeId::DATE:
 		return GetDateMinMaxDistinctCount(base_stats, base_table_cardinality);
 	default:
