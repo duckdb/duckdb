@@ -1,0 +1,129 @@
+# name: test/remote_pushdown/remote_pushdown_order_nulls.test
+# description: NULL placement in pushed-down ORDER BY must match DuckDB (NULLS LAST by default)
+#              MySQL sorts NULLs first when ascending - the pushdown makes the NULL ordering explicit
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.nulls_tbl AS
+    SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(9) t(i)
+
+# ascending: DuckDB places NULLs last by default; the query is pushed down
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v
+----
+1
+2
+4
+5
+7
+8
+NULL
+NULL
+NULL
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v
+----
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+# descending: NULLs still last
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v DESC
+----
+8
+7
+5
+4
+2
+1
+NULL
+NULL
+NULL
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v DESC
+----
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+# ORDER BY + LIMIT decides which rows are returned - NULL placement must be correct
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v DESC LIMIT 3
+----
+8
+7
+5
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v DESC LIMIT 3
+----
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+# LIMIT + OFFSET into the NULL range
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v LIMIT 3 OFFSET 5
+----
+8
+NULL
+NULL
+
+# positional ORDER BY over an aliased expression
+# v: 1,2,4,5,7,8,NULL,NULL,NULL → v % 3: 1,2,1,2,1,2,NULL,NULL,NULL
+query II
+SELECT v % 3 AS g, COUNT(*) AS cnt FROM s.nulls_tbl GROUP BY 1 ORDER BY 1
+----
+1	3
+2	3
+NULL	3
+
+# window function ORDER BY over a nullable column: DuckDB orders NULLS LAST within the window
+query II
+SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM s.nulls_tbl ORDER BY rn
+----
+1	1
+2	2
+4	3
+5	4
+7	5
+8	6
+NULL	7
+NULL	8
+NULL	9
+
+query II
+explain SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM s.nulls_tbl ORDER BY rn
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+# explicit NULLS FIRST / NULLS LAST is not pushed (MySQL cannot parse it) but must stay correct
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
+----
+NULL
+NULL
+NULL
+1
+2
+4
+5
+7
+8
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
+----
+physical_plan	<REGEX>:.*ORDER_BY.*
+
+# OFFSET without LIMIT cannot be pushed (MySQL requires LIMIT) but must stay correct
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v OFFSET 6
+----
+NULL
+NULL
+NULL

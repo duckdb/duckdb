@@ -33,7 +33,8 @@ class UpdateQueryNode;
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
 struct CatalogPushdownResult {
-	explicit CatalogPushdownResult(CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE);
+	explicit CatalogPushdownResult(
+	    CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE);
 	static CatalogPushdownResult Unknown();
 	static CatalogPushdownResult NoCatalogReference();
 	static CatalogPushdownResult RemoteReference(Catalog &catalog);
@@ -75,7 +76,6 @@ private:
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
-	CatalogPushdownResult Rewrite(const ConstantExpression &expr);
 	CatalogPushdownResult Rewrite(const SubqueryExpression &expr);
 	CatalogPushdownResult Rewrite(const CastExpression &expr);
 	CatalogPushdownResult Rewrite(const FunctionExpression &expr);
@@ -84,10 +84,12 @@ private:
 	CatalogPushdownResult Rewrite(const ColumnRefExpression &expr);
 
 	CatalogPushdownResult Rewrite(const LogicalType &type);
-	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name, const string &schema_name);
+	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name,
+	                                                const string &schema_name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
+	void TrackLocalTable(const TableRef &ref);
 	void TrackLocalTable(const BaseTableRef &ref);
 	void TrackLocalTable(const TableFunctionRef &ref);
 	void TrackLocalTable(const SubqueryRef &ref);

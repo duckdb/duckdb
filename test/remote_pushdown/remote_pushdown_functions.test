@@ -72,11 +72,11 @@ SELECT MIN(levenshtein(word, 'duck')) FROM s.word_tbl
 ----
 0
 
-# levenshtein('duck','duck')=0, ('ducks','duck')=1, ('lucky','duck')=3, ('truck','duck')=2 → sum=6
+# levenshtein('duck','duck')=0, ('ducks','duck')=1, ('lucky','duck')=2, ('truck','duck')=2 → sum=5
 query I
 SELECT SUM(levenshtein(word, 'duck')) FROM s.word_tbl
 ----
-6
+5
 
 query II
 explain SELECT MIN(levenshtein(word, 'duck')) FROM s.word_tbl

@@ -24,9 +24,10 @@ SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
 query II
 explain SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
 ----
-physical_plan	<!REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*(AGGREGATE|GROUP_BY).*
 
-# ---- GROUP BY ROLLUP: MySQL 8.0+ supports this, should push ----
+# ---- GROUP BY ROLLUP: DuckDB serializes this as GROUP BY GROUPING SETS, which MySQL
+# does not support without a secondary engine -- must be handled by DuckDB ----
 # produces rows per group + grand-total row (g1=NULL)
 
 query II
@@ -39,7 +40,7 @@ NULL	10
 query II
 explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ROLLUP (g1) ORDER BY g1
 ----
-physical_plan	<!REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 # ---- GROUP BY ALL: MySQL has no GROUP BY ALL syntax -- breaks when pushed ----
 # DuckDB expands ALL to every non-aggregate column in the SELECT list
@@ -57,7 +58,7 @@ SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
 query II
 explain SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 # ---- GROUP BY CUBE: MySQL has no CUBE support -- breaks when pushed ----
 # CUBE(g1) produces per-group rows plus a grand-total row
@@ -71,7 +72,7 @@ NULL	10
 query II
 explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY CUBE (g1) ORDER BY g1
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 # ---- GROUP BY GROUPING SETS: MySQL has no GROUPING SETS support -- breaks when pushed ----
 query II
@@ -84,7 +85,7 @@ NULL	10
 query II
 explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY GROUPING SETS ((g1), ()) ORDER BY g1
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 # ---- DISTINCT ON: MySQL has no DISTINCT ON -- breaks when pushed ----
 # keep the first row per g1 group (lowest i)
@@ -94,10 +95,11 @@ SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
 0	0
 1	1
 
+# DISTINCT ON is planned locally as a grouped aggregation
 query II
 explain SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
 ----
-physical_plan	<REGEX>:.*DISTINCT.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 # ---- ORDER BY NULLS FIRST / NULLS LAST: MySQL < 8.0.26 cannot parse this ----
 

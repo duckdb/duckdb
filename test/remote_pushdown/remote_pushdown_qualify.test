@@ -42,9 +42,9 @@ SELECT i FROM s.qualify_tbl
 ----
 9
 
-# QUALIFY on a derived column alias
+# QUALIFY on a derived window column alias
 query II
-SELECT i, i * i AS sq FROM s.qualify_tbl QUALIFY sq > 49 ORDER BY i
+SELECT i, ROW_NUMBER() OVER (ORDER BY i) AS rn FROM s.qualify_tbl QUALIFY rn > 8 ORDER BY i
 ----
-8	64
-9	81
+8	9
+9	10

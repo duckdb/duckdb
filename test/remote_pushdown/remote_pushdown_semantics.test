@@ -1,0 +1,156 @@
+# name: test/remote_pushdown/remote_pushdown_semantics.test
+# description: Functions whose MySQL semantics differ from DuckDB must not be pushed down
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.sem_tbl AS SELECT i FROM range(1, 5) t(i)
+
+# concat: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
+statement ok
+CREATE OR REPLACE TABLE s.concat_tbl AS
+    SELECT CASE WHEN i = 0 THEN NULL ELSE 'x' END AS a, 'y' AS b FROM range(2) t(i)
+
+query I
+SELECT COUNT(*) FROM s.concat_tbl WHERE concat(a, b) = concat(a, 'y')
+----
+2
+
+query II
+explain SELECT MIN(concat(a, b)) FROM s.concat_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# concat_ws skips NULLs in both systems - pushed
+query I
+SELECT MIN(concat_ws(',', a, b)) FROM s.concat_tbl
+----
+x,y
+
+query II
+explain SELECT MIN(concat_ws(',', a, b)) FROM s.concat_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# division: DuckDB integer division yields DOUBLE; MySQL yields DECIMAL rounded to 4 digits
+query I
+SELECT SUM(i) / 7 FROM s.sem_tbl
+----
+1.4285714285714286
+
+query II
+explain SELECT SUM(i) / 7 FROM s.sem_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# avg: MySQL returns DECIMAL with 4 fractional digits; DuckDB returns DOUBLE
+# avg(1,2,3,4 where i != 3) = avg(1,2,4) = 2.3333333333333335
+query I
+SELECT AVG(i) FROM s.sem_tbl WHERE i != 3
+----
+2.3333333333333335
+
+query II
+explain SELECT AVG(i) FROM s.sem_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# greatest / least: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
+query I
+SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
+----
+4
+
+query II
+explain SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# stddev / variance: sample variants in DuckDB, population variants in MySQL
+query I
+SELECT round(stddev(i), 6) FROM s.sem_tbl
+----
+1.290994
+
+query II
+explain SELECT stddev(i) FROM s.sem_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# the explicitly-named variants have identical semantics and are pushed
+query II
+SELECT round(stddev_samp(i), 6), round(stddev_pop(i), 6) FROM s.sem_tbl
+----
+1.290994	1.118034
+
+query II
+explain SELECT stddev_samp(i), stddev_pop(i) FROM s.sem_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# dayofweek / weekday / week: different numbering in MySQL
+statement ok
+CREATE OR REPLACE TABLE s.date_tbl AS SELECT DATE '2026-06-04' AS d
+
+# DuckDB: dayofweek(Thursday) = 4 (MySQL would return 5)
+query I
+SELECT MAX(dayofweek(d)) FROM s.date_tbl
+----
+4
+
+query II
+explain SELECT MAX(dayofweek(d)) FROM s.date_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# DuckDB: week('2026-01-01') = 1 (ISO); MySQL week() = 0
+query I
+SELECT MAX(week(DATE '2026-01-01')) FROM s.date_tbl
+----
+1
+
+# weekofyear is ISO in both systems - pushed
+query I
+SELECT MAX(weekofyear(d)) FROM s.date_tbl
+----
+23
+
+query II
+explain SELECT MAX(weekofyear(d)) FROM s.date_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# instr: case-insensitive in MySQL under the default collation
+statement ok
+CREATE OR REPLACE TABLE s.instr_tbl AS SELECT 'ABC' AS w
+
+query I
+SELECT MAX(instr(w, 'b')) FROM s.instr_tbl
+----
+0
+
+query II
+explain SELECT MAX(instr(w, 'b')) FROM s.instr_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# microsecond: DuckDB includes the seconds component, MySQL does not
+# (MySQL would return 0 here; DuckDB returns 12 * 1000000)
+statement ok
+CREATE OR REPLACE TABLE s.micro_tbl AS SELECT TIMESTAMP '2000-01-01 10:11:12' AS ts
+
+query I
+SELECT MAX(microsecond(ts)) FROM s.micro_tbl
+----
+12000000
+
+query II
+explain SELECT MAX(microsecond(ts)) FROM s.micro_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*

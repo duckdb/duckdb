@@ -70,10 +70,12 @@ SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.as
 ----
 2000
 
+# the ASOF join is planned locally (DuckDB plans this single-condition ASOF join
+# as a regular join + window) - the important part is that no MYSQL_QUERY appears
 query II
 explain SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.asof_right.ts)
 ----
-physical_plan	<REGEX>:.*ASOF.*
+physical_plan	<REGEX>:.*JOIN.*
 
 # ---- POSITIONAL JOIN: pairs rows by their ordinal position ----
 # MySQL has no POSITIONAL JOIN syntax -- must be handled by DuckDB
@@ -114,3 +116,42 @@ query II
 explain SELECT COUNT(*) FROM s.word_left JOIN s.word_right ON (levenshtein(s.word_left.w, s.word_right.w) <= 2)
 ----
 physical_plan	<REGEX>:.*JOIN.*AGGREGATE.*|.*AGGREGATE.*JOIN.*
+
+# ---- FULL OUTER JOIN: MySQL has no FULL JOIN -- worse, "x FULL JOIN y" would parse as
+# ---- "x AS full JOIN y" and silently compute an inner join ----
+# left: 0..9, right: 0..4 shifted by +3 → matched 3..7? full join row count:
+# matches for a.i = b.i + 3 → b.i = a.i - 3 → a.i in 3..7 matches b.i 0..4 → 5 matched rows
+# unmatched left: 5, unmatched right: 0 → total = 10
+query I
+SELECT COUNT(*) FROM s.jt_left a FULL OUTER JOIN s.jt_right b ON (a.i = b.i + 3)
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.jt_left a FULL OUTER JOIN s.jt_right b ON (a.i = b.i + 3)
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# ---- self-joins: MySQL requires unique table aliases within a join ----
+
+# with aliases the join is pushed
+query I
+SELECT COUNT(*) FROM s.jt_left a JOIN s.jt_left b USING (i)
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.jt_left a JOIN s.jt_left b USING (i)
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# without aliases MySQL would fail with "Not unique table/alias" - handled locally
+query I
+SELECT COUNT(*) FROM s.jt_left JOIN s.jt_left USING (i)
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.jt_left JOIN s.jt_left USING (i)
+----
+physical_plan	<REGEX>:.*JOIN.*

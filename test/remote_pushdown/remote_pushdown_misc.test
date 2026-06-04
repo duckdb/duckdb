@@ -1,0 +1,197 @@
+# name: test/remote_pushdown/remote_pushdown_misc.test
+# description: Miscellaneous DuckDB-specific constructs must not be pushed to MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.misc_tbl AS SELECT i, i % 2 AS g FROM range(6) t(i)
+
+# ---- TRY(...) is DuckDB-specific ----
+query I
+SELECT MAX(TRY(i // g)) FROM s.misc_tbl
+----
+5
+
+query II
+explain SELECT MAX(TRY(i // g)) FROM s.misc_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- TRY_CAST is DuckDB-specific ----
+query I
+SELECT COUNT(TRY_CAST(i AS DATE)) FROM s.misc_tbl
+----
+0
+
+query II
+explain SELECT COUNT(TRY_CAST(i AS DATE)) FROM s.misc_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- IS DISTINCT FROM has different syntax in MySQL (<=>) ----
+query I
+SELECT COUNT(*) FROM s.misc_tbl WHERE i IS DISTINCT FROM 3
+----
+5
+
+query II
+explain SELECT COUNT(*) FROM s.misc_tbl WHERE i IS DISTINCT FROM 3
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- BETWEEN over string literals is collation-sensitive ----
+statement ok
+CREATE OR REPLACE TABLE s.misc_str_tbl AS
+    SELECT CASE i WHEN 0 THEN 'a' WHEN 1 THEN 'B' ELSE 'c' END AS w FROM range(3) t(i)
+
+# binary comparison: 'B' (0x42) is not between 'a' (0x61) and 'c' (0x63); MySQL ci would match it
+query I
+SELECT COUNT(*) FROM s.misc_str_tbl WHERE w BETWEEN 'a' AND 'c'
+----
+2
+
+query II
+explain SELECT COUNT(*) FROM s.misc_str_tbl WHERE w BETWEEN 'a' AND 'c'
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# numeric BETWEEN is pushed
+query I
+SELECT COUNT(*) FROM s.misc_tbl WHERE i BETWEEN 2 AND 4
+----
+3
+
+query II
+explain SELECT COUNT(*) FROM s.misc_tbl WHERE i BETWEEN 2 AND 4
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- ANY over a string literal is collation-sensitive ----
+query I
+SELECT COUNT(*) FROM s.misc_tbl WHERE 'B' = ANY(SELECT w FROM s.misc_str_tbl)
+----
+6
+
+query II
+explain SELECT COUNT(*) FROM s.misc_tbl WHERE 'b' = ANY(SELECT w FROM s.misc_str_tbl)
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- LIKE is collation-sensitive in MySQL ----
+query I
+SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
+----
+0
+
+query II
+explain SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- VALUES lists in the FROM clause require ROW(...) syntax in MySQL ----
+query I
+SELECT COUNT(*) FROM s.misc_tbl, (VALUES (1), (2)) v(x) WHERE i = x
+----
+2
+
+# ---- group_concat with an explicit separator uses different syntax in MySQL ----
+query I
+SELECT group_concat(i, '|') FROM s.misc_tbl
+----
+0|1|2|3|4|5
+
+query II
+explain SELECT group_concat(i, '|') FROM s.misc_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# single-argument group_concat is pushed
+query I
+SELECT group_concat(i) FROM s.misc_tbl
+----
+0,1,2,3,4,5
+
+query II
+explain SELECT group_concat(i) FROM s.misc_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- MATERIALIZED CTEs are DuckDB-specific ----
+query I
+WITH cte AS MATERIALIZED (SELECT i FROM s.misc_tbl)
+SELECT SUM(i) FROM cte
+----
+15
+
+# ---- ORDER BY ALL is DuckDB-specific ----
+query II
+SELECT g, i FROM s.misc_tbl WHERE i < 3 ORDER BY ALL
+----
+0	0
+0	2
+1	1
+
+# ---- referencing a non-existent remote table must report a binder error ----
+statement error
+SELECT * FROM s.definitely_does_not_exist
+----
+<REGEX>:.*does not exist.*
+
+# ---- prepared statement parameters cannot be serialized ----
+statement ok
+PREPARE misc_prep AS SELECT SUM(i) FROM s.misc_tbl WHERE i > $1
+
+query I
+EXECUTE misc_prep(2)
+----
+12
+
+statement ok
+DEALLOCATE misc_prep
+
+# ---- window frames: EXCLUDE / GROUPS / RANGE offsets are not pushed ----
+statement ok
+CREATE OR REPLACE TABLE s.misc_win_tbl AS SELECT i, i * 10 AS v FROM range(5) t(i)
+
+# EXCLUDE CURRENT ROW
+query I
+SELECT SUM(SUM_v) FROM (
+    SELECT SUM(v) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) AS SUM_v
+    FROM s.misc_win_tbl
+) t
+----
+160
+
+query II
+explain SELECT SUM(v) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) FROM s.misc_win_tbl
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# GROUPS frame mode
+query II
+explain SELECT SUM(v) OVER (ORDER BY i GROUPS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM s.misc_win_tbl
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# RANGE frames with an offset
+query II
+explain SELECT SUM(v) OVER (ORDER BY i RANGE BETWEEN 2 PRECEDING AND CURRENT ROW) FROM s.misc_win_tbl
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# COUNT(*) as a window function is pushed (serialized as count(*))
+query I
+SELECT MAX(cnt) FROM (SELECT COUNT(*) OVER (ORDER BY i) AS cnt FROM s.misc_win_tbl) t
+----
+5
+
+query II
+explain SELECT COUNT(*) OVER (ORDER BY i) FROM s.misc_win_tbl
+----
+physical_plan	<!REGEX>:.*WINDOW.*

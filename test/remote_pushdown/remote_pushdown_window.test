@@ -83,13 +83,14 @@ statement ok
 CREATE OR REPLACE TABLE s.null_win_tbl AS
     SELECT i, CASE WHEN i % 3 = 0 THEN NULL ELSE i * 10 END AS v FROM range(9) t(i)
 
-# NULL, 10, 20, NULL→20, 40, 50, NULL→50, 70, 80 → sum of filled = 340
+# fill() interpolates missing values from the neighbouring rows:
+# NULL→0, 10, 20, NULL→30, 40, 50, NULL→60, 70, 80 → sum of filled = 360
 query I
 SELECT SUM(filled) FROM (
     SELECT fill(v) OVER (ORDER BY i) AS filled FROM s.null_win_tbl
 ) t
 ----
-340
+360
 
 query II
 explain SELECT SUM(filled) FROM (
@@ -114,18 +115,19 @@ explain SELECT COUNT(*) FROM (
 ----
 physical_plan	<REGEX>:.*WINDOW.*
 
-# IGNORE NULLS on LEAD/LAG -- MySQL < 8.0.22 cannot parse this syntax
-# if pushed to an older MySQL the query would fail with a syntax error
+# IGNORE NULLS on LEAD/LAG -- MySQL cannot parse this syntax
+# if pushed the query would fail with a syntax error
+# v: NULL,10,20,NULL,40,50,NULL,70,80; next non-NULL: 10,20,40,40,50,70,70,80,NULL → sum=380
 query I
 SELECT SUM(nxt) FROM (
-    SELECT LEAD(v) IGNORE NULLS OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
+    SELECT LEAD(v IGNORE NULLS) OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
 ) t
 ----
-340
+380
 
 query II
 explain SELECT SUM(nxt) FROM (
-    SELECT LEAD(v) IGNORE NULLS OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
+    SELECT LEAD(v IGNORE NULLS) OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
 ) t
 ----
 physical_plan	<REGEX>:.*WINDOW.*

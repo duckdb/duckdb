@@ -103,3 +103,47 @@ explain SELECT COUNT(*) FROM (
     UNION ALL SELECT i FROM s.set_tbl3) t
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- EXCEPT ALL / INTERSECT ALL: multiset semantics are identical in MySQL 8.0.31+ ----
+statement ok
+CREATE OR REPLACE TABLE s.set_dup1 AS SELECT i % 3 AS i FROM range(6) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.set_dup2 AS SELECT i % 2 AS i FROM range(2) t(i)
+
+# set_dup1: 0,1,2,0,1,2  set_dup2: 0,1 → EXCEPT ALL removes one 0 and one 1 → 0,1,2,2
+query I
+SELECT i FROM s.set_dup1 EXCEPT ALL SELECT i FROM s.set_dup2 ORDER BY i
+----
+0
+1
+2
+2
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_dup1 EXCEPT ALL SELECT i FROM s.set_dup2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# INTERSECT ALL keeps the minimum multiplicity → 0,1
+query I
+SELECT i FROM s.set_dup1 INTERSECT ALL SELECT i FROM s.set_dup2 ORDER BY i
+----
+0
+1
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_dup1 INTERSECT ALL SELECT i FROM s.set_dup2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- UNION BY NAME is DuckDB-specific and must not be pushed ----
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL BY NAME SELECT i FROM s.set_tbl2) t
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL BY NAME SELECT i FROM s.set_tbl2) t
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
