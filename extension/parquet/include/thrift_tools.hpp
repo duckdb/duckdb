@@ -39,11 +39,11 @@ struct ReadHead {
 
 	// Materialize [buffer_ptr], should call before access.
 	// TODO(hjiang): Currently it's only used for `Prefetch` operation, should be able to save one copy.
-	void Materialize() {
+	void Materialize(Allocator &allocator) {
 		if (handle_group.GetHandles().size() == 1) {
 			buffer_ptr = handle_group.Ptr();
 		} else {
-			local_buffer = Allocator::DefaultAllocator().Allocate(size);
+			local_buffer = allocator.Allocate(size);
 			handle_group.CopyTo(local_buffer.get(), size);
 			buffer_ptr = local_buffer.get();
 		}
@@ -54,7 +54,7 @@ struct ReadHead {
 			throw std::runtime_error("Prefetch registered requested for bytes outside file");
 		}
 		handle_group = file_handle.Read(size, location);
-		Materialize();
+		Materialize(file_handle.GetBufferAllocator());
 		data_isset = true;
 	}
 };
