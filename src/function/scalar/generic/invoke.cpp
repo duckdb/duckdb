@@ -85,8 +85,7 @@ unique_ptr<FunctionData> LambdaInvokeBind(BindScalarFunctionInput &input) {
 }
 
 LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                       const idx_t parameter_idx,
-                                       optional_ptr<BindLambdaContext> bind_lambda_context) {
+                                       const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
 	// The first parameter is always the lambda
 	auto child_idx = parameter_idx + 1;
 	if (child_idx >= function_child_types.size()) {

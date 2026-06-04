@@ -2525,9 +2525,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 				case_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, opt_expr->Copy(),
 				                                                       std::move(case_check.when_expr));
 			} else {
-				case_check.when_expr = make_uniq<ComparisonExpression>(
-				    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(case_expr_name),
-				    std::move(case_check.when_expr));
+				case_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                       make_uniq<ColumnRefExpression>(case_expr_name),
+				                                                       std::move(case_check.when_expr));
 			}
 		}
 		if (case_body_has_subquery) {

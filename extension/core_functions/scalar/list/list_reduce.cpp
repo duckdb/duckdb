@@ -164,8 +164,8 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 		auto &initial_vector = info.column_infos[0].vector.get();
 		ReferenceAccumulator(execute_info, input_chunk.data[vec_offset++], initial_vector, reduced_row_idx, true);
 	} else {
-		ReferenceAccumulator(execute_info, input_chunk.data[vec_offset++], *execute_info.left_slice,
-		                     reduced_row_idx, loops == 0);
+		ReferenceAccumulator(execute_info, input_chunk.data[vec_offset++], *execute_info.left_slice, reduced_row_idx,
+		                     loops == 0);
 	}
 	input_chunk.data[vec_offset++].Reference(right_slice);
 
