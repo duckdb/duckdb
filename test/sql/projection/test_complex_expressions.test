@@ -58,9 +58,13 @@ SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 END FROM exprtest
 NULL
 NULL
 
+# Use a sequence instead of random() so the volatile subject test is deterministic.
+statement ok
+CREATE SEQUENCE simple_case_subject_seq START 1
+
 query I
 SELECT count(*) FROM (
-	SELECT CASE cast(floor(random() * 3) AS integer)
+	SELECT CASE nextval('simple_case_subject_seq') % 3
 		WHEN 0 THEN 'zero'
 		WHEN 1 THEN 'one'
 		WHEN 2 THEN 'two'
@@ -71,9 +75,12 @@ SELECT count(*) FROM (
 ----
 0
 
+statement ok
+CREATE SEQUENCE simple_case_filter_seq START 1
+
 query I
 SELECT count(*) FROM range(10000) tbl(i)
-WHERE i % 2 = 0 AND CASE cast(floor(random() * 3) AS integer)
+WHERE i % 2 = 0 AND CASE nextval('simple_case_filter_seq') % 3
 	WHEN 0 THEN 'zero'
 	WHEN 1 THEN 'one'
 	WHEN 2 THEN 'two'

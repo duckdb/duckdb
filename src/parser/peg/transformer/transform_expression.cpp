@@ -2514,6 +2514,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 			}
 		}
 		if (case_body_has_subquery) {
+			// Lambda expressions currently reject subqueries. Keep the legacy searched CASE rewrite
+			// for these cases instead of turning existing valid simple CASE expressions into errors.
 			return std::move(result);
 		}
 
