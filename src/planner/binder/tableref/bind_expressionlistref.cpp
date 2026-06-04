@@ -56,12 +56,16 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		// we have to figure out the result types for those columns
 		// for each column, we iterate over all of the expressions and select the max logical type
 		// we initialize all types to SQLNULL
+		vector<uint8_t> should_infer(expr.values[0].size(), true);
 		if (result.types.empty()) {
 			result.types.resize(expr.values[0].size(), LogicalType::SQLNULL);
 		} else {
-			for (auto &type : result.types) {
+			for (idx_t i = 0; i < result.types.size(); i++) {
+				auto &type = result.types[i];
 				if (!type.IsValid()) {
 					type = LogicalType::SQLNULL;
+				} else {
+					should_infer[i] = false;
 				}
 			}
 		}
@@ -69,6 +73,9 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		for (idx_t list_idx = 0; list_idx < values.size(); list_idx++) {
 			auto &list = values[list_idx];
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
+				if (!should_infer[val_idx]) {
+					continue;
+				}
 				auto &current_type = result.types[val_idx];
 				auto next_type = ExpressionBinder::GetExpressionReturnType(*list[val_idx]);
 				result.types[val_idx] = LogicalType::MaxLogicalType(context, current_type, next_type);
@@ -81,6 +88,9 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		for (idx_t list_idx = 0; list_idx < values.size(); list_idx++) {
 			auto &list = values[list_idx];
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
+				if (!should_infer[val_idx]) {
+					continue;
+				}
 				list[val_idx] =
 				    BoundCastExpression::AddCastToType(context, std::move(list[val_idx]), result.types[val_idx]);
 			}
