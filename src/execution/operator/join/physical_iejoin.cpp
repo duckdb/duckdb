@@ -1668,7 +1668,7 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 
 	//	Merge lsel and unmatched LHS rids into (the unused) rsel, tracking the matches
 	bool found_match[STANDARD_VECTOR_SIZE];
-	const idx_t result_count = FindSimpleMatches(context, found_match);
+	FindSimpleMatches(context, found_match);
 
 	//	Read the lhs rows
 	left_table.Repin(*left_iterator);
