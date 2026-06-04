@@ -419,7 +419,6 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		//	then just delay more rows, return nothing
 		//	and ask for more data.
 		delayed.Append(input);
-		output.SetChildCardinality(0);
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,

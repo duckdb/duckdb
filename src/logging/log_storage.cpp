@@ -141,7 +141,6 @@ void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.data.size(); i++) {
 		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
 	}
-	cast_buffer.SetChildCardinality(count);
 }
 
 void CSVLogStorage::ResetAllBuffers() {
