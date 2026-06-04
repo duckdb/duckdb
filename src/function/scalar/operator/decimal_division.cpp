@@ -46,7 +46,7 @@ static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &r
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<DecimalDivBindData>();
 
 	bool scale_divisor = bind_data.scale_exp < 0;
-	uint8_t abs_exp = UnsafeNumericCast<uint8_t>(scale_divisor ? -bind_data.scale_exp : bind_data.scale_exp);
+	uint8_t abs_exp = UnsafeNumericCast<uint8_t>(AbsValue(bind_data.scale_exp));
 
 	COMPUTE_TYPE scale_factor;
 	if constexpr (std::is_same_v<COMPUTE_TYPE, int64_t>) {
