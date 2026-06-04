@@ -7,9 +7,12 @@
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -2458,19 +2461,31 @@ bool PEGTransformerFactory::TransformCastOrTryCast(PEGTransformer &transformer, 
 	return StringUtil::Lower(choice_pr.GetResult().Cast<KeywordParseResult>().keyword) == "try_cast";
 }
 
+static string SimpleCaseParameterName() {
+	const char internal_name[] = "\0__duckdb_simple_case_subject";
+	return string(internal_name, sizeof(internal_name) - 1);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CaseExpression>();
 	unique_ptr<ParsedExpression> opt_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
-	result->CaseExprMutable() = std::move(opt_expr);
+	auto has_case_expr = opt_expr != nullptr;
+	auto case_expr_name = SimpleCaseParameterName();
 
 	auto cases_pr = list_pr.Child<RepeatParseResult>(2).GetChildren();
 	for (auto &case_pr : cases_pr) {
 		auto case_expr = transformer.Transform<CaseCheck>(case_pr);
 		CaseCheck new_case;
-		new_case.when_expr = std::move(case_expr.when_expr);
+		if (has_case_expr) {
+			new_case.when_expr = make_uniq<ComparisonExpression>(
+			    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(case_expr_name),
+			    std::move(case_expr.when_expr));
+		} else {
+			new_case.when_expr = std::move(case_expr.when_expr);
+		}
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
@@ -2479,6 +2494,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		result->ElseMutable() = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
 	} else {
 		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	}
+	if (has_case_expr) {
+		vector<string> parameters;
+		parameters.push_back(std::move(case_expr_name));
+
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(make_uniq<LambdaExpression>(std::move(parameters), std::move(result)));
+		arguments.push_back(std::move(opt_expr));
+		return make_uniq<FunctionExpression>("invoke", std::move(arguments));
 	}
 	return std::move(result);
 }
