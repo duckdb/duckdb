@@ -157,8 +157,3 @@ statement error
 COPY (FROM bigdata) TO '{TEST_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', USE_TMP_FILE TRUE);
 ----
 Not implemented Error
-
-statement error
-COPY (FROM bigdata) TO '{TEST_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
-----
-Not implemented Error

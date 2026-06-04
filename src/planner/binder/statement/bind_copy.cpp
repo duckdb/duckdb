@@ -103,23 +103,7 @@ static idx_t ParseBytesArg(const string &name, Value &arg) {
 	return arg.GetValue<idx_t>();
 }
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
-	if (function.plan) {
-		// plan rewrite COPY TO
-		return function.plan(*this, stmt);
-	}
-
-	auto &copy_info = *stmt.info;
-	// bind the select statement
-	// preserve SQLNULL types from table functions (e.g. JSON reader null columns)
-	// so file writers that support it can emit the correct null type (e.g. parquet UNKNOWN/NullType)
-	auto node_copy = copy_info.select_statement->Copy();
-	auto select_node = Bind(*node_copy);
-
-	if (!function.copy_to_bind) {
-		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
-	}
-
+struct CopyToBindOptions {
 	bool use_tmp_file = true;
 	CopyOverwriteMode overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
 	FilenamePattern filename_pattern;
@@ -139,6 +123,78 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
+	bool Rotate() const {
+		return file_size_bytes.IsValid() || batches_per_file.IsValid();
+	}
+
+	bool Partitioned() const {
+		return !partition_cols.empty();
+	}
+};
+
+static void ValidateCopyToOptionCombinations(const CopyToBindOptions &options, const CopyFunction &function,
+                                             const string &format) {
+	if (options.overwrite_mode == CopyOverwriteMode::COPY_APPEND && !options.filename_pattern.HasUUID()) {
+		throw BinderException("APPEND mode requires a {uuid} label in filename_pattern");
+	}
+	if (options.user_set_use_tmp_file && options.per_thread_output) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
+	}
+	if (options.user_set_use_tmp_file && options.Rotate()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
+	}
+	if (options.user_set_use_tmp_file && options.Partitioned()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+	}
+	if (options.per_thread_output && options.Partitioned()) {
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+	}
+	if (options.Rotate() && (!function.prepare_batch || !function.flush_batch)) {
+		throw NotImplementedException("Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) with FORMAT %s",
+		                              function.name);
+	}
+	if (!options.write_empty_file) {
+		if (options.per_thread_output) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
+		}
+		if (options.Partitioned()) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+		}
+	}
+	if (options.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
+	    !function.copy_to_get_written_statistics) {
+		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", format);
+	}
+	if (!options.order_columns.empty() && !options.Partitioned()) {
+		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
+	}
+}
+
+static void ValidateCopyToOutputColumns(const CopyToBindOptions &options, idx_t column_count) {
+	if (!options.write_partition_columns && options.partition_cols.size() == column_count) {
+		throw NotImplementedException("No column to write as all columns are specified as partition columns. "
+		                              "WRITE_PARTITION_COLUMNS option can be used to write partition columns.");
+	}
+}
+
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
+	if (function.plan) {
+		// plan rewrite COPY TO
+		return function.plan(*this, stmt);
+	}
+
+	auto &copy_info = *stmt.info;
+	// bind the select statement
+	// preserve SQLNULL types from table functions (e.g. JSON reader null columns)
+	// so file writers that support it can emit the correct null type (e.g. parquet UNKNOWN/NullType)
+	auto node_copy = copy_info.select_statement->Copy();
+	auto select_node = Bind(*node_copy);
+
+	if (!function.copy_to_bind) {
+		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
+	}
+
+	CopyToBindOptions options;
 	CopyFunctionBindInput bind_input(*stmt.info, function.function_info);
 
 	bind_input.file_extension = function.extension;
@@ -148,51 +204,51 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file = GetBooleanArg(context, option.second);
-			user_set_use_tmp_file = true;
+			options.use_tmp_file = GetBooleanArg(context, option.second);
+			options.user_set_use_tmp_file = true;
 		} else if (loption == "overwrite_or_ignore" || loption == "overwrite" || loption == "append") {
-			if (seen_overwrite_mode) {
+			if (options.seen_overwrite_mode) {
 				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE, OVERWRITE or APPEND");
 			}
-			seen_overwrite_mode = true;
+			options.seen_overwrite_mode = true;
 
 			auto boolean = GetBooleanArg(context, option.second);
 			if (boolean) {
 				if (loption == "overwrite_or_ignore") {
-					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+					options.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
 				} else if (loption == "overwrite") {
-					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+					options.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
 				} else if (loption == "append") {
-					if (!seen_filepattern) {
-						filename_pattern.SetFilenamePattern("{uuid}");
+					if (!options.seen_filepattern) {
+						options.filename_pattern.SetFilenamePattern("{uuid}");
 					}
-					overwrite_mode = CopyOverwriteMode::COPY_APPEND;
+					options.overwrite_mode = CopyOverwriteMode::COPY_APPEND;
 				}
 			}
 		} else if (loption == "filename_pattern") {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
-			filename_pattern.SetFilenamePattern(
+			options.filename_pattern.SetFilenamePattern(
 			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
-			seen_filepattern = true;
+			options.seen_filepattern = true;
 		} else if (loption == "file_extension") {
 			if (option.second.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
 			}
 			bind_input.file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		} else if (loption == "per_thread_output") {
-			per_thread_output = GetBooleanArg(context, option.second);
+			options.per_thread_output = GetBooleanArg(context, option.second);
 		} else if (loption == "batch_size" || loption == "row_group_size") {
 			if (option.second.empty()) {
 				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE cannot be empty");
 			}
-			batch_size = option.second[0].GetValue<uint64_t>();
+			options.batch_size = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "batch_size_bytes" || loption == "row_group_size_bytes") {
 			if (option.second.empty()) {
 				throw BinderException("BATCH_SIZE_BYTES/ROW_GROUP_SIZE_BYTES cannot be empty");
 			}
-			batch_size_bytes = ParseBytesArg(loption, option.second[0]);
+			options.batch_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "file_size_bytes") {
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
@@ -200,74 +256,54 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (!function.file_size_bytes) {
 				throw BinderException("FILE_SIZE_BYTES not implemented for %s", function.name);
 			}
-			file_size_bytes = ParseBytesArg(loption, option.second[0]);
+			options.file_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
 			if (option.second.empty()) {
 				throw BinderException("BATCHES_PER_FILE/ROW_GROUPS_PER_FILE cannot be empty");
 			}
-			batches_per_file = option.second[0].GetValue<uint64_t>();
+			options.batches_per_file = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
-			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
+			options.partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else if (loption == "order_by") {
-			order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
+			options.order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
-				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
+				options.return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else if (loption == "preserve_order") {
 			if (GetBooleanArg(context, option.second)) {
-				preserve_order = PreserveOrderType::PRESERVE_ORDER;
+				options.preserve_order = PreserveOrderType::PRESERVE_ORDER;
 			} else {
-				preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
+				options.preserve_order = PreserveOrderType::DONT_PRESERVE_ORDER;
 			}
 		} else if (loption == "return_stats") {
 			if (GetBooleanArg(context, option.second)) {
-				return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+				options.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
 			}
 		} else if (loption == "write_partition_columns") {
-			write_partition_columns = GetBooleanArg(context, option.second);
+			options.write_partition_columns = GetBooleanArg(context, option.second);
 		} else if (loption == "write_empty_file") {
-			write_empty_file = GetBooleanArg(context, option.second);
+			options.write_empty_file = GetBooleanArg(context, option.second);
 		} else if (loption == "hive_file_pattern") {
-			hive_file_pattern = GetBooleanArg(context, option.second);
+			options.hive_file_pattern = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
 	}
-	if (overwrite_mode == CopyOverwriteMode::COPY_APPEND && !filename_pattern.HasUUID()) {
-		throw BinderException("APPEND mode requires a {uuid} label in filename_pattern");
-	}
-	if (user_set_use_tmp_file && per_thread_output) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
-	}
-	if (user_set_use_tmp_file && (file_size_bytes.IsValid() || batches_per_file.IsValid())) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES/BATCHES_PER_FILE for COPY");
-	}
-	if (user_set_use_tmp_file && !partition_cols.empty()) {
-		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
-	}
-	if (per_thread_output && !partition_cols.empty()) {
-		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
-	}
-	if ((file_size_bytes.IsValid() || batches_per_file.IsValid()) && !partition_cols.empty()) {
-		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
-	}
-	if (!write_partition_columns) {
-		if (partition_cols.size() == select_node.names.size()) {
-			throw NotImplementedException("No column to write as all columns are specified as partition columns. "
-			                              "WRITE_PARTITION_COLUMNS option can be used to write partition columns.");
-		}
-	}
+
+	ValidateCopyToOptionCombinations(options, function, stmt.info->format);
+
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {
-		use_tmp_file = false;
+		options.use_tmp_file = false;
 	} else {
 		auto &fs = FileSystem::GetFileSystem(context);
 		bool is_file_and_exists = fs.FileExists(stmt.info->file_path);
 		bool is_stdout = stmt.info->file_path == "/dev/stdout";
-		if (!user_set_use_tmp_file) {
-			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
+		if (!options.user_set_use_tmp_file) {
+			options.use_tmp_file =
+			    is_file_and_exists && !options.per_thread_output && !options.Partitioned() && !is_stdout;
 		}
 	}
 
@@ -308,64 +344,37 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 
+	ValidateCopyToOutputColumns(options, select_node.names.size());
+
 	auto names_to_write =
-	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
+	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, options.partition_cols,
+	                                                 options.write_partition_columns);
 	auto types_to_write =
-	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
+	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, options.partition_cols,
+	                                                 options.write_partition_columns);
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
-
-	const auto rotate = file_size_bytes.IsValid() || batches_per_file.IsValid();
-	if (rotate) {
-		if (user_set_use_tmp_file) {
-			throw NotImplementedException(
-			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
-		}
-		if (!partition_cols.empty()) {
-			throw NotImplementedException(
-			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
-		}
-		if (!function.prepare_batch || !function.flush_batch) {
-			throw NotImplementedException(
-			    "Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY with FORMAT %s", function.name);
-		}
-	}
-	if (!write_empty_file) {
-		if (per_thread_output) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
-		}
-		if (!partition_cols.empty()) {
-			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
-		}
-	}
-	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS && !function.copy_to_get_written_statistics) {
-		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
-	}
-
-	if (!order_columns.empty() && partition_cols.empty()) {
-		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
-	}
 
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
-	copy->use_tmp_file = use_tmp_file;
-	copy->overwrite_mode = overwrite_mode;
-	copy->filename_pattern = filename_pattern;
+	copy->use_tmp_file = options.use_tmp_file;
+	copy->overwrite_mode = options.overwrite_mode;
+	copy->filename_pattern = options.filename_pattern;
 	copy->file_extension = bind_input.file_extension;
-	copy->per_thread_output = per_thread_output;
-	copy->batch_size = batch_size;
-	copy->batch_size_bytes = batch_size_bytes;
-	copy->batches_per_file = batches_per_file;
-	copy->file_size_bytes = file_size_bytes;
-	copy->rotate = rotate;
-	copy->partition_output = !partition_cols.empty();
-	copy->write_partition_columns = write_partition_columns;
-	copy->partition_columns = std::move(partition_cols);
-	copy->write_empty_file = write_empty_file;
-	copy->return_type = return_type;
-	copy->preserve_order = preserve_order;
-	copy->hive_file_pattern = hive_file_pattern;
-	copy->order_columns = std::move(order_columns);
+	copy->per_thread_output = options.per_thread_output;
+	copy->batch_size = options.batch_size;
+	copy->batch_size_bytes = options.batch_size_bytes;
+	copy->batches_per_file = options.batches_per_file;
+	copy->file_size_bytes = options.file_size_bytes;
+	copy->rotate = options.Rotate();
+	copy->partition_output = options.Partitioned();
+	copy->write_partition_columns = options.write_partition_columns;
+	copy->partition_columns = std::move(options.partition_cols);
+	copy->write_empty_file = options.write_empty_file;
+	copy->return_type = options.return_type;
+	copy->preserve_order = options.preserve_order;
+	copy->hive_file_pattern = options.hive_file_pattern;
+	copy->order_columns = std::move(options.order_columns);
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
