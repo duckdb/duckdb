@@ -1140,6 +1140,9 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     allow_retry = True
     peak_rss_bytes = 0
+    child_env = os.environ.copy()
+    # Omit printing "FAILURES SUMMARY" block at the end of each unittest process.
+    child_env["SUMMARIZE_FAILURES"] = "0"
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
     # is still open here, so keep it after close and unlink it ourselves.
@@ -1158,6 +1161,7 @@ def run_batch(config: TestRunnerConfig, batch):
             errors="backslashreplace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=child_env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
 
