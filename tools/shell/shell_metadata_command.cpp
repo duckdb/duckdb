@@ -284,6 +284,38 @@ MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult PrintHistory(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// query the history through the shell_history() table function
+	auto result = state.conn->Query("SELECT id, sql FROM shell_history()");
+	if (result->HasError()) {
+		state.PrintF(PrintOutput::STDERR, "%s: %s\n", state.program_name, result->GetError().c_str());
+		return MetadataResult::FAIL;
+	}
+	idx_t row_count = result->RowCount();
+	idx_t start = 0;
+	if (args.size() == 2) {
+		// .history N - only show the last N entries
+		auto limit = static_cast<idx_t>(ShellState::StringToInt(args[1]));
+		if (limit < row_count) {
+			start = row_count - limit;
+		}
+	}
+	for (idx_t row = start; row < row_count; row++) {
+		auto id = result->GetValue(0, row).GetValue<int64_t>();
+		auto sql = result->GetValue(1, row).GetValue<string>();
+		state.HighlightSQL(sql);
+		// prefix each entry with its index - align any continuation lines (from multi-line
+		// statements) underneath the SQL by padding them with spaces to the prefix width
+		string prefix = StringUtil::Format("%5lld  ", static_cast<long long>(id));
+		sql = StringUtil::Replace(sql, "\n", "\n" + string(prefix.size(), ' '));
+		state.PrintF("%s%s\n", prefix.c_str(), sql.c_str());
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	if (state.safe_mode) {
 		state.PrintF(PrintOutput::STDERR, ".log cannot be used in -safe mode\n");
@@ -872,6 +904,8 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight_mode", 2, ToggleHighlightMode, "mixed|dark|light", "Toggle the highlight mode to dark or light mode", 0,
      ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
+    {"history", 0, PrintHistory, "?N?", "Show the command history with syntax highlighting", 0,
+     "If N is given, only the last N entries are shown.\nUse the shell_history() table function to query the history."},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
      "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "
      "(read_json)\n\t--parquet\tImport data from Parquet (read_parquet)\n\t--[parameter] [value]\tProvides a parameter "

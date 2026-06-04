@@ -22,6 +22,12 @@
         "test/sql/storage/rowid_gaps/bulk_append_after_gap_checkpoint.test",
         "test/sql/storage/rowid_gaps/indexed_no_merge_across_gap.test"
       ]
+    },
+    {
+      "reason": "Test expects an out-of-memory error from a specific persistent index loading pattern.",
+      "paths": [
+        "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
+      ]
     }
   ]
 }

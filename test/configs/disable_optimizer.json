@@ -6,7 +6,8 @@
     {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
-        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/optimizer/statistics/statistics_filter_pruning.test"
       ]
     },
     {

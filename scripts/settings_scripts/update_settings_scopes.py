@@ -1,4 +1,10 @@
-from .config import SettingsList, VALID_SCOPE_VALUES, find_start_end_indexes, write_content_to_file
+from .config import (
+    SettingsList,
+    VALID_SCOPE_VALUES,
+    find_start_end_indexes,
+    write_content_to_file,
+    strip_conflict_markers,
+)
 
 # markers
 START_MARKER = r'static const ConfigurationOption internal_options\[\] = \{\n'
@@ -8,7 +14,7 @@ END_MARKER = r',\s*FINAL_ALIAS};'
 # generate the scope code for the ConfigurationOption array and insert into the config file
 def generate_scope_code(file):
     with open(file, 'r') as source_file:
-        source_code = source_file.read()
+        source_code = strip_conflict_markers(source_file.read())
 
     # find the start and end indexes of the settings' scope array
     start_index, end_index = find_start_end_indexes(source_code, START_MARKER, END_MARKER, file)

@@ -147,6 +147,9 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
+	lfun.GetSignature().GetParameter(0).SetName("list");
+	lfun.GetSignature().GetParameter(1).SetName("index");
+
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 	lfun.SetFallible();
 	sfun.SetFallible();
@@ -161,6 +164,9 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
+
+	lfun.GetSignature().GetParameter(0).SetName("array");
+	lfun.GetSignature().GetParameter(1).SetName("index");
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 
