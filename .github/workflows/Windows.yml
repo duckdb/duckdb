@@ -334,7 +334,7 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
-         run: make unittest_release SKIP_BUILD=1
+         run: python test/run.py
 
  win-packaged-upload:
    runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
