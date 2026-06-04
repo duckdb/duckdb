@@ -491,7 +491,7 @@ jobs:
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
         DISABLE_SANITIZER: 1
-        SMOKE_UNITTEST: build/release/test/unittest
+        SMOKE_RUNNER: build/release/test/run
       with:
         build: python3 scripts/ci/retry.py -- make release
         test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
