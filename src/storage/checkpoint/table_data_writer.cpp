@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -69,6 +70,10 @@ SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
 	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, *this,
 	                                           table_data_writer);
+}
+
+unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(IndexSerializationInfo &info) {
+	return make_uniq<SingleFileIndexWriter>(checkpoint_manager.partial_block_manager, info);
 }
 
 CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
@@ -181,32 +186,19 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	// prior: ser version 3
-	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
-	    StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
-	IndexSerializationInfo serialization_info;
-	if (!v1_0_0_storage) {
-		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
-	}
-	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
-	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos.ordered_infos) {
-			for (auto &allocator : entry.get().allocator_infos) {
-				for (auto &block : allocator.block_pointers) {
-					checkpoint_manager.verify_block_usage_count[block.block_id]++;
-				}
-			}
-		}
-	}
+	// auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
-	// write empty block pointers for forwards compatibility
-	vector<BlockPointer> compat_block_pointers;
-	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(
-	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
-	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
+	// if (debug_verify_blocks) {
+	// 	for (auto &entry : index_storage_infos.ordered_infos) {
+	// 		for (auto &allocator : entry.get().allocator_infos) {
+	// 			for (auto &block : allocator.block_pointers) {
+	// 				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 } // namespace duckdb

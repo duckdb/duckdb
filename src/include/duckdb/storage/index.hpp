@@ -19,6 +19,7 @@ namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
+class TableIndexWriter;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -56,6 +57,9 @@ public:
 
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
+
+	//!
+	virtual void Checkpoint(TableIndexWriter &writer);
 
 	//! Returns unique flag
 	bool IsUnique() const {

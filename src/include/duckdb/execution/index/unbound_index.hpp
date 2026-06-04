@@ -13,6 +13,7 @@
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
+
 namespace duckdb {
 
 class ColumnDataCollection;
@@ -106,6 +107,7 @@ public:
 	const string &GetTableName() const {
 		return GetCreateInfo().table;
 	}
+	void Checkpoint(TableIndexWriter &writer) override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into

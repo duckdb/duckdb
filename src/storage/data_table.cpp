@@ -37,6 +37,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
+#include <duckdb/storage/checkpoint/table_index_writer.hpp>
+
 namespace duckdb {
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
@@ -1835,6 +1837,16 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		RebuildIndexes();
 		timer.EndTimer();
 	}
+	// checkpoint all indexes
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
+	StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
+	IndexSerializationInfo serialization_info;
+	if (!v1_0_0_storage) {
+		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
+	}
+	serialization_info.checkpoint_id = writer.GetCheckpointOptions().transaction_id;
+	const auto index_writer = writer.GetTableIndexWriter(serialization_info);
+	info->GetIndexes().CheckPoint(*index_writer);
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats
@@ -1842,6 +1854,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
+	// todo: this is a bit scary, we should look for a structure where this ordering is less hard to mess up.
+	TableIndexList::Serialize(index_writer->GetResult(), serializer);
 	row_groups->SetStats(global_stats);
 }
 

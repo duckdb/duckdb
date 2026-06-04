@@ -167,6 +167,8 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	//! Need to have a separate partial block manager for indexes due to different block shapes.
+	PartialBlockManager index_partial_block_manager;
 	//! Checkpoint type
 	CheckpointOptions options;
 	//! Block usage count for verification purposes

@@ -21,7 +21,7 @@ class MetadataWriter;
 struct PartialBlockForIndex : public PartialBlock {
 public:
 	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
-	                     const shared_ptr<BlockHandle> &block_handle);
+	                     BufferHandle buffer_handle);
 	~PartialBlockForIndex() override {};
 
 public:
@@ -77,6 +77,9 @@ private:
 	//! Serializes a buffer, if dirty or not on disk.
 	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
 	               const idx_t bitmask_offset);
+	//!
+	unique_ptr<FixedSizeBuffer> Checkpoint(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
+		       const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
@@ -84,6 +87,7 @@ private:
 	uint32_t GetOffset(const idx_t bitmask_count, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
+	idx_t GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
 private:
 	//! Block manager of the database instance

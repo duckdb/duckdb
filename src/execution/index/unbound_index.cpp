@@ -6,6 +6,8 @@
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
+#include <duckdb/storage/checkpoint/table_index_writer.hpp>
+
 namespace duckdb {
 
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
@@ -32,6 +34,10 @@ void UnboundIndex::ResetStorage() {
 			}
 		}
 	}
+}
+
+void UnboundIndex::Checkpoint(TableIndexWriter &writer) {
+	writer.AddUnboundIndex(GetStorageInfo());
 }
 
 void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,

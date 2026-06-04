@@ -304,6 +304,24 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 	}
 }
 
+unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Checkpoint(PartialBlockManager &partial_block_manager) {
+	auto result = make_unsafe_uniq<FixedSizeAllocator>(segment_size, block_manager, memory_tag);
+
+	result->total_segment_count = total_segment_count;
+	result->available_segments_per_buffer = available_segments_per_buffer;
+	result->bitmask_offset = bitmask_offset;
+	result->buffer_with_free_space = buffer_with_free_space;
+
+	for (auto &entry : buffers) {
+		auto buffer_id = entry.first;
+		auto &buffer = *entry.second;
+
+		result->buffers[buffer_id] = buffer.Checkpoint(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+	}
+
+	return result;
+}
+
 vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	vector<IndexBufferInfo> buffer_infos;
 	for (auto &buffer : buffers) {

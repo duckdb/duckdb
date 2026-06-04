@@ -20,6 +20,7 @@ struct IndexStorageInfo;
 struct DataTableInfo;
 template <class T>
 class TableIndexIterationHelper;
+class TableIndexWriter;
 
 //! IndexBindState to transition index binding phases preventing lock order inversion.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
@@ -109,7 +110,10 @@ public:
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
+	void CheckPoint(TableIndexWriter &writer);
+
 public:
+	static void Serialize(IndexSerializationResult &result, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

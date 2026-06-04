@@ -29,6 +29,9 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
+#include <duckdb/storage/checkpoint/table_index_writer.hpp>
+#include <duckdb/storage/table/table_index_list.hpp>
+
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
@@ -1060,6 +1063,45 @@ IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensiti
 	}
 
 	return info;
+}
+
+void ART::Checkpoint(TableIndexWriter &writer) {
+	lock_guard<mutex> guard(lock);
+
+	auto &info = writer.GetInfo();
+	auto &partial_block_manager = writer.GetPartialBlockManager();
+
+	IndexStorageInfo storage_info(name);
+	storage_info.root = tree.Get();
+	storage_info.options = info.options;
+
+	// It never hurts to serialize the storage version, even to older formats
+	if (storage_version != StorageVersion::INVALID) {
+		storage_info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
+	}
+
+	// todo: possibly wrap this in a method for the writer
+	// auto v1_0_0_option = options.find("v1_0_0_storage");
+	// bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	// auto info = PrepareSerialize(options, v1_0_0_storage);
+	// auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+
+	auto new_allocators =
+		make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>();
+
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+		(*new_allocators)[i] = (*allocators)[i]->Checkpoint(partial_block_manager);
+	}
+
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+		storage_info.allocator_infos.push_back((*new_allocators)[i]->GetInfo());
+	}
+
+	auto new_art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db, new_allocators);
+	new_art->tree = tree;
+	new_art->storage_version = storage_version;
+
+	writer.AddBoundIndex(std::move(storage_info), std::move(new_art));
 }
 
 IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {

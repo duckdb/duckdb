@@ -1,17 +1,17 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -343,6 +343,25 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 	return result;
 }
 
+void TableIndexList::CheckPoint(TableIndexWriter &writer) {
+	lock_guard<mutex> lock(index_entries_lock);
+
+	for (const auto &entry : index_entries) {
+		entry->index->Checkpoint(writer);
+	}
+
+	const auto it = writer.GetBoundIndexes();
+	for (const auto &entry : index_entries) {
+		lock_guard<mutex> guard(entry->lock);
+
+		if (!entry->index->IsBound()) {
+			continue;
+		}
+
+		entry->index = std::move(*std::next(it));
+	}
+}
+
 void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
@@ -383,6 +402,15 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 		}
 		entry->last_written_checkpoint = checkpoint_id;
 	}
+}
+
+void TableIndexList::Serialize(IndexSerializationResult &result, Serializer &serializer) {
+	// write empty block pointers for forwards compatibility
+	const vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+	serializer.WriteList(
+		104, "index_storage_infos", result.ordered_infos.size(),
+		[&](Serializer::List &list, idx_t i) { list.WriteElement(result.ordered_infos[i].get()); });
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

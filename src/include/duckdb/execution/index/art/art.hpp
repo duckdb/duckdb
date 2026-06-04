@@ -134,6 +134,9 @@ public:
 
 	//! Serializes ART memory to disk and returns the ART storage information.
 	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+	//!
+	void Checkpoint(TableIndexWriter &writer) override;
+
 	//! Serializes ART memory to the WAL and returns the ART storage information.
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 
