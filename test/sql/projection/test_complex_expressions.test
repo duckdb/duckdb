@@ -125,6 +125,17 @@ FROM (SELECT 1 i, 42 __duckdb_simple_case_subject) tbl
 ----
 42
 
+statement ok
+CREATE VIEW simple_case_storage_compat_view AS
+SELECT CASE i WHEN 1 THEN 'one' ELSE 'other' END AS label
+FROM (VALUES (1), (2)) tbl(i)
+
+query T rowsort
+SELECT label FROM simple_case_storage_compat_view
+----
+one
+other
+
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)

@@ -6,8 +6,82 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool IsLambdaParameterReference(const ParsedExpression &expr, const string &parameter_name) {
+	if (expr.GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		return false;
+	}
+	auto &column_ref = expr.Cast<ColumnRefExpression>();
+	return !column_ref.IsQualified() && StringUtil::CIEquals(column_ref.GetColumnName(), parameter_name);
+}
+
+bool GetSingleLambdaParameterName(const LambdaExpression &lambda_expr, string &parameter_name) {
+	string error;
+	auto parameters = lambda_expr.ExtractColumnRefExpressions(error);
+	if (!error.empty() || parameters.size() != 1) {
+		return false;
+	}
+	auto &parameter_ref = parameters[0].get().Cast<ColumnRefExpression>();
+	if (parameter_ref.IsQualified()) {
+		return false;
+	}
+	parameter_name = parameter_ref.GetColumnName();
+	return true;
+}
+
+unique_ptr<ParsedExpression> TryGetLegacySimpleCaseExpression(const FunctionExpression &expr) {
+	if (expr.FunctionName() != "invoke" || expr.GetArguments().size() != 2) {
+		return nullptr;
+	}
+	auto &lambda_arg = expr.GetArguments()[0].GetExpression();
+	if (lambda_arg.GetExpressionClass() != ExpressionClass::LAMBDA) {
+		return nullptr;
+	}
+
+	auto &lambda_expr = lambda_arg.Cast<LambdaExpression>();
+	string parameter_name;
+	if (!GetSingleLambdaParameterName(lambda_expr, parameter_name)) {
+		return nullptr;
+	}
+	if (!StringUtil::StartsWith(parameter_name, "__duckdb_simple_case_subject")) {
+		return nullptr;
+	}
+	if (lambda_expr.Right().GetExpressionClass() != ExpressionClass::CASE) {
+		return nullptr;
+	}
+
+	auto &case_expr = lambda_expr.Right().Cast<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
+	auto &subject_expr = expr.GetArguments()[1].GetExpression();
+	for (auto &case_check : case_expr.CaseChecks()) {
+		if (case_check.when_expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
+			return nullptr;
+		}
+		auto &comparison = case_check.when_expr->Cast<ComparisonExpression>();
+		if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL ||
+		    !IsLambdaParameterReference(comparison.Left(), parameter_name)) {
+			return nullptr;
+		}
+
+		CaseCheck legacy_check;
+		legacy_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, subject_expr.Copy(),
+		                                                         comparison.Right().Copy());
+		legacy_check.then_expr = case_check.then_expr->Copy();
+		result->CaseChecksMutable().push_back(std::move(legacy_check));
+	}
+	result->ElseMutable() = case_expr.Else().Copy();
+	return std::move(result);
+}
+
+} // namespace
 
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
 }
@@ -132,6 +206,16 @@ optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
+		auto legacy_simple_case = TryGetLegacySimpleCaseExpression(*this);
+		if (legacy_simple_case) {
+			legacy_simple_case->SetAlias(GetAlias());
+			legacy_simple_case->SetQueryLocation(GetQueryLocation());
+			legacy_simple_case->Serialize(serializer);
+			return;
+		}
+	}
+
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
 	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
