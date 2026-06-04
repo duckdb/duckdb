@@ -141,7 +141,7 @@ public:
 
 	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
 	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
-	                                                             ColumnBinding binding,
+	                                                             const LogicalType &result_type, ColumnBinding binding,
 	                                                             const Expression &constant_value) const;
 
 	//! Returns the virtual columns for this table

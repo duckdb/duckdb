@@ -95,18 +95,14 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 	}
 }
 
-unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
-                                                              const vector<LogicalType> &source_types) {
-	if (insert.column_index_map.empty()) {
-		throw InternalException("No defaults to push");
-	}
-
+unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert, unique_ptr<LogicalOperator> root,
+                                                           const vector<LogicalType> &source_types) {
 	auto &table = insert.table;
 	auto source_bindings = root->GetColumnBindings();
 	vector<unique_ptr<Expression>> select_list;
 	for (auto &col : table.GetColumns().Physical()) {
 		auto storage_idx = col.StorageOid();
-		auto mapped_index = insert.column_index_map[col.Physical()];
+		auto mapped_index = insert.column_index_map.empty() ? storage_idx : insert.column_index_map[col.Physical()];
 		if (mapped_index == DConstants::INVALID_INDEX) {
 			// Push default value
 			select_list.push_back(std::move(insert.bound_defaults[storage_idx]));
@@ -114,7 +110,7 @@ unique_ptr<LogicalOperator> Binder::ResolveDefaultsProjection(LogicalInsert &ins
 		}
 		auto &original_type = source_types[mapped_index];
 		auto source_binding = source_bindings[mapped_index];
-		select_list.push_back(table.GetDefaultExpressionForColumn(context, original_type, source_binding,
+		select_list.push_back(table.GetDefaultExpressionForColumn(context, original_type, col.Type(), source_binding,
 		                                                          *insert.bound_defaults[storage_idx]));
 	}
 
@@ -645,16 +641,14 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 		auto source_types = root_select.types;
 		auto target_types = insert->expected_types;
-		if (!insert->column_index_map.empty()) {
-			root_select.plan = ResolveDefaultsProjection(*insert, std::move(root_select.plan), source_types);
-			target_types.clear();
-			for (auto &column : table.GetColumns().Physical()) {
-				target_types.push_back(column.Type());
-			}
-			source_types.clear();
-			for (auto &expr : root_select.plan->expressions) {
-				source_types.push_back(expr->GetReturnType());
-			}
+		root_select.plan = ResolveInputProjection(*insert, std::move(root_select.plan), source_types);
+		target_types.clear();
+		for (auto &column : table.GetColumns().Physical()) {
+			target_types.push_back(column.Type());
+		}
+		source_types.clear();
+		for (auto &expr : root_select.plan->expressions) {
+			source_types.push_back(expr->GetReturnType());
 		}
 		root = CastLogicalOperatorToTypes(source_types, target_types, std::move(root_select.plan));
 	} else {

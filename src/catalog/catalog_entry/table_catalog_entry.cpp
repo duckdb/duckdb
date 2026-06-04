@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 #include <sstream>
 
@@ -354,15 +355,18 @@ bool TableCatalogEntry::HasPrimaryKey() const {
 
 LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &column) const {
 	return column.Type();
+	// return LogicalType::INVALID;
 }
 
 unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientContext &context,
                                                                         const LogicalType &input_type,
+                                                                        const LogicalType &result_type,
                                                                         ColumnBinding binding,
                                                                         const Expression &constant_value) const {
 	(void)context;
 	(void)constant_value;
-	return make_uniq<BoundColumnRefExpression>(input_type, binding);
+	return BoundCastExpression::AddCastToType(context, make_uniq<BoundColumnRefExpression>(input_type, binding),
+	                                          result_type);
 }
 
 virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
