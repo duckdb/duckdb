@@ -243,13 +243,11 @@ public:
 		return ra_buffer.GetReadHead(pos);
 	}
 
-	// The coalesced read heads registered for prefetch; each is one I/O unit (see ReadHead::Fetch).
 	std::list<ReadHead> &GetReadHeads() {
 		return ra_buffer.read_heads;
 	}
 
-	// The caching file handle that prefetch reads go through.
-	CachingFileHandle &GetCachingFileHandle() {
+	CachingFileHandle &GetCachingFileHandle() const {
 		return file_handle;
 	}
 
