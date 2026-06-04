@@ -1025,6 +1025,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 		} /* end while */
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
+		error.AddErrorLocation(zSql);
 		PrintDatabaseError(error.Message());
 		return SuccessState::FAILURE;
 	}
