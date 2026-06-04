@@ -205,10 +205,6 @@ bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value,
 }
 
 static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
-	// Parquet VARIANT:
-	// - metadata = BLOB
-	// - value = BLOB
-
 	auto num_values = input.size();
 	auto &metadata_value = input.data[0];
 

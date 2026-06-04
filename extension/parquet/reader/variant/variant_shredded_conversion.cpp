@@ -199,42 +199,42 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 
 	auto &type = typed_value.GetType();
 	switch (type.id()) {
-		//! boolean
+	//! boolean
 	case LogicalTypeId::BOOLEAN: {
 		return ConvertTypedValues<bool, ConvertShreddedValue<bool>, LogicalTypeId::BOOLEAN>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! int8
+	//! int8
 	case LogicalTypeId::TINYINT: {
 		return ConvertTypedValues<int8_t, ConvertShreddedValue<int8_t>, LogicalTypeId::TINYINT>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! int16
+	//! int16
 	case LogicalTypeId::SMALLINT: {
 		return ConvertTypedValues<int16_t, ConvertShreddedValue<int16_t>, LogicalTypeId::SMALLINT>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! int32
+	//! int32
 	case LogicalTypeId::INTEGER: {
 		return ConvertTypedValues<int32_t, ConvertShreddedValue<int32_t>, LogicalTypeId::INTEGER>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! int64
+	//! int64
 	case LogicalTypeId::BIGINT: {
 		return ConvertTypedValues<int64_t, ConvertShreddedValue<int64_t>, LogicalTypeId::BIGINT>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! float
+	//! float
 	case LogicalTypeId::FLOAT: {
 		return ConvertTypedValues<float, ConvertShreddedValue<float>, LogicalTypeId::FLOAT>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! double
+	//! double
 	case LogicalTypeId::DOUBLE: {
 		return ConvertTypedValues<double, ConvertShreddedValue<double>, LogicalTypeId::DOUBLE>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! decimal4/decimal8/decimal16
+	//! decimal4/decimal8/decimal16
 	case LogicalTypeId::DECIMAL: {
 		auto physical_type = type.InternalType();
 		switch (physical_type) {
@@ -260,42 +260,42 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 			                              EnumUtil::ToString(physical_type));
 		}
 	}
-		//! date
+	//! date
 	case LogicalTypeId::DATE: {
 		return ConvertTypedValues<date_t, ConvertShreddedValue<date_t>, LogicalTypeId::DATE>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! time
+	//! time
 	case LogicalTypeId::TIME: {
 		return ConvertTypedValues<dtime_t, ConvertShreddedValue<dtime_t>, LogicalTypeId::TIME>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! timestamptz(6) (timestamptz(9) not implemented in DuckDB)
+	//! timestamptz(6) (timestamptz(9) not implemented in DuckDB)
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		return ConvertTypedValues<timestamp_tz_t, ConvertShreddedValue<timestamp_tz_t>, LogicalTypeId::TIMESTAMP_TZ>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! timestampntz(6)
+	//! timestampntz(6)
 	case LogicalTypeId::TIMESTAMP: {
 		return ConvertTypedValues<timestamp_t, ConvertShreddedValue<timestamp_t>, LogicalTypeId::TIMESTAMP>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! timestampntz(9)
+	//! timestampntz(9)
 	case LogicalTypeId::TIMESTAMP_NS: {
 		return ConvertTypedValues<timestamp_ns_t, ConvertShreddedValue<timestamp_ns_t>, LogicalTypeId::TIMESTAMP_NS>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! binary
+	//! binary
 	case LogicalTypeId::BLOB: {
 		return ConvertTypedValues<string_t, ConvertShreddedValue<string_t>, LogicalTypeId::BLOB>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! string
+	//! string
 	case LogicalTypeId::VARCHAR: {
 		return ConvertTypedValues<string_t, ConvertShreddedValue<string_t>, LogicalTypeId::VARCHAR>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-		//! uuid
+	//! uuid
 	case LogicalTypeId::UUID: {
 		return ConvertTypedValues<hugeint_t, ConvertShreddedValue<hugeint_t>, LogicalTypeId::UUID>(
 		    typed_value, metadata, value, offset, length, total_size);

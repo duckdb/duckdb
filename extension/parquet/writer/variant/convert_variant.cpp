@@ -7,7 +7,6 @@
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "reader/variant/variant_shredded_conversion.hpp"
 
 namespace duckdb {
 
@@ -1006,61 +1005,5 @@ ScalarFunction VariantColumnWriter::GetTransformFunction() {
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return transform;
 }
-
-//! Decode a binary Variant value (the canonical encoding: metadata blob followed by the value blob, concatenated)
-//! into a DuckDB VARIANT. This is the inverse of 'variant_to_parquet_variant' for the common (unshredded) case.
-// static void BytesToVariant(DataChunk &input, ExpressionState &state, Vector &result) {
-// 	auto &blob_vec = input.data[0];
-// 	auto count = input.size();
-//
-// 	UnifiedVectorFormat blob_format;
-// 	blob_vec.ToUnifiedFormat(count, blob_format);
-// 	auto blobs = blob_format.GetData<string_t>(blob_format);
-//
-// 	vector<VariantValue> values;
-// 	values.reserve(count);
-// 	for (idx_t i = 0; i < count; i++) {
-// 		auto idx = blob_format.sel->get_index(i);
-// 		if (!blob_format.validity.RowIsValid(idx)) {
-// 			//! NULL input -> MISSING, which ToVARIANT renders as a NULL output row
-// 			values.emplace_back();
-// 			continue;
-// 		}
-// 		auto &blob = blobs[idx];
-// 		VariantMetadata metadata(blob);
-// 		auto data = const_data_ptr_cast(blob.GetData());
-// 		values.push_back(VariantBinaryDecoder::Decode(metadata, data + metadata.total_size));
-// 	}
-//
-// 	VariantValue::ToVARIANT(values, result);
-//
-// 	if (input.AllConstant()) {
-// 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-// 	}
-// }
-
-// void VariantShreddedConversion::Convert(Vector &metadata_and_value, idx_t offset, idx_t length, idx_t total_size,
-// Vector &result) {
-//     auto res = ConvertBinaryEncoding(metadata_and_value, metadata_and_value, offset, length, total_size, true);
-//     VariantValue::ToVARIANT(res, result);
-// }
-//
-// static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
-//     // Parquet VARIANT:
-//     // - metadata = BLOB
-//     // - value = BLOB
-//
-//     auto num_values = input.size();
-//
-//     auto &metadata_value = input.data[0];
-//
-//     auto intermediate = VariantShreddedConversion::Convert(metadata_value, group, 0, num_values, num_values);
-//     VariantValue::ToVARIANT(intermediate, result);
-// }
-
-// ScalarFunction VariantColumnWriter::GetBytesToVariantFunction() {
-// 	ScalarFunction transform("variant_bytes_to_variant", {LogicalType::BLOB}, LogicalType::VARIANT(),
-// FromParquetVariant); 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING); 	return transform;
-// }
 
 } // namespace duckdb
