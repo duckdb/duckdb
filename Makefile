@@ -33,6 +33,7 @@ EXE_SUFFIX := .exe
 endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
+SMOKE_RUNNER ?= build/relassert/test/run
 UNITTEST_SLOW_FLAGS ?= --batch-size=5 --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
@@ -493,16 +494,16 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 unittest: debug
-	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
+	build/debug/test/run $(T)
 
 unittest_reldebug:
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/$(UNITTEST_BINARY) $(T)
+	build/reldebug/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 ifneq ($(SKIP_BUILD),1)
 unittest_release: release
 endif
 unittest_release:
-	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
+	build/release/test/run $(T)
 
 TEST_CONFIGS := \
 	test/configs/verify_statement_copy.json \
@@ -541,52 +542,52 @@ TEST_CONFIGS := \
 	test/configs/force_storage_mmap.json
 
 test_configs:
-	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
 
 test_vector:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/$(UNITTEST_BINARY)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	./build/release/test/run --test-flags="--verify-vector dictionary_expression --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector dictionary_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector constant_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector sequence_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector nested_shuffle --skip-compiled"
 
 test_table_scan:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/$(UNITTEST_BINARY)
+	./build/release/test/run --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"'
 
 test_storage:
 	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/$(UNITTEST_BINARY)
 
 .PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) '*' $(T)
+	./build/release/test/run --test-flags="--select-tag release" '*' $(T)
 
 test_release_tag:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
+	./build/release/test/run --test-flags="--select-tag release" $(T)
 
 unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(UNITTEST_SLOW_FLAGS) $(T)
+	build/relassert/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
-	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(SMOKE_RUNNER) --batch-timeout 120 --test-list test/smoke_tests.list $(T)
 
 unittestarrow:
-	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) "[arrow]"
+	build/debug/test/run "[arrow]"
 
 allunit:
-	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/$(UNITTEST_BINARY) '*' $(T)
+	./build/release/test/run --workers=50% '*' $(T)
 ifndef CI
 allunit: release
 endif
 
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage --force-reload" "[interquery]" $(T)
 
 .PHONY: unittest_threadsan_extra
 unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan_extra: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage" "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -797,7 +798,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	$(PYTHON) scripts/ci/run_tests.py ./build/release/$(UNITTEST_BINARY) "[sqlitelogic]"
+	./build/release/test/run "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:

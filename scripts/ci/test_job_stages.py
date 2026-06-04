@@ -309,7 +309,7 @@ class JobStagesTest(unittest.TestCase):
             f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
         )
 
-    def test_workflow_unittest_commands_use_run_tests_py(self):
+    def test_workflow_unittest_commands_use_wrapped_runner(self):
         violations: list[str] = []
 
         for workflow_path in self._workflow_paths():
@@ -317,7 +317,7 @@ class JobStagesTest(unittest.TestCase):
             for line_no, command in self._extract_run_commands(workflow_text):
                 if not self._has_direct_unittest_invocation(command):
                     continue
-                if "scripts/ci/run_tests.py" in command:
+                if "scripts/ci/run_tests.py" in command or re.search(r"(?:^|[\s\"'])[\w./-]*/run(?:\.bat)?(?:$|[\s\"'])", command):
                     continue
                 snippet = " ".join(command.strip().split())
                 if len(snippet) > 180:
@@ -326,7 +326,7 @@ class JobStagesTest(unittest.TestCase):
 
         if violations:
             formatted = "\n\n".join(f"- {entry}" for entry in violations)
-            self.fail("workflow `run:` commands using `unittest` must use scripts/ci/run_tests.py:\n\n" + formatted)
+            self.fail("workflow `run:` commands using `unittest` must use scripts/ci/run_tests.py or a generated run wrapper:\n\n" + formatted)
 
 
 if __name__ == "__main__":

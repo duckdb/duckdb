@@ -4,6 +4,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from io import StringIO
 from unittest import mock
 from pathlib import Path
 
@@ -12,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.ci import run_tests
+from scripts.ci import test_runner_wrapper
 
 
 def create_temp_file(content: str, **format_vars: object) -> Path:
@@ -27,6 +29,45 @@ def start_runner(cli_args: list[str]):
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_wrapper_builds_sibling_unittest_argv(self):
+        argv = test_runner_wrapper.build_run_tests_argv(["[slow]", "test/sql/a.test"], "build/release/test/run")
+        self.assertEqual(
+            argv, [str((REPO_ROOT / "build" / "release" / "test" / "unittest").resolve()), "[slow]", "test/sql/a.test"]
+        )
+
+    def test_wrapper_uses_windows_executable_name(self):
+        argv = test_runner_wrapper.build_run_tests_argv([], r"test\run.py", "unittest.exe")
+        self.assertEqual(argv, [str(Path(r"test\run.py").resolve().parent / "unittest.exe")])
+
+    def test_wrapper_errors_when_sibling_binary_is_missing(self):
+        wrapper_dir = Path(tempfile.mkdtemp())
+        try:
+            with mock.patch("scripts.ci.test_runner_wrapper.sys.stderr", new=StringIO()) as stderr:
+                rc = test_runner_wrapper.main([], wrapper_path=wrapper_dir / "run", source_root=REPO_ROOT)
+            self.assertEqual(rc, 1)
+            self.assertIn("expected sibling unittest binary", stderr.getvalue())
+        finally:
+            os.rmdir(wrapper_dir)
+
+    def test_wrapper_invokes_run_tests_from_source_root(self):
+        wrapper_dir = Path(tempfile.mkdtemp())
+        unittest_path = wrapper_dir / "unittest"
+        unittest_path.write_text("", encoding="utf8")
+        original_cwd = Path.cwd()
+        try:
+            with mock.patch("scripts.ci.run_tests.main", return_value=7) as mock_main:
+                rc = test_runner_wrapper.main(
+                    ["--workers", "1", "test/sql/a.test"], wrapper_path=wrapper_dir / "run", source_root=REPO_ROOT
+                )
+            self.assertEqual(rc, 7)
+            self.assertEqual(Path.cwd(), original_cwd)
+            mock_main.assert_called_once_with(
+                ["--workers", "1", "test/sql/a.test"], default_unittest_bin=str(unittest_path.resolve())
+            )
+        finally:
+            unittest_path.unlink(missing_ok=True)
+            os.rmdir(wrapper_dir)
+
     def test_summarizes_wrong_result_failure(self):
         stderr = """
 1. test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow:29
@@ -384,7 +425,6 @@ require windows: 2
             list_helper_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("generated test list using:", proc.stdout)
         self.assertIn("batch_size=2", proc.stdout)
         self.assertNotIn("found 2 tests", proc.stdout)
         self.assertNotIn("forces batch_size=1", proc.stdout)
@@ -451,31 +491,43 @@ require windows: 2
         )
 
         os.chmod(list_helper_path, 0o755)
+        list_commands = []
+
+        real_subprocess_run = run_tests.subprocess.run
+
+        def capture_list_command(*args, **kwargs):
+            command = args[0]
+            if "--list-tests" in command:
+                list_commands.append(command)
+            return real_subprocess_run(*args, **kwargs)
 
         try:
-            proc = start_runner(
-                [
-                    "--workers",
-                    "1",
-                    "--batch-size",
-                    "2",
-                    "--test-list",
-                    str(base_test_list_path),
-                    "--changed-tests",
-                    str(changed_test_list_path),
-                    "--test-command",
-                    "echo fake-run {test_list}",
-                    str(list_helper_path),
-                ]
-            )
+            with mock.patch("scripts.ci.run_tests.subprocess.run", side_effect=capture_list_command):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "2",
+                        "--test-list",
+                        str(base_test_list_path),
+                        "--changed-tests",
+                        str(changed_test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        str(list_helper_path),
+                    ]
+                )
         finally:
             base_test_list_path.unlink(missing_ok=True)
             changed_test_list_path.unlink(missing_ok=True)
             list_helper_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn(f"-f {base_test_list_path}", proc.stdout)
-        self.assertIn(f"-f {changed_test_list_path}", proc.stdout)
+        self.assertTrue(list_commands)
+        self.assertIn("-f", list_commands[0])
+        self.assertIn(str(base_test_list_path), list_commands[0])
+        self.assertIn(str(changed_test_list_path), list_commands[0])
         self.assertIn("added 1 tests from --changed-tests file to the smoke test run", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)
 

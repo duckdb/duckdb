@@ -311,7 +311,6 @@ def generate_test_list(
     if test_list_files:
         list_file_args = [arg for test_list_file in test_list_files for arg in ("-f", str(test_list_file))]
     command = [unittest_bin, *shlex.split(test_flags), "--list-tests", *list_file_args, *patterns]
-    print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
         text=True,
@@ -624,7 +623,7 @@ def render_failure_lines(failure: FailureInfo):
 
 def format_batch_failure(batch, config: TestRunnerConfig, attempt_summaries, recovered: bool, retry_count: int):
     reproduce_batch = batch
-    rerun_parts = [shlex.quote(config.unittest_bin)]
+    rerun_parts = [shlex.quote(format_unittest_bin_for_display(config.unittest_bin))]
     rerun_parts.extend(shlex.split(config.test_flags))
     parts = []
     if recovered:
@@ -640,6 +639,16 @@ def format_batch_failure(batch, config: TestRunnerConfig, attempt_summaries, rec
     rerun_cmd = shlex.join(rerun_parts)
     parts.extend(["", "reproduce:", rerun_cmd, ""])
     return "\n".join(parts)
+
+
+def format_unittest_bin_for_display(unittest_bin: str):
+    try:
+        if os.path.isabs(unittest_bin):
+            return os.path.relpath(unittest_bin, os.getcwd())
+    except ValueError:
+        # On Windows, relpath can fail across drives. Fall back to the original path.
+        return unittest_bin
+    return unittest_bin
 
 
 def normalize_output(output):
@@ -890,7 +899,7 @@ def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
         )
 
 
-def parse_args(argv: list[str] | None = None):
+def parse_args(argv: list[str] | None = None, default_unittest_bin: str | None = None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser()
@@ -913,7 +922,10 @@ def parse_args(argv: list[str] | None = None):
         default="",
         help="additional flags appended to the unittest binary for listing and execution",
     )
-    parser.add_argument("unittest_bin")
+    if default_unittest_bin is None:
+        parser.add_argument("unittest_bin")
+    else:
+        parser.add_argument("unittest_bin", nargs="?", default=default_unittest_bin, help=argparse.SUPPRESS)
     parser.add_argument("patterns", nargs="*")
     parser.add_argument(
         "--test-command",
@@ -1121,19 +1133,19 @@ def run_single_config(
             generated_test_list.unlink(missing_ok=True)
 
 
-def main(argv: list[str] | None = None):
+def main(argv: list[str] | None = None, default_unittest_bin: str | None = None):
     enable_line_buffering()
     STOP_REQUESTED.clear()
     previous_sigint_handler = signal.getsignal(signal.SIGINT)
     signal.signal(signal.SIGINT, signal_stop_requested)
     try:
-        return main_impl(argv)
+        return main_impl(argv, default_unittest_bin=default_unittest_bin)
     finally:
         signal.signal(signal.SIGINT, previous_sigint_handler)
 
 
-def main_impl(argv: list[str] | None = None):
-    args = parse_args(argv)
+def main_impl(argv: list[str] | None = None, default_unittest_bin: str | None = None):
+    args = parse_args(argv, default_unittest_bin=default_unittest_bin)
     if args.changed_tests is not None and args.test_list is None:
         print("error: --changed-tests requires --test-list", file=sys.stderr)
         return 1
@@ -1220,7 +1232,7 @@ def main_impl(argv: list[str] | None = None):
     return 0
 
 
-def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
+def invoke(argv: list[str], cwd: Path | None = None, default_unittest_bin: str | None = None) -> InvocationResult:
     stdout_buffer = StringIO()
     stderr_buffer = StringIO()
     old_cwd = os.getcwd()
@@ -1228,7 +1240,7 @@ def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
         if cwd is not None:
             os.chdir(cwd)
         with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-            returncode = int(main(argv) or 0)
+            returncode = int(main(argv, default_unittest_bin=default_unittest_bin) or 0)
     finally:
         os.chdir(old_cwd)
     return InvocationResult(returncode=returncode, stdout=stdout_buffer.getvalue(), stderr=stderr_buffer.getvalue())
