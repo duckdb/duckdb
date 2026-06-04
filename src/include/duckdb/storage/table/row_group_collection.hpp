@@ -154,6 +154,7 @@ public:
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result) const;
+	bool SupportsPerColumnWrites() const;
 	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 

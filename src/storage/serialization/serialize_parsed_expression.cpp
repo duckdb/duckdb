@@ -201,34 +201,6 @@ unique_ptr<ParsedExpression> DefaultExpression::Deserialize(Deserializer &deseri
 	return std::move(result);
 }
 
-void FunctionExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
-	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
-	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
-	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
-	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
-	serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
-}
-
-unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", result->children);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", result->filter);
-	auto order_bys = deserializer.ReadPropertyWithDefault<unique_ptr<ResultModifier>>(204, "order_bys");
-	result->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(std::move(order_bys));
-	deserializer.ReadPropertyWithDefault<bool>(205, "distinct", result->distinct);
-	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
-	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
-	deserializer.ReadPropertyWithDefault<string>(208, "catalog", result->catalog);
-	return std::move(result);
-}
-
 void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);

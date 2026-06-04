@@ -493,7 +493,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCallStatementIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.GetChild(1));
-	auto table_function_arguments = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(2));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.GetChild(2));
 	auto result = TransformCallStatement(transformer, qualified_table_function, std::move(table_function_arguments));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -3815,11 +3815,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatemen
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
-	vector<unique_ptr<ParsedExpression>> table_function_arguments {};
+	vector<FunctionArgument> table_function_arguments {};
 	auto &table_function_arguments_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (table_function_arguments_opt.HasResult()) {
 		table_function_arguments =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(table_function_arguments_opt.GetResult());
+		    transformer.Transform<vector<FunctionArgument>>(table_function_arguments_opt.GetResult());
 	}
 	auto result = TransformExecuteStatement(transformer, identifier, std::move(table_function_arguments));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));

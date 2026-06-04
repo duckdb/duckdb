@@ -509,8 +509,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			}
 			// SET_RETURNING_FUNCTION: neutral, recurse into args
 			CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &arg : func_expr.GetChildren()) {
-				result = Merge(result, Rewrite(*arg));
+			for (auto &arg : func_expr.GetArgumentsMutable()) {
+				result = Merge(result, Rewrite(*arg.GetExpressionMutable()));
 			}
 			return result;
 		}

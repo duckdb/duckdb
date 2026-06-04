@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCheckpointStatement(PEG
 	function->CatalogMutable() = SYSTEM_CATALOG;
 	function->SchemaMutable() = DEFAULT_SCHEMA;
 	if (!catalog_name.empty()) {
-		function->GetChildrenMutable().push_back(make_uniq<ConstantExpression>(catalog_name));
+		function->GetArgumentsMutable().emplace_back(make_uniq<ConstantExpression>(catalog_name));
 	}
 	result->function = std::move(function);
 	return std::move(result);

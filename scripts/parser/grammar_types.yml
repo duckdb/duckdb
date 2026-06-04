@@ -549,7 +549,6 @@ ExpressionList:
     - BoundedListExpression
     - SliceBound
     - TargetList
-    - TableFunctionArguments
     - PragmaParameters
     - ReturningClause
     - WindowPartition
@@ -572,6 +571,12 @@ ExpressionList:
     - SetAssignment
     - VariableList
     - UsingKey
+
+FunctionArgumentList:
+  type: "vector<FunctionArgument>"
+  by_value: true
+  rules:
+    - TableFunctionArguments
 
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
