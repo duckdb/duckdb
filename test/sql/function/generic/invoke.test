@@ -1,0 +1,104 @@
+# name: test/sql/function/generic/invoke.test
+# group: [generic]
+
+# Basic lambda invoke
+query I
+select invoke(lambda x: x * x, 2) as square_of_x
+----
+4
+
+# Multiple bindings using nested invoke
+query I
+select invoke(lambda a: invoke(lambda b: a + b, 4), 3) as sum_ab
+----
+7
+
+# Multiple arguments
+query I
+select invoke(lambda x, y: x * y + y, 3, 4) as result
+----
+16
+
+query I
+select invoke(lambda x, y, z: x + y + z, 1, 2, 3) as result
+----
+6
+
+query I
+select invoke(lambda x, y, z, w: x * y + z * w, 1, 2, 3, 4) as result
+----
+14
+
+# Nested invoke expressions
+query I
+select invoke(lambda x: invoke(lambda y: y + 5, x + 3), 2) as result
+----
+10
+
+query I
+select invoke(lambda x: invoke(lambda y: y + x + 5, 3), 2) as result
+----
+10
+
+# Nested multiple lambda invoke with multiple arguments
+query I
+select invoke(lambda a: invoke(lambda b, c: a + b + c, 4, 5), 3) as result
+----
+12
+
+# Also the other way around
+query I
+select invoke(lambda a, b: invoke(lambda c: a + b + c, 5), 3, 4) as result
+----
+12
+
+# Lambda invoke with row constructor
+query II
+SELECT unnest(invoke(lambda x: invoke(lambda y: row(x, y), 3), 2));
+----
+2	3
+
+# Lambda invoke with different types
+query I
+SELECT invoke(lambda name: invoke(lambda age: name || age, 30), 'Alice, ');
+----
+Alice, 30
+
+# Lambda invoke with nested lambda
+query I
+SELECT invoke(lambda x: list_transform([1,2,3], LAMBDA y: y + x), 1);
+----
+[2, 3, 4]
+
+# Lambda invoke with NULL
+query I
+select invoke(lambda x: x IS NULL, NULL);
+----
+true
+
+# Naming is correct
+query I
+select invoke(lambda x: alias(x), 1);
+----
+x
+
+# Lambda invoke in non-SELECT context
+query I rowsort
+SELECT * FROM range(0, 10) as r(i) WHERE invoke(lambda x: x, i % 2 == 0) ORDER BY ALL;
+----
+0
+2
+4
+6
+8
+
+# Errors
+statement error
+SELECT invoke(lambda x: x + x, 2, 4, 6);
+----
+Binder Error: The number of lambda parameters does not match the number of arguments passed to the 'invoke' function, expected 1, got 3.
+
+statement error
+SELECT invoke(NULL, 1);
+----
+Binder Error: Invalid lambda expression passed to 'invoke' function.

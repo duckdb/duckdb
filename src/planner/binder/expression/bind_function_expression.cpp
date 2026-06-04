@@ -378,14 +378,24 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &args = function.GetArgumentsMutable();
 
-	// the first child is the list, the second child is the lambda expression
-	// constexpr idx_t list_ix = 0;
-	constexpr idx_t list_idx = 0;
-	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(args[lambda_expr_idx].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA);
+	// find the lambda expression
+	idx_t lambda_expr_idx = 0;
+	bool found_lambda = false;
+	for (idx_t i = 0; i < args.size(); i++) {
+		if (args[i].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
+			if (found_lambda) {
+				return BindResult("Only one lambda expression is supported per lambda function!");
+			}
+			lambda_expr_idx = i;
+			found_lambda = true;
+			break;
+		}
+	}
+	if (!found_lambda) {
+		return BindResult("This scalar function requires a lambda expression!");
+	}
 
 	vector<LogicalType> function_child_types;
-	// bind the list
 	ErrorData error;
 
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
@@ -408,13 +418,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		function_child_types.push_back(child->GetReturnType());
 	}
 
-	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*args[list_idx].GetExpressionMutable());
-	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-	    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
-		return BindResult("Invalid LIST argument during lambda function binding!");
+	if (lambda_expr_idx > 0) {
+		// get the logical type of the children of the list
+		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
+		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+			return BindResult("Invalid LIST argument during lambda function binding!");
+		}
 	}
 
 	// bind the lambda parameter
@@ -512,10 +524,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			auto &column_types = binding.GetColumnTypes();
 			D_ASSERT(column_names.size() == column_types.size());
 
-			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
-				                                                              column_types[column_idx - 1], offset);
-				offset++;
+			for (idx_t column_idx = 0; column_idx < column_names.size(); column_idx++) {
+				auto bound_lambda_param =
+				    make_uniq<BoundReferenceExpression>(column_names[column_idx], column_types[column_idx], offset++);
 				bound_function_expr.GetChildrenMutable().push_back(std::move(bound_lambda_param));
 			}
 		}

@@ -29,8 +29,7 @@ static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const Bo
 	for (idx_t i = bound_lambda_ref_expr.LambdaIndex() + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].GetColumnCount();
 	}
-	offset += lambda_bindings[bound_lambda_ref_expr.LambdaIndex()].GetColumnCount() -
-	          bound_lambda_ref_expr.Binding().column_index - 1;
+	offset += bound_lambda_ref_expr.Binding().column_index;
 	offset += bound_lambda_expr.ParameterCount();
 	return offset;
 }
@@ -196,7 +195,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type = (*bind_lambda_function)(context, function_child_types,
 		                                            bound_lambda_ref.Binding().column_index, bind_lambda_context);
-		auto index = bound_lambda_expr.ParameterCount() - bound_lambda_ref.Binding().column_index - 1;
+		auto index = bound_lambda_ref.Binding().column_index;
 		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}
