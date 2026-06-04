@@ -107,7 +107,7 @@ struct ModFun {
 
 struct DecimalDivisionFun {
 	static constexpr const char *Name = "decimal_division";
-	static constexpr const char *Parameters = "x,y";
+	static constexpr const char *Parameters = "x,y[,scale]";
 	static constexpr const char *Description = "Divides two DECIMAL values using exact integer arithmetic, returning a DECIMAL result with scale determined by SQL Server semantics (result_scale = max(6, s1 + p2 + 1)).";
 	static constexpr const char *Example = "decimal_division(10.00::DECIMAL(10,2), 3.00::DECIMAL(10,2))";
 	static constexpr const char *Categories = "";

@@ -15,12 +15,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 struct DecimalDivBindData : public FunctionData {
-	// Exponent for the scale factor applied to the numerator before dividing:
-	//   result_int = (a_int * 10^scale_exp) / b_int
-	// where scale_exp = s2 + result_scale - s1
-	uint8_t scale_exp;
+	// scale_exp = s2 + result_scale - s1
+	// >= 0: scale numerator up:   result_int = (a_int * 10^scale_exp) / b_int
+	// <  0: scale divisor up:     result_int =  a_int / (b_int * 10^|scale_exp|)
+	int32_t scale_exp;
 
-	explicit DecimalDivBindData(uint8_t scale_exp_p) : scale_exp(scale_exp_p) {
+	explicit DecimalDivBindData(int32_t scale_exp_p) : scale_exp(scale_exp_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -36,19 +36,23 @@ struct DecimalDivBindData : public FunctionData {
 // Execute functions
 //
 // COMPUTE_TYPE controls intermediate arithmetic:
-//   int64_t   -- INT16 inputs only; scale_exp <= 13, max numerator ~10^17, fits in int64_t
-//   hugeint_t -- INT32/64/128 inputs; numerator can reach 10^37+
+//   int64_t   -- when input_max_width + |scale_exp| < 19 (product fits in int64_t);
+//                always for INT16, conditionally for INT32 when |scale_exp| <= 9
+//   hugeint_t -- otherwise
 //===--------------------------------------------------------------------===//
 
 template <class INPUT_TYPE, class RESULT_TYPE, class COMPUTE_TYPE>
 static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<DecimalDivBindData>();
 
+	bool scale_divisor = bind_data.scale_exp < 0;
+	uint8_t abs_exp = UnsafeNumericCast<uint8_t>(scale_divisor ? -bind_data.scale_exp : bind_data.scale_exp);
+
 	COMPUTE_TYPE scale_factor;
 	if constexpr (std::is_same_v<COMPUTE_TYPE, int64_t>) {
-		scale_factor = NumericHelper::POWERS_OF_TEN[bind_data.scale_exp];
+		scale_factor = NumericHelper::POWERS_OF_TEN[abs_exp];
 	} else {
-		scale_factor = Hugeint::POWERS_OF_TEN[bind_data.scale_exp];
+		scale_factor = Hugeint::POWERS_OF_TEN[abs_exp];
 	}
 
 	BinaryExecutor::Execute<INPUT_TYPE, INPUT_TYPE, RESULT_TYPE>(
@@ -57,8 +61,20 @@ static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &r
 			    throw InvalidInputException("decimal_division: division by zero");
 		    }
 
-		    COMPUTE_TYPE numerator = COMPUTE_TYPE(a) * scale_factor;
-		    COMPUTE_TYPE divisor = COMPUTE_TYPE(b);
+		    COMPUTE_TYPE numerator, divisor;
+		    if (scale_divisor) {
+			    numerator = COMPUTE_TYPE(a);
+			    if constexpr (std::is_same_v<COMPUTE_TYPE, int64_t>) {
+				    divisor = COMPUTE_TYPE(b) * scale_factor;
+			    } else {
+				    if (!Hugeint::TryMultiply(hugeint_t(b), scale_factor, divisor)) {
+					    throw OutOfRangeException("decimal_division: scaled divisor overflowed DECIMAL range");
+				    }
+			    }
+		    } else {
+			    numerator = COMPUTE_TYPE(a) * scale_factor;
+			    divisor = COMPUTE_TYPE(b);
+		    }
 
 		    bool negative;
 		    COMPUTE_TYPE abs_num, abs_div;
@@ -132,25 +148,31 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
 
-	uint8_t min_scale = 6;
+	uint8_t result_scale;
 	if (arguments.size() == 3) {
 		if (!arguments[2]->IsFoldable()) {
-			throw NotImplementedException("decimal_division: min_scale argument must be a constant integer");
+			throw NotImplementedException("decimal_division: scale argument must be a constant integer");
 		}
-		Value min_scale_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[2]);
-		if (min_scale_val.IsNull()) {
-			throw InvalidInputException("decimal_division: min_scale argument must not be NULL");
+		Value scale_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[2]);
+		if (scale_val.IsNull()) {
+			throw InvalidInputException("decimal_division: scale argument must not be NULL");
 		}
-		int32_t min_scale_i = min_scale_val.GetValue<int32_t>();
-		if (min_scale_i < 0 || min_scale_i > Decimal::MAX_WIDTH_DECIMAL) {
-			throw InvalidInputException("decimal_division: min_scale must be between 0 and %d, got %d",
-			                            Decimal::MAX_WIDTH_DECIMAL, min_scale_i);
+		int32_t scale_i = scale_val.GetValue<int32_t>();
+		if (scale_i < 0 || scale_i > Decimal::MAX_WIDTH_DECIMAL) {
+			throw InvalidInputException("decimal_division: scale must be between 0 and %d, got %d",
+			                            Decimal::MAX_WIDTH_DECIMAL, scale_i);
 		}
-		min_scale = UnsafeNumericCast<uint8_t>(min_scale_i);
+		result_scale = UnsafeNumericCast<uint8_t>(scale_i);
+	} else {
+		result_scale = MaxValue<uint8_t>(6, s1 + p2 + 1);
 	}
-
-	uint8_t result_scale = MaxValue<uint8_t>(min_scale, s1 + p2 + 1);
-	uint8_t result_width = p1 - s1 + s2 + result_scale;
+	// result_width uses signed arithmetic to catch underflow before casting.
+	auto result_width_i = p1 - s1 + s2 + result_scale;
+	if (result_width_i < 1) {
+		throw InvalidInputException("decimal_division: scale %d produces a zero-width result for these input types",
+		                            result_scale);
+	}
+	uint8_t result_width = UnsafeNumericCast<uint8_t>(result_width_i);
 
 	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
 		throw OutOfRangeException(
@@ -184,33 +206,43 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	auto rhs_physical = arguments[1]->GetReturnType().InternalType();
 	auto wider = MaxValue<PhysicalType>(lhs_physical, rhs_physical);
 
+	int32_t scale_exp = s2 + result_scale - s1;
+	int32_t abs_scale_exp = scale_exp < 0 ? -scale_exp : scale_exp;
+
 	switch (wider) {
 	case PhysicalType::INT16:
-		// scale_exp <= 13, max numerator ~10^17 — int64_t intermediates are safe
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(4, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(4, s2);
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, s2);
 		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t, int64_t>(result_physical));
 		break;
 	case PhysicalType::INT32:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(9, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(9, s2);
-		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int32_t, hugeint_t>(result_physical));
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, s2);
+		// int64_t safe when MAX_WIDTH_INT32 + |scale_exp| < CACHED_POWERS_OF_TEN (19)
+		if (Decimal::MAX_WIDTH_INT32 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int32_t, int64_t>(result_physical));
+		} else {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int32_t, hugeint_t>(result_physical));
+		}
 		break;
 	case PhysicalType::INT64:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(18, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(18, s2);
-		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t, hugeint_t>(result_physical));
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT64, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT64, s2);
+		if (Decimal::MAX_WIDTH_INT64 + abs_scale_exp < NumericHelper::CACHED_POWERS_OF_TEN) {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t, int64_t>(result_physical));
+		} else {
+			bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t, hugeint_t>(result_physical));
+		}
 		break;
 	case PhysicalType::INT128:
-		bound_function.GetArguments()[0] = LogicalType::DECIMAL(38, s1);
-		bound_function.GetArguments()[1] = LogicalType::DECIMAL(38, s2);
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, s2);
 		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<hugeint_t, hugeint_t>(result_physical));
 		break;
 	default:
 		throw InternalException("decimal_division: unexpected physical type");
 	}
 
-	uint8_t scale_exp = s2 + result_scale - s1;
 	return make_uniq<DecimalDivBindData>(scale_exp);
 }
 
