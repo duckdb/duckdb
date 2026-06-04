@@ -221,3 +221,23 @@ from lf_dim
 left join lf_fact using (k);
 ----
 10000
+
+# Empty joins can produce zero total-domain denominators. LEFT join fanout
+# estimation should handle that the same way as the final denominator result.
+
+statement ok
+create table empty_inner_a(i int);
+
+statement ok
+create table empty_inner_b(i int);
+
+statement ok
+create table empty_left_c(i int);
+
+query I
+select count(*)
+from empty_inner_a
+join empty_inner_b on empty_inner_a.i = empty_inner_b.i
+left join empty_left_c on empty_inner_a.i = empty_left_c.i;
+----
+0

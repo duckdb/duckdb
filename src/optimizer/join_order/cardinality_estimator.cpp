@@ -398,6 +398,10 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 	}
 }
 
+static double GetEffectiveDenom(double denom) {
+	return denom <= 0 ? 1 : denom;
+}
+
 double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
 	auto effective_d = filter.GetDistinctCount();
 	auto comparison_type = filter.GetComparisonType();
@@ -413,14 +417,13 @@ LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Deno
 	auto &predicate = filter.GetPredicate();
 	D_ASSERT(left.relations && right.relations);
 	D_ASSERT(left.numerator_relations && right.numerator_relations);
-	D_ASSERT(left.denom > 0 && right.denom > 0);
 	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
 	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
 	auto &preserved_numerator = left_is_preserved ? *left.numerator_relations : *right.numerator_relations;
-	auto preserved_denom = left_is_preserved ? left.denom : right.denom;
+	auto preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
 
 	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
-	auto inner_denom = CalculateInnerJoinDenom(left.denom * right.denom, filter);
+	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
 	if (inner_denom <= 0) {
 		return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
 	}
