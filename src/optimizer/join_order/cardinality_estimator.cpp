@@ -26,40 +26,83 @@ public:
 	double denominator;
 };
 
+struct DomainEstimate {
+public:
+	DomainEstimate();
+
+public:
+	idx_t GetDistinctCount() const;
+	bool HasReliableDistinctCount() const;
+	idx_t GetReliableDistinctCount() const;
+	void Update(const DistinctCount &distinct_count);
+
+private:
+	optional_idx reliable_distinct_count;
+	optional_idx min_max_distinct_count;
+	idx_t fallback_distinct_count;
+};
+
+static bool IsReliableDistinctCount(DistinctCountSource source) {
+	return source == DistinctCountSource::HLL || source == DistinctCountSource::EXACT;
+}
+
+static void UpdateMaxDistinctCount(optional_idx &target, idx_t distinct_count) {
+	if (target.IsValid()) {
+		target = MaxValue(target.GetIndex(), distinct_count);
+		return;
+	}
+	target = distinct_count;
+}
+
+DomainEstimate::DomainEstimate() : fallback_distinct_count(NumericLimits<idx_t>::Maximum()) {
+}
+
+idx_t DomainEstimate::GetDistinctCount() const {
+	if (reliable_distinct_count.IsValid()) {
+		return reliable_distinct_count.GetIndex();
+	}
+	if (min_max_distinct_count.IsValid()) {
+		return min_max_distinct_count.GetIndex();
+	}
+	return fallback_distinct_count;
+}
+
+bool DomainEstimate::HasReliableDistinctCount() const {
+	return reliable_distinct_count.IsValid();
+}
+
+idx_t DomainEstimate::GetReliableDistinctCount() const {
+	D_ASSERT(reliable_distinct_count.IsValid());
+	return reliable_distinct_count.GetIndex();
+}
+
+void DomainEstimate::Update(const DistinctCount &distinct_count) {
+	if (IsReliableDistinctCount(distinct_count.source)) {
+		UpdateMaxDistinctCount(reliable_distinct_count, distinct_count.distinct_count);
+	} else if (distinct_count.source == DistinctCountSource::MIN_MAX) {
+		UpdateMaxDistinctCount(min_max_distinct_count, distinct_count.distinct_count);
+	} else {
+		fallback_distinct_count = MinValue(distinct_count.distinct_count, fallback_distinct_count);
+	}
+}
+
 struct RelationsSetToStats {
 public:
 	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set), fallback_distinct_count(NumericLimits<idx_t>::Maximum()) {
+	    : equivalent_relations(column_binding_set) {
 	}
 
 public:
 	//! Column binding sets that are equivalent in a join plan.
 	column_binding_set_t equivalent_relations;
-	//! The estimated total domains of the equivalent relations determined from HLL or exact metadata.
-	optional_idx reliable_distinct_count;
-	//! The estimated total domains derived from min/max statistics.
-	optional_idx min_max_distinct_count;
-	//! The estimated total domains using the row-count fallback.
-	idx_t fallback_distinct_count;
+	DomainEstimate domain_estimate;
 	vector<reference<JoinPredicate>> predicates;
 	vector<string> column_names;
 };
 
-static idx_t GetDistinctCount(const RelationsSetToStats &relation_set_to_stats) {
-	if (relation_set_to_stats.reliable_distinct_count.IsValid()) {
-		return relation_set_to_stats.reliable_distinct_count.GetIndex();
-	}
-	if (relation_set_to_stats.min_max_distinct_count.IsValid()) {
-		return relation_set_to_stats.min_max_distinct_count.GetIndex();
-	}
-	return relation_set_to_stats.fallback_distinct_count;
-}
-
 struct FilterInfoWithTotalDomains {
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
-	    : predicate(predicate), reliable_distinct_count(relation_set_to_stats.reliable_distinct_count),
-	      min_max_distinct_count(relation_set_to_stats.min_max_distinct_count),
-	      fallback_distinct_count(relation_set_to_stats.fallback_distinct_count) {
+	    : predicate(predicate), domain_estimate(relation_set_to_stats.domain_estimate) {
 	}
 
 public:
@@ -73,9 +116,7 @@ public:
 
 public:
 	reference<JoinPredicate> predicate;
-	optional_idx reliable_distinct_count;
-	optional_idx min_max_distinct_count;
-	idx_t fallback_distinct_count;
+	reference<const DomainEstimate> domain_estimate;
 };
 
 struct Subgraph2Denominator {
@@ -158,22 +199,15 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	if (reliable_distinct_count.IsValid()) {
-		return static_cast<double>(reliable_distinct_count.GetIndex());
-	}
-	if (min_max_distinct_count.IsValid()) {
-		return static_cast<double>(min_max_distinct_count.GetIndex());
-	}
-	return static_cast<double>(fallback_distinct_count);
+	return static_cast<double>(domain_estimate.get().GetDistinctCount());
 }
 
 bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
-	return reliable_distinct_count.IsValid();
+	return domain_estimate.get().HasReliableDistinctCount();
 }
 
 idx_t FilterInfoWithTotalDomains::GetReliableDistinctCount() const {
-	D_ASSERT(reliable_distinct_count.IsValid());
-	return reliable_distinct_count.GetIndex();
+	return domain_estimate.get().GetReliableDistinctCount();
 }
 
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
@@ -897,19 +931,7 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 }
 
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
-	return GetDistinctCount(a) > GetDistinctCount(b);
-}
-
-static bool IsReliableDistinctCount(DistinctCountSource source) {
-	return source == DistinctCountSource::HLL || source == DistinctCountSource::EXACT;
-}
-
-static void UpdateMaxDistinctCount(optional_idx &target, idx_t distinct_count) {
-	if (target.IsValid()) {
-		target = MaxValue(target.GetIndex(), distinct_count);
-		return;
-	}
-	target = distinct_count;
+	return a.domain_estimate.GetDistinctCount() > b.domain_estimate.GetDistinctCount();
 }
 
 void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
@@ -943,14 +965,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			if (i_set.find(key) == i_set.end()) {
 				continue;
 			}
-			if (IsReliableDistinctCount(distinct_count.source)) {
-				UpdateMaxDistinctCount(relation_to_tdom.reliable_distinct_count, distinct_count.distinct_count);
-			} else if (distinct_count.source == DistinctCountSource::MIN_MAX) {
-				UpdateMaxDistinctCount(relation_to_tdom.min_max_distinct_count, distinct_count.distinct_count);
-			} else {
-				relation_to_tdom.fallback_distinct_count =
-				    MinValue(distinct_count.distinct_count, relation_to_tdom.fallback_distinct_count);
-			}
+			relation_to_tdom.domain_estimate.Update(distinct_count);
 		}
 	}
 }
@@ -980,7 +995,7 @@ void CardinalityEstimator::PrintRelationStats() {
 		for (auto &column_name : total_domain.column_names) {
 			domain += column_name + ", ";
 		}
-		domain += "\n TOTAL DOMAIN = " + to_string(GetDistinctCount(total_domain));
+		domain += "\n TOTAL DOMAIN = " + to_string(total_domain.domain_estimate.GetDistinctCount());
 		Printer::Print(domain);
 	}
 }
