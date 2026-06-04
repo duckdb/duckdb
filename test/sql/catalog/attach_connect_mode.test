@@ -1,7 +1,8 @@
 # name: test/sql/catalog/attach_connect_mode.test
 # description: CONNECT_MODE option on ATTACH. NONE disables; ENABLE asserts at attach time;
-#              AUTO defers to backend's Supports(CONNECT) declaration.
 # group: [catalog]
+
+#              AUTO defers to backend's Supports(CONNECT) declaration.
 
 # DuckDB-backed catalogs don't support CONNECT, so:
 #   AUTO   -> CONNECT errors at CONNECT time

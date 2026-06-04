@@ -180,8 +180,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	if (connect_mode == ConnectMode::AUTO) {
 		connect_mode = catalog->Supports(RemoteCapability::CONNECT) ? ConnectMode::ENABLE : ConnectMode::NONE;
 	} else if (connect_mode == ConnectMode::ENABLE && !catalog->Supports(RemoteCapability::CONNECT)) {
-		throw InvalidInputException("ATTACH ... (CONNECT_MODE ENABLE): database \"%s\" does not support CONNECT",
-		                            name);
+		throw InvalidInputException("ATTACH ... (CONNECT_MODE ENABLE): database \"%s\" does not support CONNECT", name);
 	}
 }
 
