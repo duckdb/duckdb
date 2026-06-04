@@ -140,6 +140,9 @@ struct GlobalFileState {
 	idx_t num_batches DUCKDB_GUARDED_BY(lock);
 };
 
+static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
+    DUCKDB_REQUIRES(global_state.lock);
+
 //===--------------------------------------------------------------------===//
 // Copy State Declarations
 //===--------------------------------------------------------------------===//
@@ -245,7 +248,7 @@ public:
 // Partitioned Copy Declarations
 //===--------------------------------------------------------------------===//
 enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, BATCH, PREPARE, FLUSH, DONE };
-enum class FileCreationReason : uint8_t { NORMAL, SORTED_RUN_BOUNDARY };
+enum class FileCreationReason : uint8_t { NORMAL, SORTED_RUN_BOUNDARY, ROTATION };
 
 struct PartitionedCopyTask {
 	PartitionedCopyStage stage = PartitionedCopyStage::DONE;
@@ -759,8 +762,6 @@ public:
 	    DUCKDB_REQUIRES(active_writes_lock);
 	unique_ptr<GlobalFileState> CreatePartitionFileStateFromReservation(const vector<Value> &values, idx_t offset)
 	    DUCKDB_EXCLUDES(active_writes_lock);
-	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
@@ -770,6 +771,14 @@ private:
 	void CreateNextState();
 	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
+	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
+	    DUCKDB_EXCLUDES(active_writes_lock);
+	void EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values)
+	    DUCKDB_EXCLUDES(active_writes_lock);
+	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to initialize the replacement file.
+	//! Callers that can reach the swap path must serialize the full partition writer run for this write_info.
+	void EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
+	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock);
 	template <class FUNC>
 	void WithSerializedPartitionWriteRun(PartitionWriteInfo &write_info, FUNC &&func) {
 		annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
@@ -1634,9 +1643,8 @@ bool PartitionedCopy::ShouldStopFlushing() const {
 }
 
 bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
-	// A full partition writer run must remain serialized when the run boundary has file-state semantics.
-	// ORDER BY uses the boundary to start a fresh file per sorted run. Rotation is currently rejected with
-	// PARTITION_BY in the binder, but keeping it here makes the intended locking policy explicit for future support.
+	// A full partition writer run must remain serialized when the run boundary has file-state semantics:
+	// ORDER BY starts a fresh file per sorted run, and rotation can start a fresh file between batches.
 	return !op.order_columns.empty() || op.Rotate();
 }
 
@@ -2062,6 +2070,7 @@ void PartitionedCopy::FlushPreparedPartitionRun(const vector<Value> &values, Par
 		EnsureFreshPartitionFileForSortedRun(write_info, values);
 		for (auto &batch : batches) {
 			D_ASSERT(batch);
+			EnsureFreshPartitionFileForRotation(write_info, values);
 			FlushPreparedPartitionBatch(values, write_info, std::move(batch));
 		}
 	});
@@ -2095,6 +2104,7 @@ void PartitionedCopy::FlushDelayedPartitionRun(const vector<Value> &values, Part
 			if (batch->Count() == 0) {
 				return;
 			}
+			EnsureFreshPartitionFileForRotation(write_info, values);
 			auto prepared_batch = PreparePartitionBatch(
 			    values, write_info,
 			    PartitionedCopyCollection(PartitionedCopyCollectionSchema::WRITE_SCHEMA, std::move(batch)));
@@ -2199,7 +2209,7 @@ PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(c
 	}
 
 	if (op.hive_file_pattern) {
-		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY) {
+		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY || reason == FileCreationReason::ROTATION) {
 			++previous_partitions[values];
 		}
 		auto prev_offset = previous_partitions.find(values);
@@ -2242,6 +2252,20 @@ void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &w
 	if (op.order_columns.empty()) {
 		return;
 	}
+	EnsureFreshPartitionFile(write_info, values, FileCreationReason::SORTED_RUN_BOUNDARY);
+}
+
+void PartitionedCopy::EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values) {
+	if (!op.Rotate()) {
+		return;
+	}
+	EnsureFreshPartitionFile(write_info, values, FileCreationReason::ROTATION);
+}
+
+void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
+                                               FileCreationReason reason) {
+	D_ASSERT(reason == FileCreationReason::SORTED_RUN_BOUNDARY || reason == FileCreationReason::ROTATION);
+	D_ASSERT(RequiresSerializedPartitionWrites());
 
 	optional_ptr<GlobalFileState> old_file_state_ptr;
 	{
@@ -2251,12 +2275,15 @@ void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &w
 		}
 		old_file_state_ptr = write_info.file_state.get();
 		annotated_lock_guard<annotated_mutex> file_guard(old_file_state_ptr->lock);
-		if (old_file_state_ptr->num_batches == 0) {
+		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY && old_file_state_ptr->num_batches == 0) {
+			return;
+		}
+		if (reason == FileCreationReason::ROTATION && !PhysicalCopyRotateNow(op, *old_file_state_ptr)) {
 			return;
 		}
 	}
 
-	auto new_file_state = CreatePartitionFileState(values, FileCreationReason::SORTED_RUN_BOUNDARY);
+	auto new_file_state = CreatePartitionFileState(values, reason);
 
 	unique_ptr<GlobalFileState> old_file_state;
 	{
@@ -2264,7 +2291,11 @@ void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &w
 		D_ASSERT(write_info.file_state);
 		D_ASSERT(RefersToSameObject(*old_file_state_ptr.get(), *write_info.file_state));
 		annotated_lock_guard<annotated_mutex> file_guard(write_info.file_state->lock);
-		D_ASSERT(write_info.file_state->num_batches > 0);
+		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY) {
+			D_ASSERT(write_info.file_state->num_batches > 0);
+		} else {
+			D_ASSERT(PhysicalCopyRotateNow(op, *write_info.file_state));
+		}
 
 		old_file_state = std::move(write_info.file_state);
 		write_info.file_state = std::move(new_file_state);
@@ -2581,7 +2612,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		auto state = make_uniq<CopyToFileGlobalState>(*this, context);
-		if (!per_thread_output && Rotate() && write_empty_file) {
+		if (!partition_output && !per_thread_output && Rotate() && write_empty_file) {
 			annotated_lock_guard<annotated_mutex> guard(state->lock);
 			state->global_state = state->CreateFileStateLocked();
 		}
