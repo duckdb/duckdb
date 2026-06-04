@@ -334,7 +334,7 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
-         run: python test/run.py
+         run: python build/release/test/run.py
 
  win-packaged-upload:
    runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
