@@ -42,3 +42,50 @@ query I
 insert into t values (1, 1) on conflict (i) do update set j = excluded.i;
 ----
 1
+
+statement ok
+create table t_case (i int not null primary key);
+
+query I
+insert into t_case (I) select 1 on conflict do nothing;
+----
+1
+
+query I
+select * from t_case;
+----
+1
+
+query I
+insert into t_case (I) select 1 on conflict do nothing;
+----
+0
+
+# nullable column, mismatched case: value must survive, not become NULL
+statement ok
+create table t_case_nullable (i int, j int unique);
+
+statement ok
+insert into t_case_nullable (I, J) select 7, 9 on conflict do nothing;
+
+query II
+select i, j from t_case_nullable;
+----
+7	9
+
+# mismatched case on both insert columns and explicit ON CONFLICT target
+statement ok
+create table t_case_upd (i int primary key, j int);
+
+statement ok
+insert into t_case_upd (I, J) select 1, 10 on conflict do nothing;
+
+query I
+insert into t_case_upd (I, J) select 1, 20 on conflict (I) do update set j = excluded.j;
+----
+1
+
+query II
+select i, j from t_case_upd;
+----
+1	20

@@ -50,7 +50,7 @@ struct OffsetPruningResult {
 
 class RowGroupReorderer {
 public:
-	explicit RowGroupReorderer(const RowGroupOrderOptions &options_p);
+	RowGroupReorderer(const RowGroupOrderOptions &options_p, TransactionData transaction_p);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
@@ -62,6 +62,7 @@ public:
 
 private:
 	const RowGroupOrderOptions options;
+	const TransactionData transaction;
 
 	idx_t offset;
 	bool initialized;

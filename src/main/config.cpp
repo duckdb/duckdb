@@ -22,7 +22,9 @@
 
 namespace duckdb {
 
+#ifdef DEBUG
 bool DBConfigOptions::debug_print_bindings = false;
+#endif
 DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificationMode::NONE;
 
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
@@ -676,7 +678,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			return NumericLimits<idx_t>::Maximum();
+			result = DConstants::INVALID_INDEX;
 		} else {
 			throw ParserException(error);
 		}
