@@ -317,7 +317,7 @@ class JobStagesTest(unittest.TestCase):
             for line_no, command in self._extract_run_commands(workflow_text):
                 if not self._has_direct_unittest_invocation(command):
                     continue
-                if "scripts/ci/run_tests.py" in command or re.search(r"(?:^|[\s\"'])[\w./-]*/run(?:\.bat)?(?:$|[\s\"'])", command):
+                if re.search(r"(?:^|[\s\"'])\.?/build/[^/\s\"']+/test/run(?:$|[\s\"'])", command):
                     continue
                 snippet = " ".join(command.strip().split())
                 if len(snippet) > 180:
@@ -326,7 +326,9 @@ class JobStagesTest(unittest.TestCase):
 
         if violations:
             formatted = "\n\n".join(f"- {entry}" for entry in violations)
-            self.fail("workflow `run:` commands using `unittest` must use scripts/ci/run_tests.py or a generated run wrapper:\n\n" + formatted)
+            self.fail(
+                "workflow `run:` commands using `unittest` must use `build/*/test/run` as test runner:\n\n" + formatted
+            )
 
 
 if __name__ == "__main__":
