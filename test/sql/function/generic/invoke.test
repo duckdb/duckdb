@@ -25,6 +25,11 @@ select invoke(lambda x, y, z: x + y + z, 1, 2, 3) as result
 6
 
 query I
+select invoke(lambda x, y, z: x * 100 + y * 10 + z, 1, 2, 3) as result
+----
+123
+
+query I
 select invoke(lambda x, y, z, w: x * y + z * w, 1, 2, 3, 4) as result
 ----
 14
@@ -52,6 +57,11 @@ select invoke(lambda a, b: invoke(lambda c: a + b + c, 5), 3, 4) as result
 ----
 12
 
+query I
+select invoke(lambda a, b: invoke(lambda c: a * 100 + b * 10 + c, 3), 1, 2) as result
+----
+123
+
 # Lambda invoke with row constructor
 query II
 SELECT unnest(invoke(lambda x: invoke(lambda y: row(x, y), 3), 2));
@@ -69,6 +79,11 @@ query I
 SELECT invoke(lambda x: list_transform([1,2,3], LAMBDA y: y + x), 1);
 ----
 [2, 3, 4]
+
+query I
+SELECT invoke(lambda x: list_transform([10, 20], lambda y, i: x + y + i), 100);
+----
+[111, 122]
 
 # Lambda invoke with NULL
 query I
@@ -91,6 +106,27 @@ SELECT * FROM range(0, 10) as r(i) WHERE invoke(lambda x: x, i % 2 == 0) ORDER B
 4
 6
 8
+
+# Stored invoke expressions should preserve lambda reference ordering across restarts.
+load {TEST_DIR}/invoke_storage.db
+
+statement ok
+CREATE TABLE invoke_order_tbl AS SELECT 1 a, 2 b, 3 c
+
+statement ok
+CREATE VIEW invoke_order_view AS SELECT invoke(lambda x, y, z: x * 100 + y * 10 + z, a, b, c) AS result FROM invoke_order_tbl
+
+query I
+SELECT result FROM invoke_order_view
+----
+123
+
+restart
+
+query I
+SELECT result FROM invoke_order_view
+----
+123
 
 # Errors
 statement error
