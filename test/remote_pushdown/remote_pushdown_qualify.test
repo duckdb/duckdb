@@ -1,0 +1,50 @@
+# name: test/remote_pushdown/remote_pushdown_qualify.test
+# description: QUALIFY clause must not be pushed to MySQL -- MySQL cannot parse this keyword
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.qualify_tbl AS SELECT i FROM range(10) t(i)
+
+# basic QUALIFY -- keep the first 5 rows by row number
+# if pushed to MySQL the query fails immediately (MySQL has no QUALIFY keyword)
+query I
+SELECT i FROM s.qualify_tbl QUALIFY ROW_NUMBER() OVER (ORDER BY i) <= 5 ORDER BY i
+----
+0
+1
+2
+3
+4
+
+# QUALIFY with PARTITION BY
+query II
+SELECT i, i % 3 AS grp FROM s.qualify_tbl
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY i % 3 ORDER BY i) = 1
+    ORDER BY grp, i
+----
+0	0
+1	1
+2	2
+
+# QUALIFY referencing an aggregate window function
+# last two rows per the SUM window
+query I
+SELECT i FROM s.qualify_tbl
+    QUALIFY SUM(i) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) > 40
+    ORDER BY i
+----
+9
+
+# QUALIFY on a derived column alias
+query II
+SELECT i, i * i AS sq FROM s.qualify_tbl QUALIFY sq > 49 ORDER BY i
+----
+8	64
+9	81

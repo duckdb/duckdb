@@ -1,0 +1,152 @@
+# name: test/remote_pushdown/remote_pushdown_groupby.test
+# description: GROUP BY / ORDER BY / LIMIT variants that break when pushed to MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.gb_tbl AS SELECT i, i % 2 AS g1, i % 3 AS g2 FROM range(10) t(i)
+
+# ---- positional GROUP BY / ORDER BY: MySQL supports these, should push ----
+
+query II
+SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
+----
+0	4
+1	3
+2	3
+
+query II
+explain SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- GROUP BY ROLLUP: MySQL 8.0+ supports this, should push ----
+# produces rows per group + grand-total row (g1=NULL)
+
+query II
+SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ROLLUP (g1) ORDER BY g1
+----
+0	5
+1	5
+NULL	10
+
+query II
+explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ROLLUP (g1) ORDER BY g1
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- GROUP BY ALL: MySQL has no GROUP BY ALL syntax -- breaks when pushed ----
+# DuckDB expands ALL to every non-aggregate column in the SELECT list
+# if the unexpanded form is forwarded to MySQL it fails with a syntax error
+query III
+SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
+----
+0	0	2
+0	1	1
+0	2	2
+1	0	2
+1	1	2
+1	2	1
+
+query II
+explain SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- GROUP BY CUBE: MySQL has no CUBE support -- breaks when pushed ----
+# CUBE(g1) produces per-group rows plus a grand-total row
+query II
+SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY CUBE (g1) ORDER BY g1
+----
+0	5
+1	5
+NULL	10
+
+query II
+explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY CUBE (g1) ORDER BY g1
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- GROUP BY GROUPING SETS: MySQL has no GROUPING SETS support -- breaks when pushed ----
+query II
+SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY GROUPING SETS ((g1), ()) ORDER BY g1
+----
+0	5
+1	5
+NULL	10
+
+query II
+explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY GROUPING SETS ((g1), ()) ORDER BY g1
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- DISTINCT ON: MySQL has no DISTINCT ON -- breaks when pushed ----
+# keep the first row per g1 group (lowest i)
+query II
+SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
+----
+0	0
+1	1
+
+query II
+explain SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
+----
+physical_plan	<REGEX>:.*DISTINCT.*
+
+# ---- ORDER BY NULLS FIRST / NULLS LAST: MySQL < 8.0.26 cannot parse this ----
+
+statement ok
+CREATE OR REPLACE TABLE s.null_order_tbl AS
+    SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(9) t(i)
+
+# NULLS LAST: non-NULL values first, then NULLs
+query I
+SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS LAST
+----
+1
+2
+4
+5
+7
+8
+NULL
+NULL
+NULL
+
+query II
+explain SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS LAST
+----
+physical_plan	<REGEX>:.*ORDER.*
+
+# NULLS FIRST: NULLs before non-NULLs
+query I
+SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS FIRST
+----
+NULL
+NULL
+NULL
+1
+2
+4
+5
+7
+8
+
+# ---- LIMIT n PERCENT: MySQL has no PERCENT limit syntax -- breaks when pushed ----
+# 50% of 10 rows = 5 rows
+
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.gb_tbl LIMIT 50 PERCENT) t
+----
+5
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.gb_tbl LIMIT 50 PERCENT) t
+----
+physical_plan	<REGEX>:.*AGGREGATE.*

@@ -1,0 +1,116 @@
+# name: test/remote_pushdown/remote_pushdown_join_types.test
+# description: DuckDB-specific join types (ANTI, SEMI, ASOF, POSITIONAL) must not be pushed to MySQL
+#              -- MySQL has no syntax for these and would return a parse error
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.jt_left AS SELECT i FROM range(10) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.jt_right AS SELECT i FROM range(5) t(i)
+
+# ---- ANTI JOIN: returns left rows with no matching right row ----
+# MySQL has no ANTI JOIN keyword -- must be handled by DuckDB
+# i=5..9 have no match in jt_right (0..4) → COUNT=5
+query I
+SELECT COUNT(*) FROM s.jt_left ANTI JOIN s.jt_right USING (i)
+----
+5
+
+query II
+explain SELECT COUNT(*) FROM s.jt_left ANTI JOIN s.jt_right USING (i)
+----
+physical_plan	<REGEX>:.*ANTI.*
+
+# result correctness
+query I
+SELECT i FROM s.jt_left ANTI JOIN s.jt_right USING (i) ORDER BY i
+----
+5
+6
+7
+8
+9
+
+# ---- SEMI JOIN: returns left rows that have at least one matching right row ----
+# MySQL has no SEMI JOIN keyword -- must be handled by DuckDB
+# i=0..4 have a match → COUNT=5
+query I
+SELECT COUNT(*) FROM s.jt_left SEMI JOIN s.jt_right USING (i)
+----
+5
+
+query II
+explain SELECT COUNT(*) FROM s.jt_left SEMI JOIN s.jt_right USING (i)
+----
+physical_plan	<REGEX>:.*SEMI.*
+
+# ---- ASOF JOIN: matches each left row to the nearest right row by ordering key ----
+# MySQL has no ASOF JOIN syntax -- must be handled by DuckDB
+
+statement ok
+CREATE OR REPLACE TABLE s.asof_left AS SELECT i AS ts, i * 10 AS v FROM range(10) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.asof_right AS SELECT i * 2 AS ts, i * 100 AS w FROM range(5) t(i)
+
+# asof_right: ts=0,2,4,6,8
+# each left row finds the largest right.ts <= left.ts
+# ts=0→w=0, ts=1→w=0, ts=2→w=100, ts=3→w=100, ts=4→w=200,
+# ts=5→w=200, ts=6→w=300, ts=7→w=300, ts=8→w=400, ts=9→w=400 → SUM=2000
+query I
+SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.asof_right.ts)
+----
+2000
+
+query II
+explain SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.asof_right.ts)
+----
+physical_plan	<REGEX>:.*ASOF.*
+
+# ---- POSITIONAL JOIN: pairs rows by their ordinal position ----
+# MySQL has no POSITIONAL JOIN syntax -- must be handled by DuckDB
+
+statement ok
+CREATE OR REPLACE TABLE s.pos_left AS SELECT i AS a FROM range(5) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.pos_right AS SELECT i * 10 AS b FROM range(5) t(i)
+
+# row 0: (0,0), row 1: (1,10), ..., row 4: (4,40)
+# SUM(a+b) = 0+11+22+33+44 = 110
+query I
+SELECT SUM(a + b) FROM s.pos_left POSITIONAL JOIN s.pos_right
+----
+110
+
+query II
+explain SELECT SUM(a + b) FROM s.pos_left POSITIONAL JOIN s.pos_right
+----
+physical_plan	<REGEX>:.*POSITIONAL.*
+
+# ---- join conditions using DuckDB-only functions must block pushdown ----
+# levenshtein() is not in MySQL -- the join condition uses it, so the join stays local
+
+statement ok
+CREATE OR REPLACE TABLE s.word_left AS SELECT CASE i WHEN 0 THEN 'duck' WHEN 1 THEN 'geese' ELSE 'swan' END AS w FROM range(3) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.word_right AS SELECT CASE i WHEN 0 THEN 'ducks' WHEN 1 THEN 'goose' ELSE 'swam' END AS w FROM range(3) t(i)
+
+query I
+SELECT COUNT(*) FROM s.word_left JOIN s.word_right ON (levenshtein(s.word_left.w, s.word_right.w) <= 2)
+----
+3
+
+query II
+explain SELECT COUNT(*) FROM s.word_left JOIN s.word_right ON (levenshtein(s.word_left.w, s.word_right.w) <= 2)
+----
+physical_plan	<REGEX>:.*JOIN.*AGGREGATE.*|.*AGGREGATE.*JOIN.*

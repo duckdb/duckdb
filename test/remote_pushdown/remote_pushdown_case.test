@@ -1,0 +1,108 @@
+# name: test/remote_pushdown/remote_pushdown_case.test
+# description: CASE expressions with type coercions that differ between DuckDB and MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.case_tbl AS SELECT i FROM range(10) t(i)
+
+# ---- standard CASE: same semantics in MySQL -- should push ----
+query I
+SELECT SUM(CASE WHEN i < 5 THEN i ELSE 0 END) FROM s.case_tbl
+----
+10
+
+query II
+explain SELECT SUM(CASE WHEN i < 5 THEN i ELSE 0 END) FROM s.case_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# CASE with NULL branch
+query I
+SELECT COUNT(*) FROM s.case_tbl WHERE (CASE WHEN i % 2 = 0 THEN i ELSE NULL END) IS NOT NULL
+----
+5
+
+# ---- CASE returning INTERVAL: MySQL cannot use INTERVAL as a result type ----
+# MySQL's INTERVAL keyword is only valid in date arithmetic (date + INTERVAL n DAY),
+# not as a standalone value -- if pushed, MySQL returns a syntax/type error
+query I
+SELECT CASE WHEN i = 0 THEN INTERVAL '1' DAY ELSE INTERVAL '2' DAY END
+FROM s.case_tbl WHERE i = 0
+----
+1 day
+
+query II
+explain SELECT SUM(i) FROM s.case_tbl
+    WHERE (CASE WHEN i < 5 THEN INTERVAL '1' DAY ELSE INTERVAL '2' DAY END) = INTERVAL '1' DAY
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- CASE with HUGEINT branch: MySQL has no HUGEINT type ----
+# 99999999999999999999 exceeds BIGINT range; DuckDB stores it as HUGEINT
+# if pushed, MySQL would receive this literal and either overflow or error
+
+query I
+SELECT CASE WHEN i = 0 THEN 99999999999999999999 ELSE i END FROM s.case_tbl WHERE i = 0
+----
+99999999999999999999
+
+query II
+explain SELECT SUM(CASE WHEN i = 0 THEN 99999999999999999999 ELSE i END) FROM s.case_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- CASE with LIST branch: list_value() is not in MySQL ----
+# list_value is not in the whitelist → should not push; DuckDB handles it locally
+query I
+SELECT CASE WHEN i = 0 THEN [1, 2, 3] ELSE [4, 5, 6] END FROM s.case_tbl WHERE i = 0
+----
+[1, 2, 3]
+
+query II
+explain SELECT COUNT(*) FROM s.case_tbl
+    WHERE list_sum(CASE WHEN i < 5 THEN [1, 2] ELSE [3, 4] END) > 3
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# ---- CASE implicit integer/varchar coercion ----
+# both MySQL and DuckDB coerce i to VARCHAR when mixing int and string branches
+# result type is VARCHAR in both engines -- safe to push
+query I
+SELECT SUM(CASE WHEN i < 5 THEN 1 ELSE 0 END) FROM s.case_tbl
+----
+5
+
+query II
+explain SELECT SUM(CASE WHEN i < 5 THEN 1 ELSE 0 END) FROM s.case_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- case sensitivity: MySQL string equality is collation-dependent ----
+# MySQL default collation (utf8mb4_0900_ai_ci) is case-insensitive;
+# DuckDB string comparison is case-sensitive.
+# Pushing a query with string equality to MySQL can change the number of rows returned.
+
+statement ok
+CREATE OR REPLACE TABLE s.names_tbl AS
+    SELECT CASE i WHEN 0 THEN 'Alice' WHEN 1 THEN 'ALICE' ELSE 'alice' END AS name
+    FROM range(3) t(i)
+
+# DuckDB evaluates locally (case-sensitive) → exactly 1 row matches 'alice'
+# MySQL with default collation (utf8mb4_0900_ai_ci, case-insensitive) → 3 rows
+# if the query is pushed, the result changes silently; the test exposes that
+query I
+SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
+----
+1
+
+query II
+explain SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
+----
+physical_plan	<REGEX>:.*AGGREGATE.*

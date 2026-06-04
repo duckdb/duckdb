@@ -1,0 +1,105 @@
+# name: test/remote_pushdown/remote_pushdown_set_operations.test
+# description: Test remote pushdown of set operations (UNION / INTERSECT / EXCEPT) into MySQL
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.set_tbl1 AS SELECT i FROM range(5) t(i)
+
+statement ok
+CREATE OR REPLACE TABLE s.set_tbl2 AS SELECT i + 3 AS i FROM range(5) t(i)
+
+# UNION ALL of two fully-remote tables -- no overlap resolution needed, should push
+# set_tbl1: 0,1,2,3,4  set_tbl2: 3,4,5,6,7 → 10 rows total
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT i FROM s.set_tbl2) t
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT i FROM s.set_tbl2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# UNION (distinct) of two fully-remote tables: 0..7 → 8 distinct values
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2) t
+----
+8
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# INTERSECT of two fully-remote tables: overlap is i=3,4
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 INTERSECT SELECT i FROM s.set_tbl2) t
+----
+2
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 INTERSECT SELECT i FROM s.set_tbl2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# EXCEPT: set_tbl1 minus the overlap {3,4} → {0,1,2}
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 EXCEPT SELECT i FROM s.set_tbl2) t
+----
+3
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 EXCEPT SELECT i FROM s.set_tbl2) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ORDER BY on the combined result
+query I
+SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2 ORDER BY i
+----
+0
+1
+2
+3
+4
+5
+6
+7
+
+# UNION ALL of a remote table and a local range() -- cannot push the whole thing
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT * FROM range(3) t(i)) t
+----
+8
+
+query II
+explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT * FROM range(3) t(i)) t
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# Three-way UNION ALL of fully-remote tables -- should push
+statement ok
+CREATE OR REPLACE TABLE s.set_tbl3 AS SELECT i + 10 AS i FROM range(3) t(i)
+
+query I
+SELECT COUNT(*) FROM (
+    SELECT i FROM s.set_tbl1
+    UNION ALL SELECT i FROM s.set_tbl2
+    UNION ALL SELECT i FROM s.set_tbl3) t
+----
+13
+
+query II
+explain SELECT COUNT(*) FROM (
+    SELECT i FROM s.set_tbl1
+    UNION ALL SELECT i FROM s.set_tbl2
+    UNION ALL SELECT i FROM s.set_tbl3) t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
