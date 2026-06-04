@@ -99,6 +99,18 @@ public:
 	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
+class InUniformExpressionMatcher : public ExpressionMatcher {
+public:
+	InUniformExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
+	}
+
+	//! The matchers for the probe and child expressions
+	unique_ptr<ExpressionMatcher> probe_matcher;
+	unique_ptr<ExpressionMatcher> child_matcher;
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
+};
+
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
 public:
 	ConjunctionExpressionMatcher()

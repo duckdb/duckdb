@@ -247,3 +247,17 @@ query I
 select ts from '{TEMP_DIR}/my_file.json';
 ----
 2026-01-01 +00
+
+# invalid timestampformat must produce a clear error
+statement ok
+CREATE TABLE t (ts TIMESTAMP[])
+
+statement error
+COPY t FROM '{DATA_DIR}/json/simple_timestamp.json' (FORMAT JSON, TIMESTAMPFORMAT '%Q')
+----
+Unrecognized format for strftime/strptime: %Q
+
+statement error
+SELECT * FROM read_json('{DATA_DIR}/json/simple_timestamp.json', timestampformat='%Q')
+----
+Unrecognized format for strftime/strptime: %Q

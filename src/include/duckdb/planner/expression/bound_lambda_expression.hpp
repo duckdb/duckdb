@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 

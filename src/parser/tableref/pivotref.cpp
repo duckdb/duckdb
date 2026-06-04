@@ -145,25 +145,25 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 		if (function.FunctionName() == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.GetChildren().size());
-			for (const auto &child : function.GetChildren()) {
-				if (!unique_names.insert(child->GetAlias()).second) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
+				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
 					return false;
 				}
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(child.GetExpression(), child_value)) {
 					return false;
 				}
-				values.emplace_back(child->GetAlias(), std::move(child_value));
+				values.emplace_back(child.GetExpression().GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
 		} else if (function.FunctionName() == "list_value") {
 			vector<Value> values;
-			values.reserve(function.GetChildren().size());
-			for (const auto &child : function.GetChildren()) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(child.GetExpression(), child_value)) {
 					return false;
 				}
 				values.emplace_back(std::move(child_value));
@@ -172,7 +172,7 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			// figure out child type
 			LogicalType child_type(LogicalTypeId::SQLNULL);
 			for (auto &child_value : values) {
-				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+				child_type = LogicalType::DefaultForceMaxLogicalType(child_type, child_value.type());
 			}
 
 			// finally create the list
@@ -180,12 +180,12 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			return true;
 		} else if (function.FunctionName() == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[0], keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[1], values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(function.GetArguments()[1].GetExpression(), values)) {
 				return false;
 			}
 
@@ -253,8 +253,8 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.GetChildren()) {
-			if (!TryFoldForBackwardsCompatibility(child, values)) {
+		for (auto &child : function.GetArgumentsMutable()) {
+			if (!TryFoldForBackwardsCompatibility(child.GetExpressionMutable(), values)) {
 				return false;
 			}
 		}

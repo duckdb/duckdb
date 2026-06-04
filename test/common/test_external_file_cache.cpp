@@ -39,6 +39,13 @@ string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
 	return result;
 }
 
+void WriteTestContent(const string &path, const string &content) {
+	auto local_fs = FileSystem::CreateLocal();
+	auto handle = local_fs->OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
+	handle->Sync();
+}
+
 idx_t CountCachedBlocks(ExternalFileCache &cache) {
 	return cache.GetCachedFileInformation().size();
 }
@@ -232,6 +239,67 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 	}
 	REQUIRE(blocks_a == 2); // reindexed: 8 x 4KiB -> 2 x 16KiB
 	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
+}
+
+TEST_CASE("Disabled external file cache does not insert into cached_files", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const idx_t FILE_SIZE = 16384;
+	const auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_disabled.bin", content);
+
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+
+	// Disable the cache.
+	cache.SetEnabled(false);
+	REQUIRE_FALSE(cache.IsEnabled());
+	REQUIRE(cache.GetCachedFileCount() == 0);
+
+	// Open and fully read the file with caching disabled.
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	}
+
+	// With caching disabled, no entry should exist in the cache file map.
+	REQUIRE(cache.GetCachedFileCount() == 0);
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// When cache enabled, opening and reading the file does populate the map.
+	cache.SetEnabled(true);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	}
+	REQUIRE(cache.GetCachedFileCount() == 1);
+}
+
+TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const string content_a(64, 'A');
+	const string content_b(128, 'B');
+	EFCTestFileGuard test_file("test_efc_reenabled_live_handle_metadata.bin", content_a);
+
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(handle->GetFileSize() == content_a.size());
+	REQUIRE(cache.GetCachedFileCount() == 1);
+
+	cache.SetEnabled(false);
+	REQUIRE(cache.GetCachedFileCount() == 0);
+	WriteTestContent(test_file.GetPath(), content_b);
+
+	cache.SetEnabled(true);
+	REQUIRE(handle->GetFileSize() == content_b.size());
+	REQUIRE(cache.GetCachedFileCount() == 1);
 }
 
 TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[external_file_cache]") {

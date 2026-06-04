@@ -126,12 +126,12 @@ PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, uni
 		if (func_expr->FunctionName() != "-") {
 			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->GetChildren().empty());
-		if (func_expr->GetChildren()[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
 		const auto const_value =
-		    func_expr->GetChildren()[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -149,12 +149,12 @@ PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, const 
 		if (func_expr->FunctionName() != "-") {
 			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->GetChildren().empty());
-		if (func_expr->GetChildren()[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
 		const auto const_value =
-		    func_expr->GetChildren()[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 

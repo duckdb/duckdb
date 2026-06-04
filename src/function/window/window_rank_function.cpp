@@ -23,9 +23,9 @@ public:
 			//	If the argument order is a prefix of the partition ordering
 			//	(and the optimizer is enabled), then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
-			auto &arg_orders = executor.wexpr.arg_orders;
+			auto &arg_orders = executor.wexpr.ArgOrders();
 			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
 				token_tree = make_uniq<WindowTokenTree>(client, arg_orders, executor.arg_order_idx, payload_count);
 			}
 		}
@@ -140,7 +140,7 @@ struct WindowPeerExecutor : public WindowExecutor {
 void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	const auto &wexpr = executor.wexpr;
 	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
@@ -177,7 +177,7 @@ public:
 };
 
 void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PEER_BEGIN);
 	} else {
@@ -207,7 +207,7 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
                                  idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (gpeer.use_framing) {
@@ -291,7 +291,7 @@ void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 
 	auto &order_mask = gpeer.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
@@ -379,7 +379,7 @@ public:
 };
 
 void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 		required.insert(PEER_BEGIN);
@@ -416,7 +416,7 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
                                         Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
@@ -472,7 +472,7 @@ public:
 };
 
 void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 		required.insert(PEER_END);
@@ -505,7 +505,7 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {

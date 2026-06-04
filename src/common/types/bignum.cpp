@@ -2,6 +2,7 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include <cmath>
 
@@ -136,7 +137,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 	}
 	idx_t cur_pos = start_pos;
 	// Verify all is numeric
-	while (cur_pos < end_pos && std::isdigit(int_value_char[cur_pos])) {
+	while (cur_pos < end_pos && StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
 		cur_pos++;
 	}
 	if (cur_pos < end_pos) {
@@ -149,7 +150,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 		}
 
 		while (cur_pos < end_pos) {
-			if (std::isdigit(int_value_char[cur_pos])) {
+			if (StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.

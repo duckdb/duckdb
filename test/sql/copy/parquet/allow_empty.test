@@ -1,0 +1,88 @@
+# name: test/sql/copy/parquet/allow_empty.test
+# description: Test allow_empty for Parquet reads
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE allow_empty_source(id INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO allow_empty_source VALUES (1, 'first row'), (2, 'second row');
+
+statement error
+SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty_missing.parquet']);
+----
+No files found that match the pattern
+
+query TT
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty_missing.parquet'], allow_empty = true));
+----
+empty	BOOLEAN
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/allow_empty_missing.parquet'], allow_empty = true);
+----
+0
+
+statement ok
+COPY allow_empty_source TO '{TEST_DIR}/allow_empty.parquet' (FORMAT PARQUET);
+
+query IT
+SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty.parquet'], allow_empty = true) ORDER BY id;
+----
+1	first row
+2	second row
+
+statement ok
+COPY (SELECT id, payload, 'active' AS partition_key FROM allow_empty_source) TO '{TEST_DIR}/allow_empty_hive' (FORMAT PARQUET, PARTITION_BY (partition_key));
+
+query ITT
+SELECT id, payload, partition_key
+FROM read_parquet(['{TEST_DIR}/allow_empty_hive/**/*.parquet'], hive_partitioning = true, allow_empty = true)
+ORDER BY id;
+----
+1	first row	active
+2	second row	active
+
+query ITT
+SELECT id, payload, partition_key
+FROM read_parquet('{TEST_DIR}/allow_empty_hive', hive_partitioning = true, allow_empty = true)
+ORDER BY id;
+----
+1	first row	active
+2	second row	active
+
+query TT
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty_hive/partition_key=missing/*.parquet'], hive_partitioning = true, allow_empty = true));
+----
+empty	BOOLEAN
+
+query TT
+SELECT column_name, column_type
+FROM (
+	DESCRIBE SELECT id, payload
+	FROM (
+		SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty_missing/*.parquet'], allow_empty = true)
+		UNION BY NAME
+		(SELECT 1::INTEGER AS id, 'schema'::VARCHAR AS payload LIMIT 0)
+	)
+);
+----
+id	INTEGER
+payload	VARCHAR
+
+query I
+SELECT count(*)
+FROM (
+	SELECT id, payload
+	FROM (
+		SELECT * FROM read_parquet(['{TEST_DIR}/allow_empty_missing/*.parquet'], allow_empty = true)
+		UNION BY NAME
+		(SELECT 1::INTEGER AS id, 'schema'::VARCHAR AS payload LIMIT 0)
+	)
+);
+----
+0

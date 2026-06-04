@@ -61,6 +61,7 @@ add_library_unity(
   hive_partitioning.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  memory_mapped_file.cpp
   error_data.cpp
   opener_file_system.cpp
   printer.cpp

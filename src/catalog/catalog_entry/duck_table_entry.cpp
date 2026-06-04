@@ -462,11 +462,9 @@ struct StructMappingInfo {
 };
 
 unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
-	expr->SetAlias(std::move(name));
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(expr));
-	auto res = make_uniq<FunctionExpression>("struct_pack", std::move(children));
-	return std::move(res);
+	vector<FunctionArgument> children;
+	children.emplace_back(std::move(name), std::move(expr));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(children));
 }
 
 static child_list_t<LogicalType> GetChildList(const LogicalType &type) {
@@ -1384,6 +1382,11 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 		auto old_entry = triggers->GetEntry(transaction, entry_name);
 		if (old_entry) {
 			return nullptr;
+		}
+	} else if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
+		if (old_entry) {
+			triggers->DropEntry(transaction, entry_name, false);
 		}
 	}
 	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {

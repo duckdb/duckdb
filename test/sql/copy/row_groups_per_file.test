@@ -154,7 +154,32 @@ COPY bigdata TO '{TEST_DIR}/row_groups_per_file_error' (FORMAT PARQUET, ROW_GROU
 ----
 Not implemented Error
 
-statement error
-COPY bigdata TO '{TEST_DIR}/row_groups_per_file_error' (FORMAT PARQUET, ROW_GROUPS_PER_FILE 1, PARTITION_BY col_a);
+statement ok
+CREATE TABLE partitioned_bigdata AS
+SELECT col_a % 4 AS part, col_a, col_b FROM bigdata;
+
+statement ok
+COPY partitioned_bigdata
+TO '{TEST_DIR}/row_groups_per_file_partitioned'
+(FORMAT PARQUET, ROW_GROUP_SIZE 1000, ROW_GROUPS_PER_FILE 1, PARTITION_BY part);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/row_groups_per_file_partitioned/**/*.parquet', hive_partitioning = true);
 ----
-Not implemented Error
+10000
+
+query I
+WITH files AS (
+	SELECT part, count(DISTINCT filename) file_count
+	FROM read_parquet(
+		'{TEST_DIR}/row_groups_per_file_partitioned/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY part
+)
+SELECT min(file_count) > 1
+FROM files;
+----
+true
