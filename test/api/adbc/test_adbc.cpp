@@ -4633,4 +4633,141 @@ TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
 
+TEST_CASE("ADBC - Rich Error Metadata API", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	SECTION("Function pointers are wired for 1.1.0") {
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver != nullptr);
+		REQUIRE(driver->ErrorGetDetailCount != nullptr);
+		REQUIRE(driver->ErrorGetDetail != nullptr);
+	}
+
+	SECTION("No details for zero-initialized error") {
+		AdbcError error = {};
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver->ErrorGetDetailCount(&error) == 0);
+		auto detail = driver->ErrorGetDetail(&error, 0);
+		REQUIRE(detail.key == nullptr);
+		REQUIRE(detail.value == nullptr);
+	}
+
+	SECTION("Provides duckdb:error_type detail for ingestion CREATE conflict") {
+		// Create a table first (uses db.adbc_error which is zero-init)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl", input);
+
+		// Try to ingest to the same table in CREATE mode (default) with ADBC_ERROR_INIT
+		// This triggers a Catalog error ("already exists")
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		REQUIRE(error.message != nullptr);
+
+		// With ADBC_ERROR_INIT, structured error details should be available
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		// Out-of-bounds index returns empty detail
+		auto oob = AdbcErrorGetDetail(&error, 999);
+		REQUIRE(oob.key == nullptr);
+		REQUIRE(oob.value == nullptr);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("No duckdb:error_type detail when error is zero-initialized") {
+		// Same scenario but with zero-init error (no ADBC_ERROR_INIT)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl2", input);
+
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = {}; // zero-init: vendor_code = 0, not ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl2", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+
+		// With zero-init error, no structured details
+		REQUIRE(AdbcErrorGetDetailCount(&error) == 0);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("Provides duckdb:error_type detail for APPEND to missing table") {
+		auto &input = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table_rich_append", &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(!SUCCESS(status));
+		REQUIRE(error.message != nullptr);
+
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input.release) {
+			input.release(&input);
+		}
+	}
+}
+
 } // namespace duckdb
