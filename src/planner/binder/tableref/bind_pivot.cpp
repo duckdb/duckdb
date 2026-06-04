@@ -543,8 +543,8 @@ static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column
 		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.GetChildrenMutable()) {
-			if (!TryExtractUnpivotList(*child, column_names)) {
+		for (auto &child : function.GetArgumentsMutable()) {
+			if (!TryExtractUnpivotList(*child.GetExpressionMutable(), column_names)) {
 				column_names.resize(initial_size);
 				return false;
 			}
@@ -568,8 +568,8 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
 		if (function.FunctionName() == "row") {
-			for (auto &child : function.GetChildrenMutable()) {
-				BindPivotInList(child, values, binder);
+			for (auto &child : function.GetArgumentsMutable()) {
+				BindPivotInList(child.GetExpressionMutable(), values, binder);
 			}
 		} else {
 			BindPivotConstantInList(expr, values, binder);

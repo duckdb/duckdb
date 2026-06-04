@@ -154,9 +154,10 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "134217728B";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowCommunityExtensionsSetting {
@@ -312,6 +313,17 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr const char *DefaultValue = "64";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct AsyncThreadsSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "async_threads";
+	static constexpr const char *Description =
+	    "The number of total async threads used by the system for tasks like I/O.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoCheckpointSkipWalThresholdSetting {

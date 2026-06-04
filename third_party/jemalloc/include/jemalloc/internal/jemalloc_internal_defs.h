@@ -211,12 +211,10 @@
 /* #undef JEMALLOC_PROF_LIBUNWIND */
 
 /* Use libgcc for profile backtracing if defined. */
-#ifdef __GLIBC__
 #define JEMALLOC_PROF_LIBGCC
-#endif
 
 /* Use gcc intrinsics for profile backtracing if defined. */
-#define JEMALLOC_PROF_GCC
+/* #undef JEMALLOC_PROF_GCC */
 
 /* JEMALLOC_PAGEID enabled page id */
 /* #undef JEMALLOC_PAGEID */

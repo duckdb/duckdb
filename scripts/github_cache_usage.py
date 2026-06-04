@@ -33,12 +33,12 @@ MAIN = {
     "linux-relassert",
     "linux-configs",
     "vector-sizes",
-    "valgrind",
     "threadsan",
     "no-string-inline",
 }
 
 NIGHTLYTESTS = {
+    "valgrind",
     "release-assert",
     "release-assert-clang",
     "release-assert-osx-storage",

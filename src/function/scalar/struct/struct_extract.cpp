@@ -162,12 +162,12 @@ ScalarFunction GetKeyExtractFunction() {
 
 ScalarFunction GetIndexExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBindIndex);
+	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 
 ScalarFunction GetExtractAtFunction() {
 	return ScalarFunction("struct_extract_at", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractAtBind);
+	                      StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {

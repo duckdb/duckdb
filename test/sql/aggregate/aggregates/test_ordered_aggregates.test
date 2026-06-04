@@ -191,3 +191,29 @@ FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
 
 endloop
+
+# Named arguments combined with WITHIN GROUP ordered-set aggregates.
+# The ORDER BY expression is injected as the leading positional argument; a named argument for the remaining (fraction)
+# parameter must still resolve to the same result as positional.
+# (quantile/percentile parameters are currently auto-named col/col1.)
+
+query I
+SELECT percentile_cont(col1 := 0.5) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
+----
+50.0
+
+query I
+SELECT percentile_disc(col1 := 0.25) WITHIN GROUP (ORDER BY i DESC) FROM generate_series(0,100) tbl(i);
+----
+75
+
+query I
+SELECT percentile_cont(col1 := [0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
+----
+[25.0, 50.0, 75.0]
+
+# A name that does not match any parameter is rejected (rather than crashing / being ignored)
+statement error
+SELECT percentile_cont(frac := 0.5) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
+----
+<REGEX>:Binder Error:.*No function matches.*
