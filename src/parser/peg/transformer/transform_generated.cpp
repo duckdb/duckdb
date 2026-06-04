@@ -421,7 +421,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCallStatementIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr, 1);
-	auto table_function_arguments = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 2);
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr, 2);
 	auto result = TransformCallStatement(transformer, qualified_table_function, std::move(table_function_arguments));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -2112,7 +2112,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatemen
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
-	vector<unique_ptr<ParsedExpression>> table_function_arguments {};
+	vector<FunctionArgument> table_function_arguments {};
 	transformer.TransformOptional(list_pr, 2, table_function_arguments);
 	auto result = TransformExecuteStatement(transformer, identifier, std::move(table_function_arguments));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));

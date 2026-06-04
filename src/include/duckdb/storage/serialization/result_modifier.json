@@ -27,8 +27,15 @@
         "id": 201,
         "name": "offset",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 202,
+        "name": "limit_type",
+        "type": "LimitValueType",
+        "default": "LimitValueType::ROW_COUNT"
       }
-    ]
+    ],
+    "use_legacy_serialization": "v2.0.0"
   },
   {
     "class": "DistinctModifier",
@@ -55,9 +62,9 @@
     ]
   },
   {
-    "class": "LimitPercentModifier",
+    "class": "LegacyLimitPercentModifier",
     "base": "ResultModifier",
-    "enum": "LIMIT_PERCENT_MODIFIER",
+    "enum": "LEGACY_LIMIT_PERCENT_MODIFIER",
     "members": [
       {
         "id": 200,
@@ -69,7 +76,9 @@
         "name": "offset",
         "type": "ParsedExpression*"
       }
-    ]
+    ],
+    "constructor": ["limit", "offset"],
+    "constructor_method": "LegacyLimitPercentModifier::DeserializeLegacyLimitPercentModifier"
   },
   {
     "class": "BoundOrderModifier",

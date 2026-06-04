@@ -1276,7 +1276,7 @@ void ClientContext::InterruptCheck() const {
 	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
 		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 		if (now >= query_deadline.GetIndex()) {
-			throw InterruptException();
+			throw InterruptException("Query exceeded maximum execution time");
 		}
 	}
 }

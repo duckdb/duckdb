@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
@@ -361,7 +362,8 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 	Initialize(context_p, type, column_id, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const QueryContext &context_p, const vector<LogicalType> &types) {
+	context = context_p;
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
@@ -381,7 +383,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(filters)) {
+	if (!CheckZonemap(state.context.GetClientContext(), filters)) {
 		return false;
 	}
 	if (!RefersToSameObject(node.GetNode(), *this)) {
@@ -410,7 +412,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(filters)) {
+	if (!CheckZonemap(state.context.GetClientContext(), filters)) {
 		return false;
 	}
 	if (!RefersToSameObject(node.GetNode(), *this)) {
@@ -539,7 +541,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			dummy_chunk.SetCardinality(rows_in_this_vector);
+			dummy_chunk.SetChildCardinality(rows_in_this_vector);
 			result_chunk.Reset();
 			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
@@ -663,7 +665,7 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	return expr_filter.CheckStatistics(dummy_stats);
 }
 
-bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
+bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters) {
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();
@@ -672,7 +674,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		auto &filter = entry.filter;
 		const auto &base_column_index = entry.table_column_index;
 
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(base_column_index, filter);
+		auto prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}

@@ -112,6 +112,7 @@ public:
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
+	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
 	static void AddSkipReason(const string &reason);
 
 private:

@@ -41,7 +41,6 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 		return;
 	}
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
-	output.SetCardinality(next - data.offset);
 
 	// collname, VARCHAR
 	auto &collname = output.data[0];
@@ -49,7 +48,6 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 	for (idx_t i = data.offset; i < next; i++) {
 		collname.Append(Value(data.entries[i]));
 	}
-
 	data.offset = next;
 }
 

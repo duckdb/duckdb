@@ -65,7 +65,6 @@ void DuckDBEvictionQueuesFunction(ClientContext &context, TableFunctionInput &da
 		total_insertions.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.total_insertions)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBEvictionQueuesFun::RegisterFunction(BuiltinFunctions &set) {

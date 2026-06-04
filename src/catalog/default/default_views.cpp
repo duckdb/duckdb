@@ -159,8 +159,8 @@ static const DefaultView internal_views[] = {
      "scope_name, NULL::BIGINT maximum_cardinality, NULL::VARCHAR dtd_identifier, NULL::BOOL is_self_referencing, "
      "NULL::BOOL is_identity, NULL::VARCHAR identity_generation, NULL::VARCHAR identity_start, NULL::VARCHAR "
      "identity_increment, NULL::VARCHAR identity_maximum, NULL::VARCHAR identity_minimum, NULL::BOOL identity_cycle, "
-     "NULL::VARCHAR is_generated, NULL::VARCHAR generation_expression, NULL::BOOL is_updatable, comment AS "
-     "COLUMN_COMMENT FROM duckdb_columns;"},
+     "CASE WHEN is_generated THEN 'ALWAYS' ELSE 'NEVER' END is_generated, generation_expression, NULL::BOOL "
+     "is_updatable, comment AS COLUMN_COMMENT FROM duckdb_columns;"},
     {"information_schema", "schemata",
      "SELECT database_name catalog_name, schema_name, 'duckdb' schema_owner, NULL::VARCHAR "
      "default_character_set_catalog, NULL::VARCHAR default_character_set_schema, NULL::VARCHAR "

@@ -201,7 +201,7 @@ struct ICUTableRange {
 			}
 			if (state.empty_range) {
 				// empty range
-				output.SetCardinality(0);
+				output.SetChildCardinality(0);
 				state.current_input_row++;
 				state.initialized_row = false;
 				return OperatorResultType::HAVE_MORE_OUTPUT;

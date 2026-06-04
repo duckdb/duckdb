@@ -477,7 +477,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			                          first_message, original_error, extended_error);
 		}
 	}
-	output_chunk.SetCardinality(input_chunk.size());
+	output_chunk.SetChildCardinality(input_chunk.size());
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,

@@ -112,7 +112,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 			ConstantVector::Reference(state.input_chunk.data[col_idx], count_t(1), input.data[col_idx], state.row_index,
 			                          input.size());
 		}
-		state.input_chunk.SetCardinality(1);
+		state.input_chunk.SetChildCardinality(1);
 		state.row_index++;
 		state.new_row = false;
 		state.current_ordinality_idx = 1;

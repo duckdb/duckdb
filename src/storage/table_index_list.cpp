@@ -414,7 +414,6 @@ void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &inde
 		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 		index_chunk.data[i].Reference(table_chunk.data[col_id]);
 	}
-	index_chunk.SetCardinality(table_chunk);
 }
 
 } // namespace duckdb

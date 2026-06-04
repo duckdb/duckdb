@@ -463,11 +463,9 @@ struct StructMappingInfo {
 };
 
 unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
-	expr->SetAlias(std::move(name));
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(expr));
-	auto res = make_uniq<FunctionExpression>("struct_pack", std::move(children));
-	return std::move(res);
+	vector<FunctionArgument> children;
+	children.emplace_back(std::move(name), std::move(expr));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(children));
 }
 
 static child_list_t<LogicalType> GetChildList(const LogicalType &type) {

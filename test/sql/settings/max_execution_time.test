@@ -48,7 +48,7 @@ SET max_execution_time=50
 statement error
 SELECT COUNT(*) FROM range(100000000) t1, range(1000) t2
 ----
-Interrupt
+Query exceeded maximum execution time
 
 # increase timeout so RESET can succeed  
 statement ok
@@ -86,7 +86,7 @@ WITH RECURSIVE cte AS (
 )
 SELECT COUNT(*) FROM cte
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 SET max_execution_time=5000
@@ -98,7 +98,7 @@ SET max_execution_time=50
 statement error
 SELECT i % 10000000 as g, COUNT(*) FROM range(100000000) t(i) GROUP BY 1
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 SET max_execution_time=5000
@@ -110,7 +110,7 @@ SET max_execution_time=50
 statement error
 SELECT * FROM range(50000000) ORDER BY random()
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 SET max_execution_time=5000
@@ -122,7 +122,7 @@ SET max_execution_time=50
 statement error
 SELECT i, SUM(i) OVER (PARTITION BY i % 1000000 ORDER BY i) FROM range(10000000) t(i)
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 SET max_execution_time=5000
@@ -144,7 +144,7 @@ SELECT
 FROM range(100000000) t(i) 
 GROUP BY 1
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 SET max_execution_time=5000
@@ -156,7 +156,7 @@ SET max_execution_time=50
 statement error
 SELECT DISTINCT i FROM range(50000000) t(i)
 ----
-Interrupt
+Query exceeded maximum execution time
 
 statement ok
 RESET max_execution_time
@@ -164,4 +164,39 @@ RESET max_execution_time
 # Verify everything works without timeout
 statement ok
 SELECT COUNT(*) FROM range(1000)
+
+statement ok
+SET GLOBAL max_execution_time=5000
+
+query I
+SELECT current_setting('max_execution_time')
+----
+5000
+
+# local override takes precedence over global
+statement ok
+SET max_execution_time=9000
+
+query I
+SELECT current_setting('max_execution_time')
+----
+9000
+
+# reset local, global value should be visible again
+statement ok
+RESET max_execution_time
+
+query I
+SELECT current_setting('max_execution_time')
+----
+5000
+
+# reset global back to default
+statement ok
+SET GLOBAL max_execution_time=0
+
+query I
+SELECT current_setting('max_execution_time')
+----
+0
 

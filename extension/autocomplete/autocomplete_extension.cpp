@@ -452,7 +452,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
@@ -520,7 +519,6 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		word.Append(Value(entry.text));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,

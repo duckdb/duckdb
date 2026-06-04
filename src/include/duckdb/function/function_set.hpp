@@ -35,7 +35,7 @@ public:
 		return functions.size();
 	}
 
-	const T &GetFunctionByOffset(idx_t offset) {
+	const T &GetFunctionByOffset(idx_t offset) const {
 		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}

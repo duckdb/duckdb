@@ -140,9 +140,10 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			vector<LogicalType> aggregation_input_types;
 			vector<unique_ptr<Expression>> bound_children;
+
 			// Bind the children of the aggregate function
-			for (auto &child : func_expr.GetChildrenMutable()) {
-				auto bound_child = expression_binder.Bind(child);
+			for (auto &child : func_expr.GetArgumentsMutable()) {
+				auto bound_child = expression_binder.Bind(child.GetExpressionMutable());
 				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
@@ -171,7 +172,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Find the best matching aggregate function
 			auto best_function_idx =
-			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
+			    function_binder.BindFunction(func.name.GetName(), func.functions, aggregation_input_types, error);
 			if (!best_function_idx.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}

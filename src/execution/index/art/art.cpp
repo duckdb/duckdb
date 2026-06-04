@@ -455,8 +455,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 			result.data[i].Reference(input.data[i]);
 		}
 	}
-
-	result.SetCardinality(input.size());
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
@@ -476,7 +474,7 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const 
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
 	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(key_input->size());
+	row_id_chunk.SetChildCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 

@@ -59,7 +59,7 @@ public:
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c], count_t(1));
 			}
-			input_chunk.SetCardinality(1);
+			input_chunk.SetChildCardinality(1);
 		}
 	}
 

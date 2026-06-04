@@ -334,6 +334,7 @@ public:
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
 
 	StatementProperties &GetStatementProperties();
@@ -363,8 +364,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether or not the binder can contain NULLs as the root of expressions
-	bool can_contain_nulls = false;
+	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
+	bool legacy_can_contain_nulls = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -385,8 +386,8 @@ private:
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
 	                       const string &catalog = "", const string &schema = "");
 	//! Bind a limit value (LIMIT or OFFSET)
-	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
-	                              bool is_offset);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
+	                              LimitValueType value_type, bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -522,7 +523,6 @@ private:
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
-	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);

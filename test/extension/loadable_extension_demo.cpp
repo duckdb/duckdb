@@ -180,7 +180,7 @@ public:
 			data.offset++;
 			count++;
 		}
-		output.SetCardinality(count);
+		output.SetChildCardinality(count);
 	}
 };
 
@@ -895,12 +895,232 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Test extension function with named arguments, overloads and default values
+//===--------------------------------------------------------------------===//
+template <int OVERLOAD_IDX>
+static void TestFunctionArgs(DataChunk &args, ExpressionState &state, Vector &result) {
+	args.Flatten();
+	for (idx_t row = 0; row < args.size(); row++) {
+		string str = StringUtil::Format("<%d>|", OVERLOAD_IDX);
+		for (auto &vec : args.data) {
+			if (FlatVector::IsNull(vec, row)) {
+				str += "NULL|";
+			} else {
+				str += vec.GetValue(row).ToSQLString() + "|";
+			}
+		}
+		FlatVector::GetDataMutable<string_t>(result)[row] = StringVector::AddString(result, str);
+	}
+}
+
+// Aggregate counterpart of the scalar inspection function. The state captures the argument values
+// from the first row it sees; on finalize it emits "<7>|a|b|c|" so a test can observe how named
+// arguments / default values were bound into positional order.
+struct InspectAggState {
+	int32_t vals[3];
+	bool valid[3];
+	idx_t arg_count;
+	bool initialized;
+};
+
+struct InspectAggOp {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.arg_count = 0;
+		state.initialized = false;
+		for (idx_t i = 0; i < 3; i++) {
+			state.valid[i] = false;
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.initialized && !target.initialized) {
+			target = source;
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		string str = "<7>|";
+		for (idx_t i = 0; i < state.arg_count; i++) {
+			str += (state.valid[i] ? to_string(state.vals[i]) : string("NULL")) + "|";
+		}
+		target = StringVector::AddString(finalize_data.result, str);
+	}
+
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+static void InspectAggUpdate(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(sdata);
+	auto states = UnifiedVectorFormat::GetData<InspectAggState *>(sdata);
+
+	vector<UnifiedVectorFormat> idata(input_count);
+	for (idx_t c = 0; c < input_count; c++) {
+		inputs[c].ToUnifiedFormat(idata[c]);
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[sdata.sel->get_index(i)];
+		if (state.initialized) {
+			continue;
+		}
+		state.arg_count = MinValue<idx_t>(input_count, 3);
+		for (idx_t c = 0; c < state.arg_count; c++) {
+			const auto idx = idata[c].sel->get_index(i);
+			if (idata[c].validity.RowIsValid(idx)) {
+				state.vals[c] = UnifiedVectorFormat::GetData<int32_t>(idata[c])[idx];
+				state.valid[c] = true;
+			} else {
+				state.valid[c] = false;
+			}
+		}
+		state.initialized = true;
+	}
+}
+
+// The inspection functions below return VARCHAR and print "<idx>|arg|arg|..." (see
+// TestFunctionArgs) so that a single query result reveals both which overload was chosen
+// and the final positional argument list (after reordering/defaults/varargs). SPECIAL_HANDLING
+// is used so that NULL arguments still reach the body and we can observe their final position.
+static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
+	using NH = FunctionNullHandling;
+
+	// test_named_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+	// Single overload, used to test reordering + defaults.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.AddParameter("c", LogicalType::INTEGER, Value::INTEGER(200));
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_named_inspect", std::move(sig), TestFunctionArgs<1>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_named_varargs(a INTEGER, b INTEGER = 100, ... INTEGER) -> VARCHAR
+	// Varargs are appended trailing; named varargs have their names discarded but keep order.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_named_varargs", std::move(sig), TestFunctionArgs<2>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_named_overload: overload resolution driven by argument types/arity, including when
+	// the call uses named arguments (which must be reordered before cost is computed).
+	//   <10> (a INTEGER, b INTEGER)
+	//   <11> (a INTEGER, b VARCHAR)
+	//   <12> (a INTEGER)
+	{
+		ScalarFunctionSet set("test_named_overload");
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<10>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::VARCHAR);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<11>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<12>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		loader.RegisterFunction(set);
+	}
+
+	// test_named_ambig: two symmetric overloads that tie in cost for an (INTEGER, INTEGER)
+	// call, to verify the ambiguity error is raised even when arguments are named/reordered.
+	//   <13> (x INTEGER, y BIGINT)
+	//   <14> (x BIGINT,  y INTEGER)
+	{
+		ScalarFunctionSet set("test_named_ambig");
+		{
+			FunctionSignature sig;
+			sig.AddParameter("x", LogicalType::INTEGER);
+			sig.AddParameter("y", LogicalType::BIGINT);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<13>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("x", LogicalType::BIGINT);
+			sig.AddParameter("y", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<14>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		loader.RegisterFunction(set);
+	}
+
+	// test_named_nullshort(a INTEGER, b INTEGER = 100) -> VARCHAR
+	// DEFAULT_NULL_HANDLING (the default): a NULL argument should short-circuit the whole call
+	// to NULL, even when arguments are named/reordered.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.SetReturnType(LogicalType::VARCHAR);
+		loader.RegisterFunction(ScalarFunction("test_named_nullshort", std::move(sig), TestFunctionArgs<6>));
+	}
+
+	// test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+	// Aggregate counterpart of test_named_inspect. AggregateFunction has no FunctionSignature
+	// constructor, so we build it from positional types and then set parameter names + defaults on
+	// the signature. Exercises named-argument binding for aggregates (shared resolution path).
+	{
+		AggregateFunction agg(
+		    "test_named_agg_inspect", {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER},
+		    LogicalType::VARCHAR, AggregateFunction::StateSize<InspectAggState>,
+		    AggregateFunction::StateInitialize<InspectAggState, InspectAggOp>, InspectAggUpdate,
+		    AggregateFunction::StateCombine<InspectAggState, InspectAggOp>,
+		    AggregateFunction::StateFinalize<InspectAggState, string_t, InspectAggOp>, NH::DEFAULT_NULL_HANDLING);
+		auto &sig = agg.GetSignature();
+		sig.GetParameter(0).SetName("a");
+		sig.GetParameter(1).SetName("b");
+		sig.GetParameter(1).SetDefaultValue(Value::INTEGER(100));
+		sig.GetParameter(2).SetName("c");
+		sig.GetParameter(2).SetDefaultValue(Value::INTEGER(200));
+		loader.RegisterFunction(std::move(agg));
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
+
+	RegisterNamedArgumentFunction(loader);
 
 	auto &db = loader.GetDatabaseInstance();
 	// create a scalar function
