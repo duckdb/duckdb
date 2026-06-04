@@ -84,7 +84,7 @@ explain SELECT MIN(levenshtein(word, 'duck')) FROM s.word_tbl
 physical_plan	<REGEX>:.*AGGREGATE.*
 
 # log() semantic mismatch: DuckDB log(x) = log10(x), MySQL log(x) = ln(x)
-# log10(100) = 2.0; ln(100) ≈ 4.605 -- if pushed, MySQL would return the wrong answer
+# the pushdown serializes DuckDB's log(x) as log10(x), so the query can be pushed
 statement ok
 CREATE OR REPLACE TABLE s.log_tbl AS SELECT 100 AS v
 
@@ -96,11 +96,11 @@ SELECT ROUND(MIN(log(v))::DOUBLE, 4) FROM s.log_tbl
 query II
 explain SELECT ROUND(MIN(log(v))::DOUBLE, 4) FROM s.log_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # length() semantic mismatch: DuckDB counts characters, MySQL counts bytes
 # chr(233) is 'é', which is 1 character but 2 bytes in UTF-8
-# if pushed, MySQL length('é') = 2; DuckDB length('é') = 1
+# the pushdown serializes DuckDB's length() as char_length(), so the query can be pushed
 statement ok
 CREATE OR REPLACE TABLE s.mb_tbl AS SELECT chr(233) AS c
 
@@ -112,7 +112,7 @@ SELECT SUM(length(c)) FROM s.mb_tbl
 query II
 explain SELECT SUM(length(c)) FROM s.mb_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # random() is named rand() in MySQL -- pushing would cause a MySQL "function not found" error
 # verify the query runs correctly (DuckDB evaluates it locally)

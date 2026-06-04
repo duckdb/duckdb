@@ -13,6 +13,7 @@ statement ok
 CREATE OR REPLACE TABLE s.sem_tbl AS SELECT i FROM range(1, 5) t(i)
 
 # concat: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
+# the pushdown serializes DuckDB's concat as concat_ws('', ...), which skips NULLs as well
 statement ok
 CREATE OR REPLACE TABLE s.concat_tbl AS
     SELECT CASE WHEN i = 0 THEN NULL ELSE 'x' END AS a, 'y' AS b FROM range(2) t(i)
@@ -22,10 +23,16 @@ SELECT COUNT(*) FROM s.concat_tbl WHERE concat(a, b) = concat(a, 'y')
 ----
 2
 
+# concat(NULL, 'y') must be 'y' (not NULL) even when pushed down
+query I
+SELECT MIN(concat(a, b)) FROM s.concat_tbl
+----
+xy
+
 query II
 explain SELECT MIN(concat(a, b)) FROM s.concat_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # concat_ws skips NULLs in both systems - pushed
 query I
@@ -50,6 +57,7 @@ explain SELECT SUM(i) / 7 FROM s.sem_tbl
 physical_plan	<REGEX>:.*AGGREGATE.*
 
 # avg: MySQL returns DECIMAL with 4 fractional digits; DuckDB returns DOUBLE
+# the pushdown serializes avg(x) as avg(CAST(x AS DOUBLE)), so the query can be pushed
 # avg(1,2,3,4 where i != 3) = avg(1,2,4) = 2.3333333333333335
 query I
 SELECT AVG(i) FROM s.sem_tbl WHERE i != 3
@@ -59,7 +67,7 @@ SELECT AVG(i) FROM s.sem_tbl WHERE i != 3
 query II
 explain SELECT AVG(i) FROM s.sem_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # greatest / least: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
 query I

@@ -34,3 +34,47 @@ query I
 SELECT MIN(CAST(i AS VARCHAR)) FROM s.small_tbl
 ----
 0
+
+# the serializer remaps cast types to their MySQL spellings:
+# BIGINT -> SIGNED, VARCHAR -> CHAR, DOUBLE -> DOUBLE, DECIMAL(w,s) -> DECIMAL(w,s)
+query II
+explain SELECT SUM(CAST(i AS BIGINT)) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+explain SELECT MIN(CAST(i AS VARCHAR)) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query I
+SELECT SUM(CAST(i AS DOUBLE)) FROM s.small_tbl
+----
+45.0
+
+query II
+explain SELECT SUM(CAST(i AS DOUBLE)) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query I
+SELECT SUM(CAST(i AS DECIMAL(8,2))) FROM s.small_tbl
+----
+45.00
+
+query II
+explain SELECT SUM(CAST(i AS DECIMAL(8,2))) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# casting a string to a date is pushed (verified at the top of this file); casting
+# to BLOB is not - DuckDB's VARCHAR -> BLOB cast interprets backslash escapes
+query I
+SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl WHERE i = 0
+----
+1
+
+query II
+explain SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
