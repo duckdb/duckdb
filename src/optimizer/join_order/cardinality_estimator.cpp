@@ -1,10 +1,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -27,31 +29,43 @@ public:
 struct RelationsSetToStats {
 public:
 	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set), distinct_count_hll(0),
-	      distinct_count_no_hll(NumericLimits<idx_t>::Maximum()), has_distinct_count_hll(false) {
+	    : equivalent_relations(column_binding_set), fallback_distinct_count(NumericLimits<idx_t>::Maximum()) {
 	}
 
 public:
 	//! Column binding sets that are equivalent in a join plan.
 	column_binding_set_t equivalent_relations;
-	//! The estimated total domains of the equivalent relations determined using HLL.
-	idx_t distinct_count_hll;
-	//! The estimated total domains of each relation without using HLL.
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
+	//! The estimated total domains of the equivalent relations determined from HLL or exact metadata.
+	optional_idx reliable_distinct_count;
+	//! The estimated total domains derived from min/max statistics.
+	optional_idx min_max_distinct_count;
+	//! The estimated total domains using the row-count fallback.
+	idx_t fallback_distinct_count;
 	vector<reference<JoinPredicate>> predicates;
 	vector<string> column_names;
 };
 
+static idx_t GetDistinctCount(const RelationsSetToStats &relation_set_to_stats) {
+	if (relation_set_to_stats.reliable_distinct_count.IsValid()) {
+		return relation_set_to_stats.reliable_distinct_count.GetIndex();
+	}
+	if (relation_set_to_stats.min_max_distinct_count.IsValid()) {
+		return relation_set_to_stats.min_max_distinct_count.GetIndex();
+	}
+	return relation_set_to_stats.fallback_distinct_count;
+}
+
 struct FilterInfoWithTotalDomains {
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
-	    : predicate(predicate), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
-	      distinct_count_no_hll(relation_set_to_stats.distinct_count_no_hll),
-	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
+	    : predicate(predicate), reliable_distinct_count(relation_set_to_stats.reliable_distinct_count),
+	      min_max_distinct_count(relation_set_to_stats.min_max_distinct_count),
+	      fallback_distinct_count(relation_set_to_stats.fallback_distinct_count) {
 	}
 
 public:
 	double GetDistinctCount() const;
+	bool HasReliableDistinctCount() const;
+	idx_t GetReliableDistinctCount() const;
 	ExpressionType GetComparisonType();
 	bool IsInnerEquality();
 	FilterInfo &GetFilter() const;
@@ -59,9 +73,9 @@ public:
 
 public:
 	reference<JoinPredicate> predicate;
-	idx_t distinct_count_hll;
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
+	optional_idx reliable_distinct_count;
+	optional_idx min_max_distinct_count;
+	idx_t fallback_distinct_count;
 };
 
 struct Subgraph2Denominator {
@@ -144,7 +158,22 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
+	if (reliable_distinct_count.IsValid()) {
+		return static_cast<double>(reliable_distinct_count.GetIndex());
+	}
+	if (min_max_distinct_count.IsValid()) {
+		return static_cast<double>(min_max_distinct_count.GetIndex());
+	}
+	return static_cast<double>(fallback_distinct_count);
+}
+
+bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
+	return reliable_distinct_count.IsValid();
+}
+
+idx_t FilterInfoWithTotalDomains::GetReliableDistinctCount() const {
+	D_ASSERT(reliable_distinct_count.IsValid());
+	return reliable_distinct_count.GetIndex();
 }
 
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
@@ -669,8 +698,8 @@ void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &ed
 		                       *complete_subgraph.relations)) {
 			return;
 		}
-		if (edge.has_distinct_count_hll) {
-			state.unused_edge_tdoms.insert(edge.distinct_count_hll);
+		if (edge.HasReliableDistinctCount()) {
+			state.unused_edge_tdoms.insert(edge.GetReliableDistinctCount());
 		}
 		return;
 	}
@@ -868,16 +897,19 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 }
 
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
-	if (a.has_distinct_count_hll && b.has_distinct_count_hll) {
-		return a.distinct_count_hll > b.distinct_count_hll;
+	return GetDistinctCount(a) > GetDistinctCount(b);
+}
+
+static bool IsReliableDistinctCount(DistinctCountSource source) {
+	return source == DistinctCountSource::HLL || source == DistinctCountSource::EXACT;
+}
+
+static void UpdateMaxDistinctCount(optional_idx &target, idx_t distinct_count) {
+	if (target.IsValid()) {
+		target = MaxValue(target.GetIndex(), distinct_count);
+		return;
 	}
-	if (a.has_distinct_count_hll) {
-		return a.distinct_count_hll > b.distinct_count_no_hll;
-	}
-	if (b.has_distinct_count_hll) {
-		return a.distinct_count_no_hll > b.distinct_count_hll;
-	}
-	return a.distinct_count_no_hll > b.distinct_count_no_hll;
+	target = distinct_count;
 }
 
 void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
@@ -911,15 +943,13 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			if (i_set.find(key) == i_set.end()) {
 				continue;
 			}
-			if (distinct_count.from_hll && relation_to_tdom.has_distinct_count_hll) {
-				relation_to_tdom.distinct_count_hll =
-				    MaxValue(relation_to_tdom.distinct_count_hll, distinct_count.distinct_count);
-			} else if (distinct_count.from_hll && !relation_to_tdom.has_distinct_count_hll) {
-				relation_to_tdom.has_distinct_count_hll = true;
-				relation_to_tdom.distinct_count_hll = distinct_count.distinct_count;
+			if (IsReliableDistinctCount(distinct_count.source)) {
+				UpdateMaxDistinctCount(relation_to_tdom.reliable_distinct_count, distinct_count.distinct_count);
+			} else if (distinct_count.source == DistinctCountSource::MIN_MAX) {
+				UpdateMaxDistinctCount(relation_to_tdom.min_max_distinct_count, distinct_count.distinct_count);
 			} else {
-				relation_to_tdom.distinct_count_no_hll =
-				    MinValue(distinct_count.distinct_count, relation_to_tdom.distinct_count_no_hll);
+				relation_to_tdom.fallback_distinct_count =
+				    MinValue(distinct_count.distinct_count, relation_to_tdom.fallback_distinct_count);
 			}
 		}
 	}
@@ -950,9 +980,7 @@ void CardinalityEstimator::PrintRelationStats() {
 		for (auto &column_name : total_domain.column_names) {
 			domain += column_name + ", ";
 		}
-		bool have_hll = total_domain.has_distinct_count_hll;
-		domain += "\n TOTAL DOMAIN = " +
-		          to_string(have_hll ? total_domain.distinct_count_hll : total_domain.distinct_count_no_hll);
+		domain += "\n TOTAL DOMAIN = " + to_string(GetDistinctCount(total_domain));
 		Printer::Print(domain);
 	}
 }

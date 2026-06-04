@@ -1,0 +1,24 @@
+# name: test/optimizer/joins/parquet_minmax_cardinality_estimation.test
+# description: Use Parquet min/max as a local join-order distinct-count proxy
+# group: [joins]
+
+require parquet
+
+statement ok
+COPY (SELECT range::INTEGER AS i FROM range(10000)) TO '{TEST_DIR}/minmax_filter.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_filter.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~1 row.*
+
+statement ok
+COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_sparse_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_sparse_b.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_sparse_a.parquet' a JOIN '{TEST_DIR}/minmax_sparse_b.parquet' b USING (k)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~10 rows.*
