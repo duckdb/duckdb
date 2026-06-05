@@ -68,7 +68,7 @@ UngroupedAggregateState::~UngroupedAggregateState() {
 		state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		AggregateInputData aggr_input_data(bind_data[i].get(), allocator);
+		AggregateInputData aggr_input_data(aggregate_expressions[i]->Cast<BoundAggregateExpression>(), allocator);
 		destructors[i](state_vector, aggr_input_data, 1);
 	}
 }
@@ -117,7 +117,7 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 		Vector source_state(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
 		Vector dest_state(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 
-		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+		AggregateInputData aggr_input_data(aggregate, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (!aggregate.Function().HasStateCombineCallback()) {
 			throw InternalException("Aggregate function " + aggregate.Function().GetName() +
 			                        " does not support combining of states");
@@ -138,7 +138,7 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 		}
 
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+		AggregateInputData aggr_input_data(aggregate, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
@@ -361,7 +361,7 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	idx_t payload_cnt = aggregate.GetChildren().size();
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-	AggregateInputData aggr_input_data(state.bind_data[aggr_idx].get(), allocator);
+	AggregateInputData aggr_input_data(aggregate, allocator);
 	auto cluster_update = aggregate.Function().GetStateClusterUpdateCallback();
 	if (cluster_update) {
 		ClusteredAggr clustered;
@@ -665,7 +665,7 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
-		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator);
+		AggregateInputData aggr_input_data(aggregate, allocator);
 		aggregate.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data,
 		                                                result.data[column_offset + aggr_idx], 1, 0);
 		FlatVector::SetSize(result.data[column_offset + aggr_idx], count_t(1));

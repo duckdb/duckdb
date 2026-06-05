@@ -442,7 +442,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		}
 	}
 
-	AggregateInputData aggr_input_data(bind_data.bind_data.get(), local_state.allocator);
+	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -608,7 +608,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		}
 
 		// Single batched combine call
-		AggregateInputData aggr_input_data(bind_data.bind_data.get(), local_state.allocator,
+		AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
 		                                         both_valid_count);
@@ -743,7 +743,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 	}
 
-	auto state_size = 16ULL;
+	auto state_size = aggr_input_data.function.GetStateSizeCallback()(aggr_input_data.function);
 
 	// Note: The underlying state type should always be a struct (we have a D_ASSERT for that in `GetStateType`
 	AggregateStateLayout layout(result.GetType(), state_size);
@@ -810,7 +810,8 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());
 
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	AggregateInputData combine_input(bind_data.bind_data.get(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), allocator,
+	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 }
 
