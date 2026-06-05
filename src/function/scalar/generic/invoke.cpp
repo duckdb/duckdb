@@ -53,7 +53,7 @@ struct LambdaInvokeState final : public FunctionLocalState {
 	DataChunk input_chunk;
 	idx_t parameter_count;
 
-	LambdaInvokeState(unique_ptr<ExpressionExecutor> executor_p, vector<LogicalType> input_types,
+	LambdaInvokeState(unique_ptr<ExpressionExecutor> executor_p, const vector<LogicalType> &input_types,
 	                  const idx_t parameter_count_p)
 	    : executor(std::move(executor_p)), parameter_count(parameter_count_p) {
 		input_chunk.InitializeEmpty(input_types);
@@ -79,7 +79,7 @@ struct LambdaInvokeState final : public FunctionLocalState {
 		}
 
 		auto executor = make_uniq<ExpressionExecutor>(state.GetContext(), *bound_lambda_expr.LambdaExpr());
-		return make_uniq<LambdaInvokeState>(std::move(executor), std::move(input_types), parameter_count);
+		return make_uniq<LambdaInvokeState>(std::move(executor), input_types, parameter_count);
 	}
 };
 
