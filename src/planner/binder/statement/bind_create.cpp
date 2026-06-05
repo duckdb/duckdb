@@ -86,12 +86,12 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	// we have a database with this name
 	// check if there is a schema
 	auto &search_path = retriever.GetSearchPath();
-	auto catalog_names = search_path.GetCatalogsForSchema(schema);
+	auto catalog_names = search_path.GetCatalogsForSchema(Identifier(schema));
 	if (catalog_names.empty()) {
 		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
-		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
+		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, Identifier(catalog_name));
 		if (!catalog_ptr) {
 			continue;
 		}
@@ -118,7 +118,7 @@ const string Binder::BindCatalog(string &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
 	if (database) {
-		return db_manager.GetDatabase(context, catalog).get()->GetName();
+		return db_manager.GetDatabase(context, catalog).get()->GetName().GetName();
 	} else {
 		return db_manager.GetDefaultDatabase(context);
 	}
@@ -127,20 +127,20 @@ const string Binder::BindCatalog(string &catalog) {
 void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog.GetNameMutable(), info.schema.GetNameMutable());
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
-		info.catalog = TEMP_CATALOG;
+		info.catalog = Identifier::TempCatalog();
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
 		auto &default_entry = search_path->GetDefault();
-		info.catalog = default_entry.catalog;
-		info.schema = default_entry.schema;
+		info.catalog = Identifier(default_entry.catalog);
+		info.schema = Identifier(default_entry.schema);
 	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(context, info.catalog.GetName());
+		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
 	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = search_path->GetDefaultCatalog(info.schema.GetName());
+		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
 	}
 	if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = DatabaseManager::GetDefaultDatabase(context);
+		info.catalog = Identifier(DatabaseManager::GetDefaultDatabase(context));
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
@@ -229,8 +229,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
 	}
-	BindView(context, *base.query, base.catalog.GetName(), base.schema.GetName(), dependencies, base.aliases,
-	         base.types, base.names);
+	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -328,7 +327,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			// Save this back as a constant expression
 			auto const_expr = make_uniq<ConstantExpression>(default_val);
-			const_expr->SetAlias(param_name);
+			const_expr->SetAlias(Identifier(param_name));
 			it.second = std::move(const_expr);
 		}
 
@@ -516,7 +515,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// Validate UPDATE OF columns exist
 	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
 		for (const auto &col_name : create_trigger_info.columns) {
-			if (!table.ColumnExists(col_name)) {
+			if (!table.ColumnExists(Identifier(col_name))) {
 				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
 			}
 		}
@@ -555,8 +554,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
-		if (!alias.empty() && body_copy->cte_map.map.find(alias) == body_copy->cte_map.map.end()) {
-			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
+		if (!alias.empty() && body_copy->cte_map.map.find(Identifier(alias)) == body_copy->cte_map.map.end()) {
+			body_copy->cte_map.map[Identifier(alias)] = MakeTriggerValidationCTE(table);
 		}
 	}
 	validation_binder->Bind(*body_copy);
@@ -588,7 +587,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog.GetNameMutable());
-		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
+		properties.RegisterDBModify(Catalog::GetCatalog(context, Identifier(catalog)), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
@@ -779,8 +778,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name.GetName(),
-		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
+		CreateSecretInput create_secret_input {Identifier(type_string),
+		                                       Identifier(provider_string),
+		                                       Identifier(info.storage_type),
+		                                       info.name,
+		                                       scope_strings,
+		                                       bound_options,
+		                                       info.on_conflict,
+		                                       info.persist_type};
 
 		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 		break;

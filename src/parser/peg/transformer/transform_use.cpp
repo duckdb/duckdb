@@ -21,7 +21,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
+		result.name = Identifier(choice_result.Cast<IdentifierParseResult>().identifier);
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -36,9 +36,9 @@ QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransfor
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = catalog_name;
-	result.name = reserved_schema_name;
+	result.catalog = Identifier::InvalidCatalog();
+	result.schema = Identifier(catalog_name);
+	result.name = Identifier(reserved_schema_name);
 	return result;
 }
 

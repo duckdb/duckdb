@@ -57,11 +57,11 @@ public:
 
 public:
 	//! Format: Type\0Schema\0Name
-	string name;
+	Identifier name;
 
 public:
 	bool operator==(const MangledEntryName &other) const {
-		return StringUtil::CIEquals(other.name, name);
+		return other.name == name;
 	}
 	bool operator!=(const MangledEntryName &other) const {
 		return !(*this == other);
@@ -75,7 +75,7 @@ public:
 
 public:
 	//! Format: MangledEntryName\0MangledEntryName
-	string name;
+	Identifier name;
 };
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries

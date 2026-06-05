@@ -1,5 +1,5 @@
 diff --git a/src/aws_secret.cpp b/src/aws_secret.cpp
-index e6e7b06..d008820 100644
+index e6e7b06..ac0f92c 100644
 --- a/src/aws_secret.cpp
 +++ b/src/aws_secret.cpp
 @@ -56,8 +56,8 @@ static void ParseCoreS3Config(CreateSecretInput &input, KeyValueSecret &secret)
@@ -13,3 +13,12 @@ index e6e7b06..d008820 100644
  	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
  	return_value->redact_keys = {"secret", "session_token"};
  	return return_value;
+@@ -365,7 +365,7 @@ void CreateAwsSecretFunctions::Register(ExtensionLoader &loader) {
+ 
+ 	for (const auto &type : types) {
+ 		// Register the credential_chain secret provider
+-		CreateSecretFunction cred_chain_function = {type, "credential_chain", CreateAWSSecretFromCredentialChain};
++		CreateSecretFunction cred_chain_function = {type, Identifier("credential_chain"), CreateAWSSecretFromCredentialChain};
+ 
+ 		// Params for adding / overriding settings to the automatically fetched ones
+ 		cred_chain_function.named_parameters["key_id"] = LogicalType::VARCHAR;

@@ -39,7 +39,8 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 			// we already applied this collation
 			continue;
 		}
-		auto &collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
+		auto &collation_entry =
+		    catalog.GetEntry<CollateCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(collation_argument));
 		if (collation_entry.combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
@@ -74,8 +75,8 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "timetz_byte_comparable");
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                                    Identifier("timetz_byte_comparable"));
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("timetz_byte_comparable should only have a single overload");
 	}
@@ -96,8 +97,8 @@ bool PushBitStringCollation(ClientContext &context, unique_ptr<Expression> &sour
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "bitstring_byte_comparable");
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                                    Identifier("bitstring_byte_comparable"));
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("bitstring_byte_comparable should only have a single overload");
 	}
@@ -118,7 +119,8 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "normalized_interval");
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                                    Identifier("normalized_interval"));
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("normalized_interval should only have a single overload");
 	}
@@ -138,7 +140,8 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 		return false;
 	}
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "variant_normalize");
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                                    Identifier("variant_normalize"));
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("variant_normalize should only have a single overload");
 	}
@@ -149,7 +152,7 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
-	function->SetAlias(source_alias);
+	function->SetAlias(Identifier(source_alias));
 	source = std::move(function);
 	return true;
 }

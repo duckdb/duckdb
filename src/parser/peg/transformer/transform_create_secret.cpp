@@ -21,7 +21,7 @@ PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, co
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
 	if (!secret_name.empty()) {
-		info->name = secret_name;
+		info->name = Identifier(secret_name);
 	}
 	if (!secret_storage_specifier.empty()) {
 		info->storage_type = StringUtil::Lower(secret_storage_specifier);
@@ -55,7 +55,7 @@ PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, co
 			    "Can not combine a non-constant expression for the secret type with a default-named secret. Either "
 			    "provide an explicit secret name or use a constant expression for the secret type.");
 		}
-		info->name = "__default_" + StringUtil::Lower(value.ToString());
+		info->name = Identifier("__default_" + StringUtil::Lower(value.ToString()));
 	}
 	result->info = std::move(info);
 	return result;

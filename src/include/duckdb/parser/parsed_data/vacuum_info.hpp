@@ -34,7 +34,7 @@ public:
 	explicit VacuumInfo(VacuumOptions options);
 
 	const VacuumOptions options;
-	vector<string> columns;
+	vector<Identifier> columns;
 	bool has_table;
 	unique_ptr<TableRef> ref;
 

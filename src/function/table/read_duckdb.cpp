@@ -192,7 +192,7 @@ AttachedDatabaseWrapper::~AttachedDatabaseWrapper() {
 		auto &db_manager = DatabaseManager::Get(context);
 		auto name = attached_database->GetName();
 		attached_database.reset();
-		db_manager.DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+		db_manager.DetachDatabase(context, name.GetName(), OnEntryNotFound::RETURN_NULL);
 	}
 }
 DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)
@@ -247,7 +247,7 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		AttachInfo info;
 		info.path = file.path;
 		// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
-		info.name = "\x80__duckdb_reader_" + info.path;
+		info.name = Identifier("\x80__duckdb_reader_" + info.path);
 
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
@@ -264,8 +264,8 @@ TableCatalogEntry &DuckDBReader::GetTableEntry() {
 	auto &attached = GetAttachedDatabase();
 	if (!db_wrapper->table_entry) {
 		auto &catalog = attached.GetCatalog();
-		db_wrapper->table_entry =
-		    catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name, OnEntryNotFound::THROW_EXCEPTION);
+		db_wrapper->table_entry = catalog.GetEntry<TableCatalogEntry>(
+		    context, Identifier(schema_name), Identifier(table_name), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *db_wrapper->table_entry;
 }
@@ -355,10 +355,10 @@ unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, c
 		return BaseFileReader::GetStatistics(context, name);
 	}
 	auto &table_entry = GetTableEntry();
-	if (!table_entry.ColumnExists(name)) {
+	if (!table_entry.ColumnExists(Identifier(name))) {
 		return nullptr;
 	}
-	return scan_function.statistics(context, bind_data.get(), table_entry.GetColumn(name).Logical().index);
+	return scan_function.statistics(context, bind_data.get(), table_entry.GetColumn(Identifier(name)).Logical().index);
 }
 
 double DuckDBReader::GetProgressInFile(ClientContext &context) {
@@ -553,7 +553,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 	return std::move(table_function);
 }

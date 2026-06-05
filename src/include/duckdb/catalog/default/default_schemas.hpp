@@ -18,7 +18,7 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	vector<Identifier> GetDefaultEntries() override;
 	static bool IsDefaultSchema(const Identifier &input_schema);
 };
 

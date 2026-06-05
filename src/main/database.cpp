@@ -193,22 +193,22 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (storage_extension->attach != nullptr && storage_extension->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
 			attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, *storage_extension, context,
-			                                                      info.name.GetName(), info, options);
+			                                                      info.name, info, options);
 			return attached_database;
 		}
 
-		attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name.GetName(), info.path, options);
+		attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 		return attached_database;
 	}
 
 	// An empty db_type defaults to a duckdb database file.
-	attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name.GetName(), info.path, options);
+	attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
+	info.name = Identifier(AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem()));
 	info.path = config.options.database_path;
 
 	Connection con(*this);

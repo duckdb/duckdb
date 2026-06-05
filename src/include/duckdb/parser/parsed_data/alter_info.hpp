@@ -78,7 +78,7 @@ public:
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 
 	virtual Identifier GetColumnName() const {
-		return "";
+		return Identifier();
 	};
 
 	AlterEntryData GetAlterEntryData() const;

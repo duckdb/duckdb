@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALID_SCHEMA) {
+CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, Identifier::InvalidSchema()) {
 }
 
 CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Identifier name_p)
@@ -13,11 +13,11 @@ CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Iden
 }
 
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
-    : CreateTableInfo(schema.catalog.GetName(), schema.name.GetName(), std::move(name_p)) {
+    : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_uniq<CreateTableInfo>(catalog.GetName(), schema.GetName(), table.GetName());
+	auto result = make_uniq<CreateTableInfo>(catalog, schema, table);
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {
@@ -69,7 +69,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
-	ret += QualifierToString(temporary ? "" : catalog, schema, table);
+	ret += QualifierToString(temporary ? Identifier() : catalog, schema, table);
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);

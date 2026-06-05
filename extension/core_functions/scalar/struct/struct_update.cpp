@@ -77,7 +77,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 		auto &child = arguments[arg_idx];
 		if (child->GetAlias().empty()) {
 			throw BinderException("Need named argument for struct update, e.g., a := b");
-		} else if (incoming_children.find(child->GetAlias()) != incoming_children.end()) {
+		} else if (incoming_children.find(child->GetAlias().GetName()) != incoming_children.end()) {
 			throw InvalidInputException("Duplicate named argument provided for %s", child->GetAlias().c_str());
 		}
 		incoming_children.emplace(child->GetAlias(), arg_idx);
@@ -93,7 +93,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 			// Update the struct with the new data of the same name
 			auto arg_idx = update->second;
 			auto &new_child = arguments[arg_idx];
-			new_children.push_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
+			new_children.emplace_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			auto &child = arguments[arg_idx];
-			new_children.push_back(make_pair(child->GetAlias(), child->GetReturnType()));
+			new_children.emplace_back(make_pair(child->GetAlias(), child->GetReturnType()));
 		}
 	}
 

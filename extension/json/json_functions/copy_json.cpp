@@ -186,7 +186,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	if (!write_partition_columns) {
 		// Exclude the partition columns from the JSON object - they are kept as separate columns below
 		for (const auto &partition_column : partition_columns) {
-			columns_star->ExcludeListMutable().insert(QualifiedColumnName(partition_column));
+			columns_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(partition_column)));
 		}
 	}
 	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);

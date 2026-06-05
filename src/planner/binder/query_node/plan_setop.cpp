@@ -61,10 +61,10 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
-				string cur_alias = node->expressions[i]->GetAlias();
+				string cur_alias = node->expressions[i]->GetAlias().GetName();
 				node->expressions[i] =
 				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
-				node->expressions[i]->SetAlias(cur_alias);
+				node->expressions[i]->SetAlias(Identifier(cur_alias));
 			}
 		}
 		return op;

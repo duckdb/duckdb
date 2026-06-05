@@ -34,7 +34,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result) {
 	// for each using column, get the matching binding
-	auto bindings = bind_context.GetMatchingBindings(using_column);
+	auto bindings = bind_context.GetMatchingBindings(Identifier(using_column));
 	if (bindings.empty()) {
 		return false;
 	}
@@ -51,7 +51,7 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 				error += "\n\t";
 				error += other_binding.GetAlias();
 				error += ".";
-				error += bind_context.GetActualColumnName(other_binding, using_column);
+				error += bind_context.GetActualColumnName(other_binding, Identifier(using_column));
 			}
 			throw BinderException(error);
 		} else {
@@ -197,7 +197,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 		// now bind the rhs
 		for (auto &column_name : lhs_columns) {
-			auto right_using_binding = right_binder.bind_context.GetUsingBinding(column_name);
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(Identifier(column_name));
 
 			BindingAlias right_binding;
 			// loop over the set of lhs columns, and figure out if there is a table in the rhs with the same name
@@ -264,13 +264,13 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			// we check if there is ALREADY a using column of the same name in the left and right set
 			// this can happen if we chain USING clauses
 			// e.g. x JOIN y USING (c) JOIN z USING (c)
-			auto left_using_binding = left_binder.bind_context.GetUsingBinding(using_column);
-			auto right_using_binding = right_binder.bind_context.GetUsingBinding(using_column);
+			auto left_using_binding = left_binder.bind_context.GetUsingBinding(Identifier(using_column));
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(Identifier(using_column));
 			if (!left_using_binding) {
-				left_binder.bind_context.GetMatchingBinding(using_column);
+				left_binder.bind_context.GetMatchingBinding(Identifier(using_column));
 			}
 			if (!right_using_binding) {
-				right_binder.bind_context.GetMatchingBinding(using_column);
+				right_binder.bind_context.GetMatchingBinding(Identifier(using_column));
 			}
 			left_using_bindings.push_back(left_using_binding);
 			right_using_bindings.push_back(right_using_binding);
@@ -345,7 +345,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		if (result->type == JoinType::MARK) {
 			auto mark_join_idx = GenerateTableIndex();
 			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx.index);
-			bind_context.AddGenericBinding(mark_join_idx, mark_join_alias, {"__mark_index_column"},
+			bind_context.AddGenericBinding(mark_join_idx, Identifier(mark_join_alias), {"__mark_index_column"},
 			                               {LogicalType::BOOLEAN});
 			result->mark_index = mark_join_idx;
 		}

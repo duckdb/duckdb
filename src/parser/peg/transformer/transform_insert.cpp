@@ -58,7 +58,7 @@ OnConflictAction PEGTransformerFactory::TransformInsertOrIgnore(PEGTransformer &
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransformer &transformer,
                                                                       unique_ptr<BaseTableRef> base_table_name,
                                                                       const string &insert_alias) {
-	base_table_name->alias = insert_alias;
+	base_table_name->alias = Identifier(insert_alias);
 	return base_table_name;
 }
 

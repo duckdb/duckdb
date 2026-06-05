@@ -99,7 +99,7 @@ void duckdb_copy_function_set_name(duckdb_copy_function copy_function, const cha
 		return;
 	}
 	auto &copy_function_ref = *reinterpret_cast<duckdb::CopyFunction *>(copy_function);
-	copy_function_ref.name = name;
+	copy_function_ref.name = duckdb::Identifier(name);
 }
 
 void duckdb_destroy_copy_function(duckdb_copy_function *copy_function) {

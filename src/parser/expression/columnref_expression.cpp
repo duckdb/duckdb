@@ -19,14 +19,14 @@ ColumnRefExpression::ColumnRefExpression(string column_name, const BindingAlias 
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 	if (alias.IsSet()) {
 		if (!alias.GetCatalog().empty()) {
-			column_names.push_back(alias.GetCatalog());
+			column_names.emplace_back(alias.GetCatalog());
 		}
 		if (!alias.GetSchema().empty()) {
-			column_names.push_back(alias.GetSchema());
+			column_names.emplace_back(alias.GetSchema());
 		}
-		column_names.push_back(alias.GetAlias());
+		column_names.emplace_back(alias.GetAlias());
 	}
-	column_names.push_back(std::move(column_name));
+	column_names.emplace_back(std::move(column_name));
 }
 
 ColumnRefExpression::ColumnRefExpression(string column_name)
@@ -37,7 +37,7 @@ ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 	column_names.reserve(column_names_p.size());
 	for (auto &col_name : column_names_p) {
-		column_names.push_back(std::move(col_name));
+		column_names.emplace_back(std::move(col_name));
 	}
 #ifdef DEBUG
 	for (auto &col_name : column_names) {

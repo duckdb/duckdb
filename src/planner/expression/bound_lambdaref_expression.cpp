@@ -9,7 +9,7 @@ BoundLambdaRefExpression::BoundLambdaRefExpression(string alias_p, LogicalType t
                                                    idx_t lambda_idx, idx_t depth)
     : Expression(ExpressionType::BOUND_LAMBDA_REF, ExpressionClass::BOUND_LAMBDA_REF, std::move(type)),
       binding(binding), lambda_idx(lambda_idx), depth(depth) {
-	this->alias = std::move(alias_p);
+	this->alias = Identifier(std::move(alias_p));
 }
 
 BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_idx,

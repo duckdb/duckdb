@@ -39,7 +39,7 @@ unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}
-	table_ref->alias = GetAlias();
+	table_ref->alias = Identifier(GetAlias());
 	return std::move(table_ref);
 }
 

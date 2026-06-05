@@ -116,7 +116,7 @@ StarExpression::DeserializeStarExpression(Identifier &&relation_name, const case
 StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
 	for (auto &entry : exclude_list_p) {
-		exclude_list.insert(QualifiedColumnName(entry));
+		exclude_list.insert(QualifiedColumnName(Identifier(entry)));
 	}
 }
 

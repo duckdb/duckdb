@@ -263,7 +263,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
 		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(arg.GetName());
+			bound_arg->SetAlias(Identifier(arg.GetName()));
 		}
 		if (aggr.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));
@@ -343,9 +343,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	auto &bound_aggr = *node.aggregates[aggr_index];
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
-	                                                  bound_aggr.GetReturnType(),
-	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
+	auto colref = make_uniq<BoundColumnRefExpression>(
+	    aggr.GetAlias().empty() ? Identifier(bound_aggr.ToString()) : aggr.GetAlias(), bound_aggr.GetReturnType(),
+	    ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));
 }

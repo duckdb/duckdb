@@ -147,8 +147,8 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
-	lfun.GetSignature().GetParameter(0).SetName("list");
-	lfun.GetSignature().GetParameter(1).SetName("index");
+	lfun.GetSignature().GetParameter(0).SetName(Identifier("list"));
+	lfun.GetSignature().GetParameter(1).SetName(Identifier("index"));
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 	lfun.SetFallible();
@@ -165,8 +165,8 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
 	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, ListExtractStats);
 
-	lfun.GetSignature().GetParameter(0).SetName("array");
-	lfun.GetSignature().GetParameter(1).SetName("index");
+	lfun.GetSignature().GetParameter(0).SetName(Identifier("array"));
+	lfun.GetSignature().GetParameter(1).SetName(Identifier("index"));
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 

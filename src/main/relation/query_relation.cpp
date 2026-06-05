@@ -91,7 +91,7 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 			top_level_select_node->from_table = std::move(subquery);
 			auto &cte_map = top_level_select_node->cte_map;
 			top_level_select->node = std::move(top_level_select_node);
-			cte_map.map[name.GetName()] = std::move(cte_info);
+			cte_map.map[name] = std::move(cte_info);
 			select_stmt = std::move(top_level_select);
 		}
 	}

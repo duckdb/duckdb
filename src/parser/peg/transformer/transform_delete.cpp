@@ -24,7 +24,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformTargetOptAlias(PEGTrans
                                                                         unique_ptr<BaseTableRef> base_table_name,
                                                                         const string &col_id) {
 	if (!col_id.empty()) {
-		base_table_name->alias = col_id;
+		base_table_name->alias = Identifier(col_id);
 	}
 	return base_table_name;
 }

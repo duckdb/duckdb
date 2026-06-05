@@ -15,7 +15,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
 			throw ParserException("Aliases list length must match expression list length!");
 		}
 		for (idx_t i = 0; i < aliases.size(); i++) {
-			expressions[i]->SetAlias(aliases[i]);
+			expressions[i]->SetAlias(Identifier(aliases[i]));
 		}
 	}
 	// bind the expressions

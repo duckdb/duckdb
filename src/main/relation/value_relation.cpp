@@ -103,7 +103,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		}
 		table_ref->values.push_back(std::move(copied_list));
 	}
-	table_ref->alias = GetAlias();
+	table_ref->alias = Identifier(GetAlias());
 	return std::move(table_ref);
 }
 

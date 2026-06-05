@@ -94,7 +94,8 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 
 	ErrorData error;
 	FunctionBinder binder(rewriter.context);
-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, std::move(children), error, false);
+	auto function = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(new_function_name),
+	                                          std::move(children), error, false);
 	if (!function) {
 		error.Throw();
 	}

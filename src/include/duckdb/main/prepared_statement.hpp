@@ -100,7 +100,7 @@ public:
 		set<string> excess_set;
 		for (auto &pair : values) {
 			auto &name = pair.first;
-			if (!parameters.count(name)) {
+			if (!parameters.count(Identifier(name))) {
 				excess_set.insert(name);
 			}
 		}

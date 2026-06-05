@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 84d44d5..ad33805 100644
+index 84d44d5..d5fef39 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
@@ -17,6 +17,18 @@ index 84d44d5..ad33805 100644
  				result->table_functions.push_back(entry);
  			}
  		});
+@@ -208,9 +208,9 @@ unique_ptr<DeleteStatement> StatementGenerator::GenerateDelete() {
+ unique_ptr<DetachInfo> StatementGenerator::GenerateDetachInfo() {
+ 	auto info = make_uniq<DetachInfo>();
+ 	if (RandomPercentage(20)) {
+-		info->name = "RANDOM_NAME_" + RandomString(15);
++		info->name = Identifier("RANDOM_NAME_" + RandomString(15));
+ 	} else {
+-		info->name = GetRandomAttachedDataBase();
++		info->name = Identifier(GetRandomAttachedDataBase());
+ 	}
+ 	return info;
+ }
 @@ -219,7 +219,7 @@ std::string StatementGenerator::GetRandomAttachedDataBase() {
  	auto state = GetDatabaseState(context);
  	auto &st_name = *state->attached_databases[RandomValue(state->attached_databases.size())];
@@ -26,6 +38,103 @@ index 84d44d5..ad33805 100644
  }
  
  //===--------------------------------------------------------------------===//
+@@ -233,7 +233,7 @@ unique_ptr<AttachInfo> StatementGenerator::GenerateAttachInfo() {
+ 	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
+ 		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
+ 	}
+-	info->name = RandomString(10);
++	info->name = Identifier(RandomString(10));
+ 	info->path = TESTING_DIRECTORY_NAME + string("/fuzz_gen_db_") + info->name + string(".db");
+ 	if (RandomPercentage(30)) {
+ 		info->options["READ_ONLY"] = Value(true);
+@@ -249,7 +249,7 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+ 	switch (RandomValue(4)) {
+ 	case 0: {
+ 		auto info = make_uniq<CreateTypeInfo>();
+-		info->name = RandomString(5);
++		info->name = Identifier(RandomString(5));
+ 		idx_t num_enums = RandomValue(10);
+ 		auto Enum_Vector = Vector(LogicalType::VARCHAR, num_enums);
+ 		for (idx_t i = 0; i < num_enums; i++) {
+@@ -260,9 +260,9 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+ 	}
+ 	case 1: {
+ 		auto info = make_uniq<CreateTableInfo>();
+-		info->catalog = INVALID_CATALOG;
+-		info->schema = DEFAULT_SCHEMA;
+-		info->table = GenerateTableIdentifier();
++		info->catalog = Identifier::InvalidCatalog();
++		info->schema = Identifier::DefaultSchema();
++		info->table = Identifier(GenerateTableIdentifier());
+ 		if (RandomPercentage(50)) {
+ 			info->query = GenerateSelect();
+ 		} else {
+@@ -276,14 +276,14 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+ 	}
+ 	case 2: {
+ 		auto info = make_uniq<CreateSchemaInfo>();
+-		info->catalog = INVALID_CATALOG;
++		info->catalog = Identifier::InvalidCatalog();
+ 		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+-		info->schema = GenerateSchemaIdentifier();
++		info->schema = Identifier(GenerateSchemaIdentifier());
+ 		return std::move(info);
+ 	}
+ 	case 3: {
+ 		auto info = make_uniq<CreateViewInfo>();
+-		info->view_name = GenerateViewIdentifier();
++		info->view_name = Identifier(GenerateViewIdentifier());
+ 		info->query = GenerateSelect();
+ 		// TODO: add support for aliases in the view.
+ 		return std::move(info);
+@@ -307,7 +307,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
+ 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
+ 			cte->aliases.push_back(GenerateIdentifier());
+ 		}
+-		node.cte_map.map[GenerateTableIdentifier()] = std::move(cte);
++		node.cte_map.map[Identifier(GenerateTableIdentifier())] = std::move(cte);
+ 	}
+ }
+ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+@@ -479,9 +479,9 @@ unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
+ 		throw InternalException("StatementGenerator::GenerateBaseTableRef");
+ 	}
+ 	for (idx_t i = 0; i < column_count; i++) {
+-		result->column_name_alias.push_back(GenerateIdentifier());
++		result->column_name_alias.emplace_back(GenerateIdentifier());
+ 	}
+-	result->alias = GenerateTableIdentifier();
++	result->alias = Identifier(GenerateTableIdentifier());
+ 	result->table_name = entry.name;
+ 	return std::move(result);
+ }
+@@ -520,7 +520,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateJoinRef() {
+ 			join->condition = GenerateExpression();
+ 		} else {
+ 			while (true) {
+-				join->using_columns.push_back(GenerateColumnName());
++				join->using_columns.emplace_back(GenerateColumnName());
+ 				if (RandomPercentage(50)) {
+ 					break;
+ 				}
+@@ -577,14 +577,14 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
+ 		auto name = Choose(names);
+ 		names.erase(std::find(names.begin(), names.end(), name));
+ 		auto expr = GenerateConstant();
+-		expr->SetAlias(name);
++		expr->SetAlias(Identifier(name));
+ 		children.push_back(std::move(expr));
+ 	}
+ 	result->function = make_uniq<FunctionExpression>(entry.name, std::move(children));
+ 	for (idx_t i = 0; i < 1 + RandomValue(9); i++) {
+-		result->column_name_alias.push_back(GenerateIdentifier());
++		result->column_name_alias.emplace_back(GenerateIdentifier());
+ 	}
+-	result->alias = GenerateTableIdentifier();
++	result->alias = Identifier(GenerateTableIdentifier());
+ 	return std::move(result);
+ }
+ 
 @@ -762,7 +762,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
  		auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
  		auto offset = RandomValue(scalar_entry.functions.Size());
@@ -67,7 +176,7 @@ index 84d44d5..ad33805 100644
  				break;
  			}
 -			result->ExcludeListMutable().insert(column_name);
-+			result->ExcludeListMutable().insert(QualifiedColumnName(column_name));
++			result->ExcludeListMutable().insert(QualifiedColumnName(Identifier(column_name)));
  		}
  		while (RandomPercentage(20)) {
  			auto column_name = GenerateColumnName();
@@ -80,7 +189,16 @@ index 84d44d5..ad33805 100644
  
  	vector<unique_ptr<ParsedExpression>> children;
  	for (auto &param : base_function.GetSignature().GetParameters()) {
-@@ -1317,11 +1317,11 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
+@@ -1303,7 +1303,7 @@ string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
+ 		children.push_back(std::move(argument));
+ 	}
+ 	auto from_clause = make_uniq<BaseTableRef>();
+-	from_clause->table_name = "all_types";
++	from_clause->table_name = Identifier("all_types");
+ 	node->from_table = std::move(from_clause);
+ 
+ 	auto function_expr = make_uniq<FunctionExpression>(base_function.GetName(), std::move(children));
+@@ -1317,16 +1317,16 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
  	auto select = make_uniq<SelectStatement>();
  	auto node = make_uniq<SelectNode>();
  
@@ -94,3 +212,27 @@ index 84d44d5..ad33805 100644
  	for (auto &param : base_function.GetSignature().GetParameters()) {
  		unique_ptr<ParsedExpression> argument;
  		if (!always_null) {
+ 			string argument_name = "c" + to_string(column_aliases.size() + 1);
+-			column_aliases.push_back(argument_name);
++			column_aliases.emplace_back(argument_name);
+ 			argument = make_uniq<ColumnRefExpression>(std::move(argument_name));
+ 			auto constant_expr = make_uniq<ConstantExpression>(Value());
+ 			auto cast = make_uniq<CastExpression>(param.GetType(), std::move(constant_expr));
+@@ -1339,7 +1339,7 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
+ 	auto from_clause = make_uniq<TableFunctionRef>();
+ 	auto vector_types_fun = make_uniq<FunctionExpression>("test_vector_types", std::move(test_vector_types));
+ 	from_clause->function = std::move(vector_types_fun);
+-	from_clause->alias = "test_vector_types";
++	from_clause->alias = Identifier("test_vector_types");
+ 	from_clause->column_name_alias = std::move(column_aliases);
+ 	node->from_table = std::move(from_clause);
+ 
+@@ -1355,7 +1355,7 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string
+ 	auto node = make_uniq<SelectNode>();
+ 
+ 	auto from_clause = make_uniq<BaseTableRef>();
+-	from_clause->table_name = "all_types";
++	from_clause->table_name = Identifier("all_types");
+ 	node->from_table = std::move(from_clause);
+ 
+ 	unique_ptr<ParsedExpression> source;

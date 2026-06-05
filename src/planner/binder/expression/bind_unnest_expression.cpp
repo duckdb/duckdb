@@ -30,9 +30,9 @@ static unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, u
 		if (!alias.empty() && alias[0] == '.') {
 			alias = alias.substr(1);
 		}
-		result->SetAlias(alias);
+		result->SetAlias(Identifier(alias));
 	} else {
-		result->SetAlias(key_path[0]);
+		result->SetAlias(Identifier(key_path[0]));
 	}
 	return std::move(result);
 }
@@ -44,7 +44,7 @@ static unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &conte
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
 	auto result = GetIndexExtractFunction().Bind(context, std::move(arguments));
 
-	result->SetAlias("element" + to_string(key));
+	result->SetAlias(Identifier("element" + to_string(key)));
 	return std::move(result);
 }
 
@@ -93,7 +93,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!args[i].GetExpression().IsScalar()) {
 				break;
 			}
-			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias());
+			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias().GetName());
 			BindChild(args[i].GetExpressionMutable(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
@@ -206,7 +206,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->ChildMutable() = std::move(unnest_expr);
-		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias();
+		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias().GetName();
 
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);
@@ -248,7 +248,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 							vector<string> current_key_path;
 							// During recursive expansion, not all expressions are BoundFunctionExpression
 							if (keep_parent_names && expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-								current_key_path.push_back(expr->GetAlias());
+								current_key_path.emplace_back(expr->GetAlias());
 							}
 							current_key_path.push_back(entry.first);
 							new_expressions.push_back(

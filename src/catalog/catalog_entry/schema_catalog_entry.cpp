@@ -11,7 +11,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema.GetName()) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema) {
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;

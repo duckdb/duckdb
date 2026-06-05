@@ -52,7 +52,7 @@ string InsertQueryNode::ToString() const {
 	if (values_list) {
 		D_ASSERT(!default_values);
 		auto saved_alias = values_list->alias;
-		values_list->alias = string();
+		values_list->alias = Identifier(string());
 		result += values_list->ToString();
 		values_list->alias = saved_alias;
 	} else if (select_statement) {

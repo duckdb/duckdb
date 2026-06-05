@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(DelimGetRef &ref) {
 	result.names = IdentifiersToStrings(ref.internal_aliases);
 	result.plan = make_uniq<LogicalDelimGet>(tbl_idx, result.types);
 
-	bind_context.AddGenericBinding(tbl_idx, internal_name, result.names, result.types);
+	bind_context.AddGenericBinding(tbl_idx, Identifier(internal_name), result.names, result.types);
 	return result;
 }
 

@@ -45,7 +45,7 @@ public:
 	virtual ErrorData ColumnNotFoundError(const Identifier &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
-	string GetAlias() const;
+	const Identifier &GetAlias() const;
 
 	BindingType GetBindingType();
 	const BindingAlias &GetBindingAlias();

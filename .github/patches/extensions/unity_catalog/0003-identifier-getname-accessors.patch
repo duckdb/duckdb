@@ -1,5 +1,5 @@
 diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
-index f56c177..03d9830 100644
+index f56c177..c2ee448 100644
 --- a/src/functions/uc_checkpoint.cpp
 +++ b/src/functions/uc_checkpoint.cpp
 @@ -28,9 +28,9 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
@@ -15,11 +15,45 @@ index f56c177..03d9830 100644
  
  	if (result.catalog_name.empty()) {
  		throw InvalidInputException(
+@@ -64,8 +64,9 @@ static void CheckpointTableFunction(ClientContext &context, TableFunctionInput &
+ 	data.finished = true;
+ 
+ 	CatalogEntryRetriever catalog_entry_retriever(context);
+-	EntryLookupInfo lookup_table = {CatalogType::TABLE_ENTRY, data.table_name};
+-	auto tbl_entry = catalog_entry_retriever.GetEntry(data.catalog_name, data.schema_name, lookup_table);
++	EntryLookupInfo lookup_table(CatalogType::TABLE_ENTRY, Identifier(data.table_name));
++	auto tbl_entry =
++	    catalog_entry_retriever.GetEntry(Identifier(data.catalog_name), Identifier(data.schema_name), lookup_table);
+ 	if (!tbl_entry) {
+ 		throw InvalidInputException("Unity Catalog table not found: '%s.%s.%s'", data.catalog_name, data.schema_name,
+ 		                            data.table_name);
+diff --git a/src/functions/uc_table_data_path.cpp b/src/functions/uc_table_data_path.cpp
+index 20bbd29..5d6758c 100644
+--- a/src/functions/uc_table_data_path.cpp
++++ b/src/functions/uc_table_data_path.cpp
+@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> UCTableDataPathBind(ClientContext &context, Tabl
+ 
+ 	auto table_name = input.inputs[0].GetValue<string>();
+ 
+-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, table_name);
++	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, Identifier(table_name));
+ 	auto entry = schema.tables.GetEntry(context, lookup_info);
+ 	if (!entry) {
+ 		throw BinderException("table_data_path: table '%s' not found", table_name);
 diff --git a/src/include/storage/uc_table_entry.hpp b/src/include/storage/uc_table_entry.hpp
-index aba0ee1..72090f3 100644
+index aba0ee1..fa5250c 100644
 --- a/src/include/storage/uc_table_entry.hpp
 +++ b/src/include/storage/uc_table_entry.hpp
-@@ -29,7 +29,7 @@ struct UCTableInfo {
+@@ -22,14 +22,14 @@ struct UCTableInfo {
+ 		create_info = make_uniq<CreateTableInfo>();
+ 	}
+ 	UCTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(string(), schema, table);
++		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
+ 	}
+ 	UCTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, table);
++		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, Identifier(table));
  	}
  
  	const string &GetTableName() const {
@@ -29,22 +63,81 @@ index aba0ee1..72090f3 100644
  
  	unique_ptr<CreateTableInfo> create_info;
 diff --git a/src/storage/uc_default_functions.cpp b/src/storage/uc_default_functions.cpp
-index beb3f65..c91da08 100644
+index beb3f65..8da2619 100644
 --- a/src/storage/uc_default_functions.cpp
 +++ b/src/storage/uc_default_functions.cpp
-@@ -17,7 +17,7 @@ static const DefaultTableMacro uc_table_macros[] = {
+@@ -16,8 +16,8 @@ static const DefaultTableMacro uc_table_macros[] = {
+ 
  optional_ptr<CatalogEntry> UCSchemaEntry::LoadBuiltInFunction(DefaultTableMacro macro) {
  	string macro_def = macro.macro;
- 	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
+-	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
 -	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name, '\''));
++	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetName(), '\''));
 +	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetName(), '\''));
  	macro.macro = macro_def.c_str();
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
+diff --git a/src/storage/uc_schema_set.cpp b/src/storage/uc_schema_set.cpp
+index aa7e8d6..e67d5a1 100644
+--- a/src/storage/uc_schema_set.cpp
++++ b/src/storage/uc_schema_set.cpp
+@@ -22,7 +22,7 @@ void UCSchemaSet::LoadEntries(ClientContext &context) {
+ 
+ 	for (const auto &schema : tables) {
+ 		CreateSchemaInfo info;
+-		info.schema = schema.schema_name;
++		info.schema = Identifier(schema.schema_name);
+ 		info.internal = IsInternalTable(schema.catalog_name, schema.schema_name);
+ 		auto schema_entry = make_uniq<UCSchemaEntry>(catalog, info);
+ 		schema_entry->schema_data = make_uniq<UCAPISchema>(schema);
+diff --git a/src/storage/uc_table_entry.cpp b/src/storage/uc_table_entry.cpp
+index 282e824..8ceca78 100644
+--- a/src/storage/uc_table_entry.cpp
++++ b/src/storage/uc_table_entry.cpp
+@@ -40,7 +40,7 @@ TableFunction UCTableEntry::GetScanFunction(ClientContext &context, unique_ptr<F
+ 	table.InternalAttach(context);
+ 
+ 	auto &delta_catalog = *table.GetInternalCatalog();
+-	auto &schema = delta_catalog.GetSchema(context, DEFAULT_SCHEMA);
++	auto &schema = delta_catalog.GetSchema(context, Identifier::DefaultSchema());
+ 	auto transaction = schema.GetCatalogTransaction(context);
+ 	auto table_entry = schema.LookupEntry(transaction, lookup_info);
+ 	D_ASSERT(table_entry);
 diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
-index 5068777..fb044f2 100644
+index 5068777..d4924bc 100644
 --- a/src/storage/uc_table_set.cpp
 +++ b/src/storage/uc_table_set.cpp
+@@ -60,7 +60,7 @@ optional_ptr<CatalogEntry> TableInformation::GetVersion(ClientContext &context,
+ 	InternalAttach(context);
+ 	RefreshCredentials(context);
+ 	auto &delta_catalog = *GetInternalCatalog();
+-	auto &schema = delta_catalog.GetSchema(context, table_data->schema_name);
++	auto &schema = delta_catalog.GetSchema(context, Identifier(table_data->schema_name));
+ 	auto transaction = schema.GetCatalogTransaction(context);
+ 	auto table_entry = schema.LookupEntry(transaction, lookup_info);
+ 	auto create_info = table_entry->GetInfo();
+@@ -94,9 +94,9 @@ void TableInformation::RefreshCredentials(ClientContext &context) {
+ 	CreateSecretInput input;
+ 	input.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+ 	input.persist_type = SecretPersistType::TEMPORARY;
+-	input.name = "__internal_uc_" + table_data->table_id;
+-	input.type = "s3";
+-	input.provider = "config";
++	input.name = Identifier("__internal_uc_" + table_data->table_id);
++	input.type = Identifier("s3");
++	input.provider = Identifier("config");
+ 	input.options = {
+ 	    {"key_id", table_credentials.key_id},
+ 	    {"secret", table_credentials.secret},
+@@ -181,7 +181,7 @@ void TableInformation::InternalAttach(ClientContext &context) {
+ 
+ 	// Create the attach info for the table
+ 	AttachInfo info;
+-	info.name = AttachedCatalogName();
++	info.name = Identifier(AttachedCatalogName());
+ 	info.options = {{"type", Value("Delta")},
+ 	                {"child_catalog_mode", Value(true)},
+ 	                {"internal_table_name", Value(name)},
 @@ -191,7 +191,7 @@ void TableInformation::InternalAttach(ClientContext &context) {
  	if (IsCCV2()) {
  		auto log_tail = BuildLogTail(context);
@@ -63,3 +156,65 @@ index 5068777..fb044f2 100644
  
  	for (auto &table : get_tables_result) {
  		D_ASSERT(schema.name == table.schema_name);
+@@ -269,7 +269,7 @@ void UCTableSet::LoadEntries(ClientContext &context, const lock_guard<mutex> &_e
+ 		                          std::forward_as_tuple(catalog, schema));
+ 		auto &table_info = res.first->second;
+ 
+-		info.table = table.name;
++		info.table = Identifier(table.name);
+ 		auto table_entry = make_uniq<UCTableEntry>(catalog, schema, table_info, info);
+ 
+ 		table_info.table_data = make_uniq<UCAPITable>(table);
+diff --git a/src/storage/unity_catalog.cpp b/src/storage/unity_catalog.cpp
+index 682bfec..0229076 100644
+--- a/src/storage/unity_catalog.cpp
++++ b/src/storage/unity_catalog.cpp
+@@ -54,7 +54,7 @@ optional_ptr<SchemaCatalogEntry> UnityCatalog::LookupSchema(CatalogTransaction t
+ 			    "specify a DEFAULT_SCHEMA on ATTACH: `ATTACH '..' (TYPE unity_catalog, DEFAULT_SCHEMA 'my_schema')`",
+ 			    GetName());
+ 		}
+-		return GetSchema(transaction, default_schema, if_not_found);
++		return GetSchema(transaction, Identifier(default_schema), if_not_found);
+ 	}
+ 	auto entry = schemas.GetEntry(transaction.GetContext(), schema_lookup);
+ 	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
+diff --git a/src/unity_catalog_extension.cpp b/src/unity_catalog_extension.cpp
+index 6ad27dc..0a13278 100644
+--- a/src/unity_catalog_extension.cpp
++++ b/src/unity_catalog_extension.cpp
+@@ -27,7 +27,7 @@ static unique_ptr<BaseSecret> CreateUCSecretFunction(ClientContext &, CreateSecr
+ 		name = "unity_catalog";
+ 	}
+ 
+-	auto result = make_uniq<KeyValueSecret>(prefix_paths, name, "config", input.name);
++	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier(name), Identifier("config"), input.name);
+ 	for (const auto &named_param : input.options) {
+ 		auto lower_name = StringUtil::Lower(named_param.first);
+ 
+@@ -167,22 +167,22 @@ public:
+ static void LoadInternal(ExtensionLoader &loader) {
+ 	// Register unity_catalog secret type
+ 	SecretType secret_type;
+-	secret_type.name = "unity_catalog";
++	secret_type.name = Identifier("unity_catalog");
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 	loader.RegisterSecretType(secret_type);
+ 
+ 	// Also register the short alias
+-	secret_type.name = "uc";
++	secret_type.name = Identifier("uc");
+ 	loader.RegisterSecretType(secret_type);
+ 
+ 	// Register the create secret function
+-	CreateSecretFunction mysql_secret_function = {"unity_catalog", "config", CreateUCSecretFunction};
++	CreateSecretFunction mysql_secret_function = {"unity_catalog", Identifier("config"), CreateUCSecretFunction};
+ 	SetUCSecretParameters(mysql_secret_function);
+ 	loader.RegisterFunction(mysql_secret_function);
+ 
+ 	// Register the create secret function for the short alias
+-	CreateSecretFunction mysql_secret_function_deprecated = {"uc", "config", CreateUCSecretFunction<true>};
++	CreateSecretFunction mysql_secret_function_deprecated = {"uc", Identifier("config"), CreateUCSecretFunction<true>};
+ 	SetUCSecretParameters(mysql_secret_function_deprecated);
+ 	loader.RegisterFunction(mysql_secret_function_deprecated);
+ 

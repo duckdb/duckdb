@@ -444,7 +444,7 @@ void BaseAppender::ClearColumns() {
 unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
                                                          const vector<string> &expected_names) {
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	column_data_ref->alias = table_name.empty() ? "appended_data" : table_name;
+	column_data_ref->alias = Identifier(table_name.empty() ? "appended_data" : table_name);
 	;
 	column_data_ref->expected_names = expected_names;
 	return std::move(column_data_ref);
@@ -494,7 +494,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 	// Add the appender data as a CTE to the CTE map of the statement.
 	string alias = table_name.empty() ? "appended_data" : table_name;
 	auto &cte_map = GetCTEMap(*parser.statements[0]);
-	cte_map.map.insert(alias, std::move(cte_info));
+	cte_map.map.insert(Identifier(alias), std::move(cte_info));
 
 	return std::move(parser.statements[0]);
 }

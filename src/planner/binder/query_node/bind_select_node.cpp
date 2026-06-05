@@ -249,7 +249,7 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 	auto result =
 	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
 	if (result->GetAlias().empty() && index < names.size()) {
-		result->SetAlias(names[index]);
+		result->SetAlias(Identifier(names[index]));
 	}
 	return std::move(result);
 }
@@ -352,7 +352,7 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i],
 					                                                ColumnBinding(table_index, ProjectionIndex(i)));
 					if (i < names.size()) {
-						expr->SetAlias(names[i]);
+						expr->SetAlias(Identifier(names[i]));
 					}
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
@@ -411,7 +411,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 
 string Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
-		return expr.GetAlias();
+		return expr.GetAlias().GetName();
 	}
 	return expr.GetName();
 }
@@ -451,7 +451,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
-			result.names[i] = expr->GetAlias();
+			result.names[i] = expr->GetAlias().GetName();
 		}
 		bind_state.projection_map[*expr] = i;
 		bind_state.original_expressions.push_back(expr->Copy());
@@ -522,7 +522,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				function->SetAlias("__collated_group");
+				function->SetAlias(Identifier("__collated_group"));
 
 				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
 				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;

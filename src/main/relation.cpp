@@ -241,7 +241,7 @@ BoundStatement Relation::Bind(Binder &binder) {
 }
 
 shared_ptr<Relation> Relation::InsertRel(const Identifier &schema_name, const Identifier &table_name) {
-	return InsertRel(INVALID_CATALOG, schema_name, table_name);
+	return InsertRel(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
 shared_ptr<Relation> Relation::InsertRel(const Identifier &catalog_name, const Identifier &schema_name,
@@ -250,11 +250,11 @@ shared_ptr<Relation> Relation::InsertRel(const Identifier &catalog_name, const I
 }
 
 void Relation::Insert(const Identifier &table_name) {
-	Insert(INVALID_SCHEMA, table_name);
+	Insert(Identifier::InvalidSchema(), table_name);
 }
 
 void Relation::Insert(const Identifier &schema_name, const Identifier &table_name) {
-	Insert(INVALID_CATALOG, schema_name, table_name);
+	Insert(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
 void Relation::Insert(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name) {
@@ -277,7 +277,7 @@ void Relation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions
 
 shared_ptr<Relation> Relation::CreateRel(const Identifier &schema_name, const Identifier &table_name, bool temporary,
                                          OnCreateConflict on_conflict) {
-	return CreateRel(INVALID_CATALOG, schema_name, table_name, temporary, on_conflict);
+	return CreateRel(Identifier::InvalidCatalog(), schema_name, table_name, temporary, on_conflict);
 }
 
 shared_ptr<Relation> Relation::CreateRel(const Identifier &catalog_name, const Identifier &schema_name,
@@ -287,12 +287,12 @@ shared_ptr<Relation> Relation::CreateRel(const Identifier &catalog_name, const I
 }
 
 void Relation::Create(const Identifier &table_name, bool temporary, OnCreateConflict on_conflict) {
-	Create(INVALID_CATALOG, INVALID_SCHEMA, table_name, temporary, on_conflict);
+	Create(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), table_name, temporary, on_conflict);
 }
 
 void Relation::Create(const Identifier &schema_name, const Identifier &table_name, bool temporary,
                       OnCreateConflict on_conflict) {
-	Create(INVALID_CATALOG, schema_name, table_name, temporary, on_conflict);
+	Create(Identifier::InvalidCatalog(), schema_name, table_name, temporary, on_conflict);
 }
 
 void Relation::Create(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name,
@@ -338,7 +338,7 @@ void Relation::WriteParquet(const string &parquet_file, case_insensitive_map_t<v
 }
 
 shared_ptr<Relation> Relation::CreateView(const Identifier &name, bool replace, bool temporary) {
-	return CreateView(INVALID_SCHEMA, name, replace, temporary);
+	return CreateView(Identifier::InvalidSchema(), name, replace, temporary);
 }
 
 shared_ptr<Relation> Relation::CreateView(const Identifier &schema_name, const Identifier &name, bool replace,

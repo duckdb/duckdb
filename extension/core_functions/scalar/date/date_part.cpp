@@ -1774,7 +1774,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	case DatePartSpecifier::JULIAN_DAY:
 		arguments.erase(arguments.begin());
 		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-		bound_function.SetName("julian");
+		bound_function.SetName(Identifier("julian"));
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->GetReturnType().id()) {
 		case LogicalType::TIMESTAMP:
@@ -1797,7 +1797,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	case DatePartSpecifier::EPOCH:
 		arguments.erase(arguments.begin());
 		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-		bound_function.SetName("epoch");
+		bound_function.SetName(Identifier("epoch"));
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->GetReturnType().id()) {
 		case LogicalType::TIMESTAMP:

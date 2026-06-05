@@ -72,7 +72,7 @@ public:
 	CreateColumnReference(const Identifier &schema_name, const Identifier &table_name, const Identifier &column_name,
 	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
 	unique_ptr<ParsedExpression>
-	CreateColumnReference(const string &catalog_name, const Identifier &schema_name, const Identifier &table_name,
+	CreateColumnReference(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name,
 	                      const Identifier &column_name,
 	                      ColumnBindType bind_type = ColumnBindType::EXPAND_GENERATED_COLUMNS);
 	unique_ptr<ParsedExpression>

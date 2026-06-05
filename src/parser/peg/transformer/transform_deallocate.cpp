@@ -8,7 +8,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(PEG
                                                                              const string &identifier) {
 	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
-	result->info->name = identifier;
+	result->info->name = Identifier(identifier);
 	return std::move(result);
 }
 

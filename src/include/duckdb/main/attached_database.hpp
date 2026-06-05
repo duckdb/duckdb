@@ -114,11 +114,11 @@ public:
 		return storage_extension;
 	}
 
-	const string &GetName() const {
-		return name.GetName();
+	const Identifier &GetName() const {
+		return name;
 	}
 	void SetName(const string &new_name) {
-		name = new_name;
+		name = Identifier(new_name);
 	}
 	bool IsSystem() const;
 	bool IsTemporary() const;

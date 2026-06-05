@@ -23,6 +23,9 @@ public:
 public:
 	BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth = 0);
 	BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
+	BoundColumnRefExpression(const Identifier &alias, LogicalType type, ColumnBinding binding, idx_t depth = 0)
+	    : BoundColumnRefExpression(alias.GetName(), std::move(type), binding, depth) {
+	}
 
 public:
 	bool IsScalar() const override {

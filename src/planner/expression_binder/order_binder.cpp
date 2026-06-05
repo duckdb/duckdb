@@ -32,11 +32,11 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 		alias = extra_list->at(index)->ToString();
 	} else {
 		if (!expr.GetAlias().empty()) {
-			alias = expr.GetAlias();
+			alias = expr.GetAlias().GetName();
 		}
 	}
 	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
-	result->SetAlias(std::move(alias));
+	result->SetAlias(Identifier(std::move(alias)));
 	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
@@ -82,7 +82,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 
 		string alias_name = colref.ColumnNames().back().GetName();
 		// check the alias list
-		auto entry = bind_state.alias_map.find(alias_name);
+		auto entry = bind_state.alias_map.find(Identifier(alias_name));
 		if (entry != bind_state.alias_map.end()) {
 			// this is an alias - return the index
 			return entry->second;

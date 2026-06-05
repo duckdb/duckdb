@@ -335,7 +335,8 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// to make sure the result's correctness.
 		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
 		QueryErrorContext error_context;
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", function_name,
+		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(),
+		                                                             Identifier(function_name),
 		                                                             OnEntryNotFound::RETURN_NULL, error_context);
 		if (!func) {
 			throw NotImplementedException(
@@ -349,7 +350,8 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		FunctionBinder function_binder(context);
 		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
 		ErrorData error;
-		auto best_function = function_binder.BindFunction(func_entry.name.GetName(), func_entry.functions, types, error);
+		auto best_function =
+		    function_binder.BindFunction(func_entry.name.GetName(), func_entry.functions, types, error);
 		if (!best_function.IsValid()) {
 			throw BinderException(string("Fail to find corresponding function for collation min/max: ") +
 			                      error.Message());

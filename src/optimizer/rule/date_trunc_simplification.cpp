@@ -347,7 +347,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	vector<unique_ptr<Expression>> args;
 	args.emplace_back(date_part.Copy());
 	args.emplace_back(rhs.Copy());
-	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args), error);
+	auto trunc =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("date_trunc"), std::move(args), error);
 
 	// Ensure that the RHS type matches the column type.
 	if (trunc->GetReturnType().id() != return_type.id()) {
@@ -384,7 +385,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	vector<unique_ptr<Expression>> args1;
 	auto constant_param = make_uniq<BoundConstantExpression>(Value::INTEGER(1));
 	args1.emplace_back(std::move(constant_param));
-	auto interval = binder.BindScalarFunction(DEFAULT_SCHEMA, interval_func_name, std::move(args1), error);
+	auto interval = binder.BindScalarFunction(Identifier(Identifier::DefaultSchema()), Identifier(interval_func_name),
+	                                          std::move(args1), error);
 	if (!interval) {
 		return nullptr; // Something wrong---just don't do the optimization.
 	}
@@ -392,12 +394,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	vector<unique_ptr<Expression>> args2;
 	args2.emplace_back(rhs.Copy());
 	args2.emplace_back(std::move(interval));
-	auto add = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(args2), error);
+	auto add = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("+"), std::move(args2), error);
 
 	vector<unique_ptr<Expression>> args3;
 	args3.emplace_back(date_part.Copy());
 	args3.emplace_back(std::move(add));
-	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args3), error);
+	auto trunc =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("date_trunc"), std::move(args3), error);
 
 	// Ensure that the RHS type matches the column type.
 	if (trunc->GetReturnType().id() != return_type.id()) {

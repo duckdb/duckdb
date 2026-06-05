@@ -41,13 +41,13 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	for (idx_t i = 0; i < select_names.size(); i++) {
 		auto &name = select_names[i];
 		// first check if the alias is already in there
-		auto entry = bind_state.alias_map.find(name);
+		auto entry = bind_state.alias_map.find(Identifier(name));
 
 		idx_t index = reorder_idx[i];
 
 		if (entry == bind_state.alias_map.end()) {
 			// the alias is not in there yet, just assign it
-			bind_state.alias_map[name] = index;
+			bind_state.alias_map[Identifier(name)] = index;
 		}
 	}
 	// check if the expression matches one of the expressions in the original expression list

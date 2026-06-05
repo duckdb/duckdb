@@ -202,8 +202,8 @@ string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &t
                                     vector<Value> map_keys, vector<Value> map_values) {
 	child_list_t<Value> child_list = {
 	    {"database", db.name.GetName()},
-	    {"schema", table.GetSchemaName()},
-	    {"table", table.GetTableName()},
+	    {"schema", table.GetSchemaName().GetName()},
+	    {"table", table.GetTableName().GetName()},
 	    {"type", op_name},
 	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
 	};

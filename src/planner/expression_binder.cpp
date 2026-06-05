@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.FunctionName())) {
+		if (IsUnnestFunction(function.FunctionName().GetName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
@@ -371,9 +371,9 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	result.expression->SetQueryLocation(query_location);
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
-	be.SetAlias(alias);
+	be.SetAlias(Identifier(alias));
 	if (!alias.empty()) {
-		be.expr->SetAlias(alias);
+		be.expr->SetAlias(Identifier(alias));
 	}
 	return ErrorData();
 }

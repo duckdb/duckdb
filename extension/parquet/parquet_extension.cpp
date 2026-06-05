@@ -827,7 +827,7 @@ static unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, Repla
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);
@@ -878,7 +878,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			// Cast the column to GEOMETRY
 			auto cast_expr =
 			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
-			cast_expr->SetAlias(name);
+			cast_expr->SetAlias(Identifier(name));
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -890,7 +890,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 			// Cast the column to the new type
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->SetAlias(name);
+			cast_expr->SetAlias(Identifier(name));
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -903,7 +903,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			});
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->SetAlias(name);
+			cast_expr->SetAlias(Identifier(name));
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -927,9 +927,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
-	scan_fun.name = "read_parquet";
+	scan_fun.SetName("read_parquet");
 	loader.RegisterFunction(scan_fun);
-	scan_fun.name = "parquet_scan";
+	scan_fun.SetName("parquet_scan");
 	loader.RegisterFunction(scan_fun);
 
 	// parquet_metadata

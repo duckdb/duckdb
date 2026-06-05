@@ -147,7 +147,7 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 	auto &config = DBConfig::GetConfig(binder.context);
 	auto child_binder = Binder::CreateBinder(binder.context, &binder);
 	auto table_index = binder.GenerateTableIndex();
-	child_binder->bind_context.AddGenericBinding(table_index, "__copy_input", bound_statement.names,
+	child_binder->bind_context.AddGenericBinding(table_index, Identifier("__copy_input"), bound_statement.names,
 	                                             bound_statement.types);
 	ExpressionBinder expr_binder(*child_binder, binder.context);
 	vector<BoundOrderByNode> bound_orders;

@@ -43,7 +43,7 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	auto partsupp_region = partsupp->Join(supplier, "s_suppkey=ps_suppkey")
 	                           ->Join(nation, "s_nationkey=n_nationkey")
 	                           ->Join(region, "n_regionkey=r_regionkey");
-	partsupp_region->CreateView("partsupp_region");
+	partsupp_region->CreateView(Identifier("partsupp_region"));
 	auto part_join = partsupp_region->Join(part, "p_partkey=ps_partkey");
 	result =
 	    part_join

@@ -23,7 +23,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 
 	auto recursive_node = make_uniq<RecursiveCTENode>();
 	recursive_node->cte_map = std::move(set_node.cte_map);
-	recursive_node->ctename = name;
+	recursive_node->ctename = Identifier(name);
 	recursive_node->aliases = StringsToIdentifiers(aliases);
 
 	auto owned_set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
@@ -66,7 +66,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 	cte_info->query_node = std::move(inner_node);
 
-	outer_select->cte_map.map.insert(info->view_name.GetName(), std::move(cte_info));
+	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
 
 	for (const auto &column : info->aliases) {
 		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));

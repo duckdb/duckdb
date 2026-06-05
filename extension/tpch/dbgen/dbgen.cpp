@@ -248,8 +248,8 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
-                    idx_t offset = 0) {
+static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info,
+                    DBGenContext *dbgen_ctx, idx_t offset = 0) {
 	order_t o;
 	supplier_t supp;
 	customer_t cust;
@@ -384,8 +384,8 @@ struct PartsuppInfo {
 	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
-                                           LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT), LogicalType(LogicalTypeId::BIGINT),
+                                           LogicalType(LogicalTypeId::BIGINT), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
@@ -412,7 +412,7 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
-    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),
     LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
@@ -422,16 +422,16 @@ const LogicalType LineitemInfo::Types[] = {
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema;
-	info->table = T::Name + suffix;
+	info->catalog = Identifier(catalog_name);
+	info->schema = Identifier(schema);
+	info->table = Identifier(T::Name + suffix);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
 	catalog.CreateTable(context, std::move(info));
 }
 
@@ -478,11 +478,11 @@ struct TPCHDBgenParameters {
 			auto tname = get_table_name(i);
 			if (!tname.empty()) {
 				string full_tname = string(tname) + string(suffix);
-				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+				auto &tbl_catalog =
+				    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(full_tname));
 				tables[i] = &tbl_catalog;
 			}
 		}
-
 	}
 
 	vector<optional_ptr<TableCatalogEntry>> tables;
@@ -490,8 +490,9 @@ struct TPCHDBgenParameters {
 
 class TPCHDataAppender {
 public:
-	TPCHDataAppender(ClientContext &context, TPCHDBgenParameters &parameters, DBGenContext base_context, idx_t flush_count) :
-		context(context), parameters(parameters) {
+	TPCHDataAppender(ClientContext &context, TPCHDBgenParameters &parameters, DBGenContext base_context,
+	                 idx_t flush_count)
+	    : context(context), parameters(parameters) {
 		dbgen_ctx = base_context;
 		append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 		memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
@@ -531,11 +532,11 @@ public:
 					skip(i, children, part_offset, dbgen_ctx);
 					if (rowcnt > 0) {
 						// generate part of the table
-						GenerateTableData((int) i, rowcnt, part_offset);
+						GenerateTableData((int)i, rowcnt, part_offset);
 					}
 				} else {
 					// generate full table
-					GenerateTableData((int) i, rowcnt, 0);
+					GenerateTableData((int)i, rowcnt, 0);
 				}
 			}
 		}
@@ -561,7 +562,7 @@ private:
 class ParallelTPCHAppendTask : public BaseExecutorTask {
 public:
 	ParallelTPCHAppendTask(TaskExecutor &executor, TPCHDataAppender &appender, int children, int current_step)
-		: BaseExecutorTask(executor), appender(appender), children(children), current_step(current_step) {
+	    : BaseExecutorTask(executor), appender(appender), children(children), current_step(current_step) {
 	}
 
 	void ExecuteTask() override {
@@ -636,7 +637,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
 
 	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
 #ifndef DUCKDB_NO_THREADS
@@ -661,19 +662,20 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		}
 		idx_t step = 0;
 		vector<TPCHDataAppender> finished_appenders;
-		while(step < child_count) {
+		while (step < child_count) {
 			// launch N threads
 			TaskExecutor executor(context);
 
 			vector<TPCHDataAppender> new_appenders;
 			idx_t launched_step = step;
 			// initialize the appenders for each thread
-			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count here
-			for(idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
+			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count
+			// here
+			for (idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
 				new_appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
 			}
 			// schedule tasks for all appenders
-			for(auto &appender : new_appenders) {
+			for (auto &appender : new_appenders) {
 				auto task = make_uniq<ParallelTPCHAppendTask>(executor, appender, child_count, step);
 				executor.ScheduleTask(std::move(task));
 				step++;
@@ -688,14 +690,14 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			// NOTE: do NOT catch exceptions here - if Flush() fails, let the exception
 			// propagate so that all appender destructors run with UncaughtException() == true,
 			// preventing them from re-attempting a flush on already-inconsistent local storage.
-			for(auto &appender : finished_appenders) {
+			for (auto &appender : finished_appenders) {
 				appender.Flush();
 			}
 			finished_appenders.clear();
 			finished_appenders = std::move(new_appenders);
 		}
 		// flush the final batch of appenders
-		for(auto &appender : finished_appenders) {
+		for (auto &appender : finished_appenders) {
 			appender.Flush();
 		}
 	}

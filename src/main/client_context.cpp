@@ -1302,7 +1302,7 @@ void ClientContext::DisableProfiling() {
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this, INVALID_CATALOG, info.schema.GetName(), info.name.GetName(), OnEntryNotFound::RETURN_NULL);
+		    *this, Identifier::InvalidCatalog(), info.schema, info.name, OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
@@ -1364,14 +1364,14 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_nam
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// Obtain the table from the catalog.
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, database_name, schema_name, table_name,
-		                                                  OnEntryNotFound::RETURN_NULL);
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, Identifier(database_name), Identifier(schema_name),
+		                                                  Identifier(table_name), OnEntryNotFound::RETURN_NULL);
 		if (!table) {
 			return;
 		}
 		// Create the table description.
 		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
-		auto &catalog = Catalog::GetCatalog(*this, database_name);
+		auto &catalog = Catalog::GetCatalog(*this, Identifier(database_name));
 		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Copy());

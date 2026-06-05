@@ -398,7 +398,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
 			auto &proj = op.Cast<LogicalProjection>();
-			lhs_bindings.back().alias = proj.expressions[i]->GetAlias();
+			lhs_bindings.back().alias = proj.expressions[i]->GetAlias().GetName();
 		}
 	}
 }

@@ -32,7 +32,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies,
 		                                                           LogicalDependencyList());
 	}
-	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
+	serializer.WritePropertyWithDefault<Identifier>(110, "extension_name", extension_name);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -48,7 +48,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	    108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies",
 	                                                                                        LogicalDependencyList());
-	auto extension_name = deserializer.ReadPropertyWithDefault<string>(110, "extension_name");
+	auto extension_name = deserializer.ReadPropertyWithDefault<Identifier>(110, "extension_name");
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {

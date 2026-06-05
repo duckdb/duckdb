@@ -65,7 +65,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEG
 			}
 		} else {
 			auto base_table = make_uniq<BaseTableRef>();
-			base_table->table_name = col_expr.GetColumnName();
+			base_table->table_name = Identifier(col_expr.GetColumnName());
 			select_node->from_table = std::move(base_table);
 		}
 		select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -359,9 +359,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema, lowercase_name,
-	                                            std::move(function_children), std::move(filter_expr),
-	                                            std::move(order_modifier), distinct, false, export_opt.HasResult());
+	auto result = make_uniq<FunctionExpression>(
+	    qualified_function.catalog, qualified_function.schema, Identifier(lowercase_name), std::move(function_children),
+	    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
 
 	return std::move(result);
 }
@@ -379,9 +379,9 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier::InvalidSchema();
+		result.name = Identifier(choice_pr.GetResult().Cast<IdentifierParseResult>().identifier);
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).GetResult());
@@ -391,9 +391,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTran
                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	result.catalog = Identifier::InvalidCatalog();
+	result.schema = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+	result.name = Identifier(list_pr.Child<IdentifierParseResult>(1).identifier);
 	return result;
 }
 
@@ -403,12 +403,12 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
 	QualifiedName result;
 	auto &opt_schema = list_pr.Child<OptionalParseResult>(1);
 	if (opt_schema.HasResult()) {
-		result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-		result.schema = transformer.Transform<string>(opt_schema.GetResult());
+		result.catalog = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+		result.schema = Identifier(transformer.Transform<string>(opt_schema.GetResult()));
 	} else {
-		result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+		result.schema = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
 	}
-	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	result.name = Identifier(list_pr.Child<IdentifierParseResult>(2).identifier);
 	return result;
 }
 
@@ -519,7 +519,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 			} else if (sub_select) {
 				// if we have a SELECT we can push the ORDER BY clause into the SELECT list and reference it
 				auto alias = "__array_internal_idx_" + to_string(++array_idx);
-				order.expression->SetAlias(alias);
+				order.expression->SetAlias(Identifier(alias));
 				sub_select->select_list.push_back(std::move(order.expression));
 				order.expression = make_uniq<ColumnRefExpression>(alias);
 			} else {
@@ -572,7 +572,7 @@ FunctionArgument PEGTransformerFactory::TransformStructField(PEGTransformer &tra
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	expr->SetAlias(alias);
+	expr->SetAlias(Identifier(alias));
 
 	return FunctionArgument(std::move(alias), std::move(expr));
 }
@@ -1055,7 +1055,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 				throw ParserException("Too many identifiers found, expected schema.operator or operator");
 			}
 
-			auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, std::move(schema_name),
+			auto func_expr = make_uniq<FunctionExpression>(string(INVALID_CATALOG), std::move(schema_name),
 			                                               std::move(func_name), std::move(children_function));
 			func_expr->IsOperatorMutable() = true;
 			expr = std::move(func_expr);
@@ -1788,7 +1788,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		result->ReplaceListMutable() =
 		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
 		for (auto &replace_entry : result->ReplaceList()) {
-			if (result->ExcludeList().find(QualifiedColumnName(replace_entry.first)) != result->ExcludeList().end()) {
+			if (result->ExcludeList().find(QualifiedColumnName(Identifier(replace_entry.first))) !=
+			    result->ExcludeList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
 				                      replace_entry.first);
 			}
@@ -1852,7 +1853,7 @@ QualifiedColumnName PEGTransformerFactory::TransformExcludeName(PEGTransformer &
 		return QualifiedColumnName::Parse(result_string);
 	} else if (StringUtil::CIEquals(choice_pr.name, "colidorstring")) {
 		auto result = transformer.Transform<string>(choice_pr);
-		return QualifiedColumnName(result);
+		return QualifiedColumnName(Identifier(result));
 	} else {
 		throw InternalException("Unexpected option encountered for ExcludeName");
 	}

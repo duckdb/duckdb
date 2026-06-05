@@ -57,7 +57,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 	auto index_name = unique_constraint.GetName(table_info.name.GetName());
-	create_index_info->index_name = index_name;
+	create_index_info->index_name = Identifier(index_name);
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.
@@ -127,7 +127,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name.GetName());
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);
 		entry = entry_retriever.GetEntry(stmt.info->catalog, stmt.info->schema, lookup_info, stmt.info->if_not_found);
 	}
 

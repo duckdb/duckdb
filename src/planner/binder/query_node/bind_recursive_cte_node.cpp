@@ -126,8 +126,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.FunctionName(),
 			                                error_context);
-			auto entry =
-			    GetCatalogEntry(func_expr.Catalog(), DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			auto entry = GetCatalogEntry(func_expr.Catalog(), Identifier::DefaultSchema(), function_lookup,
+			                             OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(
@@ -242,10 +242,10 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	BindingAlias cte_alias(statement.ctename.GetName());
+	BindingAlias cte_alias(statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, internal_types);
 
-	BindingAlias recurring_alias("recurring", statement.ctename.GetName());
+	BindingAlias recurring_alias(Identifier("recurring"), statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
 
 	auto right = right_binder->BindNode(*statement.right);
@@ -282,7 +282,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(right.types, internal_types, std::move(right_node));
 
-	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename));
+	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias(Identifier("recurring"), ctename));
 	bool ref_recurring = recurring_binding && recurring_binding->IsReferenced();
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.

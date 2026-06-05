@@ -62,14 +62,14 @@ unique_ptr<CatalogEntry> DefaultCoordinateSystemGenerator::CreateDefaultEntry(Cl
 	return nullptr;
 }
 
-vector<string> DefaultCoordinateSystemGenerator::GetDefaultEntries() {
+vector<Identifier> DefaultCoordinateSystemGenerator::GetDefaultEntries() {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return {};
 	}
 
-	vector<string> entries;
+	vector<Identifier> entries;
 	for (const auto &crs_definition : DEFAULT_CRS_DEFINITIONS) {
-		entries.push_back(crs_definition.name);
+		entries.emplace_back(crs_definition.name);
 	}
 	return entries;
 }

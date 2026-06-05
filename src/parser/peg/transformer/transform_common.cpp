@@ -63,10 +63,10 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer, Pa
 
 		auto array_size = transformer.Transform<int64_t>(array_bound);
 		if (array_size < 0) {
-			type = make_uniq<TypeExpression>("list", std::move(children_types));
+			type = make_uniq<TypeExpression>(Identifier("list"), std::move(children_types));
 		} else {
 			children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
-			type = make_uniq<TypeExpression>("array", std::move(children_types));
+			type = make_uniq<TypeExpression>(Identifier("array"), std::move(children_types));
 		}
 	}
 	return LogicalType::UNBOUND(std::move(type));
@@ -119,7 +119,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransfo
 			throw ParserException("Type TIME does not allow any modifiers");
 		}
 		if (with_timezone) {
-			return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIME_TZ),
+			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIME_TZ)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
 		return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIME),
@@ -249,10 +249,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleType(PEGTrans
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		if (qualified_type_name.schema.empty()) {
 			qualified_type_name.schema = qualified_type_name.catalog;
-			qualified_type_name.catalog = INVALID_CATALOG;
+			qualified_type_name.catalog = Identifier::InvalidCatalog();
 		}
-		return make_uniq<TypeExpression>(qualified_type_name.catalog.GetName(), qualified_type_name.schema.GetName(),
-		                                 qualified_type_name.name.GetName(), std::move(children));
+		return make_uniq<TypeExpression>(qualified_type_name.catalog, qualified_type_name.schema,
+		                                 qualified_type_name.name, std::move(children));
 	}
 	if (type_or_character_pr.name == "CharacterType") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(type_or_character_pr);
@@ -266,9 +266,9 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTypeName(PEGTransformer &
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier::InvalidSchema();
+		result.name = Identifier(choice_pr.GetResult().Cast<IdentifierParseResult>().identifier);
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
@@ -278,9 +278,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransfor
                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	result.catalog = Identifier::InvalidCatalog();
+	result.schema = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+	result.name = Identifier(list_pr.Child<IdentifierParseResult>(1).identifier);
 	return result;
 }
 
@@ -288,9 +288,9 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(PEGT
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	QualifiedName result;
-	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
-	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	result.catalog = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+	result.schema = Identifier(transformer.Transform<string>(list_pr.Child<ListParseResult>(1)));
+	result.name = Identifier(list_pr.Child<IdentifierParseResult>(2).identifier);
 	return result;
 }
 
@@ -323,7 +323,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowType(PEGTransfor
 	for (auto &child : colid_list) {
 		auto &type_expr = UnboundType::GetTypeExpression(child.second);
 		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(child.first);
+		new_type_expr->SetAlias(Identifier(child.first));
 		struct_children.push_back(std::move(new_type_expr));
 	}
 	return make_uniq<TypeExpression>("STRUCT", std::move(struct_children));
@@ -361,7 +361,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
 		union_names.insert(colid.first);
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(colid.first);
+		new_type_expr->SetAlias(Identifier(colid.first));
 		union_children.push_back(std::move(new_type_expr));
 	}
 	return make_uniq<TypeExpression>("UNION", std::move(union_children));

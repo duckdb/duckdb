@@ -63,11 +63,14 @@ public:
 	}
 
 	//! Returns the alias of the expression
-	const string &GetAlias() const {
-		return alias.GetName();
+	const Identifier &GetAlias() const {
+		return alias;
 	}
 
 	//! Sets the alias of the expression
+	void SetAlias(const string &alias_p) {
+		alias = Identifier(alias_p);
+	}
 	void SetAlias(Identifier alias_p) {
 		alias = std::move(alias_p);
 	}

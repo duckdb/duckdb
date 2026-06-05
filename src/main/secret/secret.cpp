@@ -253,7 +253,7 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const st
 }
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
-	return functions.find(provider_name) != functions.end();
+	return functions.find(Identifier(provider_name)) != functions.end();
 }
 
 void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict) {
@@ -273,7 +273,7 @@ void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCrea
 }
 
 CreateSecretFunction &CreateSecretFunctionSet::GetFunction(const string &provider) {
-	const auto &lookup = functions.find(provider);
+	const auto &lookup = functions.find(Identifier(provider));
 
 	if (lookup == functions.end()) {
 		throw InternalException("Could not find Create Secret Function with provider %s");

@@ -48,23 +48,23 @@ static string GetSchema(CatalogEntry &entry) {
 }
 
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
-	catalog = INVALID_CATALOG;
+	catalog = Identifier::InvalidCatalog();
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		this->entry.schema = GetSchema(entry);
+		this->entry.schema = Identifier(GetSchema(entry));
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
-		catalog = entry.ParentCatalog().GetName();
+		catalog = Identifier(entry.ParentCatalog().GetName());
 	}
 }
 
 LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, Identifier catalog_str)
     : entry(std::move(entry_p)), catalog(std::move(catalog_str)) {
 	if (catalog_p) {
-		catalog = catalog_p->GetName();
+		catalog = Identifier(catalog_p->GetName());
 	}
 }
 

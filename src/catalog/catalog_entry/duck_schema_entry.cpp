@@ -308,8 +308,8 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		}
 	} else {
 		string name = info.name.GetName();
-		if (!set.AlterEntry(transaction, name, info)) {
-			throw CatalogException::MissingEntry(type, name, string());
+		if (!set.AlterEntry(transaction, Identifier(name), info)) {
+			throw CatalogException::MissingEntry(type, Identifier(name), string());
 		}
 	}
 }

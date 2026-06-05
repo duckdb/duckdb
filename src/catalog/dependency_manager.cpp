@@ -35,13 +35,13 @@ MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + name;
-	AssertMangledName(this->name, 2);
+	this->name = Identifier(CatalogTypeToString(type) + '\0' + schema + '\0' + name);
+	AssertMangledName(this->name.GetName(), 2);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
-	this->name = from.name + '\0' + to.name;
-	AssertMangledName(this->name, 5);
+	this->name = Identifier(from.name + '\0' + to.name);
+	AssertMangledName(this->name.GetName(), 5);
 }
 
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
@@ -66,7 +66,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	auto type = entry.type;
 	auto schema = GetSchema(entry);
 	auto name = entry.name;
-	CatalogEntryInfo info {type, schema, name};
+	CatalogEntryInfo info {type, Identifier(schema), name};
 
 	return MangleName(info);
 }
@@ -311,7 +311,7 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 		auto schema = DependencyManager::GetSchema(entry);
 		auto &name = entry.name;
 		auto &type = entry.type;
-		return CatalogEntryInfo {type, schema, name};
+		return CatalogEntryInfo {type, Identifier(schema), name};
 	}
 }
 
@@ -463,7 +463,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 
 	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
 		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-		EntryLookupInfo lookup_info(type, name.GetName());
+		EntryLookupInfo lookup_info(type, name);
 		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
 	}
 
@@ -796,7 +796,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 }
 
 static string FormatString(const MangledEntryName &mangled) {
-	auto input = mangled.name;
+	auto input = mangled.name.GetName();
 	for (size_t i = 0; i < input.size(); i++) {
 		if (input[i] == '\0') {
 			input[i] = '_';

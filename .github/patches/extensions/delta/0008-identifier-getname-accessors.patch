@@ -1,5 +1,115 @@
+diff --git a/src/delta_extension.cpp b/src/delta_extension.cpp
+index 9ad427e..0fc18e9 100644
+--- a/src/delta_extension.cpp
++++ b/src/delta_extension.cpp
+@@ -46,7 +46,7 @@ static unique_ptr<Catalog> DeltaCatalogAttach(optional_ptr<StorageExtensionInfo>
+ 		}
+ 	}
+ 
+-	res->SetDefaultTable(DEFAULT_SCHEMA, res->GetInternalTableName());
++	res->SetDefaultTable(Identifier::DefaultSchema(), Identifier(res->GetInternalTableName()));
+ 
+ 	return std::move(res);
+ }
+diff --git a/src/delta_macros.cpp b/src/delta_macros.cpp
+index 0d43aba..0f737cf 100644
+--- a/src/delta_macros.cpp
++++ b/src/delta_macros.cpp
+@@ -66,8 +66,8 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.schema = DEFAULT_SCHEMA;
+-	info.name = name;
++	info.schema = Identifier::DefaultSchema();
++	info.name = Identifier(name);
+ 	info.temporary = true;
+ 	info.internal = true;
+ 	info.macros.push_back(std::move(func));
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 89b3cd5..676b44e 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -283,7 +283,7 @@ void ExpressionVisitor::VisitStructLiteral(void *state, uintptr_t sibling_list_i
+ 	}
+ 
+ 	for (idx_t i = 0; i < children_keys->size(); i++) {
+-		(*children_values)[i]->SetAlias((*children_keys)[i]->ToString());
++		(*children_values)[i]->SetAlias(Identifier((*children_keys)[i]->ToString()));
+ 	}
+ 
+ 	unique_ptr<ParsedExpression> expression = make_uniq<FunctionExpression>("struct_pack", std::move(*children_values));
+diff --git a/src/functions/delta_scan/delta_scan.cpp b/src/functions/delta_scan/delta_scan.cpp
+index a26b9d8..b350152 100644
+--- a/src/functions/delta_scan/delta_scan.cpp
++++ b/src/functions/delta_scan/delta_scan.cpp
+@@ -112,10 +112,10 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(ExtensionLoader &loader) {
+ 		function.named_parameters["pushdown_partition_info"] = LogicalType::BOOLEAN;
+ 		function.named_parameters["pushdown_filters"] = LogicalType::VARCHAR;
+ 
+-		function.name = "delta_scan";
++		function.SetName("delta_scan");
+ 	}
+ 
+-	parquet_scan_copy.name = "delta_scan";
++	parquet_scan_copy.SetName("delta_scan");
+ 	return parquet_scan_copy;
+ }
+ 
+diff --git a/src/functions/delta_transaction_utils/idempotency_helpers.cpp b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+index 4a5558f..752c823 100644
+--- a/src/functions/delta_transaction_utils/idempotency_helpers.cpp
++++ b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+@@ -91,8 +91,8 @@ static unique_ptr<FunctionData> DeltaGetTransactionVersionBind(ClientContext &co
+ 	names.emplace_back("version");
+ 
+ 	// TODO: support catalog.schema.table format
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, path);
+-	auto lookup_result = Catalog::GetEntry(context, "", "", lookup, OnEntryNotFound::RETURN_NULL);
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, Identifier(path));
++	auto lookup_result = Catalog::GetEntry(context, Identifier(""), Identifier(""), lookup, OnEntryNotFound::RETURN_NULL);
+ 	if (lookup_result.get()) {
+ 		res->delta_table_entry = lookup_result->Cast<DeltaTableEntry>();
+ 	} else {
+@@ -113,8 +113,8 @@ static unique_ptr<FunctionData> DeltaSetTransactionVersionBind(ClientContext &co
+ 	res->expected_version = input.inputs[3];
+ 
+ 	// TODO: support catalog.schema.table format
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, path);
+-	auto lookup_result = Catalog::GetEntry(context, "", "", lookup, OnEntryNotFound::RETURN_NULL);
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, Identifier(path));
++	auto lookup_result = Catalog::GetEntry(context, Identifier(""), Identifier(""), lookup, OnEntryNotFound::RETURN_NULL);
+ 	if (lookup_result.get()) {
+ 		res->delta_table_entry = lookup_result->Cast<DeltaTableEntry>();
+ 	} else {
+diff --git a/src/functions/expression_functions.cpp b/src/functions/expression_functions.cpp
+index 5ad22f5..1227c33 100644
+--- a/src/functions/expression_functions.cpp
++++ b/src/functions/expression_functions.cpp
+@@ -46,7 +46,7 @@ static void GetDeltaTestExpression(DataChunk &input, ExpressionState &state, Vec
+ 
+ ScalarFunctionSet DeltaFunctions::GetExpressionFunction(ExtensionLoader &loader) {
+ 	ScalarFunctionSet result;
+-	result.name = "get_delta_test_expression";
++	result.SetName("get_delta_test_expression");
+ 
+ 	ScalarFunction getvar({}, LogicalType::LIST(LogicalType::VARCHAR), GetDeltaTestExpression, nullptr, nullptr);
+ 	result.AddFunction(getvar);
+diff --git a/src/functions/util_functions.cpp b/src/functions/util_functions.cpp
+index a4da240..987ae3f 100644
+--- a/src/functions/util_functions.cpp
++++ b/src/functions/util_functions.cpp
+@@ -33,7 +33,7 @@ static void GetWriteDataFunction(DataChunk &input, ExpressionState &state, Vecto
+ 
+ ScalarFunctionSet DeltaFunctions::GetWriteFileFunction(ExtensionLoader &loader) {
+ 	ScalarFunctionSet result;
+-	result.name = "write_blob";
++	result.SetName("write_blob");
+ 
+ 	ScalarFunction write_file({LogicalType::VARCHAR, LogicalType::BLOB}, {LogicalType::BOOLEAN}, GetWriteDataFunction,
+ 	                          nullptr, nullptr);
 diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
-index c2bae88..3fffd6d 100644
+index c2bae88..888541f 100644
 --- a/src/storage/delta_insert.cpp
 +++ b/src/storage/delta_insert.cpp
 @@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
@@ -11,3 +121,62 @@ index c2bae88..3fffd6d 100644
  	return result;
  }
  
+@@ -280,8 +280,8 @@ static optional_ptr<CopyFunctionCatalogEntry> TryGetCopyFunction(DatabaseInstanc
+ 	D_ASSERT(!name.empty());
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+-	return schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, name)->Cast<CopyFunctionCatalogEntry>();
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
++	return schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, Identifier(name))->Cast<CopyFunctionCatalogEntry>();
+ }
+ 
+ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+@@ -298,7 +298,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	if (child_catalog_mode) {
+ 		// We need to fetch the table ourselves
+ 		CatalogEntryRetriever retriever(context);
+-		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, default_table);
++		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, Identifier(default_table));
+ 		auto default_table_entry =
+ 		    LookupEntry(retriever, default_schema, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
+ 		table_entry = default_table_entry.entry->Cast<DeltaTableEntry>();
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 9ce962d..1be6f40 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -119,8 +119,8 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+ 	for (idx_t i = 0; i < return_types.size(); i++) {
+ 		table_info.columns.AddColumn(ColumnDefinition(names[i], return_types[i]));
+ 	}
+-	table_info.table =
+-	    !delta_catalog.internal_table_name.empty() ? delta_catalog.internal_table_name : catalog.GetName();
++	table_info.table = !delta_catalog.internal_table_name.empty() ? Identifier(delta_catalog.internal_table_name)
++	                                                               : catalog.GetName();
+ 
+ 	// Copy over constraints to table info TODO: these are incompatible currently
+ 	// table_info.constraints = snapshot->not_null_constraints;}
+diff --git a/src/storage/delta_table_entry.cpp b/src/storage/delta_table_entry.cpp
+index ac50afb..a3a3147 100644
+--- a/src/storage/delta_table_entry.cpp
++++ b/src/storage/delta_table_entry.cpp
+@@ -36,8 +36,8 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+-	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "delta_scan");
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
++	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("delta_scan"));
+ 	if (!catalog_entry) {
+ 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);
+ 	}
+@@ -64,7 +64,7 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	}
+ 
+ 	function_info->snapshot = this->snapshot;
+-	function_info->table_name = delta_catalog.GetName();
++	function_info->table_name = delta_catalog.GetName().GetName();
+ 	delta_scan_function.function_info = std::move(function_info);
+ 
+ 	vector<Value> inputs = {delta_catalog.GetDBPath()};

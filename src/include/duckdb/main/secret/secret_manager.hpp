@@ -190,7 +190,7 @@ private:
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
-	optional_ptr<SecretStorage> GetSecretStorage(const string &name);
+	optional_ptr<SecretStorage> GetSecretStorage(const Identifier &name);
 
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();
@@ -219,7 +219,7 @@ public:
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	vector<Identifier> GetDefaultEntries() override;
 	bool LockDuringCreate() const override {
 		return true;
 	}

@@ -104,9 +104,9 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
                                                                     const string &schema_qualification,
                                                                     const string &sequence_name) {
 	QualifiedName result;
-	result.catalog = catalog_qualification.empty() ? INVALID_CATALOG : catalog_qualification;
-	result.schema = schema_qualification.empty() ? INVALID_SCHEMA : schema_qualification;
-	result.name = sequence_name;
+	result.catalog = Identifier(catalog_qualification.empty() ? INVALID_CATALOG : catalog_qualification);
+	result.schema = Identifier(schema_qualification.empty() ? INVALID_SCHEMA : schema_qualification);
+	result.name = Identifier(sequence_name);
 	return result;
 }
 
@@ -130,7 +130,8 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			}
 			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
-			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
+			auto schema =
+			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
 			owned_info = make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema.GetName(),
 			                                            owned_by->qualified_name.name.GetName(),
 			                                            OnEntryNotFound::THROW_EXCEPTION);

@@ -83,7 +83,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 	// Evaluate all arguments to constant values
 	for (auto &child : input.children) {
-		string name = child->GetAlias();
+		string name = child->GetAlias().GetName();
 		if (!child->IsFoldable()) {
 			throw BinderException("make_type function arguments must be constant expressions");
 		}
@@ -103,7 +103,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto &arg = args[i];
 		auto result = make_uniq<ConstantExpression>(arg.second);
-		result->SetAlias(arg.first);
+		result->SetAlias(Identifier(arg.first));
 
 		type_args.push_back(std::move(result));
 	}
@@ -111,9 +111,8 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	auto type_name = args.front().second.GetValue<string>();
 	auto qualified_name = QualifiedName::Parse(type_name);
 
-	auto unbound_type = LogicalType::UNBOUND(
-	    make_uniq<TypeExpression>(qualified_name.catalog.GetName(), qualified_name.schema.GetName(),
-	                              qualified_name.name.GetName(), std::move(type_args)));
+	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(qualified_name.catalog, qualified_name.schema,
+	                                                                   qualified_name.name, std::move(type_args)));
 
 	// Bind the unbound type
 	auto binder = Binder::CreateBinder(input.context);

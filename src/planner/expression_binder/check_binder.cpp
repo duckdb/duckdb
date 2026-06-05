@@ -46,7 +46,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		if (lambda_bindings) {
 			for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-				if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.GetName())) {
+				if ((*lambda_bindings)[i - 1].HasMatchingBinding(Identifier(colref.GetName()))) {
 					// FIXME: support lambdas in CHECK constraints
 					// FIXME: like so: return (*lambda_bindings)[i - 1].Bind(colref, i, depth);
 					// FIXME: and move this to LambdaRefExpression::FindMatchingBinding
@@ -63,7 +63,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		throw BinderException("Table does not contain column %s referenced in check constraint!",
 		                      colref.ColumnNames()[0]);
 	}
-	auto &col = columns.GetColumn(colref.ColumnNames()[0].GetName());
+	auto &col = columns.GetColumn(colref.ColumnNames()[0]);
 	if (col.Generated()) {
 		auto bound_expression = col.GeneratedExpression().Copy();
 		return BindExpression(bound_expression, 0, false);

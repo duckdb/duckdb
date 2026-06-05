@@ -911,7 +911,7 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	result["Table"] = ParseInfo::QualifierToString(bind_data.table.schema.catalog.GetName(),
-	                                               bind_data.table.schema.name, bind_data.table.name.GetName());
+	                                               bind_data.table.schema.name, bind_data.table.name);
 	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
@@ -931,8 +931,8 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
 	auto schema = deserializer.ReadProperty<string>(101, "schema");
 	auto table = deserializer.ReadProperty<string>(102, "table");
-	auto &catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), Identifier(catalog),
+	                                                           Identifier(schema), Identifier(table));
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}

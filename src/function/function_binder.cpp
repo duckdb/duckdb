@@ -114,7 +114,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 	// Now check the named arguments
 	for (idx_t i = 0; i < named_arguments.size(); i++) {
 		auto &named_arg = named_arguments[i];
-		auto opt_param_idx = sig.GetParameterIndexByName(named_arg.first);
+		auto opt_param_idx = sig.GetParameterIndexByName(Identifier(named_arg.first));
 
 		if (!opt_param_idx.IsValid()) {
 			if (!sig.HasVarArgs()) {
@@ -280,7 +280,8 @@ MultipleCandidateException(const string &catalog_name, const string &schema_name
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
-	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
+	string call_str = Function::CallToString(Identifier(catalog_name), Identifier(schema_name), Identifier(name),
+	                                         arguments, named_arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		const auto &f = functions.GetFunctionByOffset(conf);
@@ -366,7 +367,7 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, const
 		// If so, we can attempt to salvage the call by implicitly naming the positional arguments and retrying again
 		for (auto &[name, expr] : arguments) {
 			if (name.empty()) {
-				name = expr->GetAlias();
+				name = expr->GetAlias().GetName();
 			}
 		}
 
@@ -544,11 +545,12 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 	}
 }
 
-unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const Identifier &name,
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &schema, const Identifier &name,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
-	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema, name);
+	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
+	    context, Identifier(schema), Identifier(name));
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
 }
@@ -935,7 +937,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 		seen_names.insert(name);
 
-		const auto opt_param_idx = sig.GetParameterIndexByName(name);
+		const auto opt_param_idx = sig.GetParameterIndexByName(Identifier(name));
 		if (!opt_param_idx.IsValid()) {
 			if (!sig.HasVarArgs()) {
 				throw BinderException(location, "Function '%s' does not have a parameter named '%s'",
@@ -970,7 +972,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 		if (param.HasDefaultValue()) {
 			arguments[i] = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
-			arguments[i]->SetAlias(param.GetName());
+			arguments[i]->SetAlias(Identifier(param.GetName()));
 
 		} else {
 			throw BinderException("Missing value for parameter '%s' in function call to '%s'", param.GetName(),

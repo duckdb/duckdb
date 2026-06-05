@@ -47,7 +47,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
                                                                     const ShowType &show_or_describe) {
 	auto result = make_uniq<ShowRef>();
 	// Legacy reasons, see bind_showref.cpp
-	result->table_name = "__show_tables_expanded";
+	result->table_name = Identifier("__show_tables_expanded");
 	result->show_type = ShowType::SHOW_UNQUALIFIED;
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -82,7 +82,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 				auto table_name = StringUtil::Lower(base_table.table_name.GetName());
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
 				    table_name == "variables") {
-					showref->table_name = "\"" + table_name + "\"";
+					showref->table_name = Identifier("\"" + table_name + "\"");
 					showref->show_type = ShowType::SHOW_UNQUALIFIED;
 				}
 			}
@@ -106,7 +106,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 		if (showref->show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
-		showref->table_name = "__show_tables_expanded";
+		showref->table_name = Identifier("__show_tables_expanded");
 		showref->show_type = ShowType::SHOW_UNQUALIFIED;
 	}
 
@@ -128,7 +128,7 @@ DescribeTarget PEGTransformerFactory::TransformDescribeStringLiteral(PEGTransfor
                                                                      const string &string_literal) {
 	DescribeTarget result;
 	result.is_table_name = true;
-	result.table_name = string_literal;
+	result.table_name = Identifier(string_literal);
 	return result;
 }
 

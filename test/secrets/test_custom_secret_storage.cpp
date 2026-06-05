@@ -33,12 +33,12 @@ struct DemoSecretType {
 		ExtensionActiveLoad load_info {instance, extension_info, "demo_secret_type_" + type_name, ""};
 		ExtensionLoader loader {load_info};
 		SecretType secret_type;
-		secret_type.name = type_name;
+		secret_type.name = Identifier(type_name);
 		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
 		secret_type.default_provider = "config";
 		loader.RegisterSecretType(secret_type);
 
-		CreateSecretFunction secret_fun = {type_name, "config", CreateDemoSecret};
+		CreateSecretFunction secret_fun = {type_name, Identifier("config"), CreateDemoSecret};
 		loader.RegisterFunction(secret_fun);
 	}
 };
@@ -61,7 +61,7 @@ public:
 protected:
 	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
-		logger.write_secret_requests.push_back(secret.GetName());
+		logger.write_secret_requests.emplace_back(secret.GetName());
 	};
 	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);

@@ -22,13 +22,13 @@ struct BindingAlias {
 	explicit BindingAlias(const StandardEntry &entry);
 
 	bool IsSet() const;
-	const string &GetAlias() const;
+	const Identifier &GetAlias() const;
 
-	const string &GetCatalog() const {
-		return catalog.GetName();
+	const Identifier &GetCatalog() const {
+		return catalog;
 	}
-	const string &GetSchema() const {
-		return schema.GetName();
+	const Identifier &GetSchema() const {
+		return schema;
 	}
 
 	bool Matches(const BindingAlias &other) const;

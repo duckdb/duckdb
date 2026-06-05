@@ -242,7 +242,7 @@ void duckdb_scalar_function_set_name(duckdb_scalar_function function, const char
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	scalar_function.name = name;
+	scalar_function.name = duckdb::Identifier(name);
 }
 
 void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_logical_type type) {

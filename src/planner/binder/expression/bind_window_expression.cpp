@@ -80,7 +80,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 
 	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
+	auto function = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name),
+	                                                   std::move(children), error, true);
 	if (!function) {
 		error.Throw();
 	}
@@ -98,12 +99,13 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.FunctionName(), error_context);
-	auto entry = GetCatalogEntry(window.Catalog(), window.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	auto entry = GetCatalogEntry(Identifier(window.Catalog()), Identifier(window.Schema()), function_lookup,
+	                             OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
-		auto macro = make_uniq<FunctionExpression>(window.Catalog(), window.Schema(), window.FunctionName(),
-		                                           std::move(window.GetChildrenMutable()),
-		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
+		auto macro = make_uniq<FunctionExpression>(
+		    Identifier(window.Catalog()), Identifier(window.Schema()), Identifier(window.FunctionName()),
+		    std::move(window.GetChildrenMutable()), std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 
@@ -380,7 +382,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// move the WINDOW expression into the set of bound windows
 	auto &window_type = result->GetReturnType();
 	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
-	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), window_type,
+	auto colref = make_uniq<BoundColumnRefExpression>(name.GetName(), window_type,
 	                                                  ColumnBinding(node.window_index, window_idx), depth);
 	return BindResult(std::move(colref));
 }

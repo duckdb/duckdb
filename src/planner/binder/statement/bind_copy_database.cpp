@@ -28,14 +28,14 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 	auto info = make_uniq<CopyDatabaseInfo>(target_database_name);
 	for (auto &entry : catalog_entries) {
 		auto create_info = entry.get().GetInfo();
-		create_info->catalog = target_database_name;
+		create_info->catalog = Identifier(target_database_name);
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
 		// Update all the dependencies of the entry to point to the newly created entries on the target database
 		LogicalDependencyList altered_dependencies;
 		for (auto &dep : create_info->dependencies.Set()) {
 			auto altered_dep = dep;
-			altered_dep.catalog = target_database_name;
+			altered_dep.catalog = Identifier(target_database_name);
 			altered_dependencies.AddDependency(altered_dep);
 		}
 		create_info->dependencies = altered_dependencies;
@@ -59,12 +59,12 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		// generate the insert statement
 		InsertStatement insert_stmt;
 		auto &insert_node = *insert_stmt.node;
-		insert_node.catalog = target_database_name;
+		insert_node.catalog = Identifier(target_database_name);
 		insert_node.schema = table.ParentSchema().name;
 		insert_node.table = table.name;
 
 		auto from_tbl = make_uniq<BaseTableRef>();
-		from_tbl->catalog_name = source_catalog.GetName();
+		from_tbl->catalog_name = Identifier(source_catalog.GetName());
 		from_tbl->schema_name = table.ParentSchema().name;
 		from_tbl->table_name = table.name;
 
@@ -105,8 +105,8 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	BoundStatement result;
 
 	unique_ptr<LogicalOperator> plan;
-	auto &source_catalog = Catalog::GetCatalog(context, stmt.from_database);
-	auto &target_catalog = Catalog::GetCatalog(context, stmt.to_database);
+	auto &source_catalog = Catalog::GetCatalog(context, Identifier(stmt.from_database));
+	auto &target_catalog = Catalog::GetCatalog(context, Identifier(stmt.to_database));
 	if (&source_catalog == &target_catalog) {
 		throw BinderException("Cannot copy from \"%s\" to \"%s\" - FROM and TO databases are the same",
 		                      stmt.from_database, stmt.to_database);
@@ -115,12 +115,12 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 		result.types = {LogicalType::BOOLEAN};
 		result.names = {"Success"};
 
-		plan = BindCopyDatabaseSchema(source_catalog, target_catalog.GetName());
+		plan = BindCopyDatabaseSchema(source_catalog, target_catalog.GetName().GetName());
 	} else {
 		result.types = {LogicalType::BIGINT};
 		result.names = {"Count"};
 
-		plan = BindCopyDatabaseData(source_catalog, target_catalog.GetName());
+		plan = BindCopyDatabaseData(source_catalog, target_catalog.GetName().GetName());
 	}
 
 	result.plan = std::move(plan);

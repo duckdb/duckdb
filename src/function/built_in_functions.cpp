@@ -63,7 +63,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 
 void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) { // NOLINT: false positive
 	for (auto &name : names) {
-		function.name = name;
+		function.name = Identifier(name);
 		AddFunction(function);
 	}
 }
@@ -123,7 +123,7 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.GetName());
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), bound_function.GetName());
 
 	// override the function with the extension function
 	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());

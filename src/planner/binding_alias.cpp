@@ -27,11 +27,11 @@ bool BindingAlias::IsSet() const {
 	return !alias.empty();
 }
 
-const string &BindingAlias::GetAlias() const {
+const Identifier &BindingAlias::GetAlias() const {
 	if (!IsSet()) {
 		throw InternalException("Calling BindingAlias::GetAlias on a non-set alias");
 	}
-	return alias.GetName();
+	return alias;
 }
 
 string BindingAlias::ToString() const {

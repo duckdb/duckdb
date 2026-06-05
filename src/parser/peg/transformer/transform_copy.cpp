@@ -96,7 +96,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithout
                                                                                      const string &col_id,
                                                                                      const string &col_id_1) {
 	auto result = make_uniq<PragmaStatement>();
-	result->info->name = "copy_database";
+	result->info->name = Identifier("copy_database");
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id)));
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id_1)));
 	return std::move(result);

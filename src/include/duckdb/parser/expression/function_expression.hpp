@@ -89,6 +89,21 @@ public:
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
+	//! Convenience overloads: function names are commonly passed as string literals
+	FunctionExpression(const string &catalog_name, const string &schema_name, const string &function_name,
+	                   vector<unique_ptr<ParsedExpression>> children, unique_ptr<ParsedExpression> filter = nullptr,
+	                   unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false, bool is_operator = false,
+	                   bool export_state = false)
+	    : FunctionExpression(Identifier(catalog_name), Identifier(schema_name), Identifier(function_name),
+	                         std::move(children), std::move(filter), std::move(order_bys), distinct, is_operator,
+	                         export_state) {
+	}
+	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
+	                   bool distinct = false, bool is_operator = false, bool export_state = false)
+	    : FunctionExpression(Identifier(function_name), std::move(children), std::move(filter), std::move(order_bys),
+	                         distinct, is_operator, export_state) {
+	}
 	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
 	                              vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
@@ -97,6 +112,21 @@ public:
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
+	//! Convenience overloads: function names are commonly passed as string literals
+	FunctionExpression(const string &catalog_name, const string &schema_name, const string &function_name,
+	                   vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter = nullptr,
+	                   unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false, bool is_operator = false,
+	                   bool export_state = false)
+	    : FunctionExpression(Identifier(catalog_name), Identifier(schema_name), Identifier(function_name),
+	                         std::move(children), std::move(filter), std::move(order_bys), distinct, is_operator,
+	                         export_state) {
+	}
+	FunctionExpression(const string &function_name, vector<FunctionArgument> children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, unique_ptr<OrderModifier> order_bys = nullptr,
+	                   bool distinct = false, bool is_operator = false, bool export_state = false)
+	    : FunctionExpression(Identifier(function_name), std::move(children), std::move(filter), std::move(order_bys),
+	                         distinct, is_operator, export_state) {
+	}
 
 public:
 	const Identifier &Catalog() const {
@@ -111,11 +141,14 @@ public:
 	string &SchemaMutable() {
 		return schema.GetNameMutable();
 	}
-	const string &FunctionName() const {
-		return function_name.GetName();
+	const Identifier &FunctionName() const {
+		return function_name;
 	}
 	string &FunctionNameMutable() {
 		return function_name.GetNameMutable();
+	}
+	void SetFunctionName(string function_name_p) {
+		function_name = Identifier(std::move(function_name_p));
 	}
 	bool IsOperator() const {
 		return is_operator;

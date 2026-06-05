@@ -63,11 +63,11 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 			throw InternalException("DROP TRIGGER: ExtraDropTriggerInfo has no base_table");
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-		    context.client, info->catalog.GetName(), info->schema.GetName(), base_table_ref.table_name.GetName());
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->catalog, info->schema,
+		                                                         base_table_ref.table_name);
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->name.GetName(), info->cascade)) {
+		if (!duck_table.DropTrigger(transaction, Identifier(info->name.GetName()), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name,
 				                       base_table_ref.table_name);

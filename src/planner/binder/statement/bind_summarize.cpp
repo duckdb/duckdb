@@ -18,7 +18,7 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	vector<unique_ptr<ParsedExpression>> unnest_children;
 	unnest_children.push_back(std::move(list_function));
 	auto unnest_function = make_uniq<FunctionExpression>("unnest", std::move(unnest_children));
-	unnest_function->SetAlias(alias);
+	unnest_function->SetAlias(Identifier(alias));
 	return std::move(unnest_function);
 }
 

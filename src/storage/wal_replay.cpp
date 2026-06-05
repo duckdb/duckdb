@@ -733,8 +733,8 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -820,7 +820,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Create a binder to bind the parsed expressions.
 	vector<ColumnIndex> column_indexes;
-	binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, column_indexes, table);
+	binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), column_names, column_types, column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// Bind the parsed expressions to create unbound expressions.
@@ -866,8 +866,8 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 void WriteAheadLogDeserializer::ReplayDropView() {
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -879,7 +879,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	CreateSchemaInfo info;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -891,7 +891,7 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.name = deserializer.ReadProperty<string>(101, "schema");
+	info.name = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -912,8 +912,8 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -931,9 +931,8 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog.GetName(), trigger_info.schema.GetName(),
-	                                         trigger_info.base_table->table_name.GetName());
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
+	                                                   trigger_info.base_table->table_name);
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -942,19 +941,19 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
-	auto table_name = deserializer.ReadPropertyWithDefault<string>(103, "table");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(103, "table");
 	if (DeserializeOnly()) {
 		return;
 	}
 	if (table_name.empty()) {
 		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
 	}
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema.GetName(), table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
-	duck_table.DropTrigger(transaction, info.name.GetName(), info.cascade);
+	duck_table.DropTrigger(transaction, info.name, info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -972,8 +971,8 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 void WriteAheadLogDeserializer::ReplayDropSequence() {
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -993,7 +992,7 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, Identifier(schema), Identifier(name));
 	seq.ReplayValue(usage_count, counter, last_value);
 }
 
@@ -1012,8 +1011,8 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 void WriteAheadLogDeserializer::ReplayDropMacro() {
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1035,8 +1034,8 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1084,8 +1083,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 void WriteAheadLogDeserializer::ReplayDropIndex() {
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	info.schema = deserializer.ReadProperty<string>(101, "schema");
-	info.name = deserializer.ReadProperty<string>(102, "name");
+	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1105,8 +1104,8 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 // Replay Data
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayUseTable() {
-	auto schema_name = deserializer.ReadProperty<string>(101, "schema");
-	auto table_name = deserializer.ReadProperty<string>(102, "table");
+	auto schema_name = deserializer.ReadProperty<Identifier>(101, "schema");
+	auto table_name = deserializer.ReadProperty<Identifier>(102, "table");
 	if (DeserializeOnly()) {
 		return;
 	}

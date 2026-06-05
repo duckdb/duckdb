@@ -144,7 +144,7 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
 	Identifier GetColumnName() const override {
-		return column_path[0];
+		return Identifier(column_path[0]);
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -216,7 +216,7 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
 	Identifier GetColumnName() const override {
-		return column_path[0];
+		return Identifier(column_path[0]);
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -246,7 +246,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	Identifier GetColumnName() const override {
-		return removed_column.GetName();
+		return removed_column;
 	}
 
 private:
@@ -271,7 +271,7 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	string ToString() const override;
 	Identifier GetColumnName() const override {
-		return column_path[0];
+		return Identifier(column_path[0]);
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -301,7 +301,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	Identifier GetColumnName() const override {
-		return column_name.GetName();
+		return column_name;
 	}
 
 private:

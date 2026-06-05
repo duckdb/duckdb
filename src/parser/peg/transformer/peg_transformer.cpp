@@ -26,7 +26,7 @@ void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamTy
 
 bool PEGTransformer::GetParam(const string &identifier, idx_t &index, PreparedParamType type) {
 	ParamTypeCheck(last_param_type, type);
-	auto entry = named_parameter_map.find(identifier);
+	auto entry = named_parameter_map.find(Identifier(identifier));
 	if (entry == named_parameter_map.end()) {
 		return false;
 	}
@@ -38,7 +38,7 @@ void PEGTransformer::SetParam(const string &identifier, idx_t index, PreparedPar
 	ParamTypeCheck(last_param_type, type);
 	last_param_type = type;
 	D_ASSERT(!named_parameter_map.count(identifier));
-	named_parameter_map[identifier] = index;
+	named_parameter_map[Identifier(identifier)] = index;
 }
 
 void PEGTransformer::ClearParameters() {
@@ -65,9 +65,9 @@ unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<Creat
 	auto info = make_uniq<CreateTypeInfo>();
 	info->temporary = true;
 	info->internal = false;
-	info->catalog = INVALID_CATALOG;
-	info->schema = INVALID_SCHEMA;
-	info->name = std::move(entry->enum_name);
+	info->catalog = Identifier::InvalidCatalog();
+	info->schema = Identifier::InvalidSchema();
+	info->name = Identifier(std::move(entry->enum_name));
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation

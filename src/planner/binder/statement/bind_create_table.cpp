@@ -58,8 +58,9 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		auto logical_type = col.GetType();
 		if (logical_type.id() == LogicalTypeId::UNBOUND && logical_type.HasAlias()) {
 			// Resolve user type if possible
-			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
-			    context, INVALID_CATALOG, INVALID_SCHEMA, logical_type.GetAlias(), OnEntryNotFound::RETURN_NULL);
+			const auto type_entry =
+			    Catalog::GetEntry<TypeCatalogEntry>(context, Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                                        Identifier(logical_type.GetAlias()), OnEntryNotFound::RETURN_NULL);
 			if (type_entry) {
 				logical_type = type_entry->user_type;
 			}
@@ -81,7 +82,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &conte
                                                             const vector<unique_ptr<Constraint>> &constraints,
                                                             const string &table_name, const ColumnList &columns) {
 	auto binder = Binder::CreateBinder(context);
-	return binder->BindConstraints(constraints, table_name, columns);
+	return binder->BindConstraints(constraints, Identifier(table_name), columns);
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEntry &table) {
@@ -99,7 +100,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_
 
 vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
                                                                const string &table_name, const ColumnList &columns) {
-	auto bound_constraints = BindConstraints(constraints, table_name, columns);
+	auto bound_constraints = BindConstraints(constraints, Identifier(table_name), columns);
 
 	// Handle PK and NOT NULL constraints.
 	bool has_primary_key = false;
@@ -325,7 +326,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		schema_name = DEFAULT_SCHEMA;
 	}
 
-	auto default_binder = CreateBinderWithSearchPath(catalog_name, schema_name);
+	auto default_binder = CreateBinderWithSearchPath(Identifier(catalog_name), Identifier(schema_name));
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
@@ -465,7 +466,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 
 		vector<Identifier> pk_names;
 		if (unique.HasIndex()) {
-			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
+			pk_names.emplace_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
 		} else {
 			pk_names = unique.GetColumnNames();
 		}
@@ -564,10 +565,11 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 
 		// Resolve the table reference in the same catalog/schema as the table being
 		// created, so FK references work for external catalogs (not just the default).
-		string fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : INVALID_CATALOG;
+		Identifier fk_catalog =
+		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
 		string fk_schema = fk.info.schema.empty() ? schema.name.GetName() : fk.info.schema.GetName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(fk_catalog, fk_schema, table_lookup);
+		auto table_entry = entry_retriever.GetEntry(Identifier(fk_catalog), Identifier(fk_schema), table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}
@@ -693,7 +695,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();
 			auto &schema_name = schema.name;
-			BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name.GetName());
+			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetName(), schema_name.GetName());
 		}
 	}
 

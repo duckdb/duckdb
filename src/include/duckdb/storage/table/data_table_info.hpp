@@ -51,8 +51,8 @@ public:
 	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
 	void VerifyIndexBuffers();
 
-	string GetSchemaName();
-	string GetTableName();
+	Identifier GetSchemaName();
+	Identifier GetTableName();
 	void SetTableName(Identifier name);
 
 private:

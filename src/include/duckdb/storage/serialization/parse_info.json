@@ -771,7 +771,7 @@
       {
         "id": 203,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
     "constructor": ["options"]

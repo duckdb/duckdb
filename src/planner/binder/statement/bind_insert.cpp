@@ -205,7 +205,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	} else {
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
-			auto &column = column_list.GetColumn(name);
+			auto &column = column_list.GetColumn(Identifier(name));
 			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
@@ -463,7 +463,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		}
 		// push all columns of the table as an alias
 		for (auto &column : columns.Physical()) {
-			source->column_name_alias.push_back(column.Name());
+			source->column_name_alias.emplace_back(column.Name());
 		}
 	}
 	// push DISTINCT ON(unique_columns)
@@ -593,7 +593,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name.GetName(), schema_name.GetName());
 	insert->bound_constraints = BindConstraints(table);
 	if (!node.select_statement && !node.default_values) {
 		result.plan = std::move(insert);

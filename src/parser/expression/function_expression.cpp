@@ -32,8 +32,9 @@ FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, co
 FunctionExpression::FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children_p), std::move(filter),
-                         std::move(order_bys), distinct, is_operator, export_state_p) {
+    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name,
+                         std::move(children_p), std::move(filter), std::move(order_bys), distinct, is_operator,
+                         export_state_p) {
 }
 
 FunctionExpression::FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
@@ -53,8 +54,8 @@ FunctionExpression::FunctionExpression(Identifier catalog_name, Identifier schem
 FunctionExpression::FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state)
-    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children), std::move(filter),
-                         std::move(order_bys), distinct, is_operator, export_state) {
+    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name, std::move(children),
+                         std::move(filter), std::move(order_bys), distinct, is_operator, export_state) {
 }
 
 string FunctionExpression::ToString() const {
@@ -143,7 +144,7 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 		vector<unique_ptr<ParsedExpression>> children;
 		for (auto &arg : arguments) {
 			auto copy = arg.GetExpression().Copy();
-			copy->SetAlias(arg.GetName());
+			copy->SetAlias(Identifier(arg.GetName()));
 			children.push_back(std::move(copy));
 		}
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
@@ -172,7 +173,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 		result->arguments.reserve(children.size());
 		for (auto &child : children) {
 			auto alias = child->GetAlias();
-			result->arguments.emplace_back(std::move(alias), std::move(child));
+			result->arguments.emplace_back(alias.GetName(), std::move(child));
 		}
 
 		// Mark this function expression as a legacy function call, so that the binder can handle it accordingly.

@@ -61,7 +61,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 				bind_macro_parameter = true;
 			}
 		} else {
-			bind_macro_parameter = macro_binding->HasMatchingBinding(col_ref.GetColumnName());
+			bind_macro_parameter = macro_binding->HasMatchingBinding(Identifier(col_ref.GetColumnName()));
 		}
 
 		if (bind_macro_parameter) {
@@ -122,7 +122,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		auto &window_expr = expr->Cast<WindowExpression>();
 		window_expr.CatalogMutable() = macro_expr.Catalog().GetName();
 		window_expr.SchemaMutable() = macro_expr.Schema().GetName();
-		window_expr.FunctionNameMutable() = macro_expr.FunctionName();
+		window_expr.FunctionNameMutable() = macro_expr.FunctionName().GetName();
 
 		window_expr.GetChildrenMutable().clear();
 		for (auto &arg : macro_expr.GetArgumentsMutable()) {

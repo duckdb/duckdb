@@ -86,14 +86,15 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	BinaryExecutor::Execute<string_t, string_t, bool>(
 	    input.data[0], input.data[1], result, [&](string_t db_name, string_t schema_name) {
-		    return search_path->SchemaInSearchPath(context, db_name.GetString(), schema_name.GetString());
+		    return search_path->SchemaInSearchPath(context, Identifier(db_name.GetString()),
+		                                           Identifier(schema_name.GetString()));
 	    });
 }
 
 // txid_current
 void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
-	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
+	auto &catalog = Catalog::GetCatalog(context, Identifier(DatabaseManager::GetDefaultDatabase(context)));
 	auto &transaction = DuckTransaction::Get(context, catalog);
 	auto val = Value::UBIGINT(transaction.start_time);
 	result.Reference(val, count_t(input.size()));

@@ -43,13 +43,13 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 		throw InvalidInputException("Can't insert nothing into a STRUCT");
 	}
 
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 	child_list_t<LogicalType> new_children;
 	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
 	for (idx_t i = 0; i < existing_children.size(); i++) {
 		auto &child = existing_children[i];
-		name_collision_set.insert(child.first);
+		name_collision_set.insert(Identifier(child.first));
 		new_children.push_back(make_pair(child.first, child.second));
 	}
 
@@ -63,7 +63,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 			throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 		}
 		name_collision_set.insert(child->GetAlias());
-		new_children.push_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
+		new_children.emplace_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
 	}
 
 	bound_function.SetReturnType(LogicalType::STRUCT(new_children));

@@ -28,7 +28,7 @@ SecretCatalogEntry::SecretCatalogEntry(unique_ptr<SecretEntry> secret_p, Catalog
 }
 
 SecretCatalogEntry::SecretCatalogEntry(unique_ptr<const BaseSecret> secret_p, Catalog &catalog)
-    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, secret_p->GetName()) {
+    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, Identifier(secret_p->GetName())) {
 	internal = true;
 	secret = make_uniq<SecretEntry>(std::move(secret_p));
 }
@@ -78,7 +78,7 @@ void SecretManager::LoadSecretStorage(unique_ptr<SecretStorage> storage) {
 }
 
 void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage) {
-	if (secret_storages.find(storage->GetName()) != secret_storages.end()) {
+	if (secret_storages.find(Identifier(storage->GetName())) != secret_storages.end()) {
 		throw InvalidConfigurationException("Secret Storage with name '%s' already registered!", storage->GetName());
 	}
 
@@ -91,7 +91,7 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 		}
 	}
 
-	secret_storages[storage->GetName()] = std::move(storage);
+	secret_storages[Identifier(storage->GetName())] = std::move(storage);
 }
 
 // FIXME: use serialization scripts?
@@ -108,7 +108,8 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether
 	case SecretSerializationType::KEY_VALUE_SECRET:
-		return KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, {scope, type, provider, name});
+		return KeyValueSecret::Deserialize<KeyValueSecret>(
+		    deserializer, BaseSecret(scope, Identifier(type), Identifier(provider), Identifier(name)));
 	// Continues below: we need to do a type lookup to find the secret deserialize method
 	case SecretSerializationType::CUSTOM:
 		break;
@@ -127,7 +128,8 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
-	return deserialized_type.deserializer(deserializer, {scope, type, provider, name});
+	return deserialized_type.deserializer(deserializer,
+	                                      BaseSecret(scope, Identifier(type), Identifier(provider), Identifier(name)));
 }
 
 void SecretManager::RegisterSecretType(SecretType &type) {
@@ -175,7 +177,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	}
 
 	//! Lookup which backend to store the secret in
-	auto backend = GetSecretStorage(resolved_storage);
+	auto backend = GetSecretStorage(Identifier(resolved_storage));
 	if (!backend) {
 		if (!config.allow_persistent_secrets &&
 		    (persist_type == SecretPersistType::PERSISTENT || storage == LOCAL_FILE_STORAGE_NAME)) {
@@ -206,7 +208,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 
 optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const string &type, const string &provider) {
 	unique_lock<mutex> lck(manager_lock);
-	auto lookup = secret_functions.find(type);
+	auto lookup = secret_functions.find(Identifier(type));
 
 	if (lookup != secret_functions.end()) {
 		if (lookup->second.ProviderExists(provider)) {
@@ -219,7 +221,7 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 	AutoloadExtensionForFunction(type, provider);
 	lck.lock();
 
-	lookup = secret_functions.find(type);
+	lookup = secret_functions.find(Identifier(type));
 
 	if (lookup != secret_functions.end()) {
 		if (lookup->second.ProviderExists(provider)) {
@@ -239,7 +241,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	auto function_input = input;
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(function_input.type.GetName());
-		function_input.provider = secret_type.default_provider;
+		function_input.provider = Identifier(secret_type.default_provider);
 	}
 
 	// Lookup function
@@ -271,7 +273,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	if (provider.empty()) {
 		default_provider = true;
 		auto secret_type = LookupTypeInternal(type.GetName());
-		provider = secret_type.default_provider;
+		provider = Identifier(secret_type.default_provider);
 	}
 
 	string default_string = default_provider ? "default " : "";
@@ -343,7 +345,7 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 	bool found = false;
 
 	if (!storage.empty()) {
-		auto storage_lookup = GetSecretStorage(storage);
+		auto storage_lookup = GetSecretStorage(Identifier(storage));
 
 		if (!storage_lookup) {
 			throw InvalidInputException("Unknown secret storage found: '%s'", storage);
@@ -377,7 +379,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 
 	// storage to drop from was specified directly
 	if (!storage.empty()) {
-		auto storage_lookup = GetSecretStorage(storage);
+		auto storage_lookup = GetSecretStorage(Identifier(storage));
 		if (!storage_lookup) {
 			throw InvalidInputException("Unknown storage type found for drop secret: '%s'", storage);
 		}
@@ -439,7 +441,7 @@ void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
 
 bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_out) {
 	unique_lock<mutex> lck(manager_lock);
-	auto lookup = secret_types.find(type);
+	auto lookup = secret_types.find(Identifier(type));
 	if (lookup != secret_types.end()) {
 		type_out = lookup->second;
 		return true;
@@ -450,7 +452,7 @@ bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_o
 	AutoloadExtensionForType(type);
 	lck.lock();
 
-	lookup = secret_types.find(type);
+	lookup = secret_types.find(Identifier(type));
 	if (lookup != secret_types.end()) {
 		type_out = lookup->second;
 		return true;
@@ -468,14 +470,14 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 }
 
 void SecretManager::RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict) {
-	auto lookup = secret_functions.find(function.secret_type);
+	auto lookup = secret_functions.find(Identifier(function.secret_type));
 	if (lookup != secret_functions.end()) {
 		lookup->second.AddFunction(function, on_conflict);
 		return;
 	}
 	CreateSecretFunctionSet new_set(function.secret_type);
 	new_set.AddFunction(function, OnCreateConflict::ERROR_ON_CONFLICT);
-	secret_functions.insert({function.secret_type, new_set});
+	secret_functions.insert(make_pair(Identifier(function.secret_type), new_set));
 }
 
 vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
@@ -622,10 +624,10 @@ void SecretManager::ThrowProviderNotFoundError(const string &type, const string 
 	throw InvalidInputException("Secret provider '%s' not found for type '%s'", provider, type);
 }
 
-optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const string &name) {
+optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const Identifier &name) {
 	lock_guard<mutex> lock(manager_lock);
 
-	auto lookup = secret_storages.find(name);
+	auto lookup = secret_storages.find(Identifier(name));
 	if (lookup != secret_storages.end()) {
 		return lookup->second.get();
 	}
@@ -652,7 +654,7 @@ DefaultSecretGenerator::DefaultSecretGenerator(Catalog &catalog, SecretManager &
 
 unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(const string &entry_name) {
 	lock_guard<mutex> guard(lock);
-	auto secret_lu = persistent_secrets.find(entry_name);
+	auto secret_lu = persistent_secrets.find(Identifier(entry_name));
 	if (secret_lu == persistent_secrets.end()) {
 		return nullptr;
 	}
@@ -722,12 +724,12 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	return CreateDefaultEntryInternal(entry_name.GetName());
 }
 
-vector<string> DefaultSecretGenerator::GetDefaultEntries() {
-	vector<string> ret;
+vector<Identifier> DefaultSecretGenerator::GetDefaultEntries() {
+	vector<Identifier> ret;
 
 	lock_guard<mutex> guard(lock);
 	for (const auto &res : persistent_secrets) {
-		ret.push_back(res.GetName());
+		ret.emplace_back(res.GetName());
 	}
 
 	return ret;

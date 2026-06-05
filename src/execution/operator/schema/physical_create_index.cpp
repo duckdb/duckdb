@@ -143,8 +143,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
-		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY,
-		                             info->index_name.GetName());
+		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);

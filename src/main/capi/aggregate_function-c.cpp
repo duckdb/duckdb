@@ -175,7 +175,7 @@ void duckdb_aggregate_function_set_name(duckdb_aggregate_function function, cons
 		return;
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
-	aggregate_function.name = name;
+	aggregate_function.name = duckdb::Identifier(name);
 }
 
 void duckdb_aggregate_function_add_parameter(duckdb_aggregate_function function, duckdb_logical_type type) {

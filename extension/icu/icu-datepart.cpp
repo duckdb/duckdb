@@ -467,7 +467,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 			arguments.erase(arguments.begin());
 			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-			bound_function.SetName(part_name);
+			bound_function.SetName(Identifier(part_name));
 			bound_function.SetReturnType(LogicalType::DOUBLE);
 			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, double>);
 

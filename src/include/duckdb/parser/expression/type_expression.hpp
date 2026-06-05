@@ -22,6 +22,14 @@ public:
 	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
 	               vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
+	//! Convenience overloads: type names are commonly passed as string literals
+	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children)
+	    : TypeExpression(Identifier(type_name), std::move(children)) {
+	}
+	TypeExpression(const string &catalog, const string &schema, const string &type_name,
+	               vector<unique_ptr<ParsedExpression>> children)
+	    : TypeExpression(Identifier(catalog), Identifier(schema), Identifier(type_name), std::move(children)) {
+	}
 
 public:
 	const string &GetTypeName() const {
@@ -31,13 +39,13 @@ public:
 		return schema.GetName();
 	}
 	void SetSchema(string new_schema) {
-		schema = std::move(new_schema);
+		schema = Identifier(std::move(new_schema));
 	}
 	const string &GetCatalog() const {
 		return catalog.GetName();
 	}
 	void SetCatalog(string new_catalog) {
-		catalog = std::move(new_catalog);
+		catalog = Identifier(std::move(new_catalog));
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

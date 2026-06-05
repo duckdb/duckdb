@@ -1,3 +1,23 @@
+diff --git a/src/quack_extension.cpp b/src/quack_extension.cpp
+index 814a7ac..784879a 100644
+--- a/src/quack_extension.cpp
++++ b/src/quack_extension.cpp
+@@ -48,13 +48,13 @@ static unique_ptr<BaseSecret> CreateQuackSecretFromConfig(ClientContext &, Creat
+ 
+ static void RegisterQuackSecretType(ExtensionLoader &loader) {
+ 	SecretType secret_type;
+-	secret_type.name = QUACK_SECRET_TYPE;
++	secret_type.name = Identifier(QUACK_SECRET_TYPE);
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 	secret_type.extension = "quack";
+ 	loader.RegisterSecretType(secret_type);
+ 
+-	CreateSecretFunction config_fun = {QUACK_SECRET_TYPE, "config", CreateQuackSecretFromConfig};
++	CreateSecretFunction config_fun = {QUACK_SECRET_TYPE, Identifier("config"), CreateQuackSecretFromConfig};
+ 	config_fun.named_parameters["token"] = LogicalType::VARCHAR;
+ 	loader.RegisterFunction(config_fun);
+ }
 diff --git a/src/storage/quack_catalog_set.cpp b/src/storage/quack_catalog_set.cpp
 index 7caa1f0..d214942 100644
 --- a/src/storage/quack_catalog_set.cpp
@@ -49,15 +69,26 @@ index 5539945..fe61d51 100644
  			auto &bind_data = get.bind_data->Cast<QuackScanBindData>();
  			auto connection_id = bind_data.client_connection->ConnectionId();
 diff --git a/src/storage/quack_schema.cpp b/src/storage/quack_schema.cpp
-index aea6c3a..0b8c63b 100644
+index aea6c3a..ff57cf3 100644
 --- a/src/storage/quack_schema.cpp
 +++ b/src/storage/quack_schema.cpp
+@@ -20,8 +20,8 @@ void QuackSchemaSet::Reload(ClientContext &context, QuackCatalog &catalog, const
+ 	Clear();
+ 	for (auto &row : load_data.schemas->Rows()) {
+ 		CreateSchemaInfo info;
+-		info.catalog = row.GetValue(0).GetValue<string>();
+-		info.schema = row.GetValue(1).GetValue<string>();
++		info.catalog = Identifier(row.GetValue(0).GetValue<string>());
++		info.schema = Identifier(row.GetValue(1).GetValue<string>());
+ 		// TODO this will fail if there are two schemas with the same name in different catalogs :/
+ 		auto schema = make_uniq<QuackSchemaCatalogEntry>(context, catalog, info, load_data);
+ 		CreateEntry(std::move(schema), OnCreateConflict::REPLACE_ON_CONFLICT);
 @@ -105,7 +105,7 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateView(CatalogTransactio
  	quack_transaction.Query(create_view_info->ToString());
  
  	// locally, override the query with a remote procedure call to ensure the view is evaluated remotely
 -	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName(), name, info.view_name);
-+	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName(), name.GetName(), info.view_name.GetName());
++	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName().GetName(), name.GetName(), info.view_name.GetName());
  	info.query = CreateViewInfo::ParseSelect(info.sql);
  
  	auto quack_entry = make_uniq<QuackViewCatalogEntry>(catalog, *this, info);
@@ -70,25 +101,29 @@ index aea6c3a..0b8c63b 100644
  }
  void QuackSchemaCatalogEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
  	throw NotImplementedException("Alter not implemented yet, Alter!");
-@@ -166,7 +166,7 @@ static const DefaultTableMacro quack_table_macros[] = {
+@@ -165,8 +165,8 @@ static const DefaultTableMacro quack_table_macros[] = {
+ // 'borrowed' from ducklake
  optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::LoadBuiltInFunction(DefaultTableMacro macro) {
  	string macro_def = macro.macro;
- 	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
+-	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
 -	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name, '\''));
++	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetName(), '\''));
 +	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetName(), '\''));
  	macro.macro = macro_def.c_str();
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
 diff --git a/src/storage/quack_table.cpp b/src/storage/quack_table.cpp
-index 8f1da8d..4e4245f 100644
+index 8f1da8d..1618735 100644
 --- a/src/storage/quack_table.cpp
 +++ b/src/storage/quack_table.cpp
-@@ -50,7 +50,7 @@ QuackTableSet::QuackTableSet(ClientContext &context, QuackSchemaCatalogEntry &pa
+@@ -49,8 +49,8 @@ QuackTableSet::QuackTableSet(ClientContext &context, QuackSchemaCatalogEntry &pa
+ 			// bind a remote procedure call to the view on the server side
  			// we don't actually care what the view contains server-side, we just treat it like an opaque object we can
  			// query
- 			CreateViewInfo info(schema, view_name);
+-			CreateViewInfo info(schema, view_name);
 -			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName(), schema.name, view_name);
-+			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName(), schema.name.GetName(), view_name);
++			CreateViewInfo info(schema, Identifier(view_name));
++			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName().GetName(), schema.name.GetName(), view_name);
  			info.query = CreateViewInfo::ParseSelect(info.sql);
  
  			// bind to resolve the types

@@ -34,11 +34,11 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	if (columns.empty()) {
 		// Empty means ALL columns should be vacuumed/analyzed
 		for (auto &col : table.GetColumns().Physical()) {
-			columns.push_back(col.GetName());
+			columns.emplace_back(col.GetName());
 		}
 	}
 
-	case_insensitive_set_t column_name_set;
+	identifier_set_t column_name_set;
 	vector<string> non_generated_column_names;
 	for (auto &col_name : columns) {
 		if (column_name_set.count(col_name) > 0) {
@@ -46,25 +46,25 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 			                      "the list of column names");
 		}
 		column_name_set.insert(col_name);
-		if (!table.ColumnExists(col_name)) {
+		if (!table.ColumnExists(Identifier(col_name))) {
 			throw BinderException("Column with name \"%s\" does not exist", col_name);
 		}
-		auto &col = table.GetColumn(col_name);
+		auto &col = table.GetColumn(Identifier(col_name));
 		// ignore generated column
 		if (col.Generated()) {
 			throw BinderException(
 			    "cannot vacuum or analyze generated column \"%s\" - specify non-generated columns to vacuum or analyze",
 			    col.GetName());
 		}
-		non_generated_column_names.push_back(col_name);
-		ColumnRefExpression colref(col_name, table.name.GetName());
+		non_generated_column_names.emplace_back(col_name);
+		ColumnRefExpression colref(col_name.GetName(), table.name.GetName());
 		auto result = bind_context.BindColumn(colref, 0);
 		if (result.HasError()) {
 			result.error.Throw();
 		}
 		select_list.push_back(std::move(result.expression));
 	}
-	info.columns = std::move(non_generated_column_names);
+	info.columns = StringsToIdentifiers(non_generated_column_names);
 
 	auto &column_ids = get.GetColumnIds();
 	D_ASSERT(select_list.size() == column_ids.size());

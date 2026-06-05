@@ -1,8 +1,32 @@
+diff --git a/src/include/storage/mysql_index_entry.hpp b/src/include/storage/mysql_index_entry.hpp
+index f180153..0f7e84d 100644
+--- a/src/include/storage/mysql_index_entry.hpp
++++ b/src/include/storage/mysql_index_entry.hpp
+@@ -19,8 +19,8 @@ public:
+ 	string table_name;
+ 
+ public:
+-	string GetSchemaName() const override;
+-	string GetTableName() const override;
++	Identifier GetSchemaName() const override;
++	Identifier GetTableName() const override;
+ };
+ 
+ } // namespace duckdb
 diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
-index 6a34aaa..db4dbe8 100644
+index 6a34aaa..18271e5 100644
 --- a/src/include/storage/mysql_table_entry.hpp
 +++ b/src/include/storage/mysql_table_entry.hpp
-@@ -26,7 +26,7 @@ struct MySQLTableInfo {
+@@ -19,14 +19,14 @@ struct MySQLTableInfo {
+ 		create_info = make_uniq<CreateTableInfo>();
+ 	}
+ 	MySQLTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(string(), schema, table);
++		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
+ 	}
+ 	MySQLTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, table);
++		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, Identifier(table));
  	}
  
  	const string &GetTableName() const {
@@ -11,6 +35,35 @@ index 6a34aaa..db4dbe8 100644
  	}
  
  	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
+index d2427fc..a6c6f03 100644
+--- a/src/mysql_extension.cpp
++++ b/src/mysql_extension.cpp
+@@ -61,7 +61,7 @@ static void ValidateUnitInterval(ClientContext &context, SetScope scope, Value &
+ unique_ptr<BaseSecret> CreateMySQLSecretFunction(ClientContext &, CreateSecretInput &input) {
+ 	// apply any overridden settings
+ 	vector<string> prefix_paths;
+-	auto result = make_uniq<KeyValueSecret>(prefix_paths, "mysql", "config", input.name);
++	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier("mysql"), Identifier("config"), input.name);
+ 	for (const auto &named_param : input.options) {
+ 		auto lower_name = StringUtil::Lower(named_param.first);
+ 
+@@ -138,13 +138,13 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	loader.RegisterFunction(debug_plan_function);
+ 
+ 	SecretType secret_type;
+-	secret_type.name = "mysql";
++	secret_type.name = Identifier("mysql");
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 
+ 	loader.RegisterSecretType(secret_type);
+ 
+-	CreateSecretFunction mysql_secret_function = {"mysql", "config", CreateMySQLSecretFunction};
++	CreateSecretFunction mysql_secret_function = {"mysql", Identifier("config"), CreateMySQLSecretFunction};
+ 	SetMySQLSecretParameters(mysql_secret_function);
+ 	loader.RegisterFunction(mysql_secret_function);
+ 
 diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
 index fea00b5..bfe3ba4 100644
 --- a/src/mysql_scanner.cpp
@@ -115,6 +168,19 @@ index 8b8dd64..a3d8c17 100644
  }
  
  void MySQLCatalogSet::EraseEntryInternal(const string &name) {
+diff --git a/src/storage/mysql_debug_execution_plan.cpp b/src/storage/mysql_debug_execution_plan.cpp
+index 7c4a18d..2caa540 100644
+--- a/src/storage/mysql_debug_execution_plan.cpp
++++ b/src/storage/mysql_debug_execution_plan.cpp
+@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> DebugExecutionPlanBind(ClientContext &context, T
+ 		auto &mysql_catalog = catalog.Cast<MySQLCatalog>();
+ 		auto entries = mysql_catalog.GetPlanCache().GetPlanCacheEntries();
+ 		for (auto &entry : entries) {
+-			result->database_names.push_back(db.GetName());
++			result->database_names.emplace_back(db.GetName());
+ 			result->entries.push_back(std::move(entry));
+ 		}
+ 	}
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
 index c01340e..26493af 100644
 --- a/src/storage/mysql_execute_query.cpp
@@ -152,21 +218,42 @@ index c01340e..26493af 100644
  	result += " SET ";
  	if (child.type != PhysicalOperatorType::PROJECTION) {
  		throw NotImplementedException("MySQL Update not supported - Expected the "
+diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
+index dddcd5f..c9f2f5a 100644
+--- a/src/storage/mysql_index.cpp
++++ b/src/storage/mysql_index.cpp
+@@ -19,7 +19,7 @@ SourceResultType MySQLCreateIndex::GetDataInternal(ExecutionContext &context, Da
+                                                    OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+ 	if (info->catalog == INVALID_CATALOG && info->schema == catalog.GetName()) {
+-		info->schema = DEFAULT_SCHEMA;
++		info->schema = Identifier::DefaultSchema();
+ 	}
+ 	auto &schema = catalog.GetSchema(context.client, info->schema);
+ 	schema.CreateIndex(context.client, *info, table);
 diff --git a/src/storage/mysql_index_entry.cpp b/src/storage/mysql_index_entry.cpp
-index f140e3a..24b04e0 100644
+index f140e3a..5e62f0f 100644
 --- a/src/storage/mysql_index_entry.cpp
 +++ b/src/storage/mysql_index_entry.cpp
-@@ -9,7 +9,7 @@ MySQLIndexEntry::MySQLIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, C
+@@ -8,12 +8,12 @@ MySQLIndexEntry::MySQLIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, C
+     : IndexCatalogEntry(catalog, schema, info), table_name(std::move(table_name_p)) {
  }
  
- string MySQLIndexEntry::GetSchemaName() const {
+-string MySQLIndexEntry::GetSchemaName() const {
 -	return schema.name;
-+	return schema.name.GetName();
++Identifier MySQLIndexEntry::GetSchemaName() const {
++	return Identifier(schema.name.GetName());
  }
  
- string MySQLIndexEntry::GetTableName() const {
+-string MySQLIndexEntry::GetTableName() const {
+-	return table_name;
++Identifier MySQLIndexEntry::GetTableName() const {
++	return Identifier(table_name);
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/storage/mysql_index_set.cpp b/src/storage/mysql_index_set.cpp
-index c122830..4607eba 100644
+index c122830..6f5335e 100644
 --- a/src/storage/mysql_index_set.cpp
 +++ b/src/storage/mysql_index_set.cpp
 @@ -11,7 +11,7 @@ MySQLIndexSet::MySQLIndexSet(MySQLSchemaEntry &schema) : MySQLInSchemaSet(schema
@@ -203,6 +290,17 @@ index c122830..4607eba 100644
  
  	auto &transaction = MySQLTransaction::Get(context, catalog);
  	auto result = transaction.Query(query);
+@@ -44,8 +44,8 @@ WHERE TABLE_SCHEMA = 'mysqlscanner';
+ 		auto index_name = result->GetString(1);
+ 		CreateIndexInfo info;
+ 		info.schema = schema.name;
+-		info.table = table_name;
+-		info.index_name = index_name;
++		info.table = Identifier(table_name);
++		info.index_name = Identifier(index_name);
+ 		auto index_entry = make_uniq<MySQLIndexEntry>(catalog, schema, info, table_name);
+ 		CreateEntry(std::move(index_entry));
+ 	}
 diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
 index fdabc68..2aa99a5 100644
 --- a/src/storage/mysql_insert.cpp
@@ -251,9 +349,18 @@ index 2fb7b86..1aa539d 100644
  			for (const auto &entry : get->table_filters) {
  				ProjectionIndex proj_idx = entry.GetIndex();
 diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
-index 66ac94d..11d3eb3 100644
+index 66ac94d..b24c393 100644
 --- a/src/storage/mysql_schema_entry.cpp
 +++ b/src/storage/mysql_schema_entry.cpp
+@@ -28,7 +28,7 @@ MySQLTransaction &GetMySQLTransaction(CatalogTransaction transaction) {
+ void MySQLSchemaEntry::TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name) {
+ 	DropInfo info;
+ 	info.type = catalog_type;
+-	info.name = name;
++	info.name = Identifier(name);
+ 	info.cascade = false;
+ 	info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	DropEntry(context, info);
 @@ -39,7 +39,7 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateTable(CatalogTransaction tran
  	auto table_name = base_info.table;
  	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
@@ -284,14 +391,7 @@ index 66ac94d..11d3eb3 100644
  	sql += " ";
  	if (!info.aliases.empty()) {
  		sql += "(";
-@@ -123,18 +123,18 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
- 	}
- 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT ||
- 	    info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
--		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name);
-+		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name.GetName());
- 		if (current_entry) {
- 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+@@ -129,12 +129,12 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateView(CatalogTransaction trans
  				return current_entry;
  			}
  			// CREATE OR REPLACE - drop any existing entries first (if any)
@@ -307,14 +407,16 @@ index 66ac94d..11d3eb3 100644
  
  optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
 diff --git a/src/storage/mysql_schema_set.cpp b/src/storage/mysql_schema_set.cpp
-index d515600..6199ee6 100644
+index d515600..73c8723 100644
 --- a/src/storage/mysql_schema_set.cpp
 +++ b/src/storage/mysql_schema_set.cpp
-@@ -25,7 +25,7 @@ FROM information_schema.schemata;
+@@ -24,8 +24,8 @@ FROM information_schema.schemata;
+ 	auto result = transaction.Query(query);
  	while (result->Next()) {
  		CreateSchemaInfo info;
- 		info.schema = result->GetString(0);
+-		info.schema = result->GetString(0);
 -		info.internal = MySQLSchemaIsInternal(info.schema);
++		info.schema = Identifier(result->GetString(0));
 +		info.internal = MySQLSchemaIsInternal(info.schema.GetName());
  		auto schema = make_uniq<MySQLSchemaEntry>(catalog, info);
  		CreateEntry(std::move(schema));

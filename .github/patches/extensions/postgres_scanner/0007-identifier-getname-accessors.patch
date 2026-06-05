@@ -1,8 +1,34 @@
+diff --git a/src/include/storage/postgres_index_entry.hpp b/src/include/storage/postgres_index_entry.hpp
+index c800f23..b468421 100644
+--- a/src/include/storage/postgres_index_entry.hpp
++++ b/src/include/storage/postgres_index_entry.hpp
+@@ -19,8 +19,8 @@ public:
+ 	string table_name;
+ 
+ public:
+-	string GetSchemaName() const override;
+-	string GetTableName() const override;
++	Identifier GetSchemaName() const override;
++	Identifier GetTableName() const override;
+ };
+ 
+ } // namespace duckdb
 diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
-index 529c234..82a584c 100644
+index 529c234..b50091e 100644
 --- a/src/include/storage/postgres_table_entry.hpp
 +++ b/src/include/storage/postgres_table_entry.hpp
-@@ -29,7 +29,7 @@ struct PostgresTableInfo {
+@@ -20,16 +20,16 @@ struct PostgresTableInfo {
+ 		create_info->columns.SetAllowDuplicates(true);
+ 	}
+ 	PostgresTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(string(), schema, table);
++		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
+ 		create_info->columns.SetAllowDuplicates(true);
+ 	}
+ 	PostgresTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, table);
++		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, Identifier(table));
+ 		create_info->columns.SetAllowDuplicates(true);
  	}
  
  	const string &GetTableName() const {
@@ -11,6 +37,48 @@ index 529c234..82a584c 100644
  	}
  
  	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/postgres_extension.cpp b/src/postgres_extension.cpp
+index dce65b1..f9f8e08 100644
+--- a/src/postgres_extension.cpp
++++ b/src/postgres_extension.cpp
+@@ -77,7 +77,7 @@ static void SetPostgresDebugQueryPrint(ClientContext &context, SetScope scope, V
+ unique_ptr<BaseSecret> CreatePostgresSecretFunction(ClientContext &context, CreateSecretInput &input) {
+ 	// apply any overridden settings
+ 	vector<string> prefix_paths;
+-	auto result = make_uniq<KeyValueSecret>(prefix_paths, "postgres", "config", input.name);
++	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier("postgres"), Identifier("config"), input.name);
+ 	for (const auto &named_param : input.options) {
+ 		auto lower_name = StringUtil::Lower(named_param.first);
+ 
+@@ -150,13 +150,13 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 
+ 	// Register the new type
+ 	SecretType secret_type;
+-	secret_type.name = "postgres";
++	secret_type.name = Identifier("postgres");
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 
+ 	loader.RegisterSecretType(secret_type);
+ 
+-	CreateSecretFunction postgres_secret_function = {"postgres", "config", CreatePostgresSecretFunction};
++	CreateSecretFunction postgres_secret_function = {"postgres", Identifier("config"), CreatePostgresSecretFunction};
+ 	SetPostgresSecretParameters(postgres_secret_function);
+ 	loader.RegisterFunction(postgres_secret_function);
+ 
+diff --git a/src/postgres_utils.cpp b/src/postgres_utils.cpp
+index 646696b..4a90eb0 100644
+--- a/src/postgres_utils.cpp
++++ b/src/postgres_utils.cpp
+@@ -199,7 +199,7 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
+ 			throw InternalException("Context is destroyed!?");
+ 		}
+ 		auto entry = schema->GetEntry(CatalogTransaction(schema->ParentCatalog(), *context), CatalogType::TYPE_ENTRY,
+-		                              pgtypename);
++		                              Identifier(pgtypename));
+ 		if (!entry) {
+ 			// unsupported so fallback to varchar
+ 			postgres_type.info = PostgresTypeAnnotation::CAST_TO_VARCHAR;
 diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
 index 866dcab..b53b35c 100644
 --- a/src/storage/postgres_catalog.cpp
@@ -87,22 +155,41 @@ index eae13de..544c61a 100644
  	return make_uniq<LogicalPostgresCreateIndex>(std::move(create_index_info), table);
  }
 diff --git a/src/storage/postgres_index_entry.cpp b/src/storage/postgres_index_entry.cpp
-index a27ab3e..1a5eebf 100644
+index a27ab3e..9a8bf9c 100644
 --- a/src/storage/postgres_index_entry.cpp
 +++ b/src/storage/postgres_index_entry.cpp
-@@ -9,7 +9,7 @@ PostgresIndexEntry::PostgresIndexEntry(Catalog &catalog, SchemaCatalogEntry &sch
+@@ -8,12 +8,12 @@ PostgresIndexEntry::PostgresIndexEntry(Catalog &catalog, SchemaCatalogEntry &sch
+     : IndexCatalogEntry(catalog, schema, info), table_name(std::move(table_name_p)) {
  }
  
- string PostgresIndexEntry::GetSchemaName() const {
+-string PostgresIndexEntry::GetSchemaName() const {
 -	return schema.name;
-+	return schema.name.GetName();
++Identifier PostgresIndexEntry::GetSchemaName() const {
++	return Identifier(schema.name.GetName());
  }
  
- string PostgresIndexEntry::GetTableName() const {
+-string PostgresIndexEntry::GetTableName() const {
+-	return table_name;
++Identifier PostgresIndexEntry::GetTableName() const {
++	return Identifier(table_name);
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/storage/postgres_index_set.cpp b/src/storage/postgres_index_set.cpp
-index f183538..7863b71 100644
+index f183538..54dfa51 100644
 --- a/src/storage/postgres_index_set.cpp
 +++ b/src/storage/postgres_index_set.cpp
+@@ -37,8 +37,8 @@ void PostgresIndexSet::LoadEntries(ClientContext &context, PostgresTransaction &
+ 		auto index_name = result.GetString(row, 2);
+ 		CreateIndexInfo info;
+ 		info.schema = schema.name;
+-		info.table = table_name;
+-		info.index_name = index_name;
++		info.table = Identifier(table_name);
++		info.index_name = Identifier(index_name);
+ 		auto index_entry = make_shared_ptr<PostgresIndexEntry>(catalog, schema, info, table_name);
+ 		CreateEntry(transaction, std::move(index_entry));
+ 	}
 @@ -62,10 +62,10 @@ string PGGetCreateIndexSQL(CreateIndexInfo &info, TableCatalogEntry &tbl) {
  		sql += " UNIQUE";
  	}
@@ -182,9 +269,18 @@ index 57cac81..3e3c727 100644
  			return;
  		}
 diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
-index 5c1b9de..74f3be3 100644
+index 5c1b9de..00a2ce8 100644
 --- a/src/storage/postgres_schema_entry.cpp
 +++ b/src/storage/postgres_schema_entry.cpp
+@@ -42,7 +42,7 @@ PostgresTransaction &GetPostgresTransaction(CatalogTransaction transaction) {
+ void PostgresSchemaEntry::TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name) {
+ 	DropInfo info;
+ 	info.type = catalog_type;
+-	info.name = name;
++	info.name = Identifier(name);
+ 	info.cascade = false;
+ 	info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	DropEntry(context, info);
 @@ -55,7 +55,7 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateTable(CatalogTransaction t
  	auto table_name = base_info.table;
  	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
@@ -205,14 +301,7 @@ index 5c1b9de..74f3be3 100644
  	sql += " ";
  	if (!info.aliases.empty()) {
  		sql += "(";
-@@ -99,18 +99,18 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateView(CatalogTransaction tr
- 	}
- 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT ||
- 	    info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
--		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name);
-+		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name.GetName());
- 		if (current_entry) {
- 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+@@ -105,12 +105,12 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateView(CatalogTransaction tr
  				return current_entry;
  			}
  			// CREATE OR REPLACE - drop any existing entries first (if any)
@@ -237,9 +326,18 @@ index 5c1b9de..74f3be3 100644
  	return types.CreateType(postgres_transaction, info);
  }
 diff --git a/src/storage/postgres_schema_set.cpp b/src/storage/postgres_schema_set.cpp
-index e6ef9db..c56d7a2 100644
+index e6ef9db..e7fcb5e 100644
 --- a/src/storage/postgres_schema_set.cpp
 +++ b/src/storage/postgres_schema_set.cpp
+@@ -72,7 +72,7 @@ void PostgresSchemaSet::LoadEntries(ClientContext &context, PostgresTransaction
+ 		auto oid = result->GetInt64(row, 0);
+ 		auto schema_name = result->GetString(row, 1);
+ 		CreateSchemaInfo info;
+-		info.schema = schema_name;
++		info.schema = Identifier(schema_name);
+ 		info.internal = PostgresSchemaEntry::SchemaIsInternal(schema_name);
+ 		auto schema = make_shared_ptr<PostgresSchemaEntry>(catalog, info, std::move(tables[row]), std::move(enums[row]),
+ 		                                                   std::move(composite_types[row]), std::move(indexes[row]));
 @@ -85,10 +85,10 @@ optional_ptr<CatalogEntry> PostgresSchemaSet::CreateSchema(PostgresTransaction &
  	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
  		create_sql += " IF NOT EXISTS";
@@ -402,9 +500,18 @@ index 624e137..f50d9b7 100644
  	transaction.Query(sql);
  }
 diff --git a/src/storage/postgres_type_set.cpp b/src/storage/postgres_type_set.cpp
-index f2db80c..b72c08d 100644
+index f2db80c..923cc23 100644
 --- a/src/storage/postgres_type_set.cpp
 +++ b/src/storage/postgres_type_set.cpp
+@@ -49,7 +49,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
+ 	PostgresType postgres_type;
+ 	CreateTypeInfo info;
+ 	postgres_type.oid = result.GetInt64(start_row, 1);
+-	info.name = result.GetString(start_row, 2);
++	info.name = Identifier(result.GetString(start_row, 2));
+ 	// construct the enum
+ 	idx_t enum_count = end_row - start_row;
+ 	Vector duckdb_levels(LogicalType::VARCHAR, enum_count);
 @@ -57,7 +57,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
  		duckdb_levels.SetValue(enum_idx, result.GetString(start_row + enum_idx, 3));
  	}
@@ -414,6 +521,15 @@ index f2db80c..b72c08d 100644
  	auto type_entry = make_shared_ptr<PostgresTypeEntry>(catalog, schema, info, postgres_type);
  	CreateEntry(transaction, std::move(type_entry));
  }
+@@ -107,7 +107,7 @@ void PostgresTypeSet::CreateCompositeType(PostgresTransaction &transaction, Post
+ 	PostgresType postgres_type;
+ 	CreateTypeInfo info;
+ 	postgres_type.oid = result.GetInt64(start_row, 1);
+-	info.name = result.GetString(start_row, 2);
++	info.name = Identifier(result.GetString(start_row, 2));
+ 
+ 	child_list_t<LogicalType> child_types;
+ 	for (idx_t row = start_row; row < end_row; row++) {
 @@ -120,7 +120,7 @@ void PostgresTypeSet::CreateCompositeType(PostgresTransaction &transaction, Post
  		postgres_type.children.push_back(std::move(child_type));
  	}

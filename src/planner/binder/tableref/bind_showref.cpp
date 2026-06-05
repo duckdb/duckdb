@@ -146,7 +146,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	result.names = return_names;
 	result.types = return_types;
 	result.plan = make_uniq<LogicalColumnDataGet>(table_index, return_types, std::move(collection));
-	bind_context.AddGenericBinding(table_index, "__show_select", return_names, return_types);
+	bind_context.AddGenericBinding(table_index, Identifier("__show_select"), return_names, return_types);
 	return result;
 }
 
@@ -177,7 +177,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 
 		// If fully qualified, check if the schema exists
 		if (!catalog_name.empty() && !schema_name.empty()) {
-			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			auto schema_entry = Catalog::GetSchema(context, Identifier(catalog_name), Identifier(schema_name),
+			                                       OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
 				                       schema_name);
@@ -187,7 +188,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			auto &client_data = ClientData::Get(context);
 			auto &default_entry = client_data.catalog_search_path->GetDefault();
 			catalog_name = default_entry.catalog;
-			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			auto schema_entry = Catalog::GetSchema(context, Identifier(catalog_name), Identifier(schema_name),
+			                                       OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
 				                       schema_name);

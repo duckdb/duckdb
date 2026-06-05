@@ -24,7 +24,8 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_INFO;
 
 public:
-	explicit CreateInfo(CatalogType type, Identifier schema = DEFAULT_SCHEMA, Identifier catalog_p = INVALID_CATALOG)
+	explicit CreateInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema(),
+	                    Identifier catalog_p = Identifier::InvalidCatalog())
 	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
@@ -44,7 +45,7 @@ public:
 	//! Whether or not the entry is an internal entry
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
-	string extension_name;
+	Identifier extension_name;
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry

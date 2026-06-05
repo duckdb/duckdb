@@ -125,8 +125,9 @@ duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_cli
 	auto &catalog_ref = *reinterpret_cast<duckdb::CCatalogWrapper *>(catalog);
 	auto &context_ref = *reinterpret_cast<duckdb::CClientContextWrapper *>(context);
 
-	auto entry = catalog_ref.catalog.GetEntry(context_ref.context, duckdb::CatalogTypeFromC(entry_type), schema_name,
-	                                          entry_name, duckdb::OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog_ref.catalog.GetEntry(context_ref.context, duckdb::CatalogTypeFromC(entry_type),
+	                                          duckdb::Identifier(schema_name), duckdb::Identifier(entry_name),
+	                                          duckdb::OnEntryNotFound::RETURN_NULL);
 
 	if (!entry) {
 		return nullptr;

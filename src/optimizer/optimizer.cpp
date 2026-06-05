@@ -476,7 +476,7 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error);
+	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name), std::move(children), error);
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

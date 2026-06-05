@@ -74,12 +74,12 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		}
 		if (!arg.GetExpression().GetAlias().empty()) {
 			// Default argument
-			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
+			if (named_arguments.find(arg.GetExpression().GetAlias().GetName()) != named_arguments.end()) {
 				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated '%s'", name,
 				                                          arg.GetExpression().GetAlias()));
 			}
-			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));
-			named_arguments[arg.GetExpression().GetAlias()] = std::move(arg.GetExpressionMutable());
+			named_arg_types.insert(arg.GetExpression().GetAlias().GetName(), std::move(arg_type));
+			named_arguments[arg.GetExpression().GetAlias().GetName()] = std::move(arg.GetExpressionMutable());
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));

@@ -26,7 +26,7 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
     : IndexCatalogEntry(catalog, schema, create_info), initial_index_size(0) {
 	auto &table = table_p.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
-	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name.GetName());
+	info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -44,11 +44,11 @@ unique_ptr<CatalogEntry> DuckIndexEntry::Copy(ClientContext &context) const {
 	return std::move(result);
 }
 
-string DuckIndexEntry::GetSchemaName() const {
+Identifier DuckIndexEntry::GetSchemaName() const {
 	return GetDataTableInfo().GetSchemaName();
 }
 
-string DuckIndexEntry::GetTableName() const {
+Identifier DuckIndexEntry::GetTableName() const {
 	return GetDataTableInfo().GetTableName();
 }
 

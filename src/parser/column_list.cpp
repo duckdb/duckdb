@@ -30,8 +30,8 @@ void ColumnList::AddColumn(ColumnDefinition column) {
 
 void ColumnList::Finalize() {
 	// add the "rowid" alias, if there is no rowid column specified in the table
-	if (name_map.find("rowid") == name_map.end()) {
-		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+	if (name_map.find(Identifier("rowid")) == name_map.end()) {
+		name_map[Identifier("rowid")] = COLUMN_IDENTIFIER_ROW_ID;
 	}
 }
 
@@ -39,15 +39,15 @@ void ColumnList::AddToNameMap(ColumnDefinition &col) {
 	if (allow_duplicate_names) {
 		idx_t index = 1;
 		string base_name = col.Name();
-		while (name_map.find(col.Name()) != name_map.end()) {
-			col.SetName(base_name + "_" + to_string(index++));
+		while (name_map.find(Identifier(col.Name())) != name_map.end()) {
+			col.SetName(Identifier(base_name + "_" + to_string(index++)));
 		}
 	} else {
-		if (name_map.find(col.Name()) != name_map.end()) {
+		if (name_map.find(Identifier(col.Name())) != name_map.end()) {
 			throw CatalogException("Column with name %s already exists!", col.Name());
 		}
 	}
-	name_map[col.Name()] = col.Oid();
+	name_map[Identifier(col.Name())] = col.Oid();
 }
 
 ColumnDefinition &ColumnList::GetColumnMutable(LogicalIndex logical) {
@@ -67,7 +67,7 @@ ColumnDefinition &ColumnList::GetColumnMutable(PhysicalIndex physical) {
 }
 
 ColumnDefinition &ColumnList::GetColumnMutable(const string &name) {
-	auto entry = name_map.find(name);
+	auto entry = name_map.find(Identifier(name));
 	if (entry == name_map.end()) {
 		throw InternalException("Column with name \"%s\" does not exist", name);
 	}
@@ -139,7 +139,7 @@ LogicalIndex ColumnList::PhysicalToLogical(PhysicalIndex index) const {
 }
 
 LogicalIndex ColumnList::GetColumnIndex(string &column_name) const {
-	auto entry = name_map.find(column_name);
+	auto entry = name_map.find(Identifier(column_name));
 	if (entry == name_map.end()) {
 		return LogicalIndex(DConstants::INVALID_INDEX);
 	}

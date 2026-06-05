@@ -6,7 +6,7 @@ CreateCollationInfo::CreateCollationInfo(string name_p, ScalarFunction function_
                                          bool not_required_for_equality_p)
     : CreateInfo(CatalogType::COLLATION_ENTRY), function(std::move(function_p)), combinable(combinable_p),
       not_required_for_equality(not_required_for_equality_p) {
-	this->name = std::move(name_p);
+	this->name = Identifier(std::move(name_p));
 	internal = true;
 }
 

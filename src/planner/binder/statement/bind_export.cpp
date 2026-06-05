@@ -157,8 +157,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	BindCopyOptions(*stmt.info);
 
 	// lookup the format in the catalog
-	auto &copy_function =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	auto &copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(
+	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format));
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -225,7 +225,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->catalog = catalog;
+		info->catalog = Identifier(catalog);
 		info->schema = table.schema.name;
 		info->table = table.name;
 
@@ -244,7 +244,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.database_name = catalog;
+		exported_data.database_name = Identifier(catalog);
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 
@@ -274,7 +274,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
-	stmt.info->catalog = catalog;
+	stmt.info->catalog = Identifier(catalog);
 	// prepare the options for export
 	auto &format = stmt.info->format;
 	auto &options = stmt.info->options;

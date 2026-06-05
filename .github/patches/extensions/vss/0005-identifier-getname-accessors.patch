@@ -1,3 +1,31 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 9756d93..438add7 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -153,7 +153,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
+                      TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+                      AttachedDatabase &db, const case_insensitive_map_t<Value> &options, const IndexStorageInfo &info,
+                      idx_t estimated_cardinality)
+-    : BoundIndex(name, TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db) {
++    : BoundIndex(Identifier(name), TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db) {
+ 
+ 	if (index_constraint_type != IndexConstraintType::NONE) {
+ 		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
+diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
+index b5d60f5..87a5fcf 100644
+--- a/src/hnsw/hnsw_index_macros.cpp
++++ b/src/hnsw/hnsw_index_macros.cpp
+@@ -95,8 +95,8 @@ static void RegisterTableMacro(ExtensionLoader &loader, const string &name, cons
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.schema = DEFAULT_SCHEMA;
+-	info.name = name;
++	info.schema = Identifier::DefaultSchema();
++	info.name = Identifier(name);
+ 	info.temporary = true;
+ 	info.internal = true;
+ 	info.macros.push_back(std::move(func));
 diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
 index bd923b9..9fe0a7d 100644
 --- a/src/hnsw/hnsw_index_physical_create.cpp
@@ -12,9 +40,20 @@ index bd923b9..9fe0a7d 100644
  
  	return std::move(gstate);
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index 494abb3..9bdf612 100644
+index 494abb3..45523d7 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
 +++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -112,8 +112,8 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+ 	idx_t row = 0;
+ 	while (data.offset < data.entries.size() && row < STANDARD_VECTOR_SIZE) {
+ 		auto &index_entry = data.entries[data.offset++].get();
+-		auto &table_entry = index_entry.schema.catalog.GetEntry<TableCatalogEntry>(context, index_entry.GetSchemaName(),
+-		                                                                           index_entry.GetTableName());
++		auto &table_entry = index_entry.schema.catalog.GetEntry<TableCatalogEntry>(
++		    context, index_entry.GetSchemaName(), index_entry.GetTableName());
+ 		auto &storage = table_entry.GetStorage();
+ 		HNSWIndex *hnsw_index = nullptr;
+ 
 @@ -138,9 +138,9 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
  		idx_t col = 0;
  
@@ -28,7 +67,7 @@ index 494abb3..9bdf612 100644
  
  		auto stats = hnsw_index->GetStats();
  
-@@ -188,7 +188,7 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+@@ -188,10 +188,11 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
  	auto qname = QualifiedName::Parse(index_name);
  
  	// look up the index name in the catalog
@@ -36,7 +75,12 @@ index 494abb3..9bdf612 100644
 +	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
  	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
  	                        .Cast<IndexCatalogEntry>();
- 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),
+-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),
++	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog,
++	                                      index_entry.GetSchemaName(),
+ 	                                      index_entry.GetTableName())
+ 	                        .Cast<TableCatalogEntry>();
+ 
 diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
 index 8cd23f3..f4d7f10 100644
 --- a/src/hnsw/hnsw_index_scan.cpp
@@ -52,6 +96,20 @@ index 8cd23f3..f4d7f10 100644
  	return result;
  }
  
+diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
+index 89f48b2..5a2926b 100644
+--- a/src/hnsw/hnsw_optimize_expr.cpp
++++ b/src/hnsw/hnsw_optimize_expr.cpp
+@@ -56,7 +56,8 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
+ 		args.push_back(std::move(similarity_expr.GetChildrenMutable()[1]));
+ 
+ 		auto &context = GetContext();
+-		auto func_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, "", "", "array_cosine_distance",
++		auto func_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, Identifier(), Identifier(),
++	                                                                Identifier("array_cosine_distance"),
+ 		                                                                OnEntryNotFound::RETURN_NULL);
+ 
+ 		if (!func_entry) {
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
 index 995a189..9b9f3bd 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
@@ -67,3 +125,17 @@ index 995a189..9b9f3bd 100644
  	result.insert("limit", to_string(limit));
  	SetEstimatedCardinality(result, estimated_cardinality);
  	return result;
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index 51c91f0..20e4762 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -27,7 +27,8 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
+                                                     unique_ptr<Expression> order_expr,
+                                                     unique_ptr<Expression> filter_expr) {
+ 	auto func_entry =
+-	    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", "list", OnEntryNotFound::RETURN_NULL);
++	    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(), Identifier("list"),
++		                                                     OnEntryNotFound::RETURN_NULL);
+ 	if (!func_entry) {
+ 		return nullptr;
+ 	}

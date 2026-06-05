@@ -757,17 +757,17 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
 	if (input.size() == 1) {
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = input[0];
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier::InvalidSchema();
+		result.name = Identifier(input[0]);
 	} else if (input.size() == 2) {
-		result.catalog = INVALID_CATALOG;
-		result.schema = input[0];
-		result.name = input[1];
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier(input[0]);
+		result.name = Identifier(input[1]);
 	} else if (input.size() == 3) {
-		result.catalog = input[0];
-		result.schema = input[1];
-		result.name = input[2];
+		result.catalog = Identifier(input[0]);
+		result.schema = Identifier(input[1]);
+		result.name = Identifier(input[2]);
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
@@ -807,7 +807,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
-				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
+				if (!unique_names.insert(child.GetExpression().GetAlias().GetName()).second) {
 					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
 				}
 				Value child_value;

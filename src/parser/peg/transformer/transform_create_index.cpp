@@ -16,7 +16,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	if (index_name.empty()) {
 		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
-	index_info->index_name = index_name;
+	index_info->index_name = Identifier(index_name);
 	index_info->table = base_table_name->table_name;
 	index_info->catalog = base_table_name->catalog_name;
 	index_info->schema = base_table_name->schema_name;

@@ -133,8 +133,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				                      info.name, existing_mode_str, attached_mode);
 			}
 			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema.GetName(),
-				                                          options.default_table.name.GetName());
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// allow custom catalogs to override this behavior
@@ -196,7 +195,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
 
 	if (default_database.empty()) {
-		default_database = attached_db->GetName();
+		default_database = attached_db->GetName().GetName();
 	}
 
 	//! Initialize the database.
@@ -206,8 +205,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	} else {
 		attached_db->Initialize(context);
 		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema.GetName(),
-			                                          options.default_table.name.GetName());
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -228,7 +226,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// override existing entry
 				detached_db = std::move(entry.first->second);
-				databases[name] = attached_db;
+				databases[name.GetName()] = attached_db;
 			} else {
 				throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 			}

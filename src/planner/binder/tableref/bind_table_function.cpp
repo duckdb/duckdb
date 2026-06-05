@@ -114,7 +114,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		} else if (!child->GetAlias().empty()) {
 			// <name> => <expression> will set the alias of <expression> to <name>
-			parameter_name = child->GetAlias();
+			parameter_name = child->GetAlias().GetName();
 		}
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
@@ -172,7 +172,7 @@ static string GetAlias(const TableFunctionRef &ref) {
 	}
 	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
-		return function_expr.FunctionName();
+		return function_expr.FunctionName().GetName();
 	}
 	return string();
 }
@@ -221,7 +221,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 				}
 				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
-				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
+				bind_context.AddGenericBinding(bind_index, Identifier(function_name), return_names, new_plan->types);
 				result.names = return_names;
 				result.types = new_plan->types;
 				result.plan = std::move(new_plan);
@@ -311,8 +311,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
-		bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-		                              get->GetTable().get(), std::move(virtual_columns));
+		bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
+		                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
@@ -324,14 +324,15 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			row_number->SetAlias(column_name_alias[return_names.size()]);
 			ordinality_alias = column_name_alias[return_names.size()].GetName();
 		} else {
-			row_number->SetAlias(ordinality_column_name);
+			row_number->SetAlias(Identifier(ordinality_column_name));
 		}
 		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);
 		window->expressions.push_back(std::move(row_number));
 		window->types.push_back(LogicalType::BIGINT);
 		window->children.push_back(std::move(get));
-		bind_context.AddGenericBinding(window_index, function_name, {ordinality_alias}, {LogicalType::BIGINT});
+		bind_context.AddGenericBinding(window_index, Identifier(function_name), {ordinality_alias},
+		                               {LogicalType::BIGINT});
 
 		BoundStatement result;
 		result.names = std::move(return_names);
@@ -341,8 +342,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 	// now add the table function to the bind context so its columns can be bound
 	BoundStatement result;
-	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-	                              get->GetTable().get(), std::move(virtual_columns));
+	bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
+	                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
 	result.names = std::move(return_names);
 	result.types = std::move(return_types);
 	result.plan = std::move(get);
@@ -374,7 +375,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// fetch the function from the catalog
 
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.FunctionName(), error_context);
-	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	auto &func_catalog = *GetCatalogEntry(Identifier(catalog), Identifier(schema), table_function_lookup,
+	                                      OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
@@ -384,7 +386,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		auto binder = Binder::CreateBinder(context, this);
 		binder->SetCanContainNulls(true);
 
-		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
+		binder->alias = ref.alias.empty() ? Identifier("unnamed_query") : ref.alias;
 		BoundStatement query;
 		try {
 			query = binder->BindNode(*query_node);
@@ -399,7 +401,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias.GetName());
 
 		// remember ref here is TableFunctionRef and NOT base class
-		bind_context.AddSubquery(bind_index, alias, ref, query);
+		bind_context.AddSubquery(bind_index, Identifier(alias), ref, query);
 		MoveCorrelatedExpressions(*binder);
 		return query;
 	}

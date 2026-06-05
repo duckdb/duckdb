@@ -164,9 +164,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		return nullptr;
 	}
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, arg_min_max);
-	auto arg_min_max_func =
-	    binder->GetCatalogEntry(SYSTEM_CATALOG, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(arg_min_max));
+	auto arg_min_max_func = binder->GetCatalogEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(),
+	                                                function_lookup, OnEntryNotFound::RETURN_NULL);
 	//	Can't find the arg_min/max aggregate we need, so give up before we break anything.
 	if (!arg_min_max_func || arg_min_max_func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		return nullptr;
@@ -244,7 +244,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	pk->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	pk->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
-	pk->SetAlias("row_number");
+	pk->SetAlias(Identifier("row_number"));
 	window_select.emplace_back(std::move(pk));
 
 	auto window_types = probe.GetTypes();

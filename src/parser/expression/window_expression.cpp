@@ -98,7 +98,7 @@ string WindowExpression::ExpressionTypeToWindow(ExpressionType expression_type) 
 }
 
 void WindowExpression::SetFunctionName(const string &function_name_p) {
-	function_name = function_name_p;
+	function_name = Identifier(function_name_p);
 	type = WindowToExpressionType(function_name.GetName());
 }
 

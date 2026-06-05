@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 		}
 		db_name = StringValue::Get(input.inputs[0]);
 	}
-	auto &catalog = Catalog::GetCatalog(context, db_name);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(db_name));
 	auto result = make_uniq<PragmaMetadataFunctionData>();
 	result->metadata_info = catalog.GetMetadataInfo(context);
 	return std::move(result);

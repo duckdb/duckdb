@@ -92,7 +92,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		auto alias = expr->GetAlias();
 		auto result = BindExpression(expr, depth);
 		if (result.expression) {
-			result.expression->SetAlias(std::move(alias));
+			result.expression->SetAlias(Identifier(std::move(alias)));
 		}
 		return result;
 	}

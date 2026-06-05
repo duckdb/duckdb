@@ -36,7 +36,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	auto &table_info = info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(type) + "_";
 	auto name = constraint_name + table_info.table + "_" + to_string(id);
-	IndexStorageInfo index_info(name);
+	IndexStorageInfo index_info {Identifier(name)};
 	if (!v1_0_0_storage) {
 		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
@@ -256,7 +256,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info.new_table_name;
-		storage->SetTableName(rename_info.new_table_name.GetName());
+		storage->SetTableName(rename_info.new_table_name);
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {
@@ -323,7 +323,7 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	auto &table_info = info.Cast<AlterTableInfo>();
 	switch (table_info.alter_table_type) {
 	case AlterTableType::RENAME_TABLE: {
-		storage->SetTableName(this->name.GetName());
+		storage->SetTableName(this->name);
 		break;
 	default:
 		break;
@@ -344,14 +344,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
 		if (rename_idx == col.Logical()) {
-			copy.SetName(info.new_name.GetName());
+			copy.SetName(info.new_name);
 		}
 		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), rename_idx)) {
 			RenameExpression(copy.GeneratedExpressionMutable(), info);
@@ -375,7 +375,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 			auto &unique = copy->Cast<UniqueConstraint>();
 			for (auto &column_name : unique.GetColumnNamesMutable()) {
 				if (column_name == info.old_name) {
-					column_name = info.new_name.GetName();
+					column_name = info.new_name;
 				}
 			}
 			break;
@@ -414,11 +414,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto col_name = info.new_column.GetName();
 
 	// We're checking for the opposite condition (ADD COLUMN IF _NOT_ EXISTS ...).
-	if (info.if_column_not_exists && ColumnExists(col_name)) {
+	if (info.if_column_not_exists && ColumnExists(Identifier(col_name))) {
 		return nullptr;
 	}
 
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
@@ -450,7 +450,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 		// When replaying WAL, only Bind DEFAULT for added Column
 		auto &catalog_name = schema.ParentCatalog().GetName();
 		auto &schema_name = schema.name;
-		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name, schema_name.GetName());
+		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name.GetName(), schema_name.GetName());
 	}
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
@@ -734,7 +734,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 		return nullptr;
 	}
 
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
@@ -849,14 +849,14 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, RemoveFieldInfo &info) {
-	if (!ColumnExists(info.column_path[0])) {
+	if (!ColumnExists(Identifier(info.column_path[0]))) {
 		if (!info.if_column_exists) {
 			throw CatalogException("Cannot drop field from column \"%s\" - it does not exist", info.column_path[0]);
 		}
 		return nullptr;
 	}
 	// follow the path
-	auto &col = GetColumn(info.column_path[0]);
+	auto &col = GetColumn(Identifier(info.column_path[0]));
 	auto res = DropFieldFromStruct(col.Type(), info.column_path, 1);
 	if (res.error.HasError()) {
 		if (!info.if_column_exists) {
@@ -950,12 +950,12 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, RenameFieldInfo &info) {
-	if (!ColumnExists(info.column_path[0])) {
+	if (!ColumnExists(Identifier(info.column_path[0]))) {
 		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
 	}
 
 	// follow the path
-	auto &col = GetColumn(info.column_path[0]);
+	auto &col = GetColumn(Identifier(info.column_path[0]));
 	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name.GetName(), 1);
 	if (res.error.HasError()) {
 		res.error.Throw();
@@ -1064,7 +1064,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	type_binder->BindLogicalType(info.target_type);
 
 	auto change_idx = GetColumnIndex(info.column_name.GetNameMutable());
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
@@ -1181,7 +1181,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
@@ -1206,7 +1206,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_DELETE);
-	auto create_info = make_uniq<CreateTableInfo>(schema, name.GetName());
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
@@ -1267,7 +1267,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		}
 		auto index_name = unique.GetName(table.name.GetName());
 		if (names.find(index_name) == names.end()) {
-			prev_indexes.RemoveIndex(index_name);
+			prev_indexes.RemoveIndex(Identifier(index_name));
 		}
 	}
 }
@@ -1296,8 +1296,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
-	const auto bound_constraint =
-	    binder->BindConstraint(*info.constraint, table_info.table.GetName(), table_info.columns);
+	const auto bound_constraint = binder->BindConstraint(*info.constraint, table_info.table, table_info.columns);
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
@@ -1316,7 +1315,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 
 void DuckTableEntry::SetAsRoot() {
 	storage->SetAsMainTable();
-	storage->SetTableName(name.GetName());
+	storage->SetTableName(name);
 }
 
 void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_state) {

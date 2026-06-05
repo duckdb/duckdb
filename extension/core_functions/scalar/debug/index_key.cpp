@@ -96,7 +96,7 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 }
 
 static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &index_name, const TableDescription &path) {
-	auto found = index_list.Find(index_name);
+	auto found = index_list.Find(Identifier(index_name));
 	if (found) {
 		return *found;
 	}

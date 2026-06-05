@@ -305,7 +305,7 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 	if (is_selected && child_map.default_value) {
 		// we have default values at a previous level wrap it in a "list"
 		vector<unique_ptr<Expression>> default_expressions;
-		child_map.default_value->SetAlias("list");
+		child_map.default_value->SetAlias(Identifier("list"));
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
@@ -393,7 +393,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
 		if (map_result.default_value) {
-			map_result.default_value->SetAlias(name);
+			map_result.default_value->SetAlias(Identifier(name));
 			default_expressions.push_back(std::move(map_result.default_value));
 		}
 	}
@@ -497,7 +497,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		//! FIXME: the 'default_value' should only be used if the STRUCT's default value is not NULL
 		if (child_map.default_value) {
 			// found a default value for this child - emplace it
-			child_map.default_value->SetAlias(global_child.name);
+			child_map.default_value->SetAlias(Identifier(global_child.name));
 			default_expressions.push_back(std::move(child_map.default_value));
 		}
 	}

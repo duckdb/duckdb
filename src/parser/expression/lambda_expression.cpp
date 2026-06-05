@@ -23,7 +23,7 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
 		auto child = make_uniq<ColumnRefExpression>(name);
 		children.push_back(std::move(child));
 	}
-	lhs = make_uniq<FunctionExpression>("row", std::move(children));
+	lhs = make_uniq<FunctionExpression>(Identifier("row"), std::move(children));
 }
 
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)

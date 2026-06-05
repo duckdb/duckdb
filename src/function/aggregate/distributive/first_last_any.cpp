@@ -467,13 +467,13 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
-	fun.name = "first";
+	fun.SetName("first");
 	return fun;
 }
 
 AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
-	fun.name = "last";
+	fun.SetName("last");
 	return fun;
 }
 

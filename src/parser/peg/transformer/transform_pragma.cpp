@@ -15,7 +15,7 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	// Rule: PragmaAssign <- SettingName '=' Expression
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
-	info.name = setting_name;
+	info.name = Identifier(setting_name);
 	if (variable_list.size() != 1) {
 		throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 	}
@@ -48,7 +48,7 @@ PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, cons
                                                vector<unique_ptr<ParsedExpression>> pragma_parameters) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
-	result->info->name = pragma_name;
+	result->info->name = Identifier(pragma_name);
 	if (pragma_parameters.empty()) {
 		return std::move(result);
 	}

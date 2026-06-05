@@ -63,8 +63,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 		throw ParserException("Empty table name not supported");
 	}
 	// Use appropriate constructor
-	auto info = make_uniq<CreateTableInfo>(table_name.catalog.GetName(), table_name.schema.GetName(),
-	                                       table_name.name.GetName());
+	auto info = make_uniq<CreateTableInfo>(table_name.catalog, table_name.schema, table_name.name);
 
 	bool if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -200,13 +199,13 @@ QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTrans
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = INVALID_SCHEMA;
+	result.catalog = Identifier::InvalidCatalog();
+	result.schema = Identifier::InvalidSchema();
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
-		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		result.name = Identifier(choice_pr.GetResult().Cast<IdentifierParseResult>().identifier);
 	}
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		result.name = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+		result.name = Identifier(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
 	}
 	return result;
 }
@@ -304,7 +303,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				}
 			} else if (cc_entry.constraint_name == "ForeignKeyConstraint") {
 				auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
-				fk_constraint.fk_columns.push_back(qualified_name.name.GetName());
+				fk_constraint.fk_columns.emplace_back(qualified_name.name.GetName());
 				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (generated_opt.HasResult()) {
@@ -580,7 +579,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCollation(PEGTransfo
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	string collation = StringUtil::Join(dotted_identifier, ".");
 	auto expr = make_uniq<ConstantExpression>(Value(collation));
-	expr->SetAlias("collation");
+	expr->SetAlias(Identifier("collation"));
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "ColumnCollation";
 	entry.expression = std::move(expr);

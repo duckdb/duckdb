@@ -316,8 +316,8 @@ protected:
 
 	// Insertion Order Preserving Map
 	// serialized as a list of pairs
-	template <class V>
-	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
+	template <class V, class KEY, class INDEX_MAP>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V, KEY, INDEX_MAP> &map) {
 		auto count = map.size();
 		OnListBegin(count);
 		for (auto &entry : map) {

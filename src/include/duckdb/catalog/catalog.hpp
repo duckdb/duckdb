@@ -145,7 +145,7 @@ public:
 	}
 
 	//! Returns the catalog name - based on how the catalog was attached
-	DUCKDB_API const string &GetName() const;
+	DUCKDB_API const Identifier &GetName() const;
 	DUCKDB_API idx_t GetOid();
 	DUCKDB_API virtual string GetCatalogType() = 0;
 
@@ -461,8 +461,8 @@ private:
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
 	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
 	                                         bool allow_default_table_lookup);
-	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
-	                                         const string &schema, const EntryLookupInfo &lookup_info,
+	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const Identifier &catalog,
+	                                         const Identifier &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup

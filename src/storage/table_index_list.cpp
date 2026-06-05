@@ -159,7 +159,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	auto &catalog = table_info.GetDB().GetCatalog();
 	auto schema = table_info.GetSchemaName();
 	auto table_name = table_info.GetTableName();
-	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table_name));
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;
@@ -205,7 +205,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 		// Add the table to the binder.
 		vector<ColumnIndex> dummy_column_ids;
-		binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, dummy_column_ids, table);
+		binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), column_names, column_types, dummy_column_ids,
+		                                  table);
 
 		// Create an IndexBinder to bind the index
 		IndexBinder idx_binder(*binder, context);

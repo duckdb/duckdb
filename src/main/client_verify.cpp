@@ -58,7 +58,7 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
 		parameter->IdentifierMutable() = identifier;
-		parameter->SetAlias(alias);
+		parameter->SetAlias(Identifier(alias));
 		expr = std::move(parameter);
 		return;
 	}
@@ -195,7 +195,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		auto prepare_base = make_uniq<SelectStatement>();
 		prepare_base->node = std::move(node);
 		for (auto &kv : prep_verifier.values) {
-			prepare_base->named_param_map[kv.first] = 0;
+			prepare_base->named_param_map[Identifier(kv.first)] = 0;
 		}
 
 		// create the PREPARE and EXECUTE statements

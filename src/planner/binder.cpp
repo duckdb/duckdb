@@ -290,13 +290,13 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 
 optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
-	string empty_schema;
+	Identifier empty_schema;
 	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
 optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
                                                  const Identifier &column_name, ErrorData &error) {
-	string empty_catalog;
+	Identifier empty_catalog;
 	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
@@ -343,11 +343,11 @@ void Binder::AddTableName(string table_name) {
 }
 
 void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
-	auto it = global_binder_state->replacement_scans.find(table_name);
+	auto it = global_binder_state->replacement_scans.find(Identifier(table_name));
 	replacement->column_name_alias.clear();
 	replacement->alias.clear();
 	if (it == global_binder_state->replacement_scans.end()) {
-		global_binder_state->replacement_scans[table_name] = std::move(replacement);
+		global_binder_state->replacement_scans[Identifier(table_name)] = std::move(replacement);
 	} else {
 		// A replacement scan by this name was previously registered, we can just use it
 	}
@@ -532,7 +532,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
+	binder->bind_context.AddBaseTable(update_table_index, Identifier(alias), names, types, bound_columns, table,
 	                                  std::move(virtual_columns));
 	ReturningBinder returning_binder(*binder, context);
 
@@ -572,14 +572,14 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, co
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema
-shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name) {
 	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
 
 	vector<CatalogSearchEntry> search_path;
 
-	search_path.emplace_back(catalog_name, schema_name);
+	search_path.emplace_back(catalog_name.GetName(), schema_name.GetName());
 	if (schema_name != DEFAULT_SCHEMA) {
-		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
+		search_path.emplace_back(catalog_name.GetName(), DEFAULT_SCHEMA);
 	}
 	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
 	return new_binder;
@@ -633,7 +633,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const s
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_ref = make_uniq<BaseTableRef>();
-	alias_ref->table_name = base_cte_name;
+	alias_ref->table_name = Identifier(base_cte_name);
 	alias_select->from_table = std::move(alias_ref);
 	alias_cte->query_node = std::move(alias_select);
 	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
@@ -657,11 +657,12 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
-	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
+	outer->select_list.push_back(
+	    make_uniq<FunctionExpression>(Identifier("count_star"), vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->table_name = base_cte_name;
+	from_ref->table_name = Identifier(base_cte_name);
 	outer->from_table = std::move(from_ref);
-	outer->cte_map.map[base_cte_name] = std::move(base_cte);
+	outer->cte_map.map[Identifier(base_cte_name)] = std::move(base_cte);
 
 	// Expand each trigger as a DML CTE.
 	// Alphabetical order by name (case-insensitive) - see GetTriggersForEvent.
@@ -677,14 +678,16 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
 		// a local WITH shadows the alias
 		auto &body_map = trig_cte->query_node->cte_map.map;
-		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
-			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		if (!trigger.referencing_new_table.empty() &&
+		    body_map.find(Identifier(trigger.referencing_new_table)) == body_map.end()) {
+			body_map[Identifier(trigger.referencing_new_table)] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
-		if (!trigger.referencing_old_table.empty() && body_map.find(trigger.referencing_old_table) == body_map.end()) {
-			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		if (!trigger.referencing_old_table.empty() &&
+		    body_map.find(Identifier(trigger.referencing_old_table)) == body_map.end()) {
+			body_map[Identifier(trigger.referencing_old_table)] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
 
-		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
+		outer->cte_map.map[Identifier(body_cte_name)] = std::move(trig_cte);
 	}
 
 	auto bound = Bind(*outer);

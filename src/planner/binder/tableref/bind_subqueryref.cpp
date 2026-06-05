@@ -7,7 +7,7 @@ BoundStatement Binder::Bind(SubqueryRef &ref) {
 	auto binder = Binder::CreateBinder(context, this);
 	binder->SetCanContainNulls(true);
 	auto subquery = binder->BindNode(*ref.subquery->node);
-	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
+	binder->alias = ref.alias.empty() ? Identifier("unnamed_subquery") : ref.alias;
 	auto bind_index = subquery.plan->GetRootIndex();
 	string subquery_alias;
 	if (ref.alias.empty()) {
@@ -24,7 +24,7 @@ BoundStatement Binder::Bind(SubqueryRef &ref) {
 	if (binder->has_unplanned_dependent_joins) {
 		has_unplanned_dependent_joins = true;
 	}
-	bind_context.AddSubquery(bind_index, subquery_alias, ref, subquery);
+	bind_context.AddSubquery(bind_index, Identifier(subquery_alias), ref, subquery);
 	MoveCorrelatedExpressions(*binder);
 
 	return subquery;

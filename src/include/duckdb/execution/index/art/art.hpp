@@ -55,8 +55,9 @@ public:
 
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
-		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
-		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
+		auto art =
+		    make_uniq<ART>(Identifier(input.name), input.constraint_type, input.column_ids, input.table_io_manager,
+		                   input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
 	}
 

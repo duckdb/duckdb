@@ -30,14 +30,14 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 
 	if (prioritize_table_when_binding) {
 		binder_with_search_path =
-		    CreateBinderWithSearchPath(table.ParentCatalog().GetName(), table.ParentSchema().name.GetName());
+		    CreateBinderWithSearchPath(table.ParentCatalog().GetName(), table.ParentSchema().name);
 		expr_binder_ptr = binder_with_search_path.get();
 	}
 
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
-		if (!table.ColumnExists(colname)) {
+		if (!table.ColumnExists(Identifier(colname))) {
 			vector<string> column_names;
 			for (auto &col : table.GetColumns().Physical()) {
 				column_names.push_back(col.Name());
@@ -45,7 +45,7 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname, "Did you mean");
 			throw BinderException("Referenced update column %s not found in table!\n%s", colname, candidates);
 		}
-		auto &column = table.GetColumn(colname);
+		auto &column = table.GetColumn(Identifier(colname));
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
@@ -109,7 +109,7 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 		}
 		auto row_id_expr = make_uniq<BoundColumnRefExpression>(
 		    row_id_entry->second.type, ColumnBinding(get.table_index, ProjectionIndex(column_idx)));
-		row_id_expr->SetAlias(row_id_entry->second.name);
+		row_id_expr->SetAlias(Identifier(row_id_entry->second.name));
 		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {
 			get.AddColumnId(row_id_column);
@@ -168,7 +168,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name, schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name.GetName(), schema_name.GetName());
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions

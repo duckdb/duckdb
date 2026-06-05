@@ -686,8 +686,8 @@ unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(Clie
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::COORDINATE_SYSTEM_ENTRY, DEFAULT_SCHEMA,
-	                              source_crs.GetIdentifier(), OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog.GetEntry(context, CatalogType::COORDINATE_SYSTEM_ENTRY, Identifier::DefaultSchema(),
+	                              Identifier(source_crs.GetIdentifier()), OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return nullptr;
 	}

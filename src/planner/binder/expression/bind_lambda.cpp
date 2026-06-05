@@ -77,7 +77,7 @@ static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
 	children.push_back(std::move(rhs_func.GetArgumentsMutable()[1].GetExpressionMutable()));
-	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
+	auto restructured = make_uniq<FunctionExpression>(Identifier("->>"), std::move(children));
 	restructured->IsOperatorMutable() = true;
 	return std::move(restructured);
 }
@@ -197,7 +197,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		auto logical_type = (*bind_lambda_function)(context, function_child_types,
 		                                            bound_lambda_ref.Binding().column_index, bind_lambda_context);
 		auto index = bound_lambda_expr.ParameterCount() - bound_lambda_ref.Binding().column_index - 1;
-		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
+		replacement = make_uniq<BoundReferenceExpression>(alias.GetName(), logical_type, index);
 		return;
 	}
 

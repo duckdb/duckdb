@@ -63,8 +63,8 @@ SimpleFunction::~SimpleFunction() {
 }
 
 static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, const Identifier &schema_name) {
-	return !catalog_name.empty() && catalog_name != Identifier(SYSTEM_CATALOG) && !schema_name.empty() &&
-	       schema_name != Identifier(DEFAULT_SCHEMA);
+	return !catalog_name.empty() && catalog_name != Identifier::SystemCatalog() && !schema_name.empty() &&
+	       schema_name != Identifier::DefaultSchema();
 }
 
 string FunctionParameter::ToString() const {

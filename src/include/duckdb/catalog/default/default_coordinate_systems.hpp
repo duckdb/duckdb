@@ -24,7 +24,7 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	vector<Identifier> GetDefaultEntries() override;
 };
 
 } // namespace duckdb

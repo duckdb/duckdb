@@ -297,7 +297,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	row_number->OrderByMutable() = std::move(orders);
 	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
-	row_number->SetAlias("limit_rownum");
+	row_number->SetAlias(Identifier("limit_rownum"));
 
 	window->expressions.push_back(std::move(row_number));
 	window->AddChild(std::move(child));

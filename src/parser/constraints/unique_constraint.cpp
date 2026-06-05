@@ -13,7 +13,7 @@ UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_prima
 }
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, string column_name_p, const bool is_primary_key)
     : UniqueConstraint(index, is_primary_key) {
-	columns.push_back(std::move(column_name_p));
+	columns.emplace_back(std::move(column_name_p));
 }
 
 UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)

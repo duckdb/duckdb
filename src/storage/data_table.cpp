@@ -66,7 +66,8 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
-    : db(db), info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), schema, table)),
+    : db(db),
+      info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), Identifier(schema), Identifier(table))),
       column_definitions(std::move(column_definitions_p)), version(DataTableVersion::MAIN_TABLE) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
@@ -449,13 +450,13 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
 
-string DataTableInfo::GetSchemaName() {
-	return schema.GetName();
+Identifier DataTableInfo::GetSchemaName() {
+	return Identifier(schema.GetName());
 }
 
-string DataTableInfo::GetTableName() {
+Identifier DataTableInfo::GetTableName() {
 	lock_guard<mutex> l(name_lock);
-	return table.GetName();
+	return Identifier(table.GetName());
 }
 
 void DataTableInfo::SetTableName(Identifier name) {
@@ -463,7 +464,7 @@ void DataTableInfo::SetTableName(Identifier name) {
 	table = std::move(name);
 }
 
-string DataTable::GetTableName() const {
+Identifier DataTable::GetTableName() const {
 	return info->GetTableName();
 }
 
@@ -679,8 +680,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	// Get the column types in their physical order.
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bound_foreign_key.info.schema,
-	                                                         bound_foreign_key.info.table);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+	    context, Identifier(db.GetName()), bound_foreign_key.info.schema, bound_foreign_key.info.table);
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());

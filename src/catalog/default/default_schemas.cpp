@@ -28,15 +28,15 @@ unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(CatalogTrans
                                                                     const Identifier &entry_name) {
 	if (IsDefaultSchema(entry_name)) {
 		CreateSchemaInfo info;
-		info.schema = StringUtil::Lower(entry_name.GetName());
+		info.schema = Identifier(StringUtil::Lower(entry_name.GetName()));
 		info.internal = true;
 		return make_uniq_base<CatalogEntry, DuckSchemaEntry>(catalog, info);
 	}
 	return nullptr;
 }
 
-vector<string> DefaultSchemaGenerator::GetDefaultEntries() {
-	vector<string> result;
+vector<Identifier> DefaultSchemaGenerator::GetDefaultEntries() {
+	vector<Identifier> result;
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {
 		result.emplace_back(internal_schemas[index].name);
 	}

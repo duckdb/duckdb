@@ -60,7 +60,7 @@ PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer, vec
 		parameter_names.insert(parameter.name);
 		if (parameter.is_default) {
 			auto default_expr = std::move(parameter.expression);
-			default_expr->SetAlias(parameter.name);
+			default_expr->SetAlias(Identifier(parameter.name));
 			macro_definition_body->default_parameters[parameter.name] = std::move(default_expr);
 			macro_definition_body->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
 			default_value_found = true;

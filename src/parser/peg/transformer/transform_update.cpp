@@ -28,7 +28,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableSet(PEGTransformer
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransformer &transformer,
                                                                        unique_ptr<BaseTableRef> base_table_name,
                                                                        const string &update_alias) {
-	base_table_name->alias = update_alias;
+	base_table_name->alias = Identifier(update_alias);
 	return std::move(base_table_name);
 }
 
@@ -45,7 +45,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 	bool is_row_assignment = false;
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_ref = expression->Cast<FunctionExpression>();
-		if (StringUtil::CIEquals(func_ref.FunctionName(), "row")) {
+		if (func_ref.FunctionName() == "row") {
 			is_row_assignment = true;
 		}
 	}

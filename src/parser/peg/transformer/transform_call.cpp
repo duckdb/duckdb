@@ -10,9 +10,9 @@ PEGTransformerFactory::TransformCallStatement(PEGTransformer &transformer,
                                               const QualifiedName &qualified_table_function,
                                               vector<FunctionArgument> table_function_arguments) {
 	auto result = make_uniq<CallStatement>();
-	auto function_expression = make_uniq<FunctionExpression>(
-	    qualified_table_function.catalog.GetName(), qualified_table_function.schema.GetName(),
-	    qualified_table_function.name.GetName(), std::move(table_function_arguments));
+	auto function_expression =
+	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->function = std::move(function_expression);
 	return std::move(result);
 }

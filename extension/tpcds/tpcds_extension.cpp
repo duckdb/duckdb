@@ -50,7 +50,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 		}
 	}
 	if (input.binder) {
-		auto &catalog = Catalog::GetCatalog(context, result->catalog);
+		auto &catalog = Catalog::GetCatalog(context, Identifier(result->catalog));
 		auto &properties = input.binder->GetStatementProperties();
 		DatabaseModificationType modification;
 		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;

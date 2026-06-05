@@ -87,7 +87,13 @@ public:
 	DUCKDB_API optional_idx BindFunction(const string &name, const PragmaFunctionSet &functions,
 	                                     vector<Value> &parameters, ErrorData &error);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const Identifier &name,
+	unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
+	                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+	                                          bool is_operator = false, optional_ptr<Binder> binder = nullptr) {
+		return BindScalarFunction(Identifier(schema), Identifier(name), std::move(children), error, is_operator,
+		                          binder);
+	}
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);

@@ -40,7 +40,7 @@ TableCatalogEntry &LogicalCreateIndex::BindTable(ClientContext &context, CreateI
 	auto &catalog = info_p.catalog;
 	auto &schema = info_p.schema;
 	auto &table_name = info_p.table;
-	return Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), schema.GetName(), table_name.GetName());
+	return Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
 }
 
 } // namespace duckdb

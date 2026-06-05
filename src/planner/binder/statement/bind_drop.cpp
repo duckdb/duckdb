@@ -26,9 +26,9 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	string schema_name = base_table_ref.schema_name.GetName();
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
-	auto &table_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.table_name.GetName());
-	stmt.info->catalog = table_entry.ParentCatalog().GetName();
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, Identifier(catalog_name), Identifier(schema_name),
+	                                                         base_table_ref.table_name);
+	stmt.info->catalog = Identifier(table_entry.ParentCatalog().GetName());
 	stmt.info->schema = table_entry.ParentSchema().name;
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 }
@@ -66,12 +66,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (stmt.info->type == CatalogType::MACRO_ENTRY) {
 			// We also support "DROP MACRO" (instead of "DROP MACRO TABLE") for table macros
 			// First try to drop a scalar macro
-			EntryLookupInfo macro_entry_lookup(stmt.info->type, stmt.info->name.GetName());
+			EntryLookupInfo macro_entry_lookup(stmt.info->type, stmt.info->name);
 			entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, macro_entry_lookup,
 			                          OnEntryNotFound::RETURN_NULL);
 			if (!entry) {
 				// Unable to find a scalar macro, try to drop a table macro
-				EntryLookupInfo table_macro_entry_lookup(CatalogType::TABLE_MACRO_ENTRY, stmt.info->name.GetName());
+				EntryLookupInfo table_macro_entry_lookup(CatalogType::TABLE_MACRO_ENTRY, stmt.info->name);
 				entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, table_macro_entry_lookup,
 				                          OnEntryNotFound::RETURN_NULL);
 				if (entry) {
@@ -86,7 +86,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				                          stmt.info->if_not_found);
 			}
 		} else {
-			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name.GetName());
+			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name);
 			entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup,
 			                          stmt.info->if_not_found);
 		}
@@ -96,7 +96,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetName());
 		}
-		stmt.info->catalog = entry->ParentCatalog().GetName();
+		stmt.info->catalog = Identifier(entry->ParentCatalog().GetName());
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
 			properties.RegisterDBModify(entry->ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);

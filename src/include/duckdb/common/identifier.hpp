@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string.hpp"
@@ -24,16 +25,30 @@ namespace duckdb {
 class Identifier {
 public:
 	Identifier() = default;
-	//! Construction from a string is implicit: promoting a raw string to an Identifier is always safe (it never
-	//! loses information). This mirrors std::string (implicit from const char *) and std::filesystem::path.
-	// NOLINTNEXTLINE: implicit construction is intentional
-	Identifier(const char *str) : value(str) { // NOLINT: implicit
+	//! Construction from a string is explicit: an Identifier carries case-insensitive semantics, so promoting a
+	//! raw string must be a deliberate choice at the call site.
+	explicit Identifier(const char *str) : value(str) {
 	}
-	// NOLINTNEXTLINE: implicit construction is intentional
-	Identifier(const string &str) : value(str) { // NOLINT: implicit
+	explicit Identifier(const string &str) : value(str) {
 	}
-	// NOLINTNEXTLINE: implicit construction is intentional
-	Identifier(string &&str) : value(std::move(str)) { // NOLINT: implicit
+	explicit Identifier(string &&str) : value(std::move(str)) {
+	}
+
+	//! Named constructors for well-known identifiers
+	static Identifier DefaultSchema() {
+		return Identifier(DEFAULT_SCHEMA);
+	}
+	static Identifier InvalidSchema() {
+		return Identifier(INVALID_SCHEMA);
+	}
+	static Identifier InvalidCatalog() {
+		return Identifier(INVALID_CATALOG);
+	}
+	static Identifier SystemCatalog() {
+		return Identifier(SYSTEM_CATALOG);
+	}
+	static Identifier TempCatalog() {
+		return Identifier(TEMP_CATALOG);
 	}
 
 	//! Conversion back to a string is explicit: it discards the case-insensitive semantics, so callers must opt in
@@ -133,6 +148,12 @@ inline string operator+(char a, const Identifier &b) {
 	return a + b.GetName();
 }
 
+//! Appending an identifier to a string appends the raw name
+inline string &operator+=(string &a, const Identifier &b) {
+	a += b.GetName();
+	return a;
+}
+
 struct IdentifierHashFunction {
 	uint64_t operator()(const Identifier &id) const {
 		return id.Hash();
@@ -174,7 +195,7 @@ inline vector<Identifier> StringsToIdentifiers(const vector<string> &strings) {
 	vector<Identifier> result;
 	result.reserve(strings.size());
 	for (auto &str : strings) {
-		result.push_back(str);
+		result.emplace_back(str);
 	}
 	return result;
 }

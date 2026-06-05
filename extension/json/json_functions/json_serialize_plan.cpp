@@ -205,12 +205,12 @@ ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	                    JSONFunctionLocalState::Init);
 
 	func.GetSignature()
-	    .AddParameter("sql", LogicalType::VARCHAR)
-	    .AddParameter("skip_null", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddParameter("skip_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddParameter("skip_default", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddParameter("format", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddParameter("optimize", LogicalType::BOOLEAN, Value::BOOLEAN(false));
+	    .AddParameter(Identifier("sql"), LogicalType::VARCHAR)
+	    .AddParameter(Identifier("skip_null"), LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter(Identifier("skip_empty"), LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter(Identifier("skip_default"), LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter(Identifier("format"), LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter(Identifier("optimize"), LogicalType::BOOLEAN, Value::BOOLEAN(false));
 
 	set.AddFunction(std::move(func));
 

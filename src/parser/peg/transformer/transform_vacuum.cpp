@@ -8,7 +8,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTran
                                                                          AnalyzeTarget analyze_target) {
 	auto result = make_uniq<VacuumStatement>(vacuum_options);
 	if (analyze_target.ref) {
-		result->info->columns = analyze_target.columns;
+		result->info->columns = StringsToIdentifiers(analyze_target.columns);
 		result->info->ref = std::move(analyze_target.ref);
 		result->info->has_table = true;
 	}

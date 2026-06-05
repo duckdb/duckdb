@@ -19,8 +19,8 @@ enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
 struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
-	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
-	CreateViewInfo(string catalog_p, string schema_p, string view_name);
+	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
+	CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name);
 
 public:
 	//! View name

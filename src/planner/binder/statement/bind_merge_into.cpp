@@ -34,11 +34,11 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
-			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias().GetName());
 		}
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
-			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias().GetName());
 		}
 	});
 }
@@ -73,7 +73,7 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 	D_ASSERT(aliases.size() == names.size());
 
 	for (idx_t c = 0; c < aliases.size(); c++) {
-		auto colref = binder.bind_context.CreateColumnReference(aliases[c], names[c],
+		auto colref = binder.bind_context.CreateColumnReference(aliases[c], Identifier(names[c]),
 		                                                        ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 		result.push_back(std::move(colref));
 	}
@@ -116,8 +116,9 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 						continue;
 					}
 					action.update_info->columns.push_back(source_names[i]);
-					action.update_info->expressions.push_back(bind_context.CreateColumnReference(
-					    source_aliases[i], source_names[i], ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+					action.update_info->expressions.push_back(
+					    bind_context.CreateColumnReference(source_aliases[i], Identifier(source_names[i]),
+					                                       ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
 				}
 			} else {
 				// UPDATE BY POSITION - get the name list from the table
@@ -380,7 +381,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind table constraints/default values in case these are referenced
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name, schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetName(), schema_name.GetName());
 
 	merge_into->bound_constraints = BindConstraints(table);
 
@@ -413,7 +414,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->SetAlias("source_marker");
+		marker->SetAlias(Identifier("source_marker"));
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -434,7 +435,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->SetAlias("source_marker");
+		marker_ref->SetAlias(Identifier("source_marker"));
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

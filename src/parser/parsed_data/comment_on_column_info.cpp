@@ -5,13 +5,15 @@
 namespace duckdb {
 
 SetColumnCommentInfo::SetColumnCommentInfo()
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, INVALID_CATALOG, INVALID_SCHEMA, "", OnEntryNotFound::THROW_EXCEPTION),
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+                Identifier(""), OnEntryNotFound::THROW_EXCEPTION),
       catalog_entry_type(CatalogType::INVALID), column_name(""), comment_value(Value()) {
 }
 
 SetColumnCommentInfo::SetColumnCommentInfo(string catalog, string schema, string name, string column_name,
                                            Value comment_value, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, std::move(catalog), std::move(schema), std::move(name), if_not_found),
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier(std::move(catalog)), Identifier(std::move(schema)),
+                Identifier(std::move(name)), if_not_found),
       catalog_entry_type(CatalogType::INVALID), column_name(std::move(column_name)),
       comment_value(std::move(comment_value)) {
 }
@@ -37,7 +39,7 @@ string SetColumnCommentInfo::ToString() const {
 }
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name.GetName());
+	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name);
 	auto entry = retriever.GetEntry(catalog, schema, lookup_info, if_not_found);
 
 	if (entry) {

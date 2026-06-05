@@ -108,8 +108,8 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
-	bind_info->schema = default_macro.schema;
-	bind_info->name = default_macro.name;
+	bind_info->schema = Identifier(default_macro.schema);
+	bind_info->name = Identifier(default_macro.name);
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->macros.push_back(std::move(function));
@@ -150,8 +150,8 @@ unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(Clien
 	return nullptr;
 }
 
-vector<string> DefaultTableFunctionGenerator::GetDefaultEntries() {
-	vector<string> result;
+vector<Identifier> DefaultTableFunctionGenerator::GetDefaultEntries() {
+	vector<Identifier> result;
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (StringUtil::Lower(internal_table_macros[index].name) != internal_table_macros[index].name) {
 			throw InternalException("Default macro name %s should be lowercase", internal_table_macros[index].name);

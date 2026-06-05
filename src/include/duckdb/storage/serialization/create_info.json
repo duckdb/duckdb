@@ -66,7 +66,7 @@
       {
         "id": 110,
         "name": "extension_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },

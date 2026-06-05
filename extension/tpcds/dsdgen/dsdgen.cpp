@@ -22,9 +22,9 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
                              bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema;
-	info->table = T::Name + suffix;
+	info->catalog = Identifier(catalog_name);
+	info->schema = Identifier(schema);
+	info->table = Identifier(T::Name + suffix);
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -33,11 +33,11 @@ static void CreateTPCDSTable(ClientContext &context, string catalog_name, string
 	if (keys) {
 		duckdb::vector<duckdb::Identifier> pk_columns;
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
-			pk_columns.push_back(T::PrimaryKeyColumns[i]);
+			pk_columns.emplace_back(T::PrimaryKeyColumns[i]);
 		}
 		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
 	catalog.CreateTable(context, std::move(info));
 }
 
@@ -89,7 +89,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 	// populate append info
 	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
@@ -97,7 +97,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table_name));
 
 		if (!table_entry.IsDuckTable()) {
 			throw InvalidInputException("dsdgen is only supported for DuckDB database files");

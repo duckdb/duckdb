@@ -35,7 +35,7 @@ public:
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	vector<Identifier> GetDefaultEntries() override;
 
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
 

@@ -215,7 +215,7 @@ shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const 
 
 void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
 	lock_guard<mutex> guard(referenced_database_lock);
-	used_databases.erase(database.GetName());
+	used_databases.erase(database.GetName().GetName());
 }
 
 AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &database) {

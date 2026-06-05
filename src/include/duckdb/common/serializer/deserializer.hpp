@@ -366,12 +366,13 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
 		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
+		using KEY_TYPE = typename is_insertion_preserving_map<T>::KEY_TYPE;
 
 		T map;
 		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
 			OnObjectBegin();
-			auto key = ReadProperty<string>(0, "key");
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
 			auto value = ReadProperty<VALUE_TYPE>(1, "value");
 			OnObjectEnd();
 			map[key] = std::move(value);

@@ -5,14 +5,13 @@
 
 namespace duckdb {
 
-CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, INVALID_SCHEMA) {
+CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, Identifier::InvalidSchema()) {
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema.GetName()), table(info.table.GetName()),
-      index_name(info.index_name.GetName()), options(info.options), index_type(info.index_type),
-      constraint_type(info.constraint_type), column_ids(info.column_ids), scan_types(info.scan_types),
-      names(info.names) {
+    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
+      options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
+      column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
 }
 
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
@@ -72,7 +71,7 @@ string CreateIndexInfo::ToString() const {
 	}
 	result += SQLIdentifier(index_name);
 	result += " ON ";
-	result += QualifierToString(temporary ? "" : catalog, schema, table);
+	result += QualifierToString(temporary ? Identifier() : catalog, schema, table);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

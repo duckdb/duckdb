@@ -354,7 +354,7 @@ private:
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			auto &info = expression_info[info_idx++];
-			expr.SetAlias(std::move(info.first));
+			expr.SetAlias(Identifier(std::move(info.first)));
 			expr.SetQueryLocation(info.second);
 			break;
 		}

@@ -1,16 +1,34 @@
+diff --git a/src/common/parquet_file_scanner.cpp b/src/common/parquet_file_scanner.cpp
+index b2b6b280..01a78681 100644
+--- a/src/common/parquet_file_scanner.cpp
++++ b/src/common/parquet_file_scanner.cpp
+@@ -36,7 +36,7 @@ ParquetFileScanner::ParquetFileScanner(ClientContext &context, const DuckLakeFil
+ 
+ 	TableFunctionRef empty;
+ 	TableFunction dummy_table_function;
+-	dummy_table_function.name = "ParquetFileScanner";
++	dummy_table_function.SetName("ParquetFileScanner");
+ 
+ 	if (multi_file_reader_creator_p) {
+ 		dummy_table_function.get_multi_file_reader = multi_file_reader_creator_p;
+diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
+index 13f8ace3..353469ac 100644
+--- a/src/functions/ducklake_add_data_files.cpp
++++ b/src/functions/ducklake_add_data_files.cpp
+@@ -43,7 +43,8 @@ static unique_ptr<FunctionData> DuckLakeAddDataFilesBind(ClientContext &context,
+ 	const auto table_name = StringValue::Get(input.inputs[1]);
+ 
+ 	auto entry =
+-	    catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name, OnEntryNotFound::THROW_EXCEPTION);
++	    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema_name), Identifier(table_name),
++	                                        OnEntryNotFound::THROW_EXCEPTION);
+ 	auto &table = entry->Cast<DuckLakeTableEntry>();
+ 
+ 	auto result = make_uniq<DuckLakeAddDataFilesData>(catalog, table);
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index 1803b084..2d999aaa 100644
+index 1803b084..d33fc78d 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
-@@ -56,7 +56,7 @@ vector<BoundOrderByNode> DuckLakeCompactor::BindSortOrders(Binder &binder, DuckL
- 
- 	// Create a child binder with the table columns in scope
- 	auto child_binder = Binder::CreateBinder(binder.context, &binder);
--	child_binder->bind_context.AddGenericBinding(table_index, table.name, column_names, column_types);
-+	child_binder->bind_context.AddGenericBinding(table_index, table.name.GetName(), column_names, column_types);
- 
- 	// Bind each ORDER BY expression directly
- 	vector<BoundOrderByNode> orders;
 @@ -116,8 +116,8 @@ SourceResultType DuckLakeCompaction::GetDataInternal(ExecutionContext &context,
  	auto files_created = gstate.written_files.size();
  
@@ -22,15 +40,6 @@ index 1803b084..2d999aaa 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(source_files.size())));
  	chunk.data[3].Append(Value::BIGINT(static_cast<int64_t>(files_created)));
  	return SourceResultType::FINISHED;
-@@ -423,7 +423,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
- 
- 	auto table_idx = binder.GenerateTableIndex();
- 	unique_ptr<FunctionData> bind_data;
--	EntryLookupInfo info(CatalogType::TABLE_ENTRY, table.name);
-+	EntryLookupInfo info(CatalogType::TABLE_ENTRY, table.name.GetName());
- 	auto scan_function = table.GetScanFunction(context, bind_data, info);
- 
- 	auto partition_id = source_files[0].file.partition_id;
 @@ -573,7 +573,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table
@@ -40,8 +49,25 @@ index 1803b084..2d999aaa 100644
  	if (!latest_entry) {
  		auto latest_snapshot = transaction.GetSnapshot();
  		latest_entry = catalog.GetEntryById(transaction, latest_snapshot, table_id);
+@@ -780,13 +780,13 @@ unique_ptr<LogicalOperator> BindCompaction(ClientContext &context, TableFunction
+ 	if (schema_entry != input.named_parameters.end()) {
+ 		schema = StringValue::Get(schema_entry->second);
+ 	}
+-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, table, nullptr, QueryErrorContext());
+-	auto table_entry = catalog.GetEntry(context, schema, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
++	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, Identifier(table), nullptr, QueryErrorContext());
++	auto table_entry = catalog.GetEntry(context, Identifier(schema), table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+ 	auto &ducklake_table = table_entry->Cast<DuckLakeTableEntry>();
+ 	optional_ptr<DuckLakeSchemaEntry> dl_schema;
+ 	bool auto_compact;
+ 	if (!schema.empty()) {
+-		auto schema_catalog = catalog.GetSchema(context, catalog.GetName(), schema, OnEntryNotFound::THROW_EXCEPTION);
++		auto schema_catalog = catalog.GetSchema(context, catalog.GetName(), Identifier(schema), OnEntryNotFound::THROW_EXCEPTION);
+ 		dl_schema = &schema_catalog->Cast<DuckLakeSchemaEntry>();
+ 		auto_compact = ducklake_catalog.GetConfigOption<string>("auto_compact", dl_schema.get()->GetSchemaId(),
+ 		                                                        ducklake_table.GetTableId(), "true") == "true";
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
-index 216fedc0..d72bffdf 100644
+index 216fedc0..941b05e9 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp
 +++ b/src/functions/ducklake_flush_inlined_data.cpp
 @@ -86,8 +86,8 @@ SourceResultType DuckLakeFlushData::GetDataInternal(ExecutionContext &context, D
@@ -55,15 +81,6 @@ index 216fedc0..d72bffdf 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(gstate.rows_flushed)));
  	return SourceResultType::FINISHED;
  }
-@@ -292,7 +292,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
- 
- 	auto table_idx = binder.GenerateTableIndex();
- 	unique_ptr<FunctionData> bind_data;
--	EntryLookupInfo info(CatalogType::TABLE_ENTRY, table.name);
-+	EntryLookupInfo info(CatalogType::TABLE_ENTRY, table.name.GetName());
- 	auto scan_function = table.GetScanFunction(context, bind_data, info);
- 
- 	auto &multi_file_bind_data = bind_data->Cast<MultiFileBindData>();
 @@ -346,7 +346,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table
@@ -73,6 +90,50 @@ index 216fedc0..d72bffdf 100644
  	if (!latest_entry) {
  		auto latest_snapshot = transaction.GetSnapshot();
  		latest_entry = catalog.GetEntryById(transaction, latest_snapshot, table_id);
+@@ -616,7 +616,7 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 			schemas = ducklake_catalog.GetSchemas(context);
+ 		} else {
+ 			// specific schema - fetch it
+-			schemas.push_back(ducklake_catalog.GetSchema(context, schema));
++			schemas.push_back(ducklake_catalog.GetSchema(context, Identifier(schema)));
+ 		}
+ 
+ 		// - scan all tables from the relevant schemas
+@@ -631,7 +631,8 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 	} else {
+ 		// specific table - fetch the table
+ 		auto table_catalog_entry =
+-		    ducklake_catalog.GetEntry<TableCatalogEntry>(context, schema, table, OnEntryNotFound::THROW_EXCEPTION);
++		    ducklake_catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table),
++	                                                 OnEntryNotFound::THROW_EXCEPTION);
+ 		auto &dl_schema = table_catalog_entry->schema.Cast<DuckLakeSchemaEntry>();
+ 		schema_table_map[dl_schema.Cast<DuckLakeSchemaEntry>().GetSchemaId().index].push_back(
+ 		    table_catalog_entry.get()->Cast<DuckLakeTableEntry>());
+@@ -705,7 +706,7 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 
+ 	// Create SUM(rows_flushed) aggregate
+ 	auto &system_catalog = Catalog::GetSystemCatalog(context);
+-	auto &sum_entry = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "sum");
++	auto &sum_entry = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier("sum"));
+ 
+ 	vector<unique_ptr<Expression>> sum_args;
+ 	sum_args.push_back(make_uniq<BoundColumnRefExpression>(child->types[2], child_bindings[2]));
+diff --git a/src/functions/ducklake_list_files.cpp b/src/functions/ducklake_list_files.cpp
+index 48586063..ac6a8205 100644
+--- a/src/functions/ducklake_list_files.cpp
++++ b/src/functions/ducklake_list_files.cpp
+@@ -80,8 +80,9 @@ static unique_ptr<FunctionData> DuckLakeListFilesBind(ClientContext &context, Ta
+ 		at_clause = make_uniq<BoundAtClause>("timestamp", time_entry->second);
+ 	}
+ 	auto table_name = StringValue::Get(input.inputs[1]);
+-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, table_name, at_clause.get(), QueryErrorContext());
+-	auto table_entry = catalog.GetEntry(context, schema, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
++	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, Identifier(table_name), at_clause.get(),
++	                             QueryErrorContext());
++	auto table_entry = catalog.GetEntry(context, Identifier(schema), table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+ 	auto &ducklake_table = table_entry->Cast<DuckLakeTableEntry>();
+ 	auto snapshot = transaction.GetSnapshot(at_clause.get());
+ 
 diff --git a/src/functions/ducklake_options.cpp b/src/functions/ducklake_options.cpp
 index 3cd8586a..b47234e0 100644
 --- a/src/functions/ducklake_options.cpp
@@ -86,19 +147,55 @@ index 3cd8586a..b47234e0 100644
  		}
  		result->options.push_back(std::move(option_info));
  	}
+diff --git a/src/functions/ducklake_set_option.cpp b/src/functions/ducklake_set_option.cpp
+index 2c99aff3..55bdc595 100644
+--- a/src/functions/ducklake_set_option.cpp
++++ b/src/functions/ducklake_set_option.cpp
+@@ -118,7 +118,8 @@ static unique_ptr<FunctionData> DuckLakeSetOptionBind(ClientContext &context, Ta
+ 	if (!table.empty()) {
+ 		// find the scope
+ 		auto table_catalog_entry =
+-		    catalog.GetEntry<TableCatalogEntry>(context, schema, table, OnEntryNotFound::THROW_EXCEPTION);
++		    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table),
++		                                                       OnEntryNotFound::THROW_EXCEPTION);
+ 		auto &ducklake_table = table_catalog_entry->Cast<DuckLakeTableEntry>();
+ 		config_option.table_id = ducklake_table.GetTableId();
+ 		if (IsTransactionLocal(config_option.table_id)) {
+@@ -126,7 +127,7 @@ static unique_ptr<FunctionData> DuckLakeSetOptionBind(ClientContext &context, Ta
+ 		}
+ 	} else if (!schema.empty()) {
+ 		// find the scope
+-		auto schema_catalog_entry = catalog.GetSchema(context, schema, OnEntryNotFound::THROW_EXCEPTION);
++		auto schema_catalog_entry = catalog.GetSchema(context, Identifier(schema), OnEntryNotFound::THROW_EXCEPTION);
+ 		auto &ducklake_schema = schema_catalog_entry->Cast<DuckLakeSchemaEntry>();
+ 		config_option.schema_id = ducklake_schema.GetSchemaId();
+ 		if (config_option.schema_id.IsTransactionLocal()) {
+diff --git a/src/functions/ducklake_table_insertions.cpp b/src/functions/ducklake_table_insertions.cpp
+index 6a0adbc6..dd598973 100644
+--- a/src/functions/ducklake_table_insertions.cpp
++++ b/src/functions/ducklake_table_insertions.cpp
+@@ -21,7 +21,7 @@ TableCatalogEntry &GetTableEntry(ClientContext &context, Catalog &catalog, const
+ 		throw BinderException("Schema cannot be NULL");
+ 	}
+ 	auto schema_name = schema.GetValue<string>();
+-	auto entry = catalog.GetEntry(context, schema_name, lookup, OnEntryNotFound::THROW_EXCEPTION);
++	auto entry = catalog.GetEntry(context, Identifier(schema_name), lookup, OnEntryNotFound::THROW_EXCEPTION);
+ 	return entry->Cast<TableCatalogEntry>();
+ }
+ 
+@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> DuckLakeTableChangesBind(ClientContext &context,
+ 
+ 	auto &catalog = DuckLakeBaseMetadataFunction::GetCatalog(context, input.inputs[0]);
+ 	auto table_name = GetTableName(input.inputs[2]);
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, table_name, end_at_clause, QueryErrorContext());
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, Identifier(table_name), end_at_clause, QueryErrorContext());
+ 	auto &table = GetTableEntry(context, catalog, lookup, input.inputs[1]);
+ 	auto &transaction = DuckLakeTransaction::Get(context, catalog);
+ 
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
-index f0e65d23..8e92243b 100644
+index f0e65d23..7f14aa76 100644
 --- a/src/storage/ducklake_catalog.cpp
 +++ b/src/storage/ducklake_catalog.cpp
-@@ -135,7 +135,7 @@ optional_ptr<CatalogEntry> DuckLakeCatalog::CreateSchema(CatalogTransaction tran
- 			return nullptr;
- 		}
- 		if (info.on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
--			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.schema);
-+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.schema.GetName());
- 		}
- 		// drop the existing entry
- 		DropInfo drop_info;
 @@ -147,7 +147,7 @@ optional_ptr<CatalogEntry> DuckLakeCatalog::CreateSchema(CatalogTransaction tran
  	//! get a local table-id
  	auto schema_id = SchemaIndex(duck_transaction.GetLocalCatalogId());
@@ -108,6 +205,53 @@ index f0e65d23..8e92243b 100644
  	auto schema_entry =
  	    make_uniq<DuckLakeSchemaEntry>(*this, info, schema_id, std::move(schema_uuid), std::move(schema_data_path));
  	auto result = schema_entry.get();
+@@ -326,8 +326,8 @@ unique_ptr<CreateMacroInfo> CreateMacroInfoFromDucklake(ClientContext &context,
+ 		throw NotImplementedException("Macro type %s is not implemented", macro.implementations.front().type);
+ 	}
+ 	auto macro_info = make_uniq<CreateMacroInfo>(type);
+-	macro_info->name = macro.macro_name;
+-	macro_info->schema = schema_name;
++	macro_info->name = Identifier(macro.macro_name);
++	macro_info->schema = Identifier(schema_name);
+ 	macro_info->temporary = false;
+ 	macro_info->internal = false;
+ 	for (auto &impl : macro.implementations) {
+@@ -376,7 +376,7 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 	ducklake_entries_map_t schema_map;
+ 	for (auto &schema : catalog.schemas) {
+ 		CreateSchemaInfo schema_info;
+-		schema_info.schema = schema.name;
++		schema_info.schema = Identifier(schema.name);
+ 		auto schema_entry = make_uniq<DuckLakeSchemaEntry>(*this, schema_info, schema.id, std::move(schema.uuid),
+ 		                                                   std::move(schema.path));
+ 		schema_map.insert(make_pair(std::move(schema.name), std::move(schema_entry)));
+@@ -394,7 +394,7 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 			    table.name);
+ 		}
+ 		auto &schema_entry = entry->second.get();
+-		auto create_table_info = make_uniq<CreateTableInfo>(schema_entry, table.name);
++		auto create_table_info = make_uniq<CreateTableInfo>(schema_entry, Identifier(table.name));
+ 		for (auto &tag : table.tags) {
+ 			if (tag.key == "comment") {
+ 				create_table_info->comment = tag.value;
+@@ -427,7 +427,7 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 		}
+ 		// create the NOT NULL constraints
+ 		for (auto &not_null_col : not_null_columns) {
+-			auto &col = create_table_info->columns.GetColumn(not_null_col);
++			auto &col = create_table_info->columns.GetColumn(Identifier(not_null_col));
+ 			create_table_info->constraints.push_back(make_uniq<NotNullConstraint>(col.Logical()));
+ 		}
+ 		// create the table and add it to the schema set
+@@ -446,7 +446,7 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 			    "Failed to load DuckLake - could not find schema that corresponds to the view entry \"%s\"", view.name);
+ 		}
+ 		auto &schema_entry = entry->second.get();
+-		auto create_view_info = make_uniq<CreateViewInfo>(schema_entry, view.name);
++		auto create_view_info = make_uniq<CreateViewInfo>(schema_entry, Identifier(view.name));
+ 		create_view_info->aliases = view.column_aliases;
+ 		for (auto &tag : view.tags) {
+ 			if (tag.key == "comment") {
 @@ -470,7 +470,7 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
  			    macro.macro_name);
  		}
@@ -136,15 +280,30 @@ index 851c128d..80b2adf0 100644
  }
  
  unique_ptr<CatalogEntry> DuckLakeCatalogSet::DropEntry(const string &name) {
+diff --git a/src/storage/ducklake_checkpoint.cpp b/src/storage/ducklake_checkpoint.cpp
+index 5cebe05f..b0de49b4 100644
+--- a/src/storage/ducklake_checkpoint.cpp
++++ b/src/storage/ducklake_checkpoint.cpp
+@@ -22,7 +22,7 @@ void DuckLakeTransactionManager::Checkpoint(ClientContext &context, bool force)
+ 
+ 	for (const auto &query : checkpoint_queries) {
+ 		auto checkpoint_query =
+-		    StringUtil::Replace(query, "{CATALOG}", SQLString::ToString(ducklake_catalog.GetName()));
++		    StringUtil::Replace(query, "{CATALOG}", SQLString::ToString(ducklake_catalog.GetName().GetName()));
+ 		auto res = conn->Query(checkpoint_query);
+ 		if (res->HasError()) {
+ 			res->GetErrorObject().Throw("Failed to perform CHECKPOINT; in DuckLake:  ");
 diff --git a/src/storage/ducklake_default_functions.cpp b/src/storage/ducklake_default_functions.cpp
-index e0c2ca2e..2c68c672 100644
+index e0c2ca2e..1c80b457 100644
 --- a/src/storage/ducklake_default_functions.cpp
 +++ b/src/storage/ducklake_default_functions.cpp
-@@ -27,7 +27,7 @@ static const DefaultTableMacro ducklake_table_macros[] = {
+@@ -26,8 +26,8 @@ static const DefaultTableMacro ducklake_table_macros[] = {
+ 
  optional_ptr<CatalogEntry> DuckLakeSchemaEntry::LoadBuiltInFunction(DefaultTableMacro macro) {
  	string macro_def = macro.macro;
- 	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", SQLString::ToString(catalog.GetName()));
+-	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", SQLString::ToString(catalog.GetName()));
 -	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", SQLString::ToString(name));
++	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", SQLString::ToString(catalog.GetName().GetName()));
 +	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", SQLString::ToString(name.GetName()));
  	macro.macro = macro_def.c_str();
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
@@ -162,8 +321,21 @@ index a9dd7a88..1ca2d3da 100644
  	return result;
  }
  
+diff --git a/src/storage/ducklake_initializer.cpp b/src/storage/ducklake_initializer.cpp
+index 3b930bac..3dad8742 100644
+--- a/src/storage/ducklake_initializer.cpp
++++ b/src/storage/ducklake_initializer.cpp
+@@ -142,7 +142,7 @@ void DuckLakeInitializer::InitializeDataPath() {
+ 
+ void DuckLakeInitializer::InitializeNewDuckLake(DuckLakeTransaction &transaction, bool has_explicit_schema) {
+ 	if (options.data_path.empty()) {
+-		auto &metadata_catalog = Catalog::GetCatalog(*transaction.GetConnection().context, options.metadata_database);
++		auto &metadata_catalog = Catalog::GetCatalog(*transaction.GetConnection().context, Identifier(options.metadata_database));
+ 		if (!metadata_catalog.IsDuckCatalog()) {
+ 			throw InvalidInputException(
+ 			    "Attempting to create a new ducklake instance but data_path is not set - set the "
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index e87017cd..30258632 100644
+index e87017cd..1040b060 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
 @@ -259,7 +259,7 @@ string DuckLakeInsert::GetName() const {
@@ -175,7 +347,17 @@ index e87017cd..30258632 100644
  	return result;
  }
  
-@@ -851,7 +851,7 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
+@@ -280,7 +280,8 @@ CopyFunctionCatalogEntry &DuckLakeFunctions::GetCopyFunction(ClientContext &cont
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+ 	auto entry =
+-	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
++	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(name),
++	                                                      OnEntryNotFound::RETURN_NULL);
+ 	if (!entry) {
+ 		throw MissingExtensionException(
+ 		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension", name, name);
+@@ -851,7 +852,7 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
  	}
  	auto table_uuid = duck_transaction.GenerateUUID();
  	auto table_data_path =
@@ -184,10 +366,64 @@ index e87017cd..30258632 100644
  
  	DuckLakeCopyInput copy_input(context, duck_schema, columns, table_data_path);
  	auto &physical_copy = DuckLakeInsert::PlanCopyForInsert(context, planner, copy_input, root.get());
+diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
+index 4fc11c8c..ff361e7d 100644
+--- a/src/storage/ducklake_multi_file_reader.cpp
++++ b/src/storage/ducklake_multi_file_reader.cpp
+@@ -596,7 +596,7 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
+ 
+ 		FunctionBinder binder(context);
+ 		ErrorData error;
+-		auto function_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(children), error, true, nullptr);
++		auto function_expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("+"), std::move(children), error, true, nullptr);
+ 		if (error.HasError()) {
+ 			error.Throw();
+ 		}
+diff --git a/src/storage/ducklake_partition_data.cpp b/src/storage/ducklake_partition_data.cpp
+index 19e54905..e7c1004c 100644
+--- a/src/storage/ducklake_partition_data.cpp
++++ b/src/storage/ducklake_partition_data.cpp
+@@ -93,7 +93,8 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyScalarFunction(ClientContext
+ 	children.push_back(std::move(column_expr));
+ 	ErrorData error;
+ 	FunctionBinder binder(context);
+-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, function_name, std::move(children), error, false);
++	auto function =
++	    binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(function_name), std::move(children), error, false);
+ 	if (!function) {
+ 		error.Throw();
+ 	}
+@@ -116,7 +117,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContex
+ 
+ 	ErrorData error;
+ 	FunctionBinder binder(context);
+-	auto and_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "&", std::move(and_children), error, false);
++	auto and_expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("&"), std::move(and_children), error, false);
+ 	if (!and_expr) {
+ 		error.Throw();
+ 	}
+@@ -125,7 +126,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContex
+ 	mod_children.push_back(std::move(and_expr));
+ 	mod_children.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(NumericCast<int32_t>(bucket_count))));
+ 
+-	auto mod_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "%", std::move(mod_children), error, false);
++	auto mod_expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("%"), std::move(mod_children), error, false);
+ 	if (!mod_expr) {
+ 		error.Throw();
+ 	}
 diff --git a/src/storage/ducklake_scan.cpp b/src/storage/ducklake_scan.cpp
-index e5fec1e1..1c8d57e2 100644
+index e5fec1e1..1f849552 100644
 --- a/src/storage/ducklake_scan.cpp
 +++ b/src/storage/ducklake_scan.cpp
+@@ -212,7 +212,7 @@ TableFunction DuckLakeFunctions::GetDuckLakeScanFunction(DatabaseInstance &insta
+ 	function.to_string = DuckLakeFunctionToString;
+ 	function.get_metrics = DuckLakeGetMetrics;
+ 
+-	function.name = "ducklake_scan";
++	function.SetName("ducklake_scan");
+ 	return function;
+ }
+ 
 @@ -224,7 +224,7 @@ DuckLakeFunctionInfo::DuckLakeFunctionInfo(DuckLakeTableEntry &table, DuckLakeTr
  shared_ptr<DuckLakeFunctionInfo>
  DuckLakeFunctionInfo::Create(DuckLakeTableEntry &table, DuckLakeTransaction &transaction, DuckLakeSnapshot snapshot) {
@@ -197,10 +433,44 @@ index e5fec1e1..1c8d57e2 100644
  	for (auto &col : table.GetColumns().Logical()) {
  		result->column_names.push_back(col.Name());
  		result->column_types.push_back(col.Type());
+@@ -285,11 +285,13 @@ unique_ptr<FunctionData> DuckLakeScanDeserialize(Deserializer &deserializer, Tab
+ 	}
+ 
+ 	// Look up the DuckLake catalog and table
+-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
++	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
+ 	auto &transaction = DuckLakeTransaction::Get(context, catalog);
+ 
+ 	auto &table_entry =
+-	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, table_name).Cast<DuckLakeTableEntry>();
++	    Catalog::GetEntry<TableCatalogEntry>(context, Identifier(catalog_name), Identifier(schema_name),
++	                                         Identifier(table_name))
++	        .Cast<DuckLakeTableEntry>();
+ 
+ 	function.function_info = DuckLakeFunctionInfo::Create(table_entry, transaction, snapshot);
+ 	auto &func_info = function.function_info->Cast<DuckLakeFunctionInfo>();
 diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
-index 10840d41..3683884a 100644
+index 10840d41..7cb322c8 100644
 --- a/src/storage/ducklake_schema_entry.cpp
 +++ b/src/storage/ducklake_schema_entry.cpp
+@@ -31,7 +31,7 @@ unique_ptr<CreateInfo> DuckLakeSchemaEntry::GetInfo() const {
+ 
+ bool DuckLakeSchemaEntry::HandleCreateConflict(CatalogTransaction transaction, CatalogType catalog_type,
+                                                const string &entry_name, OnCreateConflict on_conflict) {
+-	auto existing_entry = GetEntry(transaction, catalog_type, entry_name);
++	auto existing_entry = GetEntry(transaction, catalog_type, Identifier(entry_name));
+ 	if (!existing_entry) {
+ 		// no conflict
+ 		return true;
+@@ -51,7 +51,7 @@ bool DuckLakeSchemaEntry::HandleCreateConflict(CatalogTransaction transaction, C
+ 		// try to drop the entry prior to creating
+ 		DropInfo info;
+ 		info.type = catalog_type;
+-		info.name = entry_name;
++		info.name = Identifier(entry_name);
+ 		DropEntry(transaction.GetContext(), info);
+ 		break;
+ 	}
 @@ -67,7 +67,7 @@ optional_ptr<CatalogEntry> DuckLakeSchemaEntry::CreateTableExtended(CatalogTrans
  	auto &duck_transaction = transaction.transaction->Cast<DuckLakeTransaction>();
  	auto &base_info = info.Base();
@@ -314,10 +584,71 @@ index 10840d41..3683884a 100644
  	if (!cascade) {
  		// get a list of all dependents
  		vector<reference<CatalogEntry>> dependents;
+diff --git a/src/storage/ducklake_secret.cpp b/src/storage/ducklake_secret.cpp
+index 458ef129..e301294b 100644
+--- a/src/storage/ducklake_secret.cpp
++++ b/src/storage/ducklake_secret.cpp
+@@ -5,7 +5,7 @@ namespace duckdb {
+ unique_ptr<BaseSecret> DuckLakeSecret::CreateDuckLakeSecretFunction(ClientContext &context, CreateSecretInput &input) {
+ 	// apply any overridden settings
+ 	vector<string> prefix_paths;
+-	auto result = make_uniq<KeyValueSecret>(prefix_paths, "ducklake", "config", input.name);
++	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier("ducklake"), Identifier("config"), input.name);
+ 	if (input.options.find("metadata_path") == input.options.end()) {
+ 		throw InvalidInputException("metadata_path must be defined when creating a DuckLake secret");
+ 	}
+@@ -31,14 +31,14 @@ bool DuckLakeSecret::PathIsSecret(const string &path) {
+ 
+ SecretType DuckLakeSecret::GetSecretType() {
+ 	SecretType secret_type;
+-	secret_type.name = "ducklake";
++	secret_type.name = Identifier("ducklake");
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 	return secret_type;
+ }
+ 
+ CreateSecretFunction DuckLakeSecret::GetFunction() {
+-	CreateSecretFunction function = {"ducklake", "config", CreateDuckLakeSecretFunction};
++	CreateSecretFunction function = {"ducklake", Identifier("config"), CreateDuckLakeSecretFunction};
+ 	function.named_parameters["data_path"] = LogicalType::VARCHAR;
+ 	function.named_parameters["metadata_schema"] = LogicalType::VARCHAR;
+ 	function.named_parameters["metadata_catalog"] = LogicalType::VARCHAR;
 diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
-index fce80002..4398c349 100644
+index fce80002..1dba3915 100644
 --- a/src/storage/ducklake_table_entry.cpp
 +++ b/src/storage/ducklake_table_entry.cpp
+@@ -112,7 +112,7 @@ static void ReplaceColumnRefName(ParsedExpression &expr, const string &old_name,
+ 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+ 		auto &colref = expr.Cast<ColumnRefExpression>();
+ 		if (!colref.IsQualified() && StringUtil::CIEquals(colref.GetColumnName(), old_name)) {
+-			colref.ColumnNamesMutable().back() = new_name;
++			colref.ColumnNamesMutable().back() = Identifier(new_name);
+ 		}
+ 		return;
+ 	}
+@@ -193,10 +193,10 @@ const DuckLakeFieldId &DuckLakeTableEntry::GetFieldId(const vector<string> &colu
+ 
+ optional_ptr<const DuckLakeFieldId> DuckLakeTableEntry::TryGetFieldId(const vector<string> &column_names,
+                                                                       optional_ptr<optional_idx> name_offset) const {
+-	if (!columns.ColumnExists(column_names[0])) {
++	if (!columns.ColumnExists(Identifier(column_names[0]))) {
+ 		return nullptr;
+ 	}
+-	auto &root_col = columns.GetColumn(column_names[0]);
++	auto &root_col = columns.GetColumn(Identifier(column_names[0]));
+ 	return field_data->GetByNames(root_col.Physical(), column_names, name_offset);
+ }
+ 
+@@ -205,7 +205,7 @@ const ColumnDefinition &DuckLakeTableEntry::GetColumnByFieldId(FieldIndex field_
+ 	if (!field_id) {
+ 		throw InternalException("Column with field id %d not found", field_index.index);
+ 	}
+-	return GetColumn(field_id->Name());
++	return GetColumn(Identifier(field_id->Name()));
+ }
+ 
+ unique_ptr<BaseStatistics> GetColumnStats(const DuckLakeFieldId &field_id, const DuckLakeTableStats &table_stats) {
 @@ -305,7 +305,7 @@ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique
  		// Table has been renamed, are we then querying the correct name?
  		bool found = false;
@@ -327,6 +658,37 @@ index fce80002..4398c349 100644
  			if (table) {
  				auto &ducklake_table = table->Cast<DuckLakeTableEntry>();
  				if (ducklake_table.GetTableId() == table_id) {
+@@ -434,7 +434,7 @@ void DuckLakeTableEntry::ValidateSortExpressionColumns(DuckLakeTableEntry &table
+ 				        "Unexpected qualified column reference - only unqualified columns are supported");
+ 			    }
+ 			    string column_name = colref.GetColumnName();
+-			    if (!table.ColumnExists(column_name)) {
++			    if (!table.ColumnExists(Identifier(column_name))) {
+ 				    if (std::find(missing_columns.begin(), missing_columns.end(), column_name) ==
+ 				        missing_columns.end()) {
+ 					    missing_columns.push_back(column_name);
+@@ -468,7 +468,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
+ 	}
+ 	case ExpressionType::FUNCTION: {
+ 		auto &function = expr.Cast<FunctionExpression>();
+-		auto name = StringUtil::Lower(function.FunctionName());
++		auto name = StringUtil::Lower(function.FunctionName().GetName());
+ 
+ 		// BUCKET logic is different from the other transforms because it has two arguments.
+ 		if (name == "bucket") {
+@@ -524,10 +524,10 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
+ 		    "Unsupported partition key %s - only identity columns and year/month/day/hour/bucket are supported",
+ 		    expr.ToString());
+ 	}
+-	if (!table.ColumnExists(column_name)) {
++	if (!table.ColumnExists(Identifier(column_name))) {
+ 		throw CatalogException("Unexpected partition key - column \"%s\" does not exist", column_name);
+ 	}
+-	auto &col = table.GetColumn(column_name);
++	auto &col = table.GetColumn(Identifier(column_name));
+ 	PhysicalIndex column_index(col.StorageOid());
+ 	auto &field_id = table.GetFieldData().GetByRootIndex(column_index);
+ 	field.field_id = field_id.GetFieldIndex();
 @@ -643,7 +643,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  }
  
@@ -345,6 +707,15 @@ index fce80002..4398c349 100644
  	return std::move(new_entry);
  }
  
+@@ -687,7 +687,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 	}
+ 	auto create_info = GetInfo();
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+-	if (info.if_column_not_exists && ColumnExists(info.new_column.Name())) {
++	if (info.if_column_not_exists && ColumnExists(Identifier(info.new_column.Name()))) {
+ 		return nullptr;
+ 	}
+ 
 @@ -776,7 +776,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	ColumnList new_columns;
  	for (auto &col : columns.Logical()) {
@@ -354,6 +725,15 @@ index fce80002..4398c349 100644
  			continue;
  		}
  		new_columns.AddColumn(std::move(copy));
+@@ -1150,7 +1150,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+ 
+ 	if (info.if_column_exists) {
+-		if (!ColumnExists(info.column_path.front())) {
++		if (!ColumnExists(Identifier(info.column_path.front()))) {
+ 			return nullptr;
+ 		}
+ 	}
 @@ -1214,7 +1214,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  		throw NotImplementedException("Only rename on top-level struct fields is supported currently");
  	}
@@ -403,8 +783,17 @@ index fce80002..4398c349 100644
  	col.SetComment(info.comment_value);
  	auto &field_id = GetFieldId(col.Physical());
  
+@@ -1364,7 +1364,7 @@ DuckLakeColumnInfo DuckLakeTableEntry::GetColumnInfo(FieldIndex field_index) con
+ 	if (!field_id) {
+ 		throw InternalException("Field id not found in table");
+ 	}
+-	auto &col = GetColumn(field_id->Name());
++	auto &col = GetColumn(Identifier(field_id->Name()));
+ 	auto &col_data = field_id->GetColumnData();
+ 
+ 	DuckLakeColumnInfo result;
 diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
-index dbc7fa53..20b02566 100644
+index dbc7fa53..392251a2 100644
 --- a/src/storage/ducklake_transaction.cpp
 +++ b/src/storage/ducklake_transaction.cpp
 @@ -808,7 +808,7 @@ void GetTransactionTableChanges(reference<CatalogEntry> table_entry, Transaction
@@ -540,6 +929,15 @@ index dbc7fa53..20b02566 100644
  	new_macro_info.schema_id = commit_state.GetSchemaId(ducklake_schema);
  	// Let's do the implementations
  	for (const auto &impl : macro_entry.macros) {
+@@ -2717,7 +2717,7 @@ unique_ptr<QueryResult> DuckLakeTransaction::Query(string query) {
+ 	auto end = std::chrono::steady_clock::now();
+ 	auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+ 
+-	DUCKDB_LOG(db, DuckLakeMetadataLogType, ducklake_catalog.GetName(), query, elapsed_ms);
++	DUCKDB_LOG(db, DuckLakeMetadataLogType, ducklake_catalog.GetName().GetName(), query, elapsed_ms);
+ 
+ 	auto &cb = ducklake_catalog.GetQueryCallback();
+ 	if (cb) {
 @@ -2935,7 +2935,7 @@ void DuckLakeTransaction::DropSchema(DuckLakeSchemaEntry &schema) {
  		if (!new_schemas) {
  			throw InternalException("Dropping a transaction local table that does not exist?");

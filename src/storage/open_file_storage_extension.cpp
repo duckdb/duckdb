@@ -13,7 +13,7 @@ public:
 	                         string file_p)
 	    : DefaultGenerator(catalog), schema(schema), file(std::move(file_p)) {
 		for (auto &view_name : view_names_p) {
-			view_names.push_back(view_name);
+			view_names.emplace_back(view_name);
 		}
 	}
 
@@ -22,8 +22,8 @@ public:
 		for (auto &entry : view_names) {
 			if (entry_name == entry) {
 				auto result = make_uniq<CreateViewInfo>();
-				result->schema = DEFAULT_SCHEMA;
-				result->view_name = entry;
+				result->schema = Identifier::DefaultSchema();
+				result->view_name = Identifier(entry);
 				result->sql = StringUtil::Format("SELECT * FROM %s", SQLString(file));
 				auto view_info = CreateViewInfo::FromSelect(context, std::move(result));
 				return make_uniq_base<CatalogEntry, ViewCatalogEntry>(catalog, schema, *view_info);
@@ -32,13 +32,13 @@ public:
 		return nullptr;
 	}
 
-	vector<string> GetDefaultEntries() override {
+	vector<Identifier> GetDefaultEntries() override {
 		return view_names;
 	}
 
 private:
 	SchemaCatalogEntry &schema;
-	vector<string> view_names;
+	vector<Identifier> view_names;
 	string file;
 };
 
@@ -57,7 +57,7 @@ unique_ptr<Catalog> OpenFileStorageAttach(optional_ptr<StorageExtensionInfo> sto
 
 	// set up the default view generator for "file" and the derived name of the file
 	auto system_transaction = CatalogTransaction::GetSystemTransaction(db.GetDatabase());
-	auto &schema = catalog->GetSchema(system_transaction, Identifier(DEFAULT_SCHEMA));
+	auto &schema = catalog->GetSchema(system_transaction, Identifier::DefaultSchema());
 	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
 	auto &catalog_set = duck_schema.GetCatalogSet(CatalogType::VIEW_ENTRY);
 	auto default_generator = make_uniq<OpenFileDefaultGenerator>(*catalog, schema, view_names, std::move(file));

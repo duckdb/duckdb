@@ -11,8 +11,8 @@ namespace duckdb {
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
                                          string entry_name_p, string owner_schema_p, string owner_name_p,
                                          OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p),
-                std::move(entry_name_p), if_not_found),
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP, Identifier(std::move(entry_catalog_p)),
+                Identifier(std::move(entry_schema_p)), Identifier(std::move(entry_name_p)), if_not_found),
       entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
       owner_name(std::move(owner_name_p)) {
 }
@@ -51,8 +51,8 @@ string ChangeOwnershipInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
                                string entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
-                if_not_found),
+    : AlterInfo(AlterType::SET_COMMENT, Identifier(std::move(entry_catalog_p)), Identifier(std::move(entry_schema_p)),
+                Identifier(std::move(entry_name_p)), if_not_found),
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
 
@@ -89,8 +89,8 @@ AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER
 }
 
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog.GetName()), std::move(data.schema.GetName()),
-                std::move(data.name.GetName()), data.if_not_found),
+    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_not_found),
       alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
@@ -534,8 +534,8 @@ AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VI
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog.GetName()), std::move(data.schema.GetName()),
-                std::move(data.name.GetName()), data.if_not_found),
+    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_not_found),
       alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {

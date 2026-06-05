@@ -137,8 +137,8 @@ public:
 	const string &GetProvider() const {
 		return provider.GetName();
 	}
-	const string &GetName() const {
-		return name.GetName();
+	const Identifier &GetName() const {
+		return name;
 	}
 	bool IsSerializable() const {
 		return serializable;
@@ -171,12 +171,18 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
+	//! Convenience overload: secret types/providers/names are commonly passed as string literals
+	KeyValueSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
+	    : KeyValueSecret(prefix_paths, Identifier(type), Identifier(provider), Identifier(name)) {
+	}
 	explicit KeyValueSecret(const BaseSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()),
+	                 Identifier(secret.GetName())) {
 		serializable = true;
 	};
 	KeyValueSecret(const KeyValueSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()),
+	                 Identifier(secret.GetName())) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
 		serializable = true;

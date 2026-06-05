@@ -53,7 +53,7 @@ struct BindReplaceDemoFun {
 			left_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
 			left_children.push_back(make_uniq<ConstantExpression>(Value(name + "L")));
 			auto tf_ref_left = make_uniq<TableFunctionRef>();
-			tf_ref_left->alias = "inner_table_" + name + "L";
+			tf_ref_left->alias = Identifier("inner_table_" + name + "L");
 			tf_ref_left->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(left_children));
 			join_node->left = std::move(tf_ref_left);
 
@@ -62,7 +62,7 @@ struct BindReplaceDemoFun {
 			right_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
 			right_children.push_back(make_uniq<ConstantExpression>(Value(name + "R")));
 			auto tf_ref_right = make_uniq<TableFunctionRef>();
-			tf_ref_right->alias = "inner_table_" + name + "R";
+			tf_ref_right->alias = Identifier("inner_table_" + name + "R");
 			tf_ref_right->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(right_children));
 			join_node->right = std::move(tf_ref_right);
 

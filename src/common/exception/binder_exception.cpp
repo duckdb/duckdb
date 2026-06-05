@@ -33,7 +33,8 @@ BinderException BinderException::NoMatchingFunction(const string &catalog_name, 
                                                     const vector<string> &candidates) {
 	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", optional_idx());
 	// no matching function was found, throw an error
-	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
+	string call_str = Function::CallToString(Identifier(catalog_name), Identifier(schema_name), Identifier(name),
+	                                         arguments, named_arguments);
 	string candidate_str;
 	for (auto &candidate : candidates) {
 		candidate_str += "\t" + candidate + "\n";

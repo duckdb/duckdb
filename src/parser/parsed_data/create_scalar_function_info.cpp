@@ -28,7 +28,7 @@ unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 
 unique_ptr<AlterInfo> CreateScalarFunctionInfo::GetAlterInfo() const {
 	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(
-	    AlterEntryData(catalog.GetName(), schema.GetName(), name.GetName(), OnEntryNotFound::RETURN_NULL),
+	    AlterEntryData(catalog, schema, name, OnEntryNotFound::RETURN_NULL),
 	    unique_ptr_cast<CreateInfo, CreateScalarFunctionInfo>(Copy()));
 }
 

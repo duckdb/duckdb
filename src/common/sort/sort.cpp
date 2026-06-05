@@ -52,7 +52,8 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	}
 
 	ErrorData error;
-	create_sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(create_children), error);
+	create_sort_key = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("create_sort_key"),
+	                                            std::move(create_children), error);
 	if (!create_sort_key) {
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
 	}

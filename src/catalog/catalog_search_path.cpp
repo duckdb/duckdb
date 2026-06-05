@@ -166,7 +166,8 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 			}
 			continue;
 		}
-		auto schema_entry = Catalog::GetSchema(context, path.catalog, path.schema, OnEntryNotFound::RETURN_NULL);
+		auto schema_entry = Catalog::GetSchema(context, Identifier(path.catalog), Identifier(path.schema),
+		                                       OnEntryNotFound::RETURN_NULL);
 		if (schema_entry) {
 			// we are setting a schema - update the catalog and schema
 			if (path.catalog.empty()) {
@@ -176,9 +177,10 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		}
 		// only schema supplied - check if this is a catalog instead
 		if (path.catalog.empty()) {
-			auto catalog = Catalog::GetCatalogEntry(context, path.schema);
+			auto catalog = Catalog::GetCatalogEntry(context, Identifier(path.schema));
 			if (catalog) {
-				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
+				auto schema =
+				    catalog->GetSchema(context, Identifier(catalog->GetDefaultSchema()), OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
 					path.schema = schema->name.GetName();

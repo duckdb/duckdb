@@ -305,10 +305,10 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 
 	for (auto &arg : arguments) {
 		auto &child_name = arg.GetName();
-		if (name_collision_set.find(child_name) != name_collision_set.end()) {
+		if (name_collision_set.find(Identifier(child_name)) != name_collision_set.end()) {
 			throw BinderException("Duplicate STRUCT type argument name \"%s\"", child_name);
 		}
-		name_collision_set.insert(child_name);
+		name_collision_set.insert(Identifier(child_name));
 		children.emplace_back(child_name, TypeValue::GetType(arg.GetValue()));
 	}
 
@@ -375,11 +375,11 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 		auto &entry_name = arg.GetName();
 		auto entry_type = TypeValue::GetType(arg.GetValue());
 
-		if (name_collision_set.find(entry_name) != name_collision_set.end()) {
+		if (name_collision_set.find(Identifier(entry_name)) != name_collision_set.end()) {
 			throw BinderException("Duplicate UNION type member name \"%s\"", entry_name);
 		}
 
-		name_collision_set.insert(entry_name);
+		name_collision_set.insert(Identifier(entry_name));
 		children.emplace_back(entry_name, entry_type);
 	}
 
@@ -616,8 +616,8 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	return make_uniq_base<CatalogEntry, TypeCatalogEntry>(catalog, schema, info);
 }
 
-vector<string> DefaultTypeGenerator::GetDefaultEntries() {
-	vector<string> result;
+vector<Identifier> DefaultTypeGenerator::GetDefaultEntries() {
+	vector<Identifier> result;
 	if (schema.name != DEFAULT_SCHEMA) {
 		return result;
 	}

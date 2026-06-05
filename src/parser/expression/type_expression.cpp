@@ -15,7 +15,8 @@ TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier
 }
 
 TypeExpression::TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children)
-    : TypeExpression(INVALID_CATALOG, INVALID_SCHEMA, std::move(type_name), std::move(children)) {
+    : TypeExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), std::move(type_name),
+                     std::move(children)) {
 }
 
 TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE) {
@@ -76,7 +77,7 @@ string TypeExpression::ToString() const {
 	}
 
 	if (result.empty() && type_name == "VARCHAR" && !params.empty()) {
-		if (params.back()->HasAlias() && StringUtil::CIEquals(params.back()->GetAlias(), "collation")) {
+		if (params.back()->HasAlias() && params.back()->GetAlias() == "collation") {
 			// Special case for VARCHAR with collation
 			auto collate_expr = params.back()->Cast<ConstantExpression>();
 			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));

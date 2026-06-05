@@ -104,7 +104,7 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 		auto alias = expr->GetAlias();
 		expr = replacement->Copy();
 		if (!alias.empty()) {
-			expr->SetAlias(std::move(alias));
+			expr->SetAlias(Identifier(std::move(alias)));
 		}
 		return;
 	}
@@ -185,7 +185,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "ilike_escape",
 	                                     "not_ilike_escape",
 	                                     "like_escape"};
-	if (supported_ops.count(function.FunctionName()) == 0) {
+	if (supported_ops.count(function.FunctionName().GetName()) == 0) {
 		// unsupported op for * expression
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.FunctionName());
 	}
@@ -225,13 +225,13 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		vector<unique_ptr<ParsedExpression>> filter_children;
 		filter_children.push_back(std::move(star_expr.GetExpressionMutable()));
 		filter_children.push_back(std::move(lambda));
-		child_expr = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
+		child_expr = make_uniq<FunctionExpression>(Identifier("list_filter"), std::move(filter_children));
 	}
 
 	auto columns_expr = make_uniq<StarExpression>(star.RelationName());
 	columns_expr->IsColumnsMutable() = true;
 	columns_expr->ExpressionMutable() = std::move(child_expr);
-	columns_expr->SetAlias(std::move(original_alias));
+	columns_expr->SetAlias(Identifier(std::move(original_alias)));
 	root = std::move(columns_expr);
 }
 
@@ -394,9 +394,10 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (new_expr->GetAlias().empty()) {
-					new_expr->SetAlias(colref.GetColumnName());
+					new_expr->SetAlias(Identifier(colref.GetColumnName()));
 				} else {
-					new_expr->SetAlias(ReplaceColumnsAlias(new_expr->GetAlias(), colref.GetColumnName(), regex.get()));
+					new_expr->SetAlias(Identifier(
+					    ReplaceColumnsAlias(new_expr->GetAlias().GetName(), colref.GetColumnName(), regex.get())));
 				}
 			}
 		}

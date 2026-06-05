@@ -130,7 +130,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 	auto &bind_context = binder->bind_context;
 	auto table_index = binder->GenerateTableIndex();
-	bind_context.AddGenericBinding(table_index, "copy_csv", names, sql_types);
+	bind_context.AddGenericBinding(table_index, Identifier("copy_csv"), names, sql_types);
 
 	// Create the ParsedExpressions (cast, strftime, etc..)
 	vector<unique_ptr<ParsedExpression>> unbound_expressions;
@@ -144,14 +144,16 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
-			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
+			auto func =
+			    make_uniq_base<ParsedExpression, FunctionExpression>(Identifier("strftime"), std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else if (has_timestampformat && is_timestamp) {
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
-			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
+			auto func =
+			    make_uniq_base<ParsedExpression, FunctionExpression>(Identifier("strftime"), std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else {
 			// CAST <name> AS VARCHAR
