@@ -821,13 +821,15 @@ void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
 	}
 }
 
-void JoinHashTable::PrepareBloomFilterForPushdown() {
-	should_build_bloom_filter = true;
-	const auto build_count = Count();
-	if (build_count == 0) {
+void JoinHashTable::PrepareBloomFilterForFinalize() {
+	if (!should_build_bloom_filter) {
 		return;
 	}
 
+	// Finalize scans every build tuple and inserts its hash into the bloom filter.
+	// Resize here if the planner estimate was too low, then let finalize populate it.
+	const auto build_count = Count();
+	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
 	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
 	const auto estimated_too_low = bloom_filter_init_count == 0 ||
 	                               static_cast<double>(build_count) >
@@ -837,43 +839,8 @@ void JoinHashTable::PrepareBloomFilterForPushdown() {
 	}
 
 	bloom_filter.Reset();
-	bloom_filter_init_count = build_count;
+	bloom_filter_init_count = actual_init_count;
 	bloom_filter.Initialize(context, bloom_filter_init_count);
-	RebuildBloomFilter();
-}
-
-void JoinHashTable::RebuildBloomFilter() {
-	D_ASSERT(bloom_filter.IsInitialized());
-	D_ASSERT(equality_types.size() == 1);
-	if (data_collection->ChunkCount() == 0) {
-		return;
-	}
-
-	Vector addresses(LogicalType::POINTER);
-	vector<LogicalType> key_types {layout_ptr->GetTypes()[0]};
-	DataChunk keys;
-	keys.Initialize(BufferAllocator::Get(context), key_types);
-	Vector hashes(LogicalType::HASH);
-	const auto &sel = *FlatVector::IncrementalSelectionVector();
-	auto addresses_data = FlatVector::GetDataMutable<data_ptr_t>(addresses);
-
-	JoinHTScanState scan_state(*data_collection, 0, data_collection->ChunkCount(),
-	                           TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-	auto &iterator = scan_state.iterator;
-	do {
-		const auto row_locations = iterator.GetRowLocations();
-		const auto chunk_count = iterator.GetCurrentChunkCount();
-		for (idx_t chunk_offset = 0; chunk_offset < chunk_count; chunk_offset += STANDARD_VECTOR_SIZE) {
-			const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, chunk_count - chunk_offset);
-			for (idx_t i = 0; i < count; i++) {
-				addresses_data[i] = row_locations[chunk_offset + i];
-			}
-			data_collection->Gather(addresses, sel, count, 0, keys.data[0], sel, nullptr);
-			keys.SetChildCardinality(count);
-			Hash(keys, sel, count, hashes);
-			bloom_filter.InsertHashes(hashes);
-		}
-	} while (iterator.Next());
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {

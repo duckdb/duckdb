@@ -401,7 +401,6 @@ private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
-	void RebuildBloomFilter();
 
 	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
 	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -537,7 +536,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 	void PrepareBuildBloomFilter(idx_t estimated_row_count);
-	void PrepareBloomFilterForPushdown();
+	void PrepareBloomFilterForFinalize();
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;

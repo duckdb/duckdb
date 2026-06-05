@@ -1228,7 +1228,6 @@ void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const Physi
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
 	ht.SetBuildBloomFilter(true);
-	ht.PrepareBloomFilterForPushdown();
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
@@ -1561,6 +1560,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	if (filter_min_max) {
 		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, sink.perfect_join_executor);
+		if (!use_perfect_hash) {
+			ht.PrepareBloomFilterForFinalize();
+		}
 	}
 
 	// In case of a large build side or duplicates, use regular hash join
