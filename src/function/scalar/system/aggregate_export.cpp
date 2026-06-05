@@ -408,8 +408,6 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
-	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
-	         input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
@@ -470,8 +468,6 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 
 	D_ASSERT(input.data.size() == 2);
-	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
-	         input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 	D_ASSERT(input.data[0].GetType() == result.GetType());
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
@@ -644,58 +640,59 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, BoundSimpleFunction &function,
                                                                vector<unique_ptr<Expression>> &arguments,
                                                                bool allow_legacy) {
-	auto &arg_return_type = arguments[0]->GetReturnType();
-	for (auto &arg_type : function.GetArguments()) {
-		arg_type = arg_return_type;
-	}
-
-	if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE &&
-	    (!allow_legacy || arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE)) {
-		string allowed = allow_legacy ? "AGGREGATE_STATE or LEGACY_AGGREGATE_STATE" : "AGGREGATE_STATE";
-		throw BinderException("Can only %s %s, not %s", function.GetName(), allowed, arg_return_type.ToString());
-	}
-
-	// following error states are only reachable when someone messes up creating the state_type
-	// which is impossible from SQL
-
-	auto state_type = AggregateStateType::GetStateType(arg_return_type);
-
-	// now we can look up the function in the catalog again and bind it
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
-	                                                                                        state_type.function_name);
-	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw InternalException("Could not find aggregate %s", state_type.function_name);
-	}
-	auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
-
-	ErrorData error;
-
-	FunctionBinder function_binder(context);
-	auto best_function =
-	    function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, state_type.bound_argument_types, error);
-	if (!best_function.IsValid()) {
-		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
-		                        error.Message());
-	}
-	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
-
-	// FIXME: this is really hacky
-	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
-	vector<unique_ptr<Expression>> args;
-	args.reserve(state_type.bound_argument_types.size());
-	for (auto &arg_type : state_type.bound_argument_types) {
-		args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
-	}
-
-	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
-
-	if (bound_aggr.GetReturnType() != state_type.return_type ||
-	    bound_aggr.GetArguments() != state_type.bound_argument_types) {
-		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
-	}
-
-	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
-	                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
+	throw InternalException("FIXME: bind aggregate state internal");
+	// auto &arg_return_type = arguments[0]->GetReturnType();
+	// for (auto &arg_type : function.GetArguments()) {
+	// 	arg_type = arg_return_type;
+	// }
+	//
+	// if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE &&
+	//     (!allow_legacy || arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE)) {
+	// 	string allowed = allow_legacy ? "AGGREGATE_STATE or LEGACY_AGGREGATE_STATE" : "AGGREGATE_STATE";
+	// 	throw BinderException("Can only %s %s, not %s", function.GetName(), allowed, arg_return_type.ToString());
+	// }
+	//
+	// // following error states are only reachable when someone messes up creating the state_type
+	// // which is impossible from SQL
+	//
+	// auto state_type = AggregateStateType::GetStateType(arg_return_type);
+	//
+	// // now we can look up the function in the catalog again and bind it
+	// auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+	//                                                                                         state_type.function_name);
+	// if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+	// 	throw InternalException("Could not find aggregate %s", state_type.function_name);
+	// }
+	// auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
+	//
+	// ErrorData error;
+	//
+	// FunctionBinder function_binder(context);
+	// auto best_function =
+	//     function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, state_type.bound_argument_types, error);
+	// if (!best_function.IsValid()) {
+	// 	throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
+	// 	                        error.Message());
+	// }
+	// const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+	//
+	// // FIXME: this is really hacky
+	// // but the aggregate state export needs a rework around how it handles more complex aggregates anyway
+	// vector<unique_ptr<Expression>> args;
+	// args.reserve(state_type.bound_argument_types.size());
+	// for (auto &arg_type : state_type.bound_argument_types) {
+	// 	args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
+	// }
+	//
+	// auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
+	//
+	// if (bound_aggr.GetReturnType() != state_type.return_type ||
+	//     bound_aggr.GetArguments() != state_type.bound_argument_types) {
+	// 	throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
+	// }
+	//
+	// return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
+	//                                           bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -886,35 +883,37 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		D_ASSERT(arg_type.id() != LogicalTypeId::INVALID);
 	}
 #endif
-	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	aggregate_state_t state_type(child_aggregate->Function().GetName(), child_aggregate->Function().GetReturnType(),
-	                             child_aggregate->Function().GetArguments());
+	throw InternalException("FIXME: bind export");
+	// auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
+	// aggregate_state_t state_type(child_aggregate->Function().GetName(), child_aggregate->Function().GetReturnType(),
+	//                              child_aggregate->Function().GetArguments());
+	//
+	// LogicalType return_type;
+	// if (bound_function.HasGetStateTypeCallback()) {
+	// 	LogicalType state_layout = bound_function.GetStateType();
+	// 	auto struct_child_types = StructType::GetChildTypes(state_layout);
+	// 	return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
+	// } else {
+	// 	return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
+	// }
 
-	LogicalType return_type;
-	if (bound_function.HasGetStateTypeCallback()) {
-		LogicalType state_layout = bound_function.GetStateType();
-		auto struct_child_types = StructType::GetChildTypes(state_layout);
-		return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
-	} else {
-		return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
-	}
-
-	auto export_function = AggregateFunction(
-	    "aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(), return_type,
-	    bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
-	    bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
-	    FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
-	    /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	    /* can't propagate statistics */ nullptr, nullptr);
-	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
-	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
-
-	BoundAggregateFunction bound_func(export_function);
-
-	return make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(child_aggregate->GetChildrenMutable()),
-	                                           std::move(child_aggregate->GetFilterMutable()),
-	                                           std::move(export_bind_data), child_aggregate->GetAggregateType());
+	// auto export_function = AggregateFunction(
+	//     "aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(), return_type,
+	//     bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	//     bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
+	//     FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
+	//     /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
+	//     /* can't propagate statistics */ nullptr, nullptr);
+	// export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// export_function.SetSerializeCallback(ExportStateAggregateSerialize);
+	// export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
+	//
+	// BoundAggregateFunction bound_func(export_function);
+	//
+	// return make_uniq<BoundAggregateExpression>(std::move(bound_func),
+	// std::move(child_aggregate->GetChildrenMutable()),
+	//                                            std::move(child_aggregate->GetFilterMutable()),
+	//                                            std::move(export_bind_data), child_aggregate->GetAggregateType());
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
@@ -931,9 +930,9 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-static ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
-	auto function = ScalarFunction("finalize", {aggregate_state_logical_type_id}, LogicalTypeId::INVALID,
-	                               AggregateStateFinalize, BindAggregateState, nullptr, InitFinalizeState);
+ScalarFunction FinalizeFun::GetFunction() {
+	auto function = ScalarFunction("finalize", {LogicalTypeId::ANY}, LogicalTypeId::INVALID, AggregateStateFinalize,
+	                               BindAggregateState, nullptr, InitFinalizeState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);
@@ -941,45 +940,20 @@ static ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_ty
 	return function;
 }
 
-static ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
-	auto function = ScalarFunction("combine", {aggregate_state_logical_type_id, LogicalTypeId::ANY},
-	                               aggregate_state_logical_type_id, AggregateStateCombine, BindAggregateState, nullptr,
-	                               InitCombineState);
+ScalarFunction CombineFun::GetFunction() {
+	auto function = ScalarFunction("combine", {LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalTypeId::ANY,
+	                               AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	function.SetSerializeCallback(ExportStateScalarSerialize);
 	function.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return function;
-}
-
-ScalarFunctionSet FinalizeFun::GetFunctions() {
-	ScalarFunctionSet finalize_set;
-
-	auto blob_finalize = CreateFinalizeFun(LogicalTypeId::LEGACY_AGGREGATE_STATE);
-	finalize_set.AddFunction(blob_finalize);
-
-	auto struct_based_finalize = CreateFinalizeFun(LogicalTypeId::AGGREGATE_STATE);
-	finalize_set.AddFunction(struct_based_finalize);
-
-	return finalize_set;
-}
-
-ScalarFunctionSet CombineFun::GetFunctions() {
-	ScalarFunctionSet combine_set;
-
-	auto blob_combine = CreateCombineFun(LogicalTypeId::LEGACY_AGGREGATE_STATE);
-	combine_set.AddFunction(blob_combine);
-
-	auto struct_based_combine = CreateCombineFun(LogicalTypeId::AGGREGATE_STATE);
-	combine_set.AddFunction(struct_based_combine);
-
-	return combine_set;
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
 	auto function =
-	    AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE, nullptr,
-	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
-	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
+	                      nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
+	                      CombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }

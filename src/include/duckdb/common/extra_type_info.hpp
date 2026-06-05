@@ -32,8 +32,7 @@ enum class ExtraTypeInfoType : uint8_t {
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
 	TEMPLATE_TYPE_INFO = 12,
-	GEO_TYPE_INFO = 13,
-	AGGREGATE_STATE_TYPE_INFO = 14
+	GEO_TYPE_INFO = 13
 };
 
 struct ExtraTypeInfo {
@@ -146,38 +145,18 @@ private:
 };
 
 struct LegacyAggregateStateTypeInfo : public ExtraTypeInfo {
-	explicit LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p);
-
-	aggregate_state_t state_type;
-
 public:
 	void Serialize(Serializer &serializer) const override;
+	// Legacy deserialize method kept only for compatibility with old database files
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+	static shared_ptr<ExtraTypeInfo> LegacyDeserialize();
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 
 private:
 	LegacyAggregateStateTypeInfo();
-};
-
-struct AggregateStateTypeInfo : public StructTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
-
-	aggregate_state_t state_type;
-
-public:
-	void Serialize(Serializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	shared_ptr<ExtraTypeInfo> Copy() const override;
-	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
-
-private:
-	AggregateStateTypeInfo();
 };
 
 // If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.

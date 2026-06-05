@@ -30,13 +30,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		// verification is not supported with multiple grouping sets / grouping functions (yet?)
 		return false;
 	}
-	for (auto &aggr : statement.aggregates) {
-		auto res = aggr->GetReturnType().id();
-		if (res == LogicalTypeId::AGGREGATE_STATE || res == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
-			// already an aggregate state export - skip verification
-			return false;
-		}
-	}
+	// FIXME: don't push aggregate state export if aggregate is already state export
+
 	// we transform a query like "SELECT grp, SUM(col) FROM tbl GROUP BY grp" into
 	// "SELECT grp, first(finalize(sum_state)) FROM (SELECT grp, SUM(col) export_state FROM tbl GROUP BY grp) GROUP BY
 	// grp the second grouping is technically not necessary - we add this just so that subsequent binding remains
