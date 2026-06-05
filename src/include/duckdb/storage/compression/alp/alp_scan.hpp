@@ -176,7 +176,7 @@ public:
 		if (vector_state.bit_width > 0) {
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
 
-			const auto max_encoded = sizeof(vector_state.for_encoded);
+			const idx_t max_encoded = sizeof(vector_state.for_encoded);
 			if (bp_size > max_encoded || data_byte_offset + read_bytes + bp_size > block_size) {
 				throw InternalException("Corrupted ALP segment: encoded payload too large");
 			}
