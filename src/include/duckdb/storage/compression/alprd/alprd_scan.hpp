@@ -143,7 +143,12 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.GetBlockSize());
+		const auto block_size = segment.GetBlockSize();
+		if (data_byte_offset >= block_size) {
+			throw InternalException(
+			    "Corrupted ALPRD segment: stored data_byte_offset (%d) exceeds the segments block size (%d)",
+			    data_byte_offset, block_size);
+		}
 
 		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
@@ -165,18 +170,46 @@ public:
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
 
+		idx_t read_bytes = 0;
+		const idx_t max_left_encoded_size = sizeof(vector_state.left_encoded);
+		if (left_bp_size > max_left_encoded_size || data_byte_offset + read_bytes + left_bp_size > block_size) {
+			throw InternalException("Corrupted ALPRD segment: left_encoded payload too large");
+		}
 		memcpy(vector_state.left_encoded, (void *)vector_ptr, left_bp_size);
 		vector_ptr += left_bp_size;
+		read_bytes += left_bp_size;
 
+		const idx_t max_right_encoded_size = sizeof(vector_state.right_encoded);
+		if (right_bp_size > max_right_encoded_size || data_byte_offset + read_bytes + right_bp_size > block_size) {
+			throw InternalException("Corrupted ALPRD segment: left_encoded payload too large");
+		}
 		memcpy(vector_state.right_encoded, (void *)vector_ptr, right_bp_size);
 		vector_ptr += right_bp_size;
+		read_bytes += right_bp_size;
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, (void *)vector_ptr,
-			       AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count);
-			vector_ptr += AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
-			       AlpRDConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
+			//! Load the exceptions
+			const idx_t max_exceptions_size = sizeof(vector_state.exceptions);
+			const idx_t exceptions_copy_size = AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count;
+			if (exceptions_copy_size > max_exceptions_size ||
+			    data_byte_offset + read_bytes + exceptions_copy_size > block_size) {
+				throw InternalException("Corrupted ALPRD segment: exceptions payload too large");
+			}
+			memcpy(vector_state.exceptions, (void *)vector_ptr, exceptions_copy_size);
+			vector_ptr += exceptions_copy_size;
+			read_bytes += exceptions_copy_size;
+
+			//! Load the exceptions_positions
+			const idx_t max_exceptions_positions_size = sizeof(vector_state.exceptions_positions);
+			const idx_t exceptions_positions_copy_size =
+			    AlpRDConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
+			if (exceptions_positions_copy_size > max_exceptions_positions_size ||
+			    data_byte_offset + read_bytes + exceptions_positions_copy_size > block_size) {
+				throw InternalException("Corrupted ALPRD segment: exceptions_positions payload too large");
+			}
+			memcpy(vector_state.exceptions_positions, (void *)vector_ptr, exceptions_positions_copy_size);
+			vector_ptr += exceptions_positions_copy_size;
+			read_bytes += exceptions_positions_copy_size;
 		}
 
 		// Decode all the vector values to the specified 'value_buffer'
