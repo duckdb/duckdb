@@ -14,13 +14,16 @@ void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext> context) {
 	target_time.value += static_cast<int64_t>(sleep_ms) * Interval::MICROS_PER_MSEC;
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
-	auto sleep_interval = MinValue(DEFAULT_SLEEP_INTERVAL_MS, sleep_ms);
-	while (Timestamp::GetCurrentTimestamp() < target_time) {
-		// check interrupt flag
+	while (true) {
+		auto current_time = Timestamp::GetCurrentTimestamp();
 		if (context && context->IsInterrupted()) {
 			throw InterruptException();
 		}
-		std::this_thread::sleep_for(milliseconds(sleep_interval));
+		if (current_time >= target_time) {
+			break;
+		}
+		auto remaining_ms = static_cast<idx_t>(target_time.value - current_time.value) / Interval::MICROS_PER_MSEC;
+		std::this_thread::sleep_for(milliseconds(MinValue(remaining_ms, DEFAULT_SLEEP_INTERVAL_MS)));
 	}
 }
 
