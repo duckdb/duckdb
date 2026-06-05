@@ -1071,8 +1071,14 @@ RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
 RowGroupAppendState::~RowGroupAppendState() {
 }
 
-void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
-	append_state.row_group = this;
+void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	append_state.row_group = row_group;
+	row_group.GetNode().InitializeAppendInternal(append_state);
+}
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
+	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
+		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
+	}
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
