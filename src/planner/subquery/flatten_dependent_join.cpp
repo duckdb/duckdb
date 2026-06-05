@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -249,8 +250,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
-	RewriteDelimJoinsToCTEs(binder, plan);
-	VerifyNoDelim(*plan);
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		RewriteDelimJoinsToCTEs(binder, plan);
+		VerifyNoDelim(*plan);
+	}
 	return plan;
 }
 
