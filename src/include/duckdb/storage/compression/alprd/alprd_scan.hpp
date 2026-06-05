@@ -76,19 +76,34 @@ public:
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 
-		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
-		vector_state.right_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE);
-		vector_state.left_bit_width =
-		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE);
+		const auto block_size = segment.GetBlockSize();
+		idx_t total_segment_offset = segment.GetBlockOffset();
+		total_segment_offset += metadata_offset;
+		if (total_segment_offset + AlpRDConstants::HEADER_SIZE > block_size) {
+			throw InternalException("Corrupted ALPRD segment: metadata_offset value is corrupted");
+		}
 
-		uint8_t actual_dictionary_size =
-		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE +
-		                  AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
+		auto segment_ptr = segment_data + AlpRDConstants::METADATA_POINTER_SIZE;
+		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
+		vector_state.right_bit_width = Load<uint8_t>(segment_ptr);
+		segment_ptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
+
+		vector_state.left_bit_width = Load<uint8_t>(segment_ptr);
+		segment_ptr += AlpRDConstants::LEFT_BIT_WIDTH_SIZE;
+
+		uint8_t actual_dictionary_size = Load<uint8_t>(segment_ptr);
+		segment_ptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
+
+		total_segment_offset += AlpRDConstants::HEADER_SIZE;
 		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
+		const idx_t left_parts_dict_max_size = sizeof(vector_state.left_parts_dict);
+		if (total_segment_offset + actual_dictionary_size_bytes > block_size ||
+		    actual_dictionary_size_bytes > left_parts_dict_max_size) {
+			throw InternalException("Corrupted ALPRD segment: actual_dictionary_size is corrupted");
+		}
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
-		memcpy(vector_state.left_parts_dict, (void *)(segment_data + AlpRDConstants::HEADER_SIZE),
-		       actual_dictionary_size_bytes);
+		memcpy(vector_state.left_parts_dict, segment_ptr, actual_dictionary_size_bytes);
 	}
 
 	BufferHandle handle;
