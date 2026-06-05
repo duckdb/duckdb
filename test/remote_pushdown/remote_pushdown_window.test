@@ -131,3 +131,26 @@ explain SELECT SUM(nxt) FROM (
 ) t
 ----
 physical_plan	<REGEX>:.*WINDOW.*
+
+# ---- lead/lag with negative or non-literal offsets cannot be pushed (MySQL requires
+# ---- a literal non-negative offset) ----
+query I
+SELECT COUNT(*) FROM (SELECT LEAD(v, -1) OVER (ORDER BY i) AS prev FROM s.win_tbl) t WHERE prev IS NOT NULL
+----
+8
+
+query II
+explain SELECT LEAD(v, -1) OVER (ORDER BY i) FROM s.win_tbl
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+explain SELECT LEAD(v, i) OVER (ORDER BY i) FROM s.win_tbl
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# literal non-negative offsets are pushed
+query II
+explain SELECT LEAD(v, 2) OVER (ORDER BY i) FROM s.win_tbl
+----
+physical_plan	<!REGEX>:.*WINDOW.*

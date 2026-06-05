@@ -74,6 +74,17 @@ SELECT SUM(i) FROM (SELECT i FROM (SELECT i FROM s.ser_tbl) WHERE i > 0)
 ----
 6
 
+# ---- qualified stars keep their qualifier ----
+query III
+SELECT a.*, b.i + 10 FROM s.ser_tbl a JOIN s.ser_tbl b USING (i) WHERE a.i = 1
+----
+1	w1	11
+
+query II
+explain SELECT a.* FROM s.ser_tbl a JOIN s.ser_tbl b USING (i)
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
 # ---- avg as a window function (serialized with a DOUBLE cast) ----
 query I
 SELECT MAX(a) FROM (SELECT AVG(i) OVER (ORDER BY i) AS a FROM s.ser_tbl) t

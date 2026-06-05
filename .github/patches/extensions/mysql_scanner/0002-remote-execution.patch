@@ -475,10 +475,10 @@ index fea00b5..cb53699 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..7e717a9
+index 0000000..b82ecfd
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,763 @@
+@@ -0,0 +1,774 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -840,24 +840,39 @@ index 0000000..7e717a9
 +	return result;
 +}
 +
-+static string MySQLComparisonOperator(ExpressionType type) {
++//! Serialize a comparison between two (already serialized) operands
++static string MySQLWriteComparison(ExpressionType type, const string &left, const string &right) {
++	string comparison_operator;
 +	switch (type) {
 +	case ExpressionType::COMPARE_EQUAL:
-+		return "=";
++		comparison_operator = "=";
++		break;
 +	case ExpressionType::COMPARE_NOTEQUAL:
-+		return "<>";
++		comparison_operator = "<>";
++		break;
 +	case ExpressionType::COMPARE_LESSTHAN:
-+		return "<";
++		comparison_operator = "<";
++		break;
 +	case ExpressionType::COMPARE_GREATERTHAN:
-+		return ">";
++		comparison_operator = ">";
++		break;
 +	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-+		return "<=";
++		comparison_operator = "<=";
++		break;
 +	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-+		return ">=";
++		comparison_operator = ">=";
++		break;
++	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
++		// IS NOT DISTINCT FROM maps to MySQL's NULL-safe equality operator <=>
++		return "(" + left + " <=> " + right + ")";
++	case ExpressionType::COMPARE_DISTINCT_FROM:
++		// <=> never returns NULL, so negating it is safe
++		return "(NOT (" + left + " <=> " + right + "))";
 +	default:
 +		throw InternalException("MySQLSQLWriter: unsupported comparison type - should have been blocked by "
 +		                        "SupportsPushdown");
 +	}
++	return "(" + left + " " + comparison_operator + " " + right + ")";
 +}
 +
 +string MySQLSQLWriter::WriteSubquery(const SubqueryExpression &subquery) {
@@ -869,9 +884,8 @@ index 0000000..7e717a9
 +	case SubqueryType::SCALAR:
 +		return "(" + WriteQueryNode(*subquery.Subquery()->node) + ")";
 +	case SubqueryType::ANY:
-+		return "(" + WriteExpression(*subquery.GetChild()) + " " +
-+		       MySQLComparisonOperator(subquery.GetComparisonType()) + " ANY(" +
-+		       WriteQueryNode(*subquery.Subquery()->node) + "))";
++		return MySQLWriteComparison(subquery.GetComparisonType(), WriteExpression(*subquery.GetChild()),
++		                            "ANY(" + WriteQueryNode(*subquery.Subquery()->node) + ")");
 +	default:
 +		throw InternalException("MySQLSQLWriter: unsupported subquery type - should have been blocked by "
 +		                        "SupportsPushdown");
@@ -884,25 +898,22 @@ index 0000000..7e717a9
 +		return WriteConstant(expr.Cast<ConstantExpression>().GetValue());
 +	case ExpressionClass::COLUMN_REF:
 +		return WriteColumnRef(expr.Cast<ColumnRefExpression>());
-+	case ExpressionClass::STAR:
++	case ExpressionClass::STAR: {
++		auto &star = expr.Cast<StarExpression>();
++		if (!star.RelationName().empty()) {
++			// qualified star (e.g. t.*)
++			return WriteIdentifier(star.RelationName()) + ".*";
++		}
 +		return "*";
++	}
 +	case ExpressionClass::FUNCTION:
 +		return WriteFunction(expr.Cast<FunctionExpression>());
 +	case ExpressionClass::WINDOW:
 +		return WriteWindow(expr.Cast<WindowExpression>());
 +	case ExpressionClass::COMPARISON: {
 +		auto &comparison = expr.Cast<ComparisonExpression>();
-+		auto left = WriteExpression(comparison.Left());
-+		auto right = WriteExpression(comparison.Right());
-+		// IS [NOT] DISTINCT FROM maps to MySQL's NULL-safe equality operator <=>
-+		// (<=> never returns NULL, so negating it is safe)
-+		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-+			return "(" + left + " <=> " + right + ")";
-+		}
-+		if (expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM) {
-+			return "(NOT (" + left + " <=> " + right + "))";
-+		}
-+		return "(" + left + " " + MySQLComparisonOperator(comparison.GetExpressionType()) + " " + right + ")";
++		return MySQLWriteComparison(expr.GetExpressionType(), WriteExpression(comparison.Left()),
++		                            WriteExpression(comparison.Right()));
 +	}
 +	case ExpressionClass::CONJUNCTION: {
 +		auto &conjunction = expr.Cast<ConjunctionExpression>();
@@ -1243,7 +1254,7 @@ index 0000000..7e717a9
 +
 +} // namespace duckdb
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..3bc4262 100644
+index af9ffd7..b2814cb 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1286,7 +1297,7 @@ index af9ffd7..3bc4262 100644
  #include "storage/mysql_schema_entry.hpp"
  #include "storage/mysql_transaction.hpp"
  
-@@ -503,6 +531,694 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -503,6 +531,721 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
@@ -1374,6 +1385,7 @@ index af9ffd7..3bc4262 100644
 +	//   "now"         — DuckDB returns the transaction timestamp with time zone; MySQL the statement time
 +	//   "bit_and"/"bit_or"/"bit_xor" — MySQL operates on (and returns) unsigned 64-bit integers
 +	//   "corr"/"covar_pop"/"covar_samp" — not available in MySQL
++	//   "group_concat" — MySQL silently truncates the result to @@group_concat_max_len (1024 by default)
 +	//   "if"/"lcase"/"ucase" — not available in DuckDB (pushing would mask a binder error)
 +	static const case_insensitive_set_t MYSQL_SCALAR_FUNCTIONS = {
 +	    // String
@@ -1464,7 +1476,6 @@ index af9ffd7..3bc4262 100644
 +	    "avg",
 +	    "min",
 +	    "max",
-+	    "group_concat",
 +	    "stddev",
 +	    "stddev_pop",
 +	    "stddev_samp",
@@ -1679,6 +1690,31 @@ index af9ffd7..3bc4262 100644
 +	if (!MySQLSupportsOrderEntries(window.OrderBy(), nullptr)) {
 +		return false;
 +	}
++	auto &children = window.GetChildren();
++	switch (window.GetExpressionType()) {
++	case ExpressionType::WINDOW_LEAD:
++	case ExpressionType::WINDOW_LAG:
++		// MySQL requires a literal non-negative offset; DuckDB also accepts negative offsets
++		// and arbitrary expressions
++		if (children.size() >= 2 && !MySQLIsIntegerLiteralAtLeast(*children[1], 0)) {
++			return false;
++		}
++		break;
++	case ExpressionType::WINDOW_NTILE:
++		// MySQL requires a literal positive bucket count
++		if (children.size() == 1 && !MySQLIsIntegerLiteralAtLeast(*children[0], 1)) {
++			return false;
++		}
++		break;
++	case ExpressionType::WINDOW_NTH_VALUE:
++		// MySQL requires a literal positive position
++		if (children.size() == 2 && !MySQLIsIntegerLiteralAtLeast(*children[1], 1)) {
++			return false;
++		}
++		break;
++	default:
++		break;
++	}
 +	// whitelist of window functions supported by MySQL 8.0+ with identical semantics
 +	// (count_star is rewritten to count(*) during serialization)
 +	static const case_insensitive_set_t MYSQL_WINDOW_FUNCTIONS = {
@@ -1731,16 +1767,10 @@ index af9ffd7..3bc4262 100644
 +		}
 +		if (func.Distinct()) {
 +			// DISTINCT within aggregates is only supported for a small set of functions in MySQL
-+			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min",
-+			                                                                 "max",   "avg", "group_concat"};
++			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min", "max", "avg"};
 +			if (MYSQL_DISTINCT_AGGREGATES.count(func.FunctionName()) == 0) {
 +				return false;
 +			}
-+		}
-+		if (StringUtil::CIEquals(func.FunctionName(), "group_concat") && func.GetChildren().size() > 1) {
-+			// DuckDB's group_concat(x, sep) separator argument translates to GROUP_CONCAT(x SEPARATOR sep)
-+			// in MySQL - the serialized form would concatenate columns instead
-+			return false;
 +		}
 +		if (func.GetChildren().size() > 1 &&
 +		    (StringUtil::CIEquals(func.FunctionName(), "trim") || StringUtil::CIEquals(func.FunctionName(), "ltrim") ||
@@ -1822,6 +1852,14 @@ index af9ffd7..3bc4262 100644
 +	}
 +	case ExpressionClass::SUBQUERY: {
 +		auto &subquery = expr.Cast<SubqueryExpression>();
++		if (subquery.GetSubqueryType() == SubqueryType::ANY) {
++			// MySQL does not support LIMIT within IN / ANY / ALL subqueries (error 1235)
++			for (auto &modifier : subquery.Subquery()->node->modifiers) {
++				if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
++					return false;
++				}
++			}
++		}
 +		switch (subquery.GetComparisonType()) {
 +		case ExpressionType::INVALID: // EXISTS / scalar subqueries
 +		case ExpressionType::COMPARE_EQUAL:

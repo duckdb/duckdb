@@ -126,18 +126,13 @@ SELECT COUNT(*) FROM s.misc_tbl, (VALUES (1), (2)) v(x) WHERE i = x
 ----
 2
 
-# ---- group_concat with an explicit separator uses different syntax in MySQL ----
+# ---- group_concat: MySQL silently truncates the result to @@group_concat_max_len ----
+# (1024 bytes by default) -- must always be evaluated locally
 query I
 SELECT group_concat(i, '|') FROM s.misc_tbl
 ----
 0|1|2|3|4|5
 
-query II
-explain SELECT group_concat(i, '|') FROM s.misc_tbl
-----
-physical_plan	<REGEX>:.*AGGREGATE.*
-
-# single-argument group_concat is pushed
 query I
 SELECT group_concat(i) FROM s.misc_tbl
 ----
@@ -145,6 +140,34 @@ SELECT group_concat(i) FROM s.misc_tbl
 
 query II
 explain SELECT group_concat(i) FROM s.misc_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# a group_concat result longer than @@group_concat_max_len must not be truncated
+query I
+SELECT length(group_concat(concat(repeat('x', 500), i::VARCHAR))) FROM s.misc_tbl
+----
+3011
+
+# ---- LIMIT within IN / ANY subqueries is not supported in MySQL (error 1235) ----
+query I
+SELECT COUNT(*) FROM s.misc_tbl WHERE i IN (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 3)
+----
+3
+
+query II
+explain SELECT COUNT(*) FROM s.misc_tbl WHERE i IN (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 3)
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# LIMIT within EXISTS / scalar subqueries is supported and pushed
+query I
+SELECT COUNT(*) FROM s.misc_tbl WHERE i = (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 1)
+----
+1
+
+query II
+explain SELECT COUNT(*) FROM s.misc_tbl WHERE i = (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 1)
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
