@@ -197,3 +197,47 @@ where c_nationkey = s_nationkey
   and r_name = 'ASIA';
 ----
 1200
+
+# LEFT joins preserve the LHS rows, but they can still fan out through matches
+# on the RHS. The estimator should not keep the output at the tiny preserved
+# side cardinality when the matching inner join is much larger.
+
+statement ok
+create table lf_dim as select range::integer k from range(10);
+
+statement ok
+create table lf_fact as select (range % 10)::integer k from range(10000);
+
+query II
+explain select *
+from lf_dim
+left join lf_fact using (k);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[1-9][0-9,]*,[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from lf_dim
+left join lf_fact using (k);
+----
+10000
+
+# Empty joins can produce zero total-domain denominators. LEFT join fanout
+# estimation should handle that the same way as the final denominator result.
+
+statement ok
+create table empty_inner_a(i int);
+
+statement ok
+create table empty_inner_b(i int);
+
+statement ok
+create table empty_left_c(i int);
+
+query I
+select count(*)
+from empty_inner_a
+join empty_inner_b on empty_inner_a.i = empty_inner_b.i
+left join empty_left_c on empty_inner_a.i = empty_left_c.i;
+----
+0

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
@@ -54,7 +55,9 @@ public:
 	static BinderException ColumnNotFound(const string &name, const vector<string> &similar_bindings,
 	                                      QueryErrorContext context = QueryErrorContext());
 	static BinderException NoMatchingFunction(const string &catalog_name, const string &schema_name, const string &name,
-	                                          const vector<LogicalType> &arguments, const vector<string> &candidates);
+	                                          const vector<LogicalType> &arguments,
+	                                          const vector<pair<string, LogicalType>> &named_arguments,
+	                                          const vector<string> &candidates);
 	static BinderException Unsupported(ParsedExpression &expr, const string &message);
 };
 

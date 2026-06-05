@@ -39,10 +39,10 @@ index 79b9e01..e689e9d 100644
  	unique_ptr<FunctionData> Copy() const override {
 diff --git a/src/include/mysql_sql_writer.hpp b/src/include/mysql_sql_writer.hpp
 new file mode 100644
-index 0000000..bc64fd2
+index 0000000..4ccc58e
 --- /dev/null
 +++ b/src/include/mysql_sql_writer.hpp
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,89 @@
 +//===----------------------------------------------------------------------===//
 +//                         DuckDB
 +//
@@ -61,6 +61,7 @@ index 0000000..bc64fd2
 +
 +namespace duckdb {
 +class CaseExpression;
++class FunctionArgument;
 +class CastExpression;
 +class ClientContext;
 +class ColumnRefExpression;
@@ -110,9 +111,9 @@ index 0000000..bc64fd2
 +
 +	string WriteExpression(const ParsedExpression &expr);
 +	string WriteExpressionList(const vector<unique_ptr<ParsedExpression>> &expressions, const string &separator = ", ");
++	string WriteArgumentList(const vector<FunctionArgument> &arguments);
 +	string WriteFunction(const FunctionExpression &func);
-+	string WriteFunctionCall(const string &function_name, const vector<unique_ptr<ParsedExpression>> &children,
-+	                         bool distinct);
++	string WriteFunctionCall(const string &function_name, const vector<FunctionArgument> &children, bool distinct);
 +	string WriteWindow(const WindowExpression &window);
 +	string WriteOperator(const OperatorExpression &op);
 +	string WriteCase(const CaseExpression &case_expr);
@@ -684,10 +685,10 @@ index fea00b5..cd56adb 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..4bbae43
+index 0000000..fa69685
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,779 @@
+@@ -0,0 +1,793 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -849,8 +850,19 @@ index 0000000..4bbae43
 +	return result;
 +}
 +
-+string MySQLSQLWriter::WriteFunctionCall(const string &function_name,
-+                                         const vector<unique_ptr<ParsedExpression>> &children, bool distinct) {
++string MySQLSQLWriter::WriteArgumentList(const vector<FunctionArgument> &arguments) {
++	string result;
++	for (auto &argument : arguments) {
++		if (!result.empty()) {
++			result += ", ";
++		}
++		result += WriteExpression(argument.GetExpression());
++	}
++	return result;
++}
++
++string MySQLSQLWriter::WriteFunctionCall(const string &function_name, const vector<FunctionArgument> &children,
++                                         bool distinct) {
 +	auto name = StringUtil::Lower(function_name);
 +	if ((name == "count_star" || name == "count") && children.empty()) {
 +		return "count(*)";
@@ -859,14 +871,15 @@ index 0000000..4bbae43
 +		// DuckDB's concat skips NULL inputs - the MySQL equivalent is concat_ws with an empty separator
 +		string result = "concat_ws(''";
 +		for (auto &child : children) {
-+			result += ", " + WriteExpression(*child);
++			result += ", " + WriteExpression(child.GetExpression());
 +		}
 +		result += ")";
 +		return result;
 +	}
 +	if (name == "avg" && children.size() == 1) {
 +		// MySQL's avg returns DECIMAL(x, 4) for integer inputs - cast to DOUBLE to match DuckDB
-+		return "avg(" + string(distinct ? "DISTINCT " : "") + "CAST(" + WriteExpression(*children[0]) + " AS DOUBLE))";
++		return "avg(" + string(distinct ? "DISTINCT " : "") + "CAST(" + WriteExpression(children[0].GetExpression()) +
++		       " AS DOUBLE))";
 +	}
 +	if ((name == "greatest" || name == "least") && children.size() >= 2) {
 +		// MySQL returns NULL when ANY argument is NULL while DuckDB skips NULLs.
@@ -876,7 +889,7 @@ index 0000000..4bbae43
 +		string result = name + "(";
 +		vector<string> args;
 +		for (auto &child : children) {
-+			args.push_back(WriteExpression(*child));
++			args.push_back(WriteExpression(child.GetExpression()));
 +		}
 +		for (idx_t i = 0; i < args.size(); i++) {
 +			if (i > 0) {
@@ -896,24 +909,24 @@ index 0000000..4bbae43
 +	}
 +	if (name == "microsecond" && children.size() == 1) {
 +		// DuckDB's microsecond includes the seconds component, MySQL's does not
-+		auto child = WriteExpression(*children[0]);
++		auto child = WriteExpression(children[0].GetExpression());
 +		return "(microsecond(" + child + ") + second(" + child + ") * 1000000)";
 +	}
 +	if ((name == "dayofweek" || name == "weekday") && children.size() == 1) {
 +		// DuckDB numbers days Sunday=0 .. Saturday=6; MySQL's DAYOFWEEK is Sunday=1 .. Saturday=7
-+		return "(dayofweek(" + WriteExpression(*children[0]) + ") - 1)";
++		return "(dayofweek(" + WriteExpression(children[0].GetExpression()) + ") - 1)";
 +	}
 +	if (name == "isodow" && children.size() == 1) {
 +		// DuckDB's ISO day-of-week is Monday=1 .. Sunday=7; MySQL's WEEKDAY is Monday=0 .. Sunday=6
-+		return "(weekday(" + WriteExpression(*children[0]) + ") + 1)";
++		return "(weekday(" + WriteExpression(children[0].GetExpression()) + ") + 1)";
 +	}
 +	if (name == "week" && children.size() == 1) {
 +		// DuckDB's week is the ISO week; MySQL's default week mode is not - mode 3 matches
-+		return "week(" + WriteExpression(*children[0]) + ", 3)";
++		return "week(" + WriteExpression(children[0].GetExpression()) + ", 3)";
 +	}
 +	if (name == "trunc" && children.size() == 1) {
 +		// MySQL spells truncation towards zero as truncate(x, d)
-+		return "truncate(" + WriteExpression(*children[0]) + ", 0)";
++		return "truncate(" + WriteExpression(children[0].GetExpression()) + ", 0)";
 +	}
 +	if (name == "log" && children.size() == 1) {
 +		// DuckDB's log(x) is log base 10; MySQL's log(x) is the natural logarithm
@@ -933,13 +946,13 @@ index 0000000..4bbae43
 +	if (distinct) {
 +		result += "DISTINCT ";
 +	}
-+	result += WriteExpressionList(children);
++	result += WriteArgumentList(children);
 +	result += ")";
 +	return result;
 +}
 +
 +string MySQLSQLWriter::WriteFunction(const FunctionExpression &func) {
-+	auto &children = func.GetChildren();
++	auto &children = func.GetArguments();
 +	auto name = StringUtil::Lower(func.FunctionName());
 +	static const case_insensitive_set_t OPERATOR_NAMES = {"+", "-", "*", "/", "%", "||"};
 +	if (func.IsOperator() || OPERATOR_NAMES.count(name) > 0) {
@@ -947,13 +960,15 @@ index 0000000..4bbae43
 +			// DuckDB's || propagates NULL inputs - identical to MySQL's concat
 +			// (note: MySQL's || is a logical OR unless PIPES_AS_CONCAT is enabled)
 +			D_ASSERT(children.size() == 2);
-+			return "concat(" + WriteExpression(*children[0]) + ", " + WriteExpression(*children[1]) + ")";
++			return "concat(" + WriteExpression(children[0].GetExpression()) + ", " +
++			       WriteExpression(children[1].GetExpression()) + ")";
 +		}
 +		if (children.size() == 1) {
-+			return "(" + name + WriteExpression(*children[0]) + ")";
++			return "(" + name + WriteExpression(children[0].GetExpression()) + ")";
 +		}
 +		if (children.size() == 2) {
-+			return "(" + WriteExpression(*children[0]) + " " + name + " " + WriteExpression(*children[1]) + ")";
++			return "(" + WriteExpression(children[0].GetExpression()) + " " + name + " " +
++			       WriteExpression(children[1].GetExpression()) + ")";
 +		}
 +		throw InternalException("MySQLSQLWriter: unsupported operator %s - should have been blocked by "
 +		                        "SupportsPushdown",
@@ -982,7 +997,7 @@ index 0000000..4bbae43
 +}
 +
 +string MySQLSQLWriter::WriteWindow(const WindowExpression &window) {
-+	string result = WriteFunctionCall(window.FunctionName(), window.GetChildren(), window.Distinct());
++	string result = WriteFunctionCall(window.FunctionName(), window.GetArguments(), window.Distinct());
 +	result += " OVER (";
 +	string sep;
 +	if (!window.Partitions().empty()) {
@@ -1509,7 +1524,7 @@ index ef3d3d6..1f39ce9 100644
  	string result;
  	for (auto c : text) {
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..240e96c 100644
+index af9ffd7..f713d07 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1562,7 +1577,7 @@ index af9ffd7..240e96c 100644
  }
  
  MySQLCatalog::~MySQLCatalog() = default;
-@@ -503,6 +532,726 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -503,6 +532,738 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
@@ -1955,25 +1970,31 @@ index af9ffd7..240e96c 100644
 +	if (!MySQLSupportsOrderEntries(window.OrderBy(), nullptr)) {
 +		return false;
 +	}
-+	auto &children = window.GetChildren();
++	auto &children = window.GetArguments();
++	for (auto &child : children) {
++		if (child.HasName()) {
++			// MySQL has no named function arguments
++			return false;
++		}
++	}
 +	switch (window.GetExpressionType()) {
 +	case ExpressionType::WINDOW_LEAD:
 +	case ExpressionType::WINDOW_LAG:
 +		// MySQL requires a literal non-negative offset; DuckDB also accepts negative offsets
 +		// and arbitrary expressions
-+		if (children.size() >= 2 && !MySQLIsIntegerLiteralAtLeast(*children[1], 0)) {
++		if (children.size() >= 2 && !MySQLIsIntegerLiteralAtLeast(children[1].GetExpression(), 0)) {
 +			return false;
 +		}
 +		break;
 +	case ExpressionType::WINDOW_NTILE:
 +		// MySQL requires a literal positive bucket count
-+		if (children.size() == 1 && !MySQLIsIntegerLiteralAtLeast(*children[0], 1)) {
++		if (children.size() == 1 && !MySQLIsIntegerLiteralAtLeast(children[0].GetExpression(), 1)) {
 +			return false;
 +		}
 +		break;
 +	case ExpressionType::WINDOW_NTH_VALUE:
 +		// MySQL requires a literal positive position
-+		if (children.size() == 2 && !MySQLIsIntegerLiteralAtLeast(*children[1], 1)) {
++		if (children.size() == 2 && !MySQLIsIntegerLiteralAtLeast(children[1].GetExpression(), 1)) {
 +			return false;
 +		}
 +		break;
@@ -2042,14 +2063,20 @@ index af9ffd7..240e96c 100644
 +				return false;
 +			}
 +		}
-+		if (func.GetChildren().size() > 1 &&
++		// functions that are rewritten during serialization, with restrictions on their arguments
++		auto &children = func.GetArguments();
++		for (auto &child : children) {
++			if (child.HasName()) {
++				// MySQL has no named function arguments
++				return false;
++			}
++		}
++		if (children.size() > 1 &&
 +		    (StringUtil::CIEquals(func.FunctionName(), "trim") || StringUtil::CIEquals(func.FunctionName(), "ltrim") ||
 +		     StringUtil::CIEquals(func.FunctionName(), "rtrim"))) {
 +			// the two-argument variants of trim/ltrim/rtrim are not supported in MySQL
 +			return false;
 +		}
-+		// functions that are rewritten during serialization, with restrictions on their arguments
-+		auto &children = func.GetChildren();
 +		static const case_insensitive_set_t MYSQL_SINGLE_ARGUMENT_REWRITES = {"week",   "dayofweek",   "weekday",
 +		                                                                      "isodow", "microsecond", "trunc"};
 +		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(func.FunctionName()) > 0 && children.size() != 1) {
@@ -2069,10 +2096,10 @@ index af9ffd7..240e96c 100644
 +			if (children.size() < 2 || children.size() > 3) {
 +				return false;
 +			}
-+			if (!MySQLIsIntegerLiteralAtLeast(*children[1], 1)) {
++			if (!MySQLIsIntegerLiteralAtLeast(children[1].GetExpression(), 1)) {
 +				return false;
 +			}
-+			if (children.size() == 3 && !MySQLIsIntegerLiteralAtLeast(*children[2], 0)) {
++			if (children.size() == 3 && !MySQLIsIntegerLiteralAtLeast(children[2].GetExpression(), 0)) {
 +				return false;
 +			}
 +		}

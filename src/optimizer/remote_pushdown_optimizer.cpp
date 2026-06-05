@@ -616,10 +616,28 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 		const string &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
-		if (entry) {
-			// we found it in a local catalog - annotate as "no catalog referenced"
+		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
+			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
+			bool is_set_returning = false;
+			for (auto &func : tf_entry.functions.functions) {
+				if (func.return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
+					is_set_returning = true;
+					break;
+				}
+			}
+			if (!is_set_returning) {
+				// TABLE_RETURNING_FUNCTION - blocks pushdown; track alias so correlated
+				// refs from nested lateral subqueries are detected
+				TrackLocalTable(ref);
+				return CatalogPushdownResult::Unknown();
+			}
+			// SET_RETURNING_FUNCTION: neutral, recurse into args
 			// the generic TableRef dispatch records the function so a remote catalog can veto it
-			return CatalogPushdownResult::NoCatalogReference();
+			auto result = CatalogPushdownResult::NoCatalogReference();
+			for (auto &arg : func_expr.GetArgumentsMutable()) {
+				result = Merge(result, Rewrite(*arg.GetExpressionMutable()));
+			}
+			return result;
 		}
 	}
 	// we did not find the table function in a local catalog
@@ -643,10 +661,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 		// don't bother recursing - we can never pushdown
 		return result;
 	}
-	// recurse into children
+	// recurse into the function arguments
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
-	for (auto &arg : func_expr.GetChildren()) {
-		result = Merge(result, Rewrite(*arg));
+	for (auto &arg : func_expr.GetArgumentsMutable()) {
+		result = Merge(result, Rewrite(*arg.GetExpressionMutable()));
 	}
 	return result;
 }

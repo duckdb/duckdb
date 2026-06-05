@@ -154,9 +154,10 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "134217728B";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowCommunityExtensionsSetting {
@@ -312,6 +313,17 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr const char *DefaultValue = "64";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct AsyncThreadsSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "async_threads";
+	static constexpr const char *Description =
+	    "The number of total async threads used by the system for tasks like I/O.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoCheckpointSkipWalThresholdSetting {
@@ -577,6 +589,16 @@ struct DebugVerificationProjectionSetting {
 	static constexpr const char *Name = "debug_verification_projection";
 	static constexpr const char *Description =
 	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyAggregateStateExportSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_aggregate_state_export";
+	static constexpr const char *Description = "DEBUG SETTING: enable verification of aggregate state export";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -1316,6 +1338,17 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct LegacyDisableNullTypeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_disable_null_type";
+	static constexpr const char *Description =
+	    "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct LegacyMetricsFormatSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "legacy_metrics_format";
@@ -1825,7 +1858,8 @@ struct VacuumRebuildIndexesSetting {
 	static constexpr const char *Name = "vacuum_rebuild_indexes";
 	static constexpr const char *Description =
 	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
-	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set "
+	    "per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

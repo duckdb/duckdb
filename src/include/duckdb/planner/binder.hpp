@@ -331,6 +331,7 @@ public:
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
 
 	StatementProperties &GetStatementProperties();
@@ -360,8 +361,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether or not the binder can contain NULLs as the root of expressions
-	bool can_contain_nulls = false;
+	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
+	bool legacy_can_contain_nulls = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -577,13 +578,10 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, TableIndex proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names, MergeActionCondition condition,
-	                                                 const unordered_set<idx_t> &source_table_indices);
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
+	                const vector<BindingAlias> &source_aliases, const vector<string> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
@@ -594,6 +592,8 @@ private:
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
+
+	bool DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

@@ -79,7 +79,7 @@ void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list = std::move(expressions);
 	select_node->from_table = make_uniq<EmptyTableRef>();
-	binder->can_contain_nulls = true;
+	binder->SetCanContainNulls(true);
 	subquery = binder->BindNode(*select_node);
 	MoveCorrelatedExpressions(*binder);
 }
@@ -130,7 +130,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this);
-			binder->can_contain_nulls = true;
+			binder->SetCanContainNulls(true);
 			auto &se = child->Cast<SubqueryExpression>();
 			subquery = binder->BindNode(*se.Subquery()->node);
 			MoveCorrelatedExpressions(*binder);
@@ -382,7 +382,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		D_ASSERT(query_node);
 
 		auto binder = Binder::CreateBinder(context, this);
-		binder->can_contain_nulls = true;
+		binder->SetCanContainNulls(true);
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
 		BoundStatement query;
@@ -412,8 +412,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	BoundStatement subquery;
 	ErrorData error;
-	if (!BindTableFunctionParameters(function, fexpr.GetChildrenMutable(), arguments, parameters, named_parameters,
-	                                 subquery, error)) {
+
+	vector<unique_ptr<ParsedExpression>> children;
+	for (auto &child : fexpr.GetArgumentsMutable()) {
+		children.push_back(std::move(child.GetExpressionMutable()));
+	}
+
+	if (!BindTableFunctionParameters(function, children, arguments, parameters, named_parameters, subquery, error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}

@@ -168,6 +168,18 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 	return logical_get.GetColumnName(column_index);
 }
 
+//! Late materialization recreates a payload by re-scanning the base table column and re-applying a type cast at the
+//! topmost projection. That only reproduces the original value when the projection expression is a plain column
+//! reference, optionally wrapped in casts. A value-transforming expression (e.g. parse_filename(col)) cannot be
+//! rebuilt that way, so it must not be eligible for late materialization.
+bool IsRecreatableByLateMaterialization(const Expression &expr) {
+	reference<const Expression> current = expr;
+	while (current.get().GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+		current = current.get().Cast<BoundCastExpression>().Child();
+	}
+	return current.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+}
+
 } // namespace
 
 TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer,
@@ -918,6 +930,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				}
 				const idx_t projection_idx = projections[i].column_index;
 				if (projection_idx >= projection.expressions.size()) {
+					return false;
+				}
+				if (!IsRecreatableByLateMaterialization(*projection.expressions[projection_idx])) {
+					// The projected value is derived through a value-transforming expression that the rowid semi-join
+					// cannot reconstruct. Fall back to carrying the computed value through the aggregate instead.
 					return false;
 				}
 				if (!ExtractSingleBinding(&projection.expressions[projection_idx], projections[i])) {

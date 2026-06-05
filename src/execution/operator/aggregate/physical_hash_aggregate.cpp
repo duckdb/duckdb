@@ -795,7 +795,6 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 				auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 				group_chunk.data[bound_ref_expr.Index()].Reference(output_chunk.data[group_idx]);
 			}
-			group_chunk.SetChildCardinality(output_chunk.size());
 
 			for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size; child_idx++) {
 				aggregate_input_chunk.data[payload_idx + child_idx].Reference(

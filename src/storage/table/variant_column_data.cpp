@@ -289,7 +289,6 @@ idx_t VariantColumnData::ScanWithCallback(
 			input.Reset();
 			target.Reset();
 			input.data[0].Reference(extract_intermediate);
-			input.SetChildCardinality(scan_count);
 			executor.Execute(input, target);
 			result.Reference(target.data[0]);
 		} else {

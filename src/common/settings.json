@@ -36,8 +36,11 @@
         "name": "allocator_flush_threshold",
         "description": "Peak allocation threshold at which to flush the allocator after completing a task.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "134217728B",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "allow_community_extensions",
@@ -146,6 +149,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "64"
+    },
+    {
+        "name": "async_threads",
+        "description": "The number of total async threads used by the system for tasks like I/O.",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "auto_checkpoint_skip_wal_threshold",
@@ -341,6 +351,13 @@
     {
         "name": "debug_verification_projection",
         "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -889,6 +906,13 @@
         "default_value": "50"
     },
     {
+        "name": "legacy_disable_null_type",
+        "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",
@@ -1253,7 +1277,7 @@
     },
     {
         "name": "vacuum_rebuild_indexes",
-        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0",

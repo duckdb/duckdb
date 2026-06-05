@@ -424,7 +424,6 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			idx_t chunk_end = offset + chunk_count;
 			DataChunk chunk;
 			chunk.data.emplace_back(vector, offset, chunk_end);
-			chunk.SetChildCardinality(chunk_count);
 
 			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
 			idx_t current_count = 0;

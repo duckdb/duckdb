@@ -22,7 +22,9 @@
 
 namespace duckdb {
 
+#ifdef DEBUG
 bool DBConfigOptions::debug_print_bindings = false;
+#endif
 DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificationMode::NONE;
 
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
@@ -68,7 +70,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
-    DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
+    DUCKDB_SETTING_CALLBACK(AllocatorFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllowCommunityExtensionsSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
@@ -83,6 +85,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ArrowOutputListViewSetting),
     DUCKDB_SETTING_CALLBACK(ArrowOutputVersionSetting),
     DUCKDB_SETTING(AsofLoopJoinThresholdSetting),
+    DUCKDB_GLOBAL(AsyncThreadsSetting),
     DUCKDB_SETTING(AutoCheckpointSkipWalThresholdSetting),
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
     DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
@@ -107,6 +110,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
     DUCKDB_GLOBAL(DebugVerificationModeSetting),
     DUCKDB_SETTING(DebugVerificationProjectionSetting),
+    DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
@@ -174,6 +178,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(IntegerDivisionSetting),
     DUCKDB_SETTING_CALLBACK(LambdaSyntaxSetting),
     DUCKDB_SETTING(LateMaterializationMaxRowsSetting),
+    DUCKDB_SETTING(LegacyDisableNullTypeSetting),
     DUCKDB_SETTING(LegacyMetricsFormatSetting),
     DUCKDB_SETTING(LockConfigurationSetting),
     DUCKDB_SETTING_CALLBACK(LogQueryPathSetting),
@@ -231,14 +236,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
-                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 118),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 53),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 139),
-                                                     DUCKDB_SETTING_ALIAS("user", 156),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 154),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 28),
+                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 28),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 121),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 55),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 142),
+                                                     DUCKDB_SETTING_ALIAS("user", 159),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 27),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 157),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -621,6 +626,14 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 }
 
+idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
+#ifdef DUCKDB_NO_THREADS
+	return 0;
+#else
+	return GetSystemMaxThreads(fs);
+#endif
+}
+
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
@@ -666,7 +679,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			return NumericLimits<idx_t>::Maximum();
+			result = DConstants::INVALID_INDEX;
 		} else {
 			throw ParserException(error);
 		}
