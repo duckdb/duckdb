@@ -598,15 +598,25 @@ static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator
 	}
 
 	auto left_column_count = left_bindings.size();
+	auto cte_source_bindings = left_bindings;
+	vector<unique_ptr<Expression>> cte_source_expressions;
+	cte_source_expressions.reserve(left_column_count);
+	for (idx_t i = 0; i < left_column_count; i++) {
+		cte_source_expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
+	}
+	auto cte_source = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(cte_source_expressions));
+	cte_source->children.push_back(std::move(plan->children[0]));
+	cte_source->ResolveOperatorTypes();
+	left_types = cte_source->types;
+
 	auto cte_index = binder.GenerateTableIndex();
 	auto cte_name = "__duckdb_delim_" + to_string(cte_index.index);
-	auto cte_source = std::move(plan->children[0]);
 
 	auto left_cte_ref_index = binder.GenerateTableIndex();
 	auto left_cte_ref = make_uniq<LogicalCTERef>(left_cte_ref_index, cte_index, left_types,
 	                                             GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
 	auto new_left_bindings = left_cte_ref->GetColumnBindings();
-	auto binding_replacements = CreateBindingReplacements(left_bindings, new_left_bindings);
+	auto binding_replacements = CreateBindingReplacements(cte_source_bindings, new_left_bindings);
 
 	plan->children[0] = std::move(left_cte_ref);
 	ColumnBindingReplacer replacer;
