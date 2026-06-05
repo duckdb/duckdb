@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import json
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -9,6 +11,7 @@ from unittest import mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+RUN_TESTS = REPO_ROOT / "scripts/ci/run_tests.py"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -1652,6 +1655,58 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertIn("::group::test config: test/configs/pass.json", proc.stdout)
         self.assertEqual(proc.stdout.count("::endgroup::"), 2)
         self.assertIn("❌ ran tests: ", proc.stdout)
+
+    def test_profile_dir_sets_llvm_profile_file(self):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
+            test_list.write("test/sql/a.test\n")
+            test_list.flush()
+            test_list_path = Path(test_list.name)
+
+        with tempfile.TemporaryDirectory() as profile_dir:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as helper:
+                helper.write("#!/bin/sh\n")
+                helper.write("test -n \"$LLVM_PROFILE_FILE\"\n")
+                helper.write("mkdir -p \"$(dirname \"$LLVM_PROFILE_FILE\")\"\n")
+                helper.write("touch \"$LLVM_PROFILE_FILE\"\n")
+                helper.flush()
+                helper_path = Path(helper.name)
+
+            os.chmod(helper_path, 0o755)
+
+            try:
+                proc = subprocess.run(
+                    [
+                        sys.executable,
+                        str(RUN_TESTS),
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--profile-dir",
+                        profile_dir,
+                        "--test-command",
+                        f"{helper_path} {{test_list}}",
+                        "unused-binary",
+                    ],
+                    cwd=REPO_ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+            finally:
+                test_list_path.unlink(missing_ok=True)
+                helper_path.unlink(missing_ok=True)
+
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            entries = list(Path(profile_dir).iterdir())
+            self.assertEqual(len(entries), 1)
+            metadata = json.loads((entries[0] / "meta.json").read_text(encoding="utf8"))
+            self.assertEqual(metadata["tests"], ["test/sql/a.test"])
+            self.assertTrue((entries[0] / "meta.json").exists())
+            profraw_files = list(entries[0].glob("*.profraw"))
+            self.assertEqual(len(profraw_files), 1)
 
 
 if __name__ == "__main__":
