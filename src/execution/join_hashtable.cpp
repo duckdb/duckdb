@@ -786,7 +786,8 @@ void JoinHashTable::AllocatePointerTable() {
 	}
 
 	if (should_build_bloom_filter && !bloom_filter.IsInitialized()) {
-		bloom_filter.Initialize(context, Count());
+		bloom_filter_init_count = MaxValue<idx_t>(Count(), 1);
+		bloom_filter.Initialize(context, bloom_filter_init_count);
 	}
 
 	if (hash_map.get()) {
@@ -815,8 +816,64 @@ void JoinHashTable::AllocatePointerTable() {
 void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
 	should_build_bloom_filter = true;
 	if (!bloom_filter.IsInitialized()) {
-		bloom_filter.Initialize(context, MaxValue<idx_t>(estimated_row_count, idx_t(1)));
+		bloom_filter_init_count = MaxValue<idx_t>(estimated_row_count, idx_t(1));
+		bloom_filter.Initialize(context, bloom_filter_init_count);
 	}
+}
+
+void JoinHashTable::PrepareBloomFilterForPushdown() {
+	should_build_bloom_filter = true;
+	const auto build_count = Count();
+	if (build_count == 0) {
+		return;
+	}
+
+	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
+	const auto estimated_too_low = bloom_filter_init_count == 0 ||
+	                               static_cast<double>(build_count) >
+	                                   static_cast<double>(bloom_filter_init_count) * REBUILD_UNDERESTIMATE_THRESHOLD;
+	if (bloom_filter.IsInitialized() && !estimated_too_low) {
+		return;
+	}
+
+	bloom_filter.Reset();
+	bloom_filter_init_count = build_count;
+	bloom_filter.Initialize(context, bloom_filter_init_count);
+	RebuildBloomFilter();
+}
+
+void JoinHashTable::RebuildBloomFilter() {
+	D_ASSERT(bloom_filter.IsInitialized());
+	D_ASSERT(equality_types.size() == 1);
+	if (data_collection->ChunkCount() == 0) {
+		return;
+	}
+
+	Vector addresses(LogicalType::POINTER);
+	vector<LogicalType> key_types {layout_ptr->GetTypes()[0]};
+	DataChunk keys;
+	keys.Initialize(BufferAllocator::Get(context), key_types);
+	Vector hashes(LogicalType::HASH);
+	const auto &sel = *FlatVector::IncrementalSelectionVector();
+	auto addresses_data = FlatVector::GetDataMutable<data_ptr_t>(addresses);
+
+	JoinHTScanState scan_state(*data_collection, 0, data_collection->ChunkCount(),
+	                           TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	auto &iterator = scan_state.iterator;
+	do {
+		const auto row_locations = iterator.GetRowLocations();
+		const auto chunk_count = iterator.GetCurrentChunkCount();
+		for (idx_t chunk_offset = 0; chunk_offset < chunk_count; chunk_offset += STANDARD_VECTOR_SIZE) {
+			const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, chunk_count - chunk_offset);
+			for (idx_t i = 0; i < count; i++) {
+				addresses_data[i] = row_locations[chunk_offset + i];
+			}
+			data_collection->Gather(addresses, sel, count, 0, keys.data[0], sel, nullptr);
+			keys.SetChildCardinality(count);
+			Hash(keys, sel, count, hashes);
+			bloom_filter.InsertHashes(hashes);
+		}
+	} while (iterator.Next());
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
@@ -2156,6 +2213,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
 	bloom_filter.Reset();
+	bloom_filter_init_count = 0;
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetCorrelatedMarkJoinInfo(*this);

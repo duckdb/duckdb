@@ -1228,6 +1228,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const Physi
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
 	ht.SetBuildBloomFilter(true);
+	ht.PrepareBloomFilterForPushdown();
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
