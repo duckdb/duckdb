@@ -144,7 +144,14 @@ public:
 		if (uncompressed_mode) {
 			if (!SKIP) {
 				// Read uncompressed values
-				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
+				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
+					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
+					throw InternalException("Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
+					                        "would exceed bytes remaining in the block (%d)",
+					                        value_buffer_copy_size, bytes_remaining_in_block);
+				}
+				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
 			}
 			return;
 		}
