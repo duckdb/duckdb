@@ -73,6 +73,11 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
+		// Walk back past the EOI sentinel so the error message names a real token.
+		if (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
+		                            tokens[error_token_idx].type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
+			error_token_idx--;
+		}
 		idx_t stmt_start = error_token_idx;
 		while (stmt_start > 0 && tokens[stmt_start - 1].text != ";") {
 			stmt_start--;
@@ -96,11 +101,12 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	}
 	match_result->name = "Program";
 
-	// Program <- Statement? (';'+ Statement)* ';'*
-	// Program[0] = optional first Statement
-	// Program[1] = optional repeat of groups: (';'+ Statement)
-	// Program[2] = optional repeat of trailing ';'
+	// Program <- TopLevelStatement*
+	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
+	//   child 0: Optional<Statement>
+	//   child 1: bracket-wrapper list around Choice<';'+ | EndOfInput>
 	auto &prog = match_result->Cast<ListParseResult>();
+	auto &program_opt = prog.Child<OptionalParseResult>(0);
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
@@ -108,38 +114,30 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	                           enum_mappings, options);
 
 	vector<unique_ptr<SQLStatement>> result;
-	optional_ptr<ParseResult> current_stmt;
-	auto &first_stmt = prog.Child<OptionalParseResult>(0);
-	if (first_stmt.HasResult()) {
-		current_stmt = first_stmt.GetResult();
+	if (!program_opt.HasResult()) {
+		return result;
 	}
-
-	auto &statement_repeat = prog.Child<OptionalParseResult>(1);
-	if (statement_repeat.HasResult()) {
-		auto &repeat = statement_repeat.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat.GetChildren()) {
-			auto &child_list = child.get().Cast<ListParseResult>();
-			auto &separators = child_list.Child<RepeatParseResult>(0);
-			auto &next_stmt = child_list.GetChild(1);
-			if (current_stmt) {
-				auto separator_children = separators.GetChildren();
-				auto &separator_terminator = separator_children[0].get();
-				result.push_back(
-				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator.offset));
-			}
-			current_stmt = next_stmt;
+	auto &top_level_repeat = program_opt.GetResult().Cast<RepeatParseResult>();
+	for (auto &child : top_level_repeat.GetChildren()) {
+		auto &tls = child.get().Cast<ListParseResult>();
+		auto &stmt_opt = tls.Child<OptionalParseResult>(0);
+		if (!stmt_opt.HasResult()) {
+			// separator-only or EOI-only TopLevelStatement — no statement to yield
+			continue;
 		}
-	}
-	if (current_stmt) {
-		optional_idx trailing_terminator;
-		auto &trailing_repeat = prog.Child<OptionalParseResult>(2);
-		if (trailing_repeat.HasResult()) {
-			auto trailing_children = trailing_repeat.GetResult().Cast<RepeatParseResult>().GetChildren();
-			if (!trailing_children.empty()) {
-				trailing_terminator = trailing_children[0].get().offset;
+		// Terminator span ends at the first separator `;` if the choice picked ';'+; the
+		// EndOfInput arm leaves the offset unset so ExtractAndTransformStatement defaults to
+		// end-of-token-stream.
+		auto &term_wrapper = tls.Child<ListParseResult>(1);
+		auto &term_inner = term_wrapper.Child<ChoiceParseResult>(0).GetResult();
+		optional_idx terminator_offset;
+		if (term_inner.type != ParseResultType::END_OF_INPUT) {
+			auto semi_children = term_inner.Cast<RepeatParseResult>().GetChildren();
+			if (!semi_children.empty()) {
+				terminator_offset = semi_children[0].get().offset;
 			}
 		}
-		result.push_back(ExtractAndTransformStatement(transformer, tokens, *current_stmt, trailing_terminator));
+		result.push_back(ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset));
 	}
 	return result;
 }
