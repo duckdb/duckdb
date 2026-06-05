@@ -1,5 +1,5 @@
 # name: test/sql/parallelism/async_task_schedule_pool.test
-# description: The AsyncTaskSchedule log records which thread pool async I/O tasks are routed to; parquet prefetch currently routes to the REGULAR pool
+# description: The AsyncTaskSchedule log records which thread pool async I/O tasks are routed to; parquet prefetch routes its eager I/O onto the dedicated ASYNC pool
 # group: [parallelism]
 
 require parquet
@@ -19,11 +19,11 @@ CALL enable_logging('AsyncTaskSchedule')
 statement ok
 SELECT sum(i) FROM '{TEST_DIR}/async_pool.parquet'
 
-# the parquet prefetch eagerly scheduled I/O tasks, today they are routed to the REGULAR pool
+# the parquet prefetch eagerly scheduled I/O tasks, and routes them onto the dedicated ASYNC pool
 query I
 SELECT DISTINCT pool FROM duckdb_logs_parsed('AsyncTaskSchedule')
 ----
-REGULAR
+ASYNC
 
 # at least one batch of I/O tasks was scheduled
 query I

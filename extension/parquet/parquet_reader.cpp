@@ -1787,7 +1787,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	}
 	result.Reset();
 	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks));
+		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
