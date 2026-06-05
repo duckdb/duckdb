@@ -341,9 +341,8 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
 			auto context = transaction.transaction->context.lock();
-			const sel_t *sel_data = sel.data();
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
-				const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
+				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);
 				sub_column.FetchRows(transaction, state, child_storage_index, &offset, identity_sel, /*count=*/1,
 				                     intermediate, 0);

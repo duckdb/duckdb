@@ -694,12 +694,11 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		return;
 	}
 
-	const sel_t *sel_data = sel.data();
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
-		const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
+		const idx_t offset = offsets[sel.get_index(idx)];
 		if (offset > count) {
 			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id %lld out of range for count %lld",
 			                        offset, count);
@@ -716,7 +715,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 		const lock_guard<mutex> update_guard(update_lock);
 		if (updates) {
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
-				const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
+				const idx_t offset = offsets[sel.get_index(idx)];
 				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + idx);
 			}
 		}

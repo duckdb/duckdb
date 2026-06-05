@@ -121,9 +121,8 @@ void RowIdColumnData::FetchRows(TransactionData transaction, ColumnFetchState &s
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetDataMutable<row_t>(result);
 	auto row_start = state.row_group->GetRowStart();
-	const sel_t *sel_data = sel.data();
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
-		data[result_offset + idx] = UnsafeNumericCast<row_t>(row_start + offsets[sel_data ? sel_data[idx] : idx]);
+		data[result_offset + idx] = UnsafeNumericCast<row_t>(row_start + offsets[sel.get_index(idx)]);
 	}
 }
 

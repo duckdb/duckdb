@@ -446,9 +446,8 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 		}
 	}
 
-	const sel_t *sel_data = sel.data();
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
-		const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
+		const idx_t offset = offsets[sel.get_index(idx)];
 		const idx_t result_idx = result_offset + idx;
 		Vector variant_vec(LogicalType::VARIANT(), 1);
 		validity->FetchRowsAtSegmentLevel(transaction, state, &offset, identity_sel, /*count=*/1, variant_vec, 0);

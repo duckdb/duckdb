@@ -294,9 +294,8 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
 
 	auto &validity_mask = FlatVector::ValidityMutable(result);
 	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	const sel_t *sel_data = sel.data();
 	for (idx_t idx = 0; idx < fetch_count; idx++) {
-		const auto row_id = offsets[sel_data ? sel_data[idx] : idx];
+		const auto row_id = offsets[sel.get_index(idx)];
 		auto start_offset = row_id == 0 ? 0 : FetchListOffset(row_id - 1);
 		auto end_offset = FetchListOffset(row_id);
 		auto result_idx = result_offset + idx;
