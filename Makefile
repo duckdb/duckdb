@@ -34,7 +34,7 @@ endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
 SMOKE_RUNNER ?= build/relassert/test/run
-UNITTEST_SLOW_FLAGS ?= --batch-size=5 --track-runtime=100
+UNITTEST_SLOW_FLAGS ?= --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.

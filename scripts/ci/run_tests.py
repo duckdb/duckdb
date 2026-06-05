@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from io import StringIO
 from pathlib import Path
 
-DEFAULT_BATCH_SIZE = 10
+DEFAULT_BATCH_SIZE = 30
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
 HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
 HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
@@ -32,6 +32,7 @@ STABILIZE_FAST_TOTAL_RUNS_LARGE = 3
 STABILIZE_CHANGED_TEST_THRESHOLD = 500
 STOP_REQUESTED = threading.Event()
 ANSI_RED = "\033[31m"
+ANSI_TEAL = "\033[36m"
 ANSI_DARK_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 FAILURE_MARKER = "================================================================"
@@ -397,6 +398,60 @@ def format_dark_gray(text: str):
     return f"{ANSI_DARK_GRAY}{text}{ANSI_RESET}"
 
 
+def highlight_stack_frame_line(line: str):
+    match = re.match(r"^(\d+)(\s+)(.+)$", line)
+    if not match:
+        return line
+
+    frame_idx, spacing, remainder = match.groups()
+    delimiters = [pos for pos in (remainder.find("("), remainder.find("<")) if pos != -1]
+    if delimiters:
+        split_idx = min(delimiters)
+        function_name = remainder[:split_idx]
+        suffix = remainder[split_idx:]
+    else:
+        function_name = remainder
+        suffix = ""
+
+    return f"{format_dark_gray(frame_idx)}{spacing}{ANSI_TEAL}{function_name}{ANSI_RESET}{suffix}"
+
+
+def should_filter_stack_frame_line(line: str):
+    match = re.match(r"^\d+\s+(.+)$", line)
+    if not match:
+        return False
+    remainder = match.group(1)
+    for marker in (
+        "invokeActiveTestCase",
+        "Catch::RunContext",
+        "Catch::Session::run",
+        "Catch::Session::runInternal",
+        "main(",
+    ):
+        if marker in remainder:
+            return True
+    return False
+
+
+def highlight_stack_trace_lines(lines: list[str]):
+    highlighted = []
+    in_stack_trace = False
+    for line in lines:
+        if line == "Stack Trace:":
+            in_stack_trace = True
+            highlighted.append(line)
+            continue
+        if in_stack_trace and re.match(r"^\d+\s+", line):
+            if should_filter_stack_frame_line(line):
+                continue
+            highlighted.append(highlight_stack_frame_line(line))
+            continue
+        if in_stack_trace:
+            in_stack_trace = False
+        highlighted.append(line)
+    return highlighted
+
+
 def render_test_snippet(test_name: str | None, line_number: int | None):
     if not test_name or line_number is None or line_number <= 0:
         return []
@@ -691,10 +746,11 @@ def parse_stdout_failure_info(stdout_lines: list[str]):
 
 def extract_query_failure_diagnostics(stderr_lines: list[str]):
     for idx, line in enumerate(stderr_lines):
-        if not line.startswith("Query failed with message:"):
+        stripped = line.strip()
+        if not stripped.startswith("Query failed with message:") and not stripped.startswith("INTERNAL Error:"):
             continue
 
-        block = [line.strip()]
+        block = [stripped]
         seen_stack_trace = False
         for next_line in stderr_lines[idx + 1 :]:
             stripped = next_line.strip()
@@ -901,8 +957,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     detail_lines = []
     snippet_lines = []
-    if stderr_info.failing_summary_block:
-        detail_lines.extend(stderr_info.failing_summary_block)
+    if stderr_info.query_failure_lines:
+        detail_lines.extend(stderr_info.query_failure_lines)
 
     preferred_assertion = stdout_info.preferred_assertion
     if preferred_assertion is not None:
@@ -910,20 +966,20 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
         reproduce_batch = [test_name] if test_name else list(batch)
         line_number = preferred_assertion.line_number or line_number
         snippet_lines = preferred_assertion.snippet_lines
-        if not detail_lines and stderr_info.query_failure_lines:
-            detail_lines.extend(stderr_info.query_failure_lines)
         if preferred_assertion.detail_lines:
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
             test_name = stdout_failure_test_name or stdout_info.last_started_test or test_name
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not detail_lines and stderr_info.query_failure_lines:
-        detail_lines.extend(stderr_info.query_failure_lines)
+    if not detail_lines and stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
@@ -991,7 +1047,7 @@ def render_failure_lines(failure: FailureInfo):
     if failure.snippet_lines:
         lines.extend(["", *failure.snippet_lines])
     if failure.detail_lines:
-        lines.extend(["", *failure.detail_lines])
+        lines.extend(["", *highlight_stack_trace_lines(failure.detail_lines)])
     return lines
 
 
@@ -1140,6 +1196,9 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     allow_retry = True
     peak_rss_bytes = 0
+    child_env = os.environ.copy()
+    # Omit printing "FAILURES SUMMARY" block at the end of each unittest process.
+    child_env["SUMMARIZE_FAILURES"] = "0"
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
     # is still open here, so keep it after close and unlink it ourselves.
@@ -1158,6 +1217,7 @@ def run_batch(config: TestRunnerConfig, batch):
             errors="backslashreplace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=child_env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
 
