@@ -262,13 +262,20 @@ struct RLEScanState : public SegmentScanState {
 	    : handle(BufferManager::GetBufferManager(segment.db).Pin(segment.block)), entry_pos(0), position_in_entry(0),
 	      rle_count_offset(UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()))),
 	      data_pointer(reinterpret_cast<T *>(handle.Ptr() + segment.GetBlockOffset() + RLEConstants::RLE_HEADER_SIZE)),
-	      index_pointer(reinterpret_cast<rle_count_t *>(handle.Ptr() + segment.GetBlockOffset() + rle_count_offset)) {
+	      index_pointer(reinterpret_cast<rle_count_t *>(handle.Ptr() + segment.GetBlockOffset() + rle_count_offset)),
+	      max_entry_pos(static_cast<idx_t>(reinterpret_cast<const_data_ptr_t>(handle.Ptr() + segment.GetBlockSize()) -
+	                                       reinterpret_cast<const_data_ptr_t>(index_pointer)) /
+	                    static_cast<idx_t>(sizeof(rle_count_t))) {
 		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
 			//! This would make the index_pointer point into a region reserved for the header data
 			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
 			//! This would make the index_pointer start outside of the segment
+			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
+		}
+		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
+			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
 			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 	}
@@ -294,6 +301,10 @@ struct RLEScanState : public SegmentScanState {
 		// handled all entries in this RLE value
 		// move to the next entry
 		entry_pos++;
+		if (entry_pos > max_entry_pos) {
+			throw InternalException(
+			    "Corrupted RLE segment: index_pointer[entry_pos] would reach outside of the blocks memory");
+		}
 		position_in_entry = 0;
 	}
 
@@ -311,6 +322,7 @@ struct RLEScanState : public SegmentScanState {
 
 	const T *data_pointer;
 	const rle_count_t *index_pointer;
+	const idx_t max_entry_pos;
 };
 
 template <class T>
