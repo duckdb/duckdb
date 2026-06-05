@@ -209,6 +209,8 @@ public:
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+	//! Number of filter head counts, used for prefetching
+	idx_t filter_head_count = 0;
 
 	ParquetPrefetchMetrics prefetch_metrics;
 
