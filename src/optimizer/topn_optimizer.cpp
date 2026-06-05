@@ -82,7 +82,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	auto &colref = op.orders[0].expression->Cast<BoundColumnRefExpression>();
 	vector<JoinFilterPushdownColumn> columns;
 	JoinFilterPushdownColumn column;
-	column.probe_column_index = colref.binding;
+	column.probe_column_index = colref.Binding();
 	columns.emplace_back(column);
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*op.children[0], std::move(columns), pushdown_targets);
@@ -120,8 +120,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 			auto is_null = ExpressionFilter::CreateNullCheckExpression(
 			    make_uniq<BoundReferenceExpression>(type, idx_t(0)), ExpressionType::OPERATOR_IS_NULL);
-			or_filter->children.push_back(std::move(is_null));
-			or_filter->children.push_back(std::move(pushed_expr));
+			or_filter->GetChildrenMutable().push_back(std::move(is_null));
+			or_filter->GetChildrenMutable().push_back(std::move(pushed_expr));
 			pushed_expr = std::move(or_filter);
 		}
 

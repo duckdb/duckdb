@@ -81,11 +81,13 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
-	    : SortedAggregateBindData(context, expr.children, expr.function, expr.bind_info, expr.order_bys->orders) {
+	    : SortedAggregateBindData(context, expr.GetChildrenMutable(), expr.FunctionMutable(), expr.BindInfoMutable(),
+	                              expr.GetOrderBysMutable()->orders) {
 	}
 
 	SortedAggregateBindData(ClientContext &context, BoundWindowExpression &expr)
-	    : SortedAggregateBindData(context, expr.children, *expr.aggregate, expr.bind_info, expr.arg_orders) {
+	    : SortedAggregateBindData(context, expr.GetChildrenMutable(), *expr.AggregateFunction(), expr.BindInfoMutable(),
+	                              expr.ArgOrdersMutable()) {
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
@@ -197,7 +199,6 @@ struct SortedAggregateState {
 		idx_t total_count = 0;
 		for (column_t i = 0; i < linked.size(); ++i) {
 			funcs[i].BuildListVector(linked[i], chunk.data[i], total_count);
-			chunk.SetCardinality(linked[i].total_capacity);
 			FlatVector::SetSize(chunk.data[i], count_t(linked[i].total_capacity));
 		}
 	}
@@ -374,7 +375,6 @@ struct SortedAggregateState {
 		for (column_t col_idx = 0; col_idx < input_chunk->ColumnCount(); ++col_idx) {
 			prefixed.data[col_idx + 1].Reference(input_chunk->data[col_idx]);
 		}
-		prefixed.SetCardinality(*input_chunk);
 		// data[0] was referenced as a constant with count=1 - resize to match
 		FlatVector::SetSize(prefixed.data[0], count_t(input_chunk->size()));
 	}
@@ -444,7 +444,6 @@ struct SortedAggregateFunction {
 			D_ASSERT(buffered_cols[b] < input_count);
 			buffered.data[b].Reference(inputs[buffered_cols[b]]);
 		}
-		buffered.SetCardinality(count);
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -623,7 +622,6 @@ struct SortedAggregateFunction {
 					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
 						sliced.data[col_idx].Slice(scanned.data[col_idx], consumed, consumed + input_count);
 					}
-					sliced.SetCardinality(input_count);
 
 					if (cluster_update) {
 						ClusteredAggr clustered;
@@ -683,20 +681,20 @@ struct SortedAggregateFunction {
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
                                          const vector<unique_ptr<Expression>> &groups,
                                          optional_ptr<vector<GroupingSet>> grouping_sets) {
-	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
+	if (!expr.GetOrderBys() || expr.GetOrderBys()->orders.empty() || expr.GetChildren().empty()) {
 		// not a sorted aggregate: return
 		return;
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (Settings::Get<EnableOptimizerSetting>(context)) {
-		if (expr.order_bys->Simplify(groups, grouping_sets)) {
-			expr.order_bys.reset();
+		if (expr.GetOrderBysMutable()->Simplify(groups, grouping_sets)) {
+			expr.GetOrderBysMutable().reset();
 			return;
 		}
 	}
-	auto &bound_function = expr.function;
-	auto &children = expr.children;
-	auto &order_bys = *expr.order_bys;
+	auto &bound_function = expr.Function();
+	auto &children = expr.GetChildrenMutable();
+	auto &order_bys = *expr.GetOrderBysMutable();
 	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
 
 	if (!sorted_bind->sorted_on_args) {
@@ -724,36 +722,36 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 
-	expr.function.ReplaceImplementation(ordered_aggregate);
-	expr.bind_info = std::move(sorted_bind);
-	expr.order_bys.reset();
+	expr.FunctionMutable().ReplaceImplementation(ordered_aggregate);
+	expr.BindInfoMutable() = std::move(sorted_bind);
+	expr.GetOrderBysMutable().reset();
 }
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
 	//	Make implicit orderings explicit
-	auto &aggregate = *expr.aggregate;
-	if (aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
-		for (auto &order : expr.orders) {
+	auto &aggregate = *expr.AggregateFunction();
+	if (aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT && expr.ArgOrders().empty()) {
+		for (auto &order : expr.OrderBy()) {
 			const auto type = order.type;
 			const auto null_order = order.null_order;
 			auto expression = order.expression->Copy();
-			expr.arg_orders.emplace_back(type, null_order, std::move(expression));
+			expr.ArgOrdersMutable().emplace_back(type, null_order, std::move(expression));
 		}
 	}
 
-	if (expr.arg_orders.empty() || expr.children.empty()) {
+	if (expr.ArgOrders().empty() || expr.GetChildren().empty()) {
 		// not a sorted aggregate: return
 		return;
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (Settings::Get<EnableOptimizerSetting>(context)) {
-		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions, nullptr)) {
-			expr.arg_orders.clear();
+		if (BoundOrderModifier::Simplify(expr.ArgOrdersMutable(), expr.PartitionsMutable(), nullptr)) {
+			expr.ArgOrdersMutable().clear();
 			return;
 		}
 	}
-	auto &children = expr.children;
-	auto &arg_orders = expr.arg_orders;
+	auto &children = expr.GetChildrenMutable();
+	auto &arg_orders = expr.ArgOrdersMutable();
 	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
 
 	if (!sorted_bind->sorted_on_args) {
@@ -782,8 +780,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
 	aggregate.ReplaceImplementation(ordered_aggregate);
-	expr.bind_info = std::move(sorted_bind);
-	expr.arg_orders.clear();
+	expr.BindInfoMutable() = std::move(sorted_bind);
+	expr.ArgOrdersMutable().clear();
 }
 
 } // namespace duckdb

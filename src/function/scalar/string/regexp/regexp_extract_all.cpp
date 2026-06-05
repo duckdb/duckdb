@@ -107,7 +107,7 @@ duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &sta
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpBaseBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -242,7 +242,7 @@ static list_entry_t ExtractStructAllSingleTuple(const string_t &string_val, duck
 void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef D_ASSERT_IS_ENABLED
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpExtractAllStructBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpExtractAllStructBindData>();
 	// Struct multi-match variant only supports constant pattern (enforced in Bind)
 	D_ASSERT(info.constant_pattern);
 #endif

@@ -34,7 +34,7 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : bound_aggr_expr.children) {
+		for (auto &child_expr : bound_aggr_expr.GetChildren()) {
 			executor.AddExpression(*child_expr);
 			aggr_input_types.push_back(child_expr->GetReturnType());
 		}
@@ -222,7 +222,6 @@ static void GatherChunk(DataChunk &output_chunk, DataChunk &input_chunk, const v
 	for (auto &group_idx : idx_set) {
 		output_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
 	}
-	output_chunk.SetCardinality(input_chunk.size());
 }
 
 static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {
@@ -230,7 +229,6 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	for (auto &group_idx : idx_set) {
 		output_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
 	}
-	output_chunk.SetCardinality(input_chunk.size());
 }
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

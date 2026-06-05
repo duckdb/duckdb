@@ -109,6 +109,22 @@ def generate_case_check_comparison(field_name, indent):
     ]
 
 
+def generate_func_arg_comparison(field_name, indent):
+    i = indent
+    ii = indent + '\t'
+    iii = indent + '\t\t'
+    return [
+        f'{i}if ({field_name}.size() != other_p.{field_name}.size()) {{',
+        f'{ii}return false;',
+        f'{i}}}',
+        f'{i}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
+        f'{ii}if (!{field_name}[i].Equals(other_p.{field_name}[i])) {{',
+        f'{iii}return false;',
+        f'{ii}}}',
+        f'{i}}}',
+    ]
+
+
 def generate_expression_map_comparison(field_name, indent):
     i = indent
     ii = indent + '\t'
@@ -191,6 +207,8 @@ def generate_member_comparison(member, indent='\t'):
         return generate_order_by_comparison(field_name, indent)
     elif type_str == 'vector<CaseCheck>':
         return generate_case_check_comparison(field_name, indent)
+    elif type_str == 'vector<FunctionArgument>':
+        return generate_func_arg_comparison(field_name, indent)
     elif is_expression_map(type_str):
         return generate_expression_map_comparison(field_name, indent)
     else:
@@ -290,6 +308,13 @@ def generate_member_copy(member, indent='\t'):
             f'{indent}}}',
         ]
 
+    if type_str == 'vector<FunctionArgument>':
+        return [
+            f'{indent}for (auto &arg : {field}) {{',
+            f'{ii}copy->{field}.emplace_back(arg.Copy());',
+            f'{indent}}}',
+        ]
+
     if type_str == 'vector<OrderByNode>':
         return [
             f'{indent}for (auto &order : {field}) {{',
@@ -329,6 +354,9 @@ def generate_subclass_copy(entry):
 
     lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
     lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
+
+    if class_name == 'FunctionExpression' or class_name == 'WindowExpression':
+        lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
     for member in entry.get('members', []):
         if member_should_be_copied(member):
@@ -383,6 +411,8 @@ def generate_member_hash(member, indent='\t'):
     if type_str == 'SelectStatement*':
         return []
     if type_str == 'vector<CaseCheck>':
+        return []
+    if type_str == 'vector<FunctionArgument>':
         return []
     if is_expression_map(type_str):
         return []
@@ -475,6 +505,7 @@ def member_is_iterable_expression(member):
         or is_parsed_expression_list(type_str)
         or type_str == 'vector<CaseCheck>'
         or type_str == 'vector<OrderByNode>'
+        or type_str == 'vector<FunctionArgument>'
         or is_expression_map(type_str)
         or is_order_modifier_ptr(type_str)
     )
@@ -513,6 +544,12 @@ def generate_member_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &item : {access}) {{',
                 f'\t\t\tresult.Append(item.second);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpressionMutable());',
                 f'\t\t}}',
             ]
         if type_str == 'vector<OrderByNode>':
@@ -623,6 +660,12 @@ def generate_member_const_children_appends(member, expr_var):
                 f'\t\t\tfor (auto &order : {access}->orders) {{',
                 f'\t\t\t\tresult.Append(*order.expression);',
                 f'\t\t\t}}',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpression());',
                 f'\t\t}}',
             ]
         return []

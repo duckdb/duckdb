@@ -6,7 +6,8 @@
     {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
-        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/optimizer/statistics/statistics_filter_pruning.test"
       ]
     },
     {
@@ -35,7 +36,8 @@
         "test/parquet/variant/variant_stats_propagation.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
-        "test/optimizer/joins/fkpk_composite_key_ce.test"
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/sql/cast/signed_cast_repro.test"
       ]
     },
     {
@@ -45,7 +47,8 @@
         "test/optimizer/joins/no_duplicate_elimination_join.test",
         "test/optimizer/joins/tpcds_nofail.test",
         "test/sql/limit/test_limit0.test",
-        "test/sql/optimizer/plan/test_filter_pushdown_large.test"
+        "test/sql/optimizer/plan/test_filter_pushdown_large.test",
+        "test/optimizer/joins/denominator_cardinality_estimation.test"
       ]
     },
     {
@@ -77,7 +80,9 @@
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
-        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test"
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test"
       ]
     },
     {

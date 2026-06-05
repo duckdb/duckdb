@@ -175,7 +175,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[1] = the index expression
 		// 		bindings[2] = the constant
 		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
-		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().GetValue();
 		auto comparison_type = comparison.GetExpressionType();
 
 		auto &left = BoundComparisonExpression::Left(comparison);
@@ -215,10 +215,10 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 
 		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
 		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
-		low_value = lower_bound.Cast<BoundConstantExpression>().value;
+		low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
 		low_comparison_type =
 		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (upper_bound.Cast<BoundConstantExpression>()).value;
+		high_value = (upper_bound.Cast<BoundConstantExpression>()).GetValue();
 		high_comparison_type =
 		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
@@ -455,8 +455,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 			result.data[i].Reference(input.data[i]);
 		}
 	}
-
-	result.SetCardinality(input.size());
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
@@ -476,7 +474,6 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const 
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
 	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 

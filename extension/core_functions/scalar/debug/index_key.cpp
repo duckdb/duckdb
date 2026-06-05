@@ -190,7 +190,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
+	auto &bind_data = func_expr.BindInfo()->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
 
@@ -200,7 +200,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
-	key_chunk.SetCardinality(count);
 
 	auto &art = bind_data.art;
 	unsafe_vector<ARTKey> keys(count);

@@ -202,6 +202,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_SMALLINT:
 		return sizeof(int16_t);
 	case DUCKDB_TYPE_INTEGER:
+	case DUCKDB_TYPE_SQLNULL:
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);

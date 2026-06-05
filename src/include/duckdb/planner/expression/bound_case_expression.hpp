@@ -29,15 +29,18 @@ public:
 	BoundCaseExpression(unique_ptr<Expression> when_expr, unique_ptr<Expression> then_expr,
 	                    unique_ptr<Expression> else_expr);
 
-	vector<BoundCaseCheck> case_checks;
-	unique_ptr<Expression> else_expr;
-
 public:
 	const vector<BoundCaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
+	vector<BoundCaseCheck> &CaseChecksMutable() {
+		return case_checks;
+	}
 	const Expression &Else() const {
 		return *else_expr;
+	}
+	unique_ptr<Expression> &ElseMutable() {
+		return else_expr;
 	}
 
 public:
@@ -49,5 +52,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	vector<BoundCaseCheck> case_checks;
+	unique_ptr<Expression> else_expr;
 };
 } // namespace duckdb

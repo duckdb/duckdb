@@ -16,42 +16,54 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
 RETRIES = 2
-RETRIABLE_EXIT_CODES = {134, -6}
 
 
-def run_with_retry(command, context, **kwargs):
-    attempts = RETRIES + 1
-    for attempt in range(1, attempts + 1):
-        completed = subprocess.run(command, shell=True, check=False, **kwargs)
-        if completed.returncode == 0:
-            return completed
-        if completed.returncode in RETRIABLE_EXIT_CODES and attempt < attempts:
-            print(
-                f"Retrying crash-like failure in {context} "
-                f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
-            )
-            continue
-        raise subprocess.CalledProcessError(
-            completed.returncode,
-            command,
-            output=completed.stdout,
-            stderr=completed.stderr,
-        )
+def run_command(command, **kwargs):
+    return subprocess.run(
+        command,
+        shell=True,
+        check=False,
+        **kwargs,
+    )
 
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    run_with_retry(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql",
-        context=f"init schema ({dbname})",
-        stdout=subprocess.DEVNULL,
-    )
-    run_with_retry(
-        f"{cli} {dbname} < {benchmark_dir}/init/load.sql",
-        context=f"init load ({dbname})",
-        stdout=subprocess.DEVNULL,
-    )
-    print("INITIALIZATION DONE")
+    attempts = RETRIES + 1
+    if os.path.exists(dbname):
+        os.remove(dbname)
+
+    for attempt in range(1, attempts + 1):
+        schema_command = f"{cli} {dbname} < {benchmark_dir}/init/schema.sql"
+        completed = run_command(
+            schema_command,
+            stdout=subprocess.DEVNULL,
+        )
+        if completed.returncode == 0:
+            load_command = f"{cli} {dbname} < {benchmark_dir}/init/load.sql"
+            completed = run_command(
+                load_command,
+                stdout=subprocess.DEVNULL,
+            )
+            if completed.returncode == 0:
+                print("INITIALIZATION DONE")
+                return
+
+        if attempt < attempts:
+            if os.path.exists(dbname):
+                os.remove(dbname)
+            print(
+                f"Retrying failure in init db ({dbname}) "
+                f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+            )
+            continue
+
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            completed.args,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
 
 
 class PlanCost:
@@ -157,11 +169,27 @@ def op_inspect(op) -> PlanCost:
 
 def query_plan_cost(cli, dbname, query):
     try:
-        run_with_retry(
-            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
-            context=f"query profiling ({dbname})",
-            capture_output=True,
-        )
+        command = f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\""
+        attempts = RETRIES + 1
+        for attempt in range(1, attempts + 1):
+            completed = run_command(
+                command,
+                capture_output=True,
+            )
+            if completed.returncode == 0:
+                break
+            if attempt < attempts:
+                print(
+                    f"Retrying failure in query profiling ({dbname}) "
+                    f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+                )
+                continue
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                completed.args,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
     except subprocess.CalledProcessError as e:
         print("-------------------------")
         print("--------Failure----------")

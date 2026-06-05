@@ -29,6 +29,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
+#include "parquet_prefetch_cost_model.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_types.h"
@@ -147,11 +148,14 @@ struct ParquetLoggerPrefetchMetrics {
 	vector<bool> filters_used;
 	//! Prefetch strategy chosen for the current row group
 	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+	//! Accepted column gap (bytes)
+	uint64_t accepted_column_gap = 0;
 
 	void Reset() {
 		prefetch_groups.clear();
 		std::fill(filters_used.begin(), filters_used.end(), false);
 		strategy = ParquetPrefetchStrategy::NONE;
+		accepted_column_gap = 0;
 	}
 
 	//! Build a prefetch group
@@ -217,6 +221,9 @@ public:
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
+
+	//! Prefetch cost model
+	PrefetchCostModelState cost_model_state;
 };
 
 struct ParquetColumnDefinition {
@@ -373,12 +380,18 @@ private:
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
-	//! Whole-group prefetch strategy
-	void WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-	                        const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span, bool log_prefetch);
+	//! Whole-group prefetch strategy.
+	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
+	                                           bool log_prefetch);
 	//! Column-wise prefetch strategy.
-	void ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
-	                        const duckdb_parquet::RowGroup &group, bool filters_look_unselective, bool log_prefetch);
+	ParquetPrefetchStrategy ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
+	                                           bool log_prefetch) const;
+	//! Switch to the next row group and schedule its I/O (prepare column buffers, prefetch the bytes).
+	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
+	SourceResultType Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);

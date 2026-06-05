@@ -34,6 +34,7 @@
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_context_ids.test",
         "test/sql/logging/logging_csv.test",
+        "test/sql/logging/logging_file_truncate_rewrite.test",
         "test/sql/logging/http_log_timing.test"
       ]
     },

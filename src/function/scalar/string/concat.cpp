@@ -184,7 +184,7 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
+	auto &info = func_expr.BindInfo()->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;

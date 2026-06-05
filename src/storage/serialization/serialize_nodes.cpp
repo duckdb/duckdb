@@ -11,6 +11,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/queue.hpp"
@@ -340,6 +341,18 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void FunctionArgument::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", expression);
+}
+
+FunctionArgument FunctionArgument::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression");
+	FunctionArgument result(std::move(name), std::move(expression));
+	return result;
+}
+
 void HivePartitioningIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "value", value);
 	serializer.WritePropertyWithDefault<idx_t>(101, "index", index);
@@ -374,6 +387,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -385,6 +399,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
 	return result;
 }
 

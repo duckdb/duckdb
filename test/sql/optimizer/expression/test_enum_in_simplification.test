@@ -1,0 +1,59 @@
+# name: test/sql/optimizer/expression/test_enum_in_simplification.test
+# description: Convert enum::VARCHAR IN (VARCHAR constants...) to enum IN (enums...)
+# group: [expression]
+
+statement ok
+CREATE TYPE sym_enum AS ENUM (
+	SELECT i::VARCHAR 
+	FROM range(10) tbl(i)
+);
+
+set seed 0.8675309
+
+statement ok
+CREATE TABLE QUOTE AS (
+	WITH asks AS (
+		SELECT 
+			(100.0 * random() + 10.0)::FLOAT AS ask,
+			round(20.0 * random() + 5)::INTEGER AS asize,
+		FROM range(100)
+	)
+	SELECT
+		ask,
+		asize,
+		(ask + 5.0 * (random() - 0.5))::FLOAT AS bid,
+		round(asize + 2 * (random() - 0.5))::INTEGER AS bsize,
+		floor(random() * 10)::INTEGER::VARCHAR::sym_enum AS sym
+	FROM asks
+);
+
+query II
+explain
+SELECT sym, 
+    SUM(asize * ask) AS wsumAsk, 
+    SUM(bid * bsize) AS wsumBid, 
+    STDDEV(asize) AS sdevasksize, 
+    STDDEV(bid) AS sdevbid, 
+    CORR(ask, bid) AS corPrice, 
+    CORR(asize, bsize) AS corSize 
+FROM quote
+WHERE sym IN (
+	NULL,
+	'0',
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'10',
+	'11',
+	'12',
+)
+GROUP BY sym 
+ORDER BY sym;
+----
+physical_plan	<!REGEX>:.*AS VARCHAR.*

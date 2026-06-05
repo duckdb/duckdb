@@ -162,7 +162,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				if (result_type.id() == LogicalTypeId::INVALID) {
 					result_type = child_col_type;
 				} else {
-					result_type = LogicalType::ForceMaxLogicalType(result_type, child_col_type);
+					result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_col_type);
 				}
 				if (i != col_idx_in_child) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
@@ -171,7 +171,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			}
 		}
 		// compute the final type for each column
-		if (!can_contain_nulls) {
+		if (!CanContainNulls()) {
 			if (ExpressionBinder::ContainsNullType(result_type)) {
 				result_type = ExpressionBinder::ExchangeNullType(result_type);
 			}
@@ -252,7 +252,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 	}
 	for (auto &child : statement.children) {
 		auto child_binder = Binder::CreateBinder(context, this);
-		child_binder->can_contain_nulls = true;
+		child_binder->SetCanContainNulls(true);
 		auto child_node = child_binder->BindNode(*child);
 		MoveCorrelatedExpressions(*child_binder);
 		result.bound_children.push_back(std::move(child_node));
@@ -278,9 +278,9 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 			auto result_type = result.bound_children[0].types[i];
 			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
 				auto &child_types = result.bound_children[child_idx].types;
-				result_type = LogicalType::ForceMaxLogicalType(result_type, child_types[i]);
+				result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_types[i]);
 			}
-			if (!can_contain_nulls) {
+			if (!CanContainNulls()) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);
 				}

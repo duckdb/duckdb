@@ -334,6 +334,9 @@ SequenceException::SequenceException(const string &msg) : Exception(ExceptionTyp
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, INTERRUPT_MESSAGE) {
 }
 
+InterruptException::InterruptException(const string &message) : Exception(ExceptionType::INTERRUPT, message) {
+}
+
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 	// FIXME: Make any log context available to add error logging.
 }

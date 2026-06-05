@@ -52,7 +52,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
+			return FindBaseTableColumn(*projection.children[0], bound_colref.Binding());
 		}
 		break;
 	}
@@ -132,7 +132,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 			output.data[5].Append(Value());
 		}
 
-		output.SetCardinality(output.size() + 1);
+		// both branches above append exactly one row to the child vectors, growing output.size() accordingly
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(append_state, output);
 			output.Reset();

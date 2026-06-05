@@ -92,7 +92,7 @@ void ProjectionPullup::PullUpColrefProjection(unique_ptr<LogicalOperator> &op, L
 	ColumnBindingReplacer replacer;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto &colref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
-		replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.binding);
+		replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.Binding());
 	}
 
 	replacer.stop_operator = proj.children[0];
@@ -140,7 +140,7 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		if (proj.expressions[i]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			auto &colref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
-			replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.binding);
+			replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.Binding());
 		}
 	}
 	for (idx_t i = 0; i < pull_up_to_here; i++) {
@@ -200,7 +200,7 @@ void ProjectionPullup::CanPullThrough(column_binding_map_t<unique_ptr<Expression
 				}
 
 				auto &colref = child_expr->Cast<BoundColumnRefExpression>();
-				auto entry = projection_map.find(colref.binding);
+				auto entry = projection_map.find(colref.Binding());
 
 				if (entry == projection_map.end()) {
 					return;
