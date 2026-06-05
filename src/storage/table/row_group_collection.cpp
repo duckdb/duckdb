@@ -586,8 +586,6 @@ optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &stat
 			auto previous_allocation_size = current_row_group.GetAllocationSize();
 			current_row_group.Append(state.row_group_append_state, chunk, append_count);
 			allocation_size += current_row_group.GetAllocationSize() - previous_allocation_size;
-			// merge the stats
-			current_row_group.MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
 		if (remaining == 0) {
