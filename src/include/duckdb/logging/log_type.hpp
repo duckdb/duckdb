@@ -184,4 +184,16 @@ public:
 	                                  const vector<string> &minimal_filters, uint64_t accepted_column_gap);
 };
 
+class AsyncTaskScheduleLogType : public LogType {
+public:
+	static constexpr const char *NAME = "AsyncTaskSchedule";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	AsyncTaskScheduleLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &pool, idx_t task_count);
+};
+
 } // namespace duckdb

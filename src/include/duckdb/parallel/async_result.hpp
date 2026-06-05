@@ -12,6 +12,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,8 @@ public:
 	AsyncResult() = default;
 	AsyncResult(AsyncResult &&) = default;
 	AsyncResult(SourceResultType t); // NOLINT
-	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task);
+	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task,
+	                     TaskSchedulerType pool_type = TaskSchedulerType::REGULAR);
 	AsyncResult &operator=(SourceResultType t);
 	AsyncResult &operator=(AsyncResultType t);
 	AsyncResult &operator=(AsyncResult &&) noexcept;
@@ -68,5 +70,7 @@ public:
 private:
 	AsyncResultType result_type {AsyncResultType::INVALID};
 	vector<unique_ptr<AsyncTask>> async_tasks {};
+	//! The thread pool that the async_tasks are scheduled onto when BLOCKED
+	TaskSchedulerType pool_type {TaskSchedulerType::REGULAR};
 };
 } // namespace duckdb
