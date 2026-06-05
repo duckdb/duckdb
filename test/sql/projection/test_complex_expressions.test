@@ -120,6 +120,18 @@ SELECT CASE 1 WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
 2
 
 query I
+SELECT CASE 1 WHEN 1 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
+----
+3
+
+query I
+SELECT CASE 1 WHEN 1 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
+----
+1
+2
+3
+
+query I
 SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
 FROM (SELECT 1 i, 42 __duckdb_simple_case_subject) tbl
 ----
