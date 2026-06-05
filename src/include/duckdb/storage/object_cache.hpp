@@ -77,7 +77,7 @@ public:
 
 	template <class T>
 	shared_ptr<T> Get(const string &key) {
-		shared_ptr<ObjectCacheEntry> object = GetObject(MakeCacheKey<T>(key));
+		shared_ptr<ObjectCacheEntry> object = GetObject(key);
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
@@ -86,11 +86,10 @@ public:
 
 	template <class T, class... ARGS>
 	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
-		const auto cache_key = MakeCacheKey<T>(key);
 		const lock_guard<mutex> lock(lock_mutex);
 
 		// Check non-evictable entries first
-		auto non_evictable_it = non_evictable_entries.find(cache_key);
+		auto non_evictable_it = non_evictable_entries.find(key);
 		if (non_evictable_it != non_evictable_entries.end()) {
 			auto &existing = non_evictable_it->second;
 			if (existing->GetObjectType() != T::ObjectType()) {
@@ -100,7 +99,7 @@ public:
 		}
 
 		// Check evictable cache
-		auto existing = lru_cache.Get(cache_key);
+		auto existing = lru_cache.Get(key);
 		if (existing) {
 			if (existing->GetObjectType() != T::ObjectType()) {
 				return nullptr;
@@ -113,20 +112,14 @@ public:
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
-			non_evictable_entries[cache_key] = value;
+			non_evictable_entries[key] = value;
 			return value;
 		}
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(cache_key, value, std::move(reservation));
+		lru_cache.Put(key, value, std::move(reservation));
 		return value;
-	}
-
-	//! Type-aware Put: the key is namespaced with ObjectType, so callers only pass a natural key.
-	template <class T>
-	void Put(const string &key, shared_ptr<ObjectCacheEntry> value) {
-		Put(MakeCacheKey<T>(key), std::move(value));
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
@@ -147,12 +140,6 @@ public:
 		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
 	}
 
-	//! Type-aware Delete: the key is namespaced with TObjectType.
-	template <class T>
-	void Delete(const string &key) {
-		Delete(MakeCacheKey<T>(key));
-	}
-
 	void Delete(const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
 		auto iter = non_evictable_entries.find(key);
@@ -161,6 +148,29 @@ public:
 			return;
 		}
 		lru_cache.Delete(key);
+	}
+
+	//! Type-prefixed variants of the methods above. These namespace the caller-provided key with the entry's
+	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
+	//! cache key themselves.
+	template <class T>
+	shared_ptr<T> GetWithTypePrefix(const string &key) {
+		return Get<T>(MakeCacheKey<T>(key));
+	}
+
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+		return GetOrCreate<T>(MakeCacheKey<T>(key), std::forward<ARGS>(args)...);
+	}
+
+	template <class T>
+	void PutWithTypePrefix(const string &key, shared_ptr<ObjectCacheEntry> value) {
+		Put(MakeCacheKey<T>(key), std::move(value));
+	}
+
+	template <class T>
+	void DeleteWithTypePrefix(const string &key) {
+		Delete(MakeCacheKey<T>(key));
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);

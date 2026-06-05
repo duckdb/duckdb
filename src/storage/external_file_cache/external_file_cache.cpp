@@ -313,7 +313,7 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	for (auto &path : paths) {
-		object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
+		object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);
 	}
 }
 
@@ -325,15 +325,16 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 			return make_shared_ptr<CachedFile>(path, current_generation);
 		}
 
-		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(path, *this, path, current_generation);
+		auto entry = object_cache.GetOrCreateWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path, *this, path,
+		                                                                                       current_generation);
 		auto cached_file = entry->GetCachedFile();
 
 		if (!enable) {
-			object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
+			object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);
 			return make_shared_ptr<CachedFile>(path, current_generation);
 		}
 		if (cached_file->generation != current_generation) {
-			object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
+			object_cache.DeleteWithTypePrefix<ExternalFileCacheObjectCacheEntry>(path);
 			continue;
 		}
 		return cached_file;

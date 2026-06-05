@@ -51,7 +51,7 @@ void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
 }
 
 EncryptionKeyManager &EncryptionKeyManager::GetInternal(ObjectCache &cache) {
-	return *cache.GetOrCreate<EncryptionKeyManager>("");
+	return *cache.GetOrCreate<EncryptionKeyManager>(EncryptionKeyManager::ObjectType());
 }
 
 EncryptionKeyManager &EncryptionKeyManager::Get(ClientContext &context) {
