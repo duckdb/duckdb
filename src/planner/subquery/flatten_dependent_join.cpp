@@ -227,8 +227,6 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 
 static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
                                                               const vector<ColumnBinding> &old_child_bindings);
-static void RegisterChangedBindingAliases(column_binding_map_t<ColumnBinding> &correlated_aliases,
-                                          const vector<ReplacementBinding> &replacements);
 static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan);
 
 static void VerifyNoDelim(LogicalOperator &op) {
@@ -306,8 +304,6 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
 		state = DecorrelateSubtree(child, propagate_null_values, std::move(state));
-		auto replacements = RewriteChangedChildBindings(*plan, *child, old_child_bindings);
-		RegisterChangedBindingAliases(correlated_aliases, replacements);
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
 	return state;
@@ -335,7 +331,6 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDependentJoin &op,
                                                                       bool propagate_null_values,
                                                                       vector<ColumnBinding> state) {
-	auto old_left_bindings = op.children[0]->GetColumnBindings();
 	// If we have a parent, we unnest the left side of the DEPENDENT JOIN in the parent's context.
 	if (parent) {
 		// only push the dependent join to the left side, if there is correlation.
@@ -346,14 +341,9 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 			op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
 		}
 
+		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 	} else {
 		state = DecorrelateSubtree(op.children[0], true, std::move(state));
-	}
-
-	auto replacements = RewriteChangedChildBindings(op, *op.children[0], old_left_bindings);
-	RegisterChangedBindingAliases(correlated_aliases, replacements);
-	if (parent) {
-		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 	}
 
 	if (!op.perform_delim) {
@@ -368,10 +358,7 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOperator> &plan,
                                                            bool propagate_null_values, vector<ColumnBinding> state,
                                                            bool rewrite_parent, idx_t child_idx) {
-	auto old_child_bindings = plan->children[child_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[child_idx], propagate_null_values, std::move(state));
-	auto replacements = RewriteChangedChildBindings(*plan, *plan->children[child_idx], old_child_bindings);
-	RegisterChangedBindingAliases(correlated_aliases, replacements);
 	if (rewrite_parent) {
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
@@ -531,18 +518,6 @@ static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &o
 	return replacements;
 }
 
-static void RegisterChangedBindingAliases(column_binding_map_t<ColumnBinding> &correlated_aliases,
-                                          const vector<ReplacementBinding> &replacements) {
-	for (const auto &replacement : replacements) {
-		auto entry = correlated_aliases.find(replacement.old_binding);
-		if (entry == correlated_aliases.end()) {
-			continue;
-		}
-		auto result = correlated_aliases.emplace(replacement.new_binding, entry->second);
-		D_ASSERT(result.second || result.first->second == entry->second);
-	}
-}
-
 static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
 	auto entry = std::find(bindings.begin(), bindings.end(), binding);
 	if (entry == bindings.end()) {
@@ -690,19 +665,6 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(outer_state), correlated_aliases);
 
-	auto left_bindings = plan->children[0]->GetColumnBindings();
-	idx_t correlated_idx = 0;
-	for (auto &col : op.correlated_columns) {
-		if (correlated_idx >= outer_state.size()) {
-			break;
-		}
-		if (!FindBindingIndex(left_bindings, col.binding).IsValid() &&
-		    FindBindingIndex(left_bindings, outer_state[correlated_idx]).IsValid()) {
-			col.binding = outer_state[correlated_idx];
-		}
-		correlated_idx++;
-	}
-
 	op.duplicate_eliminated_columns.clear();
 	op.mark_types.clear();
 	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
@@ -738,7 +700,6 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 	if (op.subquery_type == SubqueryType::ANY) {
 		AddAnyJoinConditions(op, plan_columns);
 	}
-
 	return outer_state;
 }
 
@@ -748,10 +709,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
                                                                            bool correlated_left) {
 	idx_t correlated_idx = correlated_left ? 0 : 1;
 	idx_t independent_idx = correlated_left ? 1 : 0;
-	auto old_correlated_bindings = plan->children[correlated_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[correlated_idx], propagate_null_values, std::move(state));
-	auto replacements = RewriteChangedChildBindings(*plan, *plan->children[correlated_idx], old_correlated_bindings);
-	RegisterChangedBindingAliases(correlated_aliases, replacements);
 	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
 	return state;
 }
