@@ -82,11 +82,10 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	header = VariantMetadataHeader::FromHeaderByte(metadata_data[metadata_offset]);
 	metadata_offset += sizeof(uint8_t);
 
-	auto data_start = metadata_offset;
 	idx_t dictionary_size =
 	    ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset, metadata_buffer_capacity);
 
-	data_start += (dictionary_size + 1) * header.offset_size;
+	auto data_start = metadata_offset + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset =
 	    ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset, metadata_buffer_capacity);
 	for (idx_t i = 0; i < dictionary_size; i++) {
@@ -368,9 +367,15 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 
 	idx_t num_elements;
 	if (is_large) {
+		if (data_offset + sizeof(uint32_t) > data_size) {
+			throw InternalException("Corrupted VARIANT 'value' buffer");
+		}
 		num_elements = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 	} else {
+		if (data_offset + sizeof(uint8_t) > data_size) {
+			throw InternalException("Corrupted VARIANT 'value' buffer");
+		}
 		num_elements = Load<uint8_t>(data + data_offset);
 		data_offset += sizeof(uint8_t);
 	}
@@ -406,9 +411,15 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 
 	uint32_t num_elements;
 	if (is_large) {
+		if (data_offset + sizeof(uint32_t) > data_size) {
+			throw InternalException("Corrupted VARIANT 'value' buffer");
+		}
 		num_elements = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 	} else {
+		if (data_offset + sizeof(uint8_t) > data_size) {
+			throw InternalException("Corrupted VARIANT 'value' buffer");
+		}
 		num_elements = Load<uint8_t>(data + data_offset);
 		data_offset += sizeof(uint8_t);
 	}
