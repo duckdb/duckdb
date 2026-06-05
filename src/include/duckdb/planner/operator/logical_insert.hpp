@@ -43,6 +43,8 @@ struct BoundOnConflictInfo {
 	vector<column_t> source_columns;
 	//! True, if the INSERT OR REPLACE requires delete + insert.
 	bool update_is_del_and_insert;
+	//! See TableDeleteState::skip_unchanged_fk_delete_check.
+	bool skip_unchanged_fk_delete_check = false;
 };
 
 //! LogicalInsert represents an insertion of data into a base table

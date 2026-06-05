@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -325,6 +326,42 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 
 	if (update.update_is_del_and_insert) {
+		// Before expanding update.columns to all columns, decide whether the delete-side FK
+		// check can be skipped for this UPDATE rewrite. It can iff every FK constraint that
+		// fires on delete has its PK columns disjoint from the user-specified updated columns
+		// and no FK is self-referential. See TableDeleteState::skip_unchanged_fk_delete_check.
+		physical_index_set_t user_updated_set;
+		for (auto &col : update.columns) {
+			user_updated_set.insert(col);
+		}
+		bool has_delete_fk = false;
+		bool can_skip = true;
+		for (auto &constraint : bound_constraints) {
+			if (constraint->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = constraint->Cast<BoundForeignKeyConstraint>();
+			if (!fk.info.IsDeleteConstraint()) {
+				continue;
+			}
+			if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				// Self-referential FKs need a per-row predicate; out of scope (see #16436).
+				can_skip = false;
+				break;
+			}
+			has_delete_fk = true;
+			for (auto &pk_idx : fk.info.pk_keys) {
+				if (user_updated_set.find(pk_idx) != user_updated_set.end()) {
+					can_skip = false;
+					break;
+				}
+			}
+			if (!can_skip) {
+				break;
+			}
+		}
+		update.skip_unchanged_fk_delete_check = can_skip && has_delete_fk;
+
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
 		physical_index_set_t all_columns;

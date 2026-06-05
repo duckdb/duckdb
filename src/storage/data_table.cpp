@@ -1529,6 +1529,14 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 		case ConstraintType::FOREIGN_KEY: {
 			auto &bound_foreign_key = constraint->Cast<BoundForeignKeyConstraint>();
 			if (bound_foreign_key.info.IsDeleteConstraint()) {
+				// Skip the spurious delete-side FK check when this delete is the DELETE-half of
+				// an UPDATE rewrite whose updated columns are disjoint from the FK's PK columns
+				// and the FK is not self-referential. The matching INSERT in the same statement
+				// re-adds the identical PK so the reference is never actually going to dangle.
+				if (state.skip_unchanged_fk_delete_check &&
+				    bound_foreign_key.info.type != ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+					break;
+				}
 				VerifyDeleteForeignKeyConstraint(storage, bound_foreign_key, context, chunk);
 			}
 			break;

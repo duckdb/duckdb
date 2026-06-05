@@ -191,6 +191,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
+	delete_state.skip_unchanged_fk_delete_check = skip_unchanged_fk_delete_check;
 	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
