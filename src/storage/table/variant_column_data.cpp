@@ -433,8 +433,6 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                   const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                   idx_t fetch_count, Vector &result, idx_t result_offset) {
-	const SelectionVector identity_sel;
-
 	if (storage_index.IsPushdownExtract() && IsShredded()) {
 		StorageIndex struct_extract;
 		if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
@@ -450,7 +448,8 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 		const idx_t offset = offsets[sel.get_index(idx)];
 		const idx_t result_idx = result_offset + idx;
 		Vector variant_vec(LogicalType::VARIANT(), 1);
-		validity->FetchRowsAtSegmentLevel(transaction, state, &offset, identity_sel, /*count=*/1, variant_vec, 0);
+		validity->FetchRowsAtSegmentLevel(transaction, state, &offset, *FlatVector::IncrementalSelectionVector(),
+		                                  /*count=*/1, variant_vec, 0);
 		if (IsShredded()) {
 			auto intermediate = CreateUnshreddingIntermediate(1);
 			auto &child_vectors = StructVector::GetEntries(intermediate);
@@ -458,8 +457,8 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 			// fetch the sub-column states
 			StorageIndex empty(0);
 			for (idx_t i = 0; i < sub_columns.size(); i++) {
-				sub_columns[i]->FetchRows(transaction, state, empty, &offset, identity_sel, /*count=*/1,
-				                          child_vectors[i], 0);
+				sub_columns[i]->FetchRows(transaction, state, empty, &offset, *FlatVector::IncrementalSelectionVector(),
+				                          /*count=*/1, child_vectors[i], 0);
 			}
 
 			//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
@@ -467,8 +466,8 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 			VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
 			variant_vec.SetValue(0, unshredded.GetValue(0));
 		} else {
-			sub_columns[0]->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/1,
-			                          variant_vec, 0);
+			sub_columns[0]->FetchRows(transaction, state, storage_index, &offset,
+			                          *FlatVector::IncrementalSelectionVector(), /*count=*/1, variant_vec, 0);
 		}
 
 		if (!storage_index.IsPushdownExtract()) {

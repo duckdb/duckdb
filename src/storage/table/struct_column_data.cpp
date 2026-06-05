@@ -327,8 +327,6 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                  const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                  idx_t fetch_count, Vector &result, idx_t result_offset) {
-	const SelectionVector identity_sel;
-
 	// fetch the validity state
 	validity->FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
 	if (storage_index.IsPushdownExtract()) {
@@ -344,8 +342,8 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);
-				sub_column.FetchRows(transaction, state, child_storage_index, &offset, identity_sel, /*count=*/1,
-				                     intermediate, 0);
+				sub_column.FetchRows(transaction, state, child_storage_index, &offset,
+				                     *FlatVector::IncrementalSelectionVector(), /*count=*/1, intermediate, 0);
 				auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
 				result.SetValue(result_offset + idx, fetched_row);
 			}
