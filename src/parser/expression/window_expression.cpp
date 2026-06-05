@@ -7,32 +7,6 @@ namespace duckdb {
 WindowExpression::WindowExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::WINDOW) {
 }
 
-WindowExpression::WindowExpression(ExpressionType type, vector<FunctionArgument> arguments_p,
-                                   unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
-    : ParsedExpression(type, ExpressionClass::WINDOW), arguments(std::move(arguments_p)) {
-	if (offset_expr) {
-		arguments.emplace_back("offset", std::move(offset_expr));
-	}
-	if (default_expr) {
-		arguments.emplace_back("default", std::move(default_expr));
-	}
-}
-
-WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children_p,
-                                   unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
-    : ParsedExpression(type, ExpressionClass::WINDOW) {
-	for (auto &child : children_p) {
-		// Unnamed arguments
-		arguments.emplace_back(std::move(child));
-	}
-	if (offset_expr) {
-		arguments.emplace_back("offset", std::move(offset_expr));
-	}
-	if (default_expr) {
-		arguments.emplace_back("default", std::move(default_expr));
-	}
-}
-
 vector<unique_ptr<ParsedExpression>> WindowExpression::SerializedChildren(Serializer &serializer) const {
 	vector<unique_ptr<ParsedExpression>> result;
 	idx_t nargs = arguments.size();

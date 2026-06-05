@@ -414,12 +414,6 @@ private:
 private:
 	WindowExpression();
 
-	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
-	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
-
-	WindowExpression(ExpressionType type, vector<FunctionArgument> children, unique_ptr<ParsedExpression> offset_expr,
-	                 unique_ptr<ParsedExpression> default_expr);
-
 	//	Backwards-compatible serialization interface
 	//	Remove LEAD/LAG offset/default
 	vector<unique_ptr<ParsedExpression>> SerializedChildren(Serializer &serializer) const;
