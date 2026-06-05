@@ -727,7 +727,6 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
-	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
 	const data_ptr_t *addresses_ptrs;
 	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (count != 1) {
@@ -738,41 +737,13 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 	}
 
-	auto state_size = bind_data.aggregate->Function().GetStateSizeCallback()(bind_data.aggregate->Function());
+	auto state_size = 16ULL;
 
 	// Note: The underlying state type should always be a struct (we have a D_ASSERT for that in `GetStateType`
-	bool should_result_as_struct = bind_data.aggregate->Function().HasGetStateTypeCallback();
-	if (should_result_as_struct) {
-		AggregateStateLayout layout(bind_data.aggregate->Function().GetStateType(), state_size);
+	AggregateStateLayout layout(result.GetType(), state_size);
 
-		result.Flatten();
-		SerializeStructFields(layout, result, count, addresses_ptrs);
-		return;
-	}
-
-	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), UnsafeNumericCast<uint32_t>(state_size)));
-	}
-}
-
-void ExportStateAggregateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                   const BoundAggregateFunction &function) {
-	throw NotImplementedException("FIXME: export state serialize");
-}
-
-unique_ptr<FunctionData> ExportStateAggregateDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
-	throw NotImplementedException("FIXME: export state deserialize");
-}
-
-void ExportStateScalarSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                const BoundScalarFunction &function) {
-	throw NotImplementedException("FIXME: export state serialize");
-}
-
-unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
-	throw NotImplementedException("FIXME: export state deserialize");
+	result.Flatten();
+	SerializeStructFields(layout, result, count, addresses_ptrs);
 }
 
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
@@ -861,14 +832,19 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 
 } // namespace
 
+void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
+	auto &bound_function = aggregate.FunctionMutable();
+	bound_function.SetStateFinalizeCallback(ExportAggregateFinalize);
+	bound_function.SetReturnType(state_layout);
+	aggregate.StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
+	aggregate.SetReturnType(std::move(state_layout));
+}
+
 unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
-	auto &bound_function = child_aggregate->Function();
+	auto &bound_function = child_aggregate->FunctionMutable();
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
-	}
-	if (bound_function.HasBindCallback()) {
-		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom binders");
 	}
 	if (bound_function.HasStateDestructorCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
@@ -878,42 +854,15 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
-#ifdef DEBUG
-	for (auto &arg_type : child_aggregate->Function().GetArguments()) {
-		D_ASSERT(arg_type.id() != LogicalTypeId::INVALID);
+	LogicalType return_type;
+	if (!bound_function.HasGetStateTypeCallback()) {
+		throw NotImplementedException(
+		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
+		    bound_function.GetName());
 	}
-#endif
-	throw InternalException("FIXME: bind export");
-	// auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	// aggregate_state_t state_type(child_aggregate->Function().GetName(), child_aggregate->Function().GetReturnType(),
-	//                              child_aggregate->Function().GetArguments());
-	//
-	// LogicalType return_type;
-	// if (bound_function.HasGetStateTypeCallback()) {
-	// 	LogicalType state_layout = bound_function.GetStateType();
-	// 	auto struct_child_types = StructType::GetChildTypes(state_layout);
-	// 	return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
-	// } else {
-	// 	return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
-	// }
-
-	// auto export_function = AggregateFunction(
-	//     "aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(), return_type,
-	//     bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
-	//     bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
-	//     FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
-	//     /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	//     /* can't propagate statistics */ nullptr, nullptr);
-	// export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	// export_function.SetSerializeCallback(ExportStateAggregateSerialize);
-	// export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
-	//
-	// BoundAggregateFunction bound_func(export_function);
-	//
-	// return make_uniq<BoundAggregateExpression>(std::move(bound_func),
-	// std::move(child_aggregate->GetChildrenMutable()),
-	//                                            std::move(child_aggregate->GetFilterMutable()),
-	//                                            std::move(export_bind_data), child_aggregate->GetAggregateType());
+	LogicalType state_layout = bound_function.GetStateType();
+	SetStateExport(*child_aggregate, std::move(state_layout));
+	return std::move(child_aggregate);
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
@@ -934,8 +883,6 @@ ScalarFunction FinalizeFun::GetFunction() {
 	auto function = ScalarFunction("finalize", {LogicalTypeId::ANY}, LogicalTypeId::INVALID, AggregateStateFinalize,
 	                               BindAggregateState, nullptr, InitFinalizeState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	function.SetSerializeCallback(ExportStateScalarSerialize);
-	function.SetDeserializeCallback(ExportStateScalarDeserialize);
 
 	return function;
 }
@@ -944,8 +891,6 @@ ScalarFunction CombineFun::GetFunction() {
 	auto function = ScalarFunction("combine", {LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalTypeId::ANY,
 	                               AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	function.SetSerializeCallback(ExportStateScalarSerialize);
-	function.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return function;
 }
 

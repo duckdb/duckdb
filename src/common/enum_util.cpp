@@ -401,6 +401,24 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 	return static_cast<AggregateOrderDependent>(StringUtil::StringToEnum(GetAggregateOrderDependentValues(), 2, "AggregateOrderDependent", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAggregateStateExportModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateStateExportMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(AggregateStateExportMode::STATE_EXPORT), "STATE_EXPORT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value) {
+	return StringUtil::EnumToString(GetAggregateStateExportModeValues(), 2, "AggregateStateExportMode", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value) {
+	return static_cast<AggregateStateExportMode>(StringUtil::StringToEnum(GetAggregateStateExportModeValues(), 2, "AggregateStateExportMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAggregateTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AggregateType::NON_DISTINCT), "NON_DISTINCT" },
