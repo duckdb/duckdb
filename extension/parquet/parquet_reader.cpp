@@ -1578,21 +1578,19 @@ private:
 	std::shared_ptr<duckdb_apache::thrift::transport::TTransport> transport;
 };
 
+// Async I/O tasks for the read heads in the index range [from, to), skipping any that are already fetched.
 static vector<unique_ptr<AsyncTask>>
 CollectIOTasks(std::shared_ptr<duckdb_apache::thrift::transport::TTransport> transport,
-               const shared_ptr<CachingFileHandle> &file_handle, idx_t tail_count = 0) {
+               const shared_ptr<CachingFileHandle> &file_handle, idx_t from, idx_t to) {
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*transport);
 	auto &read_heads = trans.GetReadHeads();
 	vector<unique_ptr<AsyncTask>> io_tasks;
-	if (tail_count == 0) {
-		for (auto &read_head : read_heads) {
+	idx_t i = 0;
+	for (auto &read_head : read_heads) {
+		if (i >= from && i < to && !read_head.data_isset) {
 			io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(read_head, file_handle, transport));
 		}
-	} else {
-		auto it = read_heads.rbegin();
-		for (idx_t n = 0; n < tail_count && it != read_heads.rend(); ++n, ++it) {
-			io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(*it, file_handle, transport));
-		}
+		i++;
 	}
 	return io_tasks;
 }
@@ -1790,16 +1788,17 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 				strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 			}
 		}
+		auto read_head_count = trans.GetReadHeads().size();
 		switch (strategy) {
 		case ParquetPrefetchStrategy::PREFETCH_FILTERS:
-			// schedule only the filter columns' I/O (the trailing filter read heads).
-			io_tasks =
-			    CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, state.filter_head_count);
+			// schedule only the filter columns' I/O, they are last so we do from read_head_count - state.filter_head_count
+			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle,
+			                          read_head_count - state.filter_head_count, read_head_count);
 			break;
 		case ParquetPrefetchStrategy::WHOLE_GROUP:
 		case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
 			// schedule the I/O for all columns up front
-			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle);
+			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, 0, read_head_count);
 			break;
 		default:
 			throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
@@ -1876,6 +1875,17 @@ idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &r
 void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataChunk &result,
                                            const vector<bool> &need_to_read, idx_t filter_count, uint8_t *define_ptr,
                                            uint8_t *repeat_ptr) {
+	// On the lazy PREFETCH_FILTERS path the surviving payload columns are not yet fetched
+	if (filter_count > 0 && state.filter_head_count > 0) {
+		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+		auto payload_head_count = trans.GetReadHeads().size() - state.filter_head_count;
+		// payload columns are registered early, so we do from 0 to head
+		auto io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, 0, payload_head_count);
+		for (auto &task : io_tasks) {
+			task->Execute();
+		}
+	}
+
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		MultiFileLocalIndex col_idx(i);
 		if (!need_to_read[col_idx]) {
