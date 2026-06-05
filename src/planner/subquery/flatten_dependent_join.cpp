@@ -230,12 +230,27 @@ static void RegisterChangedBindingAliases(column_binding_map_t<ColumnBinding> &c
                                           const vector<ReplacementBinding> &replacements);
 static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan);
 
+static void VerifyNoDelim(LogicalOperator &op) {
+	// Verify that there are no delim joins or delim scans in the plan, as these should have been rewritten to CTEs at
+	// this point.
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		throw InternalException("Found DELIM_JOIN after flattening dependent joins");
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		throw InternalException("Found DELIM_GET after flattening dependent joins");
+	}
+	for (auto &child : op.children) {
+		VerifyNoDelim(*child);
+	}
+}
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
 	RewriteDelimJoinsToCTEs(binder, plan);
+	VerifyNoDelim(*plan);
 	return plan;
 }
 
