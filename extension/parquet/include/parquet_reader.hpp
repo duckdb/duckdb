@@ -394,6 +394,12 @@ private:
 	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
 	SourceResultType Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	//! Run the filters
+	idx_t EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, vector<bool> &need_to_read,
+	                      idx_t scan_count, uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch);
+	//! Read the remaining (non-filter) columns into result.
+	void DecodeRemainingColumns(ParquetReaderScanState &state, DataChunk &result, const vector<bool> &need_to_read,
+	                            idx_t filter_count, uint8_t *define_ptr, uint8_t *repeat_ptr);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);

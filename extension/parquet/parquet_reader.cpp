@@ -1793,8 +1793,8 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		switch (strategy) {
 		case ParquetPrefetchStrategy::PREFETCH_FILTERS:
 			// schedule only the filter columns' I/O (the trailing filter read heads).
-			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle,
-			                          state.filter_head_count);
+			io_tasks =
+			    CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, state.filter_head_count);
 			break;
 		case ParquetPrefetchStrategy::WHOLE_GROUP:
 		case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
@@ -1813,6 +1813,87 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, vector<bool> &need_to_read,
+                                     idx_t scan_count, uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
+	idx_t filter_count = result.size();
+	D_ASSERT(filter_count == scan_count);
+
+	state.sel.Initialize(nullptr);
+	D_ASSERT(!filters || state.scan_filters.size() == filters->FilterCount());
+
+	bool is_first_filter = true;
+	if (deletion_filter) {
+		auto row_start = UnsafeNumericCast<row_t>(state.offset_in_group + state.group_offset);
+		filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
+		//! FIXME: does this need to be set?
+		//! As part of 'DirectFilter' we also initialize reads of the child readers
+		is_first_filter = false;
+	}
+	if (!filters) {
+		return filter_count;
+	}
+
+	// first load the columns that are used in filters
+	auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+	auto filter_state = adaptive_filter.BeginFilter();
+	const auto &permutation = adaptive_filter.GetPermutation();
+	for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+		if (filter_count == 0) {
+			// if no rows are left we can stop checking filters
+			break;
+		}
+		auto &scan_filter = state.scan_filters[permutation[i]];
+		MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+
+		auto &result_vector = result.data[local_idx.GetIndex()];
+		auto &child_reader = state.GetColumnReader(local_idx);
+		ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
+		child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state, state.sel,
+		                    filter_count, is_first_filter);
+		if (log_prefetch) {
+			auto &filters_used = state.prefetch_metrics.logger.filters_used;
+			if (filters_used.size() != state.scan_filters.size()) {
+				filters_used.assign(state.scan_filters.size(), false);
+			}
+			filters_used[permutation[i]] = true;
+		}
+		need_to_read[local_idx.GetIndex()] = false;
+		is_first_filter = false;
+		if (filter_count == 0) {
+			state.filter_eliminated_all_rows[permutation[i]] = true;
+		}
+	}
+	adaptive_filter.EndFilter(filter_state);
+	state.prefetch_metrics.filter_ran = true;
+	if (filter_count > 0) {
+		state.prefetch_metrics.had_match = true;
+	}
+	return filter_count;
+}
+
+void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataChunk &result,
+                                           const vector<bool> &need_to_read, idx_t filter_count, uint8_t *define_ptr,
+                                           uint8_t *repeat_ptr) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		MultiFileLocalIndex col_idx(i);
+		if (!need_to_read[col_idx]) {
+			continue;
+		}
+		if (filter_count == 0) {
+			state.GetColumnReader(col_idx).Skip(result.size());
+			continue;
+		}
+		auto &result_vector = result.data[i];
+		auto &child_reader = state.GetColumnReader(col_idx);
+		if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+			child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+			                                      GetGroup(state).ordinal);
+		}
+		ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
+		child_reader.Select(reader_input, result_vector, state.sel, filter_count);
+	}
 }
 
 SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
@@ -1834,79 +1915,11 @@ SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk
 	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
 
 	if (filters || deletion_filter) {
-		idx_t filter_count = result.size();
-		D_ASSERT(filter_count == scan_count);
 		vector<bool> need_to_read(column_ids.size(), true);
-
-		state.sel.Initialize(nullptr);
-		D_ASSERT(!filters || state.scan_filters.size() == filters->FilterCount());
-
-		bool is_first_filter = true;
-		if (deletion_filter) {
-			auto row_start = UnsafeNumericCast<row_t>(state.offset_in_group + state.group_offset);
-			filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
-			//! FIXME: does this need to be set?
-			//! As part of 'DirectFilter' we also initialize reads of the child readers
-			is_first_filter = false;
-		}
-
-		if (filters) {
-			// first load the columns that are used in filters
-			auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
-			auto filter_state = adaptive_filter.BeginFilter();
-			const auto &permutation = adaptive_filter.GetPermutation();
-			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-				if (filter_count == 0) {
-					// if no rows are left we can stop checking filters
-					break;
-				}
-				auto &scan_filter = state.scan_filters[permutation[i]];
-				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
-
-				auto &result_vector = result.data[local_idx.GetIndex()];
-				auto &child_reader = state.GetColumnReader(local_idx);
-				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
-				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
-				                    state.sel, filter_count, is_first_filter);
-				if (log_prefetch) {
-					auto &filters_used = state.prefetch_metrics.logger.filters_used;
-					if (filters_used.size() != state.scan_filters.size()) {
-						filters_used.assign(state.scan_filters.size(), false);
-					}
-					filters_used[permutation[i]] = true;
-				}
-				need_to_read[local_idx.GetIndex()] = false;
-				is_first_filter = false;
-				if (filter_count == 0) {
-					state.filter_eliminated_all_rows[permutation[i]] = true;
-				}
-			}
-			adaptive_filter.EndFilter(filter_state);
-			state.prefetch_metrics.filter_ran = true;
-			if (filter_count > 0) {
-				state.prefetch_metrics.had_match = true;
-			}
-		}
-
+		idx_t filter_count =
+		    EvaluateFilters(state, result, need_to_read, scan_count, define_ptr, repeat_ptr, log_prefetch);
 		// we still may have to read some cols
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			MultiFileLocalIndex col_idx(i);
-			if (!need_to_read[col_idx]) {
-				continue;
-			}
-			if (filter_count == 0) {
-				state.GetColumnReader(col_idx).Skip(result.size());
-				continue;
-			}
-			auto &result_vector = result.data[i];
-			auto &child_reader = state.GetColumnReader(col_idx);
-			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
-				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
-				                                      GetGroup(state).ordinal);
-			}
-			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
-			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
-		}
+		DecodeRemainingColumns(state, result, need_to_read, filter_count, define_ptr, repeat_ptr);
 		if (scan_count != filter_count) {
 			result.Slice(state.sel, filter_count);
 		}
