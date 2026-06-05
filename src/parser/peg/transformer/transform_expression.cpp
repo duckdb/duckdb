@@ -19,16 +19,10 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr_list = ExtractParseResultsFromList(list_pr.GetChild(0));
-
-	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto &expr : expr_list) {
-		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
-	}
-
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
+                                                    vector<unique_ptr<ParsedExpression>> expression_alias) {
+	auto expressions = std::move(expression_alias);
 	auto select_statement = make_uniq<SelectStatement>();
 	auto select_node = make_uniq<SelectNode>();
 
@@ -165,9 +159,8 @@ PEGTransformerFactory::TransformSchemaReservedTableColumnName(PEGTransformer &tr
 }
 
 string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier;
+                                                                  const string &reserved_table_name) {
+	return reserved_table_name;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
@@ -225,10 +218,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
-			if (arg.HasName()) {
-				throw ParserException("Named arguments are not supported in window functions");
-			}
-			expr->GetChildrenMutable().push_back(std::move(arg.GetExpressionMutable()));
+			expr->GetArgumentsMutable().push_back(std::move(arg));
 		}
 
 		expr->HasIgnoreNullsMutable() = has_ignore_nulls_result;
@@ -1759,9 +1749,8 @@ unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformTableReservedCol
 	return make_uniq<ColumnRefExpression>(column, table);
 }
 
-string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier;
+string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer, const string &table_name) {
+	return table_name;
 }
 
 string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -2229,7 +2218,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractArgument(PEG
 	if (choice_pr.type == ParseResultType::STRING) {
 		return make_uniq<ConstantExpression>(Value(choice_pr.Cast<StringLiteralParseResult>().result));
 	}
-	auto date_part = transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	auto date_part = transformer.Transform<DatePartSpecifier>(choice_pr);
 	return make_uniq<ConstantExpression>(EnumUtil::ToString(date_part));
 }
 

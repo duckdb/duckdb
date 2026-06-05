@@ -71,7 +71,6 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 		sort_chunk.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
 	sort_chunk.SetChildCardinality(input.size());
-
 	// Sink the data into the local sort state
 	InterruptState interrupt;
 	OperatorSinkInput sink {*global_table.global_sink, *local_sink, interrupt};
