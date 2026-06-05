@@ -269,7 +269,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	vector<CachedFileInformation> result;
 	for (const auto &key : keys) {
-		auto entry = object_cache.Get<ExternalFileCacheObjectCacheEntry>(key);
+		auto entry = object_cache.GetWithTypePrefix<ExternalFileCacheObjectCacheEntry>(key);
 		if (!entry) {
 			continue;
 		}

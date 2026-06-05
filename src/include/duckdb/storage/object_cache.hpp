@@ -164,8 +164,9 @@ public:
 	}
 
 	template <class T>
-	void PutWithTypePrefix(const string &key, const shared_ptr<ObjectCacheEntry> &value) {
-		Put(MakeCacheKey<T>(key), value);
+	void PutWithTypePrefix(const string &key,
+	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
+		Put(MakeCacheKey<T>(key), std::move(value));
 	}
 
 	template <class T>
