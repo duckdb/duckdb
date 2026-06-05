@@ -184,8 +184,10 @@ vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &b
 				D_ASSERT(value_validity.RowIsValid(value_index));
 				auto metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 				VariantMetadata variant_metadata(metadata_value);
-				ret[i] = VariantBinaryDecoder::Decode(variant_metadata,
-				                                      const_data_ptr_cast(value_data[value_index].GetData()));
+
+				auto &value_buffer = value_data[value_index];
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(value_buffer.GetData()), 0,
+				                                      value_buffer.GetSize());
 			}
 		}
 	}
@@ -340,8 +342,11 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 		if (validity.RowIsValid(index)) {
 			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 			VariantMetadata variant_metadata(metadata_value);
-			auto binary_value = value_data[index].GetData();
-			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+
+			auto &value_buffer = value_data[index];
+			auto binary_value = value_buffer.GetData();
+			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value), 0,
+			                                      value_buffer.GetSize());
 		}
 	}
 	return ret;
@@ -366,8 +371,11 @@ static VariantValue ConvertPartiallyShreddedObject(vector<ShreddedVariantField> 
 		//! Object is partially shredded, decode the object and merge the values
 		auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 		VariantMetadata variant_metadata(metadata_value);
-		auto binary_value = value_data[index].GetData();
-		auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+
+		auto &value_buffer = value_data[index];
+		auto binary_value = value_buffer.GetData();
+		auto unshredded = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value), 0,
+		                                               value_buffer.GetSize());
 		if (unshredded.value_type != VariantValueType::OBJECT) {
 			throw InvalidInputException("Partially shredded objects have to encode Object Variants in the 'value'");
 		}
@@ -438,8 +446,11 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 				D_ASSERT(validity.RowIsValid(value_index));
 				auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 				VariantMetadata variant_metadata(metadata_value);
-				auto binary_value = value_data[value_index].GetData();
-				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+
+				auto &value_buffer = value_data[value_index];
+				auto binary_value = value_buffer.GetData();
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value), 0,
+				                                      value_buffer.GetSize());
 				if (ret[i].value_type == VariantValueType::OBJECT) {
 					throw InvalidInputException(
 					    "When 'typed_value' for a shredded Object is NULL, 'value' can not contain an Object value");
@@ -500,8 +511,10 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 				D_ASSERT(value_validity.RowIsValid(value_index));
 				auto metadata_value = metadata_data[metadata_format.sel->get_index(i)];
 				VariantMetadata variant_metadata(metadata_value);
-				ret[i] = VariantBinaryDecoder::Decode(variant_metadata,
-				                                      const_data_ptr_cast(value_data[value_index].GetData()));
+
+				const auto &value_buffer = value_data[value_index];
+				ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(value_buffer.GetData()), 0,
+				                                      value_buffer.GetSize());
 			}
 		}
 	}
