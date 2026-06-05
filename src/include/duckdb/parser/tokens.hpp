@@ -19,6 +19,7 @@ class AlterStatement;
 class AttachStatement;
 class CallStatement;
 class ConnectStatement;
+class ConnectExecuteStatement;
 class CopyStatement;
 class CreateStatement;
 class DetachStatement;
@@ -46,6 +47,7 @@ class LogicalPlanStatement;
 class MultiStatement;
 class CopyDatabaseStatement;
 class MergeIntoStatement;
+class PassthroughStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

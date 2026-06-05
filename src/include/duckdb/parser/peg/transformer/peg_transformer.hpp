@@ -226,9 +226,12 @@ class PEGTransformerFactory {
 public:
 	explicit PEGTransformerFactory();
 
-	//! Helper functions
-	vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                           Matcher &root_matcher);
+	//! Match a single TopLevelStatement from `tokens` starting at `token_cursor` and transform it
+	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).
+	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
+	//! starts, and on return holds the token index immediately past the last consumed token.
+	unique_ptr<SQLStatement> TransformTopLevelStatement(vector<MatcherToken> &tokens, ParserOptions &options,
+	                                                    Matcher &root_matcher, idx_t &token_cursor);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);
@@ -303,9 +306,11 @@ private:
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
 
-	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
-	// hand-write the (PEGTransformer&, ParseResult&) entry points.
+	// connect.gram — these rules have optional sub-clauses or non-standard shapes, so the
+	// generator skips them and we hand-write the (PEGTransformer&, ParseResult&) entry points.
 	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformConnectExecuteStatement(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 

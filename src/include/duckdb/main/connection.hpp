@@ -132,8 +132,6 @@ public:
 	//! DEFAULT_SCHEMA.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
 
-	//! Extract a set of SQL statements from a specific query
-	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
 	//! Extract the logical plan that corresponds to a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 

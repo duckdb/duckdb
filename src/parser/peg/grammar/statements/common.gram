@@ -1,4 +1,14 @@
-Program <- Statement? (';'+ Statement)* ';'*
+Program <- TopLevelStatement*
+
+# LOCAL mode root. ConnectExecuteStatement is tried first so it matches `CONNECT x EXECUTE`
+# without being shadowed by `Statement`'s ConnectStatement (which only consumes `CONNECT x`
+# and would then fail on the trailing EXECUTE).
+TopLevelStatement <- ConnectExecuteStatement / (Statement? (';'+ / EndOfInput))
+
+# CONNECTED mode root (used by StatementIterator when ClientContext::IsConnected()). Only
+# recognises the structured control statements; anything else is shipped to the sticky target
+# verbatim via the iterator's PEG-failure scan-for-';' fallback.
+ConnectedTopLevelStatement <- ConnectExecuteStatement / (DisconnectStatement? (';'+ / EndOfInput))
 
 Statement <-
 	CreateStatement /

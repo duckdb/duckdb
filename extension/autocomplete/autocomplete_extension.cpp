@@ -510,6 +510,9 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
+		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_NOW_AUTOCOMPLETE) {
+			continue;
+		}
 
 		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
 		token_type.Append(Value(TokenTypeToString(entry.type)));
@@ -549,7 +552,9 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->Root().Match(state);
-	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
+	// consuming it.
+	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
 			if (!token_list.empty()) {

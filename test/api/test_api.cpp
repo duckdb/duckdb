@@ -24,7 +24,7 @@ TEST_CASE("Test StarExpression replace_list parameter", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto sql = "select * replace(i * $n as i) from range(1, 10) t(i)";
-	auto stmts = con.ExtractStatements(sql);
+	auto stmts = con.context->ParseStatements(sql);
 
 	auto &select_stmt = stmts[0]->Cast<SelectStatement>();
 	auto &select_node = select_stmt.node->Cast<SelectNode>();
@@ -620,7 +620,7 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 
 	auto query = "INSERT INTO Foo values (1, 'qwerty', 42)";
 
-	auto stmts = conn.ExtractStatements(query);
+	auto stmts = conn.context->ParseStatements(query);
 	auto &stmt = stmts[0];
 
 	// Issue was here: calling ToString destroyed the 'alias' of the ValuesList
@@ -743,15 +743,15 @@ TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements wit
 	con.Query("CREATE TABLE test(id INT);");
 
 	sql = "INSERT INTO test (id) VALUES (1) RETURNING id AS inserted";
-	auto stmts = con.ExtractStatements(sql);
+	auto stmts = con.context->ParseStatements(sql);
 	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id) (VALUES (1)) RETURNING id AS inserted");
 
 	sql = "UPDATE test SET id = 1 RETURNING id AS updated";
-	stmts = con.ExtractStatements(sql);
+	stmts = con.context->ParseStatements(sql);
 	REQUIRE(stmts[0]->ToString() == sql);
 
 	sql = "DELETE FROM test WHERE (id = 1) RETURNING id AS deleted";
-	stmts = con.ExtractStatements(sql);
+	stmts = con.context->ParseStatements(sql);
 	REQUIRE(stmts[0]->ToString() == sql);
 }
 

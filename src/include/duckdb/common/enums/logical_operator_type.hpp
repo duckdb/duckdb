@@ -105,6 +105,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_UPDATE_EXTENSIONS = 182,
 	LOGICAL_CONNECT = 183,
 	LOGICAL_DISCONNECT = 184,
+	LOGICAL_CONNECT_EXECUTE = 185,
 
 	// -----------------------------
 	// Secrets

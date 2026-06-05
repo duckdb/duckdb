@@ -401,8 +401,9 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	auto prepared = con.Prepare(query);
 	REQUIRE(prepared->HasError());
 	// we can use ExtractStatements to execute the individual statements though
-	auto statements = con.ExtractStatements(query);
-	for (auto &statement : statements) {
+	auto iterator = con.context->ExtractStatements(query);
+	while (iterator.Peek(*con.context)) {
+		auto statement = iterator.GetStatement();
 		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
 		prepared = con.Prepare(stmt);
 		REQUIRE(!prepared->HasError());

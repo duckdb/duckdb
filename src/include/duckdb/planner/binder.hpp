@@ -422,6 +422,8 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(ConnectExecuteStatement &stmt);
+	BoundStatement Bind(PassthroughStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.

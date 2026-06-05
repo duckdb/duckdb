@@ -32,7 +32,11 @@ enum class TokenType {
 	TABLE_FUNCTION,
 	PRAGMA_FUNCTION,
 	SETTING_NAME,
-	ERROR
+	ERROR,
+	//! Sentinel for real end of input — consumed by EndOfInputMatcher.
+	END_OF_INPUT,
+	//! Sentinel for cursor position in autocomplete mode — List/Repeat fire suggestion walk.
+	END_NOW_AUTOCOMPLETE
 };
 
 inline string TokenTypeToString(TokenType type) {
@@ -71,6 +75,10 @@ inline string TokenTypeToString(TokenType type) {
 		return "PRAGMA_FUNCTION";
 	case TokenType::SETTING_NAME:
 		return "SETTING_NAME";
+	case TokenType::END_OF_INPUT:
+		return "END_OF_INPUT";
+	case TokenType::END_NOW_AUTOCOMPLETE:
+		return "END_NOW_AUTOCOMPLETE";
 	default:
 		return "UNKNOWN";
 	}
@@ -91,6 +99,7 @@ enum class ParseResultType : uint8_t {
 	EXTENSION,
 	NUMBER,
 	STRING,
+	END_OF_INPUT,
 	INVALID
 };
 
@@ -120,6 +129,8 @@ inline const char *ParseResultToString(ParseResultType type) {
 		return "NUMBER";
 	case ParseResultType::STRING:
 		return "STRING";
+	case ParseResultType::END_OF_INPUT:
+		return "END_OF_INPUT";
 	case ParseResultType::INVALID:
 		return "INVALID";
 	}
@@ -178,6 +189,19 @@ struct IdentifierParseResult : ParseResult {
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
 		ss << ": " << identifier << "\n";
+	}
+};
+
+struct EndOfInputParseResult : ParseResult {
+	static constexpr ParseResultType TYPE = ParseResultType::END_OF_INPUT;
+
+	EndOfInputParseResult() : ParseResult(TYPE, optional_idx()) {
+	}
+
+	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
+	                      const std::string &indent, bool is_last) const override {
+		ParseResult::ToStringInternal(ss, visited, indent, is_last);
+		ss << "\n";
 	}
 };
 

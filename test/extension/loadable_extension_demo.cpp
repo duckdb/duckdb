@@ -362,39 +362,26 @@ public:
 		parser_override = QuackParser;
 	}
 
-	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
-		auto lcase = StringUtil::Lower(query);
-		if (!StringUtil::Contains(lcase, "quack")) {
-			// quack not found!?
-			if (StringUtil::Contains(lcase, "quac")) {
-				// use our error
-				return ParserExtensionParseResult("Did you mean... QUACK!?");
-			}
-			// use original error
+	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query,
+	                                                     const vector<idx_t> &allowed_boundaries) {
+		// Recognize the exact 17-character string "quack quack quack" (case-insensitive) at the
+		// start of the view. PEG happily parses one or two identifiers (as `SELECT x AS y`),
+		// but three in a row without separators is the syntactic hole we use to invoke this
+		// parse_function. Per-segment good citizen: claim only the triplet, leave the rest.
+		const string kTriplet = "quack quack quack";
+		if (query.size() < kTriplet.size()) {
 			return ParserExtensionParseResult();
 		}
-
-		idx_t count = 0;
-		size_t pos = 0;
-		size_t last_end = 0;
-		while ((pos = lcase.find("quack", last_end)) != string::npos) {
-			string between = lcase.substr(last_end, pos - last_end);
-			StringUtil::Trim(between);
-			if (!between.empty() && !StringUtil::CIEquals(between, ";")) {
-				return ParserExtensionParseResult("This is not a quack: " + between);
-			}
-			count++;
-			last_end = pos + 5;
+		if (!StringUtil::CIEquals(string(query.substr(0, kTriplet.size())), kTriplet)) {
+			return ParserExtensionParseResult();
 		}
-
-		string after = lcase.substr(last_end);
-		StringUtil::Trim(after);
-		if (!after.empty() && !StringUtil::CIEquals(after, ";")) {
-			return ParserExtensionParseResult("This is not a quack: " + after);
+		// The triplet must end at a token boundary (i.e., 17 ∈ allowed_boundaries).
+		if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(), idx_t(kTriplet.size()))) {
+			return ParserExtensionParseResult();
 		}
-
-		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(count));
+		auto result = ParserExtensionParseResult(make_uniq<QuackExtensionData>(3));
+		result.consumed_chars = kTriplet.size();
+		return result;
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,

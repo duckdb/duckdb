@@ -123,6 +123,7 @@ enum class PhysicalOperatorType : uint8_t {
 	UPDATE_EXTENSIONS,
 	CONNECT,
 	DISCONNECT,
+	CONNECT_EXECUTE,
 
 	// -----------------------------
 	// Secret
