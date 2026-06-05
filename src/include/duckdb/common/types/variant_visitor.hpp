@@ -38,7 +38,9 @@ public:
 
 		auto type_id = variant.GetTypeId(row, values_idx);
 		auto byte_offset = variant.GetByteOffset(row, values_idx);
-		auto blob_data = const_data_ptr_cast(variant.GetData(row).GetData());
+		auto blob = variant.GetData(row);
+		VariantUtils::VerifyValueByteOffset(byte_offset, blob);
+		auto blob_data = const_data_ptr_cast(blob.GetData());
 		auto ptr = const_data_ptr_cast(blob_data + byte_offset);
 
 		VisitMetadata(type_id, std::forward<Args>(args)...);

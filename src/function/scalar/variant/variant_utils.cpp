@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -65,11 +66,21 @@ bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t r
 	return type_id == VariantLogicalType::ARRAY || type_id == VariantLogicalType::OBJECT;
 }
 
+void VariantUtils::VerifyValueByteOffset(uint32_t byte_offset, const string_t &blob) {
+	if (byte_offset > blob.GetSize()) {
+		throw InvalidInputException(
+		    "Corrupt VARIANT: value byte offset (%u) is out of range for the variant data of size %llu", byte_offset,
+		    static_cast<uint64_t>(blob.GetSize()));
+	}
+}
+
 VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
                                                    uint32_t value_index) {
 	D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::DECIMAL);
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto blob = variant.GetData(row);
+	VerifyValueByteOffset(byte_offset, blob);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto width = VarintDecode<uint32_t>(ptr);
@@ -80,10 +91,18 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 
 string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto blob = variant.GetData(row);
+	VerifyValueByteOffset(byte_offset, blob);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	auto length = VarintDecode<uint32_t>(ptr);
+	auto consumed = static_cast<idx_t>(ptr - data);
+	if (consumed > blob.GetSize() || length > blob.GetSize() - consumed) {
+		throw InvalidInputException(
+		    "Corrupt VARIANT: string value of length %u at byte offset %u exceeds the variant data of size %llu", length,
+		    byte_offset, static_cast<uint64_t>(blob.GetSize()));
+	}
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
@@ -91,7 +110,9 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
                                                  uint32_t value_index) {
 	D_ASSERT(IsNestedType(variant, row, value_index));
 	auto byte_offset = variant.GetByteOffset(row, value_index);
-	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto blob = variant.GetData(row);
+	VerifyValueByteOffset(byte_offset, blob);
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto ptr = data + byte_offset;
 
 	VariantNestedData result;

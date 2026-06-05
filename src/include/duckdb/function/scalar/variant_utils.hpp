@@ -122,6 +122,8 @@ struct VariantUtils {
 	                                           const unary_path_function_t &unary_fn,
 	                                           const many_path_function_t &many_fn);
 	DUCKDB_API static bool IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index);
+	//! Verify that a value's byte offset points within the variant data blob, throwing on corrupt input
+	DUCKDB_API static void VerifyValueByteOffset(uint32_t byte_offset, const string_t &blob);
 	DUCKDB_API static VariantDecimalData DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                       uint32_t value_index);
 	DUCKDB_API static VariantNestedData DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,
