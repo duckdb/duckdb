@@ -116,8 +116,7 @@ struct StringAggFunction {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, aggr_input_data.allocator,
-		                 source.value, aggr_input_data.bind_data);
+		PerformOperation(target, aggr_input_data.allocator, source.value, aggr_input_data.bind_data);
 	}
 };
 
