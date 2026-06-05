@@ -154,12 +154,26 @@ public:
 		vector_state.bit_width = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
-		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
+		if (vector_state.exceptions_count > vector_size) {
+			throw InternalException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
+			                        vector_state.exceptions_count, vector_size);
+		}
+		if (vector_state.v_factor > vector_state.v_exponent) {
+			throw InternalException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)",
+			                        vector_state.v_factor, vector_state.v_exponent);
+		}
+		if (vector_state.bit_width > sizeof(uint64_t) * 8) {
+			throw InternalException("Corrupted ALP segment: Invalid bit_width encountered: %d", vector_state.bit_width);
+		}
 
 		if (vector_state.bit_width > 0) {
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+
+			auto max_encoded = sizeof(vector_state.for_encoded);
+			auto block_size = segment.GetBlockSize();
+			if (bp_size > max_encoded || data_byte_offset + bp_size > block_size) {
+				throw InternalException("Corrupted ALP segment: encoded payload too large");
+			}
 			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
 			vector_ptr += bp_size;
 		}
