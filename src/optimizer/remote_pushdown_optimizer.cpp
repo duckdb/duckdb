@@ -38,6 +38,8 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -275,10 +277,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
+				result = Merge(result, Rewrite(limit_mod.limit));
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
+				result = Merge(result, Rewrite(limit_mod.offset));
 			}
 			break;
 		}
@@ -305,19 +307,21 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Merge from_table result with all expressions to determine if the whole node can be pushed
 	CatalogPushdownResult result = from_result;
 	for (auto &expr : node.select_list) {
-		result = Merge(result, Rewrite(*expr));
+		result = Merge(result, Rewrite(expr));
 	}
 	if (node.where_clause) {
-		result = Merge(result, Rewrite(*node.where_clause));
+		result = Merge(result, Rewrite(node.where_clause));
 	}
 	for (auto &expr : node.groups.group_expressions) {
+		// note: GROUP BY entries are deliberately not constant-folded - a bare integer
+		// literal is a positional reference there
 		result = Merge(result, Rewrite(*expr));
 	}
 	if (node.having) {
-		result = Merge(result, Rewrite(*node.having));
+		result = Merge(result, Rewrite(node.having));
 	}
 	if (node.qualify) {
-		result = Merge(result, Rewrite(*node.qualify));
+		result = Merge(result, Rewrite(node.qualify));
 	}
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
@@ -331,10 +335,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
+				result = Merge(result, Rewrite(limit_mod.limit));
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
+				result = Merge(result, Rewrite(limit_mod.offset));
 			}
 			break;
 		}
@@ -472,11 +476,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
+				result = Merge(result, Rewrite(limit_mod.limit));
 				has_expression_modifiers = true;
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
+				result = Merge(result, Rewrite(limit_mod.offset));
 				has_expression_modifiers = true;
 			}
 			break;
@@ -680,7 +684,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Also analyze the join condition - it may contain subqueries or local macro calls
 	// that affect whether the join can be pushed as a whole.
 	if (ref.condition) {
-		result = Merge(result, Rewrite(*ref.condition));
+		result = Merge(result, Rewrite(ref.condition));
 	}
 	return result;
 }
@@ -914,6 +918,89 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ColumnRefExpression
 	return CatalogPushdownResult::NoCatalogReference();
 }
 
+//! Returns true if the expression cannot contain anything that prevents constant folding
+//! (column references, subqueries, parameters, star expressions, window functions, ...)
+static bool IsPotentiallyFoldable(const ParsedExpression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::SUBQUERY:
+	case ExpressionClass::PARAMETER:
+	case ExpressionClass::STAR:
+	case ExpressionClass::WINDOW:
+	case ExpressionClass::DEFAULT:
+	case ExpressionClass::LAMBDA:
+	case ExpressionClass::LAMBDA_REF:
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		return false;
+	default:
+		break;
+	}
+	bool foldable = true;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { foldable = foldable && IsPotentiallyFoldable(child); });
+	return foldable;
+}
+
+RemotePushdownOptimizer::ConstantFoldResult
+RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		// already a constant
+		return ConstantFoldResult::NOT_FOLDABLE;
+	}
+	if (!IsPotentiallyFoldable(*expr)) {
+		return ConstantFoldResult::NOT_FOLDABLE;
+	}
+	// bind a copy of the expression (binding modifies the expression in-place)
+	unique_ptr<Expression> bound_expr;
+	try {
+		auto expr_copy = expr->Copy();
+		auto fold_binder = Binder::CreateBinder(binder.context);
+		ConstantBinder constant_binder(*fold_binder, binder.context, "remote pushdown");
+		bound_expr = constant_binder.Bind(expr_copy);
+	} catch (std::exception &) {
+		// the expression cannot be bound as a constant - this is not necessarily an error in the
+		// full query (e.g. the constant binder rejects aggregates like count(5), which are valid
+		// over a table) - leave the expression in place
+		return ConstantFoldResult::NOT_FOLDABLE;
+	}
+	if (!bound_expr || bound_expr->HasParameter() || bound_expr->HasSubquery()) {
+		return ConstantFoldResult::NOT_FOLDABLE;
+	}
+	if (bound_expr->IsVolatile()) {
+		// volatile functions (random(), ...) must be re-evaluated on every row
+		return ConstantFoldResult::NOT_FOLDABLE;
+	}
+	if (!bound_expr->IsConsistent()) {
+		// functions like now() are constant within a query, but must be re-evaluated when a
+		// prepared statement is re-executed. The binder normally records this when it binds the
+		// function - folding removes the function from the statement, so record it here instead
+		// (re-binding restarts from a copy of the unbound statement, re-running this fold)
+		binder.SetAlwaysRequireRebind();
+	}
+	Value fold_result;
+	if (!ExpressionExecutor::TryEvaluateScalar(binder.context, *bound_expr, fold_result)) {
+		// evaluating the constant expression raises an error (e.g. an out-of-range error) -
+		// the query has to be executed locally so the user sees DuckDB's error message
+		return ConstantFoldResult::FOLD_ERROR;
+	}
+	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
+	// preserve the name DuckDB would generate for the original expression
+	folded->SetAlias(expr->GetAlias().empty() ? expr->ToString() : expr->GetAlias());
+	folded->SetQueryLocation(expr->GetQueryLocation());
+	expr = std::move(folded);
+	return ConstantFoldResult::FOLDED;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr) {
+	// note: this overload must not be used for expressions where a bare integer literal has
+	// positional meaning (top-level ORDER BY / GROUP BY / DISTINCT ON entries) - folding e.g.
+	// "1 + 1" into "2" would turn a constant expression into a positional reference there
+	if (TryConstantFold(expr) == ConstantFoldResult::FOLD_ERROR) {
+		return CatalogPushdownResult::Unknown();
+	}
+	return Rewrite(*expr);
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 	CatalogPushdownResult result;
 	switch (expr.GetExpressionClass()) {
@@ -940,7 +1027,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
+	    expr, [&](unique_ptr<ParsedExpression> &child) { result = Merge(result, Rewrite(child)); });
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		// the expression is fully remote - check if the remote catalog supports pushing it down
 		if (!result.catalog->SupportsPushdown(expr)) {

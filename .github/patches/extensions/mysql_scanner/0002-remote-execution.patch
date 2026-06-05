@@ -376,10 +376,10 @@ index d2427fc..44e762e 100644
  
  void MysqlScannerExtension::Load(ExtensionLoader &loader) {
 diff --git a/src/mysql_filter_pushdown.cpp b/src/mysql_filter_pushdown.cpp
-index 63ae838..8f57b9c 100644
+index 63ae838..95a1684 100644
 --- a/src/mysql_filter_pushdown.cpp
 +++ b/src/mysql_filter_pushdown.cpp
-@@ -1,10 +1,172 @@
+@@ -1,10 +1,260 @@
  #include "mysql_filter_pushdown.hpp"
  
 -#include "dbconnector/table_scan/filter_pushdown.hpp"
@@ -412,6 +412,79 @@ index 63ae838..8f57b9c 100644
 +		return "CAST(" + constant_string + " AS BINARY)";
 +	}
 +	return constant_string;
++}
++
++//! Where a constant sorts relative to every value a MySQL column can contain. MySQL has no
++//! infinite dates / timestamps and no inf / nan doubles, so DuckDB's non-finite constants
++//! compare above (infinity, nan) or below (-infinity) every value in the column.
++enum class MySQLConstantRange { FINITE, ABOVE_ALL_VALUES, BELOW_ALL_VALUES };
++
++static MySQLConstantRange GetConstantRange(const Value &constant) {
++	if (constant.IsNull()) {
++		return MySQLConstantRange::FINITE;
++	}
++	switch (constant.type().id()) {
++	case LogicalTypeId::FLOAT: {
++		auto value = FloatValue::Get(constant);
++		if (Value::FloatIsFinite(value)) {
++			return MySQLConstantRange::FINITE;
++		}
++		// DuckDB sorts nan above infinity
++		return value < 0 ? MySQLConstantRange::BELOW_ALL_VALUES : MySQLConstantRange::ABOVE_ALL_VALUES;
++	}
++	case LogicalTypeId::DOUBLE: {
++		auto value = DoubleValue::Get(constant);
++		if (Value::DoubleIsFinite(value)) {
++			return MySQLConstantRange::FINITE;
++		}
++		return value < 0 ? MySQLConstantRange::BELOW_ALL_VALUES : MySQLConstantRange::ABOVE_ALL_VALUES;
++	}
++	case LogicalTypeId::DATE: {
++		auto value = DateValue::Get(constant);
++		if (Value::IsFinite(value)) {
++			return MySQLConstantRange::FINITE;
++		}
++		return value == date_t::ninfinity() ? MySQLConstantRange::BELOW_ALL_VALUES
++		                                    : MySQLConstantRange::ABOVE_ALL_VALUES;
++	}
++	case LogicalTypeId::TIMESTAMP: {
++		auto value = TimestampValue::Get(constant);
++		if (Value::IsFinite(value)) {
++			return MySQLConstantRange::FINITE;
++		}
++		return value == timestamp_t::ninfinity() ? MySQLConstantRange::BELOW_ALL_VALUES
++		                                         : MySQLConstantRange::ABOVE_ALL_VALUES;
++	}
++	default:
++		return MySQLConstantRange::FINITE;
++	}
++}
++
++//! Serialize a comparison against a constant that compares above / below every value the column
++//! can contain - the comparison is always true (for non-NULL values) or always false
++static string WriteNonFiniteComparison(const string &column_name, ExpressionType comparison_type,
++                                       MySQLConstantRange range) {
++	bool always_true;
++	switch (comparison_type) {
++	case ExpressionType::COMPARE_LESSTHAN:
++	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
++		always_true = range == MySQLConstantRange::ABOVE_ALL_VALUES;
++		break;
++	case ExpressionType::COMPARE_GREATERTHAN:
++	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
++		always_true = range == MySQLConstantRange::BELOW_ALL_VALUES;
++		break;
++	case ExpressionType::COMPARE_NOTEQUAL:
++		always_true = true;
++		break;
++	case ExpressionType::COMPARE_EQUAL:
++		always_true = false;
++		break;
++	default:
++		return string();
++	}
++	// note: a NULL value compares as NULL and is filtered out either way, matching IS NOT NULL
++	return always_true ? column_name + " IS NOT NULL" : "FALSE";
 +}
 +
 +static string TransformComparisonOperator(ExpressionType type) {
@@ -477,6 +550,12 @@ index 63ae838..8f57b9c 100644
 +		} else {
 +			return string();
 +		}
++		auto constant_range = GetConstantRange(*constant);
++		if (constant_range != MySQLConstantRange::FINITE) {
++			// the constant cannot be represented in MySQL - but the column can never contain
++			// a non-finite value either, so the comparison has a known outcome
++			return WriteNonFiniteComparison(column_name, comparison_type, constant_range);
++		}
 +		auto operator_string = TransformComparisonOperator(comparison_type);
 +		if (operator_string.empty()) {
 +			return string();
@@ -519,10 +598,19 @@ index 63ae838..8f57b9c 100644
 +				if (op.GetChildren()[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 +					return string();
 +				}
++				auto &constant = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
++				if (GetConstantRange(constant) != MySQLConstantRange::FINITE) {
++					// the column can never contain a non-finite value - drop the element
++					continue;
++				}
 +				if (!in_list.empty()) {
 +					in_list += ", ";
 +				}
-+				in_list += WriteFilterConstant(op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue());
++				in_list += WriteFilterConstant(constant);
++			}
++			if (in_list.empty()) {
++				// all elements were non-finite - the filter matches no rows
++				return "FALSE";
 +			}
 +			return column_name + " IN (" + in_list + ")";
 +		}
@@ -553,7 +641,7 @@ index 63ae838..8f57b9c 100644
  string MySQLFilterPushdown::TransformFilters(const vector<column_t> &column_ids, optional_ptr<TableFilterSet> filters,
                                               const vector<string> &names) {
  	if (!filters || !filters->HasFilters()) {
-@@ -14,10 +176,10 @@ string MySQLFilterPushdown::TransformFilters(const vector<column_t> &column_ids,
+@@ -14,10 +264,10 @@ string MySQLFilterPushdown::TransformFilters(const vector<column_t> &column_ids,
  	string result;
  	for (auto &entry : *filters) {
  		column_t col_id = column_ids[entry.GetIndex()];

@@ -67,8 +67,8 @@ explain SELECT SUM(CAST(i AS DECIMAL(8,2))) FROM s.small_tbl
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
-# casting a string to a date is pushed (verified at the top of this file); casting
-# to BLOB is not - DuckDB's VARCHAR -> BLOB cast interprets backslash escapes
+# casting a string LITERAL to BLOB is constant-folded locally (DuckDB's backslash
+# interpretation is applied before serialization), so it can be pushed
 query I
 SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl WHERE i = 0
 ----
@@ -76,5 +76,17 @@ SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl WHERE i = 0
 
 query II
 explain SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# casting a string COLUMN to BLOB cannot be folded and is not pushed -
+# DuckDB's VARCHAR -> BLOB cast interprets backslash escapes, MySQL's CAST AS BINARY does not
+query I
+SELECT COUNT(CAST(d AS BLOB)) FROM s.small_tbl
+----
+10
+
+query II
+explain SELECT COUNT(CAST(d AS BLOB)) FROM s.small_tbl
 ----
 physical_plan	<REGEX>:.*AGGREGATE.*

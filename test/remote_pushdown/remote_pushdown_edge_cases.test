@@ -209,6 +209,7 @@ explain SELECT edge_j1.* FROM s.edge_j1 JOIN s.edge_j2 USING (i)
 physical_plan	<!REGEX>:.*JOIN.*
 
 # ---- infinite dates / timestamps cannot be represented in MySQL ----
+# comparisons between literals are constant-folded locally and can be pushed
 query I
 SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
 ----
@@ -217,10 +218,24 @@ SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infini
 query II
 explain SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
 ----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# comparisons of a column against an infinite literal cannot be folded and stay local
+statement ok
+CREATE OR REPLACE TABLE s.edge_ts_tbl AS SELECT TIMESTAMP '2026-01-01' + i * INTERVAL 1 DAY AS ts FROM range(10) t(i)
+
+query I
+SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts < TIMESTAMP 'infinity'
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts < TIMESTAMP 'infinity'
+----
 physical_plan	<REGEX>:.*MYSQL_SCAN.*
 
 query II
-explain SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' > DATE '-infinity'
+explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE > DATE '-infinity'
 ----
 physical_plan	<REGEX>:.*MYSQL_SCAN.*
 
@@ -252,14 +267,15 @@ explain SELECT COUNT(*) FROM s.edge_tbl WHERE i < CAST('5' AS INTEGER)
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
-# casting 'infinity' to DATE succeeds locally but the result cannot be pushed
+# casting 'infinity' to DATE succeeds locally; against a column the infinite literal
+# cannot be pushed
 query I
-SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' < CAST('infinity' AS DATE)
+SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE < CAST('infinity' AS DATE)
 ----
 10
 
 query II
-explain SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' < CAST('infinity' AS DATE)
+explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE < CAST('infinity' AS DATE)
 ----
 physical_plan	<REGEX>:.*MYSQL_SCAN.*
 

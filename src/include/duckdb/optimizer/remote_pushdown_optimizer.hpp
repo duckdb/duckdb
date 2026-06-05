@@ -75,8 +75,23 @@ private:
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 
+	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 	CatalogPushdownResult Rewrite(const SubqueryExpression &expr);
+	enum class ConstantFoldResult {
+		//! The expression is not a foldable constant expression (contains columns, is volatile, ...)
+		NOT_FOLDABLE,
+		//! The expression was replaced with its locally-evaluated constant result
+		FOLDED,
+		//! The expression is constant but evaluating it raises an error - the query must be
+		//! executed locally so the user sees DuckDB's error message
+		FOLD_ERROR
+	};
+	//! Attempt to constant-fold a column-free, non-volatile expression by binding and evaluating
+	//! it locally, replacing it with the resulting constant. This makes more queries eligible for
+	//! remote pushdown: the remote system only sees the (DuckDB-evaluated) literal instead of
+	//! functions whose remote semantics differ.
+	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
 	CatalogPushdownResult Rewrite(const CastExpression &expr);
 	CatalogPushdownResult Rewrite(const FunctionExpression &expr);
 	CatalogPushdownResult Rewrite(const WindowExpression &expr);
