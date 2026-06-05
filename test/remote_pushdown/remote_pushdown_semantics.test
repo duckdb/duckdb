@@ -70,26 +70,33 @@ explain SELECT AVG(i) FROM s.sem_tbl
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # greatest / least: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
+# the pushdown serializes these as a COALESCE rotation that skips NULLs as well
 query I
 SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
 ----
 4
 
+query I
+SELECT MIN(least(i, NULL, 3)) FROM s.sem_tbl
+----
+1
+
 query II
 explain SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # stddev / variance: sample variants in DuckDB, population variants in MySQL
-query I
-SELECT round(stddev(i), 6) FROM s.sem_tbl
+# the pushdown serializes them as the explicit stddev_samp / var_samp
+query II
+SELECT round(stddev(i), 6), round(variance(i), 6) FROM s.sem_tbl
 ----
-1.290994
+1.290994	1.666667
 
 query II
-explain SELECT stddev(i) FROM s.sem_tbl
+explain SELECT stddev(i), variance(i) FROM s.sem_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # the explicitly-named variants have identical semantics and are pushed
 query II
@@ -102,26 +109,32 @@ explain SELECT stddev_samp(i), stddev_pop(i) FROM s.sem_tbl
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
-# dayofweek / weekday / week: different numbering in MySQL
+# dayofweek / weekday / week / isodow: different numbering in MySQL - the pushdown
+# serializes them with the numbering shifted to match DuckDB
 statement ok
 CREATE OR REPLACE TABLE s.date_tbl AS SELECT DATE '2026-06-04' AS d
 
-# DuckDB: dayofweek(Thursday) = 4 (MySQL would return 5)
-query I
-SELECT MAX(dayofweek(d)) FROM s.date_tbl
+# DuckDB: dayofweek(Thursday) = 4 (MySQL's DAYOFWEEK would return 5)
+query IIII
+SELECT MAX(dayofweek(d)), MAX(weekday(d)), MAX(isodow(d)), MAX(isodow(DATE '2026-06-07')) FROM s.date_tbl
 ----
-4
+4	4	4	7
 
 query II
-explain SELECT MAX(dayofweek(d)) FROM s.date_tbl
+explain SELECT MAX(dayofweek(d)), MAX(weekday(d)), MAX(isodow(d)) FROM s.date_tbl
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
-# DuckDB: week('2026-01-01') = 1 (ISO); MySQL week() = 0
+# DuckDB: week('2026-01-01') = 1 (ISO); MySQL's default week mode would return 0
 query I
 SELECT MAX(week(DATE '2026-01-01')) FROM s.date_tbl
 ----
 1
+
+query II
+explain SELECT MAX(week(d)) FROM s.date_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # weekofyear is ISO in both systems - pushed
 query I
@@ -148,8 +161,8 @@ explain SELECT MAX(instr(w, 'b')) FROM s.instr_tbl
 ----
 physical_plan	<REGEX>:.*AGGREGATE.*
 
-# microsecond: DuckDB includes the seconds component, MySQL does not
-# (MySQL would return 0 here; DuckDB returns 12 * 1000000)
+# microsecond: DuckDB includes the seconds component, MySQL does not - the pushdown
+# serializes it as (microsecond(x) + second(x) * 1000000)
 statement ok
 CREATE OR REPLACE TABLE s.micro_tbl AS SELECT TIMESTAMP '2000-01-01 10:11:12' AS ts
 
@@ -160,5 +173,41 @@ SELECT MAX(microsecond(ts)) FROM s.micro_tbl
 
 query II
 explain SELECT MAX(microsecond(ts)) FROM s.micro_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# trunc is serialized as truncate(x, 0)
+query II
+SELECT MAX(trunc(i + 0.7)), MAX(trunc(0 - i - 0.7)) FROM s.sem_tbl
+----
+4	-1
+
+query II
+explain SELECT MAX(trunc(i + 0.7)) FROM s.sem_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# substring with literal positive offsets is pushed; other offsets are evaluated locally
+statement ok
+CREATE OR REPLACE TABLE s.substr_tbl AS SELECT 'héllo!' AS w
+
+query II
+SELECT MIN(substring(w, 2, 3)), MIN(substring(w, 3)) FROM s.substr_tbl
+----
+éll	llo!
+
+query II
+explain SELECT MIN(substring(w, 2, 3)) FROM s.substr_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# zero / negative / non-literal offsets behave differently in MySQL - not pushed
+query I
+SELECT MIN(substring(w, 0, 2)) FROM s.substr_tbl
+----
+h
+
+query II
+explain SELECT MIN(substring(w, 0, 2)) FROM s.substr_tbl
 ----
 physical_plan	<REGEX>:.*AGGREGATE.*

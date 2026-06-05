@@ -101,7 +101,8 @@ explain SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM s.nulls_tbl ORDER BY
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
-# explicit NULLS FIRST / NULLS LAST is not pushed (MySQL cannot parse it) but must stay correct
+# explicit NULLS FIRST / NULLS LAST is pushed - the serializer encodes the NULL placement
+# through the injected "expr IS NULL" ordering key
 query I
 SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
 ----
@@ -118,7 +119,15 @@ NULL
 query II
 explain SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
 ----
-physical_plan	<REGEX>:.*ORDER_BY.*
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v DESC NULLS FIRST LIMIT 4
+----
+NULL
+NULL
+NULL
+8
 
 # OFFSET without LIMIT cannot be pushed (MySQL requires LIMIT) but must stay correct
 query I
@@ -127,3 +136,80 @@ SELECT v FROM s.nulls_tbl ORDER BY v OFFSET 6
 NULL
 NULL
 NULL
+
+# ---- unspecified ordering follows DuckDB's default_order / default_null_order settings ----
+
+statement ok
+SET default_null_order='nulls_first'
+
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v
+----
+NULL
+NULL
+NULL
+1
+2
+4
+5
+7
+8
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v
+----
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+statement ok
+SET default_order='desc'
+
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v
+----
+NULL
+NULL
+NULL
+8
+7
+5
+4
+2
+1
+
+query II
+explain SELECT v FROM s.nulls_tbl ORDER BY v
+----
+physical_plan	<!REGEX>:.*ORDER_BY.*
+
+statement ok
+SET default_null_order='nulls_last'
+
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v
+----
+8
+7
+5
+4
+2
+1
+NULL
+NULL
+NULL
+
+# explicit ASC overrides the descending default; the NULL placement still follows the setting
+query I
+SELECT v FROM s.nulls_tbl ORDER BY v ASC
+----
+1
+2
+4
+5
+7
+8
+NULL
+NULL
+NULL
+
+statement ok
+SET default_order='asc'

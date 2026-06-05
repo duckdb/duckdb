@@ -475,10 +475,10 @@ index fea00b5..cb53699 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..ae2ba50
+index 0000000..7e717a9
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,697 @@
+@@ -0,0 +1,763 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -547,7 +547,12 @@ index 0000000..ae2ba50
 +	case LogicalTypeId::VARCHAR:
 +		// WriteLiteral escapes both quotes and backslashes
 +		// (MySQL treats backslash as an escape character within string literals)
-+		return MySQLUtils::WriteLiteral(StringValue::Get(value));
++		// The explicit binary collation makes any comparison involving the literal byte-wise,
++		// matching DuckDB's string comparison semantics (MySQL's default collation is
++		// case-insensitive). utf8mb4_0900_bin is a NO PAD collation, so trailing spaces are
++		// significant as well. Comparisons against non-string types are unaffected - MySQL
++		// still coerces the string to the other operand's type (date, number, ...).
++		return "(" + MySQLUtils::WriteLiteral(StringValue::Get(value)) + " COLLATE utf8mb4_0900_bin)";
 +	case LogicalTypeId::BLOB:
 +		return MySQLUtils::TransformConstant(value);
 +	case LogicalTypeId::DATE:
@@ -649,6 +654,53 @@ index 0000000..ae2ba50
 +		// MySQL's avg returns DECIMAL(x, 4) for integer inputs - cast to DOUBLE to match DuckDB
 +		return "avg(" + string(distinct ? "DISTINCT " : "") + "CAST(" + WriteExpression(*children[0]) + " AS DOUBLE))";
 +	}
++	if ((name == "greatest" || name == "least") && children.size() >= 2) {
++		// MySQL returns NULL when ANY argument is NULL while DuckDB skips NULLs.
++		// Replace every argument with a COALESCE over all arguments starting at itself:
++		// each rotation yields the argument itself when it is non-NULL and some other
++		// non-NULL argument otherwise, so the result is NULL only if all arguments are NULL
++		string result = name + "(";
++		vector<string> args;
++		for (auto &child : children) {
++			args.push_back(WriteExpression(*child));
++		}
++		for (idx_t i = 0; i < args.size(); i++) {
++			if (i > 0) {
++				result += ", ";
++			}
++			result += "COALESCE(";
++			for (idx_t k = 0; k < args.size(); k++) {
++				if (k > 0) {
++					result += ", ";
++				}
++				result += args[(i + k) % args.size()];
++			}
++			result += ")";
++		}
++		result += ")";
++		return result;
++	}
++	if (name == "microsecond" && children.size() == 1) {
++		// DuckDB's microsecond includes the seconds component, MySQL's does not
++		auto child = WriteExpression(*children[0]);
++		return "(microsecond(" + child + ") + second(" + child + ") * 1000000)";
++	}
++	if ((name == "dayofweek" || name == "weekday") && children.size() == 1) {
++		// DuckDB numbers days Sunday=0 .. Saturday=6; MySQL's DAYOFWEEK is Sunday=1 .. Saturday=7
++		return "(dayofweek(" + WriteExpression(*children[0]) + ") - 1)";
++	}
++	if (name == "isodow" && children.size() == 1) {
++		// DuckDB's ISO day-of-week is Monday=1 .. Sunday=7; MySQL's WEEKDAY is Monday=0 .. Sunday=6
++		return "(weekday(" + WriteExpression(*children[0]) + ") + 1)";
++	}
++	if (name == "week" && children.size() == 1) {
++		// DuckDB's week is the ISO week; MySQL's default week mode is not - mode 3 matches
++		return "week(" + WriteExpression(*children[0]) + ", 3)";
++	}
++	if (name == "trunc" && children.size() == 1) {
++		// MySQL spells truncation towards zero as truncate(x, d)
++		return "truncate(" + WriteExpression(*children[0]) + ", 0)";
++	}
 +	if (name == "log" && children.size() == 1) {
 +		// DuckDB's log(x) is log base 10; MySQL's log(x) is the natural logarithm
 +		// (the two-argument log(b, x) has identical semantics in both systems)
@@ -656,6 +708,12 @@ index 0000000..ae2ba50
 +	} else if (name == "length" || name == "len") {
 +		// MySQL's length() counts bytes; char_length() counts characters like DuckDB
 +		name = "char_length";
++	} else if (name == "stddev") {
++		// DuckDB's stddev is the sample standard deviation; MySQL's is the population variant
++		name = "stddev_samp";
++	} else if (name == "variance") {
++		// DuckDB's variance is the sample variance; MySQL's is the population variant
++		name = "var_samp";
 +	}
 +	string result = name + "(";
 +	if (distinct) {
@@ -834,9 +892,17 @@ index 0000000..ae2ba50
 +		return WriteWindow(expr.Cast<WindowExpression>());
 +	case ExpressionClass::COMPARISON: {
 +		auto &comparison = expr.Cast<ComparisonExpression>();
-+		return "(" + WriteExpression(comparison.Left()) + " " +
-+		       MySQLComparisonOperator(comparison.GetExpressionType()) + " " + WriteExpression(comparison.Right()) +
-+		       ")";
++		auto left = WriteExpression(comparison.Left());
++		auto right = WriteExpression(comparison.Right());
++		// IS [NOT] DISTINCT FROM maps to MySQL's NULL-safe equality operator <=>
++		// (<=> never returns NULL, so negating it is safe)
++		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
++			return "(" + left + " <=> " + right + ")";
++		}
++		if (expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM) {
++			return "(NOT (" + left + " <=> " + right + "))";
++		}
++		return "(" + left + " " + MySQLComparisonOperator(comparison.GetExpressionType()) + " " + right + ")";
 +	}
 +	case ExpressionClass::CONJUNCTION: {
 +		auto &conjunction = expr.Cast<ConjunctionExpression>();
@@ -1177,7 +1243,7 @@ index 0000000..ae2ba50
 +
 +} // namespace duckdb
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..4818a77 100644
+index af9ffd7..3bc4262 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1220,7 +1286,7 @@ index af9ffd7..4818a77 100644
  #include "storage/mysql_schema_entry.hpp"
  #include "storage/mysql_transaction.hpp"
  
-@@ -503,6 +531,662 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -503,6 +531,694 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
@@ -1285,23 +1351,27 @@ index af9ffd7..4818a77 100644
 +	//   "avg"         — serialized as avg(CAST(x AS DOUBLE)) (MySQL's avg over integers is DECIMAL(x,4))
 +	//   "log"         — log(x) is serialized as log10(x); the two-argument log(b, x) matches
 +	//   "length"/"len" — serialized as char_length (MySQL's length counts bytes)
-+	// Excluded (verified mismatches):
++	//   "stddev"/"variance" — serialized as the sample variants stddev_samp/var_samp
++	//   "week"        — serialized as week(x, 3) (ISO weeks)
++	//   "dayofweek"/"weekday" — serialized as (dayofweek(x) - 1) (DuckDB numbers from Sunday=0)
++	//   "isodow"      — serialized as (weekday(x) + 1) (ISO numbering from Monday=1)
++	//   "microsecond" — serialized as (microsecond(x) + second(x) * 1000000)
++	//   "trunc"       — serialized as truncate(x, 0)
++	//   "greatest"/"least" — serialized as a COALESCE rotation (MySQL propagates NULL arguments)
++	//   "substring"/"substr" — only pushed with literal positive offsets (see SupportsPushdown)
++	// Excluded (verified mismatches that cannot be fixed by rewriting):
 +	//   "/"           — DuckDB division by zero yields inf, MySQL yields NULL
-+	//   "trunc"       — MySQL spells it truncate(x, d)
 +	//   "random"      — pushing would ignore DuckDB's setseed()
 +	//   "translate"   — not available in MySQL
 +	//   "format"      — different semantics (MySQL: number formatting; DuckDB: printf-style)
-+	//   "make_date"/"make_time"/"make_timestamp" — MySQL spells these makedate/maketime
-+	//   "substring"/"substr"/"left"/"right" — negative/zero offsets behave differently
-+	//   "instr"       — MySQL matches case-insensitively under the default collation
++	//   "make_date"/"make_time"/"make_timestamp" — MySQL's makedate/maketime take different arguments
++	//   "left"/"right" — negative offsets behave differently
++	//   "instr"       — MySQL's INSTR only matches case-sensitively with BINARY arguments, but those
++	//                   make it count byte positions instead of character positions
 +	//   "ascii"       — MySQL returns the first byte, DuckDB the first code point
 +	//   "md5"/"sha1"  — removed in MySQL 9.0
-+	//   "regexp_replace" — different regex dialect; MySQL replaces all matches, DuckDB only the first
-+	//   "greatest"/"least" — MySQL returns NULL if any argument is NULL, DuckDB skips NULLs
-+	//   "dayofweek"/"weekday"/"week" — different day/week numbering
-+	//   "microsecond" — DuckDB includes the seconds component, MySQL does not
++	//   "regexp_replace" — different regex dialect (RE2 vs ICU)
 +	//   "now"         — DuckDB returns the transaction timestamp with time zone; MySQL the statement time
-+	//   "stddev"/"variance" — sample variants in DuckDB, population variants in MySQL
 +	//   "bit_and"/"bit_or"/"bit_xor" — MySQL operates on (and returns) unsigned 64-bit integers
 +	//   "corr"/"covar_pop"/"covar_samp" — not available in MySQL
 +	//   "if"/"lcase"/"ucase" — not available in DuckDB (pushing would mask a binder error)
@@ -1327,6 +1397,8 @@ index af9ffd7..4818a77 100644
 +	    "hex",
 +	    "unhex",
 +	    "bin",
++	    "substring",
++	    "substr",
 +	    // Math
 +	    "abs",
 +	    "ceil",
@@ -1354,6 +1426,7 @@ index af9ffd7..4818a77 100644
 +	    "pi",
 +	    "sign",
 +	    "mod",
++	    "trunc",
 +	    "+",
 +	    "-",
 +	    "*",
@@ -1367,8 +1440,13 @@ index af9ffd7..4818a77 100644
 +	    "minute",
 +	    "second",
 +	    "dayofmonth",
++	    "dayofweek",
 +	    "dayofyear",
++	    "weekday",
++	    "isodow",
++	    "week",
 +	    "weekofyear",
++	    "microsecond",
 +	    "quarter",
 +	    "monthname",
 +	    "dayname",
@@ -1377,6 +1455,8 @@ index af9ffd7..4818a77 100644
 +	    "coalesce",
 +	    "nullif",
 +	    "ifnull",
++	    "greatest",
++	    "least",
 +	    // Aggregate
 +	    "count",
 +	    "count_star",
@@ -1385,8 +1465,10 @@ index af9ffd7..4818a77 100644
 +	    "min",
 +	    "max",
 +	    "group_concat",
++	    "stddev",
 +	    "stddev_pop",
 +	    "stddev_samp",
++	    "variance",
 +	    "var_pop",
 +	    "var_samp",
 +	    "any_value",
@@ -1423,25 +1505,12 @@ index af9ffd7..4818a77 100644
 +	}
 +}
 +
-+//! Operand check for comparisons: MySQL string comparisons are collation-dependent
-+//! (case-insensitive, by default) while DuckDB compares bytes - block comparisons
-+//! against string literals.
-+static bool MySQLComparisonOperandIsString(const ParsedExpression &expr) {
-+	if (expr.GetExpressionClass() != ExpressionClass::CONSTANT) {
-+		return false;
-+	}
-+	auto &constant = expr.Cast<ConstantExpression>();
-+	return constant.GetValue().type().id() == LogicalTypeId::VARCHAR;
-+}
-+
 +//! Check whether a list of ORDER BY entries can be rewritten for MySQL (see MySQLRewriteOrderEntries)
 +static bool MySQLSupportsOrderEntries(const vector<OrderByNode> &orders,
 +                                      optional_ptr<const vector<unique_ptr<ParsedExpression>>> select_list) {
 +	for (auto &order : orders) {
-+		if (order.null_order != OrderByNullType::ORDER_DEFAULT) {
-+			// MySQL cannot parse NULLS FIRST / NULLS LAST
-+			return false;
-+		}
++		// note: explicit NULLS FIRST / NULLS LAST is supported - the serializer encodes the NULL
++		// placement through the injected "expr IS NULL" ordering key
 +		auto &expr = *order.expression;
 +		if (expr.GetExpressionClass() == ExpressionClass::STAR) {
 +			// ORDER BY ALL is DuckDB-specific
@@ -1482,6 +1551,19 @@ index af9ffd7..4818a77 100644
 +	}
 +	auto &val = expr.Cast<ConstantExpression>().GetValue();
 +	return val.type().IsIntegral() && !val.IsNull();
++}
++
++static bool MySQLIsIntegerLiteralAtLeast(const ParsedExpression &expr, int64_t minimum_value) {
++	if (!MySQLIsIntegerLiteral(expr)) {
++		return false;
++	}
++	auto &val = expr.Cast<ConstantExpression>().GetValue();
++	Value bigint_value;
++	string error;
++	if (!val.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error) || bigint_value.IsNull()) {
++		return false;
++	}
++	return BigIntValue::Get(bigint_value) >= minimum_value;
 +}
 +
 +static bool MySQLSupportsResultModifiers(const QueryNode &node,
@@ -1586,11 +1668,11 @@ index af9ffd7..4818a77 100644
 +			break;
 +		}
 +	}
-+	// frame offsets must be literals in MySQL
-+	if (window.StartExpr() && window.StartExpr()->GetExpressionClass() != ExpressionClass::CONSTANT) {
++	// frame offsets must be integer literals in MySQL
++	if (window.StartExpr() && !MySQLIsIntegerLiteral(*window.StartExpr())) {
 +		return false;
 +	}
-+	if (window.EndExpr() && window.EndExpr()->GetExpressionClass() != ExpressionClass::CONSTANT) {
++	if (window.EndExpr() && !MySQLIsIntegerLiteral(*window.EndExpr())) {
 +		return false;
 +	}
 +	// the NULL ordering of the window ORDER BY must be made explicit when serializing
@@ -1666,6 +1748,34 @@ index af9ffd7..4818a77 100644
 +			// the two-argument variants of trim/ltrim/rtrim are not supported in MySQL
 +			return false;
 +		}
++		// functions that are rewritten during serialization, with restrictions on their arguments
++		auto &children = func.GetChildren();
++		static const case_insensitive_set_t MYSQL_SINGLE_ARGUMENT_REWRITES = {"week",   "dayofweek",   "weekday",
++		                                                                      "isodow", "microsecond", "trunc"};
++		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(func.FunctionName()) > 0 && children.size() != 1) {
++			return false;
++		}
++		if (StringUtil::CIEquals(func.FunctionName(), "greatest") ||
++		    StringUtil::CIEquals(func.FunctionName(), "least")) {
++			// rewritten into a COALESCE rotation, which grows quadratically - bound the argument count
++			if (children.size() < 2 || children.size() > 8) {
++				return false;
++			}
++		}
++		if (StringUtil::CIEquals(func.FunctionName(), "substring") ||
++		    StringUtil::CIEquals(func.FunctionName(), "substr")) {
++			// MySQL handles zero and negative offsets differently - only push down calls with
++			// literal positive offsets (and a literal non-negative length)
++			if (children.size() < 2 || children.size() > 3) {
++				return false;
++			}
++			if (!MySQLIsIntegerLiteralAtLeast(*children[1], 1)) {
++				return false;
++			}
++			if (children.size() == 3 && !MySQLIsIntegerLiteralAtLeast(*children[2], 0)) {
++				return false;
++			}
++		}
 +		return MySQLSupportsFunction(func);
 +	}
 +	case ExpressionClass::WINDOW: {
@@ -1673,7 +1783,6 @@ index af9ffd7..4818a77 100644
 +		return MySQLSupportsWindow(window);
 +	}
 +	case ExpressionClass::COMPARISON: {
-+		auto &comparison = expr.Cast<ComparisonExpression>();
 +		switch (expr.GetExpressionType()) {
 +		case ExpressionType::COMPARE_EQUAL:
 +		case ExpressionType::COMPARE_NOTEQUAL:
@@ -1681,20 +1790,20 @@ index af9ffd7..4818a77 100644
 +		case ExpressionType::COMPARE_GREATERTHAN:
 +		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 +		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
++		case ExpressionType::COMPARE_DISTINCT_FROM:
++		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
++			// IS [NOT] DISTINCT FROM is serialized using MySQL's NULL-safe <=> operator
 +			break;
 +		default:
-+			// IS [NOT] DISTINCT FROM and other comparisons have different syntax in MySQL
++			// other comparison types are not supported in MySQL
 +			return false;
 +		}
-+		return !MySQLComparisonOperandIsString(comparison.Left()) &&
-+		       !MySQLComparisonOperandIsString(comparison.Right());
++		// string comparisons are safe to push: the serializer attaches an explicit binary
++		// collation to string literals, which makes the comparison byte-wise like DuckDB
++		return true;
 +	}
-+	case ExpressionClass::BETWEEN: {
-+		auto &between = expr.Cast<BetweenExpression>();
-+		return !MySQLComparisonOperandIsString(between.Input()) &&
-+		       !MySQLComparisonOperandIsString(between.LowerBound()) &&
-+		       !MySQLComparisonOperandIsString(between.UpperBound());
-+	}
++	case ExpressionClass::BETWEEN:
++		return true;
 +	case ExpressionClass::OPERATOR: {
 +		switch (expr.GetExpressionType()) {
 +		case ExpressionType::OPERATOR_IS_NULL:
@@ -1704,15 +1813,8 @@ index af9ffd7..4818a77 100644
 +		case ExpressionType::OPERATOR_NULLIF:
 +			return true;
 +		case ExpressionType::COMPARE_IN:
-+		case ExpressionType::COMPARE_NOT_IN: {
-+			auto &op = expr.Cast<OperatorExpression>();
-+			for (auto &child : op.GetChildren()) {
-+				if (MySQLComparisonOperandIsString(*child)) {
-+					return false;
-+				}
-+			}
++		case ExpressionType::COMPARE_NOT_IN:
 +			return true;
-+		}
 +		default:
 +			// TRY(...), array indexing and other operators are DuckDB-specific
 +			return false;
@@ -1720,10 +1822,6 @@ index af9ffd7..4818a77 100644
 +	}
 +	case ExpressionClass::SUBQUERY: {
 +		auto &subquery = expr.Cast<SubqueryExpression>();
-+		if (subquery.GetChild() && MySQLComparisonOperandIsString(*subquery.GetChild())) {
-+			// e.g. 'literal' = ANY(...) - MySQL string comparisons are collation-dependent
-+			return false;
-+		}
 +		switch (subquery.GetComparisonType()) {
 +		case ExpressionType::INVALID: // EXISTS / scalar subqueries
 +		case ExpressionType::COMPARE_EQUAL:

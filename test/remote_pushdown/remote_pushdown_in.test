@@ -45,7 +45,8 @@ SELECT COUNT(*) FROM s.in_tbl WHERE i NOT IN (1, NULL)
 ----
 0
 
-# string IN lists are collation-sensitive in MySQL (case-insensitive by default) -- must stay local
+# string IN lists are collation-sensitive in MySQL (case-insensitive by default) -- the
+# pushdown attaches an explicit binary collation to the literals so they can be pushed
 statement ok
 CREATE OR REPLACE TABLE s.in_str_tbl AS
     SELECT CASE i WHEN 0 THEN 'Alice' WHEN 1 THEN 'ALICE' ELSE 'alice' END AS name
@@ -59,7 +60,7 @@ SELECT COUNT(*) FROM s.in_str_tbl WHERE name IN ('alice', 'bob')
 query II
 explain SELECT COUNT(*) FROM s.in_str_tbl WHERE name IN ('alice', 'bob')
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # IN over a remote subquery is pushed
 query I

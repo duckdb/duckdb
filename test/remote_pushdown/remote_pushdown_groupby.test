@@ -101,7 +101,8 @@ explain SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
 ----
 physical_plan	<REGEX>:.*GROUP_BY.*
 
-# ---- ORDER BY NULLS FIRST / NULLS LAST: MySQL < 8.0.26 cannot parse this ----
+# ---- ORDER BY NULLS FIRST / NULLS LAST: MySQL cannot parse the NULLS clause, but the
+# serializer encodes the NULL placement through an explicit "expr IS NULL" ordering key ----
 
 statement ok
 CREATE OR REPLACE TABLE s.null_order_tbl AS
@@ -124,7 +125,7 @@ NULL
 query II
 explain SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS LAST
 ----
-physical_plan	<REGEX>:.*ORDER.*
+physical_plan	<!REGEX>:.*ORDER_BY.*
 
 # NULLS FIRST: NULLs before non-NULLs
 query I

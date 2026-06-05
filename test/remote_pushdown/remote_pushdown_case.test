@@ -94,9 +94,9 @@ CREATE OR REPLACE TABLE s.names_tbl AS
     SELECT CASE i WHEN 0 THEN 'Alice' WHEN 1 THEN 'ALICE' ELSE 'alice' END AS name
     FROM range(3) t(i)
 
-# DuckDB evaluates locally (case-sensitive) → exactly 1 row matches 'alice'
-# MySQL with default collation (utf8mb4_0900_ai_ci, case-insensitive) → 3 rows
-# if the query is pushed, the result changes silently; the test exposes that
+# MySQL's default collation (utf8mb4_0900_ai_ci) is case-insensitive and would match 3 rows;
+# the pushdown attaches an explicit binary collation to string literals, so the pushed
+# comparison is byte-wise like DuckDB and matches exactly 1 row
 query I
 SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
 ----
@@ -105,4 +105,4 @@ SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
 query II
 explain SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
