@@ -1,0 +1,49 @@
+# name: test/sql/parser/test_columns_unpacked_operators.test
+# description: Test *COLUMNS() used alongside operators that appear in lambda bodies (issue #17617)
+# group: [parser]
+
+statement ok
+CREATE TABLE test (a VARCHAR, b VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('hello', 'world'), ('empty', NULL);
+
+# IS NOT NULL inside a lambda body — *COLUMNS() is only in the list argument, not inside IS NOT NULL
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: x IS NOT NULL) FROM test;
+----
+[hello, world]
+[empty]
+
+# IS NULL inside a lambda body
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: x IS NULL) FROM test;
+----
+[]
+[NULL]
+
+# NOT inside a lambda body — lambda x: NOT (x = 'hello')
+# NULL = 'hello' is NULL, NOT NULL is NULL (falsy), so NULL is filtered out
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: NOT (x = 'hello')) FROM test;
+----
+[world]
+[empty]
+
+# Combined: IS NOT NULL AND a string predicate (the original issue #17617 reproduction)
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: lower(x) != 'empty' AND x IS NOT NULL) FROM test;
+----
+[hello, world]
+[]
+
+# Operators directly wrapping *COLUMNS() are still disallowed (arity is undefined)
+statement error
+SELECT *COLUMNS(*) IS NOT NULL FROM test;
+----
+*COLUMNS() can not be used together with the 'OPERATOR_IS_NOT_NULL' operator
+
+statement error
+SELECT *COLUMNS(*) IS NULL FROM test;
+----
+*COLUMNS() can not be used together with the 'OPERATOR_IS_NULL' operator
