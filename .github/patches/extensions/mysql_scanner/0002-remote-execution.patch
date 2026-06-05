@@ -39,10 +39,10 @@ index 79b9e01..e689e9d 100644
  	unique_ptr<FunctionData> Copy() const override {
 diff --git a/src/include/mysql_sql_writer.hpp b/src/include/mysql_sql_writer.hpp
 new file mode 100644
-index 0000000..72675f9
+index 0000000..bc64fd2
 --- /dev/null
 +++ b/src/include/mysql_sql_writer.hpp
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,88 @@
 +//===----------------------------------------------------------------------===//
 +//                         DuckDB
 +//
@@ -86,12 +86,14 @@ index 0000000..72675f9
 +//! * unnamed derived tables get a generated alias (required by MySQL)
 +//! Constructs that cannot be serialized are rejected up-front by MySQLCatalog::SupportsPushdown -
 +//! encountering them here is an internal error.
++struct MySQLVersion;
++
 +class MySQLSQLWriter {
 +public:
-+	explicit MySQLSQLWriter(ClientContext &context);
++	MySQLSQLWriter(ClientContext &context, const MySQLVersion &version);
 +
 +	//! Convert a query node to a MySQL-compatible SQL string
-+	static string MySQLToString(ClientContext &context, const QueryNode &node);
++	static string MySQLToString(ClientContext &context, const MySQLVersion &version, const QueryNode &node);
 +
 +private:
 +	string WriteQueryNode(const QueryNode &node);
@@ -122,13 +124,65 @@ index 0000000..72675f9
 +
 +private:
 +	ClientContext &context;
++	//! The NO PAD binary collation attached to string literals (derived from the server version)
++	string binary_collation;
 +	//! Counter for generating aliases for unnamed derived tables (MySQL requires an alias)
 +	idx_t unnamed_subquery_index = 0;
 +};
 +
 +} // namespace duckdb
+diff --git a/src/include/mysql_utils.hpp b/src/include/mysql_utils.hpp
+index 7fd38a3..7759e3e 100644
+--- a/src/include/mysql_utils.hpp
++++ b/src/include/mysql_utils.hpp
+@@ -25,6 +25,45 @@ enum mysql_ssl_mode_compat {
+ 	SSL_MODE_VERIFY_IDENTITY
+ };
+ 
++//! The type of server we are connected to
++enum class MySQLServerType : uint8_t { MYSQL, MARIADB };
++
++//! Server version information, parsed from the server version string on attach
++struct MySQLVersion {
++	idx_t major_version = 0;
++	idx_t minor_version = 0;
++	idx_t patch_version = 0;
++	MySQLServerType server_type = MySQLServerType::MYSQL;
++
++	//! Parse a server version string (e.g. "9.6.0", "8.0.42-log", "11.4.2-MariaDB",
++	//! "5.5.5-10.11.6-MariaDB-log")
++	static MySQLVersion Parse(const string &version_string);
++
++	bool IsAtLeast(idx_t major_p, idx_t minor_p, idx_t patch_p) const {
++		if (major_version != major_p) {
++			return major_version > major_p;
++		}
++		if (minor_version != minor_p) {
++			return minor_version > minor_p;
++		}
++		return patch_version >= patch_p;
++	}
++
++	//! The NO PAD binary collation used to give string literals byte-wise comparison
++	//! semantics, or an empty string if the server has no suitable collation
++	//! (in which case string literals cannot be pushed down)
++	string GetBinaryCollation() const {
++		switch (server_type) {
++		case MySQLServerType::MARIADB:
++			// utf8mb4_nopad_bin is available since MariaDB 10.2
++			return IsAtLeast(10, 2, 0) ? "utf8mb4_nopad_bin" : string();
++		default:
++			// utf8mb4_0900_bin is available since MySQL 8.0.17
++			return IsAtLeast(8, 0, 17) ? "utf8mb4_0900_bin" : string();
++		}
++	}
++};
++
+ struct MySQLConnectionParameters {
+ 	string host;
+ 	string user;
 diff --git a/src/include/storage/mysql_catalog.hpp b/src/include/storage/mysql_catalog.hpp
-index 817414e..9a54c5e 100644
+index 817414e..314b3ce 100644
 --- a/src/include/storage/mysql_catalog.hpp
 +++ b/src/include/storage/mysql_catalog.hpp
 @@ -61,6 +61,21 @@ public:
@@ -153,6 +207,110 @@ index 817414e..9a54c5e 100644
  
  	void ClearCache();
  
+@@ -69,6 +84,10 @@ public:
+ 	MySQLConnectionPool &GetConnectionPool();
+ 	PlanCache &GetPlanCache();
+ 	MySQLStatsCache &GetStatsCache();
++	//! The server version, fetched when the database was attached
++	const MySQLVersion &GetVersion() const {
++		return version;
++	}
+ 
+ private:
+ 	void DropSchema(ClientContext &context, DropInfo &info) override;
+@@ -76,6 +95,7 @@ private:
+ private:
+ 	MySQLSchemaSet schemas;
+ 	string default_schema;
++	MySQLVersion version;
+ 	shared_ptr<MySQLConnectionPool> connection_pool;
+ 	PlanCache plan_cache_;
+ 	MySQLStatsCache stats_cache_;
+diff --git a/src/include/storage/mysql_statistics.hpp b/src/include/storage/mysql_statistics.hpp
+index 377b093..827533a 100644
+--- a/src/include/storage/mysql_statistics.hpp
++++ b/src/include/storage/mysql_statistics.hpp
+@@ -11,6 +11,7 @@
+ #include "duckdb.hpp"
+ #include "duckdb/common/case_insensitive_map.hpp"
+ #include "duckdb/planner/table_filter.hpp"
++#include "mysql_utils.hpp"
+ 
+ #include <chrono>
+ #include <deque>
+@@ -152,13 +153,6 @@ struct CachedBufferPoolRate {
+ 	std::chrono::steady_clock::time_point cached_at;
+ };
+ 
+-struct CachedVersionInfo {
+-	string mysql_version;
+-	bool has_histogram_support = false;
+-	bool detected = false;
+-	std::chrono::steady_clock::time_point cached_at;
+-};
+-
+ struct StatsEvictionEntry {
+ 	string key;
+ 	idx_t seq;
+@@ -169,7 +163,6 @@ public:
+ 	static constexpr int64_t TABLE_STATS_TTL_SECONDS = 300;
+ 	static constexpr int64_t COST_CONSTANTS_TTL_SECONDS = 1800;
+ 	static constexpr int64_t BUFFER_POOL_TTL_SECONDS = 300;
+-	static constexpr int64_t VERSION_TTL_SECONDS = 3600;
+ 	static constexpr idx_t MAX_TABLE_STATS_ENTRIES = 1000;
+ 
+ 	using InvalidationCallback = std::function<void(const string &schema, const string &table)>;
+@@ -185,9 +178,6 @@ public:
+ 	bool GetBufferPoolHitRate(double &out);
+ 	void StoreBufferPoolHitRate(double hit_rate);
+ 
+-	bool GetVersionInfo(string &version, bool &has_histogram_support);
+-	void StoreVersionInfo(const string &version, bool has_histogram_support);
+-
+ 	void Clear();
+ 	void Invalidate(const string &schema, const string &table);
+ 
+@@ -199,7 +189,6 @@ private:
+ 	idx_t next_eviction_seq_ = 0;
+ 	CachedCostConstants cost_constants_;
+ 	CachedBufferPoolRate buffer_pool_;
+-	CachedVersionInfo version_info_;
+ 
+ 	static string MakeCacheKey(const string &schema, const string &table);
+ 	void EvictOldest();
+@@ -208,7 +197,8 @@ private:
+ 
+ class MySQLStatisticsCollector {
+ public:
+-	MySQLStatisticsCollector(MySQLConnection &connection, MySQLStatsCache &shared_cache);
++	MySQLStatisticsCollector(MySQLConnection &connection, MySQLStatsCache &shared_cache,
++	                         const MySQLVersion &server_version);
+ 
+ 	MySQLTableStats GetTableStats(const string &schema, const string &table);
+ 	bool HasUsableIndex(const string &schema, const string &table, const vector<string> &columns);
+@@ -232,21 +222,16 @@ public:
+ 	ExplainAnalyzeResult RunExplainAnalyze(const string &query);
+ 
+ 	bool SupportsExplainAnalyze() const;
+-	int GetMajorVersion() const;
+-	int GetMinorVersion() const;
+-	int GetPatchVersion() const;
+ 	double EstimateSelectivity(const string &schema, const string &table, const string &column,
+ 	                           ExpressionType comparison, const Value &value);
+ 
+ private:
+ 	reference<MySQLConnection> connection_;
+ 	reference<MySQLStatsCache> shared_cache_;
++	MySQLVersion server_version_;
+ 	bool has_histogram_support_ = false;
+-	bool version_detected_ = false;
+ 	bool stats_expiry_set_ = false;
+-	string mysql_version_;
+ 
+-	void DetectVersion();
+ 	void EnsureFreshStats();
+ 	void FetchTableMetadata(const string &schema, const string &table, MySQLTableStats &stats);
+ 	void FetchInnoDBStats(const string &schema, const string &table, MySQLTableStats &stats);
 diff --git a/src/include/storage/mysql_transaction.hpp b/src/include/storage/mysql_transaction.hpp
 index ba4ceae..5bca78a 100644
 --- a/src/include/storage/mysql_transaction.hpp
@@ -402,7 +560,7 @@ index 9e3123b..0497674 100644
  
  	HandleTruncatedData();
 diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
-index fea00b5..cb53699 100644
+index fea00b5..cd56adb 100644
 --- a/src/mysql_scanner.cpp
 +++ b/src/mysql_scanner.cpp
 @@ -7,6 +7,7 @@
@@ -413,7 +571,58 @@ index fea00b5..cb53699 100644
  #include "storage/mysql_table_set.hpp"
  #include "storage/mysql_catalog.hpp"
  #include "storage/mysql_statistics.hpp"
-@@ -676,9 +677,29 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
+@@ -262,7 +263,8 @@ static void InjectQueryHints(ClientContext &context, string &select, const Feder
+ 	Value explain_val;
+ 	if (context.TryGetCurrentSetting("mysql_explain_validation_enabled", explain_val) &&
+ 	    BooleanValue::Get(explain_val) && !fed.filter_analysis.recommended_index.empty()) {
+-		MySQLStatisticsCollector explain_stats(con, shared_cache);
++		MySQLStatisticsCollector explain_stats(con, shared_cache,
++		                                       bind_data.table.catalog.Cast<MySQLCatalog>().GetVersion());
+ 		bool uses_index = false;
+ 		for (const auto &analysis : fed.filter_analysis.analyses) {
+ 			if (analysis.has_index && analysis.ShouldPush()) {
+@@ -287,27 +289,10 @@ static void InjectQueryHints(ClientContext &context, string &select, const Feder
+ 	if (context.TryGetCurrentSetting("mysql_query_timeout_enabled", timeout_val)) {
+ 		timeout_enabled = BooleanValue::Get(timeout_val);
+ 	}
+-	string cached_version;
+-	bool cached_histogram = false;
+-	bool version_supports_timeout = true;
+-	if (shared_cache.GetVersionInfo(cached_version, cached_histogram)) {
+-		bool is_mariadb = StringUtil::Contains(StringUtil::Lower(cached_version), "mariadb");
+-		if (is_mariadb) {
+-			version_supports_timeout = false;
+-		} else {
+-			auto dot = cached_version.find('.');
+-			if (dot != string::npos) {
+-				int major = 0;
+-				try {
+-					major = std::stoi(cached_version.substr(0, dot));
+-				} catch (...) {
+-				}
+-				if (major < 8) {
+-					version_supports_timeout = false;
+-				}
+-			}
+-		}
+-	}
++	// MAX_EXECUTION_TIME query hints are only supported on MySQL 8+
++	auto &server_version = bind_data.table.catalog.Cast<MySQLCatalog>().GetVersion();
++	bool version_supports_timeout =
++	    server_version.server_type == MySQLServerType::MYSQL && server_version.IsAtLeast(8, 0, 0);
+ 	if (timeout_enabled && version_supports_timeout && fed.execution_plan.estimated_cost.Total() > 0) {
+ 		idx_t min_timeout = MIN_QUERY_TIMEOUT_MS;
+ 		idx_t max_timeout = MAX_QUERY_TIMEOUT_MS;
+@@ -435,7 +420,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+ 	string filter_string;
+ 
+ 	if (bind_data.use_predicate_analyzer && input.filters && input.filters->HasFilters()) {
+-		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache());
++		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache(), mysql_catalog.GetVersion());
+ 		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name, bind_data.table.name);
+ 		ConfigurePredicateAnalyzer(context, analyzer);
+ 
+@@ -676,9 +661,29 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
  			names.push_back(field.name);
  			return_types.push_back(field.duckdb_type);
  		}
@@ -443,7 +652,7 @@ index fea00b5..cb53699 100644
  	auto &mysql_catalog = catalog.Cast<MySQLCatalog>();
  
  	auto acquire_mode = MySQLConnectionPool::GetAcquireMode(context);
-@@ -696,6 +717,7 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
+@@ -696,6 +701,7 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
  		names.push_back(field.name);
  		return_types.push_back(field.duckdb_type);
  	}
@@ -451,7 +660,7 @@ index fea00b5..cb53699 100644
  	return make_uniq<MySQLQueryBindData>(std::move(sql), catalog, std::move(conn), std::move(stmt), std::move(params));
  }
  
-@@ -713,11 +735,17 @@ static void MySQLQueryScan(ClientContext &context, TableFunctionInput &data, Dat
+@@ -713,11 +719,17 @@ static void MySQLQueryScan(ClientContext &context, TableFunctionInput &data, Dat
  	auto &gstate = data.global_state->Cast<MySQLGlobalState>();
  	if (!gstate.result) {
  		auto &bind_data = data.bind_data->CastNoConst<MySQLQueryBindData>();
@@ -475,10 +684,10 @@ index fea00b5..cb53699 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..b82ecfd
+index 0000000..4bbae43
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,774 @@
+@@ -0,0 +1,779 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -509,11 +718,12 @@ index 0000000..b82ecfd
 +
 +namespace duckdb {
 +
-+MySQLSQLWriter::MySQLSQLWriter(ClientContext &context) : context(context) {
++MySQLSQLWriter::MySQLSQLWriter(ClientContext &context, const MySQLVersion &version)
++    : context(context), binary_collation(version.GetBinaryCollation()) {
 +}
 +
-+string MySQLSQLWriter::MySQLToString(ClientContext &context, const QueryNode &node) {
-+	MySQLSQLWriter writer(context);
++string MySQLSQLWriter::MySQLToString(ClientContext &context, const MySQLVersion &version, const QueryNode &node) {
++	MySQLSQLWriter writer(context, version);
 +	return writer.WriteQueryNode(node);
 +}
 +
@@ -545,14 +755,18 @@ index 0000000..b82ecfd
 +	case LogicalTypeId::DECIMAL:
 +		return value.ToString();
 +	case LogicalTypeId::VARCHAR:
++		if (binary_collation.empty()) {
++			// SupportsPushdown blocks string literals when the server has no binary collation
++			throw InternalException("MySQLSQLWriter: no binary collation available for this server version");
++		}
 +		// WriteLiteral escapes both quotes and backslashes
 +		// (MySQL treats backslash as an escape character within string literals)
 +		// The explicit binary collation makes any comparison involving the literal byte-wise,
 +		// matching DuckDB's string comparison semantics (MySQL's default collation is
-+		// case-insensitive). utf8mb4_0900_bin is a NO PAD collation, so trailing spaces are
++		// case-insensitive). The collation is a NO PAD collation, so trailing spaces are
 +		// significant as well. Comparisons against non-string types are unaffected - MySQL
 +		// still coerces the string to the other operand's type (date, number, ...).
-+		return "(" + MySQLUtils::WriteLiteral(StringValue::Get(value)) + " COLLATE utf8mb4_0900_bin)";
++		return "(" + MySQLUtils::WriteLiteral(StringValue::Get(value)) + " COLLATE " + binary_collation + ")";
 +	case LogicalTypeId::BLOB:
 +		return MySQLUtils::TransformConstant(value);
 +	case LogicalTypeId::DATE:
@@ -1253,8 +1467,49 @@ index 0000000..b82ecfd
 +}
 +
 +} // namespace duckdb
+diff --git a/src/mysql_utils.cpp b/src/mysql_utils.cpp
+index ef3d3d6..1f39ce9 100644
+--- a/src/mysql_utils.cpp
++++ b/src/mysql_utils.cpp
+@@ -330,6 +330,36 @@ MYSQL *MySQLUtils::Connect(const string &dsn, const string &attach_path) {
+ 	return result;
+ }
+ 
++MySQLVersion MySQLVersion::Parse(const string &version_string) {
++	MySQLVersion result;
++	if (StringUtil::Contains(StringUtil::Lower(version_string), "mariadb")) {
++		result.server_type = MySQLServerType::MARIADB;
++	}
++
++	string version = version_string;
++	if (result.server_type == MySQLServerType::MARIADB && StringUtil::StartsWith(version, "5.5.5-")) {
++		// MariaDB servers can prefix their version with "5.5.5-" (replication compatibility)
++		version = version.substr(6);
++	}
++	// parse the leading major.minor.patch
++	idx_t numbers[3] = {0, 0, 0};
++	idx_t number_index = 0;
++	for (idx_t pos = 0; pos < version.size(); pos++) {
++		auto c = version[pos];
++		if (c >= '0' && c <= '9') {
++			numbers[number_index] = numbers[number_index] * 10 + static_cast<idx_t>(c - '0');
++		} else if (c == '.' && number_index < 2) {
++			number_index++;
++		} else {
++			break;
++		}
++	}
++	result.major_version = numbers[0];
++	result.minor_version = numbers[1];
++	result.patch_version = numbers[2];
++	return result;
++}
++
+ string MySQLUtils::EscapeQuotes(const string &text, char quote) {
+ 	string result;
+ 	for (auto c : text) {
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..b2814cb 100644
+index af9ffd7..240e96c 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1297,14 +1552,24 @@ index af9ffd7..b2814cb 100644
  #include "storage/mysql_schema_entry.hpp"
  #include "storage/mysql_transaction.hpp"
  
-@@ -503,6 +531,721 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -28,7 +56,8 @@ MySQLCatalog::MySQLCatalog(AttachedDatabase &db_p, string connection_string_p, s
+ 	    [this](const string &schema, const string &table) { plan_cache_.InvalidateTable(schema, table); });
+ 
+ 	auto pooled = connection_pool->ForceAcquire();
+-	(void)pooled;
++	auto server_info = mysql_get_server_info(pooled->GetConn());
++	version = MySQLVersion::Parse(server_info ? server_info : "");
+ }
+ 
+ MySQLCatalog::~MySQLCatalog() = default;
+@@ -503,6 +532,726 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
 +unique_ptr<TableRef> MySQLCatalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
 +	// serialize the query node into MySQL-compatible SQL (identifier quoting, type / function
 +	// remapping, explicit NULL ordering, ...)
-+	return RemoteExecute(context, MySQLSQLWriter::MySQLToString(context, *node));
++	return RemoteExecute(context, MySQLSQLWriter::MySQLToString(context, version, *node));
 +}
 +
 +unique_ptr<TableRef> MySQLCatalog::RemoteExecute(ClientContext &context, const string &sql) {
@@ -1741,6 +2006,11 @@ index af9ffd7..b2814cb 100644
 +		if (!MySQLSupportsType(value.type(), false)) {
 +			return false;
 +		}
++		if (value.type().id() == LogicalTypeId::VARCHAR && version.GetBinaryCollation().empty()) {
++			// string literals can only be pushed if the server has a NO PAD binary collation
++			// to give comparisons byte-wise (DuckDB) semantics
++			return false;
++		}
 +		if (!value.IsNull()) {
 +			// MySQL has no infinity / NaN
 +			if (value.type().id() == LogicalTypeId::FLOAT && !Value::FloatIsFinite(FloatValue::Get(value))) {
@@ -2019,6 +2289,204 @@ index af9ffd7..b2814cb 100644
  void MySQLCatalog::ClearCache() {
  	schemas.ClearEntries();
  	plan_cache_.Clear();
+diff --git a/src/storage/mysql_statistics.cpp b/src/storage/mysql_statistics.cpp
+index 404c8e6..4a7d7f9 100644
+--- a/src/storage/mysql_statistics.cpp
++++ b/src/storage/mysql_statistics.cpp
+@@ -510,30 +510,6 @@ void MySQLStatsCache::StoreBufferPoolHitRate(double hit_rate) {
+ 	buffer_pool_.cached_at = std::chrono::steady_clock::now();
+ }
+ 
+-bool MySQLStatsCache::GetVersionInfo(string &version, bool &has_histogram_support) {
+-	std::lock_guard<std::mutex> lock(mutex_);
+-	if (!version_info_.detected) {
+-		return false;
+-	}
+-	auto elapsed = std::chrono::steady_clock::now() - version_info_.cached_at;
+-	auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+-	if (seconds >= VERSION_TTL_SECONDS) {
+-		version_info_.detected = false;
+-		return false;
+-	}
+-	version = version_info_.mysql_version;
+-	has_histogram_support = version_info_.has_histogram_support;
+-	return true;
+-}
+-
+-void MySQLStatsCache::StoreVersionInfo(const string &version, bool has_histogram_support) {
+-	std::lock_guard<std::mutex> lock(mutex_);
+-	version_info_.mysql_version = version;
+-	version_info_.has_histogram_support = has_histogram_support;
+-	version_info_.detected = true;
+-	version_info_.cached_at = std::chrono::steady_clock::now();
+-}
+-
+ void MySQLStatsCache::Clear() {
+ 	std::lock_guard<std::mutex> lock(mutex_);
+ 	table_stats_.clear();
+@@ -541,7 +517,6 @@ void MySQLStatsCache::Clear() {
+ 	next_eviction_seq_ = 0;
+ 	cost_constants_.loaded = false;
+ 	buffer_pool_.loaded = false;
+-	version_info_.detected = false;
+ }
+ 
+ void MySQLStatsCache::Invalidate(const string &schema, const string &table) {
+@@ -550,8 +525,12 @@ void MySQLStatsCache::Invalidate(const string &schema, const string &table) {
+ 	table_stats_.erase(cache_key);
+ }
+ 
+-MySQLStatisticsCollector::MySQLStatisticsCollector(MySQLConnection &connection, MySQLStatsCache &shared_cache)
+-    : connection_(connection), shared_cache_(shared_cache) {
++MySQLStatisticsCollector::MySQLStatisticsCollector(MySQLConnection &connection, MySQLStatsCache &shared_cache,
++                                                   const MySQLVersion &server_version)
++    : connection_(connection), shared_cache_(shared_cache), server_version_(server_version) {
++	// histograms (and information_schema_stats_expiry) are only available on MySQL 8+
++	has_histogram_support_ =
++	    server_version_.server_type == MySQLServerType::MYSQL && server_version_.IsAtLeast(8, 0, 0);
+ }
+ 
+ double MySQLStatisticsCollector::ComputeStalenessScore(const MySQLTableStats &stats) {
+@@ -585,41 +564,6 @@ double MySQLStatisticsCollector::ComputeStalenessScore(const MySQLTableStats &st
+ 	return std::min(score, 1.0);
+ }
+ 
+-void MySQLStatisticsCollector::DetectVersion() {
+-	if (version_detected_) {
+-		return;
+-	}
+-
+-	string cached_version;
+-	bool cached_histogram;
+-	if (shared_cache_.get().GetVersionInfo(cached_version, cached_histogram)) {
+-		mysql_version_ = cached_version;
+-		has_histogram_support_ = cached_histogram;
+-		version_detected_ = true;
+-		return;
+-	}
+-
+-	version_detected_ = true;
+-
+-	auto result =
+-	    connection_.get().Query("SELECT @@version AS mysql_version", MySQLResultStreaming::FORCE_MATERIALIZATION);
+-
+-	if (result->Exhausted()) {
+-		return;
+-	}
+-
+-	auto &chunk = result->NextChunk();
+-	if (chunk.size() == 0) {
+-		return;
+-	}
+-
+-	mysql_version_ = chunk.data[0].GetValue(0).ToString();
+-	bool is_mariadb = StringUtil::Contains(StringUtil::Lower(mysql_version_), "mariadb");
+-	has_histogram_support_ = (!is_mariadb && GetMajorVersion() >= 8);
+-
+-	shared_cache_.get().StoreVersionInfo(mysql_version_, has_histogram_support_);
+-}
+-
+ void MySQLStatisticsCollector::EnsureFreshStats() {
+ 	if (stats_expiry_set_) {
+ 		return;
+@@ -637,19 +581,9 @@ void MySQLStatisticsCollector::EnsureFreshStats() {
+ MySQLTableStats MySQLStatisticsCollector::GetTableStats(const string &schema, const string &table) {
+ 	MySQLTableStats cached_stats;
+ 	if (shared_cache_.get().GetTableStats(schema, table, cached_stats)) {
+-		if (!version_detected_) {
+-			string cached_ver;
+-			bool cached_hist;
+-			if (shared_cache_.get().GetVersionInfo(cached_ver, cached_hist)) {
+-				mysql_version_ = cached_ver;
+-				has_histogram_support_ = cached_hist;
+-				version_detected_ = true;
+-			}
+-		}
+ 		return cached_stats;
+ 	}
+ 
+-	DetectVersion();
+ 	EnsureFreshStats();
+ 
+ 	MySQLTableStats stats;
+@@ -1322,75 +1256,9 @@ bool MySQLStatisticsCollector::ValidateWithExplain(const string &query, const st
+ 	return true;
+ }
+ 
+-int MySQLStatisticsCollector::GetMajorVersion() const {
+-	if (mysql_version_.empty()) {
+-		return 0;
+-	}
+-	auto dot = mysql_version_.find('.');
+-	if (dot == string::npos) {
+-		return 0;
+-	}
+-	try {
+-		return std::stoi(mysql_version_.substr(0, dot));
+-	} catch (...) {
+-		return 0;
+-	}
+-}
+-
+-int MySQLStatisticsCollector::GetMinorVersion() const {
+-	if (mysql_version_.empty()) {
+-		return 0;
+-	}
+-	auto first_dot = mysql_version_.find('.');
+-	if (first_dot == string::npos) {
+-		return 0;
+-	}
+-	auto second_dot = mysql_version_.find('.', first_dot + 1);
+-	if (second_dot == string::npos) {
+-		return 0;
+-	}
+-	try {
+-		return std::stoi(mysql_version_.substr(first_dot + 1, second_dot - first_dot - 1));
+-	} catch (...) {
+-		return 0;
+-	}
+-}
+-
+-int MySQLStatisticsCollector::GetPatchVersion() const {
+-	if (mysql_version_.empty()) {
+-		return 0;
+-	}
+-	auto first_dot = mysql_version_.find('.');
+-	if (first_dot == string::npos) {
+-		return 0;
+-	}
+-	auto second_dot = mysql_version_.find('.', first_dot + 1);
+-	if (second_dot == string::npos) {
+-		return 0;
+-	}
+-	auto rest = mysql_version_.substr(second_dot + 1);
+-	auto end = rest.find_first_not_of("0123456789");
+-	try {
+-		return std::stoi(rest.substr(0, end));
+-	} catch (...) {
+-		return 0;
+-	}
+-}
+-
+ bool MySQLStatisticsCollector::SupportsExplainAnalyze() const {
+-	int major = GetMajorVersion();
+-	int minor = GetMinorVersion();
+-	int patch = GetPatchVersion();
+-	if (major > 8) {
+-		return true;
+-	}
+-	if (major == 8 && minor > 0) {
+-		return true;
+-	}
+-	if (major == 8 && minor == 0 && patch >= 18) {
+-		return true;
+-	}
+-	return false;
++	// EXPLAIN ANALYZE is available on MySQL 8.0.18+ (MariaDB uses different ANALYZE syntax)
++	return server_version_.server_type == MySQLServerType::MYSQL && server_version_.IsAtLeast(8, 0, 18);
+ }
+ 
+ MySQLStatisticsCollector::ExplainAnalyzeResult MySQLStatisticsCollector::RunExplainAnalyze(const string &query) {
 diff --git a/test/sql/mysql_query.test b/test/sql/mysql_query.test
 index a44e00f..dad540b 100644
 --- a/test/sql/mysql_query.test
