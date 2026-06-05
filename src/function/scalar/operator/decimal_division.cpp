@@ -230,12 +230,10 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	// during plan deserialization (bind is re-called with the stored argument types, and
 	// changing p changes the result-width formula).
 	// For cross-tier inputs, promote the narrower argument to the wider physical tier.
-	bound_function.GetArguments()[0] = (lhs_physical != wider)
-	                                       ? LogicalType::DECIMAL(input_max_width, s1)
-	                                       : arguments[0]->GetReturnType();
-	bound_function.GetArguments()[1] = (rhs_physical != wider)
-	                                       ? LogicalType::DECIMAL(input_max_width, s2)
-	                                       : arguments[1]->GetReturnType();
+	bound_function.GetArguments()[0] =
+	    (lhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s1) : arguments[0]->GetReturnType();
+	bound_function.GetArguments()[1] =
+	    (rhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s2) : arguments[1]->GetReturnType();
 
 	switch (wider) {
 	case PhysicalType::INT16:
