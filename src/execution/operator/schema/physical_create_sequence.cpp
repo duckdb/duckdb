@@ -6,8 +6,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateSequence::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.CreateSequence(context.client, *info);
 

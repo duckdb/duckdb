@@ -16,4 +16,4 @@ UPDATE tbl SET myco=42
 statement error
 UPDATE tbl SET tbl.mycol=42
 ----
-not supported
+Parser Error: Qualified column names in UPDATE .. SET not supported

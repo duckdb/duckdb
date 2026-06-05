@@ -1,0 +1,49 @@
+# name: test/sql/parallelism/interquery/parallel_dependencies_prepared_statement.test_slow
+# description: Test concurrent dependencies with prepared statements
+# group: [interquery]
+
+concurrentloop threadid 0 11
+
+loop x 0 100
+
+# create the table
+onlyif threadid=0
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid=0
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+onlyif threadid=0
+statement ok
+COMMIT
+
+# now drop the table
+onlyif threadid=0
+statement ok
+DROP TABLE integers CASCADE
+
+endloop
+
+loop x 0 100
+
+onlyif threadid>0
+statement maybe
+PREPARE s1 AS SELECT SUM(i) FROM integers
+----
+does not exist
+
+onlyif threadid>0
+statement maybe
+EXECUTE s1
+----
+does not exist
+
+endloop
+
+endloop

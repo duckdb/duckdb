@@ -39,7 +39,6 @@ unique_ptr<FunctionLocalState> ArrayBoundCastData::InitArrayLocalState(CastLocal
 // ARRAY -> ARRAY
 //------------------------------------------------------------------------------
 static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-
 	auto source_array_size = ArrayType::GetSize(source.GetType());
 	auto target_array_size = ArrayType::GetSize(result.GetType());
 	if (source_array_size != target_array_size) {
@@ -61,6 +60,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, true);
+			return true;
 		}
 
 		auto &source_cc = ArrayVector::GetEntry(source);

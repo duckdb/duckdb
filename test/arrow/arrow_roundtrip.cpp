@@ -5,14 +5,14 @@
 using namespace duckdb;
 
 static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false,
-                               bool loseless_conversion = false) {
+                               bool lossless_conversion = false) {
 	DuckDB db;
 	Connection con(db);
 	if (export_large_buffer) {
 		auto res = con.Query("SET arrow_large_buffer_size=True");
 		REQUIRE(!res->HasError());
 	}
-	if (loseless_conversion) {
+	if (lossless_conversion) {
 		auto res = con.Query("SET arrow_lossless_conversion = true");
 		REQUIRE(!res->HasError());
 	}
@@ -31,7 +31,7 @@ static void TestArrowRoundtripStringView(const string &query) {
 static void TestParquetRoundtrip(const string &path) {
 	DBConfig config;
 	// This needs to be set since this test will be triggered when testing autoloading
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 
 	DuckDB db(nullptr, &config);
 	Connection con(db);
@@ -86,12 +86,126 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz, bignum) REPLACE "
-	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
-	                   "FROM test_all_types()",
-	                   false, true);
+	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
+	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
+	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons
+	// in extension metadata (e.g. CRS strings like "ogc:crs84"), causing std::stoi to crash.
+	{
+		string format = "w:16";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:1";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+	{
+		string format = "w:128";
+		auto type = ArrowType::GetTypeFromFormat(format);
+		REQUIRE(type);
+		REQUIRE(type->GetDuckType() == LogicalType::BLOB);
+	}
+}
+
+static void SetupUnionTable(Connection &con, idx_t num_rows, bool with_nulls = false) {
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	// Insert alternating int and string union members via separate statements
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(" +
+	                          to_string(num_rows) + ") tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(s := 'val' || i::VARCHAR) FROM range(" +
+	                          to_string(num_rows) + ") tbl(i) WHERE i % 2 = 1"));
+	if (with_nulls) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(" +
+		                          to_string(num_rows / 5) + ") tbl(i)"));
+	}
+}
+
+TEST_CASE("Test Arrow UNION type roundtrip", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+
+	// Small union with mixed tags
+	SetupUnionTable(con, 10);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union with NULLs
+	SetupUnionTable(con, 10, true);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Single-member union
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(10) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// All-NULL union column
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT NULL::UNION(i INT, s VARCHAR) FROM range(10) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Single-tag-only: all rows use the same member, other member completely empty
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(i INT, s VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(i := i::INT) FROM range(10000) tbl(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union alongside other columns
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(id INT, u UNION(i INT, s VARCHAR), label VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT i, union_value(i := i::INT), 'row' || i::VARCHAR "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT i, union_value(s := 'val' || i::VARCHAR), 'row' || "
+	                          "i::VARCHAR FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Nested struct as union member
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(u UNION(a INT, b STRUCT(x INT, y VARCHAR)))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(a := i::INT) FROM range(10000) tbl(i) "
+	                          "WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT union_value(b := ROW(i, 'v' || i::VARCHAR)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Union inside a struct
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl(s STRUCT(tag INT, u UNION(i INT, v VARCHAR)))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT ROW(i, union_value(i := i::INT)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl SELECT ROW(i, union_value(v := i::VARCHAR)) "
+	                          "FROM range(10000) tbl(i) WHERE i % 2 = 1"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Large batch - exercises chunk_offset across multiple scan passes (> STANDARD_VECTOR_SIZE)
+	SetupUnionTable(con, 10000);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Large batch with NULLs
+	SetupUnionTable(con, 10000, true);
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl", true));
+
+	// Three-member union, large batch
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE union_tbl3(u UNION(a INT, b FLOAT, c VARCHAR))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(a := i::INT) FROM range(10000) tbl(i) "
+	                          "WHERE i % 3 = 0"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(b := (i * 1.5)::FLOAT) FROM range(10000) "
+	                          "tbl(i) WHERE i % 3 = 1"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO union_tbl3 SELECT union_value(c := 'str' || i::VARCHAR) FROM "
+	                          "range(10000) tbl(i) WHERE i % 3 = 2"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", true));
+}
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
@@ -103,6 +217,21 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UHUGEINT
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)", false,
 	                   true);
+
+	// UHUGEINT (lossy - should export as Decimal(38,0), not extension type)
+	{
+		DuckDB db;
+		Connection con(db);
+		auto client_properties = con.context->GetClientProperties();
+		ArrowSchema schema;
+		schema.Init();
+		vector<LogicalType> types = {LogicalType::UHUGEINT};
+		vector<string> names = {"col"};
+		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+		REQUIRE(schema.n_children == 1);
+		REQUIRE(string(schema.children[0]->format) == "d:38,0");
+		schema.release(&schema);
+	}
 
 	// BIT
 	TestArrowRoundtrip("SELECT '0101011'::BIT str FROM range(5) tbl(i)", false, true);
@@ -154,6 +283,10 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
+
+#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
+	return; // Skip in relassert, takes too long
+#endif
 
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;

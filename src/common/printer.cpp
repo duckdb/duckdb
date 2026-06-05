@@ -31,8 +31,7 @@ void Printer::RawPrint(OutputStream stream, const string &str) {
 }
 
 void Printer::DefaultLinePrint(OutputStream stream, const string &str) {
-	Printer::RawPrint(stream, str);
-	Printer::RawPrint(stream, "\n");
+	Printer::RawPrint(stream, str + "\n");
 }
 
 line_printer_f Printer::line_printer = Printer::DefaultLinePrint;
@@ -74,8 +73,11 @@ idx_t Printer::TerminalWidth() {
 	rows = csbi.srWindow.Right - csbi.srWindow.Left + 1;
 	return rows;
 #else
-	struct winsize w;
+	struct winsize w = {};
 	ioctl(0, TIOCGWINSZ, &w);
+	if (w.ws_col == 0) {
+		return 120;
+	}
 	return w.ws_col;
 #endif
 #else

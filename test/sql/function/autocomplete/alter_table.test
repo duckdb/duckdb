@@ -8,17 +8,17 @@ statement ok
 CREATE TABLE my_table(first_column bigint);
 
 query II
-FROM sql_auto_complete('ALTER TABLE my_table DROP COLUMN fi') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('ALTER TABLE my_table DROP COLUMN fi') LIMIT 1;
 ----
 first_column	33
 
 query II
-FROM sql_auto_complete('ALTER TABLE my_table ALTER COLUMN fi') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('ALTER TABLE my_table ALTER COLUMN fi') LIMIT 1;
 ----
 first_column	34
 
 query II
-FROM sql_auto_complete('ALTER TABLE my_table RENAME COLUMN fi') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('ALTER TABLE my_table RENAME COLUMN fi') LIMIT 1;
 ----
 first_column	35
 

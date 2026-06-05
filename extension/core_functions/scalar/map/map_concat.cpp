@@ -132,7 +132,6 @@ bool IsEmptyMap(const LogicalType &map) {
 
 unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                        vector<unique_ptr<Expression>> &arguments) {
-
 	auto arg_count = arguments.size();
 	if (arg_count < 2) {
 		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
@@ -141,7 +140,7 @@ unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &b
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		// Prepared statement
 		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 		return nullptr;
 	}
 
@@ -155,7 +154,7 @@ unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &b
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
 			bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
-			bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+			bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 			return nullptr;
 		}
 		if (map.id() == LogicalTypeId::SQLNULL) {
@@ -183,8 +182,8 @@ unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &b
 	if (expected.id() == LogicalTypeId::SQLNULL && is_null == false) {
 		expected = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
 	}
-	bound_function.return_type = expected;
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(expected);
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 } // namespace
@@ -192,7 +191,7 @@ unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &b
 ScalarFunction MapConcatFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

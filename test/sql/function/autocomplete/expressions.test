@@ -6,96 +6,96 @@ require autocomplete
 
 # literal
 query II
-FROM sql_auto_complete('SELECT NULL FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT NULL FR') LIMIT 1;
 ----
 FROM 	12
 
 # cast
 query II
-FROM sql_auto_complete('SELECT CAST(a AS INTE') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT CAST(a AS INTE') LIMIT 1;
 ----
 INTEGER	17
 
 query II
-FROM sql_auto_complete('SELECT a::INTE') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT a::INTE') LIMIT 1;
 ----
 INTEGER	10
 
 # distinct
 query II
-FROM sql_auto_complete('SELECT col IS DIST') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col IS DIST') LIMIT 1;
 ----
 DISTINCT 	14
 
 query II
-FROM sql_auto_complete('SELECT col IS DISTINCT FRO') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col IS DISTINCT FRO') LIMIT 1;
 ----
 FROM 	23
 
 # collate
 query II
-FROM sql_auto_complete('SELECT col COLL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col COLL') LIMIT 1;
 ----
 COLLATE 	11
 
 # between
 query II
-FROM sql_auto_complete('SELECT col BETW') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col BETW') LIMIT 1;
 ----
 BETWEEN 	11
 
 # case
 query II
-FROM sql_auto_complete('SELECT CASE WH') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT CASE WH') LIMIT 1;
 ----
 WHEN 	12
 
 # functions
 query II
-FROM sql_auto_complete('SELECT sum(42) IS NOT NUL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(42) IS NOT NUL') LIMIT 1;
 ----
 NULL 	22
 
 query II
-FROM sql_auto_complete('SELECT sum(disti') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(disti') LIMIT 1;
 ----
 distinct 	11
 
 query II
-FROM sql_auto_complete('SELECT sum(a, b orde') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(a, b orde') LIMIT 1;
 ----
 order 	16
 
 query II
-FROM sql_auto_complete('SELECT sum(a) filt') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(a) filt') LIMIT 1;
 ----
 filter 	14
 
 query II
-FROM sql_auto_complete('SELECT CASE WHEN a=1 THEN 1 WHEN a=2 THEN 2 WHEN a=3 THEN 3 END FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT CASE WHEN a=1 THEN 1 WHEN a=2 THEN 2 WHEN a=3 THEN 3 END FR') LIMIT 1;
 ----
 FROM 	64
 
 # slice
 query II
-FROM sql_auto_complete('SELECT col[1:2] FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col[1:2] FR') LIMIT 1;
 ----
 FROM 	16
 
 # test parsing of many expressions
 query II
-FROM sql_auto_complete('SELECT col BETWEEN 1 AND 2, col > col2, col AND (col2 OR col3), col4 IS NOT DISTINCT FROM col5, col6 IN (SELECT * FROM tbl) FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col BETWEEN 1 AND 2, col > col2, col AND (col2 OR col3), col4 IS NOT DISTINCT FROM col5, col6 IN (SELECT * FROM tbl) FR') LIMIT 1;
 ----
 FROM 	124
 
 # literals
 query II
-FROM sql_auto_complete('SELECT 42, 83.5, -125, 1.25e375, [1, 2, 3, 4], {''name'': 42}, ARRAY[col, col2 + 1] FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT 42, 83.5, -125, 1.25e375, [1, 2, 3, 4], {''name'': 42}, ARRAY[col, col2 + 1] FR') LIMIT 1;
 ----
 FROM 	82
 
 # complex types
 query II
-FROM sql_auto_complete('SELECT a::DECIMAL(42), b::INT[3], []::INT[][][], d::ROW(i INT[], c ROW(d INTE') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT a::DECIMAL(42), b::INT[3], []::INT[][][], d::ROW(i INT[], c ROW(d INTE') LIMIT 1;
 ----
 INTEGER	73

@@ -23,12 +23,12 @@ enum class RequireResult { PRESENT, MISSING };
 
 struct CachedLabelData {
 public:
-	CachedLabelData(const string &hash, unique_ptr<QueryResult> result) : hash(hash), result(std::move(result)) {
+	CachedLabelData(const string &hash, string result_str_p) : hash(hash), result_str(std::move(result_str_p)) {
 	}
 
 public:
 	string hash;
-	unique_ptr<QueryResult> result;
+	string result_str;
 };
 
 struct HashLabelMap {
@@ -45,7 +45,7 @@ public:
 
 class SQLLogicTestRunner {
 public:
-	SQLLogicTestRunner(string dbpath);
+	explicit SQLLogicTestRunner(string dbpath);
 	~SQLLogicTestRunner();
 
 	string file_name;

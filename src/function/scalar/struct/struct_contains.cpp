@@ -204,7 +204,7 @@ static unique_ptr<FunctionData> StructContainsBind(ClientContext &context, Scala
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
 		bound_function.arguments[1] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
+		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
 
@@ -248,7 +248,7 @@ ScalarFunction StructContainsFun::GetFunction() {
 ScalarFunction StructPositionFun::GetFunction() {
 	ScalarFunction fun("struct_contains", {LogicalTypeId::STRUCT, LogicalType::ANY}, LogicalType::INTEGER,
 	                   StructSearchFunction<int32_t, true>, StructContainsBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

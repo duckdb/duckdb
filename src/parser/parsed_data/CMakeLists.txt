@@ -5,6 +5,7 @@ add_library_unity(
   alter_scalar_function_info.cpp
   alter_table_function_info.cpp
   alter_table_info.cpp
+  alter_database_info.cpp
   attach_info.cpp
   comment_on_column_info.cpp
   copy_info.cpp
@@ -13,6 +14,7 @@ add_library_unity(
   create_index_info.cpp
   create_aggregate_function_info.cpp
   create_collation_info.cpp
+  create_coordinate_system_info.cpp
   create_copy_function_info.cpp
   create_macro_info.cpp
   create_pragma_function_info.cpp

@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

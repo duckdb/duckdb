@@ -1,0 +1,19 @@
+# name: test/sql/peg_parser/parser/update_statement.test
+# description: Test update statement in peg parser
+# group: [parser]
+
+require autocomplete
+
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE temp.a SET i = 44$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE foo SET (key, fruit, cost) = (1, 'pear', 2);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE test t SET a=1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE foo t SET (key, fruit, cost) = (1, 'pear', 2);$TEST_PEG_PARSER$);
+

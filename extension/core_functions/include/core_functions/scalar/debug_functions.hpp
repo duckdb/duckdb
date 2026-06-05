@@ -25,4 +25,14 @@ struct VectorTypeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct SleepMsFun {
+	static constexpr const char *Name = "sleep_ms";
+	static constexpr const char *Parameters = "milliseconds";
+	static constexpr const char *Description = "Sleeps for the specified number of milliseconds and returns NULL";
+	static constexpr const char *Example = "sleep_ms(100)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

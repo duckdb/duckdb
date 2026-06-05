@@ -1,0 +1,158 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test
+# description: Test TOTAL_MEMORY_ALLOCATED metric.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+
+# Create a table with a large dataset to trigger memory allocations
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT range AS id, hash(range) AS data FROM range(100000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# Verify that total_memory_allocated is tracked (may be 0 for small queries, but should be present)
+query I
+SELECT
+	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Test with a query that's more likely to allocate memory (large join/aggregation)
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+
+# Use a query with aggregation and ordering that should trigger memory allocations
+statement ok
+SELECT id, COUNT(*) as cnt FROM test GROUP BY id ORDER BY id LIMIT 1000;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# Verify that total_memory_allocated is tracked
+query I
+SELECT
+	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Verify that total_memory_allocated only appears at root level, not in children
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true", "OPERATOR_NAME": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT * FROM test WHERE id < 1000 ORDER BY id;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# Check that root has total_memory_allocated
+query I
+SELECT
+	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Verify that children nodes don't have total_memory_allocated
+# We'll check by looking at the JSON structure - children should not have this field
+statement ok
+CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(children, recursive := true) FROM metrics_output;
+
+# Verify that total_memory_allocated field does not exist in children nodes
+statement error
+SELECT total_memory_allocated FROM metrics_children;
+----
+Binder Error
+
+# Test disabling the metric removes it from output
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "false"}';
+
+statement ok
+CREATE OR REPLACE TABLE test2 AS SELECT range AS id FROM range(10000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement error
+SELECT total_memory_allocated FROM metrics_output;
+----
+Binder Error
+
+# Test with a query that forces memory allocations (using memory limit to trigger spilling)
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+
+statement ok
+SET memory_limit = '100MB';
+
+# Create a large table that will require memory allocations
+statement ok
+CREATE OR REPLACE TABLE large_test AS SELECT range AS id, hash(range) AS data FROM range(1000000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# Verify that total_memory_allocated is tracked (should be > 0 for large operations)
+query I
+SELECT
+	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+

@@ -48,6 +48,11 @@ public:
 		return ObjectType();
 	}
 
+	// Rejects table records the overall error counts, which is relatively small and should not be evicted.
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+
 private:
 	//! Current File Index being used in the query
 	idx_t current_file_idx = 0;

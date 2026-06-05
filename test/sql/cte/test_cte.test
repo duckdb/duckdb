@@ -97,6 +97,14 @@ SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte);
 1
 42
 
+# cte in nested set operation node
+query I
+SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte UNION ALL SELECT * FROM cte);
+----
+1
+42
+42
+
 # cte in recursive cte
 query I
 WITH RECURSIVE cte(d) AS (
@@ -220,3 +228,7 @@ SELECT b.x
 FROM (SELECT 1) _(x), LATERAL (SELECT * FROM cte) b(x)
 ----
 
+query III
+WITH RECURSIVE rec(a, b, c) AS (select a,b,c from (values(1,2,3),(1,2,3)) s(a,b,c) union select 1,2,3) select * from rec;
+----
+1	2	3

@@ -30,13 +30,8 @@ struct pg_parser_state_str {
 };
 
 #ifdef __MVS__
-// --------------------------------------------------------
-// Permanent - WIP
-// static __tlssim<parser_state> pg_parser_state_impl();
-// #define pg_parser_state (*pg_parser_state_impl.access())
-// --------------------------------------------------------
-// Temporary
-static parser_state pg_parser_state;
+static __tlssim<parser_state> pg_parser_state_impl;
+#define pg_parser_state (*pg_parser_state_impl.access())
 #else
 static __thread parser_state pg_parser_state;
 #endif
@@ -90,6 +85,7 @@ void *palloc(size_t n) {
 
 void pg_parser_init() {
 	pg_parser_state.pg_err_code = PGUNDEFINED;
+	pg_parser_state.pg_err_pos = 0;
 	pg_parser_state.pg_err_msg[0] = '\0';
 
 	pg_parser_state.malloc_ptr_size = 4;

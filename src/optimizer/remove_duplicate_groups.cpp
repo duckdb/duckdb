@@ -23,6 +23,13 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		return;
 	}
 
+	// If there are multiple grouping sets (ROLLUP/CUBE), we cannot remove duplicate groups
+	// because the position of groups matters semantically in ROLLUP(col1, col2, col3),
+	// even if col1 and col3 reference the same column binding (e.g., after join column replacement)
+	if (aggr.grouping_sets.size() > 1) {
+		return;
+	}
+
 	auto &groups = aggr.groups;
 
 	column_binding_map_t<idx_t> duplicate_map;

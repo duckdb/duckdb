@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {

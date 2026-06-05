@@ -1,0 +1,35 @@
+# name: test/sql/transactions/statement-preprocessor/copy_from_database_is_transactional.test
+# group: [statement-preprocessor]
+
+require tpch
+
+statement ok
+attach ':memory:' as db1;
+
+statement ok
+use db1;
+
+statement ok
+call dbgen(sf=1);
+
+statement ok
+attach ':memory:' as db2;
+
+statement ok
+use db2;
+
+statement ok
+set memory_limit='10MB';
+
+# Decomposes into two statements
+# 1. Copy the Schema (works)
+# 2. Copy the Data (fails)
+statement error
+copy from database db1 to db2;
+----
+<REGEX>:.*Out of Memory Error.*
+
+# Should not have copied schema
+query I
+SHOW TABLES;
+----

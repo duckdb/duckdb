@@ -1,11 +1,10 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-#include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
 
@@ -73,7 +72,6 @@ TemporaryFileIdentifier::TemporaryFileIdentifier(TemporaryBufferSize size_p, idx
 TemporaryFileIdentifier::TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size_p, idx_t file_index_p,
                                                  bool encrypted_p)
     : size(size_p), file_index(file_index_p), encrypted(encrypted_p) {
-
 	if (encrypted) {
 		// generate a random encryption key ID and corresponding key
 		EncryptionEngine::AddTempKeyToCache(db);
@@ -144,6 +142,10 @@ idx_t BlockIndexManager::GetMaxIndex() const {
 	return max_index;
 }
 
+idx_t BlockIndexManager::GetUsedBlockCount() const {
+	return indexes_in_use.size();
+}
+
 bool BlockIndexManager::HasFreeBlocks() const {
 	return !free_indexes.empty();
 }
@@ -199,7 +201,7 @@ TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(m
 
 TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size) {
 	TemporaryFileLock lock(file_lock);
-	if (index_manager.GetMaxIndex() >= max_allowed_index && index_manager.HasFreeBlocks()) {
+	if (index_manager.GetMaxIndex() >= max_allowed_index && !index_manager.HasFreeBlocks()) {
 		// file is at capacity
 		return TemporaryFileIndex();
 	}
@@ -320,7 +322,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetMaxIndex());
+	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
 	return info;
 }
 
@@ -642,17 +644,23 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
 }
 
 bool TemporaryFileManager::IsEncrypted() const {
-	return db.config.options.temp_file_encryption;
+	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,
-                                                                 unique_ptr<FileBuffer> reusable_buffer) {
+                                                                 unique_ptr<FileBuffer> reusable_buffer,
+                                                                 idx_t *eviction_size) {
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
 	{
 		TemporaryFileManagerLock lock(manager_lock);
 		index = GetTempBlockIndex(lock, id);
 		handle = GetFileHandle(lock, index.identifier);
+	}
+
+	// If eviction size requested, set it to the size of the block (compressed size if applicable).
+	if (eviction_size) {
+		*eviction_size = NumericCast<idx_t>(index.identifier.size);
 	}
 
 	// before the reusable buffer is given,
@@ -762,9 +770,12 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 			// we want to remove all files in the directory
 			fs.RemoveDirectory(temp_directory);
 		} else {
+			vector<string> full_path_files_to_delete;
+			full_path_files_to_delete.reserve(files_to_delete.size());
 			for (auto &file : files_to_delete) {
-				fs.RemoveFile(fs.JoinPath(temp_directory, file));
+				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
 			}
+			fs.RemoveFiles(full_path_files_to_delete);
 		}
 	}
 }

@@ -57,6 +57,16 @@ struct ArgMinNullFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct ArgMinNullsLastFun {
+	static constexpr const char *Name = "arg_min_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Finds the rows with N minimum vals, including nulls. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null_val(A, B, N)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct ArgMaxFun {
 	static constexpr const char *Name = "arg_max";
 	static constexpr const char *Parameters = "arg,val";
@@ -84,6 +94,16 @@ struct ArgMaxNullFun {
 	static constexpr const char *Parameters = "arg,val";
 	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
 	static constexpr const char *Example = "arg_max_null(A, B)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct ArgMaxNullsLastFun {
+	static constexpr const char *Name = "arg_max_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Finds the rows with N maximum vals, including nulls. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null_val(A, B, N)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();

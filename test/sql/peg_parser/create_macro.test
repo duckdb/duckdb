@@ -1,8 +1,0 @@
-# name: test/sql/peg_parser/create_macro.test
-# description: Test create table syntax in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$create macro my_range(x) as table from range(x);$TEST_PEG_PARSER$);

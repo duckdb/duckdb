@@ -18,8 +18,10 @@ add_library_unity(
   like_optimizations.cpp
   move_constants.cpp
   ordered_aggregate_optimizer.cpp
+  predicate_factoring.cpp
   regex_optimizations.cpp
-  timestamp_comparison.cpp)
+  timestamp_comparison.cpp
+  constant_order_normalization.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_rules>
     PARENT_SCOPE)

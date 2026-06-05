@@ -118,8 +118,8 @@ unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientC
 	return make_uniq<LimitPercentOperatorState>(*this);
 }
 
-SourceResultType PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk,
-                                               OperatorSourceInput &input) const {
+SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                       OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitPercentGlobalState>();
 	auto &state = input.global_state.Cast<LimitPercentOperatorState>();
 	auto &percent_limit = gstate.limit_percent;

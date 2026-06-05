@@ -1,0 +1,100 @@
+# name: test/sql/prepared/parameter_order_subquery.test
+# description: Test the parameter order for prepared statements with sub-queries
+# group: [prepared]
+
+statement ok
+CREATE TABLE t1(c0 INT2);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3), (5), (7), (10), (20);
+
+statement ok
+PREPARE prepare_query AS SELECT (? NOT IN (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?));
+
+query I
+EXECUTE prepare_query(-675986880, 1);
+----
+true
+
+statement ok
+PREPARE q1 AS SELECT (? NOT IN (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?)) AND
+                    (? IN (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?));
+
+query I
+EXECUTE q1(10, 1, 20, 3);
+----
+false
+
+statement ok
+PREPARE q2 AS SELECT ? IN (
+  SELECT t1.c0
+  FROM t1
+  WHERE t1.c0 IN (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?)
+    AND t1.c0 > ?
+  ORDER BY t1.c0
+  LIMIT ?
+);
+
+query I
+EXECUTE q2(7, 5, 3, 2);
+----
+true
+
+statement ok
+PREPARE q3 AS SELECT ? = ANY (
+  SELECT t1.c0
+  FROM t1
+  WHERE t1.c0 = ALL (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?)
+  ORDER BY t1.c0
+  LIMIT ?
+);
+
+query I
+EXECUTE q3(1, 1, 2);
+----
+true
+
+statement ok
+PREPARE q4 AS SELECT (? NOT IN (
+  SELECT t1.c0
+  FROM t1
+  WHERE t1.c0 < ?
+  ORDER BY t1.c0
+  LIMIT ?
+));
+
+query I
+EXECUTE q4(10, 5, 2);
+----
+true
+
+statement ok
+PREPARE q5 AS SELECT ? IN (
+  (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?)
+  UNION ALL
+  (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?)
+);
+
+query I
+EXECUTE q5(2, 2, 4);
+----
+true
+
+statement ok
+PREPARE q7 AS SELECT ? = (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?);
+
+query I
+EXECUTE q7(1, 1);
+----
+true
+
+statement ok
+PREPARE q8 AS SELECT
+  (SELECT MAX(c0) FROM (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?) s1) AS a,
+  ? AS b,
+  (SELECT MAX(c0) FROM (SELECT t1.c0 FROM t1 ORDER BY t1.c0 LIMIT ?) s2) AS c;
+
+query III
+EXECUTE q8(1, 10, 3);
+----
+1	10	3

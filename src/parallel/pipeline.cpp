@@ -106,12 +106,16 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
+	auto max_threads = source_state->MaxThreads();
+
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		if (!op.ParallelOperator()) {
 			return false;
 		}
+		max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 	}
+
 	auto partition_info = sink->RequiredPartitionInfo();
 	if (partition_info.batch_index) {
 		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
@@ -119,7 +123,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
 	}
-	auto max_threads = source_state->MaxThreads();
+
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
 	if (max_threads > active_threads) {
@@ -153,7 +157,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
+	if (!Settings::Get<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {
@@ -249,6 +253,10 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
+	return dependencies;
 }
 
 string Pipeline::ToString() const {

@@ -97,7 +97,7 @@ unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction
 		throw BinderException("Could not find key \"%s\" in union\n%s", key, message);
 	}
 
-	bound_function.return_type = return_type;
+	bound_function.SetReturnType(return_type);
 	return make_uniq<UnionExtractBindData>(key, key_index, return_type);
 }
 

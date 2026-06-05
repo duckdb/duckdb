@@ -58,8 +58,8 @@ SELECT count(*) FROM glob('__TEST_DIR__/row_groups_per_file3/*.parquet')
 query IIIIII
 COPY bigdata TO '__TEST_DIR__/row_groups_per_file_stats/' (FORMAT PARQUET, WRITE_EMPTY_FILE false, FILENAME_PATTERN '{uuid}', ROW_GROUP_SIZE 3000, ROW_GROUPS_PER_FILE 2, RETURN_STATS);
 ----
-<REGEX>:.*row_groups_per_file_stats.*[a-zA-Z0-9-]{36}.parquet	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"col_a"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0}, '"col_b"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0}}	NULL
-<REGEX>:.*row_groups_per_file_stats.*[a-zA-Z0-9-]{36}.parquet	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"col_a"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0}, '"col_b"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0}}	NULL
+<REGEX>:.*row_groups_per_file_stats.*[a-zA-Z0-9-]{36}.parquet	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"col_a"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0, num_values=\d+}, '"col_b"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0, num_values=\d+}}	NULL
+<REGEX>:.*row_groups_per_file_stats.*[a-zA-Z0-9-]{36}.parquet	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"col_a"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0, num_values=\d+}, '"col_b"'={column_size_bytes=\d+, max=\d+, min=\d+, null_count=0, num_values=\d+}}	NULL
 
 # now we crank up the threads
 statement ok

@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+constexpr const char *SequenceCatalogEntry::Name;
+
 SequenceData::SequenceData(CreateSequenceInfo &info)
     : usage_count(info.usage_count), counter(info.start_value), last_value(info.start_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {

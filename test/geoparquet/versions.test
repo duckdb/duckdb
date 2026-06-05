@@ -1,14 +1,12 @@
 # name: test/geoparquet/versions.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 # DEFAULT (V1)
 
 statement ok
-COPY (SELECT st_point(1,2) as geometry)
+COPY (SELECT 'POINT(1 2)'::GEOMETRY as geometry)
 TO '__TEST_DIR__/test_default.parquet' (FORMAT PARQUET);
 
 query I
@@ -25,7 +23,7 @@ NULL
 # V1
 
 statement ok
-COPY (SELECT st_point(1,2) as geometry)
+COPY (SELECT 'POINT(1 2)'::GEOMETRY as geometry)
 TO '__TEST_DIR__/test_v1.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V1');
 
 query I
@@ -42,7 +40,7 @@ NULL
 # NONE
 
 statement ok
-COPY (SELECT st_point(1,2) as geometry)
+COPY (SELECT 'POINT(1 2)'::GEOMETRY as geometry)
 TO '__TEST_DIR__/test_none.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'NONE');
 
 query I
@@ -58,7 +56,7 @@ SELECT geo_types from parquet_metadata('__TEST_DIR__/test_none.parquet');
 # BOTH
 
 statement ok
-COPY (SELECT st_point(1,2) as geometry)
+COPY (SELECT 'POINT(1 2)'::GEOMETRY as geometry)
 TO '__TEST_DIR__/test_both.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'BOTH');
 
 query I
@@ -75,7 +73,7 @@ SELECT geo_types from parquet_metadata('__TEST_DIR__/test_both.parquet');
 
 # V2
 statement ok
-COPY (SELECT st_point(1,2) as geometry)
+COPY (SELECT 'POINT(1 2)'::GEOMETRY as geometry)
 TO '__TEST_DIR__/test_v2.parquet' (FORMAT PARQUET, GEOPARQUET_VERSION 'V2');
 
 query I

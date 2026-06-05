@@ -30,7 +30,7 @@ ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted;
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'xxxxx');
 ----
-IO Error: Wrong encryption key used to open the database file
+Invalid Input Error: Wrong encryption key used to open the database file
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');

@@ -23,6 +23,44 @@ env:
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
+  linux-configs-all:
+    name: Run all tests with different configurations
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [force_storage, force_storage_restart, latest_storage, block_verification, wal_verification, prefetch_all_parquet_files, no_local_filesystem, block_size_16kB, latest_storage_block_size_16kB, block_allocator_100mib, variant_vector, compressed_in_memory, prefetch_all_storage]
+    env:
+      BASE_BRANCH: ${{ github.base_ref || 'main' }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Build
+      id: build
+      shell: bash
+      env:
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
+        GEN: ninja
+      run: make reldebug
+
+    - name: Run Tests
+      shell: bash
+      run: |
+        ./build/reldebug/test/unittest --test-config test/configs/${{ matrix.config }}.json "*"
+
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
      runs-on: macos-latest

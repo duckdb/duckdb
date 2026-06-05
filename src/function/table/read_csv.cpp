@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/function/table/read_duckdb.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -192,8 +193,10 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
+	AddFunction(MultiFileReader::CreateFunctionSet(ReadDuckDBTableFunction::GetFunction()));
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
+	config.replacement_scans.emplace_back(ReadDuckDBTableFunction::ReplacementScan);
 }
 
 } // namespace duckdb

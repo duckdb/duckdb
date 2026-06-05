@@ -53,6 +53,7 @@ class SelectNode;
 class SetOperationNode;
 class RecursiveCTENode;
 class CTENode;
+class StatementNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

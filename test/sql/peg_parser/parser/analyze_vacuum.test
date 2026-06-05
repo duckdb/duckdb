@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/parser/analyze_vacuum.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ANALYZE;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ANALYZE test(x);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$VACUUM test(i);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$VACUUM;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$VACUUM db1.integers;$TEST_PEG_PARSER$);

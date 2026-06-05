@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON, HTML, GRAPHVIZ, YAML };
+enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON, HTML, GRAPHVIZ, YAML, MERMAID };
 
 } // namespace duckdb

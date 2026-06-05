@@ -56,6 +56,7 @@ public:
 	string GetInitialDBPath();
 	optional_idx GetMaxThreads();
 	optional_idx GetBlockAllocSize();
+	optional_idx GetMaxTestThreads();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
@@ -88,6 +89,7 @@ public:
 	static bool TestMemoryLeaks();
 	static bool TestRunStorageFuzzer();
 
+	static void LoadBaseConfig(const Value &input);
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
 	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);

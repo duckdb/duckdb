@@ -4,22 +4,25 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
-CREATE TYPE l AS X(0,0,0,0,0,0,0,0,0,0,0); -- original issue, those are 11 parameters though
-----
-Parser Error: 'X': a maximum of 9 type modifiers is allowed
+# We used to have issues parsing lots of type arguments, but thats no longer the case,
+# so these should all error out because type X/XX does not exist.
 
 statement error
-CREATE TYPE ll AS XX(1,2,3,4,5,6,7,8,9,10); -- needs to also fail on 10, did not used to
+CREATE TYPE l AS X(0,0,0,0,0,0,0,0,0,0,0);
 ----
-Parser Error: 'XX': a maximum of 9 type modifiers is allowed
+Catalog Error: Type with name X does not exist!
 
 statement error
-CREATE TYPE ll AS XX(1,2,3,4,5,6,7,8,9); -- nine are fine, fails for other reasons
+CREATE TYPE ll AS XX(1,2,3,4,5,6,7,8,9,10);
 ----
 Catalog Error: Type with name XX does not exist!
 
 statement error
-CREATE TYPE ll AS XX(a,2,3,4,5,6,7,8,9); -- no variables
+CREATE TYPE ll AS XX(1,2,3,4,5,6,7,8,9);
+----
+Catalog Error: Type with name XX does not exist!
+
+statement error
+CREATE TYPE ll AS XX(a,2,3,4,5,6,7,8,9);
 ----
 Parser Error: Expected a constant as type modifier

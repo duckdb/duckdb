@@ -43,7 +43,7 @@ Schema with name foo does not exist!
 statement error
 select * from foo.bar;
 ----
-Table with name bar does not exist!
+Catalog Error: Table with name "foo.bar" does not exist because schema "foo" does not exist.
 
 query I
 select schema_name from duckdb_schemas() where schema_name = 'foo';

@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/transformer/special_string.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require tpch
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+query I nosort bstring
+select B'1010'; 
+
+statement ok 
+call enable_peg_parser(); 
+
+query I nosort bstring 
+select B'1010';

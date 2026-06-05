@@ -8,7 +8,7 @@ from .config import (
 
 
 def generate_create_value(setting):
-    if setting.sql_type == 'VARCHAR':
+    if setting.sql_type.startswith('VARCHAR'):
         return 'Value'
     else:
         return f'Value::{setting.sql_type}'

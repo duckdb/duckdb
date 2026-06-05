@@ -1,0 +1,68 @@
+# name: test/issues/general/test_19221.test
+# description: Issue 19221 - Cannot use file_row_number, filename, file_index with WITH ORDINALITY
+# group: [general]
+
+require parquet
+
+statement ok
+COPY (FROM range(1)) TO '__TEST_DIR__/ordinality_virtual_columns.parquet';
+
+query II
+SELECT
+    ordinality,
+    file_row_number,
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet') WITH ORDINALITY
+----
+1	0
+
+query II
+SELECT
+    ordinality,
+    filename like '%ordinality_virtual_columns.parquet',
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet') WITH ORDINALITY
+----
+1	true
+
+query II
+SELECT
+    ordinality,
+    file_index,
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet') WITH ORDINALITY
+----
+1	0
+
+query II
+SELECT
+    ordinality,
+    file_row_number,
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet', file_row_number = true) WITH ORDINALITY
+----
+1	0
+
+query II
+SELECT
+    ordinality,
+    filename like '%ordinality_virtual_columns.parquet',
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet', filename = true) WITH ORDINALITY
+----
+1	true
+
+query IIII
+SELECT
+    ordinality,
+    file_row_number,
+    filename like '%ordinality_virtual_columns.parquet',
+    file_index,
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet') WITH ORDINALITY
+----
+1	0	true	0
+
+query IIII
+SELECT
+    ordinality,
+    file_row_number,
+    filename like '%ordinality_virtual_columns.parquet',
+    file_index,
+FROM read_parquet('__TEST_DIR__/ordinality_virtual_columns.parquet', file_row_number = true, filename = true) WITH ORDINALITY
+----
+1	0	true	0

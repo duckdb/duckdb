@@ -145,7 +145,7 @@ def test_autocomplete_funky_table(shell, autocomplete_extension):
     test = (
         ShellTest(shell)
         .statement("""CREATE TABLE "Funky Table With Spaces"(my_column INTEGER);""")
-        .statement("SELECT * FROM sql_auto_complete('SELECT * FROM F') LIMIT 1;")
+        .statement("SELECT suggestion FROM sql_auto_complete('SELECT * FROM F') LIMIT 1;")
     )
     result = test.run()
     result.check_stdout('"Funky Table With Spaces"')
@@ -153,7 +153,7 @@ def test_autocomplete_funky_table(shell, autocomplete_extension):
     test = (
         ShellTest(shell)
         .statement("""CREATE TABLE "Funky Table With Spaces"("Funky Column" int);""")
-        .statement("""SELECT * FROM sql_auto_complete('select "Funky Column" FROM f') LIMIT 1;""")
+        .statement("""SELECT suggestion FROM sql_auto_complete('select "Funky Column" FROM f') LIMIT 1;""")
     )
     result = test.run()
     result.check_stdout('"Funky Table With Spaces"')

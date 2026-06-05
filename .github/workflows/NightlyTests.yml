@@ -26,6 +26,8 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
+  REDUCE_SYMBOLS: 1
+  PYTHONUNBUFFERED: 1
 
 jobs:
   check-draft:
@@ -44,7 +46,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -57,6 +59,10 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -80,11 +86,9 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - name: Install
       shell: bash
@@ -92,14 +96,26 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
     - name: Build
       shell: bash
+      env:
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -113,11 +129,9 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - uses: actions/setup-python@v5
       with:
@@ -128,6 +142,10 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -135,7 +153,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --force-storage --time_execution
 
   smaller-binary:
     name: Smaller Binary
@@ -146,7 +164,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -157,6 +175,10 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -186,7 +208,7 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -198,14 +220,26 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
     - name: Build
       shell: bash
+      env:
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   sqllogic:
      name: Sqllogic tests
@@ -213,7 +247,7 @@ jobs:
      needs: linux-memory-leaks
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -224,6 +258,8 @@ jobs:
          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -244,7 +280,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -255,6 +291,10 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -274,11 +314,9 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Checkout duckdb-httpfs
         uses: actions/checkout@v4
@@ -301,6 +339,10 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
@@ -319,37 +361,7 @@ jobs:
       - name: Run Extension Medata Tests
         shell: bash
         run: |
-          ./scripts/run_extension_medata_tests.sh
-
-  force-blocking-sink-source:
-    name: Forcing async Sinks/Sources
-    runs-on: ubuntu-24.04
-    needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - uses: ./.github/actions/ccache-action
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
+          ./scripts/run_extension_medata_tests.sh "${{ github.workspace }}/build/release/src/libduckdb_static.a"
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
@@ -365,14 +377,14 @@ jobs:
 
    steps:
      - name: Checkout
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - uses: ./.github/actions/cleanup_runner
 
      - name: Checkout tools repo
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
          path: unsafe
@@ -387,6 +399,10 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -439,17 +455,19 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         id: build
@@ -458,6 +476,7 @@ jobs:
           CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: All tests with 512 vector size and default block size
@@ -476,7 +495,7 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -487,6 +506,10 @@ jobs:
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         id: build
@@ -500,6 +523,44 @@ jobs:
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
         run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
+
+  force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-24.04
+    needs: check-draft
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
+
+      - name: Build
+        shell: bash
+        env:
+          DISABLE_SANITIZER: 1
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600 --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -526,7 +587,7 @@ jobs:
         git submodule update
         git rm -r submodules/duckdb
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
@@ -538,6 +599,10 @@ jobs:
         make patch_duckdb || echo "done"
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Print version
       shell: bash
@@ -581,21 +646,24 @@ jobs:
      GEN: ninja
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
      HASH_ZERO: 1
+     DISABLE_SANITIZER: 1
      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -604,3 +672,157 @@ jobs:
      - name: Test
        shell: bash
        run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+
+
+  bwc_build:
+    name: Build DuckDB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+
+      - name: Setup ccache
+        uses: ./.github/actions/ccache-action
+
+      - name: Build DuckDB
+        run: |
+          make release \
+            EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' \
+            DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+
+      - name: Upload DuckDB binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-binary
+          path: build/release/duckdb
+
+  bwc-test:
+    name: BWC Test (DuckDB ${{ matrix.old_duckdb_version }})
+    runs-on: ubuntu-latest
+    needs: bwc_build
+    strategy:
+      fail-fast: false
+      matrix:
+        old_duckdb_version:
+          - v1.1.0
+          - v1.1.1
+          - v1.1.2
+          - v1.1.3
+          - v1.2.0
+          - v1.2.1
+          - v1.2.2
+          - v1.3.0
+          - v1.3.1
+          - v1.3.2
+          - v1.4.0
+          - v1.4.1
+          - v1.4.2
+          - v1.4.3
+          - v1.4.4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download DuckDB binary
+        uses: actions/download-artifact@v4
+        with:
+          name: duckdb-binary
+          path: build/release
+
+      - name: Make DuckDB binary executable
+        run: chmod +x build/release/duckdb
+
+      - name: Install Python dependencies
+        run: pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
+
+      - name: Download BWC cache
+        if: false
+        run: |
+          VERSION=${{ matrix.old_duckdb_version }}
+          CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+          RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
+          mkdir -p "${RUNTIME_DIR}"
+
+          # Download the cache archive from test-utils repo
+          DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
+          HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+          tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
+          CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
+          echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
+
+      - name: Run BWC tests
+        run: python3.11 test/bwc/runner.py --old_duckdb_version=${{ matrix.old_duckdb_version }}
+
+      - name: Export BWC cache
+        if: always()
+        run: python3.11 test/bwc/export_cache.py --version ${{ matrix.old_duckdb_version }} --output-dir duckdb_unittest_tempdir/bwc/cache
+
+      - name: Upload BWC cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bwc-cache-${{ matrix.old_duckdb_version }}
+          path: duckdb_unittest_tempdir/bwc/cache/runtime_${{ matrix.old_duckdb_version }}.tar.gz
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bwc-test-results-${{ matrix.old_duckdb_version }}
+          path: |
+            duckdb_unittest_tempdir/bwc/tests_summary_*.txt
+            duckdb_unittest_tempdir/bwc/reports/test_report_*.duckdb
+
+  summary:
+    name: BWC Test Summary
+    runs-on: ubuntu-24.04
+    needs: bwc-test
+    if: always()
+    steps:
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bwc-test-results-*
+          merge-multiple: true
+
+      - name: Aggregate results
+        run: |
+          echo "============================================================"
+          echo "BWC Test Summary"
+          echo "============================================================"
+          failed=0
+          for summary in tests_summary_*.txt; do
+            [ -f "$summary" ] || continue
+            version=$(echo "$summary" | sed 's/tests_summary_\(.*\)\.txt/\1/')
+            failures=$(grep '# FAILED' "$summary" || true)
+            if [ -n "$failures" ]; then
+              echo ""
+              echo "Failed tests for DuckDB version '$version':"
+              echo "$failures" | while read -r line; do
+                echo "  $line"
+              done
+              failed=1
+            fi
+          done
+          echo "============================================================"
+          if [ "$failed" -eq 1 ]; then
+            echo "Some BWC tests failed."
+            exit 1
+          else
+            echo "All BWC tests passed."
+          fi

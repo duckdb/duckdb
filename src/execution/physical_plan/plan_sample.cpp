@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 

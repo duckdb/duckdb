@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -58,56 +59,101 @@ string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extensio
 	return link;
 }
 
-duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
-	string home_directory = fs.GetHomeDirectory();
-	// exception if the home directory does not exist, don't create whatever we think is home
-	if (!fs.DirectoryExists(home_directory)) {
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  home_directory);
+vector<duckdb::string> ExtensionHelper::DefaultExtensionFolders(FileSystem &fs) {
+	vector<duckdb::string> default_folders;
+// These fallbacks are necessary if the user doesn't use the CMake build.
+#ifndef DUCKDB_EXTENSION_DIRECTORIES
+#ifdef _WIN32
+#define DUCKDB_EXTENSION_DIRECTORIES "~\\.duckdb\\extensions"
+#else
+#define DUCKDB_EXTENSION_DIRECTORIES "~/.duckdb/extensions"
+#endif
+#endif
+	string dirs_string(DUCKDB_EXTENSION_DIRECTORIES);
+
+	// Skip if empty
+	if (dirs_string.empty()) {
+		return default_folders;
 	}
-	string res = home_directory;
-	res = fs.JoinPath(res, ".duckdb");
-	res = fs.JoinPath(res, "extensions");
-	return res;
+
+	// Split the string by separator
+	auto directories = StringUtil::Split(dirs_string, ';');
+
+	for (auto &dir : directories) {
+		// Skip empty directories
+		if (dir.empty()) {
+			continue;
+		}
+
+		default_folders.push_back(dir);
+	}
+
+	return default_folders;
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
+vector<string> ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	return GetExtensionDirectoryPath(db, fs);
 }
 
-string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
-	string extension_directory;
+vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
+	vector<string> extension_directories;
 	auto &config = db.config;
-	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
-		extension_directory = config.options.extension_directory;
-		// TODO this should probably live in the FileSystem
-		// convert random separators to platform-canonic
-	} else { // otherwise default to home
-		extension_directory = DefaultExtensionFolder(fs);
+
+	auto custom_extension_directory = Settings::Get<ExtensionDirectorySetting>(config);
+	if (!custom_extension_directory.empty()) {
+		extension_directories.push_back(custom_extension_directory);
 	}
 
-	extension_directory = fs.ConvertSeparators(extension_directory);
-	// expand ~ in extension directory
-	extension_directory = fs.ExpandPath(extension_directory);
+	if (!config.options.extension_directories.empty()) {
+		// Add all configured extension directories
+		for (const auto &dir : config.options.extension_directories) {
+			extension_directories.push_back(dir);
+		}
+	}
+	if (extension_directories.empty()) {
+		// Add default extension directory if no custom directories configured
+		for (const auto &default_dir : ExtensionHelper::DefaultExtensionFolders(fs)) {
+			extension_directories.push_back(default_dir);
+		}
+	}
 
+	// Process all directories with common path operations
 	auto path_components = PathComponents();
-	for (auto &path_ele : path_components) {
-		extension_directory = fs.JoinPath(extension_directory, path_ele);
+	for (auto &extension_directory : extension_directories) {
+		// convert random separators to platform-canonic
+		extension_directory = fs.ConvertSeparators(extension_directory);
+		// expand ~ in extension directory
+		extension_directory = fs.ExpandPath(extension_directory);
+
+		// Add path components (version and platform)
+		for (auto &path_ele : path_components) {
+			extension_directory = fs.JoinPath(extension_directory, path_ele);
+		}
 	}
 
-	return extension_directory;
+	return extension_directories;
 }
 
 string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
-	string extension_directory = GetExtensionDirectoryPath(db, fs);
+	auto extension_directories = GetExtensionDirectoryPath(db, fs);
+	// TODO: This should never be the case given the implementation of GetExtensionDirectoryPath
+	// should we still keep this check?
+	D_ASSERT(!extension_directories.empty());
+
+	string extension_directory = extension_directories[0]; // Use first/primary directory
 	{
 		if (!fs.DirectoryExists(extension_directory)) {
+			string home_directory = fs.GetHomeDirectory();
+			if (extension_directory.rfind(home_directory, 0) == 0 && !fs.DirectoryExists(home_directory)) {
+				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+				                  "home_directory='/path/to/dir' option.",
+				                  home_directory);
+			}
 			fs.CreateDirectoriesRecursive(extension_directory);
 		}
 	}
@@ -176,9 +222,9 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
                                      idx_t data_size, DBConfig &config) {
-	if (!config.options.allow_unsigned_extensions) {
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(config)) {
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    static_cast<char *>(data), data_size, config.options.allow_community_extensions);
+		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
@@ -212,7 +258,6 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	} else {
 		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 	}
-	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 #ifdef WASM_LOADABLE_EXTENSIONS
 	versioned_path = versioned_path + ".wasm";
 #else
@@ -240,7 +285,7 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
-	if (!metadata_mismatch_error.empty() && !DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db)) {
+	if (!metadata_mismatch_error.empty() && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(db)) {
 		throw IOException("Failed to install '%s'\n%s", extension_name, metadata_mismatch_error);
 	}
 
@@ -277,12 +322,6 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	auto metadata_file_path = local_extension_path + ".info";
 	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
 
-	// First remove the local extension we are about to replace
-	fs.TryRemoveFile(local_extension_path);
-
-	// Then remove the old metadata file
-	fs.TryRemoveFile(metadata_file_path);
-
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 	fs.MoveFile(temp_path, local_extension_path);
 }
@@ -301,7 +340,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 		if (context) {
 			auto &db = DatabaseInstance::GetDatabase(*context);
 			if (extension == "httpfs" && !db.ExtensionIsLoaded("httpfs") &&
-			    db.config.options.autoload_known_extensions) {
+			    Settings::Get<AutoloadKnownExtensionsSetting>(*context)) {
 				ExtensionHelper::AutoLoadExtension(*context, "httpfs");
 			}
 		}
@@ -373,11 +412,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
                                                            optional_ptr<ClientContext> context) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
-		auto fs = FileSystem::CreateLocal();
-		if (fs->FileExists(local_extension_path + ".info")) {
+		auto &fs = FileSystem::GetLocal(db);
+		if (fs.FileExists(local_extension_path + ".info")) {
 			try {
 				install_info =
-				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+				    ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
 			} catch (...) {
 				if (!options.force_install) {
 					// We are going to rewrite the file anyhow, so this is fine
@@ -450,8 +489,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	}
 
 	QueryContext query_context(context);
-	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
+	auto &fs = FileSystem::GetLocal(db);
+	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), info, db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
@@ -467,17 +506,16 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
-	if (StringUtil::StartsWith(options.repository->path, "http://")) {
+	if (HTTPUtil::IsHTTPProtocol(options.repository->path)) {
+		if (db.ExtensionIsLoaded("httpfs")) {
+			HTTPUtil::BumpToSecureProtocol(generated_url);
+		}
 		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context);
 	}
 
 	// Default case, let the FileSystem figure it out
 	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, options,
 	                              context);
-}
-
-static bool IsHTTP(const string &path) {
-	return StringUtil::StartsWith(path, "http://") || !StringUtil::StartsWith(path, "https://");
 }
 
 static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
@@ -523,7 +561,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 
 	if (fs.FileExists(local_extension_path) && !options.force_install) {
 		// File exists: throw error if origin mismatches
-		if (options.throw_on_origin_mismatch && !DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db) &&
+		if (options.throw_on_origin_mismatch && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(db) &&
 		    fs.FileExists(local_extension_path + ".info")) {
 			ThrowErrorOnMismatchingExtensionOrigin(fs, local_extension_path, extension_name, extension,
 			                                       options.repository);
@@ -547,16 +585,16 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	}
 
 	// Install extension from local, direct url
-	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
-		LocalFileSystem local_fs;
+	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
+		auto &local_fs = FileSystem::GetLocal(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
-	if (options.repository && !IsHTTP(options.repository->path)) {
-		LocalFileSystem local_fs;
-		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
+	if (options.repository && !FileSystem::IsRemoteFile(options.repository->path)) {
+		auto &local_fs = FileSystem::GetLocal(db);
+		return InstallFromRepository(db, local_fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);
 	}
 

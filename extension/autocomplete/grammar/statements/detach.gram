@@ -1,1 +1,1 @@
-DetachStatement <- 'DETACH'i Database? IfExists? CatalogName
+DetachStatement <- 'DETACH' Database? IfExists? CatalogName

@@ -11,6 +11,8 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
 
 namespace duckdb {
 
@@ -67,8 +69,9 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
+	    : requires_valid_transaction(true), output_type(QueryResultOutputType::FORCE_MATERIALIZED),
+	      bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT), parameter_count(0),
+	      always_require_rebind(false) {
 	}
 
 	struct CatalogIdentity {
@@ -84,15 +87,20 @@ struct StatementProperties {
 		}
 	};
 
+	struct ModificationInfo {
+		CatalogIdentity identity;
+		DatabaseModificationType modifications;
+	};
+
 	//! The set of databases this statement will read from
 	unordered_map<string, CatalogIdentity> read_databases;
 	//! The set of databases this statement will modify
-	unordered_map<string, CatalogIdentity> modified_databases;
+	unordered_map<string, ModificationInfo> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
-	bool allow_stream_result;
+	QueryResultOutputType output_type;
 	//! Whether or not all parameters have successfully had their types determined
 	bool bound_all_parameters;
 	//! What type of data the statement returns
@@ -107,8 +115,7 @@ struct StatementProperties {
 	}
 
 	void RegisterDBRead(Catalog &catalog, ClientContext &context);
-
-	void RegisterDBModify(Catalog &catalog, ClientContext &context);
+	void RegisterDBModify(Catalog &catalog, ClientContext &context, DatabaseModificationType modification);
 };
 
 } // namespace duckdb

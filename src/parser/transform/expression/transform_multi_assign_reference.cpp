@@ -4,7 +4,6 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgquery::PGMultiAssignRef &root) {
-
 	// Early-out, if the root is not a function call.
 	if (root.source->type != duckdb_libpgquery::T_PGFuncCall) {
 		return TransformExpression(root.source);

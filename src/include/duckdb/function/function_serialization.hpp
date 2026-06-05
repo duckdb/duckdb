@@ -29,12 +29,13 @@ public:
 		// the fields are present, they will be used.
 		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.catalog_name, "");
 		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.schema_name, "");
-		bool has_serialize = function.serialize;
+
+		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
 			serializer.WriteObject(504, "function_data",
-			                       [&](Serializer &obj) { function.serialize(obj, bind_info, function); });
-			D_ASSERT(function.deserialize);
+			                       [&](Serializer &obj) { function.GetSerializeCallback()(obj, bind_info, function); });
+			D_ASSERT(function.GetDeserializeCallback());
 		}
 	}
 
@@ -94,13 +95,13 @@ public:
 
 	template <class FUNC>
 	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
-		if (!function.deserialize) {
+		if (!function.HasSerializationCallbacks()) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.name);
 		}
 		unique_ptr<FunctionData> result;
 		deserializer.ReadObject(504, "function_data",
-		                        [&](Deserializer &obj) { result = function.deserialize(obj, function); });
+		                        [&](Deserializer &obj) { result = function.GetDeserializeCallback()(obj, function); });
 		return result;
 	}
 
@@ -156,15 +157,14 @@ public:
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
 		} else {
-
 			FunctionBinder binder(context);
 
 			// Resolve templates
 			binder.ResolveTemplateTypes(function, children);
 
-			if (function.bind) {
+			if (function.HasBindCallback()) {
 				try {
-					bind_data = function.bind(context, function, children);
+					bind_data = function.GetBindCallback()(context, function, children);
 				} catch (std::exception &ex) {
 					ErrorData error(ex);
 					throw SerializationException("Error during bind of function in deserialization: %s",
@@ -178,8 +178,8 @@ public:
 			binder.CastToFunctionArguments(function, children);
 		}
 
-		if (TypeRequiresAssignment(function.return_type)) {
-			function.return_type = std::move(return_type);
+		if (TypeRequiresAssignment(function.GetReturnType())) {
+			function.SetReturnType(std::move(return_type));
 		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}

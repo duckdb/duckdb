@@ -126,7 +126,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 
-		CopyFunctionBindInput function_bind_input(*copy_info);
+		CopyFunctionBindInput function_bind_input(*copy_info, function.function_info);
 		auto names_to_write = GetNamesWithoutPartitions(names, partition_columns, write_partition_columns);
 		auto types_to_write = GetTypesWithoutPartitions(expected_types, partition_columns, write_partition_columns);
 		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);

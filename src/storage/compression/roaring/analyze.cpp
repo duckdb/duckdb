@@ -2,18 +2,7 @@
 #include "duckdb/storage/compression/roaring/appender.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/likely.hpp"
-#include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/bitpacking.hpp"
 
 namespace duckdb {
 
@@ -24,7 +13,7 @@ static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
 	result = make_unsafe_uniq_array_uninitialized<BitmaskTableEntry>(NumericLimits<uint8_t>::Maximum() + 1);
 
 	for (uint16_t val = 0; val < NumericLimits<uint8_t>::Maximum() + 1; val++) {
-		bool previous_bit;
+		bool previous_bit = false;
 		auto &entry = result[val];
 		entry.valid_count = 0;
 		entry.run_count = 0;
@@ -37,7 +26,7 @@ static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
 			}
 			entry.valid_count += bit_set;
 
-			if (i && !bit_set && previous_bit == true) {
+			if (!bit_set && previous_bit) {
 				entry.run_count++;
 			}
 			previous_bit = bit_set;
@@ -167,10 +156,32 @@ void RoaringAnalyzeState::FlushContainer() {
 	count = 0;
 }
 
-void RoaringAnalyzeState::Analyze(Vector &input, idx_t count) {
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
-
 	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input, count);
+	total_count += count;
+}
+
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	Vector bitpacked_vector(LogicalType::UBIGINT, count);
+	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	bitpacked_vector_validity.EnsureWritable();
+	auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
+	const bool *src = FlatVector::GetData<bool>(input);
+	const auto &validity = FlatVector::Validity(input);
+	if (validity.AllValid()) {
+		BitPackBooleans<false, true>(dst, src, count);
+	} else {
+		BitPackBooleans<false, false>(dst, src, count, &validity);
+	}
+
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
+	// mask.
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, bitpacked_vector, count);
 	total_count += count;
 }
 

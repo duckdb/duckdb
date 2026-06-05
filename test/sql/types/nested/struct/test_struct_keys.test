@@ -1,0 +1,93 @@
+# name: test/sql/types/nested/struct/test_struct_keys.test
+# group: [struct]
+
+# Basic
+query I
+select struct_keys({a: 1, b: 2, c: 3, d: 4, e: 5});
+----
+[a, b, c, d, e]
+
+# NULL as input (typed)
+query I
+select struct_keys(NULL::STRUCT(a INT, b VARCHAR));
+----
+NULL
+
+# NULL as input (untyped)
+query I
+select struct_keys(NULL);
+----
+NULL
+
+# Constant vector as input (same result for every row)
+statement ok
+CREATE TABLE t_struct_constant(x INTEGER);
+
+statement ok
+INSERT INTO t_struct_constant VALUES (1), (2), (3);
+
+query I
+SELECT struct_keys({a: 1, b: 2}) FROM t_struct_constant;
+----
+[a, b]
+[a, b]
+[a, b]
+
+# Flat vector as input
+statement ok
+CREATE TABLE t_struct_flat(col STRUCT(a INT, b VARCHAR), idx INTEGER);
+
+statement ok
+INSERT INTO t_struct_flat VALUES
+	(ROW(1, 'x')::STRUCT(a INT, b VARCHAR), 0),
+	(ROW(2, 'y')::STRUCT(a INT, b VARCHAR), 1),
+	(ROW(3, 'z')::STRUCT(a INT, b VARCHAR), 2),
+	(NULL::STRUCT(a INT, b VARCHAR), 3),
+	(ROW(4, 'q')::STRUCT(a INT, b VARCHAR), 4);
+
+query I
+SELECT struct_keys(col) FROM t_struct_flat;
+----
+[a, b]
+[a, b]
+[a, b]
+NULL
+[a, b]
+
+# Dictionary vector as input, preserve per-row NULLs
+statement ok
+CREATE TABLE filtered_struct (
+    col STRUCT(a INT, b VARCHAR),
+    idx INTEGER
+);
+
+statement ok
+INSERT INTO filtered_struct VALUES
+    (ROW(1, 'x')::STRUCT(a INT, b VARCHAR), 0),
+    (ROW(2, 'y')::STRUCT(a INT, b VARCHAR), 1),
+    (NULL::STRUCT(a INT, b VARCHAR), 3),
+    (ROW(4, 'q')::STRUCT(a INT, b VARCHAR), 2);
+
+# Expecting to get the results respectively to the filteration & ordering
+query I
+SELECT struct_keys(col) FROM filtered_struct WHERE idx % 2 != 0 ORDER BY idx;
+----
+[a, b]
+NULL
+
+# Unnamed struct should raise an error
+statement error
+select struct_keys(ROW(1, 2));
+----
+Invalid Input Error: struct_keys() cannot be applied to an unnamed STRUCT
+
+# Error cases: non-STRUCT inputs should fail
+statement error
+select struct_keys(42);
+----
+struct_keys() expects a STRUCT argument
+
+statement error
+select struct_keys(['a', 'b']);
+----
+struct_keys() expects a STRUCT argument

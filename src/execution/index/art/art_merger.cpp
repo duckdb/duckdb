@@ -107,7 +107,7 @@ ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	// We fall back to the ART insertion code.
 	auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, entry.right.GetRowId());
 	return ARTOperator::Insert(arena, art, entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET,
-	                           nullptr, IndexAppendMode::DEFAULT);
+	                           DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 }
 
 array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {
@@ -255,7 +255,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 
 	Prefix l_prefix(art, entry.left, true);
 	Prefix r_prefix(art, entry.right, true);
-	const auto count = Prefix::Count(art);
+	const auto count = art.PrefixCount();
 
 	// Find a byte at pos where the prefixes differ.
 	// If they match up to max_count, then pos stays invalid.

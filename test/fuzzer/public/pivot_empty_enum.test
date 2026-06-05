@@ -11,3 +11,4 @@ CREATE TABLE t1 (c01 INT);
 statement error
 PIVOT_WIDER t1 ON c01 IN ENUM;
 ----
+Binder Error: ENUM type is incomplete

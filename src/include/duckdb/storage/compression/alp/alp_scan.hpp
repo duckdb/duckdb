@@ -11,15 +11,9 @@
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -130,7 +124,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(data_byte_offset < segment.GetBlockSize());
 
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
@@ -140,6 +134,14 @@ public:
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
+		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			}
+			return;
+		}
 		vector_state.v_factor = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::FACTOR_SIZE;
 
@@ -153,7 +155,6 @@ public:
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 
@@ -201,7 +202,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(segment);
 	return result;
 }

@@ -22,6 +22,7 @@ SELECT * FROM vw2
 statement error
 SELECT * FROM vw
 ----
+Catalog Error: Table with name vw does not exist
 
 statement ok
 ROLLBACK
@@ -35,6 +36,7 @@ SELECT * FROM vw;
 statement error
 SELECT * FROM vw2
 ----
+Catalog Error: Table with name vw2 does not exist
 
 statement ok
 BEGIN TRANSACTION;
@@ -54,6 +56,7 @@ SELECT * FROM vw2
 statement error
 SELECT * FROM vw
 ----
+Catalog Error: Table with name vw does not exist
 
 statement ok
 CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
@@ -68,8 +71,10 @@ SELECT * FROM vw
 statement error
 ALTER VIEW sqlite_master RENAME TO my_sqlite_master
 ----
+Binder Error: Can not comment on System Catalog entries
 
 # cannot rename a view that does not exist
 statement error
 ALTER VIEW nonexistingview RENAME TO my_new_view
 ----
+Catalog Error: View with name nonexistingview does not exist

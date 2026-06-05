@@ -39,7 +39,7 @@ ExternalFileCache::CachedFileRange::GetOverlap(const CachedFileRange &other) con
 void ExternalFileCache::CachedFileRange::AddCheckSum() {
 #ifdef DEBUG
 	D_ASSERT(checksum == 0);
-	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
+	auto buffer_handle = block_handle->GetMemory().GetBufferManager().Pin(block_handle);
 	checksum = Checksum(buffer_handle.Ptr(), nr_bytes);
 #endif
 }
@@ -49,7 +49,7 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 	if (checksum == 0) {
 		return;
 	}
-	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
+	auto buffer_handle = block_handle->GetMemory().GetBufferManager().Pin(block_handle);
 	if (!buffer_handle.IsValid()) {
 		return;
 	}
@@ -57,7 +57,8 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 #endif
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
+ExternalFileCache::CachedFile::CachedFile(string path_p)
+    : path(std::move(path_p)), file_size(0), last_modified(0), can_seek(false), on_disk_file(false) {
 }
 
 void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &guard) const {
@@ -152,7 +153,8 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 		auto ranges_guard = file.second->lock.GetSharedLock();
 		for (const auto &range_entry : file.second->Ranges(ranges_guard)) {
 			const auto &range = *range_entry.second;
-			result.push_back({file.first, range.nr_bytes, range.location, !range.block_handle->IsUnloaded()});
+			result.push_back(
+			    {file.first, range.nr_bytes, range.location, !range.block_handle->GetMemory().IsUnloaded()});
 		}
 	}
 	return result;

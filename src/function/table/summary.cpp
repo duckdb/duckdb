@@ -9,7 +9,6 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("summary");
 

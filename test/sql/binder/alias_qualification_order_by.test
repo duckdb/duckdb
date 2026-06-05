@@ -1,0 +1,44 @@
+# name: test/sql/binder/alias_qualification_order_by.test
+# description: Test alias.name resolution in ORDER BY clause
+# group: [binder]
+
+# simple ordering by projection alias
+query I
+SELECT a AS x FROM (VALUES (3),(1),(2)) t(a)
+ORDER BY alias.x;
+----
+1
+2
+3
+
+# ordering by a later alias derived from a prior alias
+query II
+SELECT a + 1 AS x, alias.x * 10 AS y FROM (VALUES (1),(3),(2)) t(a)
+ORDER BY alias.y DESC;
+----
+4	40
+3	30
+2	20
+
+# quoted alias in ORDER BY
+query I
+SELECT a AS "MiXeD" FROM (VALUES (2),(1)) t(a)
+ORDER BY alias."MiXeD";
+----
+1
+2
+
+# ensure a table actually named `alias` still works and does not conflict with alias references
+statement ok
+CREATE TABLE alias (v INT);
+
+statement ok
+INSERT INTO alias VALUES (20), (10);
+
+# Table-qualified column should be prioritized when resolving alias.<name>
+query I
+SELECT v AS x FROM alias
+ORDER BY alias.v;
+----
+10
+20

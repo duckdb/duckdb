@@ -25,7 +25,6 @@ struct HugeIntPacker {
 };
 
 class BitpackingPrimitives {
-
 public:
 	static constexpr const idx_t BITPACKING_ALGORITHM_GROUP_SIZE = 32;
 	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
@@ -61,7 +60,6 @@ public:
 	template <class T>
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
 	                                bool skip_sign_extension = false) {
-
 		for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
 		}

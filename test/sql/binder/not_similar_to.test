@@ -31,6 +31,7 @@ SELECT * similar to 'a' FROM (select * not similar to '(a|c)' from foo);
 ----
 Binder Error: No matching columns found that match regex "a"
 
+
 statement ok
 CREATE TABLE t0(c0 VARCHAR);
 

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class BlockHandle;
 class ClientContext;
@@ -30,10 +30,14 @@ public:
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API
+	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
-	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	DUCKDB_API
+	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other
@@ -78,6 +82,7 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
+	DUCKDB_API void InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -161,6 +166,8 @@ public:
 	vector<shared_ptr<StringHeap>> GetHeapReferences();
 	//! Get the allocator type of this ColumnDataCollection
 	ColumnDataAllocatorType GetAllocatorType() const;
+	//! Get the buffer manager of the allocator
+	BufferManager &GetBufferManager() const;
 
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
@@ -194,7 +201,9 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(
+	    const ColumnDataCollection &collection,
+	    ColumnDataScanProperties properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;

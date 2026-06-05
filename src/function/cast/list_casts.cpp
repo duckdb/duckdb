@@ -98,7 +98,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	unsafe_unique_array<bool> needs_quotes;
-	idx_t needs_quotes_length;
+	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {

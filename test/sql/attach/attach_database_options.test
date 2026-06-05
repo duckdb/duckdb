@@ -1,0 +1,20 @@
+# name: test/sql/attach/attach_database_options.test
+# description: Test ATTACH with database options being persisted
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+# attach a new database
+statement ok
+ATTACH DATABASE ':memory:' AS new_database (BLOCK_SIZE 262144, ROW_GROUP_SIZE 2048);
+
+query I
+SELECT options['block_size'] from duckdb_databases() where database_name = 'new_database';
+----
+262144
+
+query I
+SELECT options['row_group_size'] from duckdb_databases() where database_name = 'new_database';
+----
+2048

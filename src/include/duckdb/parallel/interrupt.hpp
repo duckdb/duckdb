@@ -83,6 +83,11 @@ public:
 		return false;
 	}
 
+	bool CanBlock(const unique_lock<mutex> &guard) const {
+		VerifyLock(guard);
+		return can_block;
+	}
+
 	//! Unblock all tasks (must hold the lock)
 	bool UnblockTasks(const unique_lock<mutex> &guard) {
 		VerifyLock(guard);

@@ -8,3 +8,8 @@ statement error
 SET disable_database_invalidation=true;
 ----
 <REGEX>:Invalid Input Error.*Cannot change disable_database_invalidation setting while database is running.*
+
+statement error
+SET allow_unredacted_secrets=true;
+----
+Cannot change

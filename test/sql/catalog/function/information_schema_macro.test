@@ -9,3 +9,4 @@ PRAGMA enable_verification
 statement error
 create macro information_schema.foo(a) as a;
 ----
+<REGEX>:.*Binder Error: Cannot create entry.*

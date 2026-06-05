@@ -1,6 +1,16 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/encryption_functions.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/encryption_types.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -8,26 +18,32 @@ class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
 
-struct EncryptionTag {
-	EncryptionTag();
-	data_ptr_t data();
+class AdditionalAuthenticatedData {
+public:
+	explicit AdditionalAuthenticatedData(Allocator &allocator)
+	    : additional_authenticated_data(make_uniq<MemoryStream>(allocator, INITIAL_AAD_CAPACITY)) {
+	}
+	virtual ~AdditionalAuthenticatedData();
+
+public:
+	template <typename T>
+	void WriteData(const T &val) {
+		additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
+	}
+
+public:
+	void WriteStringData(const std::string &val) const;
+	data_ptr_t data() const;
 	idx_t size() const;
 
 private:
-	unique_ptr<data_t[]> tag;
-};
+	static constexpr uint32_t INITIAL_AAD_CAPACITY = 32;
 
-struct EncryptionNonce {
-	EncryptionNonce();
-	data_ptr_t data();
-	idx_t size() const;
-
-private:
-	unique_ptr<data_t[]> nonce;
+protected:
+	unique_ptr<MemoryStream> additional_authenticated_data;
 };
 
 class EncryptionEngine {
-
 public:
 	EncryptionEngine();
 	~EncryptionEngine();

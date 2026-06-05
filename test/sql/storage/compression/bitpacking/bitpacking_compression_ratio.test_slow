@@ -211,7 +211,7 @@ drop table test_bitpacked;
 drop table test_uncompressed;
 
 statement ok
-PRAGMA force_bitpacking_mode='none'
+PRAGMA force_bitpacking_mode='auto'
 
 # Assert that all supported types do in fact compress
 foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) bool

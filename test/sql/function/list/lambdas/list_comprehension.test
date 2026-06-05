@@ -87,3 +87,19 @@ statement error
 SELECT [a for a[1], b[2] in [1, 2, 3, 4]];
 ----
 Parser Error: syntax error at or near "["
+
+query I
+SELECT [i FOR x, i IN [4, 5, 6] IF x > 5];
+----
+[3]
+
+query I
+SELECT [x FOR x IN [4, 5, 6] IF x > 5];
+----
+[6]
+
+query I
+SELECT [i FOR x, i IN [4, 5, 6] IF i % 2 = 0];
+----
+[2]
+

@@ -60,6 +60,9 @@ SELECT * FROM test WHERE id=150001
 statement ok
 CREATE TABLE test_large_list AS SELECT i%100 AS id, LIST((-i)::VARCHAR) AS list FROM range(0,100000) tbl(i) GROUP BY id;
 
+statement ok
+CHECKPOINT
+
 query II
 SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(list) FROM test_large_list) tbl(i)
 ----

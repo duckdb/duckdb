@@ -1,0 +1,102 @@
+# name: test/sql/json/table/read_json_unnest_heterogeneous_struct.test
+# description: Test UNNEST of heterogeneous struct arrays from read_json_auto
+# group: [table]
+
+# Regression test for https://github.com/duckdb/duckdb/pull/21209
+# Cross-join UNNEST of a deeply nested array of objects with different keys
+# caused INTERNAL Error in the UnnestRewriter optimizer when read_json_auto
+# inferred a STRUCT[] type with heterogeneous element shapes.
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+# ============================================================================
+# CASE 1: Flat heterogeneous struct array
+# ============================================================================
+
+statement ok
+COPY (
+    SELECT * FROM (VALUES
+        ('{"results": [{"name": "Alice", "age": 30}, {"name": "Bob", "company": "ACME"}, {"name": "Charlie", "score": 95.5, "tags": ["a","b"]}]}')
+    )
+) TO '{TEMP_DIR}/heterogeneous.json' (format csv, quote '', header 0);
+
+# DuckDB unifies all keys into one STRUCT type
+query I
+SELECT typeof(results[1]) FROM read_json_auto('{TEMP_DIR}/heterogeneous.json');
+----
+STRUCT("name" VARCHAR, age BIGINT, company VARCHAR, score DOUBLE, tags VARCHAR[])
+
+# Cross-join UNNEST works for flat arrays
+query IIIII
+SELECT unnest.name, unnest.age, unnest.company, unnest.score, unnest.tags
+FROM read_json_auto('{TEMP_DIR}/heterogeneous.json') t, UNNEST(t.results)
+ORDER BY unnest.name;
+----
+Alice	30	NULL	NULL	NULL
+Bob	NULL	ACME	NULL	NULL
+Charlie	NULL	NULL	95.5	[a, b]
+
+# ============================================================================
+# CASE 2: Deeply nested heterogeneous struct array (was crashing before fix)
+# ============================================================================
+
+statement ok
+COPY (
+    SELECT * FROM (VALUES
+        ('{"response": {"service": {"data": {"items": [{"type": "person", "first_name": "John", "last_name": "Doe"}, {"type": "company", "company_name": "Widgets Inc", "registration_number": "12345"}, {"type": "person", "first_name": "Jane", "middle_name": "M", "last_name": "Smith"}]}}}}')
+    )
+) TO '{TEMP_DIR}/nested_heterogeneous.json' (format csv, quote '', header 0);
+
+# Cross-join UNNEST on deeply nested path should work
+query I
+SELECT unnest.type
+FROM read_json_auto('{TEMP_DIR}/nested_heterogeneous.json') t,
+     UNNEST(t.response.service.data.items)
+ORDER BY unnest.type;
+----
+company
+person
+person
+
+# Access multiple fields from the unnested struct
+query IIII
+SELECT unnest.type, unnest.first_name, unnest.last_name, unnest.company_name
+FROM read_json_auto('{TEMP_DIR}/nested_heterogeneous.json') t,
+     UNNEST(t.response.service.data.items)
+ORDER BY unnest.type, unnest.first_name;
+----
+company	NULL	NULL	Widgets Inc
+person	Jane	Smith	NULL
+person	John	Doe	NULL
+
+# ============================================================================
+# CAST to JSON[] workaround should also still work
+# ============================================================================
+
+query I
+SELECT json_extract_string(item, '$.name')
+FROM (
+    SELECT UNNEST(CAST(results AS JSON[])) AS item
+    FROM read_json_auto('{TEMP_DIR}/heterogeneous.json')
+)
+ORDER BY 1;
+----
+Alice
+Bob
+Charlie
+
+query II
+SELECT json_extract_string(item, '$.type'),
+       COALESCE(json_extract_string(item, '$.first_name'), json_extract_string(item, '$.company_name'))
+FROM (
+    SELECT UNNEST(CAST(t.response.service.data.items AS JSON[])) AS item
+    FROM read_json_auto('{TEMP_DIR}/nested_heterogeneous.json') t
+)
+ORDER BY 1, 2;
+----
+company	Widgets Inc
+person	Jane
+person	John

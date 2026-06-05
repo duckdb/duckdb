@@ -8,3 +8,4 @@ PRAGMA enable_verification
 statement error
 SELECT 6 OFFSET count(*) FILTER ((SELECT 2 UNION (SELECT 2) OFFSET (SELECT LAST))) OVER ();
 ----
+Not implemented Error: Unimplemented expression class

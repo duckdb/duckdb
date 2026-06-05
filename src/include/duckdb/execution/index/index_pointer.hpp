@@ -47,22 +47,22 @@ public:
 	inline bool HasMetadata() const {
 		return data & AND_METADATA;
 	}
-	//! Get metadata (zero to 7th bit)
+	//! Get metadata (Bits 56-63)
 	inline uint8_t GetMetadata() const {
 		return data >> SHIFT_METADATA;
 	}
-	//! Set metadata (zero to 7th bit)
+	//! Set metadata (Bits 56-63)
 	inline void SetMetadata(const uint8_t metadata) {
 		data &= ~AND_METADATA;
 		data |= UnsafeNumericCast<idx_t>(metadata) << SHIFT_METADATA;
 	}
 
-	//! Get the offset (8th to 23rd bit)
+	//! Get the offset (Bits 32-55)
 	inline idx_t GetOffset() const {
 		auto offset = data >> SHIFT_OFFSET;
 		return offset & AND_OFFSET;
 	}
-	//! Get the buffer ID (24th to 63rd bit)
+	//! Get the buffer ID (Bits 0-31)
 	inline idx_t GetBufferId() const {
 		return data & AND_BUFFER_ID;
 	}
@@ -72,7 +72,7 @@ public:
 		data = 0;
 	}
 
-	//! Adds an idx_t to a buffer ID, the rightmost 32 bits of data contain the buffer ID
+	//! Adds an idx_t to a buffer ID, the rightmost 32 bits of data (Bits 0-31) contain the buffer ID
 	inline void IncreaseBufferId(const idx_t summand) {
 		data += summand;
 	}
@@ -83,9 +83,14 @@ public:
 	}
 
 private:
-	//! Data holds all the information contained in an IndexPointer
-	//! [0 - 7: metadata,
-	//! 8 - 23: offset, 24 - 63: buffer ID]
+	//! Data holds all the information contained in an IndexPointer (64-bit value)
+	//! Bit layout:
+	//! MSB                                                                        LSB
+	//! 63         56 55                      32 31                                  0
+	//! +------------+--------------------------+------------------------------------+
+	//! |  Metadata  |           Offset         |           Buffer ID                |
+	//! |   8 bits   |          24 bits         |            32 bits                 |
+	//! +------------+--------------------------+------------------------------------+
 	//! NOTE: we do not use bit fields because when using bit fields Windows compiles
 	//! the IndexPointer class into 16 bytes instead of the intended 8 bytes, doubling the
 	//! space requirements

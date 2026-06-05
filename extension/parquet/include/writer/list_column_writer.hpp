@@ -26,14 +26,12 @@ public:
 
 class ListColumnWriter : public ColumnWriter {
 public:
-	ListColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path_p,
-	                 unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
-	    : ColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls),
-	      child_writer(std::move(child_writer_p)) {
+	ListColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p,
+	                 unique_ptr<ColumnWriter> child_writer_p)
+	    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
+		child_writers.push_back(std::move(child_writer_p));
 	}
 	~ListColumnWriter() override = default;
-
-	unique_ptr<ColumnWriter> child_writer;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
@@ -46,6 +44,11 @@ public:
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
+	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
+
+protected:
+	ColumnWriter &GetChildWriter();
+	const ColumnWriter &GetChildWriter() const;
 };
 
 } // namespace duckdb

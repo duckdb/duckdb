@@ -16,10 +16,7 @@ ArrowQueryResult::ArrowQueryResult(StatementType statement_type, StatementProper
 ArrowQueryResult::ArrowQueryResult(ErrorData error) : QueryResult(QueryResultType::ARROW_RESULT, std::move(error)) {
 }
 
-unique_ptr<DataChunk> ArrowQueryResult::Fetch() {
-	throw NotImplementedException("Can't 'Fetch' from ArrowQueryResult");
-}
-unique_ptr<DataChunk> ArrowQueryResult::FetchRaw() {
+unique_ptr<DataChunk> ArrowQueryResult::FetchInternal() {
 	throw NotImplementedException("Can't 'FetchRaw' from ArrowQueryResult");
 }
 

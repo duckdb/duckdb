@@ -1,5 +1,9 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
+
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -15,13 +19,24 @@
 
 namespace duckdb {
 
+const vector<unique_ptr<ParsedExpression>> &StatementVerifier::GetSelectList(QueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE:
+		return node.Cast<SelectNode>().select_list;
+	case QueryNodeType::SET_OPERATION_NODE:
+		return GetSelectList(*node.Cast<SetOperationNode>().children[0]);
+	default:
+		return empty_select_list;
+	}
+}
+
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
                                      optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters_p)
     : type(type), name(std::move(name)), statement(std::move(statement_p)),
       select_statement(statement->type == StatementType::SELECT_STATEMENT ? &statement->Cast<SelectStatement>()
                                                                           : nullptr),
       parameters(parameters_p),
-      select_list(select_statement ? select_statement->node->GetSelectList() : empty_select_list) {
+      select_list(select_statement ? GetSelectList(*select_statement->node) : empty_select_list) {
 }
 
 StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p,

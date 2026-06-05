@@ -35,12 +35,11 @@ void PartialBlockForIndex::Clear() {
 constexpr idx_t FixedSizeBuffer::BASE[];
 constexpr uint8_t FixedSizeBuffer::SHIFT[];
 
-FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag)
     : block_manager(block_manager), readers(0), segment_count(0), allocation_size(0), dirty(false), vacuum(false),
       loaded(false), block_pointer(), block_handle(nullptr) {
-
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
+	buffer_handle = buffer_manager.Allocate(memory_tag, &block_manager, false);
 	block_handle = buffer_handle.GetBlockHandle();
 
 	// Zero-initialize the buffer as it might get serialized to storage.
@@ -52,7 +51,6 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
                                  const BlockPointer &block_pointer)
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
       dirty(false), vacuum(false), loaded(false), block_pointer(block_pointer) {
-
 	D_ASSERT(block_pointer.IsValid());
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
@@ -159,7 +157,6 @@ void FixedSizeBuffer::LoadFromDisk() {
 }
 
 uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t available_segments) {
-
 	// Get a handle to the buffer's validity mask (offset 0).
 	SegmentHandle handle(*this, 0);
 	const auto bitmask_ptr = handle.GetPtr<validity_t>();

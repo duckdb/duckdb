@@ -1,0 +1,29 @@
+# name: test/sql/parallelism/interquery/concurrent_reads_during_index_creation.test_slow
+# description: Test concurrent reads during index creation
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers AS SELECT range AS i FROM range (1_000_000)
+
+concurrentloop threadid 0 11
+
+onlyif threadid=0
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+loop x 0 100
+
+onlyif threadid<>0
+query I
+SELECT COUNT(*) FROM integers WHERE i = (${threadid} * 10000 + ${x})
+----
+1
+
+endloop
+
+endloop
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=500000
+----
+1

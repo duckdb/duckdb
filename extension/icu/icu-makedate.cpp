@@ -56,7 +56,7 @@ BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalTyp
 	if (!input.context) {
 		throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
 	}
-	if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+	if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 		throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to DATE without an explicit time zone "
 		                      "has been disabled  - use \"AT TIME ZONE ...\"");
 	}
@@ -148,7 +148,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
 		                        Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		return function;
 	}
 
@@ -156,7 +156,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
 		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		return function;
 	}
 
@@ -165,7 +165,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		set.AddFunction(function);
 		loader.RegisterFunction(set);
 	}

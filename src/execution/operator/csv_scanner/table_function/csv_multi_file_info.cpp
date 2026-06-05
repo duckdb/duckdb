@@ -365,13 +365,15 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	return true;
 }
 
-void CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                       LocalTableFunctionState &local_state, DataChunk &chunk) {
+AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                              LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.csv_reader->FinishedIterator()) {
-		return;
+		return AsyncResult(SourceResultType::FINISHED);
 	}
 	lstate.csv_reader->Flush(chunk);
+	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
+	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {

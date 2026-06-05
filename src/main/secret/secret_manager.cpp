@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -43,13 +44,16 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 	lock_guard<mutex> lck(manager_lock);
 
 	// Construct default path
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetLocal(db);
 	config.default_secret_path = fs.GetHomeDirectory();
 	vector<string> path_components = {".duckdb", "stored_secrets"};
 	for (auto &path_ele : path_components) {
 		config.default_secret_path = fs.JoinPath(config.default_secret_path, path_ele);
 	}
-	config.secret_path = config.default_secret_path;
+	// Use default path if none has been specified by the user configuration
+	if (config.secret_path.empty()) {
+		config.secret_path = config.default_secret_path;
+	}
 
 	// Set the defaults for persistent storage
 	config.default_persistent_storage = LOCAL_FILE_STORAGE_NAME;
@@ -653,7 +657,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 		return nullptr;
 	}
 
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetLocal(catalog.GetDatabase());
 
 	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");

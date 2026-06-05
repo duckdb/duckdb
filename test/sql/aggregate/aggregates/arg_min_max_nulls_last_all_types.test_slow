@@ -1,0 +1,43 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_nulls_last_all_types.test_slow
+# description: Test the ARG_MIN_NULLS_LAST and ARG_MAX_NULLS_LAST overloads with all types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table all_types as from test_all_types()
+
+foreach col bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob bit small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map union fixed_int_array fixed_varchar_array fixed_nested_int_array fixed_nested_varchar_array fixed_struct_array struct_of_fixed_array fixed_array_of_int_list list_of_fixed_int_array
+
+statement ok
+CREATE OR REPLACE TABLE asc_ordered AS SELECT "${col}" FROM all_types ORDER BY "${col}" ASC NULLS LAST
+
+statement ok
+CREATE OR REPLACE TABLE desc_ordered AS SELECT "${col}" FROM all_types ORDER BY "${col}" DESC NULLS LAST
+
+statement ok
+CREATE OR REPLACE TABLE arg_min_result AS SELECT unnest(arg_min_nulls_last("${col}", "${col}", 3)) FROM all_types
+
+statement ok
+CREATE OR REPLACE TABLE arg_max_result AS SELECT unnest(arg_max_nulls_last("${col}", "${col}", 3)) FROM all_types
+
+query II
+SELECT * FROM (SELECT rowid, * FROM asc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_min_result ORDER BY rowid);
+
+query II
+SELECT * FROM (SELECT rowid, * FROM desc_ordered ORDER BY rowid) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_max_result ORDER BY rowid);
+
+statement ok
+CREATE OR REPLACE TABLE arg_min_result AS SELECT arg_min_nulls_last("${col}", "${col}") FROM all_types
+
+statement ok
+CREATE OR REPLACE TABLE arg_max_result AS SELECT arg_max_nulls_last("${col}", "${col}") FROM all_types
+
+query II
+SELECT * FROM (SELECT rowid, * FROM asc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_min_result ORDER BY rowid);
+
+query II
+SELECT * FROM (SELECT rowid, * FROM desc_ordered ORDER BY rowid LIMIT 1) EXCEPT SELECT * FROM (SELECT rowid, * FROM arg_max_result ORDER BY rowid);
+
+endloop

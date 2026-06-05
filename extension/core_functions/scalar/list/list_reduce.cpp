@@ -1,6 +1,8 @@
 #include "core_functions/scalar/list_functions.hpp"
+
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -46,6 +48,7 @@ struct ReduceExecuteInfo {
 		}
 		input_types.push_back(left_slice->GetType());
 		input_types.push_back(left_slice->GetType());
+
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
@@ -175,7 +178,6 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -223,8 +225,8 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
-	bound_function.return_type = cast_lambda_expr->return_type;
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index,
+	bound_function.SetReturnType(cast_lambda_expr->return_type);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
 	                                     has_initial);
 }
 
@@ -311,10 +313,10 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::ANY,
 	                   LambdaFunctions::ListReduceFunction, ListReduceBind, nullptr, nullptr);
 
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.bind_lambda = ListReduceBindLambda;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
+	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
+	fun.SetBindLambdaCallback(ListReduceBindLambda);
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

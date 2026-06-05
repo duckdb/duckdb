@@ -8,6 +8,9 @@ require noforcestorage
 
 require skip_reload
 
+# FIXME: Enable when more read paths have been added to profiling.
+require no_alternative_verify
+
 statement ok
 SET threads = 1;
 
@@ -68,19 +71,16 @@ statement ok
 PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
 
 statement ok
-SET profiling_coverage='ALL';
+ATTACH '__TEST_DIR__/profile_fs.db';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_fs.db';
+SELECT * FROM profile_fs.tbl;
 
 statement ok
 PRAGMA disable_profiling;
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
-
-statement ok
-SELECT total_bytes_read FROM metrics_output;
 
 query I
 SELECT

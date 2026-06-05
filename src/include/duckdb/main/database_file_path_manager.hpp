@@ -43,12 +43,16 @@ public:
 	void DetachDatabase(DatabaseManager &manager, const string &path);
 
 private:
-	//! The lock to add entries to the database path map
+	//! The lock to add entries to the db_paths map
 	mutable mutex db_paths_lock;
 	//! A set containing all attached database path
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
+#if defined(_WIN32) || defined(__APPLE__)
 	case_insensitive_map_t<DatabasePathInfo> db_paths;
+#else  // !(_WIN32 or __APPLE__)
+	unordered_map<string, DatabasePathInfo> db_paths;
+#endif // _WIN32 or __APPLE__
 };
 
 } // namespace duckdb

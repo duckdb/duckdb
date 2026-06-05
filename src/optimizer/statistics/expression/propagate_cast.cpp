@@ -1,10 +1,16 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
+	// Bail out if the stats are not numeric
+	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+		return nullptr;
+	}
 	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}
@@ -142,8 +148,37 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	return true;
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
+static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistics &input, const LogicalType &target) {
+	if (target.IsNested() || target.id() == LogicalTypeId::VARIANT) {
+		// only try this for non-nested
+		return nullptr;
+	}
+	if (!VariantStats::IsShredded(input)) {
+		// not shredded
+		return nullptr;
+	}
+	auto structured_type = VariantStats::GetShreddedStructuredType(input);
+	auto &shredded_stats = VariantStats::GetShreddedStats(input);
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
+		// this field might be partially shredded - skip stats propagation
+		return nullptr;
+	}
+	// extract the typed stats
+	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
+	if (structured_type == target) {
+		// type matches - return stats directly
+		return typed_stats.ToUnique();
+	}
+	// typed stats don't match - try to cast
+	return StatisticsPropagator::TryPropagateCast(typed_stats, structured_type, target);
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
+                                                                  const LogicalType &source,
                                                                   const LogicalType &target) {
+	if (source.id() == LogicalTypeId::VARIANT) {
+		return StatisticsPropagateVariant(stats, target);
+	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}

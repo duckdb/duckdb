@@ -1,0 +1,22 @@
+# name: test/sql/copy/parquet/parquet_metadata_glob.test_slow
+# description: Test parquet metadata function applied to many files
+# group: [parquet]
+
+require parquet
+
+statement ok
+set variable parquet_files = (
+	select list(file)
+	from glob('data/parquet-testing/**.parquet')
+	where 'broken' not in file
+)
+
+statement ok
+SELECT * FROM parquet_metadata(getvariable('parquet_files'));
+
+query II
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata(getvariable('parquet_files'))
+where file_name = 'data/parquet-testing/varchar_stats.parquet'
+----
+200	208
+200	208

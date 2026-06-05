@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -51,6 +52,11 @@ int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 int64_t PipeFileSystem::GetFileSize(FileHandle &handle) {
 	return 0;
+}
+
+timestamp_t PipeFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	auto &child_handle = *handle.Cast<PipeFile>().child_handle;
+	return child_handle.file_system.GetLastModifiedTime(child_handle);
 }
 
 void PipeFileSystem::FileSync(FileHandle &handle) {

@@ -1,0 +1,16 @@
+# name: test/sql/peg_parser/parser/scientific_notation.test
+# description: Test scientific notation in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select +1234.56789e-1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select 1e30, 1e100, 1e-1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1e308+1e308$TEST_PEG_PARSER$);
+
+

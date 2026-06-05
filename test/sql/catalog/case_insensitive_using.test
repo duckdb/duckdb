@@ -202,3 +202,4 @@ SELECT * FROM (SELECT 1 "hello", 2 "HeLlO") t1 JOIN (SELECT 1 "hello", 2 "HeLlO"
 statement error
 SELECT hello FROM (a JOIN b USING (hello)), (d JOIN e USING (hello))
 ----
+<REGEX>:.*Binder Error: Ambiguous column reference.*

@@ -20,21 +20,20 @@ void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) 
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
-
-	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
-	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
+		subquery_expr->subquery = TransformSelectStmt(*root.subselect);
+		D_ASSERT(subquery_expr->subquery);
 		break;
 	}
 	case duckdb_libpgquery::PG_ANY_SUBLINK:
 	case duckdb_libpgquery::PG_ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
+		// transform the test expression first to preserve positional parameter order
 		subquery_expr->child = TransformExpression(root.testexpr);
 		// get the operator name
 		if (!root.operName) {
@@ -53,6 +52,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		    subquery_expr->comparison_type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 			throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
 		}
+		subquery_expr->subquery = TransformSelectStmt(*root.subselect);
+		D_ASSERT(subquery_expr->subquery);
 		if (root.subLinkType == duckdb_libpgquery::PG_ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
@@ -66,6 +67,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		// return a single scalar value from the subquery
 		// no child expression to compare to
 		subquery_expr->subquery_type = SubqueryType::SCALAR;
+		subquery_expr->subquery = TransformSelectStmt(*root.subselect);
+		D_ASSERT(subquery_expr->subquery);
 		break;
 	}
 	case duckdb_libpgquery::PG_ARRAY_SUBLINK: {
@@ -73,6 +76,9 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		// wrap subquery into
 		// "SELECT CASE WHEN ARRAY_AGG(col) IS NULL THEN [] ELSE ARRAY_AGG(col) END FROM (...) tbl"
 		auto select_node = make_uniq<SelectNode>();
+
+		subquery_expr->subquery = TransformSelectStmt(*root.subselect);
+		D_ASSERT(subquery_expr->subquery);
 
 		unique_ptr<ParsedExpression> array_agg_child;
 		optional_ptr<SelectNode> sub_select;

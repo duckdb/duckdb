@@ -18,10 +18,14 @@ using duckdb::QueryResultType;
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
                                          const char **names, idx_t column_count, struct ArrowSchema *out_schema) {
-
-	if (!types || !names || !arrow_options || !out_schema) {
+	if (!arrow_options || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
 	}
+	// types and names can be nullptr when column_count is 0
+	if (column_count > 0 && (!types || !names)) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
+	}
+
 	duckdb::vector<LogicalType> schema_types;
 	duckdb::vector<std::string> schema_names;
 	for (idx_t i = 0; i < column_count; i++) {
@@ -75,8 +79,7 @@ duckdb_error_data duckdb_schema_from_arrow(duckdb_connection connection, struct 
 	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableSchema>();
 	try {
 		duckdb::vector<LogicalType> return_types;
-		duckdb::ArrowTableFunction::PopulateArrowTableSchema(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                     *schema);
+		duckdb::ArrowTableFunction::PopulateArrowTableSchema(*conn->context, *arrow_table, *schema);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
@@ -298,7 +301,6 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 }
 
 void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p) {
-
 	auto stream = reinterpret_cast<ArrowArrayStream *>(*stream_p);
 	if (!stream) {
 		return;

@@ -11,7 +11,7 @@ ConnectionManager::ConnectionManager() : connection_count(0), current_connection
 
 void ConnectionManager::AddConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
-	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+	for (auto &callback : ExtensionCallback::Iterate(context)) {
 		callback->OnConnectionOpened(context);
 	}
 	connections[context] = weak_ptr<ClientContext>(context.shared_from_this());
@@ -20,7 +20,7 @@ void ConnectionManager::AddConnection(ClientContext &context) {
 
 void ConnectionManager::RemoveConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
-	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+	for (auto &callback : ExtensionCallback::Iterate(context)) {
 		callback->OnConnectionClosed(context);
 	}
 	connections.erase(context);
@@ -38,17 +38,16 @@ void ConnectionManager::AssignConnectionId(Connection &connection) {
 vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
 	lock_guard<mutex> lock(connections_lock);
 	vector<shared_ptr<ClientContext>> result;
-	for (auto &it : connections) {
-		auto connection = it.second.lock();
+	for (auto it = connections.begin(); it != connections.end();) {
+		auto connection = it->second.lock();
 		if (!connection) {
-			connections.erase(it.first);
-			connection_count = connections.size();
-			continue;
+			it = connections.erase(it);
 		} else {
 			result.push_back(std::move(connection));
+			++it;
 		}
 	}
-
+	connection_count = connections.size();
 	return result;
 }
 

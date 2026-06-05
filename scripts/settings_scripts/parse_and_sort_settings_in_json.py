@@ -26,6 +26,7 @@ def add_all_settings_to_global_list():
         'aliases',
         'default_scope',
         'default_value',
+        'conditional_defaults',
     ]
 
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
@@ -50,6 +51,7 @@ def add_all_settings_to_global_list():
             aliases=entry.get('aliases', []),
             default_scope=entry.get('default_scope', None),
             default_value=entry.get('default_value', None),
+            conditional_defaults=entry.get('conditional_defaults', None),
         )
         SettingsList.append(setting)
 

@@ -1,0 +1,49 @@
+# name: test/sql/outofcore/out_of_core_hash_join.test_slow
+# description: Test out of core hash join
+# group: [outofcore]
+
+require tpch
+
+load __TEST_DIR__/out_of_core_hash_join.db
+
+statement ok
+CALL dbgen(sf=1);
+
+query I
+SELECT bit_xor(hash(*COLUMNS(*)))
+FROM lineitem;
+----
+3944753436594036139
+
+foreach mem 300MiB 600MiB
+
+foreach threads 1 2 8
+
+statement ok
+SET memory_limit='${mem}';
+
+statement ok
+SET threads=${threads};
+
+query II
+WITH cte AS (
+    WITH l1 AS (
+        SELECT COLUMNS(*) AS "l1_\0"
+        FROM lineitem
+    ), l2 AS (
+        SELECT COLUMNS(*) AS "l2_\0"
+        FROM lineitem
+    )
+    SELECT *
+    FROM l1, l2
+    WHERE l1.l1_l_orderkey = l2.l2_l_orderkey
+    AND l1.l1_l_linenumber = l2.l2_l_linenumber
+)
+SELECT bit_xor(hash(*COLUMNS('^l1_.*'))), bit_xor(hash(*COLUMNS('^l2_.*')))
+FROM cte;
+----
+3944753436594036139	3944753436594036139
+
+endloop
+
+endloop

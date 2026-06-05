@@ -14,6 +14,12 @@ CREATE TABLE memory_compressed.a(i INTEGER)
 statement ok
 INSERT INTO memory_compressed.a FROM range(10000000)
 
+statement ok
+PRAGMA force_checkpoint
+
+statement ok
+FORCE CHECKPOINT memory_compressed
+
 # uncompressed this would take 10M * 4 bytes = ~40MB
 # this compresses very well, so we should be able to store it in far less space
 # assert this takes less than 1 MB

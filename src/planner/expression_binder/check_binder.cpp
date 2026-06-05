@@ -43,7 +43,6 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
-
 	if (!colref.IsQualified()) {
 		if (lambda_bindings) {
 			for (idx_t i = lambda_bindings->size(); i > 0; i--) {

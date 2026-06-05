@@ -16,13 +16,13 @@ AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
     : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
-                      AlignValue(aggr->function.state_size(aggr->function)), aggr->aggr_type,
+                      AlignValue(aggr->function.GetStateSizeCallback()(aggr->function)), aggr->aggr_type,
                       aggr->return_type.InternalType(), aggr->filter.get()) {
 }
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)
     : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->state_size(*window.aggregate)),
+                      AlignValue(window.aggregate->GetStateSizeCallback()(*window.aggregate)),
                       window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
                       window.return_type.InternalType(), window.filter_expr.get()) {
 }

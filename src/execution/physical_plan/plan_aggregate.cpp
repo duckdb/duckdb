@@ -217,14 +217,14 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
 		// check if we have exceeded the bits for the hash
-		if (perfect_hash_bits > DBConfig::GetSetting<PerfectHtThresholdSetting>(context)) {
+		if (perfect_hash_bits > Settings::Get<PerfectHtThresholdSetting>(context)) {
 			// too many bits for perfect hash
 			return false;
 		}
 	}
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (aggregate.IsDistinct() || !aggregate.function.combine) {
+		if (aggregate.IsDistinct() || !aggregate.function.HasStateCombineCallback()) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
 		}
@@ -241,7 +241,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	bool can_use_simple_aggregation = true;
 	for (auto &expression : op.expressions) {
 		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (!aggregate.function.simple_update) {
+		if (!aggregate.function.HasStateSimpleUpdateCallback()) {
 			// unsupported aggregate for simple aggregation: use hash aggregation
 			can_use_simple_aggregation = false;
 			break;

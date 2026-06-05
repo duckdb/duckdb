@@ -1,0 +1,358 @@
+# name: test/sql/function/string/regex_extract_all_struct.test
+# description: tests for regexp_extract_all struct multi-match variant
+# group: [string]
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT regexp_extract_all('Peter:33 Paul:14', '(\w+):(\d+)', ['name','num']) AS res;
+----
+[{'name': Peter, 'num': 33}, {'name': Paul, 'num': 14}]
+
+query I
+SELECT regexp_extract_all('a1 b2 c', '(\w)(\d)?', ['c','d']) AS res;
+----
+[{'c': a, 'd': 1}, {'c': b, 'd': 2}, {'c': c, 'd': NULL}]
+
+statement error
+SELECT regexp_extract_all('abc', '(a)(b)(c)', []);
+----
+
+statement error
+SELECT regexp_extract_all('abc', '(a)(b)(c)', ['x','x']);
+----
+
+statement error
+SELECT regexp_extract_all('abc', '(a)(b)', ['g1','g2','g3']);
+----
+
+query I
+SELECT regexp_extract_all('Aa aA', '(a)', ['lower'], 'i') AS res;
+----
+[{'lower': A}, {'lower': a}, {'lower': a}, {'lower': A}]
+
+query I
+SELECT regexp_extract_all(NULL, '(a)', ['g']);
+----
+NULL
+
+statement error
+SELECT regexp_extract_all('abc', NULL, ['g']);
+----
+
+query I
+SELECT regexp_extract_all('щцф', '(.)', ['ch']) AS res;
+----
+[{'ch': щ}, {'ch': ц}, {'ch': ф}]
+
+query I
+SELECT regexp_extract_all('aa', '(a)(b)?', ['a','b']) AS res;
+----
+[{'a': a, 'b': NULL}, {'a': a, 'b': NULL}]
+
+query I
+SELECT regexp_extract_all('ab ac a', '(a)(b)?(c)?', ['a','b','c']) AS res;
+----
+[{'a': a, 'b': b, 'c': NULL}, {'a': a, 'b': NULL, 'c': c}, {'a': a, 'b': NULL, 'c': NULL}]
+
+query I
+SELECT regexp_extract_all('x1 y2', '(\w)(\d)', ['digit','letter']) AS res;
+----
+[{'digit': x, 'letter': 1}, {'digit': y, 'letter': 2}]
+
+query I
+SELECT regexp_extract_all('aaaaa', '(a)', ['g']) AS res;
+----
+[{'g': a}, {'g': a}, {'g': a}, {'g': a}, {'g': a}]
+
+query I
+SELECT regexp_extract_all('щц', '(щ)(ц)?', ['first','second']) AS res;
+----
+[{'first': щ, 'second': ц}]
+
+query I
+SELECT regexp_extract_all('hi', '(h|i)?', ['ch']) AS res;
+----
+[{'ch': h}, {'ch': i}, {'ch': NULL}]
+
+query I
+SELECT regexp_extract_all(NULL, '(a)', ['g']) AS res;
+----
+NULL
+
+query I
+SELECT regexp_extract_all('bb', '(a*)b', ['a']) AS res;
+----
+[{'a': ''}, {'a': ''}]
+
+query I
+SELECT regexp_extract_all('abc', '(x)(y)', ['x','y']) AS res;
+----
+[]
+
+query I
+SELECT regexp_extract_all('', '(a)?', ['a']) AS res;
+----
+[{'a': NULL}]
+
+query I
+SELECT regexp_extract_all('ab', '((a)(b))', ['outer','first','second']) AS res;
+----
+[{'outer': ab, 'first': a, 'second': b}]
+
+query I
+SELECT regexp_extract_all('ab aab b', '(a*)(b)', ['as','b']) AS res;
+----
+[{'as': a, 'b': b}, {'as': aa, 'b': b}, {'as': '', 'b': b}]
+
+query I
+SELECT regexp_extract_all('щ', '(щ|ц)?', ['ch']) AS res;
+----
+[{'ch': щ}, {'ch': NULL}]
+
+query I
+SELECT regexp_extract_all('hi', '(h|i)?(Z)?', ['ch','z']) AS res;
+----
+[{'ch': h, 'z': NULL}, {'ch': i, 'z': NULL}, {'ch': NULL, 'z': NULL}]
+
+query I
+SELECT regexp_extract_all('foobarbaz', '((BA)([RZ]))', ['whole','ba','letter'], 'i') AS res;
+----
+[{'whole': bar, 'ba': ba, 'letter': r}, {'whole': baz, 'ba': ba, 'letter': z}]
+
+# ---------------------------------------------------------------------------
+# Multi-row input scenarios
+# ---------------------------------------------------------------------------
+
+# Multiple rows, same constant pattern, two groups
+query II
+WITH t(s) AS (VALUES ('x1 y2'), ('a3'), ('no_digits'))
+SELECT s, regexp_extract_all(s, '(\w)(\d)', ['c','d']) AS res FROM t;
+----
+x1 y2	[{'c': x, 'd': 1}, {'c': y, 'd': 2}]
+a3	[{'c': a, 'd': 3}]
+no_digits	[]
+
+# Multiple rows with optional group producing NULL vs present
+query II
+WITH t(s) AS (VALUES ('a1 b2'), ('c3'), ('z'))
+SELECT s, regexp_extract_all(s, '(\w)(\d)?', ['l','d']) AS res FROM t;
+----
+a1 b2	[{'l': a, 'd': 1}, {'l': b, 'd': 2}]
+c3	[{'l': c, 'd': 3}]
+z	[{'l': z, 'd': NULL}]
+
+# Multiple rows with trailing empty overall match generation
+query II
+WITH t(s) AS (VALUES ('hi'), ('h'), (''))
+SELECT s, regexp_extract_all(s, '(h|i)?', ['ch']) AS res FROM t;
+----
+hi	[{'ch': h}, {'ch': i}, {'ch': NULL}]
+h	[{'ch': h}, {'ch': NULL}]
+(empty)	[{'ch': NULL}]
+
+# ---------------------------------------------------------------------------
+# Migrated tests from regex_extract_all.test (constant patterns with captures)
+# ---------------------------------------------------------------------------
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)', ['g1']) AS res;
+----
+[{'g1': 1}, {'g1': 2}, {'g1': 14}]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)([a-z]+)', ['g1','g2']) AS res;
+----
+[{'g1': 1, 'g2': a}, {'g1': 2, 'g2': b}, {'g1': 14, 'g2': m}]
+
+query I
+SELECT REGEXP_EXTRACT_ALL('test', '(.)', ['a'])
+----
+[{'a': t}, {'a': e}, {'a': s}, {'a': t}]
+
+query I
+SELECT regexp_extract_all('a 2b 14m', '(\d+)?([a-z]+)', ['g1','g2']) AS res;
+----
+[{'g1': NULL, 'g2': a}, {'g1': 2, 'g2': b}, {'g1': 14, 'g2': m}]
+
+
+query I
+SELECT regexp_extract_all('AbCdE', '([[:lower:]]+)C([[:lower:]]+)', ['g1','g2']) AS res;
+----
+[{'g1': b, 'g2': d}]
+
+query I
+SELECT regexp_extract_all('AbCdEfCg', '([[:lower:]]+)C([[:lower:]]+)', ['g1','g2']) AS res;
+----
+[{'g1': b, 'g2': d}, {'g1': f, 'g2': g}]
+
+query I
+SELECT regexp_extract_all('abc=111, def=222, ghi=333', '("[^"]+"|\w+)=("[^"]+"|\w+)', ['key','val']) AS res;
+----
+[{'key': abc, 'val': 111}, {'key': def, 'val': 222}, {'key': ghi, 'val': 333}]
+
+query I
+SELECT regexp_extract_all('abcd', 'a(bc)*', ['g1']) AS res;
+----
+[{'g1': bc}]
+
+query I
+SELECT regexp_extract_all('abc', '((a))', ['outer','inner']) AS res;
+----
+[{'outer': a, 'inner': a}]
+
+query I
+SELECT regexp_extract_all('abc', '(a)(b)', ['g1','g2']) AS res;
+----
+[{'g1': a, 'g2': b}]
+
+query I
+SELECT regexp_extract_all('aabb', '^((aa)(bb))$', ['all','p1','p2']) AS res;
+----
+[{'all': aabb, 'p1': aa, 'p2': bb}]
+
+query I
+SELECT regexp_extract_all('ababcd', '(ab){2}cd', ['g1']) AS res;
+----
+[{'g1': ab}]
+
+query I
+SELECT regexp_extract_all('ababcd', '(ab){1,}cd', ['g1']) AS res;
+----
+[{'g1': ab}]
+
+query I
+SELECT regexp_extract_all('ababcd', '(ab){1,2}cd', ['g1']) AS res;
+----
+[{'g1': ab}]
+
+query I
+SELECT regexp_extract_all('abd', 'a(bc)?d', ['g1']) AS res;
+----
+[]
+
+query I
+SELECT regexp_extract_all('ad', 'a(bc)?d', ['g1']) AS res;
+----
+[{'g1': NULL}]
+
+query I
+SELECT regexp_extract_all('abcd', 'a(bc)*d', ['g1']) AS res;
+----
+[{'g1': bc}]
+
+query I
+SELECT regexp_extract_all('foobarbaz', '(BA[R|Z])', ['g1'], 'i') AS res;
+----
+[{'g1': bar}, {'g1': baz}]
+
+query I
+SELECT regexp_extract_all('abcd', '(ab){0,2}cd', ['g1']) AS res;
+----
+[{'g1': ab}]
+
+query I
+SELECT regexp_extract_all('abbbcd', '(ab){0,2}cd', ['g1']) AS res;
+----
+[{'g1': NULL}]
+
+query I
+SELECT regexp_extract_all('acdd', '(ab){0,2}cd', ['g1']) AS res;
+----
+[{'g1': NULL}]
+
+query I
+SELECT regexp_extract_all('abbb', '^a*(b)', ['g1']) AS res;
+----
+[{'g1': b}]
+
+query I
+SELECT regexp_extract_all('abcdef', 'a(.c.*)f', ['mid']) AS res;
+----
+[{'mid': bcde}]
+
+query I
+SELECT regexp_extract_all('щцф', 'щ(.).', ['g1']) AS res;
+----
+[{'g1': ц}]
+
+query I
+SELECT regexp_extract_all('щцф', 'щ(..)..', ['g1']) AS res;
+----
+[]
+
+query I
+SELECT regexp_extract_all('abcdef', '(bcde)', ['seg']) AS res;
+----
+[{'seg': bcde}]
+
+query I
+SELECT regexp_extract_all('aaaaaaaa', '(a)(a)', ['g1','g2']) AS res;
+----
+[{'g1': a, 'g2': a}, {'g1': a, 'g2': a}, {'g1': a, 'g2': a}, {'g1': a, 'g2': a}]
+
+query I
+SELECT regexp_extract_all('aaaaaaaa', '(a)(a)(a)', ['g1','g2','g3']) AS res;
+----
+[{'g1': a, 'g2': a, 'g3': a}, {'g1': a, 'g2': a, 'g3': a}]
+
+query I
+SELECT regexp_extract_all('aba aba aa', '(a)(b)?(a)', ['g1','g2','g3']) AS res;
+----
+[{'g1': a, 'g2': b, 'g3': a}, {'g1': a, 'g2': b, 'g3': a}, {'g1': a, 'g2': NULL, 'g3': a}]
+
+query I
+SELECT regexp_extract_all('aBa aAA', '(a)(B)?(a)', ['g1','g2','g3'], 'i') AS res;
+----
+[{'g1': a, 'g2': B, 'g3': a}, {'g1': a, 'g2': NULL, 'g3': A}]
+
+query I
+SELECT regexp_extract_all('aaaaaaaaaaa', '(a)(a)(a)(a)(a)(a)(a)', ['g1','g2','g3','g4','g5','g6','g7']) AS res;
+----
+[{'g1': a, 'g2': a, 'g3': a, 'g4': a, 'g5': a, 'g6': a, 'g7': a}]
+
+query I
+SELECT regexp_extract_all('', '()', ['empty']) AS res;
+----
+[{'empty': ''}]
+
+# ---------------------------------------------------------------------------
+# Group list binding errors
+# ---------------------------------------------------------------------------
+
+statement error
+WITH params(name_list) AS (SELECT ['g1','g2'])
+SELECT regexp_extract_all('abc', '(a)(b)', name_list) FROM params;
+----
+Group specification field must be a constant list
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', NULL::VARCHAR[]);
+----
+Group specification must be a non-NULL LIST
+
+statement error
+SELECT regexp_extract_all('abc', '(a)(b)', []::VARCHAR[]);
+----
+Group name list must be non-empty
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['g1', NULL::VARCHAR]);
+----
+NULL group name in regexp_extract_all
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['dup','dup']);
+----
+Duplicate group name 'dup' in regexp_extract_all
+
+statement error
+SELECT regexp_extract_all('abc', '(', ['g1']);
+----
+Pattern failed to parse
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['g1','g2']);
+----
+Not enough capturing groups

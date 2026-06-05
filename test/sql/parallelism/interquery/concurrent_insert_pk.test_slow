@@ -1,0 +1,24 @@
+# name: test/sql/parallelism/interquery/concurrent_insert_pk.test_slow
+# description: Test concurrent inserts into primary key table
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+concurrentloop threadid 0 10
+
+loop x 0 1000
+
+statement maybe
+INSERT INTO integers VALUES (${x})
+----
+violat
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
+----
+1000	1000

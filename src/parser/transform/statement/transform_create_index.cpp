@@ -66,7 +66,12 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 			Value val;
 			if (def_elem->arg) {
-				val = TransformValue(*PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg))->value;
+				auto expr = TransformExpression(def_elem->arg);
+				if (expr->expression_class != ExpressionClass::CONSTANT) {
+					throw InvalidInputException("Create index option must be a constant value");
+				}
+				auto &const_expr = expr->Cast<ConstantExpression>();
+				val = const_expr.value;
 			} else {
 				val = Value::BOOLEAN(true);
 			}

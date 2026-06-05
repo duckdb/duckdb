@@ -54,6 +54,9 @@ restart
 statement ok
 SET extension_directory='__TEST_DIR__/extension_directory'
 
+statement ok
+SET extension_directories=[]
+
 statement error
 LOAD 'loadable_extension_demo';
 ----
@@ -75,9 +78,42 @@ select count(*) from glob('__TEST_DIR__/extension_directory/**/loadable_extensio
 # unload again
 restart
 
+# Ensure that using an array of extension directories works.
+statement ok
+SET extension_directory=''
+
+statement ok
+SET extension_directories=['__TEST_DIR__/extension_directory_a', '__TEST__DIR__/second_extension_directory_b']
+
+statement error
+LOAD 'loadable_extension_demo';
+----
+
+# can install after setting directory, even if the extension directory does not yet exist
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# can load now
+statement ok
+LOAD 'loadable_extension_demo';
+
+# Switching the order shouldn't make a difference
+statement ok
+SET extension_directories=['__TEST_DIR__/extension_directory_b', '__TEST__DIR__/second_extension_directory_a']
+
+statement ok
+LOAD 'loadable_extension_demo';
+
+
+# unload again
+restart
+
 
 statement ok
 SET extension_directory=''
+
+statement ok
+SET extension_directories=[]
 
 # we will use a nonstandard home directory, but we won't create it if it does not exist
 

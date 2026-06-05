@@ -102,7 +102,7 @@ CREATE TABLE tablename2 (
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename OWNED BY tablename2;
 ----
-Parser Error: Owned by value should be passed as most once
+Parser Error: Owned by value should be passed at most once
 
 statement ok
 ALTER SEQUENCE sequence1 OWNED BY tablename;

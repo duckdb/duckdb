@@ -9,7 +9,7 @@
     df = DataFrame(
         DBInterface.execute(
             con,
-            """SELECT * EXCLUDE(time, time_tz, fixed_int_array, fixed_varchar_array, fixed_nested_int_array,
+            """SELECT * EXCLUDE(time, time_ns, time_tz, fixed_int_array, fixed_varchar_array, fixed_nested_int_array,
             		fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list,
             		list_of_fixed_int_array, bignum)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time

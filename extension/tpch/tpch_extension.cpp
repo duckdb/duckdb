@@ -1,12 +1,12 @@
-#include "tpch_extension.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include "dbgen/dbgen.hpp"
+#include "tpch_extension.hpp"
 
 namespace duckdb {
 
@@ -24,9 +24,16 @@ struct DBGenFunctionData : public TableFunctionData {
 	int step = -1;
 };
 
-static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
+                                          vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DBGenFunctionData>();
+
+	// Set the current catalog and schema.
+	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	result->catalog = current_catalog;
+	result->schema = current_schema;
+
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");
@@ -53,7 +60,10 @@ static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableF
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
-		properties.RegisterDBModify(catalog, context);
+		DatabaseModificationType modification;
+		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
+		modification |= DatabaseModificationType::INSERT_DATA;
+		properties.RegisterDBModify(catalog, context, modification);
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");

@@ -1,6 +1,7 @@
 {
     "group": "pending_result_interface",
     "deprecated": false,
+    "description": "Functions to interact with a pending result. First, prepare a pending result, and then execute it.",
     "entries": [
         {
             "name": "duckdb_pending_prepared",

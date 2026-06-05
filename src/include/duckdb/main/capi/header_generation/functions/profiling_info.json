@@ -1,6 +1,7 @@
 {
     "group": "profiling_info",
     "deprecated": false,
+    "description": "Functions to access the post-execution profiling information of a query. Only available, if profiling is enabled.",
     "entries": [
         {
             "name": "duckdb_get_profiling_info",

@@ -1,0 +1,95 @@
+# name: test/sql/join/semianti/test_semianti_join_filter_pushdown.test
+# description: Test SEMI and ANTI JOIN filter pushdown correctness
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (id INTEGER, val INTEGER, amount INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES (1, 1, 50), (2, 1, 75), (3, 2, 60), (4, 2, 90), (5, 3, 100);
+
+statement ok
+CREATE TABLE right_table (id INTEGER, category INTEGER, budget INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES (1, 1, 1000), (2, 2, 2000), (3, 1, 1500);
+
+statement ok
+CREATE TABLE empty_table (id INTEGER, category INTEGER);
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON l.id = r.id AND l.val > 1 AND r.category = 1;
+----
+3	2	60
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON l.id = r.id AND r.category = 1;
+----
+1	1	50
+3	2	60
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON l.id = r.id AND l.val > 1;
+----
+3	2	60
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN empty_table e ON l.id = e.id;
+----
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON l.id = r.id AND l.val > 1 AND r.category = 1;
+----
+1	1	50
+2	1	75
+4	2	90
+5	3	100
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON l.id = r.id AND r.category = 1;
+----
+2	1	75
+4	2	90
+5	3	100
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON l.id = r.id AND l.val = 1;
+----
+3	2	60
+4	2	90
+5	3	100
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN empty_table e ON l.id = e.id;
+----
+1	1	50
+2	1	75
+3	2	60
+4	2	90
+5	3	100
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+2	1	75
+3	2	60
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+1	1	50
+4	2	90
+5	3	100

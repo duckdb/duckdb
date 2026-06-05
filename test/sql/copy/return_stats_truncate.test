@@ -8,7 +8,7 @@ require parquet
 query IIIIII
 COPY (SELECT repeat('\xFF', 300)::BLOB as blob) TO '__TEST_DIR__/test_truncate_blob.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, null_count=0}}	NULL
+<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, null_count=0, num_values=1}}	NULL
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_blob.parquet');
@@ -19,7 +19,7 @@ NULL	NULL
 query IIIIII
 COPY (SELECT ('\xFE' || repeat('\xFF', 300))::BLOB as blob) TO '__TEST_DIR__/test_truncate_blob.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, max=FF, min=FEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, null_count=0}}	NULL
+<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, max=FF, min=FEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, null_count=0, num_values=1}}	NULL
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_blob.parquet');
@@ -30,7 +30,7 @@ false	false
 query IIIIII
 COPY (SELECT repeat('🦆', 300) as str) TO '__TEST_DIR__/test_truncate_string.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, null_count=0}}	NULL
+<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, null_count=0, num_values=1}}	NULL
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_string.parquet');
@@ -41,7 +41,7 @@ NULL	NULL
 query IIIIII
 COPY (SELECT 'B' || repeat('🦆', 300) as str) TO '__TEST_DIR__/test_truncate_string.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, max=C, min=B🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆, null_count=0}}	NULL
+<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, max=C, min=B🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆, null_count=0, num_values=1}}	NULL
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_string.parquet');

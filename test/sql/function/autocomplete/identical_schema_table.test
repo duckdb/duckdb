@@ -11,6 +11,6 @@ statement ok
 CREATE TABLE my_catalog_entry(i INT);
 
 query II
-FROM sql_auto_complete('FROM my_c') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FROM my_c') LIMIT 1;
 ----
 my_catalog_entry	5

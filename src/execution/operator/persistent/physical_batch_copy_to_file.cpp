@@ -644,8 +644,8 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                  OperatorSourceInput &input) const {
+SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                          OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	switch (return_type) {

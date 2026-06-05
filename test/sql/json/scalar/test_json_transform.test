@@ -371,17 +371,17 @@ select json_transform_strict('42', '"DECIMAL(2,1)"')
 statement error
 select json_transform('42', '"DECIMAL(39)"')
 ----
-<REGEX>:.*Invalid Input Error.*can not be converted to a DuckDB Type.*
+Binder Error: DECIMAL type width must be between 1 and 38
 
 statement error
 select json_transform('42', '"DECIMAL(2,4)"')
 ----
-<REGEX>:.*Invalid Input Error.*can not be converted to a DuckDB Type.*
+Binder Error: DECIMAL type scale cannot be greater than width
 
 statement error
 select json_transform('42', '"DECIMAL(5,1,1)"')
 ----
-<REGEX>:.*Invalid Input Error.*can not be converted to a DuckDB Type.*
+Binder Error: DECIMAL type can take at most two type modifiers, width and scale
 
 # uuid
 query T

@@ -186,32 +186,40 @@ NULL	NULL	7
 statement error
 SELECT GROUPING();
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 SELECT GROUPING() FROM students;
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 SELECT GROUPING(NULL) FROM students;
 ----
+<REGEX>:.*Binder Error.*statement cannot be used.*
 
 statement error
 SELECT GROUPING(course) FROM students;
 ----
+<REGEX>:.*Binder Error.*statement cannot be used.*
 
 statement error
 SELECT GROUPING(course) FROM students GROUP BY ();
 ----
+<REGEX>:.*Binder Error.*statement cannot be used.*
 
 statement error
 SELECT GROUPING(type) FROM students GROUP BY course;
 ----
+<REGEX>:.*Binder Error.*must be a grouping column.*
 
 statement error
 SELECT GROUPING(course) FROM students WHERE GROUPING(course)=0 GROUP BY course;
 ----
+<REGEX>:.*Binder Error.*not supported.*
 
 # we have a limit on how many children the grouping clause can contain
 statement error
 SELECT GROUPING(course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
 ----
+<REGEX>:.*Binder Error.*statement cannot have more.*

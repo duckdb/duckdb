@@ -6,11 +6,12 @@
 statement error
 CREATE TABLE tbl(a UNION(b INT, b INT));
 ----
+Binder Error: Duplicate UNION type member name "b"
 
 statement error
 CREATE TABLE tbl(a UNION(b INT, B INT));
 ----
-
+Binder Error: Duplicate UNION type member name "B"
 
 # allow members with same type
 statement ok

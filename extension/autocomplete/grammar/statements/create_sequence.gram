@@ -1,4 +1,4 @@
-CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedName SequenceOption*
+CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
 SequenceOption <-
 	SeqSetCycle /
@@ -8,13 +8,13 @@ SequenceOption <-
 	SeqStartWith /
 	SeqOwnedBy
 
-SeqSetCycle <- 'NO'i? 'CYCLE'i
-SeqSetIncrement <- 'INCREMENT'i 'BY'i? Expression
+SeqSetCycle <- 'NO'? 'CYCLE'
+SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
 SeqSetMinMax <- SeqMinOrMax Expression
-SeqNoMinMax <- 'NO'i SeqMinOrMax
-SeqStartWith <- 'START'i 'WITH'i? Expression
-SeqOwnedBy <- 'OWNED'i 'BY'i QualifiedName
+SeqNoMinMax <- 'NO' SeqMinOrMax
+SeqStartWith <- 'START' 'WITH'? Expression
+SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 
-
-SeqMinOrMax <- 'MINVALUE'i / 'MAXVALUE'i
-
+SeqMinOrMax <- MinValue / MaxValue
+MinValue <- 'MINVALUE'
+MaxValue <- 'MAXVALUE'

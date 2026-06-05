@@ -1,0 +1,42 @@
+# name: test/sql/extensions/attach_type_alias_conflict.test
+# description: ATTACH OR REPLACE for the same database under different alias forms must not silently replace the in-flight catalog
+# group: [extensions]
+
+require sqlite_scanner
+
+statement ok
+SET autoinstall_known_extensions=true;
+
+statement ok
+SET autoload_known_extensions=true;
+
+statement ok
+ATTACH '__TEST_DIR__/foo.db' AS d (TYPE sqlite);
+
+statement ok
+CREATE OR REPLACE TABLE d.t(x INTEGER);
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO d.t VALUES (1);
+
+query I
+SELECT count(*) FROM d.t;
+----
+1
+
+# 'sqlite3' is just an alias of 'sqlite' (both resolve to sqlite_scanner).
+# This ATTACH refers to the SAME database; it must not replace the
+# in-flight catalog out from under the open transaction.
+statement ok
+ATTACH OR REPLACE '__TEST_DIR__/foo.db' AS d (TYPE sqlite3);
+
+query I
+SELECT count(*) FROM d.t;
+----
+1
+
+statement ok
+ROLLBACK;

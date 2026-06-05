@@ -6,6 +6,11 @@ require 64bit
 
 require vector_size 2048
 
+require ram 16gb
+
+statement ok
+set temp_directory=null;
+
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0

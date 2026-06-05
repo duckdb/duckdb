@@ -20,6 +20,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
@@ -36,7 +37,6 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
-
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -208,6 +208,8 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+	//! Bloom filter pushes deferred until HashJoinFinalizeEvent::FinishEvent, once the filter is fully populated
+	vector<pair<reference<const JoinFilterPushdownFilter>, idx_t>> deferred_bloom_filters;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -288,7 +290,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			auto count_fun = CountFunctionBase::GetFunction();
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0U));
+			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
@@ -396,7 +398,6 @@ static bool KeysAreSkewed(const HashJoinGlobalSinkState &sink) {
 //! If we have only one thread, always finalize single-threaded. Otherwise, we finalize in parallel if we
 //! have more than 1M rows or if we want to verify parallelism.
 static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bool consider_skew) {
-
 	// if only one thread, finalize single-threaded
 	const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 	if (num_threads == 1) {
@@ -583,6 +584,9 @@ public:
 	void FinishEvent() override {
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
+		for (auto &entry : sink.deferred_bloom_filters) {
+			sink.op.filter_pushdown->PushBloomFilter(entry.first, *sink.hash_table, sink.op, entry.second);
+		}
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
@@ -707,31 +711,34 @@ public:
 	}
 };
 
+bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                            const ExpressionType &cmp) const {
+	auto dynamic_or_filter_threshold = Settings::Get<DynamicOrFilterThresholdSetting>(context);
+	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
+}
+
 void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
-	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
 	auto build_idx = join_condition[filter_idx];
-	auto &data_collection = ht.GetDataCollection();
-
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-
-	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
-	// Go through all the blocks and fill the keys addresses
-	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
-
-	// Scan the build keys in the hash table
-	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], key_count);
-	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
-	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
+	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
+	if (key_count == 0) {
+		return;
+	}
 
 	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
 	value_set_t unique_ht_values;
 	for (idx_t k = 0; k < key_count; k++) {
-		unique_ht_values.insert(build_vector.GetValue(k));
+		// Cast to storage type, only insert if it succeeds
+		auto value = build_vector.GetValue(k);
+		if (info.columns[filter_idx].storage_type.IsValid() &&
+		    !value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+			return; // it's all or nothing sadly
+		}
+		unique_ht_values.insert(value);
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
@@ -749,12 +756,49 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// the IN-list is expensive to execute otherwise
 	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
-	return;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                       JoinFilterGlobalState &gstate,
-                                                       const PhysicalComparisonJoin &op) const {
+bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                               const bool is_perfect_hashtable) const {
+	if (!ht) {
+		return false;
+	}
+
+	// with a perfect hashtable we expect good min/max pruning, so we don't want the bloom filter
+	if (is_perfect_hashtable) {
+		return false;
+	}
+
+	// bf is only supported for single key joins with equality condition as the Filter API only allows
+	// single-column filters so far
+	const bool can_use_bf = ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
+
+	// building the bloom filter is costly on the build to make probing faster, so only use it if there are
+	// more probing tuples than build tuples
+	const double build_to_probe_ratio =
+	    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
+	const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
+
+	// only use bloom filter if there is no in-filter already
+	return can_use_bf && build_side_has_filter && probe_larger_then_build;
+}
+
+void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+                                             const PhysicalOperator &op, idx_t filter_col_idx) const {
+	// If the nulls are equal, we let nulls pass. If not, we filter them
+	auto filters_null_values = !ht.NullValuesAreEqual(0);
+	const auto key_name = ht.conditions[0].right->ToString();
+	const auto key_type = ht.conditions[0].left->return_type;
+	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
+	ht.SetBuildBloomFilter(true);
+
+	auto opt_bf_filter = make_uniq<SelectivityOptionalFilter>(
+	    std::move(bf_filter), SelectivityOptionalFilter::BF_THRESHOLD, SelectivityOptionalFilter::BF_CHECK_N);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_bf_filter));
+}
+
+unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -764,22 +808,39 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
 
 	gstate.global_aggregate_state->Finalize(*final_min_max);
+	return final_min_max;
+}
 
+unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(
+    ClientContext &context, optional_ptr<JoinHashTable> ht, const PhysicalComparisonJoin &op,
+    unique_ptr<DataChunk> final_min_max, const bool is_perfect_hashtable,
+    optional_ptr<vector<pair<reference<const JoinFilterPushdownFilter>, idx_t>>> deferred_bloom_filters) const {
 	if (probe_info.empty()) {
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
 
-	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
-			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
+			const auto &pushdown_column = info.columns[filter_idx];
+			auto &filter_col_idx = pushdown_column.probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
 
 			auto min_val = final_min_max->data[min_idx].GetValue(0);
 			auto max_val = final_min_max->data[max_idx].GetValue(0);
+
+			// Cast to storage type, skip if fails
+			if (pushdown_column.storage_type.IsValid()) {
+				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+			}
+
 			if (min_val.IsNull() || max_val.IsNull()) {
 				// min/max is NULL
 				// this can happen in case all values in the RHS column are NULL, but they are still pushed into the
@@ -788,11 +849,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 			}
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
-			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
-			    cmp == ExpressionType::COMPARE_EQUAL) {
+			if (ht && CanUseInFilter(context, ht, cmp)) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
-
 			if (Value::NotDistinctFrom(min_val, max_val)) {
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
@@ -800,16 +859,20 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
 			} else {
-				// min != max - generate a range filter
+				// min != max - generate a range filter or bloom filter + optional range filter
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
+
 				switch (cmp) {
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_GREATERTHAN:
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					auto optional_greater_equals = make_uniq<SelectivityOptionalFilter>(
+					    std::move(greater_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
+					    SelectivityOptionalFilter::MIN_MAX_CHECK_N);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					break;
 				}
 				default:
@@ -821,17 +884,37 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					auto optional_less_equals = make_uniq<SelectivityOptionalFilter>(
+					    std::move(less_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
+					    SelectivityOptionalFilter::MIN_MAX_CHECK_N);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					break;
 				}
 				default:
 					break;
 				}
+
+				auto condition_type = op.conditions[join_condition[filter_idx]].left->return_type;
+				bool has_cast = condition_type != pushdown_column.storage_type;
+				if (!has_cast && ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
+					if (deferred_bloom_filters) {
+						// Defer the push until HashJoinFinalizeEvent::FinishEvent so the scan
+						// only sees the filter once the bloom filter is fully populated.
+						ht->SetBuildBloomFilter(true);
+						deferred_bloom_filters->emplace_back(info, filter_col_idx);
+					}
+				}
 			}
 		}
 	}
-
 	return final_min_max;
+}
+
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                                       JoinFilterGlobalState &gstate,
+                                                       const PhysicalComparisonJoin &op) const {
+	auto final_min_max = FinalizeMinMax(gstate);
+	return FinalizeFilters(context, ht, op, std::move(final_min_max), false, nullptr);
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -906,10 +989,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	Value min;
 	Value max;
+	unique_ptr<DataChunk> filter_min_max = nullptr;
+
 	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
-		auto final_min_max = filter_pushdown->Finalize(context, &ht, *sink.global_filter_state, *this);
-		min = final_min_max->data[0].GetValue(0);
-		max = final_min_max->data[1].GetValue(0);
+		filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
+		min = filter_min_max->data[0].GetValue(0);
+		max = filter_min_max->data[1].GetValue(0);
 	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {
 		min = Value::MinimumValue(conditions[0].right->return_type);
 		max = Value::MaximumValue(conditions[0].right->return_type);
@@ -922,6 +1007,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		auto key_type = ht.equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
 	}
+
+	if (filter_min_max) {
+		filter_pushdown->FinalizeFilters(context, &ht, *this, std::move(filter_min_max), use_perfect_hash,
+		                                 &sink.deferred_bloom_filters);
+	}
+
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
@@ -1094,7 +1185,7 @@ public:
 
 	//! For probe synchronization
 	atomic<idx_t> probe_chunk_count;
-	idx_t probe_chunk_done;
+	atomic<idx_t> probe_chunk_done;
 
 	//! To determine the number of threads
 	idx_t probe_count;
@@ -1165,7 +1256,8 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
     : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
       probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
-      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
+      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120), full_outer_chunk_count(0),
+      full_outer_chunk_done(0) {
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
@@ -1445,8 +1537,8 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	}
 }
 
-SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk,
-                                           OperatorSourceInput &input) const {
+SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto &gstate = input.global_state.Cast<HashJoinGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSourceState>();

@@ -10,9 +10,10 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 	JoinType join_type = JoinType::INVALID;
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_EXCEPT);
+	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_EXCEPT);
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		join_type = op->Cast<LogicalComparisonJoin>().join_type;
 		break;
@@ -40,9 +41,18 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 		}
 		break;
 	}
-	// TODO: For ANTI joins, if the right child is empty, you can replace the whole join with
-	//  the left child
-	case JoinType::ANTI:
+	// For ANTI joins, if the right child is empty, the whole join collapses to the left child
+	case JoinType::ANTI: {
+		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT &&
+		    op->type != LogicalOperatorType::LOGICAL_EXCEPT) {
+			op = std::move(op->children[0]);
+			break;
+		}
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+		}
+		break;
+	}
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT: {
@@ -69,7 +79,6 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		for (auto &child : op->children) {
 			if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
@@ -90,6 +99,7 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		op = PullUpEmptyJoinChildren(std::move(op));
 		break;

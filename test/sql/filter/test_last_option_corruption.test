@@ -1,0 +1,15 @@
+# name: test/sql/filter/test_last_option_corruption.test
+# description: Test that extension options don't collide when loaded in specific order
+# group: [filter]
+
+require icu
+
+restart
+
+# parquet registers options in overlapping slot(s)
+require parquet
+
+query I
+SELECT current_setting('binary_as_string')::BOOLEAN;
+----
+false

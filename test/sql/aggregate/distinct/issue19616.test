@@ -1,0 +1,37 @@
+# name: test/sql/aggregate/distinct/issue19616.test
+# description: Issue #19616: Missing setting vector_type produces incorrect result
+# group: [distinct]
+
+statement ok
+CREATE TABLE test (
+	col1 int,
+	col2 int,
+	col3 int
+);
+
+statement ok
+INSERT INTO test
+VALUES (22, 6, 8),
+	(28, 57, 45),
+	(82, 44, 71);
+
+statement ok
+SET threads = 4;
+
+loop i 0 10
+
+query I
+SELECT *
+FROM (
+	SELECT DISTINCT col2
+	FROM test
+	GROUP BY ROLLUP (col1, col2, col3)
+)
+ORDER BY col2;
+----
+6
+44
+57
+NULL
+
+endloop

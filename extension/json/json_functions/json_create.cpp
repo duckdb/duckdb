@@ -235,7 +235,7 @@ struct CreateJSONValue<uhugeint_t, string_t> {
 };
 
 template <class T>
-inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const T &value) {
+static inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const T &value) {
 	return nullptr; // This function should only be called with string_t as template
 }
 
@@ -473,7 +473,6 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
-
 	value_v.Flatten(count);
 
 	// Initialize array for the nested values
@@ -579,7 +578,8 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::UUID: {
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::GEOMETRY: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
 		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
@@ -606,8 +606,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
-	case LogicalTypeId::USER:
 	case LogicalTypeId::TEMPLATE:
+	case LogicalTypeId::UNBOUND:
+	case LogicalTypeId::TYPE:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
@@ -728,7 +729,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
 
@@ -736,7 +737,7 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
 
@@ -788,7 +789,7 @@ static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParam
 	return true;
 }
 
-BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+static BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto cast_data = make_uniq<NestedToJSONCastData>();
 	GetJSONType(cast_data->const_struct_names, source);
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);

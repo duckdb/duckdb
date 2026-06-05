@@ -29,3 +29,4 @@ ALTER TABLE data ALTER COLUMN x DROP DEFAULT;
 statement error
 ALTER TABLE data ALTER COLUMN j DROP DEFAULT;
 ----
+Binder Error: Table "data" does not have a column with name "j"

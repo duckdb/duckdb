@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_writer.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ public:
 	virtual bool MaxIsExact();
 
 	virtual bool HasGeoStats();
-	virtual optional_ptr<GeometryStats> GetGeoStats();
+	virtual optional_ptr<GeometryStatsData> GetGeoStats();
 	virtual void WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats);
 
 public:
@@ -227,11 +227,16 @@ public:
 	}
 };
 
+struct ParquetUUIDTargetType {
+	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
+	data_t bytes[PARQUET_UUID_SIZE];
+};
+
 class UUIDStatisticsState : public ColumnWriterStatistics {
 public:
 	bool has_stats = false;
-	data_t min[16] = {0};
-	data_t max[16] = {0};
+	ParquetUUIDTargetType min;
+	ParquetUUIDTargetType max;
 
 public:
 	bool HasStats() override {
@@ -245,20 +250,21 @@ public:
 		return GetMaxValue();
 	}
 	string GetMinValue() override {
-		return HasStats() ? string(char_ptr_cast(min), 16) : string();
+		return HasStats() ? string(char_ptr_cast(min.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE) : string();
 	}
 	string GetMaxValue() override {
-		return HasStats() ? string(char_ptr_cast(max), 16) : string();
+		return HasStats() ? string(char_ptr_cast(max.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE) : string();
 	}
 };
 
 class GeoStatisticsState final : public ColumnWriterStatistics {
 public:
 	explicit GeoStatisticsState() : has_stats(false) {
+		geo_stats.SetEmpty();
 	}
 
 	bool has_stats;
-	GeometryStats geo_stats;
+	GeometryStatsData geo_stats;
 
 public:
 	void Update(const string_t &val) {
@@ -268,37 +274,36 @@ public:
 	bool HasGeoStats() override {
 		return has_stats;
 	}
-	optional_ptr<GeometryStats> GetGeoStats() override {
+	optional_ptr<GeometryStatsData> GetGeoStats() override {
 		return geo_stats;
 	}
 	void WriteGeoStats(duckdb_parquet::GeospatialStatistics &stats) override {
 		const auto &types = geo_stats.types;
-		const auto &bbox = geo_stats.bbox;
+		const auto &bbox = geo_stats.extent;
 
-		if (bbox.IsSet()) {
-
+		if (bbox.HasXY()) {
 			stats.__isset.bbox = true;
-			stats.bbox.xmin = bbox.xmin;
-			stats.bbox.xmax = bbox.xmax;
-			stats.bbox.ymin = bbox.ymin;
-			stats.bbox.ymax = bbox.ymax;
+			stats.bbox.xmin = bbox.x_min;
+			stats.bbox.xmax = bbox.x_max;
+			stats.bbox.ymin = bbox.y_min;
+			stats.bbox.ymax = bbox.y_max;
 
 			if (bbox.HasZ()) {
 				stats.bbox.__isset.zmin = true;
 				stats.bbox.__isset.zmax = true;
-				stats.bbox.zmin = bbox.zmin;
-				stats.bbox.zmax = bbox.zmax;
+				stats.bbox.zmin = bbox.z_min;
+				stats.bbox.zmax = bbox.z_max;
 			}
 			if (bbox.HasM()) {
 				stats.bbox.__isset.mmin = true;
 				stats.bbox.__isset.mmax = true;
-				stats.bbox.mmin = bbox.mmin;
-				stats.bbox.mmax = bbox.mmax;
+				stats.bbox.mmin = bbox.m_min;
+				stats.bbox.mmax = bbox.m_max;
 			}
 		}
 
 		stats.__isset.geospatial_types = true;
-		stats.geospatial_types = types.ToList<int>();
+		stats.geospatial_types = types.ToWKBList();
 	}
 };
 

@@ -12,22 +12,26 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ALTER blabla SET TYPE VARCHAR
 ----
+Binder Error: Table "test" does not have a column with name "blabla"
 
 # expression error
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING blabla
 ----
+Binder Error: Table does not contain column blabla referenced
 
 # cannot use aggregates/window functions
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING SUM(i)
 ----
+Binder Error: aggregate functions are not allowed in alter statement
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()
 ----
+Binder Error: window functions are not allowed in alter statement
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING othertable.j
 ----
-
+Binder Error: Cannot extract field 'othertable' from expression "#0"

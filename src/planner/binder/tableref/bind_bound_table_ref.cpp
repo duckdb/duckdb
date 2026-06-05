@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-unique_ptr<BoundTableRef> Binder::Bind(BoundRefWrapper &ref) {
-	if (!ref.binder || !ref.bound_ref) {
+BoundStatement Binder::Bind(BoundRefWrapper &ref) {
+	if (!ref.binder || !ref.bound_ref.plan) {
 		throw InternalException("Rebinding bound ref that was already bound");
 	}
 	bind_context.AddContext(std::move(ref.binder->bind_context));

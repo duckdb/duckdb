@@ -6,6 +6,7 @@
 #include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -106,8 +107,12 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 					throw NotImplementedException("Only SELECT statements can be serialized to json!");
 				}
 				auto &select = statement->Cast<SelectStatement>();
-				auto json =
-				    JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty, info.skip_if_default);
+
+				auto options = make_uniq<SerializationOptions>();
+				options->serialization_compatibility =
+				    state.GetContext().db->config.options.serialization_compatibility;
+				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
+				                                      info.skip_if_default, *options);
 
 				yyjson_mut_arr_append(statements_arr, json);
 			}
@@ -210,6 +215,11 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 		if (!stmt->node) {
 			throw ParserException("Error parsing json: no select node found in json");
 		}
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(*stmt->node, [](unique_ptr<ParsedExpression> &child) {
+			if (!child) {
+				throw ParserException("Error parsing json: null expression found in json");
+			}
+		});
 		result.push_back(std::move(stmt));
 	}
 

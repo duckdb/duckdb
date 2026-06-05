@@ -1,0 +1,7 @@
+# name: test/sql/types/type/test_type_storage.test
+# group: [type]
+
+statement error
+CREATE TABLE T  (v TYPE);
+----
+Invalid Input Error: A table cannot be created with a 'TYPE' column

@@ -76,8 +76,11 @@ NULL
 10203040-5060-7080-0102-030405060708
 
 # all types function
+# geometry used to be part of an extension, so even though it was technically part of the old storage version
+# it was not actually stored in the database file, so exclude it for now.
+# If we ever bump the minimum storage version, this exclusion can be removed.
 query I nosort alltypes
-SELECT * FROM test_all_types();
+SELECT * EXCLUDE(geometry) FROM test_all_types();
 
 query I nosort alltypes
 SELECT * FROM all_types

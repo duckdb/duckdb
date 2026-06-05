@@ -1,0 +1,30 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_generated.test
+# description: Test read_duckdb with generated columns
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_generated.db' AS rd
+
+statement ok
+CREATE TABLE rd.tbl (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	non_generated INTEGER
+);
+
+statement ok
+INSERT INTO rd.tbl VALUES (5,4, 100);
+
+statement ok
+DETACH rd
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_generated.db')
+----
+total_profit
+
+query III
+SELECT non_generated + 42, price, amount_sold FROM read_duckdb('__TEST_DIR__/read_duckdb_generated.db')
+----
+142	5	4

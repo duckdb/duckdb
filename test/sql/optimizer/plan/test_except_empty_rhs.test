@@ -1,0 +1,25 @@
+# name: test/sql/optimizer/plan/test_except_empty_rhs.test
+# description: EXCEPT should keep its logical operator even when the RHS is empty
+# group: [plan]
+
+statement ok
+pragma explain_output='OPTIMIZED_ONLY'
+
+query I
+SELECT * FROM (SELECT 1) lhs
+EXCEPT
+SELECT * FROM (SELECT 1 WHERE 1=0) rhs
+----
+1
+
+query II
+EXPLAIN SELECT * FROM (SELECT 1) lhs
+EXCEPT
+SELECT * FROM (SELECT 1 WHERE 1=0) rhs
+----
+logical_opt	<REGEX>:.*EXCEPT.*
+
+query I
+SELECT * FROM (SELECT 42 EXCEPT SELECT 43) tbl(i) WHERE i = 42
+----
+42

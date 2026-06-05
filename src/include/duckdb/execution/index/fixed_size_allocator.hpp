@@ -30,7 +30,8 @@ public:
 
 public:
 	//! Construct a new fixed-size allocator
-	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
+	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager,
+	                   MemoryTag memory_tag = MemoryTag::ART_INDEX);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
@@ -73,6 +74,18 @@ public:
 		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
 		auto buffer_ptr = buffer_it->second->GetDeprecated(dirty);
 		return buffer_ptr + offset;
+	}
+
+	//! Has been loaded into a buffer-managed buffer from a persistent, file-backed block.
+	inline bool LoadedFromStorage(const IndexPointer ptr) const {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		if (buffer_it == buffers.end()) {
+			return false;
+		}
+
+		return buffer_it->second->InMemory();
 	}
 
 	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
@@ -152,6 +165,8 @@ public:
 	void VerifyBuffers();
 
 private:
+	//! Memory tag of memory that is allocated through the allocator
+	MemoryTag memory_tag;
 	//! Allocation size of one segment in a buffer
 	//! We only need this value to calculate bitmask_count, bitmask_offset, and
 	//! available_segments_per_buffer

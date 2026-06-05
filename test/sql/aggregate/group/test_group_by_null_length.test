@@ -1,0 +1,67 @@
+# name: test/sql/aggregate/group/test_group_by_null_length.test
+# description: Test LENGTH function with NULL in GROUP BY clause
+# group: [group]
+
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+# Test LENGTH(NULL) with GROUP BY NULL
+query I
+SELECT LENGTH(NULL) FROM t0 GROUP BY NULL;
+----
+NULL
+
+# Test LENGTH(NULL) with column in GROUP BY
+query II
+SELECT c0, LENGTH(NULL) FROM t0 GROUP BY c0;
+----
+1	NULL
+
+# Test multiple NULL expressions in SELECT with GROUP BY NULL
+query II
+SELECT NULL, LENGTH(NULL) FROM t0 GROUP BY NULL;
+----
+NULL	NULL
+
+# Test with multiple rows
+statement ok
+INSERT INTO t0(c0) VALUES (2), (3);
+
+query II
+SELECT c0, LENGTH(NULL) FROM t0 GROUP BY c0 ORDER BY c0;
+----
+1	NULL
+2	NULL
+3	NULL
+
+# Test NULL constants in GROUP BY
+query I
+SELECT NULL FROM t0 GROUP BY NULL;
+----
+NULL
+
+# Test string functions with NULL in GROUP BY
+query I
+SELECT UPPER(NULL) FROM t0 GROUP BY NULL;
+----
+NULL
+
+query I
+SELECT LOWER(NULL) FROM t0 GROUP BY NULL;
+----
+NULL
+
+# Test with explicit NULL type casting
+query I
+SELECT LENGTH(NULL::VARCHAR) FROM t0 GROUP BY NULL::VARCHAR;
+----
+NULL
+
+# Test function with NULL argument and NULL in GROUP BY
+query I
+SELECT LENGTH(NULL) + 0 FROM t0 GROUP BY NULL;
+----
+NULL

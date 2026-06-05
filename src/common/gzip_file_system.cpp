@@ -93,12 +93,24 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 	try {
 		MiniZStreamWrapper::Close();
-	} catch (...) { // NOLINT - cannot throw in exception
+	} catch (std::exception &ex) {
+		if (file && file->child_handle) {
+			// FIXME: Make any log context available here.
+			ErrorData data(ex);
+			try {
+				const auto logger = file->child_handle->logger;
+				if (logger) {
+					DUCKDB_LOG_ERROR(logger, "MiniZStreamWrapper::~MiniZStreamWrapper()\t\t" + data.Message())
+				}
+			} catch (...) { // NOLINT
+			}
+		}
+	} catch (...) { // NOLINT
 	}
 }
 
 void MiniZStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(mz_stream_ptr == nullptr);
 	this->file = &file;
 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
 	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
