@@ -115,12 +115,16 @@ idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 	throw InternalException("Fetch is not supported for row id columns");
 }
 
-void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                               row_t row_id, Vector &result, idx_t result_idx) {
+void RowIdColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                                const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                idx_t result_offset) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetDataMutable<row_t>(result);
 	auto row_start = state.row_group->GetRowStart();
-	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
+	const sel_t *sel_data = sel.data();
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		data[result_offset + idx] = UnsafeNumericCast<row_t>(row_start + offsets[sel_data ? sel_data[idx] : idx]);
+	}
 }
 
 void RowIdColumnData::Skip(ColumnScanState &state, idx_t count) {

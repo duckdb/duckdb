@@ -167,10 +167,7 @@ public:
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
-	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-	                      row_t row_id, Vector &result, idx_t result_idx);
-	//! Bulk variant of FetchRow.
+	//! Fetch a batch of row offsets and append them to the vector
 	virtual void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
 	                       const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
 	                       idx_t result_offset);

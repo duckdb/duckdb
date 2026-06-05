@@ -681,29 +681,10 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
-void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                          row_t row_id, Vector &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
-		throw InternalException("ColumnData::FetchRow - row_id out of range");
-	}
-	auto segment = data.GetSegment(UnsafeNumericCast<idx_t>(row_id));
-
-	// now perform the fetch within the segment
-	auto index_in_segment = row_id - UnsafeNumericCast<row_t>(segment->GetRowStart());
-	segment->GetNode().FetchRow(state, index_in_segment, result, result_idx);
-	// merge any updates made to this row
-
-	FetchUpdateRow(transaction, row_id, result, result_idx);
-}
-
 void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                            const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
                            idx_t result_offset) {
-	// Default safe fallback: per-row FetchRow.
-	for (idx_t i = 0; i < fetch_count; i++) {
-		const idx_t offset = offsets[sel.get_index(i)];
-		FetchRow(transaction, state, storage_index, NumericCast<row_t>(offset), result, result_offset + i);
-	}
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
 }
 
 void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
