@@ -109,7 +109,10 @@ explain SELECT COUNT(*) FROM s.misc_tbl WHERE 'b' = ANY(SELECT w FROM s.misc_str
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
-# ---- LIKE is collation-sensitive in MySQL ----
+# ---- LIKE is pushed down: the binary collation on the pattern literal makes the match
+# ---- byte-wise (case-sensitive), and the empty ESCAPE clause disables MySQL's default
+# ---- backslash escape character
+# 'b' must not match 'B' (MySQL's default collation would match case-insensitively)
 query I
 SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
 ----
@@ -118,7 +121,7 @@ SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
 query II
 explain SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
 ----
-physical_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 # ---- VALUES lists in the FROM clause require ROW(...) syntax in MySQL ----
 query I

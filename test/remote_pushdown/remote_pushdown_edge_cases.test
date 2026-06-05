@@ -1,0 +1,301 @@
+# name: test/remote_pushdown/remote_pushdown_edge_cases.test
+# description: Edge cases found by probing MySQL vs DuckDB - domain errors, alias resolution,
+#              column ordering, infinite timestamps, literal cast validation, LIKE
+# group: [sql]
+
+require mysql_scanner
+
+require-env MYSQL_TEST_DATABASE_AVAILABLE
+
+statement ok
+ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
+
+statement ok
+CREATE OR REPLACE TABLE s.edge_tbl AS SELECT i, i - 5 AS neg, i * 10 AS v FROM range(10) t(i)
+
+# ---- math functions with domain errors must be evaluated locally ----
+# MySQL returns NULL for sqrt(-1) / log(0) / asin(2); DuckDB yields nan / -inf
+query I
+SELECT COUNT(*) FROM s.edge_tbl WHERE isnan(sqrt(neg)::DOUBLE)
+----
+5
+
+query II
+explain SELECT sqrt(neg) FROM s.edge_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# MySQL raises an out-of-range error for exp(1000) / pow(0, -1) / cot(0); DuckDB yields inf
+query I
+SELECT MAX(exp(i * 200))::VARCHAR FROM s.edge_tbl
+----
+inf
+
+query II
+explain SELECT exp(i) FROM s.edge_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+explain SELECT pow(i, 2) FROM s.edge_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# round() rounds doubles half-away-from-zero in DuckDB but half-to-even in MySQL
+query I
+SELECT round(2.5::DOUBLE + i - i) FROM s.edge_tbl LIMIT 1
+----
+3.0
+
+query II
+explain SELECT round(v / 2.0, 0) FROM s.edge_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# ---- upper / lower / reverse have different Unicode behavior and stay local ----
+# MySQL only applies simple case mapping: upper('ß') stays 'ß', DuckDB returns 'ẞ'
+statement ok
+CREATE OR REPLACE TABLE s.edge_str_tbl AS SELECT 'ß' AS w UNION ALL SELECT 'abc'
+
+query I
+SELECT upper(w) FROM s.edge_str_tbl ORDER BY w
+----
+ABC
+ẞ
+
+query II
+explain SELECT upper(w) FROM s.edge_str_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+explain SELECT reverse(w) FROM s.edge_str_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# ---- any_value: MySQL's ANY_VALUE may return NULL for groups with non-NULL values ----
+statement ok
+CREATE OR REPLACE TABLE s.edge_av_tbl AS
+    SELECT i % 2 AS g, CASE WHEN i < 2 THEN NULL ELSE i END AS v FROM range(6) t(i)
+
+# DuckDB returns the first non-NULL value per group
+query II
+SELECT g, any_value(v) FROM s.edge_av_tbl GROUP BY g ORDER BY g
+----
+0	2
+1	3
+
+query II
+explain SELECT g, any_value(v) FROM s.edge_av_tbl GROUP BY g
+----
+physical_plan	<REGEX>:.*GROUP_BY.*
+
+# ---- lpad / rpad with negative length: MySQL returns NULL, DuckDB an empty string ----
+query I
+SELECT lpad(w, -1, 'x') FROM s.edge_str_tbl LIMIT 1
+----
+(empty)
+
+query II
+explain SELECT lpad(w, -1, 'x') FROM s.edge_str_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# literal non-negative lengths are pushed
+query II
+explain SELECT lpad(w, 5, 'x') FROM s.edge_str_tbl
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# ---- LIKE is pushed with byte-wise semantics and no escape character ----
+# backslash is not an escape character in DuckDB's LIKE; MySQL defaults to backslash
+statement ok
+CREATE OR REPLACE TABLE s.edge_like_tbl AS SELECT 'a\b' AS w UNION ALL SELECT 'ab' UNION ALL SELECT 'AB'
+
+query I
+SELECT COUNT(*) FROM s.edge_like_tbl WHERE w LIKE 'a\%'
+----
+1
+
+query I
+SELECT COUNT(*) FROM s.edge_like_tbl WHERE w NOT LIKE 'a%'
+----
+1
+
+query II
+explain SELECT COUNT(*) FROM s.edge_like_tbl WHERE w LIKE 'a\%'
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+# ---- select-list aliases in WHERE cannot be pushed (MySQL error 1054) ----
+query I
+SELECT i + 1 AS j FROM s.edge_tbl WHERE j = 5
+----
+5
+
+query II
+explain SELECT i + 1 AS j FROM s.edge_tbl WHERE j = 5
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
+
+# an alias that shadows a real column is fine - both systems prefer the column
+query I
+SELECT i + 1 AS i FROM s.edge_tbl WHERE i = 5
+----
+6
+
+query II
+explain SELECT i + 1 AS i FROM s.edge_tbl WHERE i = 5
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+# lateral alias references in the select list cannot be pushed
+query II
+SELECT i + 1 AS j, j + 1 AS k FROM s.edge_tbl WHERE i = 0
+----
+1	2
+
+# aliases referenced inside subqueries in the WHERE clause are also detected
+query I
+SELECT COUNT(*) FROM (SELECT i + 1 AS j FROM s.edge_tbl WHERE EXISTS(SELECT 1 WHERE j > 5)) t
+----
+5
+
+# aliases in GROUP BY / HAVING / ORDER BY are supported by MySQL and pushed
+query II
+SELECT i % 2 AS par, COUNT(*) FROM s.edge_tbl GROUP BY par HAVING par >= 0 ORDER BY par
+----
+0	5
+1	5
+
+query II
+explain SELECT i % 2 AS par, COUNT(*) FROM s.edge_tbl GROUP BY par ORDER BY par
+----
+physical_plan	<!REGEX>:.*GROUP_BY.*
+
+# ---- USING / NATURAL joins put the coalesced column first in MySQL's * expansion ----
+statement ok
+CREATE OR REPLACE TABLE s.edge_j1 AS SELECT 1 AS a, 10 AS i
+
+statement ok
+CREATE OR REPLACE TABLE s.edge_j2 AS SELECT 10 AS i, 2 AS b
+
+# DuckDB keeps the column order of the left table (a, i, b); MySQL returns (i, a, b)
+query III
+SELECT * FROM s.edge_j1 JOIN s.edge_j2 USING (i)
+----
+1	10	2
+
+query II
+explain SELECT * FROM s.edge_j1 JOIN s.edge_j2 USING (i)
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query III
+SELECT * FROM s.edge_j1 NATURAL JOIN s.edge_j2
+----
+1	10	2
+
+# explicit column lists are still pushed
+query II
+explain SELECT a, b FROM s.edge_j1 JOIN s.edge_j2 USING (i)
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# qualified stars are still pushed
+query II
+explain SELECT edge_j1.* FROM s.edge_j1 JOIN s.edge_j2 USING (i)
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# ---- infinite dates / timestamps cannot be represented in MySQL ----
+query I
+SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' > DATE '-infinity'
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
+
+# finite typed literals are pushed
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP '2001-01-01'
+----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# ---- casts of malformed literals: MySQL returns 0 / NULL where DuckDB errors ----
+statement error
+SELECT CAST('abc' AS INTEGER) FROM s.edge_tbl
+----
+<REGEX>:Conversion Error.*
+
+statement error
+SELECT CAST('12abc' AS INTEGER) FROM s.edge_tbl
+----
+<REGEX>:Conversion Error.*
+
+statement error
+SELECT CAST('abc' AS TIMESTAMP) FROM s.edge_tbl
+----
+<REGEX>:Conversion Error.*
+
+# valid literal casts are still pushed
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE i < CAST('5' AS INTEGER)
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+# casting 'infinity' to DATE succeeds locally but the result cannot be pushed
+query I
+SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' < CAST('infinity' AS DATE)
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE DATE '2000-01-01' < CAST('infinity' AS DATE)
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
+
+# ---- avg(DISTINCT) deduplicates the original values, not the DOUBLE casts ----
+query I
+SELECT avg(DISTINCT v) FROM s.edge_tbl
+----
+45.0
+
+query II
+explain SELECT avg(DISTINCT v) FROM s.edge_tbl
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# plain avg is still pushed
+query II
+explain SELECT avg(v) FROM s.edge_tbl
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+# ---- negative LIMIT is a binder error in DuckDB and must not reach MySQL ----
+statement error
+SELECT i FROM s.edge_tbl LIMIT -1
+----
+<REGEX>:.*LIMIT.*
+
+# ---- monthname / dayname depend on the server's lc_time_names setting ----
+statement ok
+CREATE OR REPLACE TABLE s.edge_date_tbl AS SELECT DATE '2020-01-05' AS d
+
+query I
+SELECT monthname(d) FROM s.edge_date_tbl
+----
+January
+
+query II
+explain SELECT monthname(d) FROM s.edge_date_tbl
+----
+physical_plan	<REGEX>:.*PROJECTION.*

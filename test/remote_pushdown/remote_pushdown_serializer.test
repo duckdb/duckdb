@@ -30,7 +30,7 @@ explain SELECT MIN(w || 'x') FROM s.ser_tbl
 ----
 physical_plan	<!REGEX>:.*AGGREGATE.*
 
-# ---- ln() and the two-argument log() have identical semantics in MySQL ----
+# ---- ln() / log() are evaluated locally: MySQL returns NULL on domain errors (ln(0)) ----
 query II
 SELECT ROUND(MAX(ln(i + 1))::DOUBLE, 6), MAX(log(2, i + 1)) FROM s.ser_tbl
 ----
@@ -39,7 +39,7 @@ SELECT ROUND(MAX(ln(i + 1))::DOUBLE, 6), MAX(log(2, i + 1)) FROM s.ser_tbl
 query II
 explain SELECT MAX(ln(i + 1)), MAX(log(2, i + 1)) FROM s.ser_tbl
 ----
-physical_plan	<!REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*AGGREGATE.*
 
 # ---- string literals with backslashes and quotes are escaped for MySQL ----
 query I

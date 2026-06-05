@@ -133,10 +133,10 @@ index 0000000..4ccc58e
 +
 +} // namespace duckdb
 diff --git a/src/include/mysql_utils.hpp b/src/include/mysql_utils.hpp
-index 7fd38a3..7759e3e 100644
+index 7fd38a3..281e787 100644
 --- a/src/include/mysql_utils.hpp
 +++ b/src/include/mysql_utils.hpp
-@@ -25,6 +25,45 @@ enum mysql_ssl_mode_compat {
+@@ -25,6 +25,75 @@ enum mysql_ssl_mode_compat {
  	SSL_MODE_VERIFY_IDENTITY
  };
  
@@ -162,6 +162,36 @@ index 7fd38a3..7759e3e 100644
 +			return minor_version > minor_p;
 +		}
 +		return patch_version >= patch_p;
++	}
++
++	//! Whether the server supports window functions and (recursive) CTEs
++	bool SupportsWindowFunctions() const {
++		switch (server_type) {
++		case MySQLServerType::MARIADB:
++			// window functions: MariaDB 10.2.0, CTEs: 10.2.1, recursive CTEs: 10.2.2
++			return IsAtLeast(10, 2, 2);
++		default:
++			// window functions and CTEs were added during the MySQL 8.0 development cycle -
++			// require the first GA release
++			return IsAtLeast(8, 0, 11);
++		}
++	}
++
++	//! Whether the server supports (recursive) common table expressions
++	bool SupportsCTEs() const {
++		return SupportsWindowFunctions();
++	}
++
++	//! Whether the server supports the EXCEPT / INTERSECT set operations
++	bool SupportsExceptIntersect(bool all) const {
++		switch (server_type) {
++		case MySQLServerType::MARIADB:
++			// EXCEPT / INTERSECT: MariaDB 10.3, the ALL variants: MariaDB 10.5
++			return all ? IsAtLeast(10, 5, 0) : IsAtLeast(10, 3, 0);
++		default:
++			// EXCEPT / INTERSECT (including ALL) were added in MySQL 8.0.31
++			return IsAtLeast(8, 0, 31);
++		}
 +	}
 +
 +	//! The NO PAD binary collation used to give string literals byte-wise comparison
@@ -685,10 +715,10 @@ index fea00b5..cd56adb 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..fa69685
+index 0000000..3dbf1c8
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,793 @@
+@@ -0,0 +1,803 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -954,6 +984,13 @@ index 0000000..fa69685
 +string MySQLSQLWriter::WriteFunction(const FunctionExpression &func) {
 +	auto &children = func.GetArguments();
 +	auto name = StringUtil::Lower(func.FunctionName());
++	if (name == "~~" || name == "!~~") {
++		// [NOT] LIKE - DuckDB's LIKE has no default escape character, while MySQL's default
++		// escape character is backslash; disable it with an empty ESCAPE clause
++		D_ASSERT(children.size() == 2);
++		return "(" + WriteExpression(children[0].GetExpression()) + (name == "~~" ? " LIKE " : " NOT LIKE ") +
++		       WriteExpression(children[1].GetExpression()) + " ESCAPE '')";
++	}
 +	static const case_insensitive_set_t OPERATOR_NAMES = {"+", "-", "*", "/", "%", "||"};
 +	if (func.IsOperator() || OPERATOR_NAMES.count(name) > 0) {
 +		if (name == "||") {
@@ -1405,6 +1442,9 @@ index 0000000..fa69685
 +	}
 +	if (node.from_table && node.from_table->type != TableReferenceType::EMPTY_FROM) {
 +		result += " FROM " + WriteTableRef(*node.from_table);
++	} else if (node.where_clause || node.having || !node.groups.grouping_sets.empty()) {
++		// MariaDB requires a FROM clause when WHERE / GROUP BY / HAVING is present
++		result += " FROM DUAL";
 +	}
 +	if (node.where_clause) {
 +		result += " WHERE " + WriteExpression(*node.where_clause);
@@ -1524,7 +1564,7 @@ index ef3d3d6..1f39ce9 100644
  	string result;
  	for (auto c : text) {
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..f713d07 100644
+index af9ffd7..6b17430 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1577,7 +1617,7 @@ index af9ffd7..f713d07 100644
  }
  
  MySQLCatalog::~MySQLCatalog() = default;
-@@ -503,6 +532,738 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -503,6 +532,1011 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
@@ -1631,6 +1671,26 @@ index af9ffd7..f713d07 100644
 +	}
 +}
 +
++//! Check whether a constant value is representable in MySQL - MySQL has no infinity / NaN
++//! doubles and no infinite dates / timestamps
++static bool MySQLSupportsValue(const Value &value) {
++	if (value.IsNull()) {
++		return true;
++	}
++	switch (value.type().id()) {
++	case LogicalTypeId::FLOAT:
++		return Value::FloatIsFinite(FloatValue::Get(value));
++	case LogicalTypeId::DOUBLE:
++		return Value::DoubleIsFinite(DoubleValue::Get(value));
++	case LogicalTypeId::DATE:
++		return Value::IsFinite(DateValue::Get(value));
++	case LogicalTypeId::TIMESTAMP:
++		return Value::IsFinite(TimestampValue::Get(value));
++	default:
++		return true;
++	}
++}
++
 +bool MySQLSupportsFunction(const FunctionExpression &func) {
 +	auto &function_name = func.FunctionName();
 +
@@ -1650,8 +1710,29 @@ index af9ffd7..f713d07 100644
 +	//   "trunc"       — serialized as truncate(x, 0)
 +	//   "greatest"/"least" — serialized as a COALESCE rotation (MySQL propagates NULL arguments)
 +	//   "substring"/"substr" — only pushed with literal positive offsets (see SupportsPushdown)
++	//   "lpad"/"rpad" — only pushed with a literal non-negative length (see SupportsPushdown)
++	//   "~~"/"!~~"    — [NOT] LIKE, serialized with an empty ESCAPE clause (DuckDB's LIKE has no
++	//                   default escape character, MySQL's default escape is backslash)
 +	// Excluded (verified mismatches that cannot be fixed by rewriting):
 +	//   "/"           — DuckDB division by zero yields inf, MySQL yields NULL
++	//   "sqrt"/"ln"/"log"/"log2"/"log10"/"asin"/"acos" — MySQL returns NULL on domain errors
++	//                   (sqrt(-1), ln(0), asin(2), ...) where DuckDB yields nan / -inf
++	//   "exp"/"pow"/"power"/"cot" — MySQL raises an out-of-range error (exp(1000), pow(0,-1),
++	//                   cot(0)) where DuckDB yields inf
++	//   "round"       — MySQL rounds doubles half-to-even (round(2.5e0) = 2), DuckDB rounds
++	//                   half away from zero (3); we cannot know the argument type pre-bind
++	//   "upper"/"lower" — MySQL only applies simple case mapping (upper('ß') = 'ß'), DuckDB
++	//                   applies full Unicode case mapping ('ẞ')
++	//   "reverse"     — MySQL reverses code points, splitting combining sequences; DuckDB
++	//                   reverses grapheme clusters
++	//   "bin"         — MySQL coerces string arguments to numbers (bin('abc') = '0'), DuckDB
++	//                   converts the characters
++	//   "unhex"       — MySQL returns NULL for invalid input, DuckDB raises an error
++	//   "repeat"      — MySQL returns NULL when the result exceeds @@max_allowed_packet
++	//   "monthname"/"dayname" — depend on the server's lc_time_names locale setting
++	//   "any_value"   — MySQL's ANY_VALUE is not an aggregate (it returns a value per row
++	//                   without GROUP BY) and may return NULL for groups with non-NULL values;
++	//                   DuckDB returns the first non-NULL value
 +	//   "random"      — pushing would ignore DuckDB's setseed()
 +	//   "translate"   — not available in MySQL
 +	//   "format"      — different semantics (MySQL: number formatting; DuckDB: printf-style)
@@ -1667,6 +1748,9 @@ index af9ffd7..f713d07 100644
 +	//   "corr"/"covar_pop"/"covar_samp" — not available in MySQL
 +	//   "group_concat" — MySQL silently truncates the result to @@group_concat_max_len (1024 by default)
 +	//   "if"/"lcase"/"ucase" — not available in DuckDB (pushing would mask a binder error)
++	// Double-precision overflow in "+"/"-"/"*"/"degrees" (e.g. 1e308 * 10) raises an out-of-range
++	// error in MySQL where DuckDB yields inf - this requires inputs near the limits of the DOUBLE
++	// range and remains a documented limitation.
 +	static const case_insensitive_set_t MYSQL_SCALAR_FUNCTIONS = {
 +	    // String
 +	    "concat",
@@ -1676,41 +1760,25 @@ index af9ffd7..f713d07 100644
 +	    "length",
 +	    "len",
 +	    "bit_length",
-+	    "upper",
-+	    "lower",
 +	    "trim",
 +	    "ltrim",
 +	    "rtrim",
-+	    "repeat",
 +	    "replace",
-+	    "reverse",
 +	    "lpad",
 +	    "rpad",
 +	    "hex",
-+	    "unhex",
-+	    "bin",
 +	    "substring",
 +	    "substr",
++	    "~~",
++	    "!~~",
 +	    // Math
 +	    "abs",
 +	    "ceil",
 +	    "ceiling",
 +	    "floor",
-+	    "round",
-+	    "sqrt",
-+	    "pow",
-+	    "power",
-+	    "exp",
-+	    "log",
-+	    "log10",
-+	    "log2",
-+	    "ln",
 +	    "sin",
 +	    "cos",
 +	    "tan",
-+	    "cot",
-+	    "asin",
-+	    "acos",
 +	    "atan",
 +	    "atan2",
 +	    "degrees",
@@ -1740,8 +1808,6 @@ index af9ffd7..f713d07 100644
 +	    "weekofyear",
 +	    "microsecond",
 +	    "quarter",
-+	    "monthname",
-+	    "dayname",
 +	    "last_day",
 +	    // Conditional / NULL handling
 +	    "coalesce",
@@ -1762,7 +1828,6 @@ index af9ffd7..f713d07 100644
 +	    "variance",
 +	    "var_pop",
 +	    "var_samp",
-+	    "any_value",
 +	};
 +	return MYSQL_SCALAR_FUNCTIONS.count(function_name) > 0;
 +}
@@ -1794,6 +1859,182 @@ index af9ffd7..f713d07 100644
 +	default:
 +		break;
 +	}
++}
++
++static void MySQLCollectColumnRefs(const QueryNode &node, case_insensitive_set_t &names);
++
++//! Collect the names of all unqualified column references in an expression tree, descending
++//! into subqueries
++static void MySQLCollectColumnRefs(const ParsedExpression &expr, case_insensitive_set_t &names) {
++	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
++		auto &colref = expr.Cast<ColumnRefExpression>();
++		if (!colref.IsQualified()) {
++			names.insert(colref.GetColumnName());
++		}
++	}
++	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
++		auto &subquery = expr.Cast<SubqueryExpression>();
++		if (subquery.Subquery() && subquery.Subquery()->node) {
++			MySQLCollectColumnRefs(*subquery.Subquery()->node, names);
++		}
++	}
++	ParsedExpressionIterator::EnumerateChildren(
++	    expr, [&](const ParsedExpression &child) { MySQLCollectColumnRefs(child, names); });
++}
++
++static void MySQLCollectColumnRefs(const TableRef &ref, case_insensitive_set_t &names) {
++	switch (ref.type) {
++	case TableReferenceType::JOIN: {
++		auto &join = ref.Cast<JoinRef>();
++		MySQLCollectColumnRefs(*join.left, names);
++		MySQLCollectColumnRefs(*join.right, names);
++		if (join.condition) {
++			MySQLCollectColumnRefs(*join.condition, names);
++		}
++		break;
++	}
++	case TableReferenceType::SUBQUERY: {
++		auto &subquery = ref.Cast<SubqueryRef>();
++		if (subquery.subquery && subquery.subquery->node) {
++			MySQLCollectColumnRefs(*subquery.subquery->node, names);
++		}
++		break;
++	}
++	case TableReferenceType::EXPRESSION_LIST: {
++		auto &expr_list = ref.Cast<ExpressionListRef>();
++		for (auto &row : expr_list.values) {
++			for (auto &expr : row) {
++				MySQLCollectColumnRefs(*expr, names);
++			}
++		}
++		break;
++	}
++	default:
++		break;
++	}
++}
++
++static void MySQLCollectColumnRefs(const QueryNode &node, case_insensitive_set_t &names) {
++	for (auto &cte_pair : node.cte_map.map) {
++		if (cte_pair.second->query_node) {
++			MySQLCollectColumnRefs(*cte_pair.second->query_node, names);
++		}
++	}
++	for (auto &modifier : node.modifiers) {
++		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
++			for (auto &order : modifier->Cast<OrderModifier>().orders) {
++				MySQLCollectColumnRefs(*order.expression, names);
++			}
++		}
++	}
++	switch (node.type) {
++	case QueryNodeType::SELECT_NODE: {
++		auto &select = node.Cast<SelectNode>();
++		for (auto &expr : select.select_list) {
++			MySQLCollectColumnRefs(*expr, names);
++		}
++		if (select.from_table) {
++			MySQLCollectColumnRefs(*select.from_table, names);
++		}
++		if (select.where_clause) {
++			MySQLCollectColumnRefs(*select.where_clause, names);
++		}
++		for (auto &group : select.groups.group_expressions) {
++			MySQLCollectColumnRefs(*group, names);
++		}
++		if (select.having) {
++			MySQLCollectColumnRefs(*select.having, names);
++		}
++		if (select.qualify) {
++			MySQLCollectColumnRefs(*select.qualify, names);
++		}
++		break;
++	}
++	case QueryNodeType::SET_OPERATION_NODE: {
++		auto &setop = node.Cast<SetOperationNode>();
++		for (auto &child : setop.children) {
++			MySQLCollectColumnRefs(*child, names);
++		}
++		break;
++	}
++	case QueryNodeType::RECURSIVE_CTE_NODE: {
++		auto &cte = node.Cast<RecursiveCTENode>();
++		MySQLCollectColumnRefs(*cte.left, names);
++		MySQLCollectColumnRefs(*cte.right, names);
++		break;
++	}
++	default:
++		break;
++	}
++}
++
++//! MySQL cannot resolve select-list aliases in the WHERE clause or within other select-list
++//! expressions (error 1054), while DuckDB can. Both systems prefer a real table column over an
++//! alias, so an alias reference is only a problem when no column with that name exists - which
++//! cannot be known pre-bind. We approximate: a name is assumed to be a real column if it is also
++//! referenced at a position where alias resolution is impossible (in a select-list item at or
++//! before the item that defines the alias). Otherwise the query is conservatively not pushed down.
++static bool MySQLSupportsSelectAliasUsage(const SelectNode &select) {
++	// find the first select-list item that defines each alias
++	case_insensitive_map_t<idx_t> alias_definitions;
++	for (idx_t i = 0; i < select.select_list.size(); i++) {
++		auto &alias = select.select_list[i]->GetAlias();
++		if (!alias.empty() && alias_definitions.find(alias) == alias_definitions.end()) {
++			alias_definitions[alias] = i;
++		}
++	}
++	if (alias_definitions.empty()) {
++		return true;
++	}
++	// collect the column references per select-list item
++	vector<case_insensitive_set_t> item_refs(select.select_list.size());
++	for (idx_t i = 0; i < select.select_list.size(); i++) {
++		MySQLCollectColumnRefs(*select.select_list[i], item_refs[i]);
++	}
++	// a reference at or before the defining item cannot be an alias reference - it must be a column
++	case_insensitive_set_t column_evidence;
++	for (idx_t i = 0; i < select.select_list.size(); i++) {
++		for (auto &name : item_refs[i]) {
++			auto entry = alias_definitions.find(name);
++			if (entry == alias_definitions.end() || entry->second >= i) {
++				column_evidence.insert(name);
++			}
++		}
++	}
++	// collect the names that DuckDB might resolve as an alias where MySQL cannot:
++	// references in the WHERE clause and lateral references in later select-list items
++	case_insensitive_set_t suspects;
++	if (select.where_clause) {
++		MySQLCollectColumnRefs(*select.where_clause, suspects);
++	}
++	for (idx_t i = 0; i < select.select_list.size(); i++) {
++		for (auto &name : item_refs[i]) {
++			auto entry = alias_definitions.find(name);
++			if (entry != alias_definitions.end() && entry->second < i) {
++				suspects.insert(name);
++			}
++		}
++	}
++	for (auto &name : suspects) {
++		if (alias_definitions.find(name) != alias_definitions.end() && column_evidence.count(name) == 0) {
++			return false;
++		}
++	}
++	return true;
++}
++
++//! Check whether a join tree contains a NATURAL or USING join - these coalesce the join columns
++//! when expanding an unqualified *, and MySQL places the coalesced columns first while DuckDB
++//! keeps them in the position of the left table's column order
++static bool MySQLJoinTreeHasCoalescingJoin(const TableRef &ref) {
++	if (ref.type != TableReferenceType::JOIN) {
++		return false;
++	}
++	auto &join = ref.Cast<JoinRef>();
++	if (join.ref_type == JoinRefType::NATURAL || !join.using_columns.empty()) {
++		return true;
++	}
++	return MySQLJoinTreeHasCoalescingJoin(*join.left) || MySQLJoinTreeHasCoalescingJoin(*join.right);
 +}
 +
 +//! Check whether a list of ORDER BY entries can be rewritten for MySQL (see MySQLRewriteOrderEntries)
@@ -1857,6 +2098,19 @@ index af9ffd7..f713d07 100644
 +	return BigIntValue::Get(bigint_value) >= minimum_value;
 +}
 +
++static bool MySQLIsIntegerLiteralAtMost(const ParsedExpression &expr, int64_t maximum_value) {
++	if (!MySQLIsIntegerLiteral(expr)) {
++		return false;
++	}
++	auto &val = expr.Cast<ConstantExpression>().GetValue();
++	Value bigint_value;
++	string error;
++	if (!val.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error) || bigint_value.IsNull()) {
++		return false;
++	}
++	return BigIntValue::Get(bigint_value) <= maximum_value;
++}
++
 +static bool MySQLSupportsResultModifiers(const QueryNode &node,
 +                                         optional_ptr<const vector<unique_ptr<ParsedExpression>>> select_list) {
 +	for (auto &modifier : node.modifiers) {
@@ -1878,11 +2132,13 @@ index af9ffd7..f713d07 100644
 +				// MySQL cannot parse OFFSET without LIMIT
 +				return false;
 +			}
-+			// MySQL only supports integer literals in LIMIT / OFFSET
-+			if (limit_mod.limit && !MySQLIsIntegerLiteral(*limit_mod.limit)) {
++			// MySQL only supports non-negative integer literals in LIMIT / OFFSET
++			// (negative values are a binder error in DuckDB, but a syntax error in MySQL -
++			// keep them local so the user gets DuckDB's error message)
++			if (limit_mod.limit && !MySQLIsIntegerLiteralAtLeast(*limit_mod.limit, 0)) {
 +				return false;
 +			}
-+			if (limit_mod.offset && !MySQLIsIntegerLiteral(*limit_mod.offset)) {
++			if (limit_mod.offset && !MySQLIsIntegerLiteralAtLeast(*limit_mod.offset, 0)) {
 +				return false;
 +			}
 +			break;
@@ -2019,7 +2275,30 @@ index af9ffd7..f713d07 100644
 +			// MySQL has no TRY_CAST
 +			return false;
 +		}
-+		return MySQLSupportsType(cast_expr.TargetType(), true);
++		if (!MySQLSupportsType(cast_expr.TargetType(), true)) {
++			return false;
++		}
++		// MySQL's CAST does not raise an error for malformed input - it returns NULL or a
++		// partial value (e.g. CAST('abc' AS SIGNED) is 0, CAST('12abc' AS SIGNED) is 12) where
++		// DuckDB raises a conversion error. For literal inputs the cast can be verified locally;
++		// casts of non-literal expressions over malformed data remain a documented limitation.
++		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
++			auto &value = cast_expr.Child().Cast<ConstantExpression>().GetValue();
++			auto target_type = cast_expr.TargetType();
++			if (target_type.id() == LogicalTypeId::UNBOUND) {
++				target_type = UnboundType::TryDefaultBind(target_type);
++			}
++			Value cast_result;
++			string error;
++			if (!value.DefaultTryCastAs(target_type, cast_result, &error)) {
++				return false;
++			}
++			// the cast result must also be representable in MySQL
++			if (!MySQLSupportsValue(cast_result)) {
++				return false;
++			}
++		}
++		return true;
 +	}
 +	case ExpressionClass::CONSTANT: {
 +		auto &constant = expr.Cast<ConstantExpression>();
@@ -2032,16 +2311,7 @@ index af9ffd7..f713d07 100644
 +			// to give comparisons byte-wise (DuckDB) semantics
 +			return false;
 +		}
-+		if (!value.IsNull()) {
-+			// MySQL has no infinity / NaN
-+			if (value.type().id() == LogicalTypeId::FLOAT && !Value::FloatIsFinite(FloatValue::Get(value))) {
-+				return false;
-+			}
-+			if (value.type().id() == LogicalTypeId::DOUBLE && !Value::DoubleIsFinite(DoubleValue::Get(value))) {
-+				return false;
-+			}
-+		}
-+		return true;
++		return MySQLSupportsValue(value);
 +	}
 +	case ExpressionClass::FUNCTION: {
 +		auto &func = expr.Cast<FunctionExpression>();
@@ -2058,7 +2328,9 @@ index af9ffd7..f713d07 100644
 +		}
 +		if (func.Distinct()) {
 +			// DISTINCT within aggregates is only supported for a small set of functions in MySQL
-+			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min", "max", "avg"};
++			// (avg is excluded: it is serialized as avg(CAST(x AS DOUBLE)), which would deduplicate
++			// the DOUBLE-cast values instead of the original ones)
++			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min", "max"};
 +			if (MYSQL_DISTINCT_AGGREGATES.count(func.FunctionName()) == 0) {
 +				return false;
 +			}
@@ -2089,6 +2361,15 @@ index af9ffd7..f713d07 100644
 +				return false;
 +			}
 +		}
++		if (StringUtil::CIEquals(func.FunctionName(), "lpad") || StringUtil::CIEquals(func.FunctionName(), "rpad")) {
++			// MySQL returns NULL for negative lengths where DuckDB returns an empty string, and
++			// returns NULL when the result exceeds @@max_allowed_packet - only push down calls
++			// with a literal length that is non-negative and small enough for any server setting
++			if (children.size() != 3 || !MySQLIsIntegerLiteralAtLeast(children[1].GetExpression(), 0) ||
++			    !MySQLIsIntegerLiteralAtMost(children[1].GetExpression(), 1000000)) {
++				return false;
++			}
++		}
 +		if (StringUtil::CIEquals(func.FunctionName(), "substring") ||
 +		    StringUtil::CIEquals(func.FunctionName(), "substr")) {
 +			// MySQL handles zero and negative offsets differently - only push down calls with
@@ -2107,6 +2388,10 @@ index af9ffd7..f713d07 100644
 +	}
 +	case ExpressionClass::WINDOW: {
 +		auto &window = expr.Cast<WindowExpression>();
++		if (!version.SupportsWindowFunctions()) {
++			// window functions require MySQL 8.0 / MariaDB 10.2
++			return false;
++		}
 +		return MySQLSupportsWindow(window);
 +	}
 +	case ExpressionClass::COMPARISON: {
@@ -2194,6 +2479,10 @@ index af9ffd7..f713d07 100644
 +}
 +
 +bool MySQLCatalog::SupportsPushdown(const QueryNode &node) {
++	if (!node.cte_map.map.empty() && !version.SupportsCTEs()) {
++		// common table expressions require MySQL 8.0 / MariaDB 10.2
++		return false;
++	}
 +	if (!MySQLSupportsCTEMap(node.cte_map)) {
 +		return false;
 +	}
@@ -2217,6 +2506,20 @@ index af9ffd7..f713d07 100644
 +			// MySQL has no USING SAMPLE
 +			return false;
 +		}
++		if (!MySQLSupportsSelectAliasUsage(select)) {
++			// the query references select-list aliases at positions MySQL cannot resolve
++			return false;
++		}
++		if (select.from_table && MySQLJoinTreeHasCoalescingJoin(*select.from_table)) {
++			// NATURAL / USING joins coalesce the join columns when expanding an unqualified *,
++			// and MySQL orders the result columns differently than DuckDB
++			for (auto &expr : select.select_list) {
++				if (expr->GetExpressionClass() == ExpressionClass::STAR &&
++				    expr->Cast<StarExpression>().RelationName().empty()) {
++					return false;
++				}
++			}
++		}
 +		return MySQLSupportsResultModifiers(node, &select.select_list);
 +	}
 +	case QueryNodeType::SET_OPERATION_NODE: {
@@ -2225,11 +2528,21 @@ index af9ffd7..f713d07 100644
 +			// UNION BY NAME is DuckDB-specific
 +			return false;
 +		}
++		if (setop.setop_type == SetOperationType::EXCEPT || setop.setop_type == SetOperationType::INTERSECT) {
++			// EXCEPT / INTERSECT require MySQL 8.0.31 / MariaDB 10.3 (ALL variants: MariaDB 10.5)
++			if (!version.SupportsExceptIntersect(setop.setop_all)) {
++				return false;
++			}
++		}
 +		// there is no select list to resolve positional ORDER BY references against
 +		return MySQLSupportsResultModifiers(node, nullptr);
 +	}
 +	case QueryNodeType::RECURSIVE_CTE_NODE: {
 +		auto &cte = node.Cast<RecursiveCTENode>();
++		if (!version.SupportsCTEs()) {
++			// recursive CTEs require MySQL 8.0 / MariaDB 10.2
++			return false;
++		}
 +		if (!cte.key_targets.empty()) {
 +			// USING KEY is DuckDB-specific
 +			return false;
