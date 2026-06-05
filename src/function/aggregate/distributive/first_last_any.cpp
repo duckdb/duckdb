@@ -20,6 +20,7 @@ struct FirstState {
 struct FirstFunctionBase {
 	template <class STATE>
 	static void Initialize(STATE &state) {
+		memset(&state.value, 0, sizeof(typename STATE::VALUE_TYPE));
 		state.is_set = false;
 		state.is_null = false;
 	}

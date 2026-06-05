@@ -17,14 +17,6 @@
       ]
     },
     {
-      "reason": "FIXME: crash",
-      "paths": [
-        "test/sql/pivot/pivot_query_text.test",
-        "test/sql/aggregate/aggregates/test_any_value_noninlined.test",
-        "test/sql/aggregate/aggregates/test_first_noninlined.test"
-      ]
-    },
-    {
       "reason": "FIXME: not yet supported",
       "paths": [
         "test/optimizer/deliminator.test",
