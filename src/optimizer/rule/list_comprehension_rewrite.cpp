@@ -17,8 +17,6 @@ namespace duckdb {
 
 namespace {
 
-constexpr idx_t LIST_LAMBDA_INDEX_PARAMETER = 1;
-
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
 	if (expr.Function().GetName() == target_name) {
 		D_ASSERT(!expr.GetChildren().empty() && expr.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::LIST);
@@ -61,14 +59,26 @@ optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &stru
 }
 
 bool UsesIndexParameter(Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto &ref = expr.Cast<BoundReferenceExpression>();
+		if (ref.Index() == 0) {
+			return true;
+		}
+	}
 	bool uses_index = false;
-	ExpressionIterator::VisitExpression<BoundReferenceExpression>(expr, [&](const BoundReferenceExpression &ref) {
-		if (uses_index) {
-			return;
-		}
-		if (ref.Index() == LIST_LAMBDA_INDEX_PARAMETER) {
-			uses_index = true;
-		}
+	ExpressionIterator::EnumerateChildren(expr, [&uses_index](unique_ptr<Expression> &child) {
+		ExpressionIterator::EnumerateExpression(child, [&uses_index](Expression &child) {
+			if (uses_index) {
+				return;
+			}
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &ref = child.Cast<BoundReferenceExpression>();
+				if (ref.Index() == 0) {
+					uses_index = true;
+					return;
+				}
+			}
+		});
 	});
 	return uses_index;
 }
@@ -77,10 +87,8 @@ void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
 	ExpressionIterator::VisitExpressionClassMutable(expr, ExpressionClass::BOUND_REF,
 	                                                [&](unique_ptr<Expression> &child) {
 		                                                auto &ref = child->Cast<BoundReferenceExpression>();
-		                                                D_ASSERT(ref.Index() != LIST_LAMBDA_INDEX_PARAMETER);
-		                                                if (ref.Index() > LIST_LAMBDA_INDEX_PARAMETER) {
-			                                                ref.IndexMutable()--;
-		                                                }
+		                                                D_ASSERT(ref.Index() > 0);
+		                                                ref.IndexMutable()--;
 	                                                });
 }
 

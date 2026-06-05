@@ -19,7 +19,7 @@
 namespace duckdb {
 
 struct LambdaFunctionData : public FunctionData {
-	DUCKDB_API virtual const unique_ptr<Expression> &GetLambdaExpression() const = 0;
+	DUCKDB_API virtual optional_ptr<const Expression> GetLambdaExpression() const = 0;
 };
 
 struct ListLambdaBindData final : public LambdaFunctionData {
@@ -55,8 +55,8 @@ public:
 	//! Deserializes a lambda function's bind data
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 
-	const unique_ptr<Expression> &GetLambdaExpression() const override {
-		return lambda_expr;
+	optional_ptr<const Expression> GetLambdaExpression() const override {
+		return lambda_expr.get();
 	}
 };
 

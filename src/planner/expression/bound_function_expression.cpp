@@ -40,11 +40,9 @@ bool BoundFunctionExpression::IsFoldable() const {
 		// This is a lambda function
 		D_ASSERT(bind_info);
 		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
-		auto &lambda_expr = lambda_bind_data.GetLambdaExpression();
-		if (lambda_expr) {
-			if (lambda_expr->IsVolatile()) {
-				return false;
-			}
+		auto lambda_expr = lambda_bind_data.GetLambdaExpression();
+		if (lambda_expr && lambda_expr->IsVolatile()) {
+			return false;
 		}
 	}
 	return function.GetStability() == FunctionStability::VOLATILE ? false : Expression::IsFoldable();

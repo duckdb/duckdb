@@ -378,20 +378,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &args = function.GetArgumentsMutable();
 
-	// find the lambda expression
-	idx_t lambda_expr_idx = 0;
-	bool found_lambda = false;
-	for (idx_t i = 0; i < args.size(); i++) {
-		if (args[i].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
-			if (found_lambda) {
-				return BindResult("Only one lambda expression is supported per lambda function!");
-			}
-			lambda_expr_idx = i;
-			found_lambda = true;
-			break;
-		}
-	}
-	if (!found_lambda) {
+	// list lambda functions use the existing (list, lambda) shape; invoke is the only lambda
+	// function that accepts the lambda expression as the first argument.
+	const idx_t lambda_expr_idx = func.name == "invoke" ? 0 : 1;
+	if (args.size() <= lambda_expr_idx ||
+	    args[lambda_expr_idx].GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 		return BindResult("This scalar function requires a lambda expression!");
 	}
 
@@ -418,7 +409,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		function_child_types.push_back(child->GetReturnType());
 	}
 
-	if (lambda_expr_idx > 0) {
+	if (lambda_expr_idx == 1) {
 		// get the logical type of the children of the list
 		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
 		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
@@ -524,9 +515,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			auto &column_types = binding.GetColumnTypes();
 			D_ASSERT(column_names.size() == column_types.size());
 
-			for (idx_t column_idx = 0; column_idx < column_names.size(); column_idx++) {
-				auto bound_lambda_param =
-				    make_uniq<BoundReferenceExpression>(column_names[column_idx], column_types[column_idx], offset++);
+			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
+				                                                              column_types[column_idx - 1], offset);
+				offset++;
 				bound_function_expr.GetChildrenMutable().push_back(std::move(bound_lambda_param));
 			}
 		}

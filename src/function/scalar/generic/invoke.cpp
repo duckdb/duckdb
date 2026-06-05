@@ -39,29 +39,60 @@ struct LambdaInvokeData final : public LambdaFunctionData {
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
 	}
 
-	const unique_ptr<Expression> &GetLambdaExpression() const override {
-		return lambda_expr->Cast<BoundLambdaExpression>().LambdaExpr();
+	optional_ptr<const Expression> GetLambdaExpression() const override {
+		if (!lambda_expr) {
+			return nullptr;
+		}
+		auto &bound_lambda_expr = lambda_expr->Cast<BoundLambdaExpression>();
+		return bound_lambda_expr.LambdaExpr().get();
 	}
 };
 
 struct LambdaInvokeState final : public FunctionLocalState {
 	unique_ptr<ExpressionExecutor> executor;
+	DataChunk input_chunk;
+	idx_t parameter_count;
 
-	explicit LambdaInvokeState(unique_ptr<ExpressionExecutor> executor_p) : executor(std::move(executor_p)) {
+	LambdaInvokeState(unique_ptr<ExpressionExecutor> executor_p, vector<LogicalType> input_types,
+	                  const idx_t parameter_count_p)
+	    : executor(std::move(executor_p)), parameter_count(parameter_count_p) {
+		input_chunk.InitializeEmpty(input_types);
 	}
 
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data) {
 		auto &bdata = bind_data->Cast<LambdaInvokeData>();
+		if (!bdata.lambda_expr) {
+			throw InternalException("Invoke function is missing its bound lambda expression");
+		}
 		auto &bound_lambda_expr = bdata.lambda_expr->Cast<BoundLambdaExpression>();
+		const auto parameter_count = bound_lambda_expr.ParameterCount();
+		D_ASSERT(parameter_count <= expr.GetChildren().size());
+
+		vector<LogicalType> input_types;
+		input_types.reserve(expr.GetChildren().size());
+		for (idx_t i = 0; i < parameter_count; i++) {
+			input_types.push_back(expr.GetChildren()[parameter_count - i - 1]->GetReturnType());
+		}
+		for (idx_t i = parameter_count; i < expr.GetChildren().size(); i++) {
+			input_types.push_back(expr.GetChildren()[i]->GetReturnType());
+		}
+
 		auto executor = make_uniq<ExpressionExecutor>(state.GetContext(), *bound_lambda_expr.LambdaExpr());
-		return make_uniq<LambdaInvokeState>(std::move(executor));
+		return make_uniq<LambdaInvokeState>(std::move(executor), std::move(input_types), parameter_count);
 	}
 };
 
 void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LambdaInvokeState>();
-	lstate.executor->ExecuteExpression(args, result);
+	for (idx_t i = 0; i < lstate.parameter_count; i++) {
+		lstate.input_chunk.data[i].Reference(args.data[lstate.parameter_count - i - 1]);
+	}
+	for (idx_t i = lstate.parameter_count; i < args.ColumnCount(); i++) {
+		lstate.input_chunk.data[i].Reference(args.data[i]);
+	}
+	lstate.input_chunk.SetChildCardinality(args.size());
+	lstate.executor->ExecuteExpression(lstate.input_chunk, result);
 }
 
 unique_ptr<FunctionData> LambdaInvokeBind(BindScalarFunctionInput &input) {
