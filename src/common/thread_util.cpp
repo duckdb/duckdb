@@ -11,7 +11,7 @@ namespace duckdb {
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext> context) {
 	auto target_time = Timestamp::GetCurrentTimestamp();
-	target_time.value += sleep_ms * Interval::MICROS_PER_MSEC;
+	target_time.value += static_cast<int64_t>(sleep_ms) * Interval::MICROS_PER_MSEC;
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
 	auto sleep_interval = MinValue(DEFAULT_SLEEP_INTERVAL_MS, sleep_ms);
@@ -40,7 +40,7 @@ string ThreadUtil::GetThreadIdString() {
 
 #else
 
-void ThreadUtil::SleepMs(idx_t sleep_ms) {
+void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext>) {
 	throw InvalidInputException("ThreadUtil::SleepMs requires DuckDB to be compiled with thread support");
 }
 
