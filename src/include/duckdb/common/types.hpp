@@ -474,6 +474,7 @@ public:
 	static constexpr auto JSON_TYPE_NAME = "JSON";
 	DUCKDB_API static LogicalType JSON(); // NOLINT
 	DUCKDB_API bool IsJSONType() const;
+	DUCKDB_API bool IsAggregateState() const;
 };
 
 struct DecimalType {

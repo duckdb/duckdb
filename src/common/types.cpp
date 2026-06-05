@@ -1765,6 +1765,9 @@ bool LogicalType::IsJSONType() const {
 	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == JSON_TYPE_NAME;
 }
 
+bool LogicalType::IsAggregateState() const {
+	return HasAlias() && GetAlias() == "AGGREGATE_STATE";
+}
 //===--------------------------------------------------------------------===//
 // Array Type
 //===--------------------------------------------------------------------===//

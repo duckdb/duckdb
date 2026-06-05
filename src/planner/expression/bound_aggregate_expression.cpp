@@ -142,11 +142,14 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	auto filter =
 	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(204, "filter", unique_ptr<Expression>());
 	auto result = make_uniq<BoundAggregateExpression>(std::move(entry.first), std::move(children), std::move(filter),
-	std::move(entry.second), aggregate_type);
+	                                                  std::move(entry.second), aggregate_type);
 	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
-												 AggregateStateExportMode::NONE);
+	                                             AggregateStateExportMode::NONE);
 	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
+		if (!return_type.IsAggregateState()) {
+			throw SerializationException("Aggregate State export should return an aggregate state type");
+		}
 		ExportAggregateFunction::SetStateExport(*result, std::move(return_type));
 	} else if (result->return_type != return_type) {
 		// return type mismatch - push a cast
