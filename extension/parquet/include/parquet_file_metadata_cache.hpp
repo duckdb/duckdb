@@ -49,7 +49,6 @@ public:
 
 public:
 	static string ObjectType();
-	static string ObjectCacheKey(const string &path);
 	string GetObjectType() override;
 	optional_idx GetEstimatedCacheMemory() const override;
 

@@ -13,6 +13,7 @@
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -76,7 +77,7 @@ public:
 
 	template <class T>
 	shared_ptr<T> Get(const string &key) {
-		shared_ptr<ObjectCacheEntry> object = GetObject(key);
+		shared_ptr<ObjectCacheEntry> object = GetObject(MakeCacheKey<T>(key));
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
@@ -84,11 +85,12 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
+		const auto cache_key = MakeCacheKey<T>(key);
 		const lock_guard<mutex> lock(lock_mutex);
 
 		// Check non-evictable entries first
-		auto non_evictable_it = non_evictable_entries.find(key);
+		auto non_evictable_it = non_evictable_entries.find(cache_key);
 		if (non_evictable_it != non_evictable_entries.end()) {
 			auto &existing = non_evictable_it->second;
 			if (existing->GetObjectType() != T::ObjectType()) {
@@ -98,7 +100,7 @@ public:
 		}
 
 		// Check evictable cache
-		auto existing = lru_cache.Get(key);
+		auto existing = lru_cache.Get(cache_key);
 		if (existing) {
 			if (existing->GetObjectType() != T::ObjectType()) {
 				return nullptr;
@@ -111,14 +113,20 @@ public:
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
-			non_evictable_entries[key] = value;
+			non_evictable_entries[cache_key] = value;
 			return value;
 		}
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(key, value, std::move(reservation));
+		lru_cache.Put(cache_key, value, std::move(reservation));
 		return value;
+	}
+
+	//! Type-aware Put: the key is namespaced with ObjectType, so callers only pass a natural key.
+	template <class T>
+	void Put(const string &key, shared_ptr<ObjectCacheEntry> value) {
+		Put(MakeCacheKey<T>(key), std::move(value));
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
@@ -137,6 +145,12 @@ public:
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
 		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+	}
+
+	//! Type-aware Delete: the key is namespaced with TObjectType.
+	template <class T>
+	void Delete(const string &key) {
+		Delete(MakeCacheKey<T>(key));
 	}
 
 	void Delete(const string &key) {
@@ -171,6 +185,14 @@ public:
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.EvictToReduceAtLeast(target_bytes);
+	}
+
+private:
+	//! Build the internal cache key for a typed entry by namespacing the caller-provided key with the entry's
+	//! ObjectType.
+	template <class T>
+	static string MakeCacheKey(const string &key) {
+		return StringUtil::Format("%s-%s", T::ObjectType(), key);
 	}
 
 private:

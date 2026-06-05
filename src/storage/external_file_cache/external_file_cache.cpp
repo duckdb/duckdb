@@ -16,15 +16,13 @@ namespace duckdb {
 
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
-	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string object_cache_key_p, string path_p,
-	                                  idx_t generation_p)
-	    : cache(cache_p), object_cache_key(std::move(object_cache_key_p)),
-	      cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p)) {
-		cache.InsertCachedFileKey(object_cache_key);
+	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p, idx_t generation_p)
+	    : cache(cache_p), cached_file(make_shared_ptr<CachedFile>(std::move(path_p), generation_p)) {
+		cache.InsertCachedFileKey(cached_file->path);
 	}
 
 	~ExternalFileCacheObjectCacheEntry() override {
-		cache.EraseCachedFileKey(object_cache_key);
+		cache.EraseCachedFileKey(cached_file->path);
 	}
 
 	static string ObjectType() {
@@ -36,7 +34,7 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		return object_cache_key.size() * 2 + cached_file->path.size();
+		return cached_file->path.size() * 2;
 	}
 
 	shared_ptr<CachedFile> GetCachedFile() const {
@@ -45,7 +43,6 @@ public:
 
 private:
 	ExternalFileCache &cache;
-	string object_cache_key;
 	shared_ptr<CachedFile> cached_file;
 };
 
@@ -309,23 +306,18 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 	return context.db->GetExternalFileCache();
 }
 
-string ExternalFileCache::ObjectCacheKey(const string &path) {
-	return StringUtil::Format("external-cache-%s", path);
-}
-
 BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_cache_keys_p) {
+void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
-	for (auto &key : object_cache_keys_p) {
-		object_cache.Delete(key);
+	for (auto &path : paths) {
+		object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
 	}
 }
 
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
-	const auto object_cache_key = ObjectCacheKey(path);
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	while (true) {
 		const auto current_generation = generation.load();
@@ -333,31 +325,31 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 			return make_shared_ptr<CachedFile>(path, current_generation);
 		}
 
-		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(
-		    object_cache_key, *this, object_cache_key, path, current_generation);
+		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(path, *this, path,
+		                                                                         current_generation);
 		auto cached_file = entry->GetCachedFile();
 
 		if (!enable) {
-			object_cache.Delete(object_cache_key);
+			object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
 			return make_shared_ptr<CachedFile>(path, current_generation);
 		}
 		if (cached_file->generation != current_generation) {
-			object_cache.Delete(object_cache_key);
+			object_cache.Delete<ExternalFileCacheObjectCacheEntry>(path);
 			continue;
 		}
 		return cached_file;
 	}
 }
 
-void ExternalFileCache::InsertCachedFileKey(const string &object_cache_key) {
+void ExternalFileCache::InsertCachedFileKey(const string &path) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto inserted = cached_file_keys.insert(object_cache_key);
+	auto inserted = cached_file_keys.insert(path);
 	ALWAYS_ASSERT(inserted.second);
 }
 
-void ExternalFileCache::EraseCachedFileKey(const string &object_cache_key) {
+void ExternalFileCache::EraseCachedFileKey(const string &path) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto entry = cached_file_keys.find(object_cache_key);
+	auto entry = cached_file_keys.find(path);
 	ALWAYS_ASSERT(entry != cached_file_keys.end());
 	cached_file_keys.erase(entry);
 }

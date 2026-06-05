@@ -30,10 +30,6 @@ string ParquetFileMetadataCache::ObjectType() {
 	return "parquet_metadata";
 }
 
-string ParquetFileMetadataCache::ObjectCacheKey(const string &path) {
-	return StringUtil::Format("parquet-metadata-%s", path);
-}
-
 string ParquetFileMetadataCache::GetObjectType() {
 	return ObjectType();
 }

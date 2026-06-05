@@ -81,7 +81,9 @@ TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	REQUIRE(cache.GetOrCreate<TestObject>("test", 1337)->value == 42);
 	REQUIRE(cache.Get<TestObject>("test")->value == 42);
 
-	REQUIRE(cache.GetOrCreate<AnotherTestObject>("test", 13) == nullptr);
+	REQUIRE(cache.GetOrCreate<AnotherTestObject>("test", 13) != nullptr);
+	REQUIRE(cache.GetOrCreate<AnotherTestObject>("test", 99)->value == 13);
+	REQUIRE(cache.Get<TestObject>("test")->value == 42);
 }
 
 TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {

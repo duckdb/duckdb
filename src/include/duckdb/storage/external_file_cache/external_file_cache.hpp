@@ -92,18 +92,16 @@ public:
 private:
 	class ExternalFileCacheObjectCacheEntry;
 
-	static string ObjectCacheKey(const string &path);
-
 	//! Re-index blocks of a single cached file.
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
-	//! Registers an external file cache ObjectCache key in the tracked key set.
-	void InsertCachedFileKey(const string &object_cache_key);
-	//! Removes an external file cache ObjectCache key from the tracked key set.
-	void EraseCachedFileKey(const string &object_cache_key);
-	//! Delete ObjectCache entries.
-	void DeleteObjectCacheEntries(const vector<string> &object_cache_keys);
+	//! Registers a cached file path in the tracked set.
+	void InsertCachedFileKey(const string &path);
+	//! Removes a cached file path from the tracked set.
+	void EraseCachedFileKey(const string &path);
+	//! Delete the ObjectCache entries for the given cached file paths.
+	void DeleteObjectCacheEntries(const vector<string> &paths);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
@@ -111,8 +109,8 @@ private:
 	atomic<bool> enable;
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
-	//! ObjectCache keys for external file cache entries.
-	//! It should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
+	//! Paths of the cached files tracked in the ObjectCache.
+	//! Entries should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
 	unordered_set<string> cached_file_keys DUCKDB_GUARDED_BY(lock);
 	//! Lock for accessing cached_file_keys.
 	mutable annotated_mutex lock;
