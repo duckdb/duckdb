@@ -33,6 +33,43 @@ def strip_ansi_lines(lines: list[str]) -> list[str]:
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_highlight_stack_trace_lines_colors_frame_index_and_function_name(self):
+        lines = run_tests.highlight_stack_trace_lines(
+            [
+                "INTERNAL Error: something bad happened",
+                "Stack Trace:",
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType) + 288",
+                "1        duckdb::TaskScheduler::ExecuteForever(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868",
+                "2        Catch::RunContext::invokeActiveTestCase() + 144",
+                "3        main(int, char**) + 32",
+            ]
+        )
+
+        self.assertEqual(
+            lines[2],
+            (
+                f"{run_tests.ANSI_DARK_GRAY}0{run_tests.ANSI_RESET}        "
+                f"{run_tests.ANSI_TEAL}duckdb::Exception::Exception{run_tests.ANSI_RESET}"
+                "(duckdb::ExceptionType) + 288"
+            ),
+        )
+        self.assertEqual(
+            lines[3],
+            (
+                f"{run_tests.ANSI_DARK_GRAY}1{run_tests.ANSI_RESET}        "
+                f"{run_tests.ANSI_TEAL}duckdb::TaskScheduler::ExecuteForever{run_tests.ANSI_RESET}"
+                "(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868"
+            ),
+        )
+        self.assertEqual(
+            strip_ansi_lines(lines[2:]),
+            [
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType) + 288",
+                "1        duckdb::TaskScheduler::ExecuteForever(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868",
+            ],
+        )
+        self.assertEqual(len(lines), 4)
+
     def test_wrapper_builds_sibling_unittest_argv(self):
         argv = test_runner_wrapper.build_run_tests_argv(["[slow]", "test/sql/a.test"], "build/release/test/run")
         self.assertEqual(
@@ -1391,6 +1428,74 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
                 "FAILED: REQUIRE( NO_FAIL((con1.Query( \"SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name\"))) )",
                 "  with expansion:",
                 "false",
+            ],
+        )
+
+    def test_generic_failure_extracts_sqllogictest_assertion_details(self):
+        batch = ["test/sql/copy/partitioned/partitioned_order_by_flush_race.test"]
+        stdout = """
+Filters: test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+[0/1] (0%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unittest is a Catch v2.13.7 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+-------------------------------------------------------------------------------
+/Users/sander/dev/duckdb/duckdb/test/sqlite/test_sqllogictest.cpp:41
+...............................................................................
+
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27: FAILED:
+explicitly with message:
+  0
+
+[1/1] (100%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test took 1.086s
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 8 | 7 passed | 1 failed
+"""
+        stderr = """
+1. test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27
+================================================================================
+
+::error::Query unexpectedly failed! (test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27)!
+================================================================================
+COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
+TO 'duckdb_unittest_tempdir/11276/large_ordered_partitioned_1'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);
+================================================================================
+INTERNAL Error: Assertion triggered in file "/Users/sander/dev/duckdb/duckdb/src/execution/operator/persistent/physical_copy_to_file.cpp" on line 1335: batch_state.mode == PartitionedCopyBatchMode::PREPARING
+
+Stack Trace:
+
+0        duckdb::Exception::Exception(duckdb::ExceptionType, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) + 288
+1        duckdb::InternalException::InternalException<char const*&, int&, char const*&>(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, char const*&, int&, char const*&) + 396
+2        duckdb::DuckDBAssertInternal(bool, char const*, char const*, int) + 480
+3        duckdb::PartitionedCopyHashGroup::Prepare(duckdb::ExecutionContext&, duckdb::InterruptState&, duckdb::PartitionedCopyTask const&) + 660
+
+This error signals an assertion failure within DuckDB. This usually occurs due to unexpected conditions or errors in the program's logic.
+For more information, see https://duckdb.org/docs/current/dev/internal_errors
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(reproduce_batch, batch)
+        self.assertEqual(
+            strip_ansi_lines(lines)[1:],
+            [
+                "error: FAIL test/sql/copy/partitioned/partitioned_order_by_flush_race.test",
+                "",
+                "  > 27  statement ok",
+                "    28  COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)",
+                "    29  TO '{TEST_DIR}/large_ordered_partitioned_{i}'",
+                "    30  (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);",
+                "",
+                ""
+                "INTERNAL Error: Assertion triggered in file \"/Users/sander/dev/duckdb/duckdb/src/execution/operator/persistent/physical_copy_to_file.cpp\" on line 1335: batch_state.mode == PartitionedCopyBatchMode::PREPARING",
+                "Stack Trace:",
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) + 288",
+                "1        duckdb::InternalException::InternalException<char const*&, int&, char const*&>(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, char const*&, int&, char const*&) + 396",
+                "2        duckdb::DuckDBAssertInternal(bool, char const*, char const*, int) + 480",
+                "3        duckdb::PartitionedCopyHashGroup::Prepare(duckdb::ExecutionContext&, duckdb::InterruptState&, duckdb::PartitionedCopyTask const&) + 660",
             ],
         )
 
