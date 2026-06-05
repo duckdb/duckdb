@@ -304,7 +304,8 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	if (!updates) {
 		return;
 	}
-	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
+	const idx_t offset = NumericCast<idx_t>(row_id);
+	updates->FetchRows(transaction, &offset, *FlatVector::IncrementalSelectionVector(), 1, result, result_idx);
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
@@ -714,10 +715,7 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	{
 		const lock_guard<mutex> update_guard(update_lock);
 		if (updates) {
-			for (idx_t idx = 0; idx < fetch_count; idx++) {
-				const idx_t offset = offsets[sel.get_index(idx)];
-				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + idx);
-			}
+			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
 		}
 	}
 }

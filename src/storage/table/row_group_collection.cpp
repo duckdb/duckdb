@@ -477,8 +477,6 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
 	// Filter selection vector.
 	SelectionVector filter_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
-	// Identity selection vector.
-	const SelectionVector identity_sel;
 
 	idx_t pos = 0;
 	while (pos < fetch_count) {
@@ -514,13 +512,14 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 
 		// 3. bulk visibility check for the whole run.
 		idx_t visible_count = 0;
-		const SelectionVector *sel_for_fetch = nullptr;
+		const_reference<SelectionVector> sel_for_fetch(*FlatVector::IncrementalSelectionVector());
 		if (state.fetch_type == FetchType::FORCE_FETCH) {
 			visible_count = run_count;
-			sel_for_fetch = &identity_sel;
 		} else {
 			visible_count = current_row_group.Fetch(transaction, offsets, run_count, filter_sel);
-			sel_for_fetch = (visible_count == run_count) ? &identity_sel : &filter_sel;
+			if (visible_count != run_count) {
+				sel_for_fetch = filter_sel;
+			}
 		}
 
 		if (visible_count == 0) {
@@ -529,7 +528,7 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 
 		// 4. bulk per-column fetch
 		state.row_group = row_group;
-		current_row_group.FetchRows(transaction, state, column_ids, offsets, *sel_for_fetch, visible_count, result,
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, sel_for_fetch.get(), visible_count, result,
 		                            count);
 		count += visible_count;
 	}
