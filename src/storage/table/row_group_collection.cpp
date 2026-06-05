@@ -1346,7 +1346,8 @@ public:
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// finalize the last append
-						new_row_groups[current_append_idx]->GetNode().FinalizeAppend(append_state.row_group_append_state);
+						new_row_groups[current_append_idx]->GetNode().FinalizeAppend(
+						    append_state.row_group_append_state);
 
 						// move to the next row group
 						current_append_idx++;
