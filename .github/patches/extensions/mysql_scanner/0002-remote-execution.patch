@@ -715,10 +715,10 @@ index fea00b5..cd56adb 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..3dbf1c8
+index 0000000..03e1525
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,803 @@
+@@ -0,0 +1,821 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -1192,6 +1192,24 @@ index 0000000..3dbf1c8
 +		return WriteCase(expr.Cast<CaseExpression>());
 +	case ExpressionClass::CAST: {
 +		auto &cast_expr = expr.Cast<CastExpression>();
++		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
++			// casts of literals are evaluated locally and serialized as the resulting value -
++			// MySQL's CAST diverges from DuckDB's for malformed input (NULL / partial values
++			// instead of errors), numeric strings ('1e2', '5.7') and time zone offsets
++			// (SupportsPushdown verifies that the cast succeeds)
++			auto &value = cast_expr.Child().Cast<ConstantExpression>().GetValue();
++			auto target_type = cast_expr.TargetType();
++			if (target_type.id() == LogicalTypeId::UNBOUND) {
++				target_type = UnboundType::TryDefaultBind(target_type);
++			}
++			Value cast_result;
++			string error;
++			if (!value.DefaultTryCastAs(target_type, cast_result, &error)) {
++				throw InternalException("MySQLSQLWriter: cast of literal failed - should have been blocked by "
++				                        "SupportsPushdown");
++			}
++			return WriteConstant(cast_result);
++		}
 +		return "CAST(" + WriteExpression(cast_expr.Child()) + " AS " + WriteCastType(cast_expr.TargetType()) + ")";
 +	}
 +	case ExpressionClass::BETWEEN: {
@@ -1564,7 +1582,7 @@ index ef3d3d6..1f39ce9 100644
  	string result;
  	for (auto c : text) {
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..6b17430 100644
+index af9ffd7..0dbb60f 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1617,7 +1635,7 @@ index af9ffd7..6b17430 100644
  }
  
  MySQLCatalog::~MySQLCatalog() = default;
-@@ -503,6 +532,1011 @@ WHERE table_schema = ${SCHEMA_NAME};
+@@ -503,6 +532,1040 @@ WHERE table_schema = ${SCHEMA_NAME};
  	return size;
  }
  
@@ -2050,7 +2068,12 @@ index af9ffd7..6b17430 100644
 +		}
 +		if (expr.GetExpressionClass() == ExpressionClass::CONSTANT) {
 +			auto &val = expr.Cast<ConstantExpression>().GetValue();
-+			if (val.type().IsIntegral()) {
++			if (!val.type().IsIntegral()) {
++				// ORDER BY with a non-integer literal is a binder error in DuckDB (unless
++				// order_by_non_integer_literal is set), while MySQL silently ignores it
++				return false;
++			}
++			{
 +				// positional reference - it must be resolvable against the select list so that
 +				// the NULL ordering can be made explicit when serializing
 +				if (!select_list || val.IsNull()) {
@@ -2166,6 +2189,16 @@ index af9ffd7..6b17430 100644
 +static bool MySQLSupportsCTEMap(const CommonTableExpressionMap &cte_map) {
 +	for (auto &cte_pair : cte_map.map) {
 +		auto &cte_info = *cte_pair.second;
++		if (cte_pair.first.size() > 64) {
++			// MySQL limits identifiers to 64 characters ("Identifier name is too long")
++			return false;
++		}
++		for (auto &alias : cte_info.aliases) {
++			if (alias.size() > 64) {
++				// CTE column names are also subject to MySQL's identifier length limit
++				return false;
++			}
++		}
 +		if (cte_info.materialized != CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
 +			// AS [NOT] MATERIALIZED is not supported in MySQL
 +			return false;
@@ -2278,10 +2311,14 @@ index af9ffd7..6b17430 100644
 +		if (!MySQLSupportsType(cast_expr.TargetType(), true)) {
 +			return false;
 +		}
-+		// MySQL's CAST does not raise an error for malformed input - it returns NULL or a
-+		// partial value (e.g. CAST('abc' AS SIGNED) is 0, CAST('12abc' AS SIGNED) is 12) where
-+		// DuckDB raises a conversion error. For literal inputs the cast can be verified locally;
-+		// casts of non-literal expressions over malformed data remain a documented limitation.
++		// MySQL's CAST semantics differ from DuckDB's in several ways: malformed input returns
++		// NULL or a partial value instead of raising an error (CAST('abc' AS SIGNED) is 0,
++		// CAST('12abc' AS SIGNED) is 12), numeric strings are truncated instead of parsed
++		// (CAST('1e2' AS SIGNED) is 1, CAST('5.7' AS SIGNED) is 5) and time zone offsets are
++		// converted to the session time zone instead of being ignored. Casts of literals are
++		// therefore evaluated locally and serialized as the resulting value (see
++		// MySQLSQLWriter::WriteExpression) - verify here that this is possible. Casts of
++		// non-literal expressions over malformed data remain a documented limitation.
 +		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
 +			auto &value = cast_expr.Child().Cast<ConstantExpression>().GetValue();
 +			auto target_type = cast_expr.TargetType();
@@ -2295,6 +2332,10 @@ index af9ffd7..6b17430 100644
 +			}
 +			// the cast result must also be representable in MySQL
 +			if (!MySQLSupportsValue(cast_result)) {
++				return false;
++			}
++			if (cast_result.type().id() == LogicalTypeId::VARCHAR && version.GetBinaryCollation().empty()) {
++				// the folded result is serialized as a string literal, which requires a binary collation
 +				return false;
 +			}
 +		}
@@ -2504,6 +2545,12 @@ index af9ffd7..6b17430 100644
 +		}
 +		if (select.sample) {
 +			// MySQL has no USING SAMPLE
++			return false;
++		}
++		if (select.having && select.groups.grouping_sets.empty()) {
++			// HAVING without GROUP BY: MySQL resolves bare column references against the select
++			// list and filters rows, while DuckDB turns the query into an aggregation and raises
++			// a binder error for non-aggregated columns
 +			return false;
 +		}
 +		if (!MySQLSupportsSelectAliasUsage(select)) {

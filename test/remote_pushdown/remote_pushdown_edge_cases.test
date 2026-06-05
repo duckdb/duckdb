@@ -299,3 +299,98 @@ query II
 explain SELECT monthname(d) FROM s.edge_date_tbl
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
+
+# ---- casts of literals are folded locally: MySQL's CAST parses numeric strings and time
+# ---- zone offsets differently (CAST('1e2' AS SIGNED) = 1, CAST('5.7' AS SIGNED) = 5,
+# ---- offsets are converted to the session time zone instead of ignored)
+query I
+SELECT COUNT(*) FROM s.edge_tbl WHERE CAST('1e2' AS BIGINT) = 100
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE CAST('1e2' AS BIGINT) = 100
+----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# DuckDB rounds '7.6' to 8; MySQL would truncate to 7
+query I
+SELECT COUNT(*) FROM s.edge_tbl WHERE i > CAST('7.6' AS BIGINT)
+----
+1
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl WHERE i > CAST('7.6' AS BIGINT)
+----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# DuckDB ignores the time zone offset; MySQL would convert to the session time zone
+query I
+SELECT COUNT(*) FROM s.edge_tbl
+    WHERE CAST('2020-01-01 12:00:00+02' AS TIMESTAMP) = TIMESTAMP '2020-01-01 12:00:00'
+----
+10
+
+query II
+explain SELECT COUNT(*) FROM s.edge_tbl
+    WHERE CAST('2020-01-01 12:00:00+02' AS TIMESTAMP) = TIMESTAMP '2020-01-01 12:00:00'
+----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# ---- HAVING without GROUP BY: MySQL filters rows resolving the select list, DuckDB
+# ---- treats the query as an aggregation (binder error for bare columns)
+statement error
+SELECT i FROM s.edge_tbl HAVING i > 5
+----
+<REGEX>:Binder Error.*GROUP BY.*
+
+query I
+SELECT sum(i) FROM s.edge_tbl HAVING sum(i) > 5
+----
+45
+
+query II
+explain SELECT sum(i) FROM s.edge_tbl HAVING sum(i) > 5
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
+
+# HAVING with GROUP BY is still pushed
+query II
+explain SELECT i % 2 AS g, sum(i) FROM s.edge_tbl GROUP BY g HAVING sum(i) > 5
+----
+physical_plan	<!REGEX>:.*MYSQL_SCAN.*
+
+# ---- ORDER BY with a non-integer literal is a binder error in DuckDB; MySQL ignores it ----
+statement error
+SELECT i FROM s.edge_tbl ORDER BY 1.5
+----
+<REGEX>:Binder Error.*non-integer literal.*
+
+statement ok
+SET order_by_non_integer_literal = true
+
+# even when DuckDB is configured to allow it, both systems ignore the constant - stays local
+query I
+SELECT COUNT(*) FROM (SELECT i FROM s.edge_tbl ORDER BY 1.5) t
+----
+10
+
+statement ok
+SET order_by_non_integer_literal = false
+
+# ---- CTE names longer than MySQL's 64-character identifier limit stay local ----
+query I
+WITH cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters AS (
+    SELECT i FROM s.edge_tbl
+)
+SELECT COUNT(*) FROM cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters
+----
+10
+
+query II
+explain WITH cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters AS (
+    SELECT i FROM s.edge_tbl
+)
+SELECT COUNT(*) FROM cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters
+----
+physical_plan	<REGEX>:.*MYSQL_SCAN.*
