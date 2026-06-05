@@ -85,7 +85,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
 		const auto cache_key = MakeCacheKey<T>(key);
 		const lock_guard<mutex> lock(lock_mutex);
 

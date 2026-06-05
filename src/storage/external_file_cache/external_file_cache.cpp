@@ -325,8 +325,7 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 			return make_shared_ptr<CachedFile>(path, current_generation);
 		}
 
-		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(path, *this, path,
-		                                                                         current_generation);
+		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(path, *this, path, current_generation);
 		auto cached_file = entry->GetCachedFile();
 
 		if (!enable) {
