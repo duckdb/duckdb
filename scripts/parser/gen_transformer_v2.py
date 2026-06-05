@@ -568,6 +568,17 @@ def _temp_name(target_name, suffix, depth):
     return f"{target_name}_{suffix}{depth_suffix}"
 
 
+def _default_initializer(cpp_type):
+    """Return the semantic default initializer for optional generated values."""
+    if cpp_type == "JoinType":
+        return "= JoinType::INNER"
+    if cpp_type == "OrderType":
+        return "= OrderType::ORDER_DEFAULT"
+    if cpp_type == "OrderByNullType":
+        return "= OrderByNullType::ORDER_DEFAULT"
+    return "{}"
+
+
 def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=True, depth=0):
     """Emit recursive extraction code for a plan rooted at source_expr."""
     target_name = target_name or plan.var_name
@@ -596,7 +607,7 @@ def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=T
         opt_name = _temp_name(target_name, "opt", depth)
         lines = []
         if declare:
-            lines.append(f"{indent}{plan.cpp_type} {target_name} {{}};")
+            lines.append(f"{indent}{plan.cpp_type} {target_name} {_default_initializer(plan.cpp_type)};")
         lines.extend(
             [
                 f"{indent}auto &{opt_name} = {source_expr}.Cast<OptionalParseResult>();",
@@ -1310,7 +1321,7 @@ def main():
         'pivot.gram',
         'pragma.gram',
         'prepare.gram',
-        # 'select.gram',
+        'select.gram',
         'set.gram',
         'transaction.gram',
         'update.gram',

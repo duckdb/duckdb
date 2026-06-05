@@ -434,7 +434,6 @@ Expression:
     - QualifyClause
     - WindowDefinition
     - SampleValue
-    - FunctionArgument
     - GroupByExpression
     - EmptyGroupingItem
     - CubeOrRollupClause
@@ -578,6 +577,12 @@ FunctionArgumentList:
   rules:
     - TableFunctionArguments
 
+FunctionArgument:
+  type: "FunctionArgument"
+  by_value: true
+  rules:
+    - FunctionArgument
+
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
   by_value: true
@@ -652,7 +657,7 @@ PivotColumnList:
 
 PivotColumnEntryList:
   type: "vector<PivotColumnEntry>"
-  by_value: false
+  by_value: true
   rules:
     - PivotTargetList
     - UnpivotTargetList
@@ -692,13 +697,13 @@ QualifiedName:
 
 OrderByNode:
   type: "OrderByNode"
-  by_value: false
+  by_value: true
   rules:
     - OrderByExpression
 
 GroupByNode:
   type: "GroupByNode"
-  by_value: false
+  by_value: true
   rules:
     - GroupByClause
     - GroupByExpressions
@@ -707,7 +712,7 @@ GroupByNode:
 
 LimitPercentResult:
   type: "LimitPercentResult"
-  by_value: false
+  by_value: true
   rules:
     - LimitClause
     - LimitValue
@@ -719,7 +724,7 @@ LimitPercentResult:
 
 DistinctClause:
   type: "DistinctClause"
-  by_value: false
+  by_value: true
   rules:
     - DistinctClause
     - DistinctOn
@@ -1513,5 +1518,32 @@ excluded_rules:
   - Unique
   - RowOrStruct
   - SetData
+  - SelectStatement
+  - SelectStatementInternal
+  - SimpleSelect
+  - SetIntersectClause
+  - SetopClause
+  - TableRef
+  - BaseTableName
+  - FunctionArgument
+  - NamedParameter
+  - WithClause
+  - CTEBody
+  - WithStatement
   - CTEBodyContent
+  - Materialized
+  - TableFunctionLateralOpt
+  - TableFunctionAliasColon
+  - RegularJoinClause
+  - AtUnit
+  - WindowDefinition
+  - SampleEntryCount
+  - SampleEntryFunction
+  - GroupByList
+  - GroupByExpression
+  - EmptyGroupingItem
+  - CubeOrRollupClause
+  - CubeOrRollup
+  - GroupingSetsClause
+  - LimitExpression
   - SingleArrowPair

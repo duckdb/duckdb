@@ -357,7 +357,7 @@ pair<string, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTransform
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBitType(PEGTransformer &transformer,
-                                        const vector<unique_ptr<ParsedExpression>> &expression) {
+                                        vector<unique_ptr<ParsedExpression>> expression) {
 	return make_uniq<TypeExpression>("BIT", vector<unique_ptr<ParsedExpression>> {});
 }
 
