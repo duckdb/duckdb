@@ -1727,6 +1727,9 @@ namespace {
 struct FactorialOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
+		if (left < 0) {
+			throw OutOfRangeException("factorial of a negative number is undefined");
+		}
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
 			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {

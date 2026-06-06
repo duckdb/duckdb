@@ -17,15 +17,15 @@ namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.GetChildrenMutable()) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			ReplaceMacroParameters(child, lambda_params);
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+			ReplaceMacroParameters(child.GetExpressionMutable(), lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not replace them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
@@ -100,7 +100,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 // Find aggregate expression children
 void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
                                           vector<reference<unique_ptr<ParsedExpression>>> &exprs) {
-	if ((expr->GetExpressionType() == ExpressionType::FUNCTION)) {
+	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &fn_expr = expr->Cast<FunctionExpression>();
 
 		// Look up the function in the catalog, check to see if it is actually an aggregate function
@@ -136,7 +136,10 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	window_expr.CatalogMutable() = agg_fn_expr.Catalog();
 	window_expr.SchemaMutable() = agg_fn_expr.Schema();
 	window_expr.FunctionNameMutable() = agg_fn_expr.FunctionName();
-	window_expr.GetChildrenMutable() = std::move(agg_fn_expr.GetChildrenMutable());
+	window_expr.GetArgumentsMutable().clear();
+	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {
+		window_expr.GetArgumentsMutable().push_back(std::move(arg));
+	}
 	if (!window_expr.Distinct()) {
 		window_expr.DistinctMutable() = agg_fn_expr.Distinct();
 	}

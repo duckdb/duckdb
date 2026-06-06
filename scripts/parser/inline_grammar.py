@@ -9,7 +9,7 @@ statements_dir = peg_dir / 'grammar' / 'statements'
 keywords_dir = peg_dir / 'grammar' / 'keywords'
 target_file = scripts_dir.parent / 'src' / 'include' / 'duckdb' / 'parser' / 'peg' / 'inlined_grammar.hpp'
 
-IMPLICIT_RULES = {'%whitespace'}
+IMPLICIT_RULES = {'%whitespace', 'EndOfInput'}
 
 # Maps filenames to string categories.
 # typefunc_keyword_map is the union of type name and func name keywords.
@@ -298,6 +298,9 @@ def check_undefined_rules(all_rules):
     for rule_name, rule in all_rules.items():
         for ref in rule.references():
             if ref in rule.parameters:
+                continue
+            if ref in IMPLICIT_RULES:
+                # Rule is provided at runtime via MatcherFactory::AddRuleOverride.
                 continue
             if ref not in all_rules:
                 print(f"Error: rule '{rule_name}' references undefined rule '{ref}'")

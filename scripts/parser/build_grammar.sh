@@ -25,5 +25,4 @@ python3 "$GEN_TRANSFORMER_FILE" --write
 
 echo "Successfully generated transformer wrappers"
 
-echo "Running format-fix..."
-make format-fix > /dev/null 2>&1
+make format-parser-grammar
