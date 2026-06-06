@@ -103,7 +103,7 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 		OP::template Operation<interval_t>(std::forward<ARGS>(args)...);
 		break;
 	default:
-		throw InternalException("Unsupported physical type: %s for aggregate state", TypeIdToString(type));
+		throw NotImplementedException("Unsupported physical type for default aggregate state export: %s", TypeIdToString(type));
 	}
 }
 
@@ -842,6 +842,8 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
 	bound_function.SetStateFinalizeCallback(ExportAggregateFinalize);
+	// statistics propagation is no longer correct post
+	bound_function.SetStatisticsCallback(nullptr);
 	bound_function.SetReturnType(state_layout);
 	aggregate.StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
 	aggregate.SetReturnType(std::move(state_layout));

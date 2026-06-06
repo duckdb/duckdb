@@ -19,19 +19,22 @@ struct LocalUngroupedAggregateState;
 
 struct UngroupedAggregateState {
 	explicit UngroupedAggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions);
+	UngroupedAggregateState(const UngroupedAggregateState &global_state);
 	~UngroupedAggregateState();
 
 	void Move(UngroupedAggregateState &other);
 
 public:
-	//! Aggregates
-	const vector<unique_ptr<Expression>> &aggregate_expressions;
 	//! The aggregate values
 	vector<unsafe_unique_array<data_t>> aggregate_data;
 	//! The bind data
 	vector<unique_ptr<FunctionData>> bind_data;
-	//! The destructors
-	vector<aggregate_destructor_t> destructors;
+	//! Copies of aggregate functions (owns the callbacks and state size)
+	vector<BoundAggregateFunction> functions;
+	//! Aggregate types (distinct vs non-distinct)
+	vector<AggregateType> aggregate_types;
+	//! Number of arguments per aggregate (children count)
+	vector<idx_t> argument_counts;
 	//! Counts (used for verification)
 	unique_array<atomic<idx_t>> counts;
 };

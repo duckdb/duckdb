@@ -126,6 +126,9 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
+	if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return false;
+	}
 	if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 		return false;
 	}

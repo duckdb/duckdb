@@ -36,6 +36,12 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 			// already an aggregate state export - skip verification
 			return false;
 		}
+		// skip if the aggregate cannot be exported (no combine, has destructor, or no state type callback)
+		auto &aggr_expr = aggr->Cast<BoundAggregateExpression>();
+		auto &func = aggr_expr.Function();
+		if (!func.HasStateCombineCallback() || func.HasStateDestructorCallback() || !func.HasGetStateTypeCallback()) {
+			return false;
+		}
 	}
 
 	// we transform a query like "SELECT grp, SUM(col) FROM tbl GROUP BY grp" into
