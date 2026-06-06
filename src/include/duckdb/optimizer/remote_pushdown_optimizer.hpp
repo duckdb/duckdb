@@ -49,6 +49,16 @@ struct CatalogPushdownResult {
 //! Whether an expression (tree) can be constant-folded
 enum class ExpressionFoldability { FOLDABLE, NOT_FOLDABLE };
 
+//! Whether an expression itself may be constant-folded
+enum class ExpressionFoldingMode {
+	//! The expression (or any subtree within) can be folded
+	FOLD_EXPRESSION,
+	//! Only subtrees within the expression can be folded, the expression itself must be kept -
+	//! used for positional contexts (ORDER BY / GROUP BY / DISTINCT ON, where a folded integer
+	//! literal would become a positional reference) and after a failed folding attempt
+	FOLD_CHILDREN_ONLY
+};
+
 //! The result of rewriting a single expression
 struct ExpressionPushdownResult {
 	//! The catalog analysis result - empty for FOLDABLE expressions, which are folded by the parent
@@ -98,11 +108,11 @@ private:
 		//! executed locally so the user sees DuckDB's error message
 		FOLD_ERROR
 	};
-	//! Rewrite an expression, constant-folding maximal foldable subtrees. "can_fold" must be
-	//! false where a bare integer literal has positional meaning (ORDER BY / GROUP BY / DISTINCT ON)
-	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold = true);
+	//! Rewrite an expression, constant-folding maximal foldable subtrees
+	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr,
+	                              ExpressionFoldingMode mode = ExpressionFoldingMode::FOLD_EXPRESSION);
 	//! Rewrite an expression, deferring the folding of foldable subtrees to the parent (or the root)
-	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, bool can_fold, bool fold_self);
+	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, ExpressionFoldingMode mode);
 	//! Fold a maximal foldable subtree and record the resulting constant
 	CatalogPushdownResult FoldExpression(unique_ptr<ParsedExpression> &expr);
 	//! Rewrite an expression that cannot be modified (cast target type expressions)

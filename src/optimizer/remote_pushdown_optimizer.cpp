@@ -264,7 +264,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(RecursiveCTENode &nod
 			for (auto &order : order_mod.orders) {
 				// ORDER BY entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(order.expression, false));
+				result = Merge(result, Rewrite(order.expression, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 			}
 			break;
 		}
@@ -283,7 +283,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(RecursiveCTENode &nod
 			for (auto &expr : distinct_mod.distinct_on_targets) {
 				// DISTINCT ON entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(expr, false));
+				result = Merge(result, Rewrite(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 			}
 			break;
 		}
@@ -311,7 +311,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 	for (auto &expr : node.groups.group_expressions) {
 		// GROUP BY entries cannot be constant-folded - a bare integer literal is a
 		// positional reference there
-		result = Merge(result, Rewrite(expr, false));
+		result = Merge(result, Rewrite(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 	}
 	if (node.having) {
 		result = Merge(result, Rewrite(node.having));
@@ -326,7 +326,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 			for (auto &order : order_mod.orders) {
 				// ORDER BY entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(order.expression, false));
+				result = Merge(result, Rewrite(order.expression, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 			}
 			break;
 		}
@@ -345,7 +345,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 			for (auto &expr : distinct_mod.distinct_on_targets) {
 				// DISTINCT ON entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(expr, false));
+				result = Merge(result, Rewrite(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 			}
 			break;
 		}
@@ -470,7 +470,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &nod
 			for (auto &order : order_mod.orders) {
 				// ORDER BY entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(order.expression, false));
+				result = Merge(result, Rewrite(order.expression, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 				has_expression_modifiers = true;
 			}
 			break;
@@ -492,7 +492,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &nod
 			for (auto &expr : distinct_mod.distinct_on_targets) {
 				// DISTINCT ON entries cannot be constant-folded - a bare integer literal is a
 				// positional reference there
-				result = Merge(result, Rewrite(expr, false));
+				result = Merge(result, Rewrite(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY));
 				has_expression_modifiers = true;
 			}
 			break;
@@ -1029,15 +1029,15 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExp
 	}
 }
 
-ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<ParsedExpression> &expr, bool can_fold,
-                                                                    bool fold_self) {
+ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<ParsedExpression> &expr,
+                                                                    ExpressionFoldingMode mode) {
 	// rewrite the children - foldable subtrees are folded at the last possible moment, so that
 	// every maximal foldable subtree is bound and evaluated exactly once
 	auto result = CatalogPushdownResult::NoCatalogReference();
 	vector<reference<unique_ptr<ParsedExpression>>> foldable_children;
 	bool all_children_foldable = true;
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		auto child_state = RewriteExpression(child, true, true);
+		auto child_state = RewriteExpression(child, ExpressionFoldingMode::FOLD_EXPRESSION);
 		if (child_state.foldability == ExpressionFoldability::FOLDABLE) {
 			// defer - the subtree is folded when it turns out to be a maximal foldable subtree
 			foldable_children.push_back(child);
@@ -1046,7 +1046,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 			result = Merge(std::move(result), std::move(child_state.result));
 		}
 	});
-	if (fold_self && can_fold && all_children_foldable && IsFoldableExpressionClass(*expr)) {
+	if (mode == ExpressionFoldingMode::FOLD_EXPRESSION && all_children_foldable && IsFoldableExpressionClass(*expr)) {
 		// this expression is itself foldable - defer folding to the parent
 		ExpressionPushdownResult state;
 		state.foldability = ExpressionFoldability::FOLDABLE;
@@ -1080,8 +1080,8 @@ CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedE
 			// evaluating is guaranteed to fail - keep the query local so the user sees DuckDB's error
 			return CatalogPushdownResult::Unknown();
 		case ConstantFoldResult::NOT_FOLDABLE:
-			// binding did not succeed after all - process the expression without folding it
-			return RewriteExpression(expr, true, false).result;
+			// binding did not succeed after all - process the expression without re-attempting the fold
+			return RewriteExpression(expr, ExpressionFoldingMode::FOLD_CHILDREN_ONLY).result;
 		case ConstantFoldResult::FOLDED:
 			break;
 		}
@@ -1092,8 +1092,8 @@ CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedE
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold) {
-	auto state = RewriteExpression(expr, can_fold, true);
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr, ExpressionFoldingMode mode) {
+	auto state = RewriteExpression(expr, mode);
 	if (state.foldability == ExpressionFoldability::FOLDABLE) {
 		// the entire expression is foldable - fold it at the root
 		return FoldExpression(expr);
