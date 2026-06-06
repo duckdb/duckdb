@@ -1,0 +1,79 @@
+diff --git a/extension/fts/fts_indexing.cpp b/extension/fts/fts_indexing.cpp
+index a74b9f5..c5a9e28 100644
+--- a/extension/fts/fts_indexing.cpp
++++ b/extension/fts/fts_indexing.cpp
+@@ -13,14 +13,14 @@ namespace duckdb {
+ static QualifiedName GetQualifiedName(ClientContext &context, const string &qname_str) {
+ 	auto qname = QualifiedName::Parse(qname_str);
+ 	if (qname.schema == INVALID_SCHEMA) {
+-		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(qname.catalog);
++		qname.schema = Identifier(ClientData::Get(context).catalog_search_path->GetDefaultSchema(qname.catalog));
+ 	}
+ 	return qname;
+ }
+ 
+ static string GetFTSSchema(QualifiedName &qname) {
+-	auto result = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog);
+-	result += StringUtil::Format("fts_%s_%s", qname.schema, qname.name);
++	auto result = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog.GetName());
++	result += StringUtil::Format("fts_%s_%s", qname.schema.GetName(), qname.name.GetName());
+ 	return result;
+ }
+ 
+@@ -28,10 +28,10 @@ string FTSIndexing::DropFTSIndexQuery(ClientContext &context, const FunctionPara
+ 	auto qname = GetQualifiedName(context, StringValue::Get(parameters.values[0]));
+ 	string fts_schema = GetFTSSchema(qname);
+ 
+-	if (!Catalog::GetSchema(context, qname.catalog, fts_schema, OnEntryNotFound::RETURN_NULL)) {
++	if (!Catalog::GetSchema(context, qname.catalog, Identifier(fts_schema), OnEntryNotFound::RETURN_NULL)) {
+ 		throw CatalogException(
+-		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
+-		    qname.name);
++		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.",
++		    qname.schema.GetName(), qname.name.GetName());
+ 	}
+ 
+ 	return StringUtil::Format("DROP SCHEMA %s CASCADE;", fts_schema);
+@@ -232,8 +232,8 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
+ 	result = StringUtil::Replace(result, "%union_fields_query%", StringUtil::Join(tokenize_fields, " UNION ALL "));
+ 
+ 	string fts_schema = GetFTSSchema(qname);
+-	string input_table = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog);
+-	input_table += StringUtil::Format("%s.%s", qname.schema, qname.name);
++	string input_table = qname.catalog == INVALID_CATALOG ? "" : StringUtil::Format("%s.", qname.catalog.GetName());
++	input_table += StringUtil::Format("%s.%s", qname.schema.GetName(), qname.name.GetName());
+ 
+ 	// fill in variables (inefficiently, but keeps SQL script readable)
+ 	result = StringUtil::Replace(result, "%fts_schema%", fts_schema);
+@@ -295,10 +295,10 @@ string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionPa
+ 
+ 	// throw error if an index already exists on this table
+ 	const string fts_schema = GetFTSSchema(qname);
+-	if (Catalog::GetSchema(context, qname.catalog, fts_schema, OnEntryNotFound::RETURN_NULL) && !overwrite) {
++	if (Catalog::GetSchema(context, qname.catalog, Identifier(fts_schema), OnEntryNotFound::RETURN_NULL) && !overwrite) {
+ 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwrite=1' to overwrite, or "
+ 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
+-		                       qname.schema, qname.name);
++		                       qname.schema.GetName(), qname.name.GetName());
+ 	}
+ 
+ 	// positional parameters
+@@ -313,14 +313,15 @@ string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionPa
+ 			doc_values.clear();
+ 			for (auto &cd : table.GetColumns().Logical()) {
+ 				if (cd.Type() == LogicalType::VARCHAR) {
+-					doc_values.push_back(cd.Name());
++					doc_values.emplace_back(cd.Name());
+ 				}
+ 			}
+ 			break;
+ 		}
+-		if (!table.ColumnExists(col_name)) {
++		if (!table.ColumnExists(Identifier(col_name))) {
+ 			// we check this here because else we we end up with an error halfway the indexing script
+-			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
++			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema.GetName(),
++			                       qname.name.GetName(),
+ 			                       col_name);
+ 		}
+ 		doc_values.push_back(col_name);

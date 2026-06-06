@@ -59,8 +59,8 @@ public:
 	DUCKDB_API Identifier GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
 	DUCKDB_API Identifier GetDefaultCatalog(const Identifier &schema) const;
 
-	DUCKDB_API vector<string> GetSchemasForCatalog(const Identifier &catalog) const;
-	DUCKDB_API vector<string> GetCatalogsForSchema(const Identifier &schema) const;
+	DUCKDB_API vector<Identifier> GetSchemasForCatalog(const Identifier &catalog) const;
+	DUCKDB_API vector<Identifier> GetCatalogsForSchema(const Identifier &schema) const;
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const Identifier &catalog_name,
 	                                   const Identifier &schema_name) const;

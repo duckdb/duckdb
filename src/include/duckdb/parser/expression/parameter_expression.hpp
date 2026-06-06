@@ -38,8 +38,8 @@ public:
 	const string &Identifier() const {
 		return identifier.GetName();
 	}
-	string &IdentifierMutable() {
-		return identifier.GetNameMutable();
+	duckdb::Identifier &IdentifierMutable() {
+		return identifier;
 	}
 	bool IsScalar() const override {
 		return true;

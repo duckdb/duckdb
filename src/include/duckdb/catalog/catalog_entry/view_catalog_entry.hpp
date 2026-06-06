@@ -73,7 +73,7 @@ private:
 	//! Current binding thread
 	atomic<thread_id> bind_thread;
 	//! The comments on the columns of the view: can be empty if there are no comments
-	unordered_map<string, Value> column_comments;
+	identifier_map_t<Value> column_comments;
 
 private:
 	void Initialize(CreateViewInfo &info);

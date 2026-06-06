@@ -97,7 +97,7 @@ index 687f129..83c59bd 100644
  
  		vector<unique_ptr<Expression>> children;
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-index 44790d8..dc9ec33 100644
+index 44790d8..de27098 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
 +++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 @@ -72,8 +72,8 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
@@ -124,12 +124,8 @@ index 44790d8..dc9ec33 100644
  
  		row++;
  	}
-@@ -110,10 +110,11 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
- 	auto qname = QualifiedName::Parse(index_name);
- 
- 	// look up the index name in the catalog
--	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
-+	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
+@@ -113,7 +113,8 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
  	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
  	                        .Cast<IndexCatalogEntry>();
 -	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),

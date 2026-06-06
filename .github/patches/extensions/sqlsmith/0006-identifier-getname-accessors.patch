@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 84d44d5..8424f57 100644
+index 84d44d5..60f830f 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
@@ -199,6 +199,15 @@ index 84d44d5..8424f57 100644
  		min_parameters = function->GetSignature().GetParameterCount();
  		max_parameters = min_parameters;
  	} else {
+@@ -1055,7 +1056,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+ 	auto result = make_uniq<StarExpression>();
+ 	if (!current_relation_names.empty()) {
+ 		if (RandomPercentage(10)) {
+-			result->RelationNameMutable() = GenerateRelationName();
++			result->RelationNameMutable() = Identifier(GenerateRelationName());
+ 		}
+ 	}
+ 	if (!verification_enabled) {
 @@ -1064,7 +1065,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
  			if (column_name.empty()) {
  				break;

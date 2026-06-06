@@ -61,9 +61,6 @@ public:
 	const string &GetName() const {
 		return value;
 	}
-	string &GetNameMutable() {
-		return value;
-	}
 
 	bool empty() const { // NOLINT: match std::string interface
 		return value.empty();

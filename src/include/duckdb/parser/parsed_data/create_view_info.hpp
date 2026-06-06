@@ -32,7 +32,7 @@ public:
 	//! Names of the query
 	vector<string> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
-	unordered_map<string, Value> column_comments_map;
+	identifier_map_t<Value> column_comments_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 	//! Whether or not to bind the view on create
@@ -55,7 +55,7 @@ public:
 	string ToString() const override;
 
 private:
-	CreateViewInfo(vector<string> names, vector<Value> comments, unordered_map<string, Value> column_comments);
+	CreateViewInfo(vector<string> names, vector<Value> comments, identifier_map_t<Value> column_comments);
 
 	vector<Value> GetColumnCommentsList() const;
 };

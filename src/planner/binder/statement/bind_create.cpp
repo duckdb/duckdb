@@ -67,7 +67,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	return alias_cte;
 }
 
-void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
 		return;
@@ -78,7 +78,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	// schema is specified - but catalog is not
 	// try searching for the catalog instead
 	auto &db_manager = DatabaseManager::Get(context);
-	auto database = db_manager.GetDatabase(context, Identifier(schema));
+	auto database = db_manager.GetDatabase(context, schema);
 	if (!database) {
 		//! No database by that name was found
 		return;
@@ -86,46 +86,46 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	// we have a database with this name
 	// check if there is a schema
 	auto &search_path = retriever.GetSearchPath();
-	auto catalog_names = search_path.GetCatalogsForSchema(Identifier(schema));
+	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
 		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
-		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, Identifier(catalog_name));
+		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
 		if (!catalog_ptr) {
 			continue;
 		}
-		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
+		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema.GetName())) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
-			    catalog_name, schema);
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+			    schema.GetName(), catalog_name.GetName(), schema.GetName());
 		}
 	}
 	catalog = schema;
-	schema = string();
+	schema = Identifier();
 }
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema) {
 	CatalogEntryRetriever retriever(context);
 	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-const string Binder::BindCatalog(string &catalog) {
+Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
-	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, Identifier(catalog));
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
 	if (database) {
-		return db_manager.GetDatabase(context, Identifier(catalog)).get()->GetName().GetName();
+		return db_manager.GetDatabase(context, catalog).get()->GetName();
 	} else {
-		return db_manager.GetDefaultDatabase(context).GetName();
+		return db_manager.GetDefaultDatabase(context);
 	}
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
-	BindSchemaOrCatalog(info.catalog.GetNameMutable(), info.schema.GetNameMutable());
+	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = Identifier::TempCatalog();
 	}
@@ -586,7 +586,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
-		auto catalog = BindCatalog(base.catalog.GetNameMutable());
+		auto catalog = BindCatalog(base.catalog);
 		properties.RegisterDBModify(Catalog::GetCatalog(context, Identifier(catalog)), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));

@@ -540,7 +540,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	BindSchemaOrCatalog(node.catalog.GetNameMutable(), node.schema.GetNameMutable());
+	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
 
 	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {

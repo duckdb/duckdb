@@ -69,20 +69,20 @@ public:
 	const Identifier &Catalog() const {
 		return catalog;
 	}
-	string &CatalogMutable() {
-		return catalog.GetNameMutable();
+	Identifier &CatalogMutable() {
+		return catalog;
 	}
 	const Identifier &Schema() const {
 		return schema;
 	}
-	string &SchemaMutable() {
-		return schema.GetNameMutable();
+	Identifier &SchemaMutable() {
+		return schema;
 	}
 	const Identifier &FunctionName() const {
 		return function_name;
 	}
-	string &FunctionNameMutable() {
-		return function_name.GetNameMutable();
+	Identifier &FunctionNameMutable() {
+		return function_name;
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

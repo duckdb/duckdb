@@ -425,7 +425,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->catalog.GetNameMutable(), stmt.info->schema.GetNameMutable());
+	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;

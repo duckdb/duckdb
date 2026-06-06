@@ -258,10 +258,10 @@ Identifier CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const 
 	return Identifier::InvalidCatalog();
 }
 
-vector<string> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {
-	vector<string> catalogs;
+vector<Identifier> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {
+	vector<Identifier> catalogs;
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
-		catalogs.push_back(SYSTEM_CATALOG);
+		catalogs.push_back(Identifier::SystemCatalog());
 	} else {
 		for (auto &path : paths) {
 			if (path.schema == schema || path.schema.empty()) {
@@ -272,8 +272,8 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema)
 	return catalogs;
 }
 
-vector<string> CatalogSearchPath::GetSchemasForCatalog(const Identifier &catalog) const {
-	vector<string> schemas;
+vector<Identifier> CatalogSearchPath::GetSchemasForCatalog(const Identifier &catalog) const {
+	vector<Identifier> schemas;
 	for (auto &path : paths) {
 		if (!path.schema.empty() && path.catalog == catalog) {
 			schemas.emplace_back(path.schema);

@@ -102,20 +102,20 @@ public:
 	const Identifier &Catalog() const {
 		return catalog;
 	}
-	string &CatalogMutable() {
-		return catalog.GetNameMutable();
+	Identifier &CatalogMutable() {
+		return catalog;
 	}
 	const Identifier &Schema() const {
 		return schema;
 	}
-	string &SchemaMutable() {
-		return schema.GetNameMutable();
+	Identifier &SchemaMutable() {
+		return schema;
 	}
 	const Identifier &FunctionName() const {
 		return function_name;
 	}
-	string &FunctionNameMutable() {
-		return function_name.GetNameMutable();
+	Identifier &FunctionNameMutable() {
+		return function_name;
 	}
 	void SetFunctionName(string function_name_p) {
 		function_name = Identifier(std::move(function_name_p));

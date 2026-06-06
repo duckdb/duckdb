@@ -29,8 +29,8 @@ public:
 	const Identifier &RelationName() const {
 		return relation_name;
 	}
-	string &RelationNameMutable() {
-		return relation_name.GetNameMutable();
+	Identifier &RelationNameMutable() {
+		return relation_name;
 	}
 	const qualified_column_set_t &ExcludeList() const {
 		return exclude_list;

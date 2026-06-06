@@ -51,7 +51,7 @@ index bd923b9..9fe0a7d 100644
  
  	return std::move(gstate);
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index 494abb3..45523d7 100644
+index 494abb3..19d0fa2 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
 +++ b/src/hnsw/hnsw_index_pragmas.cpp
 @@ -112,8 +112,8 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
@@ -78,12 +78,8 @@ index 494abb3..45523d7 100644
  
  		auto stats = hnsw_index->GetStats();
  
-@@ -188,10 +188,11 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
- 	auto qname = QualifiedName::Parse(index_name);
- 
- 	// look up the index name in the catalog
--	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
-+	Binder::BindSchemaOrCatalog(context, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable());
+@@ -191,7 +191,8 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
  	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
  	                        .Cast<IndexCatalogEntry>();
 -	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),

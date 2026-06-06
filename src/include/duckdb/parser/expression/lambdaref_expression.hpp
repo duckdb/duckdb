@@ -35,8 +35,8 @@ public:
 	const Identifier &ColumnName() const {
 		return column_name;
 	}
-	string &ColumnNameMutable() {
-		return column_name.GetNameMutable();
+	Identifier &ColumnNameMutable() {
+		return column_name;
 	}
 
 	bool IsScalar() const override;

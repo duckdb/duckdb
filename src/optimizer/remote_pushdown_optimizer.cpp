@@ -475,8 +475,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	string catalog_name = func_expr.Catalog().GetName();
-	string schema_name = func_expr.Schema().GetName();
+	Identifier catalog_name = func_expr.Catalog();
+	Identifier schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// If the function has an explicit catalog prefix, skip pushdown for now
@@ -614,8 +614,8 @@ bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPus
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	string catalog_name = ref.catalog_name.GetName();
-	string schema_name = ref.schema_name.GetName();
+	Identifier catalog_name = ref.catalog_name;
+	Identifier schema_name = ref.schema_name;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
@@ -705,11 +705,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cas
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const Identifier &catalog_p,
                                                                          const Identifier &schema_p) {
-	string catalog_name = catalog_p.GetName();
-	string schema_name = schema_p.GetName();
+	Identifier catalog_name = catalog_p;
+	Identifier schema_name = schema_p;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, Identifier(catalog_name));
+		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 		}

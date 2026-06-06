@@ -232,8 +232,8 @@
       {
         "id": 206,
         "name": "column_comments_map",
-        "type": "unordered_map<string, Value>",
-        "default": "unordered_map<string, Value>()",
+        "type": "identifier_map_t<Value>",
+        "default": "identifier_map_t<Value>()",
         "version": "v1.5.0"
       }
     ],

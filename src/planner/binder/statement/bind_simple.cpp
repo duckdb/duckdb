@@ -112,7 +112,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		return result;
 	}
 
-	BindSchemaOrCatalog(stmt.info->catalog.GetNameMutable(), stmt.info->schema.GetNameMutable());
+	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {

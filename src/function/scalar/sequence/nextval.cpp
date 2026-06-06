@@ -31,24 +31,22 @@ struct NextSequenceValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
+SequenceCatalogEntry &BindSequence(Binder &binder, Identifier &catalog, Identifier &schema, const string &name) {
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
 	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, Identifier(name));
-	return binder.EntryRetriever()
-	    .GetEntry(Identifier(catalog), Identifier(schema), sequence_lookup)
-	    ->Cast<SequenceCatalogEntry>();
+	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
-SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, Identifier &catalog, Identifier &schema,
                                               const string &name) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, Identifier(catalog), Identifier(schema), Identifier(name));
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, Identifier(name));
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const string &name) {
 	auto qname = QualifiedName::Parse(name);
-	return BindSequence(binder, qname.catalog.GetNameMutable(), qname.schema.GetNameMutable(), qname.name.GetName());
+	return BindSequence(binder, qname.catalog, qname.schema, qname.name.GetName());
 }
 
 struct NextValLocalState : public FunctionLocalState {
@@ -126,8 +124,7 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunc
 	}
 	auto &seq_info = create_info->Cast<CreateSequenceInfo>();
 	auto &context = deserializer.Get<ClientContext &>();
-	auto &sequence = BindSequenceFromContext(context, seq_info.catalog.GetNameMutable(),
-	                                         seq_info.schema.GetNameMutable(), seq_info.name.GetName());
+	auto &sequence = BindSequenceFromContext(context, seq_info.catalog, seq_info.schema, seq_info.name.GetName());
 	return make_uniq<NextvalBindData>(sequence);
 }
 

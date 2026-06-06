@@ -220,8 +220,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.GetResult());
-		expr->CatalogMutable() = qualified_function.catalog.GetName();
-		expr->SchemaMutable() = qualified_function.schema.GetName();
+		expr->CatalogMutable() = qualified_function.catalog;
+		expr->SchemaMutable() = qualified_function.schema;
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -789,7 +789,7 @@ ExpressionType PEGTransformerFactory::TransformComparisonOperator(PEGTransformer
 	return transformer.TransformEnum<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-bool TryNegateLikeFunction(string &function_name) {
+bool TryNegateLikeFunction(Identifier &function_name) {
 	if (function_name == "~~") {
 		function_name = "!~~";
 		return true;
@@ -1429,7 +1429,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(
 	transformer.SetParam(identifier, known_param_index, PreparedParamType::AUTO_INCREMENT);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 
-	expr->IdentifierMutable() = identifier;
+	expr->IdentifierMutable() = Identifier(identifier);
 	return std::move(expr);
 }
 
@@ -1457,7 +1457,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQuestionMarkNumbere
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
 	}
 
-	expr->IdentifierMutable() = identifier;
+	expr->IdentifierMutable() = Identifier(identifier);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1486,7 +1486,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(P
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
 	}
 
-	expr->IdentifierMutable() = identifier;
+	expr->IdentifierMutable() = Identifier(identifier);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1508,7 +1508,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(P
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::NAMED);
 	}
 
-	expr->IdentifierMutable() = identifier;
+	expr->IdentifierMutable() = Identifier(identifier);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1780,7 +1780,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		if (repeat_colid.GetChildren().size() > 1) {
 			throw ParserException("Did not expect more than one column in front of a star expression");
 		}
-		result->RelationNameMutable() = transformer.Transform<string>(repeat_colid.Child<ListParseResult>(0));
+		result->RelationNameMutable() =
+		    Identifier(transformer.Transform<string>(repeat_colid.Child<ListParseResult>(0)));
 	}
 	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->ExcludeListMutable());
 	auto &replace_list_opt = list_pr.Child<OptionalParseResult>(3);

@@ -267,7 +267,7 @@ public:
 
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                                QueryErrorContext &error_context, string &func_name);
+	                                QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -307,7 +307,7 @@ public:
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
-	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
 
 	void BindLogicalType(LogicalType &type);
 
@@ -556,9 +556,9 @@ private:
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
-	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
-	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema);
-	const string BindCatalog(string &catalog_name);
+	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);

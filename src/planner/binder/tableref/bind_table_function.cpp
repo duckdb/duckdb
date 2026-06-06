@@ -368,8 +368,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	string catalog = fexpr.Catalog().GetName();
-	string schema = fexpr.Schema().GetName();
+	Identifier catalog = fexpr.Catalog();
+	Identifier schema = fexpr.Schema();
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
@@ -435,8 +435,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 
 	// now check the named parameters
-	BindNamedParameters(table_function.named_parameters, named_parameters, error_context,
-	                    table_function.name.GetNameMutable());
+	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;

@@ -111,11 +111,11 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 	vector<Value> result;
 	result.resize(names.size());
 	for (auto &entry : column_comments_map) {
-		auto it = std::find(names.begin(), names.end(), entry.first);
+		auto it = std::find_if(names.begin(), names.end(), [&](const string &n) { return entry.first == n; });
 		if (it == names.end()) {
 			throw InternalException(
 			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names", view_name,
-			    entry.first);
+			    entry.first.GetName());
 		}
 		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
 	}
@@ -123,7 +123,7 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 }
 
 CreateViewInfo::CreateViewInfo(vector<string> names_p, vector<Value> comments,
-                               unordered_map<string, Value> column_comments_p)
+                               identifier_map_t<Value> column_comments_p)
     : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()), names(std::move(names_p)),
       column_comments_map(std::move(column_comments_p)) {
 	if (comments.empty()) {
@@ -136,7 +136,7 @@ CreateViewInfo::CreateViewInfo(vector<string> names_p, vector<Value> comments,
 		if (comments[i].IsNull()) {
 			continue;
 		}
-		column_comments_map[names[i]] = std::move(comments[i]);
+		column_comments_map[Identifier(names[i])] = std::move(comments[i]);
 	}
 }
 
