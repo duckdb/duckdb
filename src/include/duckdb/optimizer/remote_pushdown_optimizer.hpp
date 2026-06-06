@@ -59,10 +59,10 @@ enum class ExpressionFoldingMode {
 	FOLD_CHILDREN_ONLY
 };
 
-//! The result of rewriting a single expression
+//! The result of analyzing or rewriting a single expression
 struct ExpressionPushdownResult {
-	//! The catalog analysis result - empty for FOLDABLE expressions, which are folded by the parent
-	CatalogPushdownResult result;
+	//! The catalog analysis result
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED};
 	ExpressionFoldability foldability = ExpressionFoldability::NOT_FOLDABLE;
 };
 
@@ -115,19 +115,16 @@ private:
 	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, ExpressionFoldingMode mode);
 	//! Fold a maximal foldable subtree and record the resulting constant
 	CatalogPushdownResult FoldExpression(unique_ptr<ParsedExpression> &expr);
-	//! Per-expression-class catalog analysis (catalog qualification, subqueries, local tables)
-	CatalogPushdownResult AnalyzeExpression(const ParsedExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const SubqueryExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const FunctionExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const WindowExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const TypeExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const ColumnRefExpression &expr);
+	//! Per-expression-class catalog analysis (catalog qualification, subqueries, local tables),
+	//! which also determines whether the expression can be constant-folded
+	ExpressionPushdownResult AnalyzeExpression(const ParsedExpression &expr);
+	ExpressionPushdownResult AnalyzeExpression(const SubqueryExpression &expr);
+	ExpressionPushdownResult AnalyzeExpression(const FunctionExpression &expr);
+	ExpressionPushdownResult AnalyzeExpression(const WindowExpression &expr);
+	ExpressionPushdownResult AnalyzeExpression(const TypeExpression &expr);
+	ExpressionPushdownResult AnalyzeExpression(const ColumnRefExpression &expr);
 	//! Bind and evaluate an expression locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
-	//! Returns true if an expression class can be constant-folded (given foldable inputs)
-	bool IsFoldableExpressionClass(const ParsedExpression &expr);
-	//! Returns true if a function resolves to a non-volatile scalar function or a scalar macro
-	bool IsFoldableFunction(const FunctionExpression &func);
 
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name,
 	                                                const string &schema_name);
@@ -138,8 +135,6 @@ private:
 	void TrackLocalTable(const BaseTableRef &ref);
 	void TrackLocalTable(const TableFunctionRef &ref);
 	void TrackLocalTable(const SubqueryRef &ref);
-	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
-	bool IsLocalMacro(const FunctionExpression &func);
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);

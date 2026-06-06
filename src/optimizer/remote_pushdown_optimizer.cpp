@@ -717,47 +717,6 @@ void RemotePushdownOptimizer::TrackLocalTable(const SubqueryRef &ref) {
 	}
 }
 
-bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
-	// If explicitly qualified with a catalog, check whether that catalog is remote
-	if (!func.Catalog().empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, func.Catalog());
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			return false;
-		}
-		// Local catalog - check if the function is a macro
-		const string &schema = func.Schema().empty() ? DEFAULT_SCHEMA : func.Schema();
-		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
-		auto entry =
-		    Catalog::GetEntry(binder.context, func.Catalog(), schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
-		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
-			return true;
-		}
-		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.FunctionName());
-		auto table_entry =
-		    Catalog::GetEntry(binder.context, func.Catalog(), schema, table_macro_lookup, OnEntryNotFound::RETURN_NULL);
-		return table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY;
-	}
-
-	// Unqualified function - search local catalogs for a macro with this name
-	FindRemoteCatalogsInSearchPath();
-	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const string &schema = func.Schema().empty() ? local_entry.schema : func.Schema();
-		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
-		auto entry =
-		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
-		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
-			return true;
-		}
-		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.FunctionName());
-		auto table_entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_macro_lookup,
-		                                     OnEntryNotFound::RETURN_NULL);
-		if (table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool RemotePushdownOptimizer::RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const {
 	auto entry = cte_results.find(cte_name);
 	if (entry != cte_results.end()) {
@@ -862,9 +821,11 @@ bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_
 	return true;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const SubqueryExpression &subquery_expr) {
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const SubqueryExpression &subquery_expr) {
+	ExpressionPushdownResult state;
 	RemotePushdownOptimizer child_optimizer(this);
-	return child_optimizer.Rewrite(*subquery_expr.Subquery()->node);
+	state.result = child_optimizer.Rewrite(*subquery_expr.Subquery()->node);
+	return state;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr,
@@ -885,79 +846,68 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const P
 	return CatalogPushdownResult::NoCatalogReference();
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const FunctionExpression &func) {
-	if (IsLocalMacro(func)) {
-		// local macros can't be pushed to remote
-		return CatalogPushdownResult::Unknown();
-	}
-	return CheckCatalogQualification(func, func.Catalog(), func.Schema());
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const WindowExpression &func) {
-	return CheckCatalogQualification(func, func.Catalog(), func.Schema());
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const TypeExpression &type_expr) {
-	return CheckCatalogQualification(type_expr, type_expr.GetCatalog(), type_expr.GetSchema());
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ColumnRefExpression &col_ref) {
-	if (RefersToLocalTable(col_ref)) {
-		// column refers to local table - bail
-		return CatalogPushdownResult::Unknown();
-	}
-	return CatalogPushdownResult::NoCatalogReference();
-}
-
-bool RemotePushdownOptimizer::IsFoldableFunction(const FunctionExpression &func) {
-	if (func.Filter() || func.Distinct() || func.ExportState() || (func.OrderBy() && !func.OrderBy()->orders.empty())) {
-		// aggregate-style modifiers cannot be constant-folded
-		return false;
-	}
-	// look up the function - it must exist as a scalar function or a scalar macro
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const FunctionExpression &func) {
+	ExpressionPushdownResult state;
+	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	// look up the function once - this determines both whether it can be constant-folded and
+	// whether it is a macro in a local catalog (which cannot be evaluated remotely)
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.FunctionName());
 	auto entry =
 	    Catalog::GetEntry(binder.context, func.Catalog(), func.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
-		return false;
+		return state;
 	}
-	if (entry->type == CatalogType::MACRO_ENTRY) {
-		// scalar macros are expanded when binding - the stability of the expansion is checked after binding
-		return true;
-	}
-	if (entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-		// aggregate functions and table functions cannot be constant-folded
-		return false;
-	}
-	// at least one overload must be non-volatile (the selected overload is verified after binding)
-	auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
-	for (auto &overload : scalar_entry.functions.functions) {
-		if (overload.GetStability() != FunctionStability::VOLATILE) {
-			return true;
+	// aggregate-style modifiers cannot be constant-folded
+	bool foldable_modifiers = !func.Filter() && !func.Distinct() && !func.ExportState() &&
+	                          (!func.OrderBy() || func.OrderBy()->orders.empty());
+	switch (entry->type) {
+	case CatalogType::MACRO_ENTRY:
+		// scalar macros can be folded - the stability of the expansion is checked after binding
+		if (foldable_modifiers) {
+			state.foldability = ExpressionFoldability::FOLDABLE;
 		}
+		if (!entry->ParentCatalog().Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
+			// macros in local catalogs cannot be evaluated remotely - if the macro is not folded
+			// away, pushdown is blocked
+			state.result = CatalogPushdownResult::Unknown();
+		}
+		break;
+	case CatalogType::SCALAR_FUNCTION_ENTRY: {
+		// at least one overload must be non-volatile (the selected overload is verified after binding)
+		auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
+		for (auto &overload : scalar_entry.functions.functions) {
+			if (foldable_modifiers && overload.GetStability() != FunctionStability::VOLATILE) {
+				state.foldability = ExpressionFoldability::FOLDABLE;
+				break;
+			}
+		}
+		break;
 	}
-	return false;
+	default:
+		break;
+	}
+	return state;
 }
 
-bool RemotePushdownOptimizer::IsFoldableExpressionClass(const ParsedExpression &expr) {
-	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::CONSTANT:
-		// constants are trivially foldable inputs
-		return true;
-	case ExpressionClass::FUNCTION:
-		// functions must resolve to a non-volatile scalar function or a scalar macro
-		return IsFoldableFunction(expr.Cast<FunctionExpression>());
-	case ExpressionClass::CAST:
-	case ExpressionClass::COMPARISON:
-	case ExpressionClass::BETWEEN:
-	case ExpressionClass::CONJUNCTION:
-	case ExpressionClass::OPERATOR:
-	case ExpressionClass::CASE:
-		// deterministic expression types
-		return true;
-	default:
-		return false;
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const WindowExpression &func) {
+	ExpressionPushdownResult state;
+	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	return state;
+}
+
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const TypeExpression &type_expr) {
+	ExpressionPushdownResult state;
+	state.result = CheckCatalogQualification(type_expr, type_expr.GetCatalog(), type_expr.GetSchema());
+	return state;
+}
+
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ColumnRefExpression &col_ref) {
+	ExpressionPushdownResult state;
+	if (RefersToLocalTable(col_ref)) {
+		// column refers to local table - bail
+		state.result = CatalogPushdownResult::Unknown();
 	}
+	return state;
 }
 
 RemotePushdownOptimizer::ConstantFoldResult
@@ -997,7 +947,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 	return ConstantFoldResult::FOLDED;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExpression &expr) {
+ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExpression &expr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		return AnalyzeExpression(expr.Cast<SubqueryExpression>());
@@ -1009,8 +959,20 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExp
 		return AnalyzeExpression(expr.Cast<TypeExpression>());
 	case ExpressionClass::COLUMN_REF:
 		return AnalyzeExpression(expr.Cast<ColumnRefExpression>());
+	case ExpressionClass::CONSTANT:
+	case ExpressionClass::CAST:
+	case ExpressionClass::COMPARISON:
+	case ExpressionClass::BETWEEN:
+	case ExpressionClass::CONJUNCTION:
+	case ExpressionClass::OPERATOR:
+	case ExpressionClass::CASE: {
+		// deterministic expression types - foldable when all inputs are foldable
+		ExpressionPushdownResult state;
+		state.foldability = ExpressionFoldability::FOLDABLE;
+		return state;
+	}
 	default:
-		return CatalogPushdownResult::NoCatalogReference();
+		return ExpressionPushdownResult();
 	}
 }
 
@@ -1031,17 +993,19 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 			result = Merge(std::move(result), std::move(child_state.result));
 		}
 	});
-	if (mode == ExpressionFoldingMode::FOLD_EXPRESSION && all_children_foldable && IsFoldableExpressionClass(*expr)) {
+	auto state = AnalyzeExpression(*expr);
+	if (mode == ExpressionFoldingMode::FOLD_EXPRESSION && all_children_foldable &&
+	    state.foldability == ExpressionFoldability::FOLDABLE) {
 		// this expression is itself foldable - defer folding to the parent
-		ExpressionPushdownResult state;
-		state.foldability = ExpressionFoldability::FOLDABLE;
-		return state;
+		ExpressionPushdownResult folding_deferred;
+		folding_deferred.foldability = ExpressionFoldability::FOLDABLE;
+		return folding_deferred;
 	}
 	// this expression is not foldable - fold the (maximal) foldable children now
 	for (auto &child : foldable_children) {
 		result = Merge(std::move(result), FoldExpression(child.get()));
 	}
-	result = Merge(std::move(result), AnalyzeExpression(*expr));
+	result = Merge(std::move(result), std::move(state.result));
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		// the expression is fully remote - check if the remote catalog supports pushing it down
 		if (!result.catalog->SupportsPushdown(*expr)) {
@@ -1052,8 +1016,8 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 		// (functions, comparisons, operators, star expressions, parameters, etc.) during a later merge
 		result.used_expressions.push_back(*expr);
 	}
-	ExpressionPushdownResult state;
 	state.result = std::move(result);
+	state.foldability = ExpressionFoldability::NOT_FOLDABLE;
 	return state;
 }
 
