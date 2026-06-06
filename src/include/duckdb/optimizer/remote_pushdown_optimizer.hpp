@@ -115,8 +115,9 @@ private:
 	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, ExpressionFoldingMode mode);
 	//! Fold a maximal foldable subtree and record the resulting constant
 	CatalogPushdownResult FoldExpression(unique_ptr<ParsedExpression> &expr);
-	//! Rewrite an expression that cannot be modified (cast target type expressions)
-	CatalogPushdownResult Rewrite(const ParsedExpression &expr);
+	//! Rewrite a cast target type expression - these are owned by the (potentially shared)
+	//! type and must not be modified, so no constant folding is performed
+	CatalogPushdownResult RewriteTypeExpression(const ParsedExpression &expr);
 	//! Per-expression-class catalog analysis (catalog qualification, subqueries, local tables)
 	CatalogPushdownResult AnalyzeExpression(const ParsedExpression &expr);
 	CatalogPushdownResult AnalyzeExpression(const SubqueryExpression &expr);

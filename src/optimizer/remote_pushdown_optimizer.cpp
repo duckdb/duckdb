@@ -863,7 +863,7 @@ bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const LogicalType &type) {
-	return Rewrite(*UnboundType::GetTypeExpression(type));
+	return RewriteTypeExpression(*UnboundType::GetTypeExpression(type));
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const SubqueryExpression &subquery_expr) {
@@ -1101,10 +1101,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpressi
 	return state.result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ParsedExpression &expr) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteTypeExpression(const ParsedExpression &expr) {
 	auto result = AnalyzeExpression(expr);
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
+	    expr, [&](const ParsedExpression &child) { result = Merge(result, RewriteTypeExpression(child)); });
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (!result.catalog->SupportsPushdown(expr)) {
 			return CatalogPushdownResult::Unknown();
