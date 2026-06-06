@@ -32,6 +32,28 @@ class UpdateQueryNode;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
+//! An expression that a remote catalog must support in order to push down the query.
+//! Expressions reached through their owning pointer can be constant-folded when the remote
+//! system cannot evaluate them as written. For other expressions folding is not possible:
+//! cast target type expressions are owned by the (potentially shared) type, and top-level
+//! ORDER BY / GROUP BY / DISTINCT ON entries are positional contexts, where a folded integer
+//! literal would turn into a positional reference.
+struct PushdownExpression {
+	explicit PushdownExpression(const ParsedExpression &expr) : expression(&expr) {
+	}
+	explicit PushdownExpression(unique_ptr<ParsedExpression> &slot) : foldable_slot(&slot) {
+	}
+
+	const ParsedExpression &Get() const {
+		return foldable_slot ? **foldable_slot : *expression;
+	}
+
+	//! the expression (only set when there is no foldable slot)
+	optional_ptr<const ParsedExpression> expression;
+	//! the owning pointer of the expression, set when constant folding is permitted
+	optional_ptr<unique_ptr<ParsedExpression>> foldable_slot;
+};
+
 struct CatalogPushdownResult {
 	explicit CatalogPushdownResult(
 	    CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE);
@@ -41,9 +63,9 @@ struct CatalogPushdownResult {
 
 	CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE;
 	optional_ptr<Catalog> catalog;
-	vector<const_reference<ParsedExpression>> used_expressions;
+	vector<PushdownExpression> used_expressions;
 	vector<const_reference<TableRef>> used_table_constructs;
-	vector<const_reference<QueryNode>> used_nodes;
+	vector<reference<QueryNode>> used_nodes;
 };
 
 struct RemotePushdownState {
@@ -79,8 +101,6 @@ private:
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 
-	CatalogPushdownResult Rewrite(ParsedExpression &expr);
-	CatalogPushdownResult Rewrite(const SubqueryExpression &expr);
 	enum class ConstantFoldResult {
 		//! The expression is not a foldable constant expression (contains columns, is volatile, ...)
 		NOT_FOLDABLE,
@@ -90,28 +110,37 @@ private:
 		//! executed locally so the user sees DuckDB's error message
 		FOLD_ERROR
 	};
-	//! Rewrite an expression and merge the result into "current". If the expression blocks an
-	//! otherwise possible pushdown, constant subtrees are folded into their locally-evaluated
-	//! literals and the expression is re-checked - this makes more queries eligible for remote
-	//! pushdown, as the remote system only sees the (DuckDB-evaluated) literal instead of
-	//! functions whose remote semantics differ. Must not be used for expressions where a bare
-	//! integer literal has positional meaning (top-level ORDER BY / GROUP BY / DISTINCT ON
-	//! entries): folding e.g. "1 + 1" into "2" would turn it into a positional reference.
-	CatalogPushdownResult MergeExpression(CatalogPushdownResult current, unique_ptr<ParsedExpression> &expr);
-	//! Variant of MergeExpression for LIMIT / OFFSET values, which must be literals to be
-	//! pushed down - non-literal values are always folded
-	CatalogPushdownResult MergeLimitValue(CatalogPushdownResult current, unique_ptr<ParsedExpression> &expr);
+	//! Rewrite an expression through its owning pointer. When the remote catalog cannot
+	//! evaluate the expression as written, the constant subtrees within it are folded into
+	//! their locally-evaluated literals and the expression is checked again - this makes more
+	//! queries eligible for remote pushdown, as the remote system only sees the
+	//! (DuckDB-evaluated) literal instead of functions whose remote semantics differ.
+	//! "can_fold" must be false for expressions where a bare integer literal has positional
+	//! meaning (top-level ORDER BY / GROUP BY / DISTINCT ON entries): folding e.g. "1 + 1"
+	//! into "2" would turn it into a positional reference.
+	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold = true);
+	//! Rewrite an expression that cannot be modified (cast target type expressions)
+	CatalogPushdownResult Rewrite(const ParsedExpression &expr);
+	//! Shared veto / recording logic of the two Rewrite overloads above
+	CatalogPushdownResult FinishExpression(CatalogPushdownResult result, const ParsedExpression &expr,
+	                                       optional_ptr<unique_ptr<ParsedExpression>> slot);
+	//! Per-expression-class catalog analysis (catalog qualification, subqueries, local tables)
+	CatalogPushdownResult AnalyzeExpression(const ParsedExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const SubqueryExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const CastExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const FunctionExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const WindowExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const TypeExpression &expr);
+	CatalogPushdownResult AnalyzeExpression(const ColumnRefExpression &expr);
 	//! Attempt to constant-fold a column-free, non-volatile expression by binding and evaluating
 	//! it locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
 	//! Fold the largest constant subtrees within an expression (TryConstantFold on the whole
 	//! expression first, recursing into the children of unfoldable expressions)
 	ConstantFoldResult FoldConstantSubtrees(unique_ptr<ParsedExpression> &expr);
-	CatalogPushdownResult Rewrite(const CastExpression &expr);
-	CatalogPushdownResult Rewrite(const FunctionExpression &expr);
-	CatalogPushdownResult Rewrite(const WindowExpression &expr);
-	CatalogPushdownResult Rewrite(const TypeExpression &expr);
-	CatalogPushdownResult Rewrite(const ColumnRefExpression &expr);
+	//! Fold a query node's non-literal LIMIT / OFFSET values, which must be literals to be
+	//! pushed down to most remote systems
+	bool FoldLimitValues(QueryNode &node);
 
 	CatalogPushdownResult Rewrite(const LogicalType &type);
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name,
@@ -129,7 +158,7 @@ private:
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
 
-	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
+	CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
