@@ -151,12 +151,16 @@ if [[ $7 = 'true' ]]; then
 	exit 1
   fi
 
-  upload_extension "$5/$1/$2/$3/$4/$1.duckdb_extension.$dest_extension"
+  if [ "${DUCKDB_DEPLOY_SCRIPT_MODE:-}" == "for_real" ]; then
+    upload_extension "$5/$1/$2/$3/$4/$1.duckdb_extension.$dest_extension"
+  fi
 fi
 
 # upload to latest version
 if [[ $6 = 'true' ]]; then
-  upload_extension "$5/$3/$4/$1.duckdb_extension.$dest_extension"
+  if [ "${DUCKDB_DEPLOY_SCRIPT_MODE:-}" == "for_real" ]; then
+    upload_extension "$5/$3/$4/$1.duckdb_extension.$dest_extension"
+  fi
 fi
 
 # clean up
