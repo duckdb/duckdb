@@ -159,24 +159,15 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	case StatementType::SELECT_STATEMENT:
 		result = Rewrite(*statement->Cast<SelectStatement>().node);
 		break;
-	case StatementType::INSERT_STATEMENT: {
-		// dispatch through the QueryNode overload so the node-level checks (CTE handling, catalog
-		// support verification) are applied - calling Rewrite(*node) directly would statically
-		// resolve to the InsertQueryNode overload and skip them
-		QueryNode &insert_node = *statement->Cast<InsertStatement>().node;
-		result = Rewrite(insert_node);
+	case StatementType::INSERT_STATEMENT:
+		result = Rewrite(*statement->Cast<InsertStatement>().node);
 		break;
-	}
-	case StatementType::DELETE_STATEMENT: {
-		QueryNode &delete_node = *statement->Cast<DeleteStatement>().node;
-		result = Rewrite(delete_node);
+	case StatementType::DELETE_STATEMENT:
+		result = Rewrite(*statement->Cast<DeleteStatement>().node);
 		break;
-	}
-	case StatementType::UPDATE_STATEMENT: {
-		QueryNode &update_node = *statement->Cast<UpdateStatement>().node;
-		result = Rewrite(update_node);
+	case StatementType::UPDATE_STATEMENT:
+		result = Rewrite(*statement->Cast<UpdateStatement>().node);
 		break;
-	}
 	case StatementType::EXPLAIN_STATEMENT:
 		Rewrite(statement->Cast<ExplainStatement>().stmt);
 		return;
@@ -209,22 +200,22 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	CatalogPushdownResult result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = Rewrite(node.Cast<SelectNode>());
+		result = RewriteNode(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::INSERT_QUERY_NODE:
-		result = Rewrite(node.Cast<InsertQueryNode>());
+		result = RewriteNode(node.Cast<InsertQueryNode>());
 		break;
 	case QueryNodeType::DELETE_QUERY_NODE:
-		result = Rewrite(node.Cast<DeleteQueryNode>());
+		result = RewriteNode(node.Cast<DeleteQueryNode>());
 		break;
 	case QueryNodeType::UPDATE_QUERY_NODE:
-		result = Rewrite(node.Cast<UpdateQueryNode>());
+		result = RewriteNode(node.Cast<UpdateQueryNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		result = Rewrite(node.Cast<SetOperationNode>());
+		result = RewriteNode(node.Cast<SetOperationNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = Rewrite(node.Cast<RecursiveCTENode>());
+		result = RewriteNode(node.Cast<RecursiveCTENode>());
 		break;
 	default:
 		return CatalogPushdownResult::Unknown();
@@ -249,7 +240,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(RecursiveCTENode &node) {
 	RemotePushdownOptimizer left_optimizer(this);
 	CatalogPushdownResult left_result = left_optimizer.Rewrite(*node.left);
 
@@ -277,10 +268,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(limit_mod.limit));
+				result = MergeLimitValue(result, limit_mod.limit);
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(limit_mod.offset));
+				result = MergeLimitValue(result, limit_mod.offset);
 			}
 			break;
 		}
@@ -298,7 +289,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 	auto from_result = CatalogPushdownResult::NoCatalogReference();
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
@@ -307,10 +298,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Merge from_table result with all expressions to determine if the whole node can be pushed
 	CatalogPushdownResult result = from_result;
 	for (auto &expr : node.select_list) {
-		result = Merge(result, Rewrite(expr));
+		result = MergeExpression(result, expr);
 	}
 	if (node.where_clause) {
-		result = Merge(result, Rewrite(node.where_clause));
+		result = MergeExpression(result, node.where_clause);
 	}
 	for (auto &expr : node.groups.group_expressions) {
 		// note: GROUP BY entries are deliberately not constant-folded - a bare integer
@@ -318,10 +309,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		result = Merge(result, Rewrite(*expr));
 	}
 	if (node.having) {
-		result = Merge(result, Rewrite(node.having));
+		result = MergeExpression(result, node.having);
 	}
 	if (node.qualify) {
-		result = Merge(result, Rewrite(node.qualify));
+		result = MergeExpression(result, node.qualify);
 	}
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
@@ -335,10 +326,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(limit_mod.limit));
+				result = MergeLimitValue(result, limit_mod.limit);
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(limit_mod.offset));
+				result = MergeLimitValue(result, limit_mod.offset);
 			}
 			break;
 		}
@@ -356,7 +347,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node) {
 	// first bind the target table for the insert
 	BaseTableRef target_ref;
 	target_ref.catalog_name = node.catalog;
@@ -403,7 +394,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(DeleteQueryNode &node) {
 	auto result = Rewrite(node.table);
 	vector<CatalogPushdownResult> using_results;
 	for (auto &using_clause : node.using_clauses) {
@@ -423,7 +414,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(UpdateQueryNode &node) {
 	auto result = Rewrite(node.table);
 	auto from_result = CatalogPushdownResult::NoCatalogReference();
 	if (node.from_table) {
@@ -449,7 +440,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SetOperationNode &node) {
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
@@ -476,11 +467,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(limit_mod.limit));
+				result = MergeLimitValue(result, limit_mod.limit);
 				has_expression_modifiers = true;
 			}
 			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(limit_mod.offset));
+				result = MergeLimitValue(result, limit_mod.offset);
 				has_expression_modifiers = true;
 			}
 			break;
@@ -590,7 +581,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 
 CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFunctionRef &ref) {
 	if (ref.function->GetExpressionClass() != ExpressionClass::FUNCTION) {
-		throw InternalException("eek");
+		throw InternalException("RemotePushdownOptimizer: TableFunctionRef does not hold a function expression");
 	}
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
@@ -684,7 +675,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Also analyze the join condition - it may contain subqueries or local macro calls
 	// that affect whether the join can be pushed as a whole.
 	if (ref.condition) {
-		result = Merge(result, Rewrite(ref.condition));
+		result = MergeExpression(result, ref.condition);
 	}
 	return result;
 }
@@ -991,14 +982,64 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 	return ConstantFoldResult::FOLDED;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr) {
-	// note: this overload must not be used for expressions where a bare integer literal has
-	// positional meaning (top-level ORDER BY / GROUP BY / DISTINCT ON entries) - folding e.g.
-	// "1 + 1" into "2" would turn a constant expression into a positional reference there
-	if (TryConstantFold(expr) == ConstantFoldResult::FOLD_ERROR) {
-		return CatalogPushdownResult::Unknown();
+RemotePushdownOptimizer::ConstantFoldResult
+RemotePushdownOptimizer::FoldConstantSubtrees(unique_ptr<ParsedExpression> &expr) {
+	auto result = TryConstantFold(expr);
+	if (result != ConstantFoldResult::NOT_FOLDABLE) {
+		return result;
 	}
-	return Rewrite(*expr);
+	// the expression itself cannot be folded - fold the largest constant subtrees within it
+	bool any_folded = false;
+	bool any_error = false;
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		auto child_result = FoldConstantSubtrees(child);
+		any_folded = any_folded || child_result == ConstantFoldResult::FOLDED;
+		any_error = any_error || child_result == ConstantFoldResult::FOLD_ERROR;
+	});
+	if (any_error) {
+		return ConstantFoldResult::FOLD_ERROR;
+	}
+	return any_folded ? ConstantFoldResult::FOLDED : ConstantFoldResult::NOT_FOLDABLE;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::MergeExpression(CatalogPushdownResult current,
+                                                               unique_ptr<ParsedExpression> &expr) {
+	auto merged = Merge(current, Rewrite(*expr));
+	if (merged.reference_type != CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+		// the expression does not block pushdown - no need to fold anything
+		return merged;
+	}
+	if (current.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+		// pushdown had already failed before this expression
+		return merged;
+	}
+	// the expression blocks pushdown - this can be because it contains constructs the remote
+	// catalog cannot evaluate; constant folding can replace column-free subtrees with plain
+	// (DuckDB-evaluated) literals, e.g. "WHERE ts > now()::TIMESTAMP - INTERVAL 1 DAY" becomes
+	// a comparison against a timestamp literal
+	switch (FoldConstantSubtrees(expr)) {
+	case ConstantFoldResult::FOLDED:
+		// something was folded - re-check whether the expression can be pushed down now
+		return Merge(current, Rewrite(*expr));
+	case ConstantFoldResult::FOLD_ERROR:
+		// evaluating a constant sub-expression raises an error - keep the query local so the
+		// user sees DuckDB's error message
+		return merged;
+	default:
+		// nothing was folded
+		return merged;
+	}
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::MergeLimitValue(CatalogPushdownResult current,
+                                                               unique_ptr<ParsedExpression> &expr) {
+	// LIMIT / OFFSET values must be plain literals to be pushed down to most remote systems -
+	// fold constant expressions like "LIMIT 2 + 3" eagerly here, as the literal requirement is
+	// only checked at the query-node level which cannot trigger a re-fold
+	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		FoldConstantSubtrees(expr);
+	}
+	return Merge(current, Rewrite(*expr));
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
@@ -1027,7 +1068,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](unique_ptr<ParsedExpression> &child) { result = Merge(result, Rewrite(child)); });
+	    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		// the expression is fully remote - check if the remote catalog supports pushing it down
 		if (!result.catalog->SupportsPushdown(expr)) {

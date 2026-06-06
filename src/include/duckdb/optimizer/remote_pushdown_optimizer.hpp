@@ -62,20 +62,23 @@ public:
 private:
 	void FindRemoteCatalogsInSearchPath();
 	CatalogPushdownResult Rewrite(QueryNode &node);
-	CatalogPushdownResult Rewrite(SelectNode &node);
-	CatalogPushdownResult Rewrite(SetOperationNode &node);
-	CatalogPushdownResult Rewrite(InsertQueryNode &node);
-	CatalogPushdownResult Rewrite(DeleteQueryNode &node);
-	CatalogPushdownResult Rewrite(UpdateQueryNode &node);
+	//! The per-type query node handlers are deliberately NOT overloads of Rewrite: calling
+	//! Rewrite with a statically-typed node (e.g. *InsertStatement::node, which is an
+	//! InsertQueryNode) must dispatch through Rewrite(QueryNode &) so the node-level checks
+	//! (CTE handling, catalog support verification) are applied
+	CatalogPushdownResult RewriteNode(SelectNode &node);
+	CatalogPushdownResult RewriteNode(SetOperationNode &node);
+	CatalogPushdownResult RewriteNode(InsertQueryNode &node);
+	CatalogPushdownResult RewriteNode(DeleteQueryNode &node);
+	CatalogPushdownResult RewriteNode(UpdateQueryNode &node);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
-	CatalogPushdownResult Rewrite(RecursiveCTENode &node);
+	CatalogPushdownResult RewriteNode(RecursiveCTENode &node);
 	CatalogPushdownResult Rewrite(JoinRef &ref);
 	CatalogPushdownResult Rewrite(SubqueryRef &ref);
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 
-	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 	CatalogPushdownResult Rewrite(const SubqueryExpression &expr);
 	enum class ConstantFoldResult {
@@ -87,11 +90,23 @@ private:
 		//! executed locally so the user sees DuckDB's error message
 		FOLD_ERROR
 	};
+	//! Rewrite an expression and merge the result into "current". If the expression blocks an
+	//! otherwise possible pushdown, constant subtrees are folded into their locally-evaluated
+	//! literals and the expression is re-checked - this makes more queries eligible for remote
+	//! pushdown, as the remote system only sees the (DuckDB-evaluated) literal instead of
+	//! functions whose remote semantics differ. Must not be used for expressions where a bare
+	//! integer literal has positional meaning (top-level ORDER BY / GROUP BY / DISTINCT ON
+	//! entries): folding e.g. "1 + 1" into "2" would turn it into a positional reference.
+	CatalogPushdownResult MergeExpression(CatalogPushdownResult current, unique_ptr<ParsedExpression> &expr);
+	//! Variant of MergeExpression for LIMIT / OFFSET values, which must be literals to be
+	//! pushed down - non-literal values are always folded
+	CatalogPushdownResult MergeLimitValue(CatalogPushdownResult current, unique_ptr<ParsedExpression> &expr);
 	//! Attempt to constant-fold a column-free, non-volatile expression by binding and evaluating
-	//! it locally, replacing it with the resulting constant. This makes more queries eligible for
-	//! remote pushdown: the remote system only sees the (DuckDB-evaluated) literal instead of
-	//! functions whose remote semantics differ.
+	//! it locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
+	//! Fold the largest constant subtrees within an expression (TryConstantFold on the whole
+	//! expression first, recursing into the children of unfoldable expressions)
+	ConstantFoldResult FoldConstantSubtrees(unique_ptr<ParsedExpression> &expr);
 	CatalogPushdownResult Rewrite(const CastExpression &expr);
 	CatalogPushdownResult Rewrite(const FunctionExpression &expr);
 	CatalogPushdownResult Rewrite(const WindowExpression &expr);
