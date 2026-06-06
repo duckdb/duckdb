@@ -3236,10 +3236,10 @@ index 0000000..b84c501
 +physical_plan	<REGEX>:.*AGGREGATE.*
 diff --git a/test/sql/remote_pushdown/remote_pushdown_constant_folding.test b/test/sql/remote_pushdown/remote_pushdown_constant_folding.test
 new file mode 100644
-index 0000000..bcc3bbb
+index 0000000..34655e7
 --- /dev/null
 +++ b/test/sql/remote_pushdown/remote_pushdown_constant_folding.test
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,147 @@
 +# name: test/sql/remote_pushdown/remote_pushdown_constant_folding.test
 +# description: Column-free expressions are constant-folded locally before pushdown, so the
 +#              remote system only sees DuckDB-evaluated literals
@@ -3315,16 +3315,13 @@ index 0000000..bcc3bbb
 +----
 +physical_plan	<REGEX>:.*MYSQL_SCAN.*
 +
-+# ---- folding is only attempted when the expression blocks pushdown ----
-+# "+" over BIGINT literals is supported by MySQL as-is, so this is pushed unfolded
-+# (and the out-of-range error is raised remotely - both systems raise an error)
++# ---- constant expressions that error during folding keep the query local, so the user
++# ---- sees DuckDB's error message instead of a remote error
 +statement error
 +SELECT 9223372036854775807 + 1 FROM s.cf_tbl
 +----
-+<REGEX>:.*out of range.*
++<REGEX>:Out of Range Error.*Overflow in addition.*
 +
-+# when folding IS triggered (sqrt is vetoed) and a constant sub-expression errors during
-+# folding, the query is kept local so the user sees DuckDB's error message
 +statement error
 +SELECT COUNT(*) FROM s.cf_tbl WHERE i < sqrt(4) + (9223372036854775807 + 1)
 +----

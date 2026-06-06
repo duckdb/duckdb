@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
@@ -95,9 +96,6 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	}
 }
 
-//! Check whether the remote catalog supports pushing down every expression in a tree
-static bool ExpressionSupportsPushdown(Catalog &catalog, const ParsedExpression &expr);
-
 CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, CatalogPushdownResult b) {
 	if (a.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED &&
 	    b.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
@@ -125,19 +123,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, Ca
 		// "a" refers to no catalog, "b" refers to a single remote catalog
 		// check if "b" supports all constructs referenced in "a"
 		auto &remote_catalog = *b.catalog;
-		for (auto &entry : a.used_expressions) {
-			if (ExpressionSupportsPushdown(remote_catalog, entry.Get())) {
-				continue;
-			}
-			// the remote catalog cannot evaluate this expression as written - if we have the
-			// owning pointer, fold the constant subtrees within it into their locally-evaluated
-			// literals and check again (e.g. "ts > now()::TIMESTAMP - INTERVAL 1 DAY" turns
-			// into a comparison against a plain timestamp literal)
-			if (!entry.foldable_slot) {
-				return CatalogPushdownResult::Unknown();
-			}
-			if (FoldConstantSubtrees(*entry.foldable_slot) != ConstantFoldResult::FOLDED ||
-			    !ExpressionSupportsPushdown(remote_catalog, entry.Get())) {
+		for (auto &expr : a.used_expressions) {
+			if (!remote_catalog.SupportsPushdown(expr.get())) {
+				// pushdown not supported - result is UNKNOWN_CATALOG_REFERENCE
 				return CatalogPushdownResult::Unknown();
 			}
 		}
@@ -148,12 +136,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, Ca
 			}
 		}
 		for (auto &query_node : a.used_nodes) {
-			if (remote_catalog.SupportsPushdown(query_node.get())) {
-				continue;
-			}
-			// the node cannot be pushed down as written - fold the node's LIMIT / OFFSET
-			// values (which must be literals on most remote systems) and check again
-			if (!FoldLimitValues(query_node.get()) || !remote_catalog.SupportsPushdown(query_node.get())) {
+			if (!remote_catalog.SupportsPushdown(query_node.get())) {
+				// pushdown not supported - result is UNKNOWN_CATALOG_REFERENCE
 				return CatalogPushdownResult::Unknown();
 			}
 		}
@@ -248,12 +232,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	}
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (!result.catalog->SupportsPushdown(node)) {
-			// the node cannot be pushed down as written - fold the node's LIMIT / OFFSET
-			// values (which must be literals on most remote systems) and check again
-			if (!FoldLimitValues(node) || !result.catalog->SupportsPushdown(node)) {
-				// bail - referenced catalog does not support pushing down this node type
-				result = CatalogPushdownResult::Unknown();
-			}
+			// bail - referenced catalog does not support pushing down this node type
+			result = CatalogPushdownResult::Unknown();
 		}
 	} else if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
 		result.used_nodes.push_back(node);
@@ -942,36 +922,69 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ColumnRef
 	return CatalogPushdownResult::NoCatalogReference();
 }
 
-//! Returns true if the expression cannot contain anything that prevents constant folding
-//! (column references, subqueries, parameters, star expressions, window functions, ...)
-static bool IsPotentiallyFoldable(const ParsedExpression &expr) {
-	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::COLUMN_REF:
-	case ExpressionClass::SUBQUERY:
-	case ExpressionClass::PARAMETER:
-	case ExpressionClass::STAR:
-	case ExpressionClass::WINDOW:
-	case ExpressionClass::DEFAULT:
-	case ExpressionClass::LAMBDA:
-	case ExpressionClass::LAMBDA_REF:
-	case ExpressionClass::POSITIONAL_REFERENCE:
+//! Returns true if all children of an expression are constants
+static bool AllChildrenConstant(const ParsedExpression &expr) {
+	bool all_constant = true;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		all_constant = all_constant && child.GetExpressionClass() == ExpressionClass::CONSTANT;
+	});
+	return all_constant;
+}
+
+bool RemotePushdownOptimizer::IsFoldableFunction(const FunctionExpression &func) {
+	if (func.Filter() || func.Distinct() || func.ExportState() || (func.OrderBy() && !func.OrderBy()->orders.empty())) {
+		// aggregate-style modifiers cannot be constant-folded
 		return false;
-	default:
-		break;
 	}
-	bool foldable = true;
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { foldable = foldable && IsPotentiallyFoldable(child); });
-	return foldable;
+	// look up the function - it must exist as a scalar function or a scalar macro
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.FunctionName());
+	auto entry =
+	    Catalog::GetEntry(binder.context, func.Catalog(), func.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!entry) {
+		return false;
+	}
+	if (entry->type == CatalogType::MACRO_ENTRY) {
+		// scalar macros are expanded when binding - the stability of the expansion is checked
+		// after binding
+		return true;
+	}
+	if (entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		// aggregate functions and table functions cannot be constant-folded
+		return false;
+	}
+	// at least one overload must be non-volatile (the stability of the selected overload is
+	// verified after binding)
+	auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
+	for (auto &overload : scalar_entry.functions.functions) {
+		if (overload.GetStability() != FunctionStability::VOLATILE) {
+			return true;
+		}
+	}
+	return false;
 }
 
 RemotePushdownOptimizer::ConstantFoldResult
 RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
-		// already a constant
-		return ConstantFoldResult::NOT_FOLDABLE;
-	}
-	if (!IsPotentiallyFoldable(*expr)) {
+	// only fold expressions whose inputs are all constants - folding runs bottom-up during the
+	// rewrite, so nested foldable expressions have already been replaced with constants
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::FUNCTION:
+		if (!AllChildrenConstant(*expr) || !IsFoldableFunction(expr->Cast<FunctionExpression>())) {
+			return ConstantFoldResult::NOT_FOLDABLE;
+		}
+		break;
+	case ExpressionClass::CAST:
+	case ExpressionClass::COMPARISON:
+	case ExpressionClass::BETWEEN:
+	case ExpressionClass::CONJUNCTION:
+	case ExpressionClass::OPERATOR:
+	case ExpressionClass::CASE:
+		// deterministic expression types - foldable when all inputs are constants
+		if (!AllChildrenConstant(*expr)) {
+			return ConstantFoldResult::NOT_FOLDABLE;
+		}
+		break;
+	default:
 		return ConstantFoldResult::NOT_FOLDABLE;
 	}
 	// bind a copy of the expression (binding modifies the expression in-place)
@@ -1015,57 +1028,6 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 	return ConstantFoldResult::FOLDED;
 }
 
-RemotePushdownOptimizer::ConstantFoldResult
-RemotePushdownOptimizer::FoldConstantSubtrees(unique_ptr<ParsedExpression> &expr) {
-	auto result = TryConstantFold(expr);
-	if (result != ConstantFoldResult::NOT_FOLDABLE) {
-		return result;
-	}
-	// the expression itself cannot be folded - fold the largest constant subtrees within it
-	bool any_folded = false;
-	bool any_error = false;
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		auto child_result = FoldConstantSubtrees(child);
-		any_folded = any_folded || child_result == ConstantFoldResult::FOLDED;
-		any_error = any_error || child_result == ConstantFoldResult::FOLD_ERROR;
-	});
-	if (any_error) {
-		return ConstantFoldResult::FOLD_ERROR;
-	}
-	return any_folded ? ConstantFoldResult::FOLDED : ConstantFoldResult::NOT_FOLDABLE;
-}
-
-bool RemotePushdownOptimizer::FoldLimitValues(QueryNode &node) {
-	// LIMIT / OFFSET values are the only expressions owned directly by a query node that can be
-	// folded safely - ORDER BY / GROUP BY / DISTINCT ON entries are positional contexts, where
-	// folding an expression into an integer literal would turn it into a positional reference
-	bool any_folded = false;
-	for (auto &modifier : node.modifiers) {
-		if (modifier->type != ResultModifierType::LIMIT_MODIFIER) {
-			continue;
-		}
-		auto &limit_mod = modifier->Cast<LimitModifier>();
-		for (auto *limit_value : {&limit_mod.limit, &limit_mod.offset}) {
-			auto &value = *limit_value;
-			if (value && value->GetExpressionClass() != ExpressionClass::CONSTANT) {
-				any_folded = FoldConstantSubtrees(value) == ConstantFoldResult::FOLDED || any_folded;
-			}
-		}
-	}
-	return any_folded;
-}
-
-static bool ExpressionSupportsPushdown(Catalog &catalog, const ParsedExpression &expr) {
-	if (!catalog.SupportsPushdown(expr)) {
-		return false;
-	}
-	bool supported = true;
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		supported = supported && ExpressionSupportsPushdown(catalog, child);
-	});
-	return supported;
-}
-
 CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExpression &expr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
@@ -1085,60 +1047,58 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExp
 	}
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::FinishExpression(CatalogPushdownResult result,
-                                                                const ParsedExpression &expr,
-                                                                optional_ptr<unique_ptr<ParsedExpression>> slot) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold) {
+	// rewrite the children first - constant folding happens bottom-up, so foldable
+	// sub-expressions have already been replaced with constants when this expression is folded
+	auto result = CatalogPushdownResult::NoCatalogReference();
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { result = Merge(result, Rewrite(child)); });
+	if (can_fold) {
+		// if this is a foldable expression over constant inputs, replace it with its
+		// locally-evaluated result - this makes more queries eligible for remote pushdown, as
+		// the remote system only sees the (DuckDB-evaluated) literal instead of functions whose
+		// remote semantics differ. "can_fold" is false for expressions where a bare integer
+		// literal has positional meaning (top-level ORDER BY / GROUP BY / DISTINCT ON entries) -
+		// folding e.g. "1 + 1" into "2" would turn it into a positional reference there
+		switch (TryConstantFold(expr)) {
+		case ConstantFoldResult::FOLD_ERROR:
+			// evaluating the expression is guaranteed to fail - keep the query local so the
+			// user sees DuckDB's error message
+			return CatalogPushdownResult::Unknown();
+		case ConstantFoldResult::FOLDED:
+			// the expression was replaced with a constant - the children no longer exist
+			result = CatalogPushdownResult::NoCatalogReference();
+			break;
+		default:
+			break;
+		}
+	}
+	result = Merge(std::move(result), AnalyzeExpression(*expr));
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		// the expression is fully remote - check if the remote catalog supports pushing it down
-		// (only this expression itself needs to be checked here: the children were verified when
-		// their results were merged)
-		if (result.catalog->SupportsPushdown(expr)) {
-			return result;
-		}
-		// the remote catalog cannot evaluate this expression as written - fold the constant
-		// subtrees within it into their locally-evaluated literals and check again
-		if (!slot || FoldConstantSubtrees(*slot) != ConstantFoldResult::FOLDED ||
-		    !result.catalog->SupportsPushdown(**slot)) {
+		if (!result.catalog->SupportsPushdown(*expr)) {
 			return CatalogPushdownResult::Unknown();
 		}
 	} else if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
 		// record the expression so a remote catalog can veto pushdown of any expression class
-		// (functions, comparisons, operators, star expressions, parameters, etc.) during a later
-		// merge. The entries that the direct children recorded are subsumed by this expression -
-		// the pushdown check traverses the entire expression tree. Entries that are NOT reachable
-		// from this expression (subquery interiors and cast target type expressions) are kept.
-		unordered_set<const ParsedExpression *> direct_children;
-		ParsedExpressionIterator::EnumerateChildren(
-		    expr, [&](const ParsedExpression &child) { direct_children.insert(&child); });
-		auto &entries = result.used_expressions;
-		entries.erase(
-		    std::remove_if(entries.begin(), entries.end(),
-		                   [&](const PushdownExpression &entry) { return direct_children.count(&entry.Get()) > 0; }),
-		    entries.end());
-		if (slot) {
-			entries.emplace_back(*slot);
-		} else {
-			entries.emplace_back(expr);
-		}
+		// (functions, comparisons, operators, star expressions, parameters, etc.) during a later merge
+		result.used_expressions.push_back(*expr);
 	}
 	return result;
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold) {
-	auto result = AnalyzeExpression(*expr);
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { result = Merge(result, Rewrite(child)); });
-	// "can_fold" is false for expressions where a bare integer literal has positional meaning
-	// (top-level ORDER BY / GROUP BY / DISTINCT ON entries) - folding e.g. "1 + 1" into "2"
-	// would turn the constant expression into a positional reference
-	return FinishExpression(std::move(result), *expr, can_fold ? &expr : nullptr);
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ParsedExpression &expr) {
 	auto result = AnalyzeExpression(expr);
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
-	return FinishExpression(std::move(result), expr, nullptr);
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		if (!result.catalog->SupportsPushdown(expr)) {
+			return CatalogPushdownResult::Unknown();
+		}
+	} else if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
+		result.used_expressions.push_back(expr);
+	}
+	return result;
 }
 
 unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
