@@ -103,7 +103,8 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 		OP::template Operation<interval_t>(std::forward<ARGS>(args)...);
 		break;
 	default:
-		throw NotImplementedException("Unsupported physical type for default aggregate state export: %s", TypeIdToString(type));
+		throw NotImplementedException("Unsupported physical type for default aggregate state export: %s",
+		                              TypeIdToString(type));
 	}
 }
 

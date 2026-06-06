@@ -31,15 +31,14 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		return false;
 	}
 	for (auto &aggr : statement.aggregates) {
+		if (aggr->GetAlias() == "__collated_group") {
+			// collated GROUP BY adds first() aggregates to preserve original values - skip verification since
+			// ExtractPivotAggregates relies on the __collated_group alias to filter them out
+			return false;
+		}
 		auto &res_type = aggr->GetReturnType();
 		if (res_type.IsAggregateState()) {
 			// already an aggregate state export - skip verification
-			return false;
-		}
-		// skip if the aggregate cannot be exported (no combine, has destructor, or no state type callback)
-		auto &aggr_expr = aggr->Cast<BoundAggregateExpression>();
-		auto &func = aggr_expr.Function();
-		if (!func.HasStateCombineCallback() || func.HasStateDestructorCallback() || !func.HasGetStateTypeCallback()) {
 			return false;
 		}
 	}
