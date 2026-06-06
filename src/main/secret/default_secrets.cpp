@@ -85,6 +85,9 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(Client
 	secret->TrySetValue("extra_http_headers", input);
 	secret->TrySetValue("bearer_token", input);
 
+	//! Set redact keys
+	secret->redact_keys = {"http_proxy_password", "bearer_token"};
+
 	return std::move(secret);
 }
 
@@ -100,7 +103,7 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(Cli
 	secret->TrySetValue("bearer_token", input);
 
 	//! Set redact keys
-	secret->redact_keys = {"http_proxy_password"};
+	secret->redact_keys = {"http_proxy_password", "bearer_token"};
 
 	return std::move(secret);
 }
