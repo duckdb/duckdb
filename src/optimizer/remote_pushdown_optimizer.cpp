@@ -40,26 +40,12 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
 CatalogPushdownResult::CatalogPushdownResult(CatalogReferenceType reference_type_p) : reference_type(reference_type_p) {
 }
-
-namespace {
-//! RAII guard for tracking the expression recursion depth
-struct ExpressionDepthGuard {
-	explicit ExpressionDepthGuard(idx_t &depth_p) : depth(depth_p) {
-		depth++;
-	}
-	~ExpressionDepthGuard() {
-		depth--;
-	}
-	idx_t &depth;
-};
-} // namespace
 
 CatalogPushdownResult CatalogPushdownResult::Unknown() {
 	return CatalogPushdownResult(CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE);
@@ -77,7 +63,6 @@ CatalogPushdownResult CatalogPushdownResult::RemoteReference(Catalog &catalog) {
 
 RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder)
     : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
-	pushdown_state.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(binder.context);
 }
 
 RemotePushdownOptimizer::RemotePushdownOptimizer(optional_ptr<RemotePushdownOptimizer> parent_p)
@@ -950,16 +935,14 @@ bool RemotePushdownOptimizer::IsFoldableFunction(const FunctionExpression &func)
 		return false;
 	}
 	if (entry->type == CatalogType::MACRO_ENTRY) {
-		// scalar macros are expanded when binding - the stability of the expansion is checked
-		// after binding
+		// scalar macros are expanded when binding - the stability of the expansion is checked after binding
 		return true;
 	}
 	if (entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// aggregate functions and table functions cannot be constant-folded
 		return false;
 	}
-	// at least one overload must be non-volatile (the stability of the selected overload is
-	// verified after binding)
+	// at least one overload must be non-volatile (the selected overload is verified after binding)
 	auto &scalar_entry = entry->Cast<ScalarFunctionCatalogEntry>();
 	for (auto &overload : scalar_entry.functions.functions) {
 		if (overload.GetStability() != FunctionStability::VOLATILE) {
@@ -1000,9 +983,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		ConstantBinder constant_binder(*fold_binder, binder.context, "remote pushdown");
 		bound_expr = constant_binder.Bind(expr_copy);
 	} catch (std::exception &) {
-		// the expression cannot be bound as a constant - this is not necessarily an error in the
-		// full query (e.g. the constant binder rejects aggregates like count(5), which are valid
-		// over a table) - leave the expression in place
+		// the expression cannot be bound as a constant (e.g. no matching function overload)
 		return ConstantFoldResult::NOT_FOLDABLE;
 	}
 	if (!bound_expr || bound_expr->HasParameter() || bound_expr->HasSubquery()) {
@@ -1013,16 +994,12 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		return ConstantFoldResult::NOT_FOLDABLE;
 	}
 	if (!bound_expr->IsConsistent()) {
-		// functions like now() are constant within a query, but must be re-evaluated when a
-		// prepared statement is re-executed. The binder normally records this when it binds the
-		// function - folding removes the function from the statement, so record it here instead
-		// (re-binding restarts from a copy of the unbound statement, re-running this fold)
+		// functions like now() must be re-evaluated (re-folded) when a prepared statement is re-executed
 		binder.SetAlwaysRequireRebind();
 	}
 	Value fold_result;
 	if (!ExpressionExecutor::TryEvaluateScalar(binder.context, *bound_expr, fold_result)) {
-		// evaluating the constant expression raises an error (e.g. an out-of-range error) -
-		// the query has to be executed locally so the user sees DuckDB's error message
+		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
 	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
@@ -1054,26 +1031,15 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExp
 
 ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<ParsedExpression> &expr, bool can_fold,
                                                                     bool fold_self) {
-	// guard against stack overflow on extremely deep expression trees - such queries exceed the
-	// binder's expression depth limit anyway, so abandoning pushdown does not change behavior
-	if (expression_depth >= pushdown_state.max_expression_depth) {
-		ExpressionPushdownResult state;
-		state.result = CatalogPushdownResult::Unknown();
-		return state;
-	}
-	ExpressionDepthGuard depth_guard(expression_depth);
-	// rewrite the children - foldable subtrees are not folded yet: they are folded at the last
-	// possible moment, either when a foldable child meets a non-foldable parent (the child is
-	// then a maximal foldable subtree) or at the expression root. This way every maximal
-	// foldable subtree is bound and evaluated exactly once.
+	// rewrite the children - foldable subtrees are folded at the last possible moment, so that
+	// every maximal foldable subtree is bound and evaluated exactly once
 	auto result = CatalogPushdownResult::NoCatalogReference();
 	vector<reference<unique_ptr<ParsedExpression>>> foldable_children;
 	bool all_children_foldable = true;
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
 		auto child_state = RewriteExpression(child, true, true);
 		if (child_state.foldability == ExpressionFoldability::FOLDABLE) {
-			// defer - foldable states carry no analysis result, the subtree is folded (and the
-			// resulting constant recorded) when it turns out to be a maximal foldable subtree
+			// defer - the subtree is folded when it turns out to be a maximal foldable subtree
 			foldable_children.push_back(child);
 		} else {
 			all_children_foldable = false;
@@ -1081,16 +1047,12 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 		}
 	});
 	if (fold_self && can_fold && all_children_foldable && IsFoldableExpressionClass(*expr)) {
-		// this expression is itself foldable - defer folding to the parent.
-		// "can_fold" is false for expressions where a bare integer literal has positional
-		// meaning (top-level ORDER BY / GROUP BY / DISTINCT ON entries) - folding e.g. "1 + 1"
-		// into "2" would turn it into a positional reference there
+		// this expression is itself foldable - defer folding to the parent
 		ExpressionPushdownResult state;
 		state.foldability = ExpressionFoldability::FOLDABLE;
 		return state;
 	}
-	// this expression is not foldable - the foldable children are maximal foldable subtrees,
-	// fold them now
+	// this expression is not foldable - fold the (maximal) foldable children now
 	for (auto &child : foldable_children) {
 		result = Merge(std::move(result), FoldExpression(child.get()));
 	}
@@ -1112,24 +1074,19 @@ ExpressionPushdownResult RemotePushdownOptimizer::RewriteExpression(unique_ptr<P
 
 CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedExpression> &expr) {
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
-		// replace the expression with its locally-evaluated result - this makes more queries
-		// eligible for remote pushdown, as the remote system only sees the (DuckDB-evaluated)
-		// literal instead of functions whose remote semantics differ
+		// replace the expression with its locally-evaluated result
 		switch (TryConstantFold(expr)) {
 		case ConstantFoldResult::FOLD_ERROR:
-			// evaluating the expression is guaranteed to fail - keep the query local so the
-			// user sees DuckDB's error message
+			// evaluating is guaranteed to fail - keep the query local so the user sees DuckDB's error
 			return CatalogPushdownResult::Unknown();
 		case ConstantFoldResult::NOT_FOLDABLE:
-			// binding or evaluating did not succeed after all (e.g. there is no matching
-			// function overload for the constant arguments, or the selected overload turned
-			// out to be volatile) - process the expression without folding it
+			// binding did not succeed after all - process the expression without folding it
 			return RewriteExpression(expr, true, false).result;
 		case ConstantFoldResult::FOLDED:
 			break;
 		}
 	}
-	// a plain constant - record it so a remote catalog can verify that it is supported
+	// record the constant so a remote catalog can verify that it is supported
 	auto result = CatalogPushdownResult::NoCatalogReference();
 	result.used_expressions.push_back(*expr);
 	return result;
@@ -1138,7 +1095,7 @@ CatalogPushdownResult RemotePushdownOptimizer::FoldExpression(unique_ptr<ParsedE
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold) {
 	auto state = RewriteExpression(expr, can_fold, true);
 	if (state.foldability == ExpressionFoldability::FOLDABLE) {
-		// the entire expression is foldable - this is the root, fold it now
+		// the entire expression is foldable - fold it at the root
 		return FoldExpression(expr);
 	}
 	return state.result;

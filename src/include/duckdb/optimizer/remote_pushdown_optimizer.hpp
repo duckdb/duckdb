@@ -46,22 +46,18 @@ struct CatalogPushdownResult {
 	vector<const_reference<QueryNode>> used_nodes;
 };
 
-//! Whether an expression (tree) can be constant-folded - foldable subtrees are folded at the
-//! last possible moment, so that every maximal foldable subtree is bound and evaluated once
+//! Whether an expression (tree) can be constant-folded
 enum class ExpressionFoldability { FOLDABLE, NOT_FOLDABLE };
 
 //! The result of rewriting a single expression
 struct ExpressionPushdownResult {
-	//! The catalog analysis result - empty for FOLDABLE expressions, which are folded (and
-	//! analyzed) by the parent
+	//! The catalog analysis result - empty for FOLDABLE expressions, which are folded by the parent
 	CatalogPushdownResult result;
 	ExpressionFoldability foldability = ExpressionFoldability::NOT_FOLDABLE;
 };
 
 struct RemotePushdownState {
 	bool search_path_initialized = false;
-	//! The maximum expression depth (cached from the max_expression_depth setting)
-	idx_t max_expression_depth = 0;
 	vector<reference<Catalog>> remote_catalogs_in_search_path;
 	vector<CatalogSearchEntry> local_catalogs_in_search_path;
 };
@@ -102,22 +98,12 @@ private:
 		//! executed locally so the user sees DuckDB's error message
 		FOLD_ERROR
 	};
-	//! Rewrite an expression through its owning pointer - maximal foldable subtrees are
-	//! replaced with their locally-evaluated result, which makes more queries eligible for
-	//! remote pushdown (the remote system only sees the DuckDB-evaluated literal instead of
-	//! functions whose remote semantics differ). "can_fold" must be false for expressions
-	//! where a bare integer literal has positional meaning (top-level ORDER BY / GROUP BY /
-	//! DISTINCT ON entries): folding e.g. "1 + 1" into "2" would turn it into a positional
-	//! reference.
+	//! Rewrite an expression, constant-folding maximal foldable subtrees. "can_fold" must be
+	//! false where a bare integer literal has positional meaning (ORDER BY / GROUP BY / DISTINCT ON)
 	CatalogPushdownResult Rewrite(unique_ptr<ParsedExpression> &expr, bool can_fold = true);
-	//! Rewrite an expression, deferring the folding of foldable subtrees to the parent (or to
-	//! Rewrite at the root): a foldable child of an unfoldable expression is a maximal foldable
-	//! subtree, and is folded through FoldExpression at that point
+	//! Rewrite an expression, deferring the folding of foldable subtrees to the parent (or the root)
 	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, bool can_fold, bool fold_self);
-	//! Fold a maximal foldable subtree and record the resulting constant. If folding fails
-	//! after all (no matching overload, volatile overload), the expression is processed
-	//! without folding; if evaluating raises an error, pushdown is blocked so that local
-	//! execution surfaces DuckDB's error.
+	//! Fold a maximal foldable subtree and record the resulting constant
 	CatalogPushdownResult FoldExpression(unique_ptr<ParsedExpression> &expr);
 	//! Rewrite an expression that cannot be modified (cast target type expressions)
 	CatalogPushdownResult Rewrite(const ParsedExpression &expr);
@@ -131,10 +117,9 @@ private:
 	CatalogPushdownResult AnalyzeExpression(const ColumnRefExpression &expr);
 	//! Bind and evaluate an expression locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
-	//! Returns true if an expression class can be constant-folded (given foldable inputs):
-	//! deterministic expression types, and functions that resolve to a non-volatile scalar
-	//! function or a scalar macro
+	//! Returns true if an expression class can be constant-folded (given foldable inputs)
 	bool IsFoldableExpressionClass(const ParsedExpression &expr);
+	//! Returns true if a function resolves to a non-volatile scalar function or a scalar macro
 	bool IsFoldableFunction(const FunctionExpression &func);
 
 	CatalogPushdownResult Rewrite(const LogicalType &type);
@@ -172,8 +157,6 @@ private:
 	RemotePushdownState &pushdown_state;
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
 	case_insensitive_set_t local_table_names;
-	//! The current expression recursion depth (to guard against stack overflow)
-	idx_t expression_depth = 0;
 	//! CTE name to catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	case_insensitive_map_t<CatalogPushdownResult> cte_results;
 };
