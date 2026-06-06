@@ -1164,6 +1164,16 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 	}
 }
 
+unique_lock<mutex> DataTable::LockAppendsForCreateIndex() {
+	unique_lock<mutex> lock(append_lock);
+	if (!IsMainTable()) {
+		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
+		                           "%s by a different transaction",
+		                           GetTableName(), TableModification());
+	}
+	return lock;
+}
+
 bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id) {
 	if (checkpoint_id == MAX_TRANSACTION_ID) {
 		// no active checkpoint

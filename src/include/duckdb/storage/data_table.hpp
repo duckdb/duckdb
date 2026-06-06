@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/column_segment_info_scan_type.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -175,6 +176,8 @@ public:
 
 	//! Fetches an append lock
 	void AppendLock(DuckTransaction &transaction, TableAppendState &state);
+	//! Lock appends while creating an index over the table
+	unique_lock<mutex> LockAppendsForCreateIndex();
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
