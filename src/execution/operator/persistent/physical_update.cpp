@@ -114,7 +114,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	DataChunk &update_chunk = l_state.update_chunk;
 	update_chunk.Reset();
-	update_chunk.SetChildCardinality(chunk.size());
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
@@ -179,7 +178,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
 	delete_chunk.Reset();
-	delete_chunk.SetChildCardinality(update_count);
 
 	if (index_update) {
 		auto &transaction = DuckTransaction::Get(context.client, table.db);

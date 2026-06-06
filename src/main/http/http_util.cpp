@@ -117,6 +117,7 @@ bool HTTPResponse::ShouldRetry() const {
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
 	case HTTPStatusCode::InternalServerError_500:
+	case HTTPStatusCode::BadGateway_502:
 	case HTTPStatusCode::ServiceUnavailable_503:
 	case HTTPStatusCode::GatewayTimeout_504:
 		return true;

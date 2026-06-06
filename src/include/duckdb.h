@@ -934,7 +934,7 @@ process. Must be destroyed with 'duckdb_destroy_instance_cache'.
 
 * @return The database instance cache.
 */
-DUCKDB_C_API duckdb_instance_cache duckdb_create_instance_cache();
+DUCKDB_C_API duckdb_instance_cache duckdb_create_instance_cache(void);
 
 /*!
 Creates a new database instance in the instance cache, or retrieves an existing database instance.
@@ -1071,7 +1071,7 @@ Returns the version of the linked DuckDB, with a version postfix for dev version
 
 Usually used for developing C extensions that must return this for a compatibility check.
 */
-DUCKDB_C_API const char *duckdb_library_version();
+DUCKDB_C_API const char *duckdb_library_version(void);
 
 /*!
 Get the list of (fully qualified) table names of the query.
@@ -1114,7 +1114,7 @@ This should not be called in a loop as it internally loops over all the options.
 
 * @return The amount of config options available.
 */
-DUCKDB_C_API size_t duckdb_config_count();
+DUCKDB_C_API size_t duckdb_config_count(void);
 
 /*!
 Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.
@@ -1653,7 +1653,7 @@ This is the amount of tuples that will fit into a data chunk created by `duckdb_
 
 * @return The vector size.
 */
-DUCKDB_C_API idx_t duckdb_vector_size();
+DUCKDB_C_API idx_t duckdb_vector_size(void);
 
 /*!
 Whether or not the duckdb_string_t value is inlined.
@@ -3003,7 +3003,7 @@ Creates a value of type SQLNULL.
 
 * @return The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_create_null_value();
+DUCKDB_C_API duckdb_value duckdb_create_null_value(void);
 
 /*!
 Returns the number of elements in a LIST value.
@@ -3709,7 +3709,7 @@ The return value must be destroyed with `duckdb_destroy_scalar_function`.
 
 * @return The scalar function object.
 */
-DUCKDB_C_API duckdb_scalar_function duckdb_create_scalar_function();
+DUCKDB_C_API duckdb_scalar_function duckdb_create_scalar_function(void);
 
 /*!
 Destroys the given scalar function object.
@@ -4045,7 +4045,7 @@ The return value should be destroyed with `duckdb_destroy_aggregate_function`.
 
 * @return The aggregate function object.
 */
-DUCKDB_C_API duckdb_aggregate_function duckdb_create_aggregate_function();
+DUCKDB_C_API duckdb_aggregate_function duckdb_create_aggregate_function(void);
 
 /*!
 Destroys the given aggregate function object.
@@ -4206,7 +4206,7 @@ The return value should be destroyed with `duckdb_destroy_table_function`.
 
 * @return The table function object.
 */
-DUCKDB_C_API duckdb_table_function duckdb_create_table_function();
+DUCKDB_C_API duckdb_table_function duckdb_create_table_function(void);
 
 /*!
 Destroys the given table function object.
@@ -5420,7 +5420,7 @@ Creates a new cast function object.
 
 * @return The cast function object.
 */
-DUCKDB_C_API duckdb_cast_function duckdb_create_cast_function();
+DUCKDB_C_API duckdb_cast_function duckdb_create_cast_function(void);
 
 /*!
 Sets the source type of the cast function.
@@ -5608,7 +5608,7 @@ Creates a new file open options instance with blank settings.
 
 * @return The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
 */
-DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options();
+DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options(void);
 
 /*!
 Sets a specific flag in the file open options.
@@ -5719,7 +5719,7 @@ Creates a configuration option instance.
 
 * @return The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
 */
-DUCKDB_C_API duckdb_config_option duckdb_create_config_option();
+DUCKDB_C_API duckdb_config_option duckdb_create_config_option(void);
 
 /*!
 Destroys the given configuration option instance.
@@ -5807,7 +5807,7 @@ The return value must be destroyed with `duckdb_destroy_copy_function`.
 
 * @return The copy function object.
 */
-DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function();
+DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function(void);
 
 /*!
 Sets the name of the copy function.
@@ -6234,7 +6234,7 @@ Creates a new log storage object.
 
 * @return A log storage object. Must be destroyed with `duckdb_destroy_log_storage`.
 */
-DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage();
+DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage(void);
 
 /*!
 Destroys a log storage object.

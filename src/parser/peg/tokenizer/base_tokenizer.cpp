@@ -221,7 +221,19 @@ bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
 	}
 }
 
-bool BaseTokenizer::TokenizeInput() {
+bool BaseTokenizer::CanAutocomplete() const {
+	return !tokens.empty() && tokens.back().type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+}
+
+void BaseTokenizer::TokenizeInput() {
+	if (TokenizeInputInternal()) {
+		tokens.emplace_back("", sql.size(), GetTerminator());
+	} else {
+		tokens.emplace_back("", sql.size(), TokenType::END_OF_INPUT);
+	}
+}
+
+bool BaseTokenizer::TokenizeInputInternal() {
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
@@ -507,12 +519,10 @@ bool BaseTokenizer::TokenizeInput() {
 		}
 	}
 
-	// finished processing - check the final state
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
-		// no suggestions in comments or dollar-quoted strings
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
