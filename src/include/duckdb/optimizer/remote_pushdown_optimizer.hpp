@@ -115,13 +115,9 @@ private:
 	ExpressionPushdownResult RewriteExpression(unique_ptr<ParsedExpression> &expr, ExpressionFoldingMode mode);
 	//! Fold a maximal foldable subtree and record the resulting constant
 	CatalogPushdownResult FoldExpression(unique_ptr<ParsedExpression> &expr);
-	//! Rewrite a cast target type expression - these are owned by the (potentially shared)
-	//! type and must not be modified, so no constant folding is performed
-	CatalogPushdownResult RewriteTypeExpression(const ParsedExpression &expr);
 	//! Per-expression-class catalog analysis (catalog qualification, subqueries, local tables)
 	CatalogPushdownResult AnalyzeExpression(const ParsedExpression &expr);
 	CatalogPushdownResult AnalyzeExpression(const SubqueryExpression &expr);
-	CatalogPushdownResult AnalyzeExpression(const CastExpression &expr);
 	CatalogPushdownResult AnalyzeExpression(const FunctionExpression &expr);
 	CatalogPushdownResult AnalyzeExpression(const WindowExpression &expr);
 	CatalogPushdownResult AnalyzeExpression(const TypeExpression &expr);
@@ -133,7 +129,6 @@ private:
 	//! Returns true if a function resolves to a non-volatile scalar function or a scalar macro
 	bool IsFoldableFunction(const FunctionExpression &func);
 
-	CatalogPushdownResult Rewrite(const LogicalType &type);
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name,
 	                                                const string &schema_name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);

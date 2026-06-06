@@ -862,22 +862,9 @@ bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_
 	return true;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const LogicalType &type) {
-	return RewriteTypeExpression(*UnboundType::GetTypeExpression(type));
-}
-
 CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const SubqueryExpression &subquery_expr) {
 	RemotePushdownOptimizer child_optimizer(this);
 	return child_optimizer.Rewrite(*subquery_expr.Subquery()->node);
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const CastExpression &cast_expr) {
-	auto result = CatalogPushdownResult::NoCatalogReference();
-	auto &target_type = cast_expr.TargetType();
-	if (target_type.id() == LogicalTypeId::UNBOUND) {
-		result = Merge(result, Rewrite(target_type));
-	}
-	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr,
@@ -1014,8 +1001,6 @@ CatalogPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const ParsedExp
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		return AnalyzeExpression(expr.Cast<SubqueryExpression>());
-	case ExpressionClass::CAST:
-		return AnalyzeExpression(expr.Cast<CastExpression>());
 	case ExpressionClass::FUNCTION:
 		return AnalyzeExpression(expr.Cast<FunctionExpression>());
 	case ExpressionClass::WINDOW:
@@ -1099,20 +1084,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<ParsedExpressi
 		return FoldExpression(expr);
 	}
 	return state.result;
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::RewriteTypeExpression(const ParsedExpression &expr) {
-	auto result = AnalyzeExpression(expr);
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { result = Merge(result, RewriteTypeExpression(child)); });
-	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (!result.catalog->SupportsPushdown(expr)) {
-			return CatalogPushdownResult::Unknown();
-		}
-	} else if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
-		result.used_expressions.push_back(expr);
-	}
-	return result;
 }
 
 unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
