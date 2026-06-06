@@ -2980,3 +2980,3241 @@ index a44e00f..dad540b 100644
  
  require icu
  
+diff --git a/test/sql/remote_pushdown/basic_remote_pushdown.test b/test/sql/remote_pushdown/basic_remote_pushdown.test
+new file mode 100644
+index 0000000..f198427
+--- /dev/null
++++ b/test/sql/remote_pushdown/basic_remote_pushdown.test
+@@ -0,0 +1,36 @@
++# name: test/sql/remote_pushdown/basic_remote_pushdown.test
++# description: Test basic remote pushdown into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# create a table
++statement ok
++CREATE OR REPLACE TABLE s.small_tbl AS FROM range(10) t(i)
++
++# basic aggregates are pushed down
++query I
++SELECT SUM(i) FROM s.small_tbl
++----
++45
++
++query II
++explain SELECT SUM(i) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# unsupported aggregates are executed DuckDB side
++query I
++SELECT median(i) FROM s.small_tbl
++----
++4.5
++
++query II
++explain SELECT MEDIAN(i) FROM s.small_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_case.test b/test/sql/remote_pushdown/remote_pushdown_case.test
+new file mode 100644
+index 0000000..c855a8a
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_case.test
+@@ -0,0 +1,108 @@
++# name: test/sql/remote_pushdown/remote_pushdown_case.test
++# description: CASE expressions with type coercions that differ between DuckDB and MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.case_tbl AS SELECT i FROM range(10) t(i)
++
++# ---- standard CASE: same semantics in MySQL -- should push ----
++query I
++SELECT SUM(CASE WHEN i < 5 THEN i ELSE 0 END) FROM s.case_tbl
++----
++10
++
++query II
++explain SELECT SUM(CASE WHEN i < 5 THEN i ELSE 0 END) FROM s.case_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# CASE with NULL branch
++query I
++SELECT COUNT(*) FROM s.case_tbl WHERE (CASE WHEN i % 2 = 0 THEN i ELSE NULL END) IS NOT NULL
++----
++5
++
++# ---- CASE returning INTERVAL: MySQL cannot use INTERVAL as a result type ----
++# MySQL's INTERVAL keyword is only valid in date arithmetic (date + INTERVAL n DAY),
++# not as a standalone value -- if pushed, MySQL returns a syntax/type error
++query I
++SELECT CASE WHEN i = 0 THEN INTERVAL '1' DAY ELSE INTERVAL '2' DAY END
++FROM s.case_tbl WHERE i = 0
++----
++1 day
++
++query II
++explain SELECT SUM(i) FROM s.case_tbl
++    WHERE (CASE WHEN i < 5 THEN INTERVAL '1' DAY ELSE INTERVAL '2' DAY END) = INTERVAL '1' DAY
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- CASE with HUGEINT branch: MySQL has no HUGEINT type ----
++# 99999999999999999999 exceeds BIGINT range; DuckDB stores it as HUGEINT
++# if pushed, MySQL would receive this literal and either overflow or error
++
++query I
++SELECT CASE WHEN i = 0 THEN 99999999999999999999 ELSE i END FROM s.case_tbl WHERE i = 0
++----
++99999999999999999999
++
++query II
++explain SELECT SUM(CASE WHEN i = 0 THEN 99999999999999999999 ELSE i END) FROM s.case_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- CASE with LIST branch: list_value() is not in MySQL ----
++# list_value is not in the whitelist → should not push; DuckDB handles it locally
++query I
++SELECT CASE WHEN i = 0 THEN [1, 2, 3] ELSE [4, 5, 6] END FROM s.case_tbl WHERE i = 0
++----
++[1, 2, 3]
++
++query II
++explain SELECT COUNT(*) FROM s.case_tbl
++    WHERE list_sum(CASE WHEN i < 5 THEN [1, 2] ELSE [3, 4] END) > 3
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- CASE implicit integer/varchar coercion ----
++# both MySQL and DuckDB coerce i to VARCHAR when mixing int and string branches
++# result type is VARCHAR in both engines -- safe to push
++query I
++SELECT SUM(CASE WHEN i < 5 THEN 1 ELSE 0 END) FROM s.case_tbl
++----
++5
++
++query II
++explain SELECT SUM(CASE WHEN i < 5 THEN 1 ELSE 0 END) FROM s.case_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- case sensitivity: MySQL string equality is collation-dependent ----
++# MySQL default collation (utf8mb4_0900_ai_ci) is case-insensitive;
++# DuckDB string comparison is case-sensitive.
++# Pushing a query with string equality to MySQL can change the number of rows returned.
++
++statement ok
++CREATE OR REPLACE TABLE s.names_tbl AS
++    SELECT CASE i WHEN 0 THEN 'Alice' WHEN 1 THEN 'ALICE' ELSE 'alice' END AS name
++    FROM range(3) t(i)
++
++# MySQL's default collation (utf8mb4_0900_ai_ci) is case-insensitive and would match 3 rows;
++# the pushdown attaches an explicit binary collation to string literals, so the pushed
++# comparison is byte-wise like DuckDB and matches exactly 1 row
++query I
++SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
++----
++1
++
++query II
++explain SELECT COUNT(name) FROM s.names_tbl WHERE name = 'alice'
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_cast.test b/test/sql/remote_pushdown/remote_pushdown_cast.test
+new file mode 100644
+index 0000000..b84c501
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_cast.test
+@@ -0,0 +1,92 @@
++# name: test/sql/remote_pushdown/remote_pushdown_cast.test
++# description: Test basic remote pushdown of casts into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# create a table
++statement ok
++CREATE OR REPLACE TABLE s.small_tbl AS SELECT i::INTEGER i, concat(2000 + i, '-01-01') d FROM range(10) t(i)
++
++# we can pushdown in some situations
++query I
++SELECT MIN(CAST(d AS DATE)) FROM s.small_tbl
++----
++2000-01-01
++
++query II
++explain SELECT MIN(CAST(d AS DATE)) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# not many though!
++query I
++SELECT SUM(CAST(i AS BIGINT)) FROM s.small_tbl
++----
++45
++
++query I
++SELECT MIN(CAST(i AS VARCHAR)) FROM s.small_tbl
++----
++0
++
++# the serializer remaps cast types to their MySQL spellings:
++# BIGINT -> SIGNED, VARCHAR -> CHAR, DOUBLE -> DOUBLE, DECIMAL(w,s) -> DECIMAL(w,s)
++query II
++explain SELECT SUM(CAST(i AS BIGINT)) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++query II
++explain SELECT MIN(CAST(i AS VARCHAR)) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++query I
++SELECT SUM(CAST(i AS DOUBLE)) FROM s.small_tbl
++----
++45.0
++
++query II
++explain SELECT SUM(CAST(i AS DOUBLE)) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++query I
++SELECT SUM(CAST(i AS DECIMAL(8,2))) FROM s.small_tbl
++----
++45.00
++
++query II
++explain SELECT SUM(CAST(i AS DECIMAL(8,2))) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# casting a string LITERAL to BLOB is constant-folded locally (DuckDB's backslash
++# interpretation is applied before serialization), so it can be pushed
++query I
++SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl WHERE i = 0
++----
++1
++
++query II
++explain SELECT COUNT(CAST('ab' AS BLOB)) FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# casting a string COLUMN to BLOB cannot be folded and is not pushed -
++# DuckDB's VARCHAR -> BLOB cast interprets backslash escapes, MySQL's CAST AS BINARY does not
++query I
++SELECT COUNT(CAST(d AS BLOB)) FROM s.small_tbl
++----
++10
++
++query II
++explain SELECT COUNT(CAST(d AS BLOB)) FROM s.small_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_constant_folding.test b/test/sql/remote_pushdown/remote_pushdown_constant_folding.test
+new file mode 100644
+index 0000000..3652bdc
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_constant_folding.test
+@@ -0,0 +1,142 @@
++# name: test/sql/remote_pushdown/remote_pushdown_constant_folding.test
++# description: Column-free expressions are constant-folded locally before pushdown, so the
++#              remote system only sees DuckDB-evaluated literals
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.cf_tbl AS
++    SELECT i, TIMESTAMP '2026-06-01 00:00:00' + i * INTERVAL 1 DAY AS ts FROM range(10) t(i)
++
++# ---- functions with diverging remote semantics are folded into their DuckDB result ----
++
++# sqrt() is normally vetoed (MySQL returns NULL on domain errors) - constant arguments fold
++query I
++SELECT COUNT(*) FROM s.cf_tbl WHERE i < sqrt(16)
++----
++4
++
++query II
++explain SELECT COUNT(*) FROM s.cf_tbl WHERE i < sqrt(16)
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# division is normally vetoed (division by zero: inf vs NULL) - constant operands fold
++query I
++SELECT COUNT(*) FROM s.cf_tbl WHERE i > 8 / 2
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM s.cf_tbl WHERE i > 8 / 2
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- time-window filters: now()/today() with interval arithmetic fold to plain literals ----
++query I
++SELECT COUNT(*) FROM s.cf_tbl WHERE ts > now()::TIMESTAMP - INTERVAL 100 YEAR
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.cf_tbl WHERE ts > now()::TIMESTAMP - INTERVAL 100 YEAR
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++query II
++explain SELECT COUNT(*) FROM s.cf_tbl WHERE ts::DATE >= (now()::TIMESTAMP - INTERVAL 100 YEAR)::DATE
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# now() itself returns TIMESTAMP WITH TIME ZONE, which cannot be represented in MySQL -
++# the folded constant is vetoed and the query stays local
++query II
++explain SELECT i, now() FROM s.cf_tbl
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# ---- volatile functions are not folded ----
++# random() must be evaluated per row; it is also vetoed from pushdown
++query I
++SELECT COUNT(*) FROM (SELECT random() AS r FROM s.cf_tbl) t WHERE r >= 0 AND r < 1
++----
++10
++
++query II
++explain SELECT random() FROM s.cf_tbl
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# ---- constant expressions that error keep DuckDB's error message ----
++# the fold fails, and pushing would surface MySQL's out-of-range error instead
++statement error
++SELECT 9223372036854775807 + 1 FROM s.cf_tbl
++----
++<REGEX>:Out of Range Error.*Overflow in addition.*
++
++# ---- positional contexts are not folded ----
++# GROUP BY 1 + 1 groups by the constant expression; folding it to 2 would turn it into a
++# positional reference to the (non-existent) second select-list item
++query I
++SELECT COUNT(*) FROM s.cf_tbl GROUP BY 1 + 1
++----
++10
++
++# ORDER BY 1 + 1 is a constant expression, not a positional reference
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.cf_tbl ORDER BY 1 + 1) t
++----
++10
++
++# ---- LIMIT / OFFSET expressions fold to literals and can be pushed ----
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.cf_tbl ORDER BY i LIMIT 2 + 3) t
++----
++5
++
++query II
++explain SELECT i FROM s.cf_tbl ORDER BY i LIMIT 2 + 3
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- aggregates over constants are not folded but remain correct ----
++# count(5) counts rows - the constant binder rejects it, the regular path pushes it
++query I
++SELECT COUNT(5) FROM s.cf_tbl
++----
++10
++
++query II
++explain SELECT COUNT(5) FROM s.cf_tbl
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- the folded value keeps DuckDB's semantics, not MySQL's ----
++# MySQL's CAST would truncate '7.6' to 7; DuckDB rounds to 8
++query I
++SELECT COUNT(*) FROM s.cf_tbl WHERE i > CAST('7.6' AS BIGINT) - 1 + 1
++----
++1
++
++# prepared statements containing folded now() are re-folded on every execution
++statement ok
++PREPARE cf_prep AS SELECT COUNT(*) FROM s.cf_tbl WHERE ts > now()::TIMESTAMP - INTERVAL 100 YEAR
++
++query I
++EXECUTE cf_prep
++----
++10
++
++query I
++EXECUTE cf_prep
++----
++10
++
++statement ok
++DEALLOCATE cf_prep
+diff --git a/test/sql/remote_pushdown/remote_pushdown_constants.test b/test/sql/remote_pushdown/remote_pushdown_constants.test
+new file mode 100644
+index 0000000..2053863
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_constants.test
+@@ -0,0 +1,43 @@
++# name: test/sql/remote_pushdown/remote_pushdown_constants.test
++# description: Test basic remote pushdown of constants into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# create a table
++statement ok
++CREATE OR REPLACE TABLE s.small_tbl AS FROM range(10) t(i)
++
++# SUM is supported, so we can push it down, but not if there are unsupported literals attached to it
++# small numbers can be pushed down
++query II
++SELECT SUM(i), 1000000 FROM s.small_tbl
++----
++45	1000000
++
++query II
++explain SELECT SUM(i), 1000000 FROM s.small_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# large numbers cannot be
++query II
++SELECT SUM(i), 100000000000000000000000000000 FROM s.small_tbl
++----
++45	100000000000000000000000000000
++
++# unsupported types
++query II
++SELECT SUM(i), interval '1 day' FROM s.small_tbl
++----
++45	1 day
++
++query II
++SELECT SUM(i), date '2000-01-01' FROM s.small_tbl
++----
++45	2000-01-01
+diff --git a/test/sql/remote_pushdown/remote_pushdown_cte.test b/test/sql/remote_pushdown/remote_pushdown_cte.test
+new file mode 100644
+index 0000000..e7e0491
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_cte.test
+@@ -0,0 +1,101 @@
++# name: test/sql/remote_pushdown/remote_pushdown_cte.test
++# description: CTEs referencing only remote tables should be pushed; CTEs backed by local data must not
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.cte_tbl AS SELECT i, i * 10 AS v FROM range(10) t(i)
++
++# fully-remote CTE: the whole query -- CTE and outer -- should be pushed to MySQL
++# i < 5 → i=0,1,2,3,4 → v=0,10,20,30,40 → SUM(v)=100
++query I
++WITH remote_cte AS (SELECT i, v FROM s.cte_tbl WHERE i < 5)
++SELECT SUM(v) FROM remote_cte
++----
++100
++
++query II
++explain WITH remote_cte AS (SELECT i, v FROM s.cte_tbl WHERE i < 5)
++SELECT SUM(v) FROM remote_cte
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# chained fully-remote CTEs
++# doubled: v * 2; filtered to i >= 5 → v=50,60,70,80,90 → SUM(doubled)=700
++query I
++WITH
++  base AS (SELECT i, v FROM s.cte_tbl),
++  doubled AS (SELECT i, v * 2 AS v FROM base)
++SELECT SUM(v) FROM doubled WHERE i >= 5
++----
++700
++
++query II
++explain
++WITH
++  base AS (SELECT i, v FROM s.cte_tbl),
++  doubled AS (SELECT i, v * 2 AS v FROM base)
++SELECT SUM(v) FROM doubled WHERE i >= 5
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# CTE backed by a local DuckDB table: must NOT be pushed to MySQL
++statement ok
++CREATE OR REPLACE TABLE local_ids AS SELECT i FROM range(4) t(i)
++
++# JOIN remote_tbl with a local-backed CTE: aggregate must execute in DuckDB
++# SUM(v) for i=0,1,2,3 → 0+10+20+30=60
++query I
++WITH local_cte AS (SELECT i FROM local_ids)
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN local_cte ON (s.cte_tbl.i = local_cte.i)
++----
++60
++
++query II
++explain
++WITH local_cte AS (SELECT i FROM local_ids)
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN local_cte ON (s.cte_tbl.i = local_cte.i)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# CTE backed by a range() table function: also local, must NOT be pushed
++query I
++WITH range_cte AS (SELECT * FROM range(5) t(i))
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN range_cte ON (s.cte_tbl.i = range_cte.i)
++----
++100
++
++query II
++explain
++WITH range_cte AS (SELECT * FROM range(5) t(i))
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN range_cte ON (s.cte_tbl.i = range_cte.i)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# recursive CTE can be pushed
++query I
++WITH RECURSIVE cnt(i) AS (
++    SELECT 0
++    UNION ALL
++    SELECT i + 1 FROM cnt WHERE i < 9
++)
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN cnt ON (s.cte_tbl.i = cnt.i)
++----
++450
++
++query II
++explain
++WITH RECURSIVE cnt(i) AS (
++    SELECT 0
++    UNION ALL
++    SELECT i + 1 FROM cnt WHERE i < 9
++)
++SELECT SUM(s.cte_tbl.v) FROM s.cte_tbl JOIN cnt ON (s.cte_tbl.i = cnt.i)
++----
++physical_plan	<!REGEX>:.*CTE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_dml.test b/test/sql/remote_pushdown/remote_pushdown_dml.test
+new file mode 100644
+index 0000000..5a483f3
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_dml.test
+@@ -0,0 +1,100 @@
++# name: test/sql/remote_pushdown/remote_pushdown_dml.test
++# description: DML statements are not pushed through mysql_query but must keep working;
++#              the SELECT part of an INSERT can still be pushed separately
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.dml_tbl (i INTEGER, v INTEGER)
++
++statement ok
++INSERT INTO s.dml_tbl SELECT i, i * 10 FROM range(5) t(i)
++
++query I
++SELECT COUNT(*) FROM s.dml_tbl
++----
++5
++
++# UPDATE on a remote table
++statement ok
++UPDATE s.dml_tbl SET v = v + 1
++
++query I
++SELECT SUM(v) FROM s.dml_tbl
++----
++105
++
++# UPDATE with a WHERE clause
++statement ok
++UPDATE s.dml_tbl SET v = 0 WHERE i >= 3
++
++query I
++SELECT SUM(v) FROM s.dml_tbl
++----
++33
++
++# DELETE on a remote table
++statement ok
++DELETE FROM s.dml_tbl WHERE i = 0
++
++query I
++SELECT COUNT(*) FROM s.dml_tbl
++----
++4
++
++# DELETE everything
++statement ok
++DELETE FROM s.dml_tbl
++
++query I
++SELECT COUNT(*) FROM s.dml_tbl
++----
++0
++
++# INSERT from a remote aggregation: the SELECT part is pushed down
++statement ok
++CREATE OR REPLACE TABLE s.dml_src AS SELECT i, i % 2 AS g FROM range(10) t(i)
++
++statement ok
++INSERT INTO s.dml_tbl SELECT g, SUM(i) FROM s.dml_src GROUP BY g ORDER BY g
++
++query II
++SELECT i, v FROM s.dml_tbl ORDER BY i
++----
++0	20
++1	25
++
++# the SELECT part of the INSERT is pushed into a single remote query
++query II
++explain INSERT INTO s.dml_tbl SELECT g, SUM(i) FROM s.dml_src GROUP BY g
++----
++physical_plan	<REGEX>:(?s).*MYSQL_QUERY.*
++
++query II
++explain INSERT INTO s.dml_tbl SELECT g, SUM(i) FROM s.dml_src GROUP BY g
++----
++physical_plan	<!REGEX>:.*GROUP_BY.*
++
++# INSERT ... VALUES on a remote table
++statement ok
++INSERT INTO s.dml_tbl VALUES (7, 70), (8, 80)
++
++query I
++SELECT COUNT(*) FROM s.dml_tbl
++----
++4
++
++# INSERT BY NAME
++statement ok
++INSERT INTO s.dml_tbl BY NAME SELECT 9 AS i, 90 AS v
++
++query II
++SELECT i, v FROM s.dml_tbl WHERE i = 9
++----
++9	90
+diff --git a/test/sql/remote_pushdown/remote_pushdown_edge_cases.test b/test/sql/remote_pushdown/remote_pushdown_edge_cases.test
+new file mode 100644
+index 0000000..e503e80
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_edge_cases.test
+@@ -0,0 +1,412 @@
++# name: test/sql/remote_pushdown/remote_pushdown_edge_cases.test
++# description: Edge cases found by probing MySQL vs DuckDB - domain errors, alias resolution,
++#              column ordering, infinite timestamps, literal cast validation, LIKE
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.edge_tbl AS SELECT i, i - 5 AS neg, i * 10 AS v FROM range(10) t(i)
++
++# ---- math functions with domain errors must be evaluated locally ----
++# MySQL returns NULL for sqrt(-1) / log(0) / asin(2); DuckDB yields nan / -inf
++query I
++SELECT COUNT(*) FROM s.edge_tbl WHERE isnan(sqrt(neg)::DOUBLE)
++----
++5
++
++query II
++explain SELECT sqrt(neg) FROM s.edge_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# MySQL raises an out-of-range error for exp(1000) / pow(0, -1) / cot(0); DuckDB yields inf
++query I
++SELECT MAX(exp(i * 200))::VARCHAR FROM s.edge_tbl
++----
++inf
++
++query II
++explain SELECT exp(i) FROM s.edge_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++query II
++explain SELECT pow(i, 2) FROM s.edge_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# round() rounds doubles half-away-from-zero in DuckDB but half-to-even in MySQL
++query I
++SELECT round(2.5::DOUBLE + i - i) FROM s.edge_tbl LIMIT 1
++----
++3.0
++
++query II
++explain SELECT round(v / 2.0, 0) FROM s.edge_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# ---- upper / lower / reverse have different Unicode behavior and stay local ----
++# MySQL only applies simple case mapping: upper('ß') stays 'ß', DuckDB returns 'ẞ'
++statement ok
++CREATE OR REPLACE TABLE s.edge_str_tbl AS SELECT 'ß' AS w UNION ALL SELECT 'abc'
++
++query I
++SELECT upper(w) FROM s.edge_str_tbl ORDER BY w
++----
++ABC
++ẞ
++
++query II
++explain SELECT upper(w) FROM s.edge_str_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++query II
++explain SELECT reverse(w) FROM s.edge_str_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# ---- any_value: MySQL's ANY_VALUE may return NULL for groups with non-NULL values ----
++statement ok
++CREATE OR REPLACE TABLE s.edge_av_tbl AS
++    SELECT i % 2 AS g, CASE WHEN i < 2 THEN NULL ELSE i END AS v FROM range(6) t(i)
++
++# DuckDB returns the first non-NULL value per group
++query II
++SELECT g, any_value(v) FROM s.edge_av_tbl GROUP BY g ORDER BY g
++----
++0	2
++1	3
++
++query II
++explain SELECT g, any_value(v) FROM s.edge_av_tbl GROUP BY g
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- lpad / rpad with negative length: MySQL returns NULL, DuckDB an empty string ----
++query I
++SELECT lpad(w, -1, 'x') FROM s.edge_str_tbl LIMIT 1
++----
++(empty)
++
++query II
++explain SELECT lpad(w, -1, 'x') FROM s.edge_str_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# literal non-negative lengths are pushed
++query II
++explain SELECT lpad(w, 5, 'x') FROM s.edge_str_tbl
++----
++physical_plan	<!REGEX>:.*PROJECTION.*
++
++# ---- LIKE is pushed with byte-wise semantics and no escape character ----
++# backslash is not an escape character in DuckDB's LIKE; MySQL defaults to backslash
++statement ok
++CREATE OR REPLACE TABLE s.edge_like_tbl AS SELECT 'a\b' AS w UNION ALL SELECT 'ab' UNION ALL SELECT 'AB'
++
++query I
++SELECT COUNT(*) FROM s.edge_like_tbl WHERE w LIKE 'a\%'
++----
++1
++
++query I
++SELECT COUNT(*) FROM s.edge_like_tbl WHERE w NOT LIKE 'a%'
++----
++1
++
++query II
++explain SELECT COUNT(*) FROM s.edge_like_tbl WHERE w LIKE 'a\%'
++----
++physical_plan	<!REGEX>:.*FILTER.*
++
++# ---- select-list aliases in WHERE cannot be pushed (MySQL error 1054) ----
++query I
++SELECT i + 1 AS j FROM s.edge_tbl WHERE j = 5
++----
++5
++
++query II
++explain SELECT i + 1 AS j FROM s.edge_tbl WHERE j = 5
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# an alias that shadows a real column is fine - both systems prefer the column
++query I
++SELECT i + 1 AS i FROM s.edge_tbl WHERE i = 5
++----
++6
++
++query II
++explain SELECT i + 1 AS i FROM s.edge_tbl WHERE i = 5
++----
++physical_plan	<!REGEX>:.*FILTER.*
++
++# lateral alias references in the select list cannot be pushed
++query II
++SELECT i + 1 AS j, j + 1 AS k FROM s.edge_tbl WHERE i = 0
++----
++1	2
++
++# aliases referenced inside subqueries in the WHERE clause are also detected
++query I
++SELECT COUNT(*) FROM (SELECT i + 1 AS j FROM s.edge_tbl WHERE EXISTS(SELECT 1 WHERE j > 5)) t
++----
++5
++
++# aliases in GROUP BY / HAVING / ORDER BY are supported by MySQL and pushed
++query II
++SELECT i % 2 AS par, COUNT(*) FROM s.edge_tbl GROUP BY par HAVING par >= 0 ORDER BY par
++----
++0	5
++1	5
++
++query II
++explain SELECT i % 2 AS par, COUNT(*) FROM s.edge_tbl GROUP BY par ORDER BY par
++----
++physical_plan	<!REGEX>:.*GROUP_BY.*
++
++# ---- USING / NATURAL joins put the coalesced column first in MySQL's * expansion ----
++statement ok
++CREATE OR REPLACE TABLE s.edge_j1 AS SELECT 1 AS a, 10 AS i
++
++statement ok
++CREATE OR REPLACE TABLE s.edge_j2 AS SELECT 10 AS i, 2 AS b
++
++# DuckDB keeps the column order of the left table (a, i, b); MySQL returns (i, a, b)
++query III
++SELECT * FROM s.edge_j1 JOIN s.edge_j2 USING (i)
++----
++1	10	2
++
++query II
++explain SELECT * FROM s.edge_j1 JOIN s.edge_j2 USING (i)
++----
++physical_plan	<REGEX>:.*JOIN.*
++
++query III
++SELECT * FROM s.edge_j1 NATURAL JOIN s.edge_j2
++----
++1	10	2
++
++# explicit column lists are still pushed
++query II
++explain SELECT a, b FROM s.edge_j1 JOIN s.edge_j2 USING (i)
++----
++physical_plan	<!REGEX>:.*JOIN.*
++
++# qualified stars are still pushed
++query II
++explain SELECT edge_j1.* FROM s.edge_j1 JOIN s.edge_j2 USING (i)
++----
++physical_plan	<!REGEX>:.*JOIN.*
++
++# ---- infinite dates / timestamps cannot be represented in MySQL ----
++# comparisons between literals are constant-folded locally and can be pushed
++query I
++SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP 'infinity'
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# comparisons of a column against an infinite literal cannot be folded and stay local
++statement ok
++CREATE OR REPLACE TABLE s.edge_ts_tbl AS SELECT TIMESTAMP '2026-01-01' + i * INTERVAL 1 DAY AS ts FROM range(10) t(i)
++
++query I
++SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts < TIMESTAMP 'infinity'
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts < TIMESTAMP 'infinity'
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++query II
++explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE > DATE '-infinity'
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# finite typed literals are pushed
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl WHERE TIMESTAMP '2000-01-01' < TIMESTAMP '2001-01-01'
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- casts of malformed literals: MySQL returns 0 / NULL where DuckDB errors ----
++statement error
++SELECT CAST('abc' AS INTEGER) FROM s.edge_tbl
++----
++<REGEX>:Conversion Error.*
++
++statement error
++SELECT CAST('12abc' AS INTEGER) FROM s.edge_tbl
++----
++<REGEX>:Conversion Error.*
++
++statement error
++SELECT CAST('abc' AS TIMESTAMP) FROM s.edge_tbl
++----
++<REGEX>:Conversion Error.*
++
++# valid literal casts are still pushed
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl WHERE i < CAST('5' AS INTEGER)
++----
++physical_plan	<!REGEX>:.*FILTER.*
++
++# casting 'infinity' to DATE succeeds locally; against a column the infinite literal
++# cannot be pushed
++query I
++SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE < CAST('infinity' AS DATE)
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.edge_ts_tbl WHERE ts::DATE < CAST('infinity' AS DATE)
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# ---- avg(DISTINCT) deduplicates the original values, not the DOUBLE casts ----
++query I
++SELECT avg(DISTINCT v) FROM s.edge_tbl
++----
++45.0
++
++query II
++explain SELECT avg(DISTINCT v) FROM s.edge_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# plain avg is still pushed
++query II
++explain SELECT avg(v) FROM s.edge_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- negative LIMIT is a binder error in DuckDB and must not reach MySQL ----
++statement error
++SELECT i FROM s.edge_tbl LIMIT -1
++----
++<REGEX>:.*LIMIT.*
++
++# ---- monthname / dayname depend on the server's lc_time_names setting ----
++statement ok
++CREATE OR REPLACE TABLE s.edge_date_tbl AS SELECT DATE '2020-01-05' AS d
++
++query I
++SELECT monthname(d) FROM s.edge_date_tbl
++----
++January
++
++query II
++explain SELECT monthname(d) FROM s.edge_date_tbl
++----
++physical_plan	<REGEX>:.*PROJECTION.*
++
++# ---- casts of literals are folded locally: MySQL's CAST parses numeric strings and time
++# ---- zone offsets differently (CAST('1e2' AS SIGNED) = 1, CAST('5.7' AS SIGNED) = 5,
++# ---- offsets are converted to the session time zone instead of ignored)
++query I
++SELECT COUNT(*) FROM s.edge_tbl WHERE CAST('1e2' AS BIGINT) = 100
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl WHERE CAST('1e2' AS BIGINT) = 100
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# DuckDB rounds '7.6' to 8; MySQL would truncate to 7
++query I
++SELECT COUNT(*) FROM s.edge_tbl WHERE i > CAST('7.6' AS BIGINT)
++----
++1
++
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl WHERE i > CAST('7.6' AS BIGINT)
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# DuckDB ignores the time zone offset; MySQL would convert to the session time zone
++query I
++SELECT COUNT(*) FROM s.edge_tbl
++    WHERE CAST('2020-01-01 12:00:00+02' AS TIMESTAMP) = TIMESTAMP '2020-01-01 12:00:00'
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.edge_tbl
++    WHERE CAST('2020-01-01 12:00:00+02' AS TIMESTAMP) = TIMESTAMP '2020-01-01 12:00:00'
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- HAVING without GROUP BY: MySQL filters rows resolving the select list, DuckDB
++# ---- treats the query as an aggregation (binder error for bare columns)
++statement error
++SELECT i FROM s.edge_tbl HAVING i > 5
++----
++<REGEX>:Binder Error.*GROUP BY.*
++
++query I
++SELECT sum(i) FROM s.edge_tbl HAVING sum(i) > 5
++----
++45
++
++query II
++explain SELECT sum(i) FROM s.edge_tbl HAVING sum(i) > 5
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
++
++# HAVING with GROUP BY is still pushed
++query II
++explain SELECT i % 2 AS g, sum(i) FROM s.edge_tbl GROUP BY g HAVING sum(i) > 5
++----
++physical_plan	<!REGEX>:.*MYSQL_SCAN.*
++
++# ---- ORDER BY with a non-integer literal is a binder error in DuckDB; MySQL ignores it ----
++statement error
++SELECT i FROM s.edge_tbl ORDER BY 1.5
++----
++<REGEX>:Binder Error.*non-integer literal.*
++
++statement ok
++SET order_by_non_integer_literal = true
++
++# even when DuckDB is configured to allow it, both systems ignore the constant - stays local
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.edge_tbl ORDER BY 1.5) t
++----
++10
++
++statement ok
++SET order_by_non_integer_literal = false
++
++# ---- CTE names longer than MySQL's 64-character identifier limit stay local ----
++query I
++WITH cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters AS (
++    SELECT i FROM s.edge_tbl
++)
++SELECT COUNT(*) FROM cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters
++----
++10
++
++query II
++explain WITH cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters AS (
++    SELECT i FROM s.edge_tbl
++)
++SELECT COUNT(*) FROM cte_with_a_name_that_is_longer_than_the_mysql_limit_of_sixty_four_characters
++----
++physical_plan	<REGEX>:.*MYSQL_SCAN.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_filter.test b/test/sql/remote_pushdown/remote_pushdown_filter.test
+new file mode 100644
+index 0000000..3977b3a
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_filter.test
+@@ -0,0 +1,60 @@
++# name: test/sql/remote_pushdown/remote_pushdown_filter.test
++# description: FILTER (WHERE ...) on aggregates must not be pushed to MySQL -- MySQL cannot parse this syntax
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.filter_tbl AS SELECT i FROM range(10) t(i)
++
++# SUM with FILTER -- MySQL has no FILTER syntax on aggregates
++# i > 5 matches i=6,7,8,9 → 6+7+8+9 = 30
++query I
++SELECT SUM(i) FILTER (WHERE i > 5) FROM s.filter_tbl
++----
++30
++
++query II
++explain SELECT SUM(i) FILTER (WHERE i > 5) FROM s.filter_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# COUNT with FILTER -- even numbers 0,2,4,6,8 → 5
++query I
++SELECT COUNT(*) FILTER (WHERE i % 2 = 0) FROM s.filter_tbl
++----
++5
++
++query II
++explain SELECT COUNT(*) FILTER (WHERE i % 2 = 0) FROM s.filter_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# multiple filtered aggregates in one query
++# i > 7 → 8,9 (sum=17); i < 3 → 0,1,2 (sum=3)
++query II
++SELECT SUM(i) FILTER (WHERE i > 7), SUM(i) FILTER (WHERE i < 3) FROM s.filter_tbl
++----
++17	3
++
++# FILTER combined with a regular aggregate
++query II
++SELECT SUM(i), SUM(i) FILTER (WHERE i % 2 = 0) FROM s.filter_tbl
++----
++45	20
++
++query II
++explain SELECT SUM(i), SUM(i) FILTER (WHERE i % 2 = 0) FROM s.filter_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# AVG with FILTER
++query I
++SELECT AVG(i) FILTER (WHERE i >= 5) FROM s.filter_tbl
++----
++7.0
+diff --git a/test/sql/remote_pushdown/remote_pushdown_functions.test b/test/sql/remote_pushdown/remote_pushdown_functions.test
+new file mode 100644
+index 0000000..01bcdef
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_functions.test
+@@ -0,0 +1,128 @@
++# name: test/sql/remote_pushdown/remote_pushdown_functions.test
++# description: DuckDB-only functions and semantic-mismatch functions must not be pushed to MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.func_tbl AS SELECT i FROM range(10) t(i)
++
++# approx_count_distinct is DuckDB-only -- MySQL has no equivalent
++query I
++SELECT approx_count_distinct(i) FROM s.func_tbl
++----
++10
++
++query II
++explain SELECT approx_count_distinct(i) FROM s.func_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# bool_and / bool_or are DuckDB/Postgres extensions not available in MySQL
++query I
++SELECT bool_and(i >= 0) FROM s.func_tbl
++----
++true
++
++query I
++SELECT bool_and(i > 5) FROM s.func_tbl
++----
++false
++
++query I
++SELECT bool_or(i > 5) FROM s.func_tbl
++----
++true
++
++query I
++SELECT bool_or(i > 100) FROM s.func_tbl
++----
++false
++
++query II
++explain SELECT bool_and(i >= 0) FROM s.func_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# mode() is DuckDB-only
++# i % 3: value 0 appears 4 times (i=0,3,6,9), values 1 and 2 appear 3 times each
++query I
++SELECT mode(i % 3) FROM s.func_tbl
++----
++0
++
++query II
++explain SELECT mode(i % 3) FROM s.func_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# levenshtein() is DuckDB-only
++statement ok
++CREATE OR REPLACE TABLE s.word_tbl AS
++    SELECT CASE i WHEN 0 THEN 'duck' WHEN 1 THEN 'ducks' WHEN 2 THEN 'lucky' ELSE 'truck' END AS word
++    FROM range(4) t(i)
++
++query I
++SELECT MIN(levenshtein(word, 'duck')) FROM s.word_tbl
++----
++0
++
++# levenshtein('duck','duck')=0, ('ducks','duck')=1, ('lucky','duck')=2, ('truck','duck')=2 → sum=5
++query I
++SELECT SUM(levenshtein(word, 'duck')) FROM s.word_tbl
++----
++5
++
++query II
++explain SELECT MIN(levenshtein(word, 'duck')) FROM s.word_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# log() domain mismatch: MySQL returns NULL on domain errors (log(0), log(-1)) where DuckDB
++# yields -inf / nan -- log must be evaluated locally
++statement ok
++CREATE OR REPLACE TABLE s.log_tbl AS SELECT 100 AS v
++
++query I
++SELECT ROUND(MIN(log(v))::DOUBLE, 4) FROM s.log_tbl
++----
++2.0
++
++query II
++explain SELECT ROUND(MIN(log(v))::DOUBLE, 4) FROM s.log_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# length() semantic mismatch: DuckDB counts characters, MySQL counts bytes
++# chr(233) is 'é', which is 1 character but 2 bytes in UTF-8
++# the pushdown serializes DuckDB's length() as char_length(), so the query can be pushed
++statement ok
++CREATE OR REPLACE TABLE s.mb_tbl AS SELECT chr(233) AS c
++
++query I
++SELECT SUM(length(c)) FROM s.mb_tbl
++----
++1
++
++query II
++explain SELECT SUM(length(c)) FROM s.mb_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# random() is named rand() in MySQL -- pushing would cause a MySQL "function not found" error
++# verify the query runs correctly (DuckDB evaluates it locally)
++query I
++SELECT COUNT(*) FROM s.func_tbl WHERE random() >= 0
++----
++10
++
++# string_split / str_split has no MySQL equivalent
++query I
++SELECT SUM(len(string_split(word, 'u'))) FROM s.word_tbl
++----
++8
+diff --git a/test/sql/remote_pushdown/remote_pushdown_groupby.test b/test/sql/remote_pushdown/remote_pushdown_groupby.test
+new file mode 100644
+index 0000000..9a8e3e7
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_groupby.test
+@@ -0,0 +1,155 @@
++# name: test/sql/remote_pushdown/remote_pushdown_groupby.test
++# description: GROUP BY / ORDER BY / LIMIT variants that break when pushed to MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.gb_tbl AS SELECT i, i % 2 AS g1, i % 3 AS g2 FROM range(10) t(i)
++
++# ---- positional GROUP BY / ORDER BY: MySQL supports these, should push ----
++
++query II
++SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
++----
++0	4
++1	3
++2	3
++
++query II
++explain SELECT i % 3 AS g, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY 1 ORDER BY 1
++----
++physical_plan	<!REGEX>:.*(AGGREGATE|GROUP_BY).*
++
++# ---- GROUP BY ROLLUP: DuckDB serializes this as GROUP BY GROUPING SETS, which MySQL
++# does not support without a secondary engine -- must be handled by DuckDB ----
++# produces rows per group + grand-total row (g1=NULL)
++
++query II
++SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ROLLUP (g1) ORDER BY g1
++----
++0	5
++1	5
++NULL	10
++
++query II
++explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ROLLUP (g1) ORDER BY g1
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- GROUP BY ALL: MySQL has no GROUP BY ALL syntax -- breaks when pushed ----
++# DuckDB expands ALL to every non-aggregate column in the SELECT list
++# if the unexpanded form is forwarded to MySQL it fails with a syntax error
++query III
++SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
++----
++0	0	2
++0	1	1
++0	2	2
++1	0	2
++1	1	2
++1	2	1
++
++query II
++explain SELECT g1, g2, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY ALL ORDER BY g1, g2
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- GROUP BY CUBE: MySQL has no CUBE support -- breaks when pushed ----
++# CUBE(g1) produces per-group rows plus a grand-total row
++query II
++SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY CUBE (g1) ORDER BY g1
++----
++0	5
++1	5
++NULL	10
++
++query II
++explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY CUBE (g1) ORDER BY g1
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- GROUP BY GROUPING SETS: MySQL has no GROUPING SETS support -- breaks when pushed ----
++query II
++SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY GROUPING SETS ((g1), ()) ORDER BY g1
++----
++0	5
++1	5
++NULL	10
++
++query II
++explain SELECT g1, COUNT(*) AS cnt FROM s.gb_tbl GROUP BY GROUPING SETS ((g1), ()) ORDER BY g1
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- DISTINCT ON: MySQL has no DISTINCT ON -- breaks when pushed ----
++# keep the first row per g1 group (lowest i)
++query II
++SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
++----
++0	0
++1	1
++
++# DISTINCT ON is planned locally as a grouped aggregation
++query II
++explain SELECT DISTINCT ON (g1) g1, i FROM s.gb_tbl ORDER BY g1, i
++----
++physical_plan	<REGEX>:.*GROUP_BY.*
++
++# ---- ORDER BY NULLS FIRST / NULLS LAST: MySQL cannot parse the NULLS clause, but the
++# serializer encodes the NULL placement through an explicit "expr IS NULL" ordering key ----
++
++statement ok
++CREATE OR REPLACE TABLE s.null_order_tbl AS
++    SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(9) t(i)
++
++# NULLS LAST: non-NULL values first, then NULLs
++query I
++SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS LAST
++----
++1
++2
++4
++5
++7
++8
++NULL
++NULL
++NULL
++
++query II
++explain SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS LAST
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++# NULLS FIRST: NULLs before non-NULLs
++query I
++SELECT v FROM s.null_order_tbl ORDER BY v ASC NULLS FIRST
++----
++NULL
++NULL
++NULL
++1
++2
++4
++5
++7
++8
++
++# ---- LIMIT n PERCENT: MySQL has no PERCENT limit syntax -- breaks when pushed ----
++# 50% of 10 rows = 5 rows
++
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.gb_tbl LIMIT 50 PERCENT) t
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.gb_tbl LIMIT 50 PERCENT) t
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_identifiers.test b/test/sql/remote_pushdown/remote_pushdown_identifiers.test
+new file mode 100644
+index 0000000..8aeef6a
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_identifiers.test
+@@ -0,0 +1,53 @@
++# name: test/sql/remote_pushdown/remote_pushdown_identifiers.test
++# description: Quoted / keyword identifiers must survive pushdown
++#              DuckDB serializes quoted identifiers with double quotes - without ANSI_QUOTES
++#              MySQL would silently treat them as string literals
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# "name" and "order" are keywords and serialize quoted; the NULL ensures that COUNT("name")
++# evaluated as a string literal (3) differs from COUNT of the column (2)
++statement ok
++CREATE OR REPLACE TABLE s.ident_tbl AS
++    SELECT CASE WHEN i = 0 THEN NULL ELSE 'x' END AS "name", i AS "order" FROM range(3) t(i)
++
++query I
++SELECT COUNT("name") FROM s.ident_tbl
++----
++2
++
++query II
++explain SELECT COUNT("name") FROM s.ident_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# aggregate over a quoted keyword column
++query I
++SELECT SUM("order") FROM s.ident_tbl
++----
++3
++
++query II
++explain SELECT SUM("order") FROM s.ident_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# mixed-case identifiers
++statement ok
++CREATE OR REPLACE TABLE s.case_ident_tbl AS SELECT i AS "MyColumn" FROM range(5) t(i)
++
++query I
++SELECT SUM("MyColumn") FROM s.case_ident_tbl
++----
++10
++
++query II
++explain SELECT SUM("MyColumn") FROM s.case_ident_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_in.test b/test/sql/remote_pushdown/remote_pushdown_in.test
+new file mode 100644
+index 0000000..b17e465
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_in.test
+@@ -0,0 +1,74 @@
++# name: test/sql/remote_pushdown/remote_pushdown_in.test
++# description: IN lists over numeric constants are pushed down; string IN lists are collation-sensitive and stay local
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.in_tbl AS SELECT i FROM range(10) t(i)
++
++# integer IN lists are pushed down
++query I
++SELECT COUNT(*) FROM s.in_tbl WHERE i IN (1, 2, 5, 7)
++----
++4
++
++query II
++explain SELECT COUNT(*) FROM s.in_tbl WHERE i IN (1, 2, 5, 7)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# NOT IN
++query I
++SELECT COUNT(*) FROM s.in_tbl WHERE i NOT IN (1, 2, 5, 7)
++----
++6
++
++query II
++explain SELECT COUNT(*) FROM s.in_tbl WHERE i NOT IN (1, 2, 5, 7)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# IN with a NULL element: i IN (1, NULL) is TRUE for 1, NULL otherwise -- same in MySQL
++query I
++SELECT COUNT(*) FROM s.in_tbl WHERE i IN (1, NULL)
++----
++1
++
++query I
++SELECT COUNT(*) FROM s.in_tbl WHERE i NOT IN (1, NULL)
++----
++0
++
++# string IN lists are collation-sensitive in MySQL (case-insensitive by default) -- the
++# pushdown attaches an explicit binary collation to the literals so they can be pushed
++statement ok
++CREATE OR REPLACE TABLE s.in_str_tbl AS
++    SELECT CASE i WHEN 0 THEN 'Alice' WHEN 1 THEN 'ALICE' ELSE 'alice' END AS name
++    FROM range(3) t(i)
++
++query I
++SELECT COUNT(*) FROM s.in_str_tbl WHERE name IN ('alice', 'bob')
++----
++1
++
++query II
++explain SELECT COUNT(*) FROM s.in_str_tbl WHERE name IN ('alice', 'bob')
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# IN over a remote subquery is pushed
++query I
++SELECT COUNT(*) FROM s.in_tbl WHERE i IN (SELECT i FROM s.in_tbl WHERE i < 5)
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM s.in_tbl WHERE i IN (SELECT i FROM s.in_tbl WHERE i < 5)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_join.test b/test/sql/remote_pushdown/remote_pushdown_join.test
+new file mode 100644
+index 0000000..5ce4d8e
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_join.test
+@@ -0,0 +1,34 @@
++# name: test/sql/remote_pushdown/remote_pushdown_join.test
++# description: Test remote pushdown of joins into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# create a table
++statement ok
++CREATE OR REPLACE TABLE s.tbl1 AS SELECT i, i%2 v1 FROM range(10) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.tbl2 AS SELECT i, i*100 v2 FROM range(10) t(i)
++
++# joins are pushed down
++query II
++SELECT SUM(v1), SUM(v2) FROM s.tbl1 JOIN s.tbl2 USING (i)
++----
++5.0	4500.0
++
++query II
++explain SELECT SUM(v1), SUM(v2) FROM s.tbl1 JOIN s.tbl2 USING (i)
++----
++physical_plan	<!REGEX>:.*JOIN.*
++
++# join conditions that are not supported in MySQL
++query II
++SELECT SUM(v1), SUM(v2) FROM s.tbl1 JOIN s.tbl2 ON (CAST(s.tbl1.i AS VARCHAR) = CAST(s.tbl2.i AS VARCHAR))
++----
++5.0	4500.0
+diff --git a/test/sql/remote_pushdown/remote_pushdown_join_types.test b/test/sql/remote_pushdown/remote_pushdown_join_types.test
+new file mode 100644
+index 0000000..a644e58
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_join_types.test
+@@ -0,0 +1,157 @@
++# name: test/sql/remote_pushdown/remote_pushdown_join_types.test
++# description: DuckDB-specific join types (ANTI, SEMI, ASOF, POSITIONAL) must not be pushed to MySQL
++#              -- MySQL has no syntax for these and would return a parse error
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.jt_left AS SELECT i FROM range(10) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.jt_right AS SELECT i FROM range(5) t(i)
++
++# ---- ANTI JOIN: returns left rows with no matching right row ----
++# MySQL has no ANTI JOIN keyword -- must be handled by DuckDB
++# i=5..9 have no match in jt_right (0..4) → COUNT=5
++query I
++SELECT COUNT(*) FROM s.jt_left ANTI JOIN s.jt_right USING (i)
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM s.jt_left ANTI JOIN s.jt_right USING (i)
++----
++physical_plan	<REGEX>:.*ANTI.*
++
++# result correctness
++query I
++SELECT i FROM s.jt_left ANTI JOIN s.jt_right USING (i) ORDER BY i
++----
++5
++6
++7
++8
++9
++
++# ---- SEMI JOIN: returns left rows that have at least one matching right row ----
++# MySQL has no SEMI JOIN keyword -- must be handled by DuckDB
++# i=0..4 have a match → COUNT=5
++query I
++SELECT COUNT(*) FROM s.jt_left SEMI JOIN s.jt_right USING (i)
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM s.jt_left SEMI JOIN s.jt_right USING (i)
++----
++physical_plan	<REGEX>:.*SEMI.*
++
++# ---- ASOF JOIN: matches each left row to the nearest right row by ordering key ----
++# MySQL has no ASOF JOIN syntax -- must be handled by DuckDB
++
++statement ok
++CREATE OR REPLACE TABLE s.asof_left AS SELECT i AS ts, i * 10 AS v FROM range(10) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.asof_right AS SELECT i * 2 AS ts, i * 100 AS w FROM range(5) t(i)
++
++# asof_right: ts=0,2,4,6,8
++# each left row finds the largest right.ts <= left.ts
++# ts=0→w=0, ts=1→w=0, ts=2→w=100, ts=3→w=100, ts=4→w=200,
++# ts=5→w=200, ts=6→w=300, ts=7→w=300, ts=8→w=400, ts=9→w=400 → SUM=2000
++query I
++SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.asof_right.ts)
++----
++2000
++
++# the ASOF join is planned locally (DuckDB plans this single-condition ASOF join
++# as a regular join + window) - the important part is that no MYSQL_QUERY appears
++query II
++explain SELECT SUM(w) FROM s.asof_left ASOF JOIN s.asof_right ON (s.asof_left.ts >= s.asof_right.ts)
++----
++physical_plan	<REGEX>:.*JOIN.*
++
++# ---- POSITIONAL JOIN: pairs rows by their ordinal position ----
++# MySQL has no POSITIONAL JOIN syntax -- must be handled by DuckDB
++
++statement ok
++CREATE OR REPLACE TABLE s.pos_left AS SELECT i AS a FROM range(5) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.pos_right AS SELECT i * 10 AS b FROM range(5) t(i)
++
++# row 0: (0,0), row 1: (1,10), ..., row 4: (4,40)
++# SUM(a+b) = 0+11+22+33+44 = 110
++query I
++SELECT SUM(a + b) FROM s.pos_left POSITIONAL JOIN s.pos_right
++----
++110
++
++query II
++explain SELECT SUM(a + b) FROM s.pos_left POSITIONAL JOIN s.pos_right
++----
++physical_plan	<REGEX>:.*POSITIONAL.*
++
++# ---- join conditions using DuckDB-only functions must block pushdown ----
++# levenshtein() is not in MySQL -- the join condition uses it, so the join stays local
++
++statement ok
++CREATE OR REPLACE TABLE s.word_left AS SELECT CASE i WHEN 0 THEN 'duck' WHEN 1 THEN 'geese' ELSE 'swan' END AS w FROM range(3) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.word_right AS SELECT CASE i WHEN 0 THEN 'ducks' WHEN 1 THEN 'goose' ELSE 'swam' END AS w FROM range(3) t(i)
++
++query I
++SELECT COUNT(*) FROM s.word_left JOIN s.word_right ON (levenshtein(s.word_left.w, s.word_right.w) <= 2)
++----
++3
++
++query II
++explain SELECT COUNT(*) FROM s.word_left JOIN s.word_right ON (levenshtein(s.word_left.w, s.word_right.w) <= 2)
++----
++physical_plan	<REGEX>:.*JOIN.*AGGREGATE.*|.*AGGREGATE.*JOIN.*
++
++# ---- FULL OUTER JOIN: MySQL has no FULL JOIN -- worse, "x FULL JOIN y" would parse as
++# ---- "x AS full JOIN y" and silently compute an inner join ----
++# left: 0..9, right: 0..4 shifted by +3 → matched 3..7? full join row count:
++# matches for a.i = b.i + 3 → b.i = a.i - 3 → a.i in 3..7 matches b.i 0..4 → 5 matched rows
++# unmatched left: 5, unmatched right: 0 → total = 10
++query I
++SELECT COUNT(*) FROM s.jt_left a FULL OUTER JOIN s.jt_right b ON (a.i = b.i + 3)
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.jt_left a FULL OUTER JOIN s.jt_right b ON (a.i = b.i + 3)
++----
++physical_plan	<REGEX>:.*JOIN.*
++
++# ---- self-joins: MySQL requires unique table aliases within a join ----
++
++# with aliases the join is pushed
++query I
++SELECT COUNT(*) FROM s.jt_left a JOIN s.jt_left b USING (i)
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.jt_left a JOIN s.jt_left b USING (i)
++----
++physical_plan	<!REGEX>:.*JOIN.*
++
++# without aliases MySQL would fail with "Not unique table/alias" - handled locally
++query I
++SELECT COUNT(*) FROM s.jt_left JOIN s.jt_left USING (i)
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM s.jt_left JOIN s.jt_left USING (i)
++----
++physical_plan	<REGEX>:.*JOIN.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_macro.test b/test/sql/remote_pushdown/remote_pushdown_macro.test
+new file mode 100644
+index 0000000..bd99c82
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_macro.test
+@@ -0,0 +1,72 @@
++# name: test/sql/remote_pushdown/remote_pushdown_macro.test
++# description: Queries using local DuckDB macros must not be pushed to MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.macro_tbl AS SELECT i FROM range(10) t(i)
++
++# scalar macro -- calling a local macro prevents the whole query from being pushed
++statement ok
++CREATE OR REPLACE MACRO double_val(x) AS x * 2
++
++# 2 * (0+1+...+9) = 90
++query I
++SELECT SUM(double_val(i)) FROM s.macro_tbl
++----
++90
++
++query II
++explain SELECT SUM(double_val(i)) FROM s.macro_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# macro used in WHERE clause
++# double_val(i) = 2*i > 10 → i=6,7,8,9 → 4 rows
++query I
++SELECT COUNT(*) FROM s.macro_tbl WHERE double_val(i) > 10
++----
++4
++
++# macro used in GROUP BY expression
++query II
++SELECT double_val(i % 2), SUM(i) FROM s.macro_tbl GROUP BY 1 ORDER BY 1
++----
++0	20
++2	25
++
++# multi-argument macro
++statement ok
++CREATE OR REPLACE MACRO clamp(v, lo, hi) AS LEAST(GREATEST(v, lo), hi)
++
++# clamp i to [3, 7]: values 0..2 → 3, 3..7 → unchanged, 8..9 → 7
++# sum = 3+3+3+3+4+5+6+7+7+7 = 48
++query I
++SELECT SUM(clamp(i, 3, 7)) FROM s.macro_tbl
++----
++48
++
++query II
++explain SELECT SUM(clamp(i, 3, 7)) FROM s.macro_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# macro invoked with a qualified name should also be blocked
++statement ok
++CREATE OR REPLACE MACRO memory.main.triple_val(x) AS x * 3
++
++query I
++SELECT SUM(memory.main.triple_val(i)) FROM s.macro_tbl
++----
++135
++
++query II
++explain SELECT SUM(memory.main.triple_val(i)) FROM s.macro_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_misc.test b/test/sql/remote_pushdown/remote_pushdown_misc.test
+new file mode 100644
+index 0000000..b815952
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_misc.test
+@@ -0,0 +1,249 @@
++# name: test/sql/remote_pushdown/remote_pushdown_misc.test
++# description: Miscellaneous DuckDB-specific constructs must not be pushed to MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.misc_tbl AS SELECT i, i % 2 AS g FROM range(6) t(i)
++
++# ---- TRY(...) is DuckDB-specific ----
++query I
++SELECT MAX(TRY(i // g)) FROM s.misc_tbl
++----
++5
++
++query II
++explain SELECT MAX(TRY(i // g)) FROM s.misc_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- TRY_CAST is DuckDB-specific ----
++query I
++SELECT COUNT(TRY_CAST(i AS DATE)) FROM s.misc_tbl
++----
++0
++
++query II
++explain SELECT COUNT(TRY_CAST(i AS DATE)) FROM s.misc_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- IS [NOT] DISTINCT FROM is serialized using MySQL's NULL-safe <=> operator ----
++statement ok
++CREATE OR REPLACE TABLE s.distinct_tbl AS
++    SELECT CASE WHEN i = 0 THEN NULL ELSE i END AS v FROM range(4) t(i)
++
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE i IS DISTINCT FROM 3
++----
++5
++
++query II
++explain SELECT COUNT(*) FROM s.misc_tbl WHERE i IS DISTINCT FROM 3
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# NULL handling: NULL IS DISTINCT FROM 2 is true, NULL IS NOT DISTINCT FROM NULL is true
++query I
++SELECT COUNT(*) FROM s.distinct_tbl WHERE v IS DISTINCT FROM 2
++----
++3
++
++query I
++SELECT COUNT(*) FROM s.distinct_tbl WHERE v IS NOT DISTINCT FROM NULL
++----
++1
++
++query II
++explain SELECT COUNT(*) FROM s.distinct_tbl WHERE v IS NOT DISTINCT FROM NULL
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- BETWEEN over string literals: pushed with an explicit binary collation ----
++statement ok
++CREATE OR REPLACE TABLE s.misc_str_tbl AS
++    SELECT CASE i WHEN 0 THEN 'a' WHEN 1 THEN 'B' ELSE 'c' END AS w FROM range(3) t(i)
++
++# binary comparison: 'B' (0x42) is not between 'a' (0x61) and 'c' (0x63); MySQL ci would match it
++query I
++SELECT COUNT(*) FROM s.misc_str_tbl WHERE w BETWEEN 'a' AND 'c'
++----
++2
++
++query II
++explain SELECT COUNT(*) FROM s.misc_str_tbl WHERE w BETWEEN 'a' AND 'c'
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# numeric BETWEEN is pushed
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE i BETWEEN 2 AND 4
++----
++3
++
++query II
++explain SELECT COUNT(*) FROM s.misc_tbl WHERE i BETWEEN 2 AND 4
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- ANY over a string literal: pushed with an explicit binary collation ----
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE 'B' = ANY(SELECT w FROM s.misc_str_tbl)
++----
++6
++
++# byte-wise: 'b' does not match any of 'a', 'B', 'c'
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE 'b' = ANY(SELECT w FROM s.misc_str_tbl)
++----
++0
++
++query II
++explain SELECT COUNT(*) FROM s.misc_tbl WHERE 'b' = ANY(SELECT w FROM s.misc_str_tbl)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- LIKE is pushed down: the binary collation on the pattern literal makes the match
++# ---- byte-wise (case-sensitive), and the empty ESCAPE clause disables MySQL's default
++# ---- backslash escape character
++# 'b' must not match 'B' (MySQL's default collation would match case-insensitively)
++query I
++SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
++----
++0
++
++query II
++explain SELECT COUNT(*) FROM s.misc_str_tbl WHERE w LIKE 'b%'
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- VALUES lists in the FROM clause require ROW(...) syntax in MySQL ----
++query I
++SELECT COUNT(*) FROM s.misc_tbl, (VALUES (1), (2)) v(x) WHERE i = x
++----
++2
++
++# ---- group_concat: MySQL silently truncates the result to @@group_concat_max_len ----
++# (1024 bytes by default) -- must always be evaluated locally
++query I
++SELECT group_concat(i, '|') FROM s.misc_tbl
++----
++0|1|2|3|4|5
++
++query I
++SELECT group_concat(i) FROM s.misc_tbl
++----
++0,1,2,3,4,5
++
++query II
++explain SELECT group_concat(i) FROM s.misc_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# a group_concat result longer than @@group_concat_max_len must not be truncated
++query I
++SELECT length(group_concat(concat(repeat('x', 500), i::VARCHAR))) FROM s.misc_tbl
++----
++3011
++
++# ---- LIMIT within IN / ANY subqueries is not supported in MySQL (error 1235) ----
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE i IN (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 3)
++----
++3
++
++query II
++explain SELECT COUNT(*) FROM s.misc_tbl WHERE i IN (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 3)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# LIMIT within EXISTS / scalar subqueries is supported and pushed
++query I
++SELECT COUNT(*) FROM s.misc_tbl WHERE i = (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 1)
++----
++1
++
++query II
++explain SELECT COUNT(*) FROM s.misc_tbl WHERE i = (SELECT i FROM s.misc_tbl ORDER BY i LIMIT 1)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- MATERIALIZED CTEs are DuckDB-specific ----
++query I
++WITH cte AS MATERIALIZED (SELECT i FROM s.misc_tbl)
++SELECT SUM(i) FROM cte
++----
++15
++
++# ---- ORDER BY ALL is DuckDB-specific ----
++query II
++SELECT g, i FROM s.misc_tbl WHERE i < 3 ORDER BY ALL
++----
++0	0
++0	2
++1	1
++
++# ---- referencing a non-existent remote table must report a binder error ----
++statement error
++SELECT * FROM s.definitely_does_not_exist
++----
++<REGEX>:.*does not exist.*
++
++# ---- prepared statement parameters cannot be serialized ----
++statement ok
++PREPARE misc_prep AS SELECT SUM(i) FROM s.misc_tbl WHERE i > $1
++
++query I
++EXECUTE misc_prep(2)
++----
++12
++
++statement ok
++DEALLOCATE misc_prep
++
++# ---- window frames: EXCLUDE / GROUPS / RANGE offsets are not pushed ----
++statement ok
++CREATE OR REPLACE TABLE s.misc_win_tbl AS SELECT i, i * 10 AS v FROM range(5) t(i)
++
++# EXCLUDE CURRENT ROW
++query I
++SELECT SUM(SUM_v) FROM (
++    SELECT SUM(v) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) AS SUM_v
++    FROM s.misc_win_tbl
++) t
++----
++160
++
++query II
++explain SELECT SUM(v) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) FROM s.misc_win_tbl
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# GROUPS frame mode
++query II
++explain SELECT SUM(v) OVER (ORDER BY i GROUPS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM s.misc_win_tbl
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# RANGE frames with an offset
++query II
++explain SELECT SUM(v) OVER (ORDER BY i RANGE BETWEEN 2 PRECEDING AND CURRENT ROW) FROM s.misc_win_tbl
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# COUNT(*) as a window function is pushed (serialized as count(*))
++query I
++SELECT MAX(cnt) FROM (SELECT COUNT(*) OVER (ORDER BY i) AS cnt FROM s.misc_win_tbl) t
++----
++5
++
++query II
++explain SELECT COUNT(*) OVER (ORDER BY i) FROM s.misc_win_tbl
++----
++physical_plan	<!REGEX>:.*WINDOW.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_mixed.test b/test/sql/remote_pushdown/remote_pushdown_mixed.test
+new file mode 100644
+index 0000000..f23e633
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_mixed.test
+@@ -0,0 +1,80 @@
++# name: test/sql/remote_pushdown/remote_pushdown_mixed.test
++# description: Queries mixing local DuckDB tables with remote MySQL tables must not be fully pushed down
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.remote_tbl AS SELECT i, i * 10 AS v FROM range(10) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE local_tbl AS SELECT i FROM range(5) t(i)
++
++# JOIN between a local DuckDB table and a remote MySQL table
++# remote_tbl has i=0..9; local_tbl has i=0..4 → joined rows have i=0,1,2,3,4
++# SUM(v) = 0+10+20+30+40 = 100
++query I
++SELECT SUM(s.remote_tbl.v) FROM s.remote_tbl JOIN local_tbl ON (s.remote_tbl.i = local_tbl.i)
++----
++100
++
++query II
++explain SELECT SUM(s.remote_tbl.v) FROM s.remote_tbl JOIN local_tbl ON (s.remote_tbl.i = local_tbl.i)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# local table on the left side
++query I
++SELECT SUM(s.remote_tbl.v) FROM local_tbl JOIN s.remote_tbl ON (local_tbl.i = s.remote_tbl.i)
++----
++100
++
++# IN subquery over a local table
++query I
++SELECT SUM(v) FROM s.remote_tbl WHERE i IN (SELECT i FROM local_tbl)
++----
++100
++
++query II
++explain SELECT SUM(v) FROM s.remote_tbl WHERE i IN (SELECT i FROM local_tbl)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# NOT IN subquery over a local table -- i NOT IN {0..4} → i=5..9 → v=50+60+70+80+90=350
++query I
++SELECT SUM(v) FROM s.remote_tbl WHERE i NOT IN (SELECT i FROM local_tbl)
++----
++350
++
++# EXISTS correlated subquery referencing local table
++query I
++SELECT SUM(v) FROM s.remote_tbl WHERE EXISTS (SELECT 1 FROM local_tbl WHERE local_tbl.i = s.remote_tbl.i)
++----
++100
++
++query II
++explain SELECT SUM(v) FROM s.remote_tbl WHERE EXISTS (
++    SELECT 1 FROM local_tbl WHERE local_tbl.i = s.remote_tbl.i)
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# scalar subquery over a local table used in SELECT list
++# returns max(local_tbl.i) = 4 for every row
++query I
++SELECT COUNT(*) FROM s.remote_tbl WHERE v > (SELECT MAX(i) * 10 FROM local_tbl)
++----
++5
++
++# mixed source in UNION -- remote side would be pushed, but unified result is handled locally
++statement ok
++CREATE OR REPLACE TABLE local_extra AS SELECT i + 100 AS i, i * 10 AS v FROM range(5) t(i)
++
++query I
++SELECT SUM(v) FROM (SELECT v FROM s.remote_tbl UNION ALL SELECT v FROM local_extra) t
++----
++550
+diff --git a/test/sql/remote_pushdown/remote_pushdown_order_nulls.test b/test/sql/remote_pushdown/remote_pushdown_order_nulls.test
+new file mode 100644
+index 0000000..8124ba8
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_order_nulls.test
+@@ -0,0 +1,215 @@
++# name: test/sql/remote_pushdown/remote_pushdown_order_nulls.test
++# description: NULL placement in pushed-down ORDER BY must match DuckDB (NULLS LAST by default)
++#              MySQL sorts NULLs first when ascending - the pushdown makes the NULL ordering explicit
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.nulls_tbl AS
++    SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(9) t(i)
++
++# ascending: DuckDB places NULLs last by default; the query is pushed down
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v
++----
++1
++2
++4
++5
++7
++8
++NULL
++NULL
++NULL
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++# descending: NULLs still last
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v DESC
++----
++8
++7
++5
++4
++2
++1
++NULL
++NULL
++NULL
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v DESC
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++# ORDER BY + LIMIT decides which rows are returned - NULL placement must be correct
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v DESC LIMIT 3
++----
++8
++7
++5
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v DESC LIMIT 3
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++# LIMIT + OFFSET into the NULL range
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v LIMIT 3 OFFSET 5
++----
++8
++NULL
++NULL
++
++# positional ORDER BY over an aliased expression
++# v: 1,2,4,5,7,8,NULL,NULL,NULL → v % 3: 1,2,1,2,1,2,NULL,NULL,NULL
++query II
++SELECT v % 3 AS g, COUNT(*) AS cnt FROM s.nulls_tbl GROUP BY 1 ORDER BY 1
++----
++1	3
++2	3
++NULL	3
++
++# window function ORDER BY over a nullable column: DuckDB orders NULLS LAST within the window
++query II
++SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM s.nulls_tbl ORDER BY rn
++----
++1	1
++2	2
++4	3
++5	4
++7	5
++8	6
++NULL	7
++NULL	8
++NULL	9
++
++query II
++explain SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM s.nulls_tbl ORDER BY rn
++----
++physical_plan	<!REGEX>:.*WINDOW.*
++
++# explicit NULLS FIRST / NULLS LAST is pushed - the serializer encodes the NULL placement
++# through the injected "expr IS NULL" ordering key
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
++----
++NULL
++NULL
++NULL
++1
++2
++4
++5
++7
++8
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v NULLS FIRST
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v DESC NULLS FIRST LIMIT 4
++----
++NULL
++NULL
++NULL
++8
++
++# OFFSET without LIMIT cannot be pushed (MySQL requires LIMIT) but must stay correct
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v OFFSET 6
++----
++NULL
++NULL
++NULL
++
++# ---- unspecified ordering follows DuckDB's default_order / default_null_order settings ----
++
++statement ok
++SET default_null_order='nulls_first'
++
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v
++----
++NULL
++NULL
++NULL
++1
++2
++4
++5
++7
++8
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++statement ok
++SET default_order='desc'
++
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v
++----
++NULL
++NULL
++NULL
++8
++7
++5
++4
++2
++1
++
++query II
++explain SELECT v FROM s.nulls_tbl ORDER BY v
++----
++physical_plan	<!REGEX>:.*ORDER_BY.*
++
++statement ok
++SET default_null_order='nulls_last'
++
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v
++----
++8
++7
++5
++4
++2
++1
++NULL
++NULL
++NULL
++
++# explicit ASC overrides the descending default; the NULL placement still follows the setting
++query I
++SELECT v FROM s.nulls_tbl ORDER BY v ASC
++----
++1
++2
++4
++5
++7
++8
++NULL
++NULL
++NULL
++
++statement ok
++SET default_order='asc'
+diff --git a/test/sql/remote_pushdown/remote_pushdown_overflow.test b/test/sql/remote_pushdown/remote_pushdown_overflow.test
+new file mode 100644
+index 0000000..9ae3bad
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_overflow.test
+@@ -0,0 +1,25 @@
++# name: test/sql/remote_pushdown/remote_pushdown_overflow.test
++# description: Test remote pushdown of joins into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++# create a table
++statement ok
++CREATE OR REPLACE TABLE s.overflow_tbl AS SELECT 9223372036854775807::BIGINT i UNION ALL SELECT 42
++
++# arithmetic is pushed down, also when it overflows
++statement error
++SELECT i + 10 FROM s.overflow_tbl
++----
++value is out of range
++
++query I
++SELECT i + 10 FROM s.overflow_tbl WHERE i < 100
++----
++52
+diff --git a/test/sql/remote_pushdown/remote_pushdown_qualify.test b/test/sql/remote_pushdown/remote_pushdown_qualify.test
+new file mode 100644
+index 0000000..50646cc
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_qualify.test
+@@ -0,0 +1,50 @@
++# name: test/sql/remote_pushdown/remote_pushdown_qualify.test
++# description: QUALIFY clause must not be pushed to MySQL -- MySQL cannot parse this keyword
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.qualify_tbl AS SELECT i FROM range(10) t(i)
++
++# basic QUALIFY -- keep the first 5 rows by row number
++# if pushed to MySQL the query fails immediately (MySQL has no QUALIFY keyword)
++query I
++SELECT i FROM s.qualify_tbl QUALIFY ROW_NUMBER() OVER (ORDER BY i) <= 5 ORDER BY i
++----
++0
++1
++2
++3
++4
++
++# QUALIFY with PARTITION BY
++query II
++SELECT i, i % 3 AS grp FROM s.qualify_tbl
++    QUALIFY ROW_NUMBER() OVER (PARTITION BY i % 3 ORDER BY i) = 1
++    ORDER BY grp, i
++----
++0	0
++1	1
++2	2
++
++# QUALIFY referencing an aggregate window function
++# last two rows per the SUM window
++query I
++SELECT i FROM s.qualify_tbl
++    QUALIFY SUM(i) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) > 40
++    ORDER BY i
++----
++9
++
++# QUALIFY on a derived window column alias
++query II
++SELECT i, ROW_NUMBER() OVER (ORDER BY i) AS rn FROM s.qualify_tbl QUALIFY rn > 8 ORDER BY i
++----
++8	9
++9	10
+diff --git a/test/sql/remote_pushdown/remote_pushdown_semantics.test b/test/sql/remote_pushdown/remote_pushdown_semantics.test
+new file mode 100644
+index 0000000..9ee86ee
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_semantics.test
+@@ -0,0 +1,213 @@
++# name: test/sql/remote_pushdown/remote_pushdown_semantics.test
++# description: Functions whose MySQL semantics differ from DuckDB must not be pushed down
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.sem_tbl AS SELECT i FROM range(1, 5) t(i)
++
++# concat: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
++# the pushdown serializes DuckDB's concat as concat_ws('', ...), which skips NULLs as well
++statement ok
++CREATE OR REPLACE TABLE s.concat_tbl AS
++    SELECT CASE WHEN i = 0 THEN NULL ELSE 'x' END AS a, 'y' AS b FROM range(2) t(i)
++
++query I
++SELECT COUNT(*) FROM s.concat_tbl WHERE concat(a, b) = concat(a, 'y')
++----
++2
++
++# concat(NULL, 'y') must be 'y' (not NULL) even when pushed down
++query I
++SELECT MIN(concat(a, b)) FROM s.concat_tbl
++----
++xy
++
++query II
++explain SELECT MIN(concat(a, b)) FROM s.concat_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# concat_ws skips NULLs in both systems - pushed
++query I
++SELECT MIN(concat_ws(',', a, b)) FROM s.concat_tbl
++----
++x,y
++
++query II
++explain SELECT MIN(concat_ws(',', a, b)) FROM s.concat_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# division: DuckDB integer division yields DOUBLE; MySQL yields DECIMAL rounded to 4 digits
++query I
++SELECT SUM(i) / 7 FROM s.sem_tbl
++----
++1.4285714285714286
++
++query II
++explain SELECT SUM(i) / 7 FROM s.sem_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# avg: MySQL returns DECIMAL with 4 fractional digits; DuckDB returns DOUBLE
++# the pushdown serializes avg(x) as avg(CAST(x AS DOUBLE)), so the query can be pushed
++# avg(1,2,3,4 where i != 3) = avg(1,2,4) = 2.3333333333333335
++query I
++SELECT AVG(i) FROM s.sem_tbl WHERE i != 3
++----
++2.3333333333333335
++
++query II
++explain SELECT AVG(i) FROM s.sem_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# greatest / least: MySQL returns NULL if any argument is NULL; DuckDB skips NULLs
++# the pushdown serializes these as a COALESCE rotation that skips NULLs as well
++query I
++SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
++----
++4
++
++query I
++SELECT MIN(least(i, NULL, 3)) FROM s.sem_tbl
++----
++1
++
++query II
++explain SELECT MAX(greatest(i, NULL)) FROM s.sem_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# stddev / variance: sample variants in DuckDB, population variants in MySQL
++# the pushdown serializes them as the explicit stddev_samp / var_samp
++query II
++SELECT round(stddev(i), 6), round(variance(i), 6) FROM s.sem_tbl
++----
++1.290994	1.666667
++
++query II
++explain SELECT stddev(i), variance(i) FROM s.sem_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# the explicitly-named variants have identical semantics and are pushed
++query II
++SELECT round(stddev_samp(i), 6), round(stddev_pop(i), 6) FROM s.sem_tbl
++----
++1.290994	1.118034
++
++query II
++explain SELECT stddev_samp(i), stddev_pop(i) FROM s.sem_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# dayofweek / weekday / week / isodow: different numbering in MySQL - the pushdown
++# serializes them with the numbering shifted to match DuckDB
++statement ok
++CREATE OR REPLACE TABLE s.date_tbl AS SELECT DATE '2026-06-04' AS d
++
++# DuckDB: dayofweek(Thursday) = 4 (MySQL's DAYOFWEEK would return 5)
++query IIII
++SELECT MAX(dayofweek(d)), MAX(weekday(d)), MAX(isodow(d)), MAX(isodow(DATE '2026-06-07')) FROM s.date_tbl
++----
++4	4	4	7
++
++query II
++explain SELECT MAX(dayofweek(d)), MAX(weekday(d)), MAX(isodow(d)) FROM s.date_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# DuckDB: week('2026-01-01') = 1 (ISO); MySQL's default week mode would return 0
++query I
++SELECT MAX(week(DATE '2026-01-01')) FROM s.date_tbl
++----
++1
++
++query II
++explain SELECT MAX(week(d)) FROM s.date_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# weekofyear is ISO in both systems - pushed
++query I
++SELECT MAX(weekofyear(d)) FROM s.date_tbl
++----
++23
++
++query II
++explain SELECT MAX(weekofyear(d)) FROM s.date_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# instr: case-insensitive in MySQL under the default collation
++statement ok
++CREATE OR REPLACE TABLE s.instr_tbl AS SELECT 'ABC' AS w
++
++query I
++SELECT MAX(instr(w, 'b')) FROM s.instr_tbl
++----
++0
++
++query II
++explain SELECT MAX(instr(w, 'b')) FROM s.instr_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# microsecond: DuckDB includes the seconds component, MySQL does not - the pushdown
++# serializes it as (microsecond(x) + second(x) * 1000000)
++statement ok
++CREATE OR REPLACE TABLE s.micro_tbl AS SELECT TIMESTAMP '2000-01-01 10:11:12' AS ts
++
++query I
++SELECT MAX(microsecond(ts)) FROM s.micro_tbl
++----
++12000000
++
++query II
++explain SELECT MAX(microsecond(ts)) FROM s.micro_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# trunc is serialized as truncate(x, 0)
++query II
++SELECT MAX(trunc(i + 0.7)), MAX(trunc(0 - i - 0.7)) FROM s.sem_tbl
++----
++4	-1
++
++query II
++explain SELECT MAX(trunc(i + 0.7)) FROM s.sem_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# substring with literal positive offsets is pushed; other offsets are evaluated locally
++statement ok
++CREATE OR REPLACE TABLE s.substr_tbl AS SELECT 'héllo!' AS w
++
++query II
++SELECT MIN(substring(w, 2, 3)), MIN(substring(w, 3)) FROM s.substr_tbl
++----
++éll	llo!
++
++query II
++explain SELECT MIN(substring(w, 2, 3)) FROM s.substr_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# zero / negative / non-literal offsets behave differently in MySQL - not pushed
++query I
++SELECT MIN(substring(w, 0, 2)) FROM s.substr_tbl
++----
++h
++
++query II
++explain SELECT MIN(substring(w, 0, 2)) FROM s.substr_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_serializer.test b/test/sql/remote_pushdown/remote_pushdown_serializer.test
+new file mode 100644
+index 0000000..746aabf
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_serializer.test
+@@ -0,0 +1,97 @@
++# name: test/sql/remote_pushdown/remote_pushdown_serializer.test
++# description: Constructs enabled by the MySQL serializer - function remapping, identifier
++#              quoting, string escaping and derived table aliasing
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.ser_tbl AS SELECT i, 'w' || i AS w FROM range(4) t(i)
++
++# ---- || is serialized as concat() (both propagate NULLs) ----
++query I
++SELECT MIN(w || 'x') FROM s.ser_tbl
++----
++w0x
++
++# concatenating NULL yields NULL even when evaluated remotely
++query I
++SELECT COUNT(*) FROM s.ser_tbl WHERE (w || NULL) IS NULL
++----
++4
++
++query II
++explain SELECT MIN(w || 'x') FROM s.ser_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- ln() / log() are evaluated locally: MySQL returns NULL on domain errors (ln(0)) ----
++query II
++SELECT ROUND(MAX(ln(i + 1))::DOUBLE, 6), MAX(log(2, i + 1)) FROM s.ser_tbl
++----
++1.386294	2.0
++
++query II
++explain SELECT MAX(ln(i + 1)), MAX(log(2, i + 1)) FROM s.ser_tbl
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# ---- string literals with backslashes and quotes are escaped for MySQL ----
++query I
++SELECT MIN(concat(w, 'x\y')) FROM s.ser_tbl
++----
++w0x\y
++
++query II
++explain SELECT MIN(concat(w, 'x\y')) FROM s.ser_tbl
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++query I
++SELECT MIN(w || 'a''b') FROM s.ser_tbl
++----
++w0a'b
++
++# ---- unnamed derived tables get a generated alias (required by MySQL) ----
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.ser_tbl)
++----
++4
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.ser_tbl)
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# nested unnamed derived tables
++query I
++SELECT SUM(i) FROM (SELECT i FROM (SELECT i FROM s.ser_tbl) WHERE i > 0)
++----
++6
++
++# ---- qualified stars keep their qualifier ----
++query III
++SELECT a.*, b.i + 10 FROM s.ser_tbl a JOIN s.ser_tbl b USING (i) WHERE a.i = 1
++----
++1	w1	11
++
++query II
++explain SELECT a.* FROM s.ser_tbl a JOIN s.ser_tbl b USING (i)
++----
++physical_plan	<!REGEX>:.*JOIN.*
++
++# ---- avg as a window function (serialized with a DOUBLE cast) ----
++query I
++SELECT MAX(a) FROM (SELECT AVG(i) OVER (ORDER BY i) AS a FROM s.ser_tbl) t
++----
++1.5
++
++query II
++explain SELECT AVG(i) OVER (ORDER BY i) FROM s.ser_tbl
++----
++physical_plan	<!REGEX>:.*WINDOW.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_set_operations.test b/test/sql/remote_pushdown/remote_pushdown_set_operations.test
+new file mode 100644
+index 0000000..8b28527
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_set_operations.test
+@@ -0,0 +1,149 @@
++# name: test/sql/remote_pushdown/remote_pushdown_set_operations.test
++# description: Test remote pushdown of set operations (UNION / INTERSECT / EXCEPT) into MySQL
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.set_tbl1 AS SELECT i FROM range(5) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.set_tbl2 AS SELECT i + 3 AS i FROM range(5) t(i)
++
++# UNION ALL of two fully-remote tables -- no overlap resolution needed, should push
++# set_tbl1: 0,1,2,3,4  set_tbl2: 3,4,5,6,7 → 10 rows total
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT i FROM s.set_tbl2) t
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT i FROM s.set_tbl2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# UNION (distinct) of two fully-remote tables: 0..7 → 8 distinct values
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2) t
++----
++8
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# INTERSECT of two fully-remote tables: overlap is i=3,4
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 INTERSECT SELECT i FROM s.set_tbl2) t
++----
++2
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 INTERSECT SELECT i FROM s.set_tbl2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# EXCEPT: set_tbl1 minus the overlap {3,4} → {0,1,2}
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 EXCEPT SELECT i FROM s.set_tbl2) t
++----
++3
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 EXCEPT SELECT i FROM s.set_tbl2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ORDER BY on the combined result
++query I
++SELECT i FROM s.set_tbl1 UNION SELECT i FROM s.set_tbl2 ORDER BY i
++----
++0
++1
++2
++3
++4
++5
++6
++7
++
++# UNION ALL of a remote table and a local range() -- cannot push the whole thing
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT * FROM range(3) t(i)) t
++----
++8
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL SELECT * FROM range(3) t(i)) t
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
++
++# Three-way UNION ALL of fully-remote tables -- should push
++statement ok
++CREATE OR REPLACE TABLE s.set_tbl3 AS SELECT i + 10 AS i FROM range(3) t(i)
++
++query I
++SELECT COUNT(*) FROM (
++    SELECT i FROM s.set_tbl1
++    UNION ALL SELECT i FROM s.set_tbl2
++    UNION ALL SELECT i FROM s.set_tbl3) t
++----
++13
++
++query II
++explain SELECT COUNT(*) FROM (
++    SELECT i FROM s.set_tbl1
++    UNION ALL SELECT i FROM s.set_tbl2
++    UNION ALL SELECT i FROM s.set_tbl3) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- EXCEPT ALL / INTERSECT ALL: multiset semantics are identical in MySQL 8.0.31+ ----
++statement ok
++CREATE OR REPLACE TABLE s.set_dup1 AS SELECT i % 3 AS i FROM range(6) t(i)
++
++statement ok
++CREATE OR REPLACE TABLE s.set_dup2 AS SELECT i % 2 AS i FROM range(2) t(i)
++
++# set_dup1: 0,1,2,0,1,2  set_dup2: 0,1 → EXCEPT ALL removes one 0 and one 1 → 0,1,2,2
++query I
++SELECT i FROM s.set_dup1 EXCEPT ALL SELECT i FROM s.set_dup2 ORDER BY i
++----
++0
++1
++2
++2
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_dup1 EXCEPT ALL SELECT i FROM s.set_dup2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# INTERSECT ALL keeps the minimum multiplicity → 0,1
++query I
++SELECT i FROM s.set_dup1 INTERSECT ALL SELECT i FROM s.set_dup2 ORDER BY i
++----
++0
++1
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_dup1 INTERSECT ALL SELECT i FROM s.set_dup2) t
++----
++physical_plan	<!REGEX>:.*AGGREGATE.*
++
++# ---- UNION BY NAME is DuckDB-specific and must not be pushed ----
++query I
++SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL BY NAME SELECT i FROM s.set_tbl2) t
++----
++10
++
++query II
++explain SELECT COUNT(*) FROM (SELECT i FROM s.set_tbl1 UNION ALL BY NAME SELECT i FROM s.set_tbl2) t
++----
++physical_plan	<REGEX>:.*AGGREGATE.*
+diff --git a/test/sql/remote_pushdown/remote_pushdown_transactions.test b/test/sql/remote_pushdown/remote_pushdown_transactions.test
+new file mode 100644
+index 0000000..cabfc72
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_transactions.test
+@@ -0,0 +1,81 @@
++# name: test/sql/remote_pushdown/remote_pushdown_transactions.test
++# description: Pushed-down queries must see uncommitted changes made in the same transaction
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.txn_tbl AS SELECT i FROM range(5) t(i)
++
++statement ok
++BEGIN
++
++statement ok
++INSERT INTO s.txn_tbl VALUES (100)
++
++# the pushed-down aggregate must run on the transaction's connection and see the uncommitted row
++query I
++SELECT COUNT(*) FROM s.txn_tbl
++----
++6
++
++query I
++SELECT SUM(i) FROM s.txn_tbl
++----
++110
++
++statement ok
++ROLLBACK
++
++# after the rollback the row is gone
++query I
++SELECT COUNT(*) FROM s.txn_tbl
++----
++5
++
++# commit path
++statement ok
++BEGIN
++
++statement ok
++INSERT INTO s.txn_tbl VALUES (200)
++
++query I
++SELECT MAX(i) FROM s.txn_tbl
++----
++200
++
++statement ok
++COMMIT
++
++query I
++SELECT MAX(i) FROM s.txn_tbl
++----
++200
++
++# mixing pushed-down queries and regular scans within one transaction
++statement ok
++BEGIN
++
++statement ok
++INSERT INTO s.txn_tbl VALUES (300)
++
++# pushed aggregate
++query I
++SELECT MAX(i) FROM s.txn_tbl
++----
++300
++
++# regular scan (not pushed - local table function blocks the pushdown)
++query I
++SELECT COUNT(*) FROM s.txn_tbl, range(1) t(x)
++----
++7
++
++statement ok
++ROLLBACK
+diff --git a/test/sql/remote_pushdown/remote_pushdown_window.test b/test/sql/remote_pushdown/remote_pushdown_window.test
+new file mode 100644
+index 0000000..8642869
+--- /dev/null
++++ b/test/sql/remote_pushdown/remote_pushdown_window.test
+@@ -0,0 +1,156 @@
++# name: test/sql/remote_pushdown/remote_pushdown_window.test
++# description: Window function pushdown -- standard functions push to MySQL 8+, DuckDB-specific ones must not
++# group: [remote_pushdown]
++
++require mysql_scanner
++
++require-env MYSQL_TEST_DATABASE_AVAILABLE
++
++statement ok
++ATTACH 'host=localhost user=root port=0 database=mysqlscanner' AS s (TYPE MYSQL_SCANNER)
++
++statement ok
++CREATE OR REPLACE TABLE s.win_tbl AS SELECT i, i * 10 AS v, i % 3 AS g FROM range(9) t(i)
++
++# ---- standard window functions: should be pushed to MySQL 8+ ----
++
++# ROW_NUMBER pushed -- no local window operator expected
++query II
++explain SELECT i, ROW_NUMBER() OVER (ORDER BY i) AS rn FROM s.win_tbl ORDER BY i
++----
++physical_plan	<!REGEX>:.*WINDOW.*
++
++query II
++SELECT i, ROW_NUMBER() OVER (ORDER BY i) AS rn FROM s.win_tbl ORDER BY i
++----
++0	1
++1	2
++2	3
++3	4
++4	5
++5	6
++6	7
++7	8
++8	9
++
++# RANK / DENSE_RANK with PARTITION BY
++query III
++SELECT i, g, DENSE_RANK() OVER (PARTITION BY g ORDER BY i) AS dr FROM s.win_tbl ORDER BY i
++----
++0	0	1
++1	1	1
++2	2	1
++3	0	2
++4	1	2
++5	2	2
++6	0	3
++7	1	3
++8	2	3
++
++# LAG / LEAD
++query II
++SELECT i, LAG(v, 1, -1) OVER (ORDER BY i) AS prev FROM s.win_tbl ORDER BY i
++----
++0	-1
++1	0
++2	10
++3	20
++4	30
++5	40
++6	50
++7	60
++8	70
++
++# SUM as window aggregate pushed
++query II
++SELECT g, SUM(v) OVER (PARTITION BY g) AS group_sum FROM s.win_tbl ORDER BY i
++----
++0	90
++1	120
++2	150
++0	90
++1	120
++2	150
++0	90
++1	120
++2	150
++
++# ---- DuckDB-specific window functions: must NOT be pushed to MySQL ----
++
++# fill() is a DuckDB-only forward-fill window function; MySQL has no equivalent
++# if pushed, MySQL would error because it doesn't recognise fill()
++statement ok
++CREATE OR REPLACE TABLE s.null_win_tbl AS
++    SELECT i, CASE WHEN i % 3 = 0 THEN NULL ELSE i * 10 END AS v FROM range(9) t(i)
++
++# fill() interpolates missing values from the neighbouring rows:
++# NULL→0, 10, 20, NULL→30, 40, 50, NULL→60, 70, 80 → sum of filled = 360
++query I
++SELECT SUM(filled) FROM (
++    SELECT fill(v) OVER (ORDER BY i) AS filled FROM s.null_win_tbl
++) t
++----
++360
++
++query II
++explain SELECT SUM(filled) FROM (
++    SELECT fill(v) OVER (ORDER BY i) AS filled FROM s.null_win_tbl
++) t
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# mode() used as a window aggregate -- not available in MySQL
++# running mode of g (=i%3) over increasing window; simplest check: count returns correct rows
++query I
++SELECT COUNT(*) FROM (
++    SELECT mode(g) OVER (PARTITION BY g) AS m FROM s.win_tbl
++) t
++----
++9
++
++query II
++explain SELECT COUNT(*) FROM (
++    SELECT mode(g) OVER (PARTITION BY g) AS m FROM s.win_tbl
++) t
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# IGNORE NULLS on LEAD/LAG -- MySQL cannot parse this syntax
++# if pushed the query would fail with a syntax error
++# v: NULL,10,20,NULL,40,50,NULL,70,80; next non-NULL: 10,20,40,40,50,70,70,80,NULL → sum=380
++query I
++SELECT SUM(nxt) FROM (
++    SELECT LEAD(v IGNORE NULLS) OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
++) t
++----
++380
++
++query II
++explain SELECT SUM(nxt) FROM (
++    SELECT LEAD(v IGNORE NULLS) OVER (ORDER BY i) AS nxt FROM s.null_win_tbl
++) t
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# ---- lead/lag with negative or non-literal offsets cannot be pushed (MySQL requires
++# ---- a literal non-negative offset) ----
++query I
++SELECT COUNT(*) FROM (SELECT LEAD(v, -1) OVER (ORDER BY i) AS prev FROM s.win_tbl) t WHERE prev IS NOT NULL
++----
++8
++
++query II
++explain SELECT LEAD(v, -1) OVER (ORDER BY i) FROM s.win_tbl
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++query II
++explain SELECT LEAD(v, i) OVER (ORDER BY i) FROM s.win_tbl
++----
++physical_plan	<REGEX>:.*WINDOW.*
++
++# literal non-negative offsets are pushed
++query II
++explain SELECT LEAD(v, 2) OVER (ORDER BY i) FROM s.win_tbl
++----
++physical_plan	<!REGEX>:.*WINDOW.*
