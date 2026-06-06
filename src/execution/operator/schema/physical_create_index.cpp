@@ -50,7 +50,9 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto gstate = make_uniq<CreateIndexGlobalSinkState>();
-	gstate->append_lock = table.GetStorage().LockAppendsForCreateIndex();
+	if (!alter_table_info) {
+		gstate->append_lock = table.GetStorage().LockAppendsForCreateIndex();
+	}
 
 	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
 	                                                   unbound_expressions, storage_ids};
@@ -151,7 +153,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
 			}
 			// IF NOT EXISTS on existing index. We are done.
-			gstate.append_lock.unlock();
+			if (gstate.append_lock.owns_lock()) {
+				gstate.append_lock.unlock();
+			}
 			return SinkFinalizeType::READY;
 		}
 
@@ -175,7 +179,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// Add the index to the storage.
 	storage.AddIndex(std::move(bound_index));
-	gstate.append_lock.unlock();
+	if (gstate.append_lock.owns_lock()) {
+		gstate.append_lock.unlock();
+	}
 
 	return SinkFinalizeType::READY;
 }
