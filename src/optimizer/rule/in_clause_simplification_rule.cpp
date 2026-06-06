@@ -125,13 +125,14 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	//	then swap out the children for the valid ENUM values
 	if (in_children.size() > 1) {
 		children.swap(in_children);
-	} else if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
-		//	IN () => false
-		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 	} else {
-		//	NOT IN () => true
-		D_ASSERT(expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
-		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		// CASE WHEN ISNULL(probe) THEN NULL::BOOLEAN ELSE false/true END
+		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+		when_expr->GetChildrenMutable().emplace_back(in_children[0]->Copy());
+		auto then_expr = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		const bool not_in = (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
+		auto else_expr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(not_in));
+		return make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
 	}
 
 	return nullptr;

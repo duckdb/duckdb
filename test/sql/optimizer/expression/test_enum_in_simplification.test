@@ -11,7 +11,7 @@ CREATE TYPE sym_enum AS ENUM (
 set seed 0.8675309
 
 statement ok
-CREATE TABLE QUOTE AS (
+CREATE TABLE quote AS (
 	WITH asks AS (
 		SELECT 
 			(100.0 * random() + 10.0)::FLOAT AS ask,
@@ -97,3 +97,53 @@ GROUP BY sym
 ORDER BY sym;
 ----
 physical_plan	<!REGEX>:.*NOT.*
+
+#
+# Test no valid strings and NULL
+#
+statement ok
+INSERT INTO quote VALUES (NULL, NULL, NULL, NULL, NULL);
+
+# IN
+query II
+explain
+SELECT count(*), max(n) 
+FROM (
+	select sym IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+physical_plan	<REGEX>:.*WHEN.*IS.*NULL.*ELSE.*false.*
+
+query II
+SELECT count(*), max(n) 
+FROM (
+	select sym IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+100	false
+
+# NOT IN
+query II
+explain
+SELECT count(*), max(n) 
+FROM (
+	select sym NOT IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+physical_plan	<REGEX>:.*NOT.*WHEN.*IS.*NULL.*ELSE.*false.*
+
+query II
+SELECT count(*), max(n) 
+FROM (
+	select sym NOT IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+100	true
