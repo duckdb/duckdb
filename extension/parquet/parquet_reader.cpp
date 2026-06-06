@@ -23,6 +23,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -1884,18 +1885,6 @@ static bool IsFilterColumn(const vector<ParquetScanFilter> &scan_filters, idx_t 
 
 void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataChunk &result, idx_t filter_count,
                                            uint8_t *define_ptr, uint8_t *repeat_ptr) {
-	// On the lazy PREFETCH_FILTERS path the surviving payload columns are not yet fetched
-	if (filter_count > 0 && state.filter_head_count > 0) {
-		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
-		auto payload_head_count = trans.GetReadHeads().size() - state.filter_head_count;
-		// payload columns are registered early, so we do from 0 to head
-		auto io_tasks =
-		    CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, 0, payload_head_count);
-		for (auto &task : io_tasks) {
-			task->Execute();
-		}
-	}
-
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		MultiFileLocalIndex col_idx(i);
 		if (IsFilterColumn(state.scan_filters, i)) {
@@ -1917,7 +1906,61 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 	}
 }
 
-SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
+// FIXME: We now do this copy due to the Process reenter, maybe there is a better way
+static void CopyFilterColumns(const vector<ParquetScanFilter> &scan_filters, DataChunk &src, DataChunk &dst,
+                              idx_t count) {
+	for (auto &scan_filter : scan_filters) {
+		auto idx = MultiFileLocalIndex(scan_filter.filter_idx).GetIndex();
+		VectorOperations::Copy(src.data[idx], dst.data[idx], count, 0, 0);
+	}
+}
+
+vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetReaderScanState &state, DataChunk &result,
+                                                                      idx_t scan_count) {
+	if (state.filter_count == 0 || state.filter_head_count == 0) {
+		return {};
+	}
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	auto payload_head_count = trans.GetReadHeads().size() - state.filter_head_count;
+	// payload columns are the leading read heads
+	auto io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle, 0, payload_head_count);
+	if (io_tasks.empty()) {
+		// no payload to do
+		return {};
+	}
+	// stash the decoded filter columns and empty the chunk for the BLOCKED return
+	if (state.filter_stash.data.empty()) {
+		state.filter_stash.Initialize(allocator, result.GetTypes());
+	}
+	state.filter_stash.Reset();
+	CopyFilterColumns(state.scan_filters, result, state.filter_stash, scan_count);
+	result.Reset();
+	state.filter_done = true;
+	return io_tasks;
+}
+
+AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
+                                          uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
+	if (state.filter_done) {
+		// the filters already ran, we restore the stashed columns
+		state.filter_done = false;
+		CopyFilterColumns(state.scan_filters, state.filter_stash, result, scan_count);
+	} else {
+		// we need to evaluate the filters, then async-fetch the payload and resume into the decode
+		state.filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
+		auto io_tasks = ScheduleRemainingColumns(state, result, scan_count);
+		if (!io_tasks.empty()) {
+			return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
+		}
+	}
+	DecodeRemainingColumns(state, result, state.filter_count, define_ptr, repeat_ptr);
+	if (scan_count != state.filter_count) {
+		result.Slice(state.sel, state.filter_count);
+	}
+	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
 	result.SetChildCardinality(scan_count);
 
@@ -1936,11 +1979,10 @@ SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk
 	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
 
 	if (filters || deletion_filter) {
-		idx_t filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
-		// we still may have to read some cols
-		DecodeRemainingColumns(state, result, filter_count, define_ptr, repeat_ptr);
-		if (scan_count != filter_count) {
-			result.Slice(state.sel, filter_count);
+		auto res = ProcessFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
+		if (res.GetResultType() == AsyncResultType::BLOCKED) {
+			// we must wait  on the payload I/O
+			return res;
 		}
 	} else {
 		for (idx_t i = 0; i < column_ids.size(); i++) {
