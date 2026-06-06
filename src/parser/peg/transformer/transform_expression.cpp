@@ -201,7 +201,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-	auto lowercase_name = StringUtil::Lower(qualified_function.name.GetName());
+	auto lowercase_name = StringUtil::Lower(qualified_function.name.GetIdentifierName());
 
 	auto &over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
@@ -1805,7 +1805,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
 				                      rename_column.first.ToString());
 			}
-			if (result->ReplaceList().find(rename_column.first.column.GetName()) != result->ReplaceList().end()) {
+			if (result->ReplaceList().find(rename_column.first.column.GetIdentifierName()) !=
+			    result->ReplaceList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
 				                      rename_column.first.ToString());
 			}
@@ -2778,7 +2779,7 @@ pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformRepla
 	}
 	auto &col_ref = column_reference->Cast<ColumnRefExpression>();
 	auto column_name = col_ref.GetColumnName();
-	return make_pair(column_name, std::move(expr));
+	return make_pair(column_name.GetIdentifierName(), std::move(expr));
 }
 
 ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,

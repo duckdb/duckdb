@@ -77,7 +77,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 		auto &child = arguments[arg_idx];
 		if (child->GetAlias().empty()) {
 			throw BinderException("Need named argument for struct update, e.g., a := b");
-		} else if (incoming_children.find(Identifier(child->GetAlias().GetName())) != incoming_children.end()) {
+		} else if (incoming_children.find(child->GetAlias()) != incoming_children.end()) {
 			throw InvalidInputException("Duplicate named argument provided for %s", child->GetAlias().c_str());
 		}
 		incoming_children.emplace(child->GetAlias(), arg_idx);
@@ -128,7 +128,8 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
-		auto update = incoming_children.find(Identifier(StructType::GetChildName(existing_type, field_idx).GetName()));
+		auto update =
+		    incoming_children.find(Identifier(StructType::GetChildName(existing_type, field_idx).GetIdentifierName()));
 		if (update == incoming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {

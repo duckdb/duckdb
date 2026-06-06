@@ -3,7 +3,7 @@
 namespace duckdb {
 
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
-    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name.GetName()) {
+    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name.GetIdentifierName()) {
 	name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;
@@ -15,7 +15,7 @@ CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSe
 }
 
 unique_ptr<CreateInfo> CreatePragmaFunctionInfo::Copy() const {
-	auto result = make_uniq<CreatePragmaFunctionInfo>(functions.name.GetName(), functions);
+	auto result = make_uniq<CreatePragmaFunctionInfo>(functions.name.GetIdentifierName(), functions);
 	CopyFunctionProperties(*result);
 	return std::move(result);
 }

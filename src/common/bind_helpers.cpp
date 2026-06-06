@@ -76,7 +76,7 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 	return ParseColumnList(children, names, loption);
 }
 
-vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identifier> &names, const string &loption) {
 	vector<idx_t> result;
 
 	if (set.empty()) {
@@ -94,7 +94,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string>
 	result.resize(option_map.size());
 
 	for (idx_t i = 0; i < names.size(); i++) {
-		auto entry = option_map.find(names[i]);
+		auto entry = option_map.find(names[i].GetIdentifierName());
 		if (entry != option_map.end()) {
 			result[entry->second.second] = i;
 			entry->second.first = true;
@@ -109,7 +109,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string>
 	return result;
 }
 
-vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<Identifier> &names, const string &loption) {
 	vector<idx_t> result;
 
 	// Only accept a list of arguments

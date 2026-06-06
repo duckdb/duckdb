@@ -50,8 +50,8 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 class DuckDBFileReaderOptions : public BaseFileReaderOptions {
 public:
-	string schema_name;
-	string table_name;
+	Identifier schema_name;
+	Identifier table_name;
 
 	bool Matches(TableCatalogEntry &table) const;
 	bool HasSelection() const;
@@ -110,8 +110,8 @@ private:
 	unique_ptr<GlobalTableFunctionState> global_state;
 	atomic<bool> finished;
 	idx_t column_count;
-	string schema_name;
-	string table_name;
+	Identifier schema_name;
+	Identifier table_name;
 };
 
 struct DuckDBReadGlobalState : GlobalTableFunctionState {};
@@ -125,22 +125,22 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 	if (tables.empty()) {
 		return string();
 	}
-	case_insensitive_map_t<idx_t> table_names;
+	identifier_map_t<idx_t> table_names;
 	for (auto &table : tables) {
-		table_names[table.get().name.GetName()]++;
+		table_names[table.get().name]++;
 	}
 	vector<string> candidate_list;
 	for (auto &table_ref : tables) {
 		auto &table = table_ref.get();
-		if (table_names[table.name.GetName()] > 1) {
+		if (table_names[table.name] > 1) {
 			// name conflicts across schemas - add the schema name
 			auto &schema = table.ParentSchema();
 			candidate_list.push_back(schema.name + "." + table.name);
 		} else {
-			candidate_list.push_back(table.name.GetName());
+			candidate_list.push_back(table.name.GetIdentifierName());
 		}
 	}
-	string search_term = schema_name;
+	string search_term = schema_name.GetIdentifierName();
 	if (!search_term.empty()) {
 		search_term += ".";
 	}
@@ -230,11 +230,11 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	}
 	auto &table = tables[0].get();
 	for (auto &col : table.GetColumns().Logical()) {
-		columns.emplace_back(col.Name().GetName(), col.Type());
+		columns.emplace_back(col.Name().GetIdentifierName(), col.Type());
 	}
 	column_count = columns.size();
-	schema_name = table.ParentSchema().name.GetName();
-	table_name = table.name.GetName();
+	schema_name = table.ParentSchema().name;
+	table_name = table.name;
 	db_wrapper->table_entry = table;
 }
 
@@ -393,11 +393,11 @@ bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const string &key,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
 	if (key == "schema_name") {
-		options.schema_name = StringValue::Get(val);
+		options.schema_name = Identifier(StringValue::Get(val));
 		return true;
 	}
 	if (key == "table_name") {
-		options.table_name = StringValue::Get(val);
+		options.table_name = Identifier(StringValue::Get(val));
 		return true;
 	}
 	return false;

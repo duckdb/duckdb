@@ -240,7 +240,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
+static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<Identifier> &names,
                                                     const vector<LogicalType> &sql_types, TableIndex table_index,
                                                     ProjectionIndex index) {
 	if (index >= sql_types.size()) {
@@ -255,7 +255,7 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 }
 
 static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, TableIndex table_index,
-                                                          const vector<string> &names,
+                                                          const vector<Identifier> &names,
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
@@ -294,7 +294,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<string> &names,
+static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<Identifier> &names,
                              const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
@@ -309,7 +309,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
+void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
                            const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
@@ -409,9 +409,9 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-string Binder::GetExpressionName(const ParsedExpression &expr) {
+Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
-		return expr.GetAlias().GetName();
+		return expr.GetAlias();
 	}
 	return expr.GetName();
 }
@@ -447,11 +447,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(GetExpressionName(*expr));
+		result.names.emplace_back(GetExpressionName(*expr));
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
-			result.names[i] = expr->GetAlias().GetName();
+			result.names[i] = expr->GetAlias();
 		}
 		bind_state.projection_map[*expr] = i;
 		bind_state.original_expressions.push_back(expr->Copy());
@@ -562,7 +562,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
 	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types
 	vector<idx_t> group_by_all_indexes;
-	vector<string> new_names;
+	vector<Identifier> new_names;
 	vector<LogicalType> internal_sql_types;
 
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
@@ -588,7 +588,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {
-				new_names.push_back(struct_expr->GetName());
+				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
 				internal_sql_types.push_back(struct_expr->GetReturnType());
 				result.select_list.push_back(std::move(struct_expr));

@@ -22,7 +22,7 @@ MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &cont
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto &type = types[i];
 		auto &name = names[i];
-		auto column_definition = ColumnDefinition(name, type);
+		auto column_definition = ColumnDefinition(Identifier(name), type);
 		columns.push_back(std::move(column_definition));
 	}
 }

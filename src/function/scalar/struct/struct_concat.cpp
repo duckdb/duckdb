@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 	}
 
 	child_list_t<LogicalType> combined_children;
-	case_insensitive_set_t name_set;
+	identifier_set_t name_set;
 
 	bool has_unnamed = false;
 
@@ -48,17 +48,17 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 		const auto &child_types = StructType::GetChildTypes(arg->GetReturnType());
 		for (const auto &child : child_types) {
 			if (!child.first.empty()) {
-				auto it = name_set.find(child.first.GetName());
+				auto it = name_set.find(child.first);
 				if (it != name_set.end()) {
-					if (*it == child.first.GetName()) {
+					if (it->GetIdentifierName() == child.first.GetIdentifierName()) {
 						throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
-						                            child.first.GetName());
+						                            child.first.GetIdentifierName());
 					}
 					throw InvalidInputException(
 					    "struct_concat: Arguments contain case-insensitive duplicate STRUCT entry \"%s\" and \"%s\"",
-					    child.first.GetName(), *it);
+					    child.first.GetIdentifierName(), it->GetIdentifierName());
 				}
-				name_set.insert(child.first.GetName());
+				name_set.insert(child.first);
 			} else {
 				has_unnamed = true;
 			}

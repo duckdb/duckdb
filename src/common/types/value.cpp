@@ -152,7 +152,7 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 	value_.double_ = val;
 }
 
-Value::Value(const Identifier &val) : Value(val.GetName()) {
+Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
 }
 
 Value::Value(const char *val) : Value(val ? string(val) : string()) {

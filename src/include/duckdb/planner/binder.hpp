@@ -91,11 +91,11 @@ enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	LogicalType type;
-	string name;
+	Identifier name;
 	idx_t depth;
 
 	// NOLINTNEXTLINE - work-around bug in clang-tidy
-	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
+	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, Identifier name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
 	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
@@ -257,8 +257,8 @@ public:
 	void BindCreateViewInfo(CreateViewInfo &base);
 	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
 	                     const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-	                     const vector<string> &aliases, vector<LogicalType> &result_types,
-	                     vector<string> &result_names);
+	                     const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -349,7 +349,7 @@ public:
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
 	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
-	string GetExpressionName(const ParsedExpression &expr);
+	Identifier GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)
@@ -453,7 +453,7 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
+	BoundStatement BindCTE(const Identifier &ctename, CommonTableExpressionInfo &info);
 
 	BoundStatement BindNode(SelectNode &node);
 	BoundStatement BindNode(SetOperationNode &node);
@@ -496,7 +496,7 @@ private:
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	BoundStatement BindBoundPivot(PivotRef &expr);
 	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
-	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<Identifier> &result);
 
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
@@ -519,7 +519,7 @@ private:
 	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
+	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
@@ -594,7 +594,7 @@ private:
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
 	                                           const string &tname);
 
-	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
+	BoundCTEData PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 	shared_ptr<Binder> CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name);

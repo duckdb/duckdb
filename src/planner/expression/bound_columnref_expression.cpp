@@ -35,7 +35,7 @@ bool BoundColumnRefExpression::Equals(const BaseExpression &other_p) const {
 	return other.binding == binding && other.depth == depth;
 }
 
-string BoundColumnRefExpression::GetName() const {
+Identifier BoundColumnRefExpression::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
 		return StringUtil::Format("%s (%s)", binding.ToString(), return_type.ToString());
@@ -51,7 +51,7 @@ string BoundColumnRefExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias.GetName();
+		return alias.GetIdentifierName();
 	}
 	return binding.ToString();
 }

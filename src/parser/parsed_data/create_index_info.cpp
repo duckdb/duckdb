@@ -33,7 +33,7 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 
 		// Column reference expressions are qualified with the table name.
 		// We need to remove them to reproduce the original query.
-		RemoveTableQualificationRecursive(copy, table.GetName());
+		RemoveTableQualificationRecursive(copy, table.GetIdentifierName());
 		bool add_parenthesis = true;
 		if (copy->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &column_ref = copy->Cast<ColumnRefExpression>();

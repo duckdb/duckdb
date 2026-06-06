@@ -63,9 +63,10 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_
 		for (auto &col : columns.Logical()) {
 			column_names.emplace_back(col.Name());
 		}
-		auto candidates = StringUtil::CandidatesErrorMessage(column_names, column_name.GetName(), "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetName(), column_name,
-		                      candidates);
+		auto candidates =
+		    StringUtil::CandidatesErrorMessage(column_names, column_name.GetIdentifierName(), "Did you mean");
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetIdentifierName(),
+		                      column_name, candidates);
 	}
 	return entry;
 }
@@ -136,7 +137,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				if (pk.IsPrimaryKey()) {
 					// multi key pk column: insert set of columns into multi_key_pks
 					for (auto &col : pk.GetColumnNames()) {
-						multi_key_pks.insert(col.GetName());
+						multi_key_pks.insert(col.GetIdentifierName());
 					}
 				}
 				extra_constraints.push_back(constraint->ToString());
@@ -159,7 +160,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		ss << column.ToSQLString();
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
-		bool is_multi_key_pk = multi_key_pks.find(column.Name().GetName()) != multi_key_pks.end();
+		bool is_multi_key_pk = multi_key_pks.find(column.Name().GetIdentifierName()) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column

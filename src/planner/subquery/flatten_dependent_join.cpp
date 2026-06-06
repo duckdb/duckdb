@@ -176,7 +176,7 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 		if (reader.cte_index == table_index && reader.correlated_columns == 0) {
 			for (auto &column : correlated_columns) {
 				reader.chunk_types.push_back(column.type);
-				reader.bound_columns.push_back(column.name);
+				reader.bound_columns.emplace_back(column.name);
 			}
 			reader.correlated_columns += correlated_columns.size();
 		}

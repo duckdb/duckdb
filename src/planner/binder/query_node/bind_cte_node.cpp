@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct BoundCTEData {
-	string ctename;
+	Identifier ctename;
 	CTEMaterialize materialized;
 	TableIndex setop_index;
 	shared_ptr<Binder> child_binder;
@@ -38,7 +38,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 			}
 			++dml_cte_count;
 		}
-		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first.GetName(), *cte.second));
+		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}
 	BoundStatement result;
@@ -90,7 +90,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	return result;
 }
 
-CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<string> &aliases_p)
+CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<Identifier> &aliases_p)
     : parent_binder(parent_binder_p), cte_def(cte_def_p), aliases(aliases_p),
       active_binder_count(parent_binder.GetActiveBinders().size()) {
 }
@@ -120,7 +120,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
 	// ourselves
-	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<string>(),
+	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<Identifier>(),
 	                                         vector<LogicalType>(), CTEType::CANNOT_BE_REFERENCED);
 
 	// bind the actual CTE
@@ -136,14 +136,14 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	names = query.names;
 	for (idx_t i = 0; i < aliases.size() && i < names.size(); i++) {
-		names[i] = aliases[i];
+		names[i] = Identifier(aliases[i]);
 	}
 
 	// Rename columns if duplicate names are detected
 	QueryResult::DeduplicateColumns(names);
 }
 
-BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement) {
+BoundCTEData Binder::PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement) {
 	BoundCTEData result;
 
 	// first recursively visit the materialized CTE operations

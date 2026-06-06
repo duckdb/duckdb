@@ -22,12 +22,12 @@ public:
 	virtual ~ColumnQualifier() = default;
 
 	//! Returns the STRUCT_EXTRACT operator expression
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const string &column_name,
+	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const Identifier &column_name,
 	                                               ErrorData &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);

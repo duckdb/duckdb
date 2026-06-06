@@ -33,7 +33,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
 	for (auto &entry : pivot.entries) {
 		PivotValueElement new_value = current_value;
-		string name = entry.alias.GetName();
+		string name = entry.alias.GetIdentifierName();
 		D_ASSERT(entry.values.size() == pivot.pivot_expressions.size());
 		for (idx_t v = 0; v < entry.values.size(); v++) {
 			auto &value = entry.values[v];
@@ -60,12 +60,12 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 	}
 }
 
-static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitive_set_t &handled_columns,
+static void ExtractPivotExpressions(ParsedExpression &root_expr, identifier_set_t &handled_columns,
                                     optional_ptr<DummyBinding> macro_binding) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.ColumnNames()[0].GetName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+			    if (child_colref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
 			        macro_binding && macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
 				    throw ParameterNotResolvedException();
 			    }
@@ -132,7 +132,7 @@ void ReplacePivotAggregateExpression(ClientContext &context, unique_ptr<ParsedEx
 }
 
 static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns,
-                                                       const case_insensitive_set_t &handled_columns) {
+                                                       const identifier_set_t &handled_columns) {
 	auto subquery = make_uniq<SelectNode>();
 	subquery->from_table = std::move(ref.source);
 	if (ref.groups.empty()) {
@@ -163,7 +163,7 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 
 static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, PivotRef &ref,
                                                      vector<unique_ptr<ParsedExpression>> all_columns,
-                                                     const case_insensitive_set_t &handled_columns,
+                                                     const identifier_set_t &handled_columns,
                                                      vector<PivotValueElement> pivot_values) {
 	auto subquery = ConstructInitialGrouping(ref, std::move(all_columns), handled_columns);
 
@@ -199,7 +199,8 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 			auto name = pivot_value.name;
 			if (ref.aggregates.size() > 1 || !aggr_name.empty()) {
 				// if there are multiple aggregates specified we add the name of the aggregate as well
-				name += "_" + (aggr_name.empty() ? aggregate->GetName() : aggr_name.GetName());
+				name += "_" +
+				        (aggr_name.empty() ? aggregate->GetName().GetIdentifierName() : aggr_name.GetIdentifierName());
 			}
 			copied_aggr->SetAlias(Identifier(name));
 			subquery->select_list.push_back(std::move(copied_aggr));
@@ -209,15 +210,15 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 }
 
 struct PivotBindState {
-	vector<string> internal_group_names;
-	vector<string> group_names;
-	vector<string> aggregate_names;
-	vector<string> internal_aggregate_names;
+	vector<Identifier> internal_group_names;
+	vector<Identifier> group_names;
+	vector<Identifier> aggregate_names;
+	vector<Identifier> internal_aggregate_names;
 };
 
 static unique_ptr<SelectNode> PivotInitialAggregate(ClientContext &context, PivotBindState &bind_state, PivotRef &ref,
                                                     vector<unique_ptr<ParsedExpression>> all_columns,
-                                                    const case_insensitive_set_t &handled_columns) {
+                                                    const identifier_set_t &handled_columns) {
 	auto subquery_stage1 = ConstructInitialGrouping(ref, std::move(all_columns), handled_columns);
 
 	idx_t group_count = 0;
@@ -259,7 +260,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(ClientContext &context, Pivo
 		ReplacePivotAggregateExpression(context, aggregate, aggregate_ref);
 
 		bind_state.aggregate_names.emplace_back(std::move(aggr_name));
-		bind_state.internal_aggregate_names.push_back(aggregate_alias);
+		bind_state.internal_aggregate_names.push_back(Identifier(aggregate_alias));
 		aggregate_ref->SetAlias(Identifier(std::move(aggregate_alias)));
 		subquery_stage1->select_list.push_back(std::move(aggregate_ref));
 	}
@@ -333,7 +334,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	return subquery_stage2;
 }
 
-void ReplacePivotColumnRef(ParsedExpression &root_expr, const string &name) {
+void ReplacePivotColumnRef(ParsedExpression &root_expr, const Identifier &name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    root_expr, [&](ColumnRefExpression &colref) { colref.ColumnNamesMutable()[0] = Identifier(name); });
 }
@@ -357,13 +358,13 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 		final_pivot_operator->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(group_name)));
 	}
 	// gather aggregate names
-	vector<string> aggregate_names;
+	vector<Identifier> aggregate_names;
 	for (auto &pivot_value : bound_pivot->bound_pivot_values) {
 		for (idx_t aggr_idx = 0; aggr_idx < ref.aggregates.size(); aggr_idx++) {
 			auto aggr = ref.aggregates[aggr_idx]->Copy();
 			auto &aggr_name = bound_pivot->bound_aggregate_names[aggr_idx];
-			auto pivot_aggr_name = pivot_value.name + aggr_name;
-			aggregate_names.push_back(std::move(pivot_aggr_name));
+			auto pivot_aggr_name = pivot_value.name + aggr_name.GetIdentifierName();
+			aggregate_names.push_back(Identifier(std::move(pivot_aggr_name)));
 		}
 	}
 	QueryResult::DeduplicateColumns(aggregate_names);
@@ -433,10 +434,10 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 
 	if (aggregates.size() < ref.bound_aggregate_names.size()) {
 		vector<string> unique_names;
-		unordered_set<string> seen;
+		identifier_set_t seen;
 		for (auto &name : ref.bound_aggregate_names) {
 			if (seen.find(name) == seen.end()) {
-				unique_names.push_back(name);
+				unique_names.push_back(name.GetIdentifierName());
 				seen.insert(name);
 			}
 		}
@@ -446,9 +447,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			                        aggregates.size());
 		}
 
-		unordered_map<string, idx_t> name_to_position;
+		identifier_map_t<idx_t> name_to_position;
 		for (idx_t i = 0; i < unique_names.size(); i++) {
-			name_to_position[unique_names[i]] = i;
+			name_to_position[Identifier(unique_names[i])] = i;
 		}
 
 		vector<unique_ptr<Expression>> expanded_aggs;
@@ -465,11 +466,11 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 		                        ref.bound_aggregate_names.size(), aggregates.size());
 	}
 
-	vector<string> child_names;
+	vector<Identifier> child_names;
 	vector<LogicalType> child_types;
 	result.child_binder->bind_context.GetTypesAndNames(child_names, child_types);
 
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> types;
 	// emit the groups
 	for (idx_t i = 0; i < ref.bound_group_names.size(); i++) {
@@ -493,13 +494,13 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 				}
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
-			names.push_back(std::move(name));
+			names.push_back(Identifier(std::move(name)));
 			types.push_back(aggr->GetReturnType());
 		}
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
 	result.bound_pivot.types = types;
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetName();
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetIdentifierName();
 	QueryResult::DeduplicateColumns(names);
 	bind_context.AddGenericBinding(result.bind_index, Identifier(subquery_alias), names, types);
 
@@ -522,7 +523,7 @@ static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<V
 	values.push_back(folded_value);
 }
 
-static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column_names) {
+static bool TryExtractUnpivotList(ParsedExpression &expr, vector<Identifier> &column_names) {
 	auto initial_size = column_names.size();
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -535,7 +536,7 @@ static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column
 	}
 	case ExpressionType::VALUE_CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
-		column_names.push_back(constant.GetValue().ToString());
+		column_names.push_back(Identifier(constant.GetValue().ToString()));
 		return true;
 	}
 	case ExpressionType::FUNCTION: {
@@ -584,7 +585,7 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
-	case_insensitive_set_t handled_columns;
+	identifier_set_t handled_columns;
 
 	vector<reference<FunctionExpression>> pivot_aggregates;
 	// parse the aggregate, and extract the referenced columns from the aggregate
@@ -735,7 +736,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 
 struct UnpivotEntry {
 	string alias;
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	vector<unique_ptr<ParsedExpression>> expressions;
 };
 
@@ -744,7 +745,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias.GetName();
+		unpivot_entry.alias = entry.alias.GetIdentifierName();
 		for (auto &val : entry.values) {
 			auto column_name = val.ToString();
 			if (column_name.empty()) {
@@ -756,10 +757,10 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		return;
 	}
 
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	if (TryExtractUnpivotList(*entry.expr, column_names)) {
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias.GetName();
+		unpivot_entry.alias = entry.alias.GetIdentifierName();
 		for (auto &column_name : column_names) {
 			if (column_name.empty()) {
 				throw BinderException("UNPIVOT - empty column name not supported");
@@ -779,14 +780,14 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		// create one pivot entry per result column
 		UnpivotEntry unpivot_entry;
 		if (!expr->GetAlias().empty()) {
-			unpivot_entry.alias = expr->GetAlias().GetName();
+			unpivot_entry.alias = expr->GetAlias().GetIdentifierName();
 		}
 		unpivot_entry.expressions.push_back(std::move(expr));
 		unpivot_entries.push_back(std::move(unpivot_entry));
 	}
 }
 
-void Binder::ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result) {
+void Binder::ExtractUnpivotColumnName(ParsedExpression &expr, vector<Identifier> &result) {
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		result.push_back(colref.GetColumnName());
@@ -820,11 +821,11 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
 	}
 
-	case_insensitive_set_t handled_columns;
-	case_insensitive_map_t<string> name_map;
+	identifier_set_t handled_columns;
+	identifier_map_t<Identifier> name_map;
 	for (auto &entry : unpivot_entries) {
 		for (auto &unpivot_expr : entry.expressions) {
-			vector<string> result;
+			vector<Identifier> result;
 			ExtractUnpivotColumnName(*unpivot_expr, result);
 			if (result.empty()) {
 				throw BinderException(
@@ -836,14 +837,14 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 				throw BinderException(
 				    *unpivot_expr,
 				    "UNPIVOT clause must contain exactly one column - expression \"%s\" contains multiple (%s)",
-				    unpivot_expr->ToString(), StringUtil::Join(result, ", "));
+				    unpivot_expr->ToString(), StringUtil::Join(IdentifiersToStrings(result), ", "));
 			}
 			handled_columns.insert(result[0]);
 			entry.column_names.push_back(std::move(result[0]));
 		}
 	}
 
-	vector<string> select_names;
+	vector<Identifier> select_names;
 	for (auto &col_expr : all_columns) {
 		if (col_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
@@ -907,9 +908,9 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	select_names.push_back("unpivot_names");
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		if (i > 0) {
-			select_names.push_back("unpivot_list_" + std::to_string(i + 1));
+			select_names.push_back(Identifier("unpivot_list_" + std::to_string(i + 1)));
 		} else {
-			select_names.push_back("unpivot_list");
+			select_names.push_back(Identifier("unpivot_list"));
 		}
 	}
 
@@ -962,7 +963,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(unpivot_list_ref));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
-		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i].GetName() : ref.unpivot_names[i];
+		auto unnest_name =
+		    i < ref.column_name_alias.size() ? ref.column_name_alias[i].GetIdentifierName() : ref.unpivot_names[i];
 		unnest_val_expr->SetAlias(Identifier(unnest_name));
 		result_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
@@ -1015,7 +1017,7 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	auto root_index = result.plan->GetRootIndex();
 
 	MoveCorrelatedExpressions(*child_binder);
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetName();
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetIdentifierName();
 	SubqueryRef subquery_ref(nullptr, Identifier(subquery_alias));
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
 	if (where_clause) {

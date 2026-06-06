@@ -9,23 +9,23 @@ hash_t Identifier::Hash() const {
 }
 
 bool operator==(const Identifier &a, const Identifier &b) {
-	return StringUtil::CIEquals(a.GetName(), b.GetName());
+	return StringUtil::CIEquals(a.GetIdentifierName(), b.GetIdentifierName());
 }
 bool operator==(const Identifier &a, const string &b) {
-	return StringUtil::CIEquals(a.GetName(), b);
+	return StringUtil::CIEquals(a.GetIdentifierName(), b);
 }
 bool operator==(const string &a, const Identifier &b) {
-	return StringUtil::CIEquals(a, b.GetName());
+	return StringUtil::CIEquals(a, b.GetIdentifierName());
 }
 bool operator==(const Identifier &a, const char *b) {
-	return StringUtil::CIEquals(a.GetName(), string(b));
+	return StringUtil::CIEquals(a.GetIdentifierName(), string(b));
 }
 bool operator==(const char *a, const Identifier &b) {
-	return StringUtil::CIEquals(string(a), b.GetName());
+	return StringUtil::CIEquals(string(a), b.GetIdentifierName());
 }
 
 bool operator<(const Identifier &a, const Identifier &b) {
-	return StringUtil::CILessThan(a.GetName(), b.GetName());
+	return StringUtil::CILessThan(a.GetIdentifierName(), b.GetIdentifierName());
 }
 
 } // namespace duckdb

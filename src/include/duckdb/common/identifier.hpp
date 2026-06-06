@@ -52,13 +52,13 @@ public:
 	}
 
 	//! Conversion back to a string is explicit: it discards the case-insensitive semantics, so callers must opt in
-	//! (use GetName() for the raw value). Keeping this explicit is what makes the Identifier type safe.
+	//! (use GetIdentifierName() for the raw value). Keeping this explicit is what makes the Identifier type safe.
 	explicit operator const string &() const {
 		return value;
 	}
 
 	//! The raw underlying string (preserving original casing)
-	const string &GetName() const {
+	const string &GetIdentifierName() const {
 		return value;
 	}
 
@@ -110,30 +110,30 @@ DUCKDB_API bool operator<(const Identifier &a, const Identifier &b);
 
 //! String concatenation (std::operator+ is a template and cannot use the implicit conversion, so we provide our own)
 inline string operator+(const Identifier &a, const string &b) {
-	return a.GetName() + b;
+	return a.GetIdentifierName() + b;
 }
 inline string operator+(const string &a, const Identifier &b) {
-	return a + b.GetName();
+	return a + b.GetIdentifierName();
 }
 inline string operator+(const Identifier &a, const char *b) {
-	return a.GetName() + b;
+	return a.GetIdentifierName() + b;
 }
 inline string operator+(const char *a, const Identifier &b) {
-	return a + b.GetName();
+	return a + b.GetIdentifierName();
 }
 inline string operator+(const Identifier &a, const Identifier &b) {
-	return a.GetName() + b.GetName();
+	return a.GetIdentifierName() + b.GetIdentifierName();
 }
 inline string operator+(const Identifier &a, char b) {
-	return a.GetName() + b;
+	return a.GetIdentifierName() + b;
 }
 inline string operator+(char a, const Identifier &b) {
-	return a + b.GetName();
+	return a + b.GetIdentifierName();
 }
 
 //! Appending an identifier to a string appends the raw name
 inline string &operator+=(string &a, const Identifier &b) {
-	a += b.GetName();
+	a += b.GetIdentifierName();
 	return a;
 }
 
@@ -168,7 +168,7 @@ inline vector<string> IdentifiersToStrings(const vector<Identifier> &identifiers
 	vector<string> result;
 	result.reserve(identifiers.size());
 	for (auto &identifier : identifiers) {
-		result.push_back(identifier.GetName());
+		result.push_back(identifier.GetIdentifierName());
 	}
 	return result;
 }

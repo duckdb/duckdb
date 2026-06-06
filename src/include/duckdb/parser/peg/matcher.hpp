@@ -57,7 +57,7 @@ struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from Identifier
 	AutoCompleteCandidate(const Identifier &candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
-	    : AutoCompleteCandidate(candidate_p.GetName(), suggestion_type, score_bonus, candidate_type) {
+	    : AutoCompleteCandidate(candidate_p.GetIdentifierName(), suggestion_type, score_bonus, candidate_type) {
 	}
 
 	string candidate;

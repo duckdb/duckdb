@@ -45,7 +45,7 @@ static void duckdb_prepare_param_index_to_name_map_internal(PreparedStatementWra
 	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
 	for (auto &kv : named_param_map) {
-		cache[kv.second] = kv.first.GetName();
+		cache[kv.second] = kv.first.GetIdentifierName();
 	}
 }
 

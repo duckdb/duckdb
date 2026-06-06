@@ -261,9 +261,9 @@ unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types = macro_def.types;
 	types.resize(macro_def.parameters.size(), LogicalType::UNKNOWN);
-	vector<string> names;
+	vector<Identifier> names;
 	for (idx_t i = 0; i < positional_arguments.size(); i++) {
-		names.push_back(macro_def.parameters[i]->Cast<ColumnRefExpression>().GetColumnName());
+		names.emplace_back(macro_def.parameters[i]->Cast<ColumnRefExpression>().GetColumnName());
 	}
 	for (auto &kv : named_arguments) {
 		names.emplace_back(kv.first);
@@ -332,15 +332,15 @@ string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (idx_t param_idx = 0; param_idx < parameters.size(); param_idx++) {
 		const auto &param_name = parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		auto param_string = param_name;
+		auto param_string = param_name.GetIdentifierName();
 		if (types[param_idx] != LogicalType::UNKNOWN) {
 			param_string += " " + types[param_idx].ToString();
 		}
-		auto it = default_parameters.find(Identifier(param_name));
+		auto it = default_parameters.find(param_name);
 		if (it != default_parameters.end()) {
 			param_string += " := " + it->second->ToString();
 		}
-		param_strings.push_back(std::move(param_string));
+		param_strings.emplace_back(std::move(param_string));
 	}
 	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
 }

@@ -69,7 +69,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		}
 		D_ASSERT(names.size() == types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
-			columns.emplace_back(names[i], types[i]);
+			columns.emplace_back(Identifier(names[i]), types[i]);
 		}
 	} else {
 		if (csv_options.auto_detect) {
@@ -79,12 +79,12 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
 			                                    names, multi_file_list);
 			for (idx_t i = 0; i < return_types.size(); i++) {
-				columns.emplace_back(names[i], return_types[i]);
+				columns.emplace_back(Identifier(names[i]), return_types[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
 				D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
-				columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
+				columns.emplace_back(Identifier(csv_options.name_list[i]), csv_options.sql_type_list[i]);
 			}
 		}
 		// After sniffing we can consider these set, so they are exported as named parameters

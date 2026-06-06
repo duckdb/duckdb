@@ -93,7 +93,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!args[i].GetExpression().IsScalar()) {
 				break;
 			}
-			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias().GetName());
+			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias().GetIdentifierName());
 			BindChild(args[i].GetExpressionMutable(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
@@ -206,7 +206,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->ChildMutable() = std::move(unnest_expr);
-		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias().GetName();
+		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias().GetIdentifierName();
 
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);

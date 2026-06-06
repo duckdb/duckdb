@@ -94,12 +94,12 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 
 void ColumnDataRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(200, "expected_names", expected_names);
 	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
 }
 
 unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
-	auto expected_names = deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names");
+	auto expected_names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "expected_names");
 	auto collection =
 	    deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result =
@@ -118,14 +118,14 @@ unique_ptr<TableRef> EmptyTableRef::Deserialize(Deserializer &deserializer) {
 
 void ExpressionListRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(200, "expected_names", expected_names);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expected_types", expected_types);
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", values);
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExpressionListRef>(new ExpressionListRef());
-	deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names", result->expected_names);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "expected_names", result->expected_names);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "expected_types", result->expected_types);
 	deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", result->values);
 	return std::move(result);

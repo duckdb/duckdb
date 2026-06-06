@@ -281,7 +281,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "duckdb::Identifier"
       },
       {
         "id": 201,

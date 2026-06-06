@@ -23,9 +23,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
-                                                                   const string &field_name) {
+                                                                   const Identifier &field_name) {
 	ColumnQualifier qualifier(binder);
-	return qualifier.CreateStructExtract(std::move(base), field_name);
+	return qualifier.CreateStructExtract(std::move(base), Identifier(field_name));
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
@@ -74,7 +74,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 				return alias_result;
 			}
 
-			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName().GetIdentifierName());
 			if (value_function) {
 				return BindExpression(value_function, depth);
 			}
@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
-	ref.name = col_ref.ColumnNames().back().GetName();
+	ref.name = col_ref.ColumnNames().back().GetIdentifierName();
 	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;

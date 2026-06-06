@@ -20,7 +20,7 @@ string ExpressionListRef::ToString() const {
 		result += ")";
 	}
 	result += ")";
-	return BaseToString(result, StringsToIdentifiers(expected_names));
+	return BaseToString(result, expected_names);
 }
 
 bool ExpressionListRef::Equals(const TableRef &other_p) const {

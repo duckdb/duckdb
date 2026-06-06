@@ -38,12 +38,12 @@ BinderException BinderException::NoMatchingFunction(const Identifier &catalog_na
 	for (auto &candidate : candidates) {
 		candidate_str += "\t" + candidate + "\n";
 	}
-	extra_info["name"] = name.GetName();
+	extra_info["name"] = name.GetIdentifierName();
 	if (!catalog_name.empty()) {
-		extra_info["catalog"] = catalog_name.GetName();
+		extra_info["catalog"] = catalog_name.GetIdentifierName();
 	}
 	if (!schema_name.empty()) {
-		extra_info["schema"] = schema_name.GetName();
+		extra_info["schema"] = schema_name.GetIdentifierName();
 	}
 	extra_info["call"] = call_str;
 	if (!candidates.empty()) {

@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 84d44d5..60f830f 100644
+index 84d44d5..83e7b75 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
@@ -10,10 +10,10 @@ index 84d44d5..60f830f 100644
 -			    entry.name.find("fuzz_all_functions") == std::string::npos &&
 -			    entry.name.find("reduce_sql_statement") == std::string::npos &&
 -			    entry.name.find("sqlsmith") == std::string::npos) {
-+			if (entry.name.GetName().find("fuzzyduck") == std::string::npos &&
-+			    entry.name.GetName().find("fuzz_all_functions") == std::string::npos &&
-+			    entry.name.GetName().find("reduce_sql_statement") == std::string::npos &&
-+			    entry.name.GetName().find("sqlsmith") == std::string::npos) {
++			if (entry.name.GetIdentifierName().find("fuzzyduck") == std::string::npos &&
++			    entry.name.GetIdentifierName().find("fuzz_all_functions") == std::string::npos &&
++			    entry.name.GetIdentifierName().find("reduce_sql_statement") == std::string::npos &&
++			    entry.name.GetIdentifierName().find("sqlsmith") == std::string::npos) {
  				result->table_functions.push_back(entry);
  			}
  		});
@@ -34,7 +34,7 @@ index 84d44d5..60f830f 100644
  	auto &st_name = *state->attached_databases[RandomValue(state->attached_databases.size())];
  	auto name = st_name.name;
 -	return name;
-+	return name.GetName();
++	return name.GetIdentifierName();
  }
  
  //===--------------------------------------------------------------------===//
@@ -56,7 +56,7 @@ index 84d44d5..60f830f 100644
  		idx_t num_enums = RandomValue(10);
  		auto Enum_Vector = Vector(LogicalType::VARCHAR, num_enums);
  		for (idx_t i = 0; i < num_enums; i++) {
-@@ -260,9 +260,9 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+@@ -260,15 +260,15 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
  	}
  	case 1: {
  		auto info = make_uniq<CreateTableInfo>();
@@ -69,6 +69,13 @@ index 84d44d5..60f830f 100644
  		if (RandomPercentage(50)) {
  			info->query = GenerateSelect();
  		} else {
+ 			idx_t num_cols = RandomValue(1000);
+ 			for (idx_t i = 0; i < num_cols; i++) {
+-				info->columns.AddColumn(ColumnDefinition(GenerateIdentifier(), GenerateLogicalType()));
++				info->columns.AddColumn(ColumnDefinition(Identifier(GenerateIdentifier()), GenerateLogicalType()));
+ 			}
+ 		}
+ 		// TODO: add constraints to the columns (primary keys etc.);
 @@ -276,14 +276,14 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
  	}
  	case 2: {
@@ -87,9 +94,12 @@ index 84d44d5..60f830f 100644
  		info->query = GenerateSelect();
  		// TODO: add support for aliases in the view.
  		return std::move(info);
-@@ -307,7 +307,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
+@@ -305,9 +305,9 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
+ 		auto cte = make_uniq<CommonTableExpressionInfo>();
+ 		cte->query_node = std::move(unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect())->node);
  		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
- 			cte->aliases.push_back(GenerateIdentifier());
+-			cte->aliases.push_back(GenerateIdentifier());
++			cte->aliases.push_back(Identifier(GenerateIdentifier()));
  		}
 -		node.cte_map.map[GenerateTableIdentifier()] = std::move(cte);
 +		node.cte_map.map[Identifier(GenerateTableIdentifier())] = std::move(cte);
@@ -158,7 +168,7 @@ index 84d44d5..60f830f 100644
  		auto offset = RandomValue(scalar_entry.functions.Size());
  		auto actual_function = scalar_entry.functions.GetFunctionByOffset(offset);
 -		name = scalar_entry.name;
-+		name = scalar_entry.name.GetName();
++		name = scalar_entry.name.GetIdentifierName();
  		for (auto &arg : actual_function.GetSignature().GetParameters()) {
  			arguments.push_back(arg.GetType());
  		}
@@ -167,7 +177,7 @@ index 84d44d5..60f830f 100644
  		    aggregate_entry.functions.GetFunctionByOffset(RandomValue(aggregate_entry.functions.Size()));
  
 -		name = aggregate_entry.name;
-+		name = aggregate_entry.name.GetName();
++		name = aggregate_entry.name.GetIdentifierName();
  		min_parameters = actual_function.GetSignature().GetParameterCount();
  		max_parameters = min_parameters;
  		if (actual_function.GetVarArgs().id() != LogicalTypeId::INVALID) {
@@ -176,7 +186,7 @@ index 84d44d5..60f830f 100644
  	case CatalogType::MACRO_ENTRY: {
  		auto &macro_entry = function.Cast<MacroCatalogEntry>();
 -		name = macro_entry.name;
-+		name = macro_entry.name.GetName();
++		name = macro_entry.name.GetIdentifierName();
  		idx_t macro_idx = RandomValue(macro_entry.macros.size());
  		min_parameters = macro_entry.macros[macro_idx]->parameters.size();
  		max_parameters = min_parameters;
@@ -195,7 +205,7 @@ index 84d44d5..60f830f 100644
  	if (function) {
  		type = ExpressionType::WINDOW_AGGREGATE;
 -		name = function->name;
-+		name = function->name.GetName();
++		name = function->name.GetIdentifierName();
  		min_parameters = function->GetSignature().GetParameterCount();
  		max_parameters = min_parameters;
  	} else {
@@ -222,7 +232,7 @@ index 84d44d5..60f830f 100644
  	auto node = make_uniq<SelectNode>();
  
 -	bool always_null = FunctionArgumentsAlwaysNull(base_function.GetName());
-+	bool always_null = FunctionArgumentsAlwaysNull(base_function.GetName().GetName());
++	bool always_null = FunctionArgumentsAlwaysNull(base_function.GetName().GetIdentifierName());
  
  	vector<unique_ptr<ParsedExpression>> children;
  	for (auto &param : base_function.GetSignature().GetParameters()) {
@@ -240,7 +250,7 @@ index 84d44d5..60f830f 100644
  	auto node = make_uniq<SelectNode>();
  
 -	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
-+	bool always_null = FunctionArgumentsAlwaysNull(base_function.name.GetName());
++	bool always_null = FunctionArgumentsAlwaysNull(base_function.name.GetIdentifierName());
  
  	vector<unique_ptr<ParsedExpression>> children;
  	vector<unique_ptr<ParsedExpression>> test_vector_types;

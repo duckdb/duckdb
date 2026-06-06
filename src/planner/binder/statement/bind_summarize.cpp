@@ -22,7 +22,7 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	return std::move(unnest_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name) {
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
 	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
@@ -30,7 +30,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggre
 	return std::move(cast_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
                                                              const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
@@ -55,7 +55,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &
 	return std::move(binary_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_name) {
+static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(Identifier column_name) {
 	auto count_star = make_uniq<CastExpression>(LogicalType::DOUBLE, SummarizeCreateCountStar());
 	auto count =
 	    make_uniq<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", std::move(column_name)));
@@ -82,7 +82,7 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	if (ref.query) {
 		query = std::move(ref.query);
 	} else {
-		auto table_name = QualifiedName::Parse(ref.table_name.GetName());
+		auto table_name = QualifiedName::Parse(ref.table_name.GetIdentifierName());
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(make_uniq<StarExpression>());
 		auto basetableref = make_uniq<BaseTableRef>();
@@ -142,7 +142,7 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select), "summarize_tbl");
-	subquery_ref->column_name_alias = StringsToIdentifiers(plan.names);
+	subquery_ref->column_name_alias = plan.names;
 
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(SummarizeWrapUnnest(name_children, "column_name"));

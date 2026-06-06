@@ -239,7 +239,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
 	case ConstraintType::UNIQUE: {
-		return BindUniqueConstraint(constraint, table.GetName(), columns);
+		return BindUniqueConstraint(constraint, table.GetIdentifierName(), columns);
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		return BindForeignKey(constraint);
@@ -265,7 +265,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
-	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
+	binder->bind_context.AddGenericBinding(table_index, base.table, StringsToIdentifiers(names), types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
@@ -367,7 +367,7 @@ static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr,
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
-		                                                               if (gcols.count(name)) {
+		                                                               if (gcols.count(name.GetIdentifierName())) {
 			                                                               contains_gcol = true;
 			                                                               return;
 		                                                               }
@@ -380,7 +380,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.Name().GetName());
+		generated_columns.insert(col.Name().GetIdentifierName());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -409,7 +409,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			auto &constraint = constr->Cast<UniqueConstraint>();
 			if (!constraint.HasIndex()) {
 				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col.GetName())) {
+					if (generated_columns.count(col.GetIdentifierName())) {
 						return true;
 					}
 				}
@@ -438,7 +438,7 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 	D_ASSERT(!names.empty());
 	for (auto &name : names) {
 		if (!columns.ColumnExists(name)) {
-			throw BinderException("column \"%s\" named in key does not exist", name.GetName());
+			throw BinderException("column \"%s\" named in key does not exist", name.GetIdentifierName());
 		}
 		auto &column = columns.GetColumn(name);
 		if (column.Generated()) {
@@ -505,7 +505,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		// no unique constraint or primary key
 		string search_term = find_primary_key ? "primary key" : "primary key or unique constraint";
 		throw BinderException("Failed to create foreign key: there is no %s for referenced table \"%s\"", search_term,
-		                      fk.info.table.GetName());
+		                      fk.info.table.GetIdentifierName());
 	}
 	// check if all the columns exist
 	for (auto &name : fk.pk_columns) {
@@ -513,13 +513,13 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (!found) {
 			throw BinderException(
 			    "Failed to create foreign key: referenced table \"%s\" does not have a column named \"%s\"",
-			    fk.info.table.GetName(), name);
+			    fk.info.table.GetIdentifierName(), name);
 		}
 	}
 	auto fk_names = StringUtil::Join(IdentifiersToStrings(fk.pk_columns), ",");
 	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
 	                      "constraint on the columns %s",
-	                      fk.info.table.GetName(), fk_names);
+	                      fk.info.table.GetIdentifierName(), fk_names);
 }
 
 static void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk) {
@@ -568,7 +568,8 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		// created, so FK references work for external catalogs (not just the default).
 		Identifier fk_catalog =
 		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
-		string fk_schema = fk.info.schema.empty() ? schema.name.GetName() : fk.info.schema.GetName();
+		string fk_schema =
+		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
 		auto table_entry = entry_retriever.GetEntry(Identifier(fk_catalog), Identifier(fk_schema), table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
@@ -638,12 +639,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			} else if (target_col_names.size() < sql_types.size()) {
 				// filled the target_col_names with the name of query names
 				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
-					target_col_names.push_back(names[i]);
+					target_col_names.emplace_back(names[i]);
 				}
 			}
 			ColumnList new_columns;
 			for (idx_t i = 0; i < target_col_names.size(); i++) {
-				new_columns.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+				new_columns.AddColumn(ColumnDefinition(Identifier(target_col_names[i]), sql_types[i]));
 			}
 			base.columns = std::move(new_columns);
 		} else {
@@ -696,7 +697,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();
 			auto &schema_name = schema.name;
-			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetName(), schema_name.GetName());
+			BindDefaultValues(base.columns, bound_defaults, catalog_name.GetIdentifierName(),
+			                  schema_name.GetIdentifierName());
 		}
 	}
 

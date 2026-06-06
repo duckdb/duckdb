@@ -104,7 +104,7 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(ClientContext &context, const Ide
 Catalog &Catalog::GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name) {
 	auto catalog = Catalog::GetCatalogEntry(retriever, catalog_name);
 	if (!catalog) {
-		throw BinderException("Catalog \"%s\" does not exist!", catalog_name.GetName());
+		throw BinderException("Catalog \"%s\" does not exist!", catalog_name.GetIdentifierName());
 	}
 	return *catalog;
 }
@@ -354,7 +354,7 @@ unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, const string
 }
 
 string Catalog::GetConnectDisplay() {
-	return GetAttached().GetName().GetName();
+	return GetAttached().GetName().GetIdentifierName();
 }
 
 //===--------------------------------------------------------------------===//
@@ -386,7 +386,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo lookup_info(info.type, info.name);
-	auto lookup = LookupEntry(retriever, info.schema.GetName(), lookup_info, info.if_not_found);
+	auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
 	if (!lookup.Found()) {
 		return;
 	}
@@ -830,7 +830,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
-			auto result = TryLookupEntryInternal(transaction, candidate_schema.GetName(), lookup_info);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema.GetIdentifierName(), lookup_info);
 			if (result.Found()) {
 				return result;
 			}
@@ -903,7 +903,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	CatalogEntryLookup result;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
-		result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema.GetName(), lookup.lookup_info);
+		result =
+		    lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema.GetIdentifierName(), lookup.lookup_info);
 		if (result.Found()) {
 			break;
 		}
@@ -1054,13 +1055,13 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const Identifier &schema_name,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
-	auto lookup_entry = TryLookupEntry(retriever, schema_name.GetName(), lookup_info, if_not_found);
+	auto lookup_entry = TryLookupEntry(retriever, schema_name.GetIdentifierName(), lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
 		                                    lookup_info.GetEntryName())) {
-			lookup_entry = TryLookupEntry(retriever, schema_name.GetName(), lookup_info, if_not_found);
+			lookup_entry = TryLookupEntry(retriever, schema_name.GetIdentifierName(), lookup_info, if_not_found);
 		}
 	}
 
@@ -1135,7 +1136,7 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
 	// Catalog has not been found.
 	if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 		throw CatalogException(schema_lookup.GetErrorContext(), "Catalog with name %s does not exist!",
-		                       catalog_name.GetName());
+		                       catalog_name.GetIdentifierName());
 	}
 	return nullptr;
 }
@@ -1227,7 +1228,7 @@ void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		CatalogEntryRetriever retriever(transaction.GetContext());
 		EntryLookupInfo lookup_info(info.GetCatalogType(), info.name);
-		auto lookup = LookupEntry(retriever, info.schema.GetName(), lookup_info, info.if_not_found);
+		auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
 		if (!lookup.Found()) {
 			return;
 		}
@@ -1279,8 +1280,8 @@ bool Catalog::HasDefaultTable() const {
 }
 
 void Catalog::SetDefaultTable(const Identifier &schema, const Identifier &name) {
-	default_table = name.GetName();
-	default_table_schema = schema.GetName();
+	default_table = name.GetIdentifierName();
+	default_table_schema = schema.GetIdentifierName();
 }
 
 string Catalog::GetDefaultTable() const {

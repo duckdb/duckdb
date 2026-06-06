@@ -95,7 +95,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	// of the other formats. WRITE_PARTITION_COLUMNS keeps them inside the JSON object instead.
 	vector<string> partition_columns;
 	bool write_partition_columns = false;
-	vector<string> original_column_names;
+	vector<Identifier> original_column_names;
 	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
 	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
 	for (const auto &kv : copy_info.options) {
@@ -129,12 +129,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				auto node_copy = copy_info.select_statement->Copy();
 				auto child_binder = Binder::CreateBinder(binder.context, &binder);
 				auto bound = child_binder->Bind(*node_copy);
-				original_column_names = std::move(bound.names);
+				original_column_names = bound.names;
 			}
 			auto converted = ConvertVectorToValue(vector<Value>(kv.second));
 			auto partition_indices = ParseColumnsOrdered(converted, original_column_names, loption);
 			for (auto &partition_index : partition_indices) {
-				partition_columns.push_back(original_column_names[partition_index]);
+				partition_columns.emplace_back(original_column_names[partition_index]);
 			}
 			vector<Value> csv_partition_columns;
 			for (const auto &partition_column : partition_columns) {

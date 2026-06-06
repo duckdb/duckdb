@@ -38,7 +38,7 @@ void ColumnList::Finalize() {
 void ColumnList::AddToNameMap(ColumnDefinition &col) {
 	if (allow_duplicate_names) {
 		idx_t index = 1;
-		string base_name = col.Name().GetName();
+		string base_name = col.Name().GetIdentifierName();
 		while (name_map.find(col.Name()) != name_map.end()) {
 			col.SetName(Identifier(base_name + "_" + to_string(index++)));
 		}
@@ -69,7 +69,7 @@ ColumnDefinition &ColumnList::GetColumnMutable(PhysicalIndex physical) {
 ColumnDefinition &ColumnList::GetColumnMutable(const Identifier &name) {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
-		throw InternalException("Column with name \"%s\" does not exist", name.GetName());
+		throw InternalException("Column with name \"%s\" does not exist", name.GetIdentifierName());
 	}
 	auto logical_index = entry->second;
 	D_ASSERT(logical_index < columns.size());

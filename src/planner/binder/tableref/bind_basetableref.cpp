@@ -50,7 +50,8 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		return BoundStatement();
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.catalog_name.GetName(), ref.schema_name.GetName(), ref.table_name.GetName());
+		ReplacementScanInput input(ref.catalog_name.GetIdentifierName(), ref.schema_name.GetIdentifierName(),
+		                           ref.table_name.GetIdentifierName());
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;
@@ -134,8 +135,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto index = GenerateTableIndex();
 
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		auto names = BindContext::AliasColumnNames(alias, IdentifiersToStrings(ctebinding->GetColumnNames()),
-		                                           ref.column_name_alias);
+		auto names = BindContext::AliasColumnNames(alias, ctebinding->GetColumnNames(), ref.column_name_alias);
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
@@ -144,8 +144,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		BoundStatement result;
 		result.types = ctebinding->GetColumnTypes();
 		result.names = names;
-		result.plan =
-		    make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, std::move(names), is_recurring);
+		result.plan = make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, IdentifiersToStrings(names),
+		                                       is_recurring);
 		return result;
 	}
 
@@ -164,14 +164,14 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			if (GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 				AddTableName(ref.ToString());
 			} else {
-				AddTableName(ref.table_name.GetName());
+				AddTableName(ref.table_name.GetIdentifierName());
 			}
 
 			// add a bind context entry
 			auto table_index = GenerateTableIndex();
 			auto ref_alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			vector<LogicalType> types {LogicalType::INTEGER};
-			vector<string> names {"__dummy_col" + to_string(table_index.index)};
+			vector<Identifier> names {Identifier("__dummy_col" + to_string(table_index.index))};
 			bind_context.AddGenericBinding(table_index, ref_alias, names, types);
 
 			BoundStatement result;
@@ -190,8 +190,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(ref.catalog_name.GetName(), ref.schema_name.GetName(),
-		                                              ref.table_name.GetName());
+		auto full_path =
+		    ReplacementScan::GetFullPath(ref.catalog_name.GetIdentifierName(), ref.schema_name.GetIdentifierName(),
+		                                 ref.table_name.GetIdentifierName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -217,7 +218,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			throw BinderException(error_context,
 			                      "Circular reference to CTE \"%s\", use WITH RECURSIVE to "
 			                      "use recursive CTEs.",
-			                      ref.table_name.GetName());
+			                      ref.table_name.GetIdentifierName());
 		}
 		// could not find an alternative: bind again to get the error
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
@@ -241,7 +242,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
-		vector<string> table_names;
+		vector<Identifier> table_names;
 		vector<TableColumnType> table_categories;
 
 		vector<LogicalType> return_types;
@@ -291,7 +292,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		subquery.alias = ref.alias;
 		// construct view names by taking the view aliases
-		subquery.column_name_alias = StringsToIdentifiers(view_catalog_entry.aliases);
+		subquery.column_name_alias = view_catalog_entry.aliases;
 		// now apply the subquery column aliases
 		for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
 			if (i < subquery.column_name_alias.size()) {

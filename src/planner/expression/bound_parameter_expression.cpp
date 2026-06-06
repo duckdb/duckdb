@@ -5,22 +5,22 @@
 
 namespace duckdb {
 
-BoundParameterExpression::BoundParameterExpression(const string &identifier)
+BoundParameterExpression::BoundParameterExpression(const duckdb::Identifier &identifier)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER,
                  LogicalType(LogicalTypeId::UNKNOWN)),
       identifier(identifier) {
 }
 
-BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier,
-                                                   LogicalType return_type,
+BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set,
+                                                   duckdb::Identifier identifier, LogicalType return_type,
                                                    shared_ptr<BoundParameterData> parameter_data)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
       identifier(std::move(identifier)) {
 	// check if we have already deserialized a parameter with this number
-	auto entry = global_parameter_set.find(this->identifier);
+	auto entry = global_parameter_set.find(this->identifier.GetIdentifierName());
 	if (entry == global_parameter_set.end()) {
 		// we have not - store the entry we deserialized from this parameter expression
-		global_parameter_set[this->identifier] = parameter_data;
+		global_parameter_set[this->identifier.GetIdentifierName()] = parameter_data;
 	} else {
 		// we have! use the previously deserialized entry
 		parameter_data = entry->second;
@@ -64,7 +64,7 @@ bool BoundParameterExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<BoundParameterExpression>();
-	return StringUtil::CIEquals(identifier, other.identifier);
+	return identifier == other.identifier;
 }
 
 hash_t BoundParameterExpression::Hash() const {

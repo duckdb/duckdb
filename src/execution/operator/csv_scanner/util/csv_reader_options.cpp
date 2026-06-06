@@ -680,7 +680,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_csv requires a type specification as string");
 			}
-			parsed_types_per_column[name.GetName()] = i;
+			parsed_types_per_column[name.GetIdentifierName()] = i;
 			parsed_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 		}
 		if (parsed_names.empty()) {
@@ -772,7 +772,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 					throw BinderException("read_csv %s requires a type specification as string", key);
 				}
 				sql_type_names.push_back(StringValue::Get(val));
-				parsed_types_per_column[name.GetName()] = i;
+				parsed_types_per_column[name.GetIdentifierName()] = i;
 			}
 		} else {
 			auto &list_child = ListType::GetChildType(child_type);

@@ -60,7 +60,8 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) 
 			return result;
 		}
 	}
-	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found", name.GetName());
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found",
+	                        name.GetIdentifierName());
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
@@ -933,7 +934,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
 			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name().GetName());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name().GetIdentifierName());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -1272,7 +1273,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
-	log.WriteSetTable(info->schema.GetName(), info->table.GetName());
+	log.WriteSetTable(info->schema.GetIdentifierName(), info->table.GetIdentifierName());
 	if (!commit_state) {
 		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 		return;
@@ -1677,7 +1678,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 				if (column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
-					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name().GetName());
+					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name().GetIdentifierName());
 					break;
 				}
 			}

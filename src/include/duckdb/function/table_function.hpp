@@ -377,7 +377,7 @@ public:
 	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -385,7 +385,7 @@ public:
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 	// Overloads taking std::nullptr
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API

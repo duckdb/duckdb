@@ -35,7 +35,7 @@ public:
 public:
 	//! Returns a table reference to the appended data.
 	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
-	                                                  const vector<string> &expected_names);
+	                                                  const vector<Identifier> &expected_names);
 	//! Parses the statement to append data.
 	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
 	                                               const string &table_name);

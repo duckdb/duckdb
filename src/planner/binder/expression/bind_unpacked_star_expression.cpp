@@ -31,8 +31,8 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 				if (new_expr->GetAlias().empty()) {
 					new_expr->SetAlias(Identifier(colref.GetColumnName()));
 				} else {
-					new_expr->SetAlias(Identifier(
-					    Binder::ReplaceColumnsAlias(new_expr->GetAlias().GetName(), colref.GetColumnName(), regex)));
+					new_expr->SetAlias(Identifier(Binder::ReplaceColumnsAlias(
+					    new_expr->GetAlias().GetIdentifierName(), colref.GetColumnName().GetIdentifierName(), regex)));
 				}
 			}
 		}

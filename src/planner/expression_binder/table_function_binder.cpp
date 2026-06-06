@@ -23,7 +23,8 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		auto lambda_ref =
+		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
@@ -31,7 +32,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.ColumnNames()[0].GetName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+	} else if (col_ref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
 	           binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 		throw ParameterNotResolvedException();
 	}
@@ -52,7 +53,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	}
 
 	if (accept_sql_value_functions) {
-		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back().GetName());
+		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back().GetIdentifierName());
 		if (value_function) {
 			return BindExpression(value_function, depth, root_expression);
 		}

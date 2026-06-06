@@ -154,7 +154,7 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		result.referenced_columns = fk.pk_columns;
-		result.referenced_table = fk.info.table.GetName();
+		result.referenced_table = fk.info.table.GetIdentifierName();
 		result.column_names = fk.fk_columns;
 		break;
 	}
@@ -179,10 +179,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
 	string result = table.name + "_";
 	for (auto &col : info.column_names) {
-		result += StringUtil::Lower(col.GetName()) + "_";
+		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
 	}
 	for (auto &col : info.referenced_columns) {
-		result += StringUtil::Lower(col.GetName()) + "_";
+		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
 	}
 	switch (constraint.type) {
 	case ConstraintType::CHECK:

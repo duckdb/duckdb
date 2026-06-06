@@ -117,7 +117,7 @@ public:
 	virtual bool HasParameter() const = 0;
 
 	//! Get the name of the expression
-	virtual string GetName() const;
+	virtual Identifier GetName() const;
 	//! Convert the Expression to a String
 	virtual string ToString() const = 0;
 	//! Print the expression to stdout

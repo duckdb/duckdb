@@ -182,7 +182,7 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
-		if (!FunctionMatcher::Match(function, expr.Function().GetName().GetName())) {
+		if (!FunctionMatcher::Match(function, expr.Function().GetName().GetIdentifierName())) {
 			return false;
 		}
 		if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {

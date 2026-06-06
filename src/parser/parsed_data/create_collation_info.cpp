@@ -11,7 +11,8 @@ CreateCollationInfo::CreateCollationInfo(string name_p, ScalarFunction function_
 }
 
 unique_ptr<CreateInfo> CreateCollationInfo::Copy() const {
-	auto result = make_uniq<CreateCollationInfo>(name.GetName(), function, combinable, not_required_for_equality);
+	auto result =
+	    make_uniq<CreateCollationInfo>(name.GetIdentifierName(), function, combinable, not_required_for_equality);
 	CopyProperties(*result);
 	return std::move(result);
 }

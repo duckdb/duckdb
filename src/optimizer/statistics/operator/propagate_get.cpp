@@ -23,7 +23,7 @@ static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, str
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
 		index = bound_ref.Index();
-		alias = bound_ref.GetAlias().GetName();
+		alias = bound_ref.GetAlias().GetIdentifierName();
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(*expr,

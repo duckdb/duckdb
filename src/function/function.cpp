@@ -45,16 +45,16 @@ bool FunctionData::SupportStatementCache() const {
 	return true;
 }
 
-Function::Function(string name_p) : name(std::move(name_p)) {
+Function::Function(Identifier name_p) : name(std::move(name_p)) {
 }
 Function::~Function() {
 }
 
-SimpleFunction::SimpleFunction(string name_p, FunctionSignature signature_p)
+SimpleFunction::SimpleFunction(Identifier name_p, FunctionSignature signature_p)
     : Function(std::move(name_p)), signature(std::move(signature_p)) {
 }
 
-SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
+SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
     : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
 }
@@ -97,7 +97,7 @@ string SimpleFunction::ToString() const {
 	return name + signature.ToString();
 }
 
-SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
+SimpleNamedParameterFunction::SimpleNamedParameterFunction(Identifier name_p, vector<LogicalType> arguments_p,
                                                            LogicalType varargs_p)
     : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
 }

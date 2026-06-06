@@ -4,7 +4,7 @@
 namespace duckdb {
 
 CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunction function)
-    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(function.name.GetName()) {
+    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(function.name.GetIdentifierName()) {
 	name = function.name;
 	functions.AddFunction(std::move(function));
 	internal = true;
@@ -19,7 +19,7 @@ CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunctionSet set)
 }
 
 unique_ptr<CreateInfo> CreateTableFunctionInfo::Copy() const {
-	TableFunctionSet set(name.GetName());
+	TableFunctionSet set(name.GetIdentifierName());
 	set.functions = functions.functions;
 	auto result = make_uniq<CreateTableFunctionInfo>(std::move(set));
 	CopyFunctionProperties(*result);

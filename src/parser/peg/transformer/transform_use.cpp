@@ -8,7 +8,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
                                                                       const QualifiedName &use_target) {
 	string value_str;
 	if (IsInvalidSchema(use_target.schema)) {
-		value_str = SQLIdentifier::ToString(use_target.name.GetName());
+		value_str = SQLIdentifier::ToString(use_target.name.GetIdentifierName());
 	} else {
 		value_str = SQLIdentifier(use_target.schema) + "." + SQLIdentifier(use_target.name);
 	}

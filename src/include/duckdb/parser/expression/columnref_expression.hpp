@@ -39,13 +39,13 @@ public:
 	}
 
 	bool IsQualified() const;
-	const string &GetColumnName() const;
-	const string &GetTableName() const;
+	const Identifier &GetColumnName() const;
+	const Identifier &GetTableName() const;
 	bool IsScalar() const override {
 		return false;
 	}
 
-	string GetName() const override;
+	Identifier GetName() const override;
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;

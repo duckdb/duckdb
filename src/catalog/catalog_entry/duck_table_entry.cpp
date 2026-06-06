@@ -112,9 +112,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 
 		column_defs.push_back(col_def.Copy());
 	}
-	storage =
-	    make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
-	                               schema.name.GetName(), name.GetName(), std::move(column_defs), std::move(info.data));
+	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
+	                                     schema.name.GetIdentifierName(), name.GetIdentifierName(),
+	                                     std::move(column_defs), std::move(info.data));
 
 	// Create the unique indexes for the UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints.
 	idx_t indexes_idx = 0;
@@ -450,7 +450,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 		// When replaying WAL, only Bind DEFAULT for added Column
 		auto &catalog_name = schema.ParentCatalog().GetName();
 		auto &schema_name = schema.name;
-		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name.GetName(), schema_name.GetName());
+		binder->BindDefaultValue(info.new_column, bound_defaults, catalog_name.GetIdentifierName(),
+		                         schema_name.GetIdentifierName());
 	}
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
@@ -515,7 +516,7 @@ Value ConstructMapping(const string &name, const LogicalType &type) {
 	child_list_t<Value> child_mapping;
 	auto child_types = GetChildList(type);
 	for (auto &entry : child_types) {
-		auto mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
+		auto mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
 		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
@@ -564,7 +565,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 		} else {
 			default_value = make_uniq<ConstantExpression>(Value(new_field.Type()));
 		}
-		result.default_value = PackExpression(std::move(default_value), new_field.Name().GetName());
+		result.default_value = PackExpression(std::move(default_value), new_field.Name().GetIdentifierName());
 		return result;
 	}
 
@@ -582,7 +583,8 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 			if (type.id() == LogicalTypeId::LIST) {
 				result.default_value = PackExpression(std::move(child_res.default_value), "list");
 			} else {
-				result.default_value = PackExpression(std::move(child_res.default_value), entry.first.GetName());
+				result.default_value =
+				    PackExpression(std::move(child_res.default_value), entry.first.GetIdentifierName());
 			}
 			found = true;
 			break;
@@ -611,7 +613,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
 	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
-	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name().GetName(), col.Type())));
+	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name().GetIdentifierName(), col.Type())));
 	D_ASSERT(res.default_value);
 	children.push_back(std::move(res.default_value));
 
@@ -803,12 +805,14 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 			if (last_entry) {
 				if (type.id() != LogicalTypeId::STRUCT) {
 					throw CatalogException("Cannot drop field '%s' from column '%s' - it's not a struct",
-					                       column_path.back().GetName(), column_path.front().GetName());
+					                       column_path.back().GetIdentifierName(),
+					                       column_path.front().GetIdentifierName());
 				}
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
 					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
-					                       column_path.back().GetName(), column_path.front().GetName());
+					                       column_path.back().GetIdentifierName(),
+					                       column_path.front().GetIdentifierName());
 				}
 				continue;
 			} else {
@@ -823,7 +827,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
+			mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
 			type_value = entry.second;
 		}
 
@@ -900,7 +904,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 				if (type.id() != LogicalTypeId::STRUCT) {
 					throw CatalogException(
 					    "Cannot rename field '%s' from column '%s' - can only rename fields inside a struct",
-					    column_path.back().GetName(), column_path.front().GetName());
+					    column_path.back().GetIdentifierName(), column_path.front().GetIdentifierName());
 				}
 				// we are renaming this entry
 				for (auto &sub_entry : child_types) {
@@ -911,7 +915,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 					}
 				}
 				field_name = Identifier(new_name);
-				mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
+				mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
 				type_value = entry.second;
 			} else {
 				// we are renaming a field in this entry - recurse
@@ -925,7 +929,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
+			mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
 			type_value = entry.second;
 		}
 		if (entry.second.IsNested()) {
@@ -953,7 +957,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 
 	// follow the path
 	auto &col = GetColumn(Identifier(info.column_path[0]));
-	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name.GetName(), 1);
+	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name.GetIdentifierName(), 1);
 	if (res.error.HasError()) {
 		res.error.Throw();
 	}
@@ -1249,7 +1253,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
 		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name.GetName());
+			auto index_name = unique.GetName(prev_table.name.GetIdentifierName());
 			names.insert(index_name);
 		}
 	}
@@ -1262,7 +1266,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		if (!unique.IsPrimaryKey()) {
 			continue;
 		}
-		auto index_name = unique.GetName(table.name.GetName());
+		auto index_name = unique.GetName(table.name.GetIdentifierName());
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(Identifier(index_name));
 		}

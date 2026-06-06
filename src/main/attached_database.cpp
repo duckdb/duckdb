@@ -148,7 +148,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
-	catalog = storage_extension->attach(storage_info, context, *this, name.GetName(), info, options);
+	catalog = storage_extension->attach(storage_info, context, *this, name.GetIdentifierName(), info, options);
 	stored_database_path = std::move(options.stored_database_path);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");

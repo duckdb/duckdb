@@ -83,7 +83,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 	// Evaluate all arguments to constant values
 	for (auto &child : input.children) {
-		string name = child->GetAlias().GetName();
+		string name = child->GetAlias().GetIdentifierName();
 		if (!child->IsFoldable()) {
 			throw BinderException("make_type function arguments must be constant expressions");
 		}

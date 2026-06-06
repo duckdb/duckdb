@@ -40,7 +40,7 @@ public:
 	}
 
 	bool IsScalar() const override;
-	string GetName() const override;
+	Identifier GetName() const override;
 	string ToString() const override;
 	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;

@@ -269,7 +269,7 @@ private:
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
-	DUCKDB_API explicit Function(string name);
+	DUCKDB_API explicit Function(Identifier name);
 	DUCKDB_API virtual ~Function();
 
 	//! The name of the function
@@ -324,8 +324,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	DUCKDB_API SimpleFunction(string name, FunctionSignature signature);
-	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
+	DUCKDB_API SimpleFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
@@ -365,7 +365,7 @@ public:
 
 class SimpleNamedParameterFunction : public Function {
 public:
-	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleNamedParameterFunction(Identifier name, vector<LogicalType> arguments,
 	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleNamedParameterFunction() override;
 

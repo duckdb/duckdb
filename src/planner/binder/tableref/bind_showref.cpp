@@ -143,15 +143,15 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	auto table_index = GenerateTableIndex();
 
 	BoundStatement result;
-	result.names = return_names;
+	result.names = StringsToIdentifiers(return_names);
 	result.types = return_types;
 	result.plan = make_uniq<LogicalColumnDataGet>(table_index, return_types, std::move(collection));
-	bind_context.AddGenericBinding(table_index, "__show_select", return_names, return_types);
+	bind_context.AddGenericBinding(table_index, "__show_select", StringsToIdentifiers(return_names), return_types);
 	return result;
 }
 
 BoundStatement Binder::BindShowTable(ShowRef &ref) {
-	auto lname = StringUtil::Lower(ref.table_name.GetName());
+	auto lname = StringUtil::Lower(ref.table_name.GetIdentifierName());
 
 	string sql;
 	if (lname == "\"databases\"") {
@@ -180,7 +180,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
-				                       catalog_name.GetName(), schema_name.GetName());
+				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 			}
 		} else if (catalog_name.empty() && !schema_name.empty()) {
 			// We have a schema name, use default catalog
@@ -190,16 +190,16 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
-				                       catalog_name.GetName(), schema_name.GetName());
+				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 			}
 		}
-		sql = PragmaShowTables(catalog_name.GetName(), schema_name.GetName());
+		sql = PragmaShowTables(catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {
 		sql = PragmaShowTablesExpanded();
 	} else {
-		sql = PragmaShow(ref.table_name.GetName());
+		sql = PragmaShow(ref.table_name.GetIdentifierName());
 	}
 	auto select = CreateViewInfo::ParseSelect(sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));

@@ -30,10 +30,10 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
-		auto entry_score = StringUtil::SimilarityRating(entry.name.GetName(), lookup_info.GetEntryName());
+		auto entry_score = StringUtil::SimilarityRating(entry.name.GetIdentifierName(), lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = entry.name.GetName();
+			result.name = entry.name.GetIdentifierName();
 		}
 	});
 	return result;

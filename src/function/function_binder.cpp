@@ -875,7 +875,7 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 
 	// Finally, substitute all template types in the bound function with their concrete types.
 	for (auto &templated_type : to_substitute) {
-		SubstituteTemplateType(templated_type, bindings, bound_function.GetName().GetName());
+		SubstituteTemplateType(templated_type, bindings, bound_function.GetName().GetIdentifierName());
 	}
 }
 
@@ -893,9 +893,9 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 // Verify that all template types are bound to concrete types.
 void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function) {
 	for (const auto &arg : bound_function.GetArguments()) {
-		VerifyTemplateType(arg, bound_function.GetName().GetName());
+		VerifyTemplateType(arg, bound_function.GetName().GetIdentifierName());
 	}
-	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName().GetName());
+	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName().GetIdentifierName());
 }
 
 // Drain all named argument and insert them in the correct position according to the function signature.
@@ -929,8 +929,8 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 		if (seen_names.count(name)) {
 			// This should also not really happen when invoked through SQL
-			throw BinderException(location, "Duplicate named argument '%s' in function call to '%s'", name.GetName(),
-			                      function.GetName());
+			throw BinderException(location, "Duplicate named argument '%s' in function call to '%s'",
+			                      name.GetIdentifierName(), function.GetName());
 		}
 
 		seen_names.insert(name);

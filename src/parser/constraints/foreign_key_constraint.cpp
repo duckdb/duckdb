@@ -26,10 +26,10 @@ string ForeignKeyConstraint::ToString() const {
 		}
 		base += ") REFERENCES ";
 		if (!info.schema.empty() && info.schema != DEFAULT_SCHEMA) {
-			base += info.schema.GetName();
+			base += info.schema.GetIdentifierName();
 			base += ".";
 		}
-		base += info.table.GetName();
+		base += info.table.GetIdentifierName();
 		if (!pk_columns.empty()) {
 			base += "(";
 

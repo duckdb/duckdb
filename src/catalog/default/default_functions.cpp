@@ -255,8 +255,8 @@ static bool DefaultFunctionMatches(const DefaultMacro &macro, const string &sche
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
-	auto schema = StringUtil::Lower(input_schema.GetName());
-	auto name = StringUtil::Lower(input_name.GetName());
+	auto schema = StringUtil::Lower(input_schema.GetIdentifierName());
+	auto name = StringUtil::Lower(input_name.GetIdentifierName());
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
 			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);

@@ -17,8 +17,9 @@ FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, co
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog)),
-      schema(std::move(schema)), function_name(StringUtil::Lower(function_name.GetName())), is_operator(is_operator),
-      distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)), export_state(export_state_p) {
+      schema(std::move(schema)), function_name(StringUtil::Lower(function_name.GetIdentifierName())),
+      is_operator(is_operator), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
+      export_state(export_state_p) {
 	arguments.reserve(children_p.size());
 	for (auto &child : children_p) {
 		arguments.emplace_back(std::move(child));
@@ -42,7 +43,7 @@ FunctionExpression::FunctionExpression(Identifier catalog_name, Identifier schem
                                        unique_ptr<OrderModifier> order_bys_p, bool distinct, bool is_operator,
                                        bool export_state)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog_name)),
-      schema(std::move(schema_name)), function_name(StringUtil::Lower(function_name.GetName())),
+      schema(std::move(schema_name)), function_name(StringUtil::Lower(function_name.GetIdentifierName())),
       is_operator(is_operator), arguments(std::move(children)), distinct(distinct), filter(std::move(filter)),
       order_bys(std::move(order_bys_p)), export_state(export_state) {
 	D_ASSERT(!function_name.empty());
@@ -63,14 +64,14 @@ string FunctionExpression::ToString() const {
 		// built-in operator
 		D_ASSERT(!distinct);
 		if (arguments.size() == 1) {
-			if (StringUtil::Contains(function_name.GetName(), "__postfix")) {
+			if (StringUtil::Contains(function_name.GetIdentifierName(), "__postfix")) {
 				return "((" + arguments[0].ToString() + ")" +
-				       StringUtil::Replace(function_name.GetName(), "__postfix", "") + ")";
+				       StringUtil::Replace(function_name.GetIdentifierName(), "__postfix", "") + ")";
 			}
-			return function_name.GetName() + "(" + arguments[0].ToString() + ")";
+			return function_name.GetIdentifierName() + "(" + arguments[0].ToString() + ")";
 		}
 		if (arguments.size() == 2) {
-			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name.GetName(),
+			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name.GetIdentifierName(),
 			                          arguments[1].ToString());
 		}
 	}
@@ -173,7 +174,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 		result->arguments.reserve(children.size());
 		for (auto &child : children) {
 			auto alias = child->GetAlias();
-			result->arguments.emplace_back(alias.GetName(), std::move(child));
+			result->arguments.emplace_back(alias.GetIdentifierName(), std::move(child));
 		}
 
 		// Mark this function expression as a legacy function call, so that the binder can handle it accordingly.

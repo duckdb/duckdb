@@ -19,8 +19,9 @@ SetColumnCommentInfo::SetColumnCommentInfo(string catalog, string schema, string
 }
 
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	auto result = make_uniq<SetColumnCommentInfo>(catalog.GetName(), schema.GetName(), name.GetName(),
-	                                              column_name.GetName(), comment_value, if_not_found);
+	auto result = make_uniq<SetColumnCommentInfo>(catalog.GetIdentifierName(), schema.GetIdentifierName(),
+	                                              name.GetIdentifierName(), column_name.GetIdentifierName(),
+	                                              comment_value, if_not_found);
 	result->type = type;
 	return std::move(result);
 }

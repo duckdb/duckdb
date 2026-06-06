@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-CopyFunction::CopyFunction(const string &name)
+CopyFunction::CopyFunction(const Identifier &name)
     : Function(name), plan(nullptr), copy_to_select(nullptr), copy_to_bind(nullptr), copy_options(nullptr),
       copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr), copy_to_get_written_statistics(nullptr),
       copy_to_sink(nullptr), copy_to_combine(nullptr), copy_to_finalize(nullptr), execution_mode(nullptr),

@@ -171,7 +171,7 @@
       {
         "id": 200,
         "name": "expected_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 201,
@@ -193,7 +193,7 @@
       {
         "id": 200,
         "name": "expected_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,

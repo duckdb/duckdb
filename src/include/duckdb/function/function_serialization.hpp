@@ -50,7 +50,8 @@ public:
 		                      schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name);
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name.GetName());
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		auto function = functions.functions.GetFunctionByArguments(
@@ -178,7 +179,8 @@ public:
 		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name.GetName());
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		const auto &function = functions.functions.GetFunctionByArguments(

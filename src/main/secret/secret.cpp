@@ -61,9 +61,10 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	result = result.substr(0, result.size() - 1);
 	result += ";";
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
-		result.append(it->first.GetName());
+		result.append(it->first.GetIdentifierName());
 		result.append("=");
-		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first.GetName()) != redact_keys.end()) {
+		if (mode == SecretDisplayType::REDACTED &&
+		    redact_keys.find(it->first.GetIdentifierName()) != redact_keys.end()) {
 			result.append("redacted");
 		} else {
 			result.append(it->second.ToString());
@@ -257,7 +258,7 @@ bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
 }
 
 void CreateSecretFunctionSet::AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict) {
-	if (ProviderExists(function.provider.GetName())) {
+	if (ProviderExists(function.provider.GetIdentifierName())) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw InternalException(
 			    "Attempted to override a Create Secret Function with OnCreateConflict::ERROR_ON_CONFLICT for: '%s'",

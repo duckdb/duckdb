@@ -649,7 +649,7 @@ void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<TableIndex>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
-	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(202, "ctename", ctename);
 	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize,
 	                                                    CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
@@ -658,7 +658,7 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	auto result = duckdb::unique_ptr<LogicalMaterializedCTE>(new LogicalMaterializedCTE());
 	deserializer.ReadPropertyWithDefault<TableIndex>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
-	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "ctename", result->ctename);
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize,
 	                                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
@@ -743,7 +743,7 @@ unique_ptr<LogicalOperator> LogicalProjection::Deserialize(Deserializer &deseria
 void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<bool>(200, "union_all", union_all);
-	serializer.WritePropertyWithDefault<string>(201, "ctename", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(201, "ctename", ctename);
 	serializer.WritePropertyWithDefault<TableIndex>(202, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(203, "column_count", column_count);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "key_targets", key_targets);
@@ -755,7 +755,7 @@ void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE());
 	deserializer.ReadPropertyWithDefault<bool>(200, "union_all", result->union_all);
-	deserializer.ReadPropertyWithDefault<string>(201, "ctename", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "ctename", result->ctename);
 	deserializer.ReadPropertyWithDefault<TableIndex>(202, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(203, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "key_targets", result->key_targets);
@@ -775,7 +775,7 @@ void LogicalReset::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer) {
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto scope = deserializer.ReadProperty<SetScope>(201, "scope");
-	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(name.GetName(), scope));
+	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(name.GetIdentifierName(), scope));
 	return std::move(result);
 }
 
@@ -801,7 +801,7 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(Deserializer &deserializer) 
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto value = deserializer.ReadProperty<Value>(201, "value");
 	auto scope = deserializer.ReadProperty<SetScope>(202, "scope");
-	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(name.GetName(), value, scope));
+	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(name.GetIdentifierName(), value, scope));
 	return std::move(result);
 }
 

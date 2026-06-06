@@ -94,7 +94,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			break;
 		}
 		if (entry->internal) {
-			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetName());
+			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
 		}
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {

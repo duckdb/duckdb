@@ -84,7 +84,7 @@ bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundFunctionExpression>();
-	if (!FunctionMatcher::Match(function, expr.Function().GetName().GetName())) {
+	if (!FunctionMatcher::Match(function, expr.Function().GetName().GetIdentifierName())) {
 		return false;
 	}
 	if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
@@ -98,7 +98,7 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
-	if (!FunctionMatcher::Match(function, expr.Function().GetName().GetName())) {
+	if (!FunctionMatcher::Match(function, expr.Function().GetName().GetIdentifierName())) {
 		return false;
 	}
 	// we should create matchers for these in the future

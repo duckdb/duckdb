@@ -30,7 +30,7 @@ RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEn
 }
 
 unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
-	return make_uniq<RenameDatabaseInfo>(catalog.GetName(), new_name.GetName(), if_not_found);
+	return make_uniq<RenameDatabaseInfo>(catalog.GetIdentifierName(), new_name.GetIdentifierName(), if_not_found);
 }
 
 string RenameDatabaseInfo::ToString() const {

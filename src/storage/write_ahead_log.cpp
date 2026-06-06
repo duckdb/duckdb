@@ -411,7 +411,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	auto &index_entry = entry.Cast<DuckIndexEntry>();
 	auto &list = index_entry.GetDataTableInfo().GetIndexes();
 	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, index_entry.name.GetName());
+	SerializeIndex(database, serializer, list, index_entry.name.GetIdentifierName());
 	serializer.End();
 }
 
@@ -555,7 +555,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	auto name = unique.GetName(parent.name.GetName());
+	auto name = unique.GetName(parent.name.GetIdentifierName());
 	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();

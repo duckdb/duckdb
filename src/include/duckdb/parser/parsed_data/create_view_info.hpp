@@ -26,11 +26,11 @@ public:
 	//! View name
 	Identifier view_name;
 	//! Aliases of the view
-	vector<string> aliases;
+	vector<Identifier> aliases;
 	//! Return types
 	vector<LogicalType> types;
 	//! Names of the query
-	vector<string> names;
+	vector<Identifier> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
 	identifier_map_t<Value> column_comments_map;
 	//! The SelectStatement of the view
@@ -55,7 +55,7 @@ public:
 	string ToString() const override;
 
 private:
-	CreateViewInfo(vector<string> names, vector<Value> comments, identifier_map_t<Value> column_comments);
+	CreateViewInfo(vector<Identifier> names, vector<Value> comments, identifier_map_t<Value> column_comments);
 
 	vector<Value> GetColumnCommentsList() const;
 };

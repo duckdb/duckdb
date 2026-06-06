@@ -388,8 +388,8 @@ static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shre
 		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 			auto &a = fields[lhs].first;
 			auto &b = fields[rhs].first;
-			return std::lexicographical_compare(a.GetName().begin(), a.GetName().end(), b.GetName().begin(),
-			                                    b.GetName().end());
+			return std::lexicographical_compare(a.GetIdentifierName().begin(), a.GetIdentifierName().end(),
+			                                    b.GetIdentifierName().begin(), b.GetIdentifierName().end());
 		});
 		for (idx_t i = 0; i < indices.size(); i++) {
 			auto &child_stats = StructStats::GetChildStats(typed_value, indices[i]);
@@ -521,7 +521,7 @@ bool VariantStats::MergeShredding(const BaseStatistics &stats, const BaseStatist
 
 		for (idx_t i = 0; i < stats_object_children.size(); i++) {
 			auto &stats_object_child = stats_object_children[i];
-			auto other_it = key_to_index.find(stats_object_child.first.GetName());
+			auto other_it = key_to_index.find(stats_object_child.first.GetIdentifierName());
 			if (other_it == key_to_index.end()) {
 				continue;
 			}

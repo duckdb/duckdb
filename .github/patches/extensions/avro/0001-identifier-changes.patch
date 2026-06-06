@@ -1,5 +1,5 @@
 diff --git a/src/avro_copy.cpp b/src/avro_copy.cpp
-index 634aadc..8ea2714 100644
+index 634aadc..8c56328 100644
 --- a/src/avro_copy.cpp
 +++ b/src/avro_copy.cpp
 @@ -260,13 +260,13 @@ public:
@@ -12,10 +12,10 @@ index 634aadc..8ea2714 100644
  				}
  				auto &child_type = it.second;
 -				auto child_field_id = GetChildFieldIdByName(field_id, child_name);
-+				auto child_field_id = GetChildFieldIdByName(field_id, child_name.GetName());
++				auto child_field_id = GetChildFieldIdByName(field_id, child_name.GetIdentifierName());
  
 -				auto struct_field = CreateStructField(child_name, child_type, child_field_id);
-+				auto struct_field = CreateStructField(child_name.GetName(), child_type, child_field_id);
++				auto struct_field = CreateStructField(child_name.GetIdentifierName(), child_type, child_field_id);
  				yyjson_mut_arr_add_val(fields, struct_field);
  			}
  		} else if (type_id == LogicalTypeId::LIST) {
@@ -24,7 +24,7 @@ index 634aadc..8ea2714 100644
  		auto &child = children[i];
  		auto &child_name = child_types[i].first;
 -		metadata[child_name] = child.ToString();
-+		metadata[child_name.GetName()] = child.ToString();
++		metadata[child_name.GetIdentifierName()] = child.ToString();
  	}
  
  	std::unique_ptr<yyjson_mut_doc, YyjsonDocDeleter> doc_p(yyjson_mut_doc_new(nullptr));
@@ -80,7 +80,7 @@ index 7a37a58..766767d 100644
  	}
  	case AVRO_LINK: {
 diff --git a/src/field_ids.cpp b/src/field_ids.cpp
-index e40979d..302dee3 100644
+index e40979d..66aba41 100644
 --- a/src/field_ids.cpp
 +++ b/src/field_ids.cpp
 @@ -64,7 +64,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids_p
@@ -88,12 +88,12 @@ index e40979d..302dee3 100644
  	D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
  	for (idx_t i = 0; i < struct_children.size(); i++) {
 -		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
-+		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i).GetName());
++		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
  		if (col_name == FieldID::DUCKDB_FIELD_ID || col_name == FieldID::DUCKDB_NULLABLE_ID) {
  			continue;
  		}
 diff --git a/src/include/avro_type.hpp b/src/include/avro_type.hpp
-index 513eed1..b703180 100644
+index 513eed1..8760abc 100644
 --- a/src/include/avro_type.hpp
 +++ b/src/include/avro_type.hpp
 @@ -44,7 +44,7 @@ public:
@@ -101,7 +101,7 @@ index 513eed1..b703180 100644
  			child_list_t<LogicalType> type_children;
  			for (auto &child : avro_type.children) {
 -				auto child_col = TransformAvroType(child.first, child.second);
-+				auto child_col = TransformAvroType(child.first.GetName(), child.second);
++				auto child_col = TransformAvroType(child.first.GetIdentifierName(), child.second);
  				type_children.emplace_back(child_col.name, child_col.type);
  				children.push_back(std::move(child_col));
  			}
@@ -110,7 +110,7 @@ index 513eed1..b703180 100644
  					continue;
  				}
 -				auto member = TransformAvroType(child.first, child.second);
-+				auto member = TransformAvroType(child.first.GetName(), child.second);
++				auto member = TransformAvroType(child.first.GetIdentifierName(), child.second);
  				children.push_back(std::move(member));
  			}
  			if (children.size() == 1) {

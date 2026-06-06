@@ -10,7 +10,7 @@ CreateCoordinateSystemInfo::CreateCoordinateSystemInfo(string name_p, string aut
 }
 
 unique_ptr<CreateInfo> CreateCoordinateSystemInfo::Copy() const {
-	auto result = make_uniq<CreateCoordinateSystemInfo>(name.GetName(), authority, code, projjson_definition,
+	auto result = make_uniq<CreateCoordinateSystemInfo>(name.GetIdentifierName(), authority, code, projjson_definition,
 	                                                    wkt2_2019_definition);
 	CopyProperties(*result);
 	return std::move(result);

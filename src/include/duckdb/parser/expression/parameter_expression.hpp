@@ -35,8 +35,8 @@ public:
 	ParameterExpression();
 
 public:
-	const string &Identifier() const {
-		return identifier.GetName();
+	const duckdb::Identifier &Identifier() const {
+		return identifier;
 	}
 	duckdb::Identifier &IdentifierMutable() {
 		return identifier;

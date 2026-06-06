@@ -716,7 +716,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    bound_function.GetName().GetName(), arguments, bound_function.GetReturnType(),
+	    bound_function.GetName(), arguments, bound_function.GetReturnType(),
 	    AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
@@ -773,8 +773,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    aggregate.GetName().GetName(), arguments, aggregate.GetReturnType(),
-	    AggregateFunction::StateSize<SortedAggregateState>,
+	    aggregate.GetName(), arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,

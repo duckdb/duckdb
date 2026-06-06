@@ -603,7 +603,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}
-	auto entry = TryGetDefaultTypeEntry(entry_name.GetName());
+	auto entry = TryGetDefaultTypeEntry(entry_name.GetIdentifierName());
 	if (!entry || entry->type == LogicalTypeId::INVALID) {
 		return nullptr;
 	}

@@ -50,24 +50,24 @@ bool ColumnRefExpression::IsQualified() const {
 	return column_names.size() > 1;
 }
 
-const string &ColumnRefExpression::GetColumnName() const {
+const Identifier &ColumnRefExpression::GetColumnName() const {
 	D_ASSERT(column_names.size() <= 4);
-	return column_names.back().GetName();
+	return column_names.back();
 }
 
-const string &ColumnRefExpression::GetTableName() const {
+const Identifier &ColumnRefExpression::GetTableName() const {
 	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
 	if (column_names.size() == 4) {
-		return column_names[2].GetName();
+		return column_names[2];
 	}
 	if (column_names.size() == 3) {
-		return column_names[1].GetName();
+		return column_names[1];
 	}
-	return column_names[0].GetName();
+	return column_names[0];
 }
 
-string ColumnRefExpression::GetName() const {
-	return !alias.empty() ? alias.GetName() : column_names.back().GetName();
+Identifier ColumnRefExpression::GetName() const {
+	return Identifier(!alias.empty() ? alias.GetIdentifierName() : column_names.back().GetIdentifierName());
 }
 
 string ColumnRefExpression::ToString() const {

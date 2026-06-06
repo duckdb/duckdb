@@ -80,9 +80,9 @@ public:
 	//! The set of values to pivot on (bound pivot only)
 	vector<PivotValueElement> bound_pivot_values;
 	//! The set of bound group names (bound pivot only)
-	vector<string> bound_group_names;
+	vector<Identifier> bound_group_names;
 	//! The set of bound aggregate names (bound pivot only)
-	vector<string> bound_aggregate_names;
+	vector<Identifier> bound_aggregate_names;
 
 public:
 	string ToString() const override;

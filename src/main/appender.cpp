@@ -442,7 +442,7 @@ void BaseAppender::ClearColumns() {
 }
 
 unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
-                                                         const vector<string> &expected_names) {
+                                                         const vector<Identifier> &expected_names) {
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
 	column_data_ref->alias = Identifier(table_name.empty() ? "appended_data" : table_name);
 	;
@@ -621,7 +621,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto expected_names = GetExpectedNames();
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
-	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
+	auto table_ref = GetColumnDataTableRef(collection, table_name, StringsToIdentifiers(expected_names));
 	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
 	context_ref->Append(std::move(stmt));
 }
@@ -722,7 +722,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	if (!context_ref) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
-	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
+	auto table_ref = GetColumnDataTableRef(collection, table_name, StringsToIdentifiers(names));
 	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
 	context_ref->Append(std::move(parsed_statement));
 }

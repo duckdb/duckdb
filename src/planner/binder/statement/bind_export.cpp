@@ -109,11 +109,11 @@ void ReorderTableEntries(catalog_entry_vector_t &tables) {
 }
 
 string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const string &extension) {
-	auto name = SanitizeExportIdentifier(table.name.GetName());
+	auto name = SanitizeExportIdentifier(table.name.GetIdentifierName());
 	if (table.schema.name == DEFAULT_SCHEMA) {
 		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
 	}
-	auto schema = SanitizeExportIdentifier(table.schema.name.GetName());
+	auto schema = SanitizeExportIdentifier(table.schema.name.GetIdentifierName());
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
@@ -236,7 +236,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		for (auto &constraint : table.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();
-				not_null_columns.emplace_back(table.GetColumn(not_null_constraint.index).GetName().GetName());
+				not_null_columns.emplace_back(table.GetColumn(not_null_constraint.index).GetName().GetIdentifierName());
 			}
 		}
 		for (auto &col : table.GetColumns().Physical()) {

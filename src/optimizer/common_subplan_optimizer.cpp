@@ -867,7 +867,7 @@ public:
 			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
 			                                                            std::move(materialized_select_list));
 			materialized_projection->children.emplace_back(std::move(materialized_subplan));
-			auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, materialized_column_count,
+			auto cte = make_uniq<LogicalMaterializedCTE>(Identifier(cte_name), cte_index, materialized_column_count,
 			                                             std::move(materialized_projection), std::move(remainder),
 			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {

@@ -29,12 +29,13 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		auto lambda_ref =
+		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 		// column was not found - check if it is a SQL value function
-		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
+		auto value_function = GetSQLValueFunction(col_ref.GetColumnName().GetIdentifierName());
 		if (value_function) {
 			return BindExpression(value_function, depth);
 		}

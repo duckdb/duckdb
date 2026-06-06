@@ -261,8 +261,8 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		}
 	}
 	if (!owner_entry) {
-		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema.GetName(),
-		                       info.owner_name.GetName());
+		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema.GetIdentifierName(),
+		                       info.owner_name.GetIdentifierName());
 	}
 	write_lock.unlock();
 	catalog.GetDependencyManager()->AddOwnership(transaction, *owner_entry, *entry);
@@ -362,7 +362,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 
-	if (!StringUtil::CIEquals(value->name.GetName(), entry->name.GetName())) {
+	if (!StringUtil::CIEquals(value->name.GetIdentifierName(), entry->name.GetIdentifierName())) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
@@ -572,10 +572,10 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 
 	SimilarCatalogEntry result;
 	for (auto &kv : map.Entries()) {
-		auto entry_score = StringUtil::SimilarityRating(kv.first.GetName(), name.GetName());
+		auto entry_score = StringUtil::SimilarityRating(kv.first.GetIdentifierName(), name.GetIdentifierName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = kv.first.GetName();
+			result.name = kv.first.GetIdentifierName();
 		}
 	}
 	return result;
@@ -755,7 +755,7 @@ void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::funct
 
 	auto &entries = map.Entries();
 	auto it = entries.lower_bound(prefix);
-	auto end = entries.upper_bound(Identifier(prefix.GetName() + char(255)));
+	auto end = entries.upper_bound(Identifier(prefix.GetIdentifierName() + char(255)));
 	for (; it != end; it++) {
 		auto &entry = *it->second;
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);

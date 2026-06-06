@@ -1,5 +1,5 @@
 diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
-index f56c177..fbf4bcd 100644
+index f56c177..88ae3e7 100644
 --- a/src/functions/uc_checkpoint.cpp
 +++ b/src/functions/uc_checkpoint.cpp
 @@ -28,9 +28,9 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
@@ -9,9 +9,9 @@ index f56c177..fbf4bcd 100644
 -	result.catalog_name = qname.catalog.empty() ? search_path.catalog : qname.catalog;
 -	result.schema_name = qname.schema.empty() ? search_path.schema : qname.schema;
 -	result.table_name = qname.name;
-+	result.catalog_name = qname.catalog.empty() ? search_path.catalog.GetName() : qname.catalog.GetName();
-+	result.schema_name = qname.schema.empty() ? search_path.schema.GetName() : qname.schema.GetName();
-+	result.table_name = qname.name.GetName();
++	result.catalog_name = qname.catalog.empty() ? search_path.catalog.GetIdentifierName() : qname.catalog.GetIdentifierName();
++	result.schema_name = qname.schema.empty() ? search_path.schema.GetIdentifierName() : qname.schema.GetIdentifierName();
++	result.table_name = qname.name.GetIdentifierName();
  
  	if (result.catalog_name.empty()) {
  		throw InvalidInputException(
@@ -41,7 +41,7 @@ index 20bbd29..5d6758c 100644
  	if (!entry) {
  		throw BinderException("table_data_path: table '%s' not found", table_name);
 diff --git a/src/include/storage/uc_table_entry.hpp b/src/include/storage/uc_table_entry.hpp
-index aba0ee1..fa5250c 100644
+index aba0ee1..7332a88 100644
 --- a/src/include/storage/uc_table_entry.hpp
 +++ b/src/include/storage/uc_table_entry.hpp
 @@ -22,14 +22,14 @@ struct UCTableInfo {
@@ -58,12 +58,12 @@ index aba0ee1..fa5250c 100644
  
  	const string &GetTableName() const {
 -		return create_info->table;
-+		return create_info->table.GetName();
++		return create_info->table.GetIdentifierName();
  	}
  
  	unique_ptr<CreateTableInfo> create_info;
 diff --git a/src/storage/uc_default_functions.cpp b/src/storage/uc_default_functions.cpp
-index beb3f65..8da2619 100644
+index beb3f65..e9fcd57 100644
 --- a/src/storage/uc_default_functions.cpp
 +++ b/src/storage/uc_default_functions.cpp
 @@ -16,8 +16,8 @@ static const DefaultTableMacro uc_table_macros[] = {
@@ -72,8 +72,8 @@ index beb3f65..8da2619 100644
  	string macro_def = macro.macro;
 -	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
 -	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name, '\''));
-+	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetName(), '\''));
-+	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetName(), '\''));
++	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetIdentifierName(), '\''));
++	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetIdentifierName(), '\''));
  	macro.macro = macro_def.c_str();
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
@@ -104,9 +104,18 @@ index 282e824..8ceca78 100644
  	auto table_entry = schema.LookupEntry(transaction, lookup_info);
  	D_ASSERT(table_entry);
 diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
-index 5068777..1b7c1d1 100644
+index 5068777..911261f 100644
 --- a/src/storage/uc_table_set.cpp
 +++ b/src/storage/uc_table_set.cpp
+@@ -34,7 +34,7 @@ UCTableSet::UCTableSet(UCSchemaEntry &schema) : catalog(schema.ParentCatalog().C
+ }
+ 
+ static ColumnDefinition CreateColumnDefinition(ClientContext &context, UCAPIColumnDefinition &coldef) {
+-	return {coldef.name, UCUtils::TypeToLogicalType(context, coldef.type_text)};
++	return {Identifier(coldef.name), UCUtils::TypeToLogicalType(context, coldef.type_text)};
+ }
+ 
+ optional_ptr<CatalogEntry> TableInformation::GetVersion(ClientContext &context, const EntryLookupInfo &lookup_info) {
 @@ -60,7 +60,7 @@ optional_ptr<CatalogEntry> TableInformation::GetVersion(ClientContext &context,
  	InternalAttach(context);
  	RefreshCredentials(context);
@@ -125,6 +134,15 @@ index 5068777..1b7c1d1 100644
  	input.type = "s3";
  	input.provider = "config";
  	input.options = {
+@@ -121,7 +121,7 @@ void TableInformation::InternalDetach(ClientContext &context, const lock_guard<m
+ 	}
+ 	auto &db_manager = DatabaseManager::Get(context);
+ 	auto name = AttachedCatalogName();
+-	db_manager.DetachDatabase(context, name, OnEntryNotFound::THROW_EXCEPTION);
++	db_manager.DetachDatabase(context, Identifier(name), OnEntryNotFound::THROW_EXCEPTION);
+ 	internal_attached_database = nullptr;
+ }
+ 
 @@ -150,12 +150,12 @@ Value TableInformation::BuildLogTail(ClientContext &context) {
  	vector<Value> commit_values;
  	for (const auto &commit : commits.commits) {
@@ -157,7 +175,7 @@ index 5068777..1b7c1d1 100644
  		auto log_tail = BuildLogTail(context);
  		info.options["parent_catalog"] = Value(catalog.GetName());
 -		info.options["parent_catalog_schema"] = Value(schema.name);
-+		info.options["parent_catalog_schema"] = Value(schema.name.GetName());
++		info.options["parent_catalog_schema"] = Value(schema.name.GetIdentifierName());
  		info.options["parent_commit"] = Value(true);
  		if (!log_tail.IsNull()) {
  			info.options["log_tail"] = log_tail;
@@ -166,7 +184,7 @@ index 5068777..1b7c1d1 100644
  void UCTableSet::LoadEntries(ClientContext &context, const lock_guard<mutex> &_entry_lock) {
  	auto &unity_catalog = catalog.Cast<UnityCatalog>();
 -	auto get_tables_result = UCAPI::GetTables(context, catalog, schema.name, unity_catalog.credentials);
-+	auto get_tables_result = UCAPI::GetTables(context, catalog, schema.name.GetName(), unity_catalog.credentials);
++	auto get_tables_result = UCAPI::GetTables(context, catalog, schema.name.GetIdentifierName(), unity_catalog.credentials);
  
  	for (auto &table : get_tables_result) {
  		D_ASSERT(schema.name == table.schema_name);

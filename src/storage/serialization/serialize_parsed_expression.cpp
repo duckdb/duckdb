@@ -232,7 +232,8 @@ void LambdaRefExpression::Serialize(Serializer &serializer) const {
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
 	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
 	auto column_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "column_name");
-	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, column_name.GetName()));
+	auto result =
+	    duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, column_name.GetIdentifierName()));
 	return std::move(result);
 }
 

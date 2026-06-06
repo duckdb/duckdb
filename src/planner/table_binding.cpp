@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
-                 TableIndex index)
+Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes,
+                 vector<Identifier> colnames, TableIndex index)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)) {
 	names.reserve(colnames.size());
 	for (auto &colname : colnames) {
@@ -137,7 +137,7 @@ BindingAlias Binding::GetAlias(const Identifier &explicit_alias, optional_ptr<St
 	return BindingAlias(*entry);
 }
 
-EntryBinding::EntryBinding(const Identifier &alias, vector<LogicalType> types_p, vector<string> names_p,
+EntryBinding::EntryBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
                            TableIndex index, StandardEntry &entry)
     : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
       entry(entry) {
@@ -147,7 +147,7 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 	return &entry;
 }
 
-TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<string> names_p,
+TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
                            virtual_column_map_t virtual_columns_p)
     : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
@@ -214,7 +214,7 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifie
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, string> alias_map;
 	for (auto &entry : name_map) {
-		alias_map[entry.second] = entry.first.GetName();
+		alias_map[entry.second] = entry.first.GetIdentifierName();
 	}
 	ReplaceAliases(*expression, table_entry.GetColumns(), alias_map);
 	BakeTableName(*expression, alias);
@@ -301,13 +301,13 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 }
 
 ErrorData TableBinding::ColumnNotFoundError(const Identifier &column_name) const {
-	auto candidate_message =
-	    StringUtil::CandidatesErrorMessage(IdentifiersToStrings(names), column_name.GetName(), "Candidate bindings: ");
+	auto candidate_message = StringUtil::CandidatesErrorMessage(
+	    IdentifiersToStrings(names), column_name.GetIdentifierName(), "Candidate bindings: ");
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 
-DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
+DummyBinding::DummyBinding(vector<LogicalType> types, vector<Identifier> names, string dummy_name)
     : Binding(BindingType::DUMMY, BindingAlias(Identifier(DummyBinding::DUMMY_NAME + dummy_name)), std::move(types),
               std::move(names), TableIndex()),
       dummy_name(std::move(dummy_name)) {
@@ -345,14 +345,14 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index,
                        CTEType cte_type)
     : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
       reference_count(0) {
 }
 
 CTEBinding::CTEBinding(BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p, TableIndex index)
-    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<string>(), index),
+    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<Identifier>(), index),
       cte_type(CTEType::CAN_BE_REFERENCED), reference_count(0), bind_state(std::move(bind_state_p)) {
 }
 
@@ -373,7 +373,7 @@ void CTEBinding::Reference() {
 		bind_state->Bind(*this);
 
 		// copy over the names / types and initialize the binding
-		this->names = StringsToIdentifiers(bind_state->names);
+		this->names = bind_state->names;
 		this->types = bind_state->types;
 		Initialize();
 

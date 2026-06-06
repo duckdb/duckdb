@@ -42,7 +42,7 @@ static void ExtractParameter(const ParsedExpression &expr, vector<string> &colum
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
 	}
 
-	column_names.push_back(column_ref.GetName());
+	column_names.emplace_back(column_ref.GetName());
 	column_aliases.push_back(column_ref.ToString());
 }
 
@@ -137,7 +137,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!lambda_bindings) {
 		lambda_bindings = &local_bindings;
 	}
-	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
+	DummyBinding new_lambda_binding(column_types, StringsToIdentifiers(column_names), table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
 	if (expr.CopiedExprMutable()) {

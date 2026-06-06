@@ -82,9 +82,9 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 		for (auto &struct_child : struct_children) {
 			candidates.emplace_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, StringUtil::Lower(key.GetName()));
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
-		throw BinderException("Could not find key \"%s\" in struct\n%s", key.GetName(), message);
+		throw BinderException("Could not find key \"%s\" in struct\n%s", key.GetIdentifierName(), message);
 	}
 
 	bound_function.SetReturnType(std::move(return_type));

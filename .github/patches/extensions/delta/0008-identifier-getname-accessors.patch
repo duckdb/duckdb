@@ -143,6 +143,19 @@ index 5ad22f5..1227c33 100644
  
  	ScalarFunction getvar({}, LogicalType::LIST(LogicalType::VARCHAR), GetDeltaTestExpression, nullptr, nullptr);
  	result.AddFunction(getvar);
+diff --git a/src/functions/metadata_functions.cpp b/src/functions/metadata_functions.cpp
+index ccb794b..8a0f7f3 100644
+--- a/src/functions/metadata_functions.cpp
++++ b/src/functions/metadata_functions.cpp
+@@ -43,7 +43,7 @@ void MetadataFunctionExecute(ClientContext &context, TableFunctionInput &data_p,
+ 	output.SetCardinality(count);
+ }
+ 
+-BaseMetadataFunction::BaseMetadataFunction(string name_p, table_function_bind_t bind)
++BaseMetadataFunction::BaseMetadataFunction(Identifier name_p, table_function_bind_t bind)
+     : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MetadataFunctionExecute, bind, MetadataFunctionInit) {
+ }
+ 
 diff --git a/src/functions/util_functions.cpp b/src/functions/util_functions.cpp
 index a4da240..987ae3f 100644
 --- a/src/functions/util_functions.cpp
@@ -156,8 +169,21 @@ index a4da240..987ae3f 100644
  
  	ScalarFunction write_file({LogicalType::VARCHAR, LogicalType::BLOB}, {LogicalType::BOOLEAN}, GetWriteDataFunction,
  	                          nullptr, nullptr);
+diff --git a/src/include/delta_functions.hpp b/src/include/delta_functions.hpp
+index 120e539..155728d 100644
+--- a/src/include/delta_functions.hpp
++++ b/src/include/delta_functions.hpp
+@@ -15,7 +15,7 @@ class ExtensionLoader;
+ 
+ class BaseMetadataFunction : public TableFunction {
+ public:
+-	BaseMetadataFunction(string name, table_function_bind_t bind);
++	BaseMetadataFunction(Identifier name, table_function_bind_t bind);
+ };
+ 
+ class DeltaFileListFunction : public BaseMetadataFunction {
 diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
-index c2bae88..888541f 100644
+index c2bae88..c509b44 100644
 --- a/src/storage/delta_insert.cpp
 +++ b/src/storage/delta_insert.cpp
 @@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
@@ -165,7 +191,7 @@ index c2bae88..888541f 100644
  InsertionOrderPreservingMap<string> DeltaInsert::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
 -	result["Table Name"] = table ? table->name : info->Base().table;
-+	result["Table Name"] = table ? table->name.GetName() : info->Base().table.GetName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
  	return result;
  }
  
@@ -190,12 +216,15 @@ index c2bae88..888541f 100644
  		    LookupEntry(retriever, default_schema, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
  		table_entry = default_table_entry.entry->Cast<DeltaTableEntry>();
 diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
-index 9ce962d..1be6f40 100644
+index 9ce962d..5ef48c4 100644
 --- a/src/storage/delta_schema_entry.cpp
 +++ b/src/storage/delta_schema_entry.cpp
-@@ -119,8 +119,8 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+@@ -117,10 +117,10 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+ 
+ 	CreateTableInfo table_info;
  	for (idx_t i = 0; i < return_types.size(); i++) {
- 		table_info.columns.AddColumn(ColumnDefinition(names[i], return_types[i]));
+-		table_info.columns.AddColumn(ColumnDefinition(names[i], return_types[i]));
++		table_info.columns.AddColumn(ColumnDefinition(Identifier(names[i]), return_types[i]));
  	}
 -	table_info.table =
 -	    !delta_catalog.internal_table_name.empty() ? delta_catalog.internal_table_name : catalog.GetName();
@@ -205,7 +234,7 @@ index 9ce962d..1be6f40 100644
  	// Copy over constraints to table info TODO: these are incompatible currently
  	// table_info.constraints = snapshot->not_null_constraints;}
 diff --git a/src/storage/delta_table_entry.cpp b/src/storage/delta_table_entry.cpp
-index ac50afb..5a69cd2 100644
+index ac50afb..79a8e50 100644
 --- a/src/storage/delta_table_entry.cpp
 +++ b/src/storage/delta_table_entry.cpp
 @@ -36,7 +36,7 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
@@ -222,7 +251,7 @@ index ac50afb..5a69cd2 100644
  
  	function_info->snapshot = this->snapshot;
 -	function_info->table_name = delta_catalog.GetName();
-+	function_info->table_name = delta_catalog.GetName().GetName();
++	function_info->table_name = delta_catalog.GetName().GetIdentifierName();
  	delta_scan_function.function_info = std::move(function_info);
  
  	vector<Value> inputs = {delta_catalog.GetDBPath()};
@@ -231,7 +260,7 @@ index ac50afb..5a69cd2 100644
  	for (auto &constraint : snapshot->GetNestedNotNullConstraints()) {
  		auto &col = GetColumn(constraint.index);
 -		auto &item = result[col.Name()];
-+		auto &item = result[col.Name().GetName()];
++		auto &item = result[col.Name().GetIdentifierName()];
  		item.push_back(constraint);
  	}
  	return result;

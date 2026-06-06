@@ -308,8 +308,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 
-	auto names_to_write =
-	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
+	auto names_to_write = LogicalCopyToFile::GetNamesWithoutPartitions(IdentifiersToStrings(unique_column_names),
+	                                                                   partition_cols, write_partition_columns);
 	auto types_to_write =
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
@@ -367,7 +367,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->hive_file_pattern = hive_file_pattern;
 	copy->order_columns = std::move(order_columns);
 
-	copy->names = unique_column_names;
+	copy->names = IdentifiersToStrings(unique_column_names);
 	copy->expected_types = select_node.types;
 
 	copy->AddChild(std::move(select_node.plan));
@@ -391,7 +391,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	}
 
 	BoundStatement result;
-	result.names = GetCopyFunctionReturnNames(copy->return_type);
+	result.names = StringsToIdentifiers(GetCopyFunctionReturnNames(copy->return_type));
 	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type);
 	result.plan = std::move(copy);
 
@@ -434,7 +434,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 		for (auto &col : table.GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = col.Name().GetName();
+				expected_names[bound_insert.column_index_map[i]] = col.Name().GetIdentifierName();
 			}
 		}
 	} else {

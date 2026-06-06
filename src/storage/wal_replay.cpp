@@ -820,7 +820,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Create a binder to bind the parsed expressions.
 	vector<ColumnIndex> column_indexes;
-	binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), column_names, column_types, column_indexes, table);
+	binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), StringsToIdentifiers(column_names), column_types,
+	                                  column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// Bind the parsed expressions to create unbound expressions.
@@ -839,15 +840,15 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name.GetName(), column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	                       index_storage_info.name.GetIdentifierName(), column_ids, unbound_expressions,
+	                       index_storage_info, index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.schema.GetName(),
-	                                      table_info.name.GetName());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance),
+	                                      table_info.schema.GetIdentifierName(), table_info.name.GetIdentifierName());
 
 	catalog.Alter(context, alter_info);
 }
@@ -1076,8 +1077,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name.GetName(),
-	                                      table_name.GetName());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name.GetIdentifierName(),
+	                                      table_name.GetIdentifierName());
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

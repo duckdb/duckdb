@@ -543,7 +543,7 @@ TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transfor
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	TableAlias result;
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	result.name = qualified_name.name.GetName();
+	result.name = qualified_name.name.GetIdentifierName();
 	transformer.TransformOptional<vector<string>>(list_pr, 2, result.column_name_alias);
 	return result;
 }
@@ -978,9 +978,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
 	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function = make_uniq<FunctionExpression>(
-	    Identifier(qualified_table_function.catalog.GetName()), Identifier(qualified_table_function.schema.GetName()),
-	    Identifier(qualified_table_function.name.GetName()), std::move(table_function_arguments));
+	result->function =
+	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	                                  qualified_table_function.name, std::move(table_function_arguments));
 	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(4);
 	if (table_alias_opt.HasResult()) {
 		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
@@ -1615,7 +1615,9 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, Parse
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	auto cte_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<vector<string>>(list_pr, 1, result->aliases);
+	vector<string> cte_aliases;
+	transformer.TransformOptional<vector<string>>(list_pr, 1, cte_aliases);
+	result->aliases = StringsToIdentifiers(cte_aliases);
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 2, result->key_targets);
 	auto &materialized_opt = list_pr.Child<OptionalParseResult>(4);
 	if (materialized_opt.HasResult()) {

@@ -224,7 +224,7 @@ ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_typ
 } // namespace
 
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
-	ScalarFunction result(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
+	ScalarFunction result(Identifier(IntegralCompressFunctionName(result_type)), {input_type, input_type}, result_type,
 	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.SetSerializeCallback(CMIntegralSerialize);
 	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>);
@@ -237,8 +237,9 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 }
 
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
-	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
-	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
+	ScalarFunction result(Identifier(IntegralDecompressFunctionName(result_type)), {input_type, result_type},
+	                      result_type, GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
+	                      CMUtils::Bind);
 	result.SetSerializeCallback(CMIntegralSerialize);
 	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>);
 	return result;

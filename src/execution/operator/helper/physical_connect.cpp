@@ -29,7 +29,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 	if (client.IsConnected()) {
 		auto current = client.TryGetConnectedCatalog();
 		throw InvalidInputException("Already connected to \"%s\"; DISCONNECT first before issuing another CONNECT",
-		                            current ? current->GetName().GetName() : "<detached>");
+		                            current ? current->GetName().GetIdentifierName() : "<detached>");
 	}
 
 	auto target = DatabaseManager::Get(client).GetDatabase(info->name);

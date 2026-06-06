@@ -434,7 +434,7 @@ string LogicalGet::GetName() const {
 		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
-	return StringUtil::Upper(function.name.GetName());
+	return StringUtil::Upper(function.name.GetIdentifierName());
 }
 
 } // namespace duckdb

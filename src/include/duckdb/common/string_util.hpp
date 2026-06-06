@@ -278,6 +278,8 @@ public:
 	                                                 idx_t threshold = 5);
 	//! Computes the jaro winkler distance of each string in strings, and compares it to target, then returns
 	//! TopNStrings with the given params.
+	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const Identifier &target,
+	                                                 idx_t n = 5, double threshold = 0.5);
 	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                                 double threshold = 0.5);
 	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates,

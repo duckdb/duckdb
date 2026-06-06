@@ -89,20 +89,20 @@ public:
 	}
 	vector<BindingAlias> GetBindingAliases();
 
-	void GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types);
+	void GetTypesAndNames(vector<Identifier> &result_names, vector<LogicalType> &result_types);
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                  const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids, TableCatalogEntry &entry,
 	                  bool add_row_id = true);
-	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                  const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
 	                  const Identifier &table_name);
-	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                  const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids, TableCatalogEntry &entry,
 	                  virtual_column_map_t virtual_columns);
 	//! Adds a call to a table function with the given alias to the BindContext.
-	void AddTableFunction(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddTableFunction(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
 	                      optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns);
 	//! Adds a table view with a given alias to the BindContext.
@@ -113,15 +113,15 @@ public:
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(TableIndex index, const Identifier &alias, TableFunctionRef &ref, BoundStatement &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
-	void AddEntryBinding(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddEntryBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                     const vector<LogicalType> &types, StandardEntry &entry);
 	//! Adds a base table with the given alias to the BindContext.
-	void AddGenericBinding(TableIndex index, const Identifier &alias, const vector<string> &names,
+	void AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                       const vector<LogicalType> &types);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
-	void AddCTEBinding(TableIndex index, BindingAlias alias, const vector<string> &names,
+	void AddCTEBinding(TableIndex index, BindingAlias alias, const vector<Identifier> &names,
 	                   const vector<LogicalType> &types, CTEType cte_type = CTEType::CAN_BE_REFERENCED);
 	void AddCTEBinding(unique_ptr<CTEBinding> binding);
 
@@ -149,8 +149,8 @@ public:
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
-	static vector<string> AliasColumnNames(const Identifier &table_name, const vector<string> &names,
-	                                       const vector<Identifier> &column_aliases);
+	static vector<Identifier> AliasColumnNames(const Identifier &table_name, const vector<Identifier> &names,
+	                                           const vector<Identifier> &column_aliases);
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);

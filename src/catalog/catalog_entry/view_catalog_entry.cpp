@@ -79,7 +79,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		if (view_columns) {
 			// if the view is bound - verify the name we are commenting on exists
 			auto &names = view_columns->names;
-			auto match_name = [&](const string &n) {
+			auto match_name = [&](const auto &n) {
 				return resolved_column_name == n;
 			};
 			auto entry = std::find_if(names.begin(), names.end(), match_name);
@@ -87,12 +87,12 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 				// the column name might be a view alias - check those as well
 				auto alias_entry = std::find_if(aliases.begin(), aliases.end(), match_name);
 				if (alias_entry == aliases.end()) {
-					throw BinderException("View \"%s\" does not have a column with name \"%s\"", name.GetName(),
-					                      resolved_column_name.GetName());
+					throw BinderException("View \"%s\" does not have a column with name \"%s\"",
+					                      name.GetIdentifierName(), resolved_column_name.GetIdentifierName());
 				}
 				auto alias_index = NumericCast<idx_t>(std::distance(aliases.begin(), alias_entry));
 				D_ASSERT(alias_index < names.size());
-				resolved_column_name = Identifier(names[alias_index]);
+				resolved_column_name = names[alias_index];
 			}
 		}
 		// apply the comment to the view
@@ -178,7 +178,7 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	bind_thread = thread_id {};
 }
 
-void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<string> &names_p) {
+void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<Identifier> &names_p) {
 	auto columns = view_columns.atomic_load();
 	if (columns && columns->types == types_p && columns->names == names_p) {
 		// already bound with the current info

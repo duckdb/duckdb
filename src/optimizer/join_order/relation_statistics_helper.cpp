@@ -103,7 +103,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
 	if (catalog_table) {
-		name = catalog_table->name.GetName();
+		name = catalog_table->name.GetIdentifierName();
 		return_stats.table_name = name;
 	}
 
@@ -197,7 +197,7 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 	proj_stats.cardinality = child_stats.cardinality;
 	proj_stats.table_name = proj.GetName();
 	for (auto &expr : proj.expressions) {
-		proj_stats.column_names.push_back(expr->GetName());
+		proj_stats.column_names.emplace_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
 		D_ASSERT(res.FoundExpression());
 		if (res.expression_is_constant) {

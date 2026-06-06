@@ -579,7 +579,7 @@
       {
         "id": 201,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -631,7 +631,7 @@
       {
         "id": 202,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,

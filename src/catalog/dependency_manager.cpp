@@ -36,12 +36,12 @@ MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &name = info.name;
 
 	this->name = Identifier(CatalogTypeToString(type) + '\0' + schema + '\0' + name);
-	AssertMangledName(this->name.GetName(), 2);
+	AssertMangledName(this->name.GetIdentifierName(), 2);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
 	this->name = Identifier(from.name + '\0' + to.name);
-	AssertMangledName(this->name.GetName(), 5);
+	AssertMangledName(this->name.GetIdentifierName(), 5);
 }
 
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
@@ -49,9 +49,9 @@ DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), s
 
 string DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name.GetName();
+		return entry.name.GetIdentifierName();
 	}
-	return entry.ParentSchema().name.GetName();
+	return entry.ParentSchema().name.GetIdentifierName();
 }
 
 MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {
@@ -697,7 +697,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name.GetName(), new_obj.name.GetName())) {
+	if (has_new_dependencies ||
+	    !StringUtil::CIEquals(old_obj.name.GetIdentifierName(), new_obj.name.GetIdentifierName())) {
 		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
 		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);
@@ -796,7 +797,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 }
 
 static string FormatString(const MangledEntryName &mangled) {
-	auto input = mangled.name.GetName();
+	auto input = mangled.name.GetIdentifierName();
 	for (size_t i = 0; i < input.size(); i++) {
 		if (input[i] == '\0') {
 			input[i] = '_';

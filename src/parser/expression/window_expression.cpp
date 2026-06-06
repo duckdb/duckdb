@@ -99,11 +99,12 @@ string WindowExpression::ExpressionTypeToWindow(ExpressionType expression_type) 
 
 void WindowExpression::SetFunctionName(const string &function_name_p) {
 	function_name = Identifier(function_name_p);
-	type = WindowToExpressionType(function_name.GetName());
+	type = WindowToExpressionType(function_name.GetIdentifierName());
 }
 
 string WindowExpression::ToString() const {
-	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema.GetName(), function_name.GetName());
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema.GetIdentifierName(),
+	                                                                 function_name.GetIdentifierName());
 }
 
 bool WindowExpression::HasBoundedParts() {

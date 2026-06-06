@@ -69,7 +69,7 @@ struct MultiFileReaderInterface {
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileFunction(string name_p)
+	explicit MultiFileFunction(Identifier name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;

@@ -62,7 +62,7 @@ string BoundFunctionExpression::ToString() const {
 		FunctionToStringInput input(function, bind_info.get(), children);
 		return function.FunctionToString(input);
 	}
-	auto &function_name = function.GetName().GetName();
+	auto &function_name = function.GetName().GetIdentifierName();
 
 	if (is_operator) {
 		// built-in operator

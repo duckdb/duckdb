@@ -113,7 +113,7 @@ public:
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 

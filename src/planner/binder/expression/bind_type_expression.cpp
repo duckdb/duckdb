@@ -93,13 +93,13 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 		// Shortcut for constant expressions
 		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetAlias().GetName(), const_expr.GetValue());
+			bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), const_expr.GetValue());
 			continue;
 		}
 
 		// Otherwise we need to evaluate the expression
 		auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-		bound_parameters.emplace_back(param->GetAlias().GetName(), bound_param);
+		bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), bound_param);
 	};
 
 	// Call the bind function

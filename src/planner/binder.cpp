@@ -517,7 +517,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
                                      const string &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 
 	auto binder = Binder::CreateBinder(context);
 

@@ -39,7 +39,7 @@ index e376575..82f2f9a 100644
  			return make_uniq<ErrorResponse>("Table %s.%s does not exist",
  			                                SQLIdentifier(append_request_message.SchemaName()),
 diff --git a/src/storage/quack_catalog_set.cpp b/src/storage/quack_catalog_set.cpp
-index 7caa1f0..d214942 100644
+index 7caa1f0..0e8fe6b 100644
 --- a/src/storage/quack_catalog_set.cpp
 +++ b/src/storage/quack_catalog_set.cpp
 @@ -44,8 +44,8 @@ optional_ptr<CatalogEntry> QuackCatalogSet::CreateEntry(unique_ptr<CatalogEntry>
@@ -48,13 +48,13 @@ index 7caa1f0..d214942 100644
  	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 -		entries[entry_name] = std::move(entry);
 -		return entries[entry_name].get();
-+		entries[entry_name.GetName()] = std::move(entry);
-+		return entries[entry_name.GetName()].get();
++		entries[entry_name.GetIdentifierName()] = std::move(entry);
++		return entries[entry_name.GetIdentifierName()].get();
  	} else {
  		auto inserted_entry = entries.insert(make_pair(entry_name, std::move(entry)));
  		return inserted_entry.first->second.get();
 diff --git a/src/storage/quack_insert.cpp b/src/storage/quack_insert.cpp
-index ee9b01f..10f569e 100644
+index ee9b01f..23f734e 100644
 --- a/src/storage/quack_insert.cpp
 +++ b/src/storage/quack_insert.cpp
 @@ -56,7 +56,7 @@ SinkResultType QuackInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
@@ -62,7 +62,7 @@ index ee9b01f..10f569e 100644
  	append_chunk->Reference(chunk);
  	auto chunk_wrapper = make_uniq<DataChunkWrapper>(*append_chunk);
 -	auto append_message = make_uniq<AppendRequestMessage>(quack_catalog.GetConnectionId(), tbl.schema.name, tbl.name,
-+	auto append_message = make_uniq<AppendRequestMessage>(quack_catalog.GetConnectionId(), tbl.schema.name.GetName(), tbl.name.GetName(),
++	auto append_message = make_uniq<AppendRequestMessage>(quack_catalog.GetConnectionId(), tbl.schema.name.GetIdentifierName(), tbl.name.GetIdentifierName(),
  	                                                      std::move(chunk_wrapper));
  
  	auto client_connection = quack_catalog.GetClientConnection();
@@ -71,12 +71,12 @@ index ee9b01f..10f569e 100644
  InsertionOrderPreservingMap<string> QuackInsert::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
 -	result["Table Name"] = table ? table->name : info->Base().table;
-+	result["Table Name"] = table ? table->name.GetName() : info->Base().table.GetName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
  	return result;
  }
  
 diff --git a/src/storage/quack_optimizer.cpp b/src/storage/quack_optimizer.cpp
-index 5539945..fe61d51 100644
+index 5539945..988e282 100644
 --- a/src/storage/quack_optimizer.cpp
 +++ b/src/storage/quack_optimizer.cpp
 @@ -22,7 +22,7 @@ void GatherQuackScans(LogicalOperator &op, QuackOperators &result) {
@@ -84,12 +84,12 @@ index 5539945..fe61d51 100644
  		auto &get = op.Cast<LogicalGet>();
  		auto &table_scan = get.function;
 -		if (QuackCatalog::IsQuackScan(table_scan.name)) {
-+		if (QuackCatalog::IsQuackScan(table_scan.name.GetName())) {
++		if (QuackCatalog::IsQuackScan(table_scan.name.GetIdentifierName())) {
  			// add a quack scan
  			auto &bind_data = get.bind_data->Cast<QuackScanBindData>();
  			auto connection_id = bind_data.client_connection->ConnectionId();
 diff --git a/src/storage/quack_schema.cpp b/src/storage/quack_schema.cpp
-index aea6c3a..ff57cf3 100644
+index aea6c3a..cb9bf27 100644
 --- a/src/storage/quack_schema.cpp
 +++ b/src/storage/quack_schema.cpp
 @@ -20,8 +20,8 @@ void QuackSchemaSet::Reload(ClientContext &context, QuackCatalog &catalog, const
@@ -108,7 +108,7 @@ index aea6c3a..ff57cf3 100644
  
  	// locally, override the query with a remote procedure call to ensure the view is evaluated remotely
 -	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName(), name, info.view_name);
-+	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName().GetName(), name.GetName(), info.view_name.GetName());
++	info.sql = QuackViewCatalogEntry::CreateViewSQL(ParentCatalog().GetName().GetIdentifierName(), name.GetIdentifierName(), info.view_name.GetIdentifierName());
  	info.query = CreateViewInfo::ParseSelect(info.sql);
  
  	auto quack_entry = make_uniq<QuackViewCatalogEntry>(catalog, *this, info);
@@ -117,7 +117,7 @@ index aea6c3a..ff57cf3 100644
  	auto &transaction = QuackTransaction::Get(context, ParentCatalog());
  	transaction.Query(drop_info->ToString());
 -	tables->DropEntry(info_p.name);
-+	tables->DropEntry(info_p.name.GetName());
++	tables->DropEntry(info_p.name.GetIdentifierName());
  }
  void QuackSchemaCatalogEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
  	throw NotImplementedException("Alter not implemented yet, Alter!");
@@ -127,13 +127,13 @@ index aea6c3a..ff57cf3 100644
  	string macro_def = macro.macro;
 -	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName(), '\''));
 -	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name, '\''));
-+	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetName(), '\''));
-+	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetName(), '\''));
++	macro_def = StringUtil::Replace(macro_def, "{CATALOG}", KeywordHelper::WriteQuoted(catalog.GetName().GetIdentifierName(), '\''));
++	macro_def = StringUtil::Replace(macro_def, "{SCHEMA}", KeywordHelper::WriteQuoted(name.GetIdentifierName(), '\''));
  	macro.macro = macro_def.c_str();
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
 diff --git a/src/storage/quack_table.cpp b/src/storage/quack_table.cpp
-index 8f1da8d..256bc04 100644
+index 8f1da8d..842d109 100644
 --- a/src/storage/quack_table.cpp
 +++ b/src/storage/quack_table.cpp
 @@ -49,8 +49,8 @@ QuackTableSet::QuackTableSet(ClientContext &context, QuackSchemaCatalogEntry &pa
@@ -143,7 +143,7 @@ index 8f1da8d..256bc04 100644
 -			CreateViewInfo info(schema, view_name);
 -			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName(), schema.name, view_name);
 +			CreateViewInfo info(schema, Identifier(view_name));
-+			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName().GetName(), schema.name.GetName(), view_name);
++			info.sql = QuackViewCatalogEntry::CreateViewSQL(catalog.GetName().GetIdentifierName(), schema.name.GetIdentifierName(), view_name);
  			info.query = CreateViewInfo::ParseSelect(info.sql);
  
  			// bind to resolve the types
@@ -152,7 +152,7 @@ index 8f1da8d..256bc04 100644
  	auto bind_data = make_uniq<QuackScanBindData>();
  	bind_data->client_connection = quack_catalog.GetClientConnection();
 -	bind_data->table_name = name;
-+	bind_data->table_name = name.GetName();
++	bind_data->table_name = name.GetIdentifierName();
  	for (auto &col : GetColumns().Physical()) {
 -		bind_data->column_names.push_back(col.Name());
 +		bind_data->column_names.emplace_back(col.Name());

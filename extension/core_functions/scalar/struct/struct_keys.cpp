@@ -17,7 +17,7 @@ struct StructKeysBindData : public FunctionData {
 		auto list_writer = FlatVector::Writer<VectorListType<string_t>>(keys_vector, 2);
 		idx_t idx = 0;
 		for (auto &child_writer : list_writer.WriteList(count)) {
-			child_writer.WriteValue(string_t(child_types[idx++].first.GetName()));
+			child_writer.WriteValue(string_t(child_types[idx++].first.GetIdentifierName()));
 		}
 		list_writer.WriteNull();
 	}

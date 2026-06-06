@@ -702,7 +702,7 @@ unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(Clie
 		return make_uniq<CoordinateReferenceSystem>(crs_entry.authority + ":" + crs_entry.code);
 	}
 	case CoordinateReferenceSystemType::SRID: {
-		return make_uniq<CoordinateReferenceSystem>(crs_entry.name.GetName());
+		return make_uniq<CoordinateReferenceSystem>(crs_entry.name.GetIdentifierName());
 	}
 	case CoordinateReferenceSystemType::PROJJSON: {
 		if (crs_entry.projjson_definition.empty()) {

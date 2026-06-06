@@ -119,8 +119,8 @@ public:
 		set<string> missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
-			if (!values.count(name.GetName())) {
-				missing_set.insert(name.GetName());
+			if (!values.count(name.GetIdentifierName())) {
+				missing_set.insert(name.GetIdentifierName());
 			}
 		}
 		vector<string> missing_values;
@@ -138,7 +138,7 @@ public:
 			// Same amount of identifiers, if
 			for (auto &pair : expected) {
 				auto &identifier = pair.first;
-				if (!provided.count(identifier.GetName())) {
+				if (!provided.count(identifier.GetIdentifierName())) {
 					throw InvalidInputException(MissingValuesException(expected, provided));
 				}
 			}

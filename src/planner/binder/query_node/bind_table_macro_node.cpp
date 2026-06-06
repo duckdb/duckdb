@@ -22,15 +22,15 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 
-	auto bind_result = MacroFunction::BindMacroFunction(*this, macro_func.macros, macro_func.name.GetName(), function,
-	                                                    positional_arguments, named_arguments, depth);
+	auto bind_result = MacroFunction::BindMacroFunction(*this, macro_func.macros, macro_func.name.GetIdentifierName(),
+	                                                    function, positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
 		throw BinderException(function, bind_result.error);
 	}
 	auto &macro_def = *macro_func.macros[bind_result.function_idx.GetIndex()];
 
-	auto new_macro_binding =
-	    MacroFunction::CreateDummyBinding(macro_def, macro_func.name.GetName(), positional_arguments, named_arguments);
+	auto new_macro_binding = MacroFunction::CreateDummyBinding(macro_def, macro_func.name.GetIdentifierName(),
+	                                                           positional_arguments, named_arguments);
 	new_macro_binding->arguments = &positional_arguments;
 
 	// We need an ExpressionBinder so that we can call ExpressionBinder::ReplaceMacroParametersRecursive()

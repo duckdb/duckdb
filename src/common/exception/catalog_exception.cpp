@@ -50,23 +50,23 @@ CatalogException CatalogException::MissingEntry(const string &type, const Identi
                                                 const vector<string> &suggestions, QueryErrorContext context) {
 	auto extra_info = Exception::InitializeExtraInfo("MISSING_ENTRY", context.query_location);
 	extra_info["error_subtype"] = "MISSING_ENTRY";
-	extra_info["name"] = name.GetName();
+	extra_info["name"] = name.GetIdentifierName();
 	extra_info["type"] = type;
 	if (!suggestions.empty()) {
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
 	return CatalogException(extra_info, StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
 	                                                       StringUtil::CandidatesErrorMessage(
-	                                                           suggestions, name.GetName(), "Did you mean")));
+	                                                           suggestions, name.GetIdentifierName(), "Did you mean")));
 }
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const Identifier &name,
                                                       QueryErrorContext context) {
 	auto extra_info = Exception::InitializeExtraInfo("ENTRY_ALREADY_EXISTS", optional_idx());
-	extra_info["name"] = name.GetName();
+	extra_info["name"] = name.GetIdentifierName();
 	extra_info["type"] = CatalogTypeToString(type);
 	return CatalogException(extra_info, StringUtil::Format("%s with name \"%s\" already exists!",
-	                                                       CatalogTypeToString(type), name.GetName()));
+	                                                       CatalogTypeToString(type), name.GetIdentifierName()));
 }
 
 } // namespace duckdb

@@ -154,7 +154,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
                                                               OnCreateConflict on_conflict,
                                                               SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(secret->GetType().GetName());
+	LookupTypeInternal(secret->GetType().GetIdentifierName());
 
 	//! Handle default for persist type
 	if (persist_type == SecretPersistType::DEFAULT) {
@@ -240,14 +240,15 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Make a copy to set the provider to default if necessary
 	auto function_input = input;
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(function_input.type.GetName());
+		auto secret_type = LookupTypeInternal(function_input.type.GetIdentifierName());
 		function_input.provider = Identifier(secret_type.default_provider);
 	}
 
 	// Lookup function
-	auto function_lookup = LookupFunctionInternal(function_input.type.GetName(), function_input.provider.GetName());
+	auto function_lookup =
+	    LookupFunctionInternal(function_input.type.GetIdentifierName(), function_input.provider.GetIdentifierName());
 	if (!function_lookup) {
-		ThrowProviderNotFoundError(input.type.GetName(), input.provider.GetName());
+		ThrowProviderNotFoundError(input.type.GetIdentifierName(), input.provider.GetIdentifierName());
 	}
 
 	// Call the function
@@ -260,7 +261,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 
 	// Register the secret at the secret_manager
 	return RegisterSecretInternal(transaction, std::move(secret), input.on_conflict, input.persist_type,
-	                              input.storage_type.GetName());
+	                              input.storage_type.GetIdentifierName());
 }
 
 BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info) {
@@ -272,16 +273,16 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(type.GetName());
+		auto secret_type = LookupTypeInternal(type.GetIdentifierName());
 		provider = Identifier(secret_type.default_provider);
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function = LookupFunctionInternal(type.GetName(), provider.GetName());
+	auto function = LookupFunctionInternal(type.GetIdentifierName(), provider.GetIdentifierName());
 
 	if (!function) {
-		ThrowProviderNotFoundError(info.type.GetName(), info.provider.GetName(), default_provider);
+		ThrowProviderNotFoundError(info.type.GetIdentifierName(), info.provider.GetIdentifierName(), default_provider);
 	}
 
 	auto bound_info = info;
@@ -716,12 +717,12 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(cons
 
 unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(CatalogTransaction transaction,
                                                                     const Identifier &entry_name) {
-	return CreateDefaultEntryInternal(entry_name.GetName());
+	return CreateDefaultEntryInternal(entry_name.GetIdentifierName());
 }
 
 unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContext &context,
                                                                     const Identifier &entry_name) {
-	return CreateDefaultEntryInternal(entry_name.GetName());
+	return CreateDefaultEntryInternal(entry_name.GetIdentifierName());
 }
 
 vector<Identifier> DefaultSecretGenerator::GetDefaultEntries() {
@@ -729,7 +730,7 @@ vector<Identifier> DefaultSecretGenerator::GetDefaultEntries() {
 
 	lock_guard<mutex> guard(lock);
 	for (const auto &res : persistent_secrets) {
-		ret.emplace_back(res.GetName());
+		ret.emplace_back(res.GetIdentifierName());
 	}
 
 	return ret;

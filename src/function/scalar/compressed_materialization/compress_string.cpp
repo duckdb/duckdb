@@ -246,7 +246,7 @@ ScalarFunctionSet GetStringDecompressFunctionSet() {
 } // namespace
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
-	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
+	ScalarFunction result(Identifier(StringCompressFunctionName(result_type)), {LogicalType::VARCHAR}, result_type,
 	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
 	result.SetSerializeCallback(CMStringCompressSerialize);
 	result.SetDeserializeCallback(CMStringCompressDeserialize);
@@ -259,7 +259,7 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 }
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
-	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
+	ScalarFunction result(Identifier(StringDecompressFunctionName()), {input_type}, LogicalType::VARCHAR,
 	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr,
 	                      StringDecompressLocalState::Init);
 	result.SetSerializeCallback(CMStringDecompressSerialize);

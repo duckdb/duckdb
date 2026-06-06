@@ -292,14 +292,14 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 	auto current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
-		return current_db.GetName();
+		return current_db.GetIdentifierName();
 	}
 	if (component.literal == "current_schema") {
-		return current_schema.GetName();
+		return current_schema.GetIdentifierName();
 	}
 	if (component.literal == "current_database_and_schema") {
 		if (current_schema == "main") {
-			return current_db.GetName();
+			return current_db.GetIdentifierName();
 		} else {
 			return current_db + "." + current_schema;
 		}

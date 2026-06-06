@@ -29,7 +29,7 @@ void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parame
 				error_msg = "Candidates:\n" + named_params;
 			}
 			throw BinderException(error_context, "Invalid named parameter \"%s\" for function %s\n%s", kv.first,
-			                      func_name.GetName(), error_msg);
+			                      func_name.GetIdentifierName(), error_msg);
 		}
 		if (entry->second.id() != LogicalTypeId::ANY) {
 			kv.second = kv.second.DefaultCastAs(entry->second);

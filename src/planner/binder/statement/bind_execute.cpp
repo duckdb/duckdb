@@ -87,7 +87,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	properties.parameter_count = parameter_count;
 
 	BoundStatement result;
-	result.names = prepared->names;
+	result.names = StringsToIdentifiers(prepared->names);
 	result.types = prepared->types;
 
 	prepared->Bind(std::move(bind_values));

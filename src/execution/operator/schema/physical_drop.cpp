@@ -21,7 +21,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(info->name.GetName());
+		auto stmt_iter = statements.find(info->name.GetIdentifierName());
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}
@@ -49,8 +49,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->name.GetName(), info->if_not_found, extra_info.persist_mode,
-		                      extra_info.secret_storage);
+		    .DropSecretByName(context.client, info->name.GetIdentifierName(), info->if_not_found,
+		                      extra_info.persist_mode, extra_info.secret_storage);
 		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {

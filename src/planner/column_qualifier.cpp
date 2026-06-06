@@ -79,7 +79,7 @@ unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_na
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::CreateStructExtract(unique_ptr<ParsedExpression> base,
-                                                                  const string &field_name) {
+                                                                  const Identifier &field_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
 	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));
@@ -133,13 +133,13 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	for (const auto &column_name : column_names) {
 		auto ref = binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name,
 		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-		child_expressions.emplace_back(column_name.GetName(), std::move(ref));
+		child_expressions.emplace_back(column_name.GetIdentifierName(), std::move(ref));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr, const string &column_name,
-                                                                ErrorData &error) {
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,
+                                                                const Identifier &column_name, ErrorData &error) {
 	auto using_binding = binder.bind_context.GetUsingBinding(Identifier(column_name));
 	if (using_binding) {
 		// we are referencing a USING column
@@ -161,7 +161,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	}
 
 	// try binding as a lambda parameter
-	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
+	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name.GetIdentifierName());
 	if (lambda_ref) {
 		return lambda_ref;
 	}
@@ -190,8 +190,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	}
 
 	// it's not, find candidates and error
-	auto similar_bindings = binder.bind_context.GetSimilarBindings(Identifier(column_name));
-	error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
+	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+	error = ErrorData(BinderException::ColumnNotFound(column_name.GetIdentifierName(), similar_bindings));
 	return nullptr;
 }
 
@@ -204,7 +204,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName().GetIdentifierName())) {
 			return;
 		}
 
@@ -241,7 +241,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	case ExpressionType::FUNCTION: {
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName().GetName())) {
+		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName().GetIdentifierName())) {
 			QualifyFunction(function);
 		}
 		if (function.IsLambdaFunction()) {
@@ -404,7 +404,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 	}
 	// part1 could be a column
 	ErrorData unused_error;
-	auto result_expr = QualifyColumnName(col_ref, col_ref.ColumnNames()[0].GetName(), unused_error);
+	auto result_expr = QualifyColumnName(col_ref, col_ref.ColumnNames()[0], unused_error);
 	if (result_expr) {
 		// it is! add the struct extract calls
 		struct_extract_start = 1;
@@ -422,13 +422,13 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 	optional_idx table_pos;
 	for (const auto &binding_entry : binder.bind_context.GetBindingsList()) {
 		auto &alias = binding_entry->GetBindingAlias();
-		string catalog = alias.GetCatalog().GetName();
-		string schema = alias.GetSchema().GetName();
-		string table = alias.GetAlias().GetName();
+		string catalog = alias.GetCatalog().GetIdentifierName();
+		string schema = alias.GetSchema().GetIdentifierName();
+		string table = alias.GetAlias().GetIdentifierName();
 		auto entry = binding_entry->GetStandardEntry();
 		if (entry) {
-			catalog = entry->ParentCatalog().GetName().GetName();
-			schema = entry->ParentSchema().name.GetName();
+			catalog = entry->ParentCatalog().GetName().GetIdentifierName();
+			schema = entry->ParentSchema().name.GetIdentifierName();
 		}
 
 		for (idx_t i = 0; i < 3; i++) {
@@ -502,7 +502,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(Colu
 
 	// create a struct extract with all remaining column names
 	for (idx_t i = struct_extract_start; i < col_ref.ColumnNames().size(); i++) {
-		result_expr = CreateStructExtract(std::move(result_expr), col_ref.ColumnNames()[i].GetName());
+		result_expr = CreateStructExtract(std::move(result_expr), col_ref.ColumnNames()[i]);
 	}
 
 	return result_expr;
@@ -533,7 +533,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
                                                                         ErrorData &error) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		auto lambda_ref =
+		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
 		if (lambda_ref) {
 			return lambda_ref;
 		}
@@ -572,10 +573,10 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
 
 		// otherwise check if we can turn this into a struct extract
 		ErrorData other_error;
-		auto qualified_col_ref = QualifyColumnName(col_ref, col_ref.ColumnNames()[0].GetName(), other_error);
+		auto qualified_col_ref = QualifyColumnName(col_ref, col_ref.ColumnNames()[0], other_error);
 		if (qualified_col_ref) {
 			// we could: create a struct extract
-			return CreateStructExtract(std::move(qualified_col_ref), col_ref.ColumnNames()[1].GetName());
+			return CreateStructExtract(std::move(qualified_col_ref), col_ref.ColumnNames()[1]);
 		}
 		// we could not! Try creating an implicit struct_pack
 		return CreateStructPack(col_ref);

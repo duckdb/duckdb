@@ -232,7 +232,7 @@ public:
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
-	explicit CopyFunction(const string &name);
+	explicit CopyFunction(const Identifier &name);
 
 	//! Plan rewrite copy function
 	copy_to_plan_t plan;

@@ -7,17 +7,17 @@
 
 namespace duckdb {
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p)
     : name(std::move(name_p)), type(std::move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
                                    TableColumnType category)
     : name(std::move(name_p)), type(std::move(type_p)), category(category), expression(std::move(expression)) {
 }
 
 ColumnDefinition ColumnDefinition::Copy() const {
-	ColumnDefinition copy(name.GetName(), type);
+	ColumnDefinition copy(name, type);
 	copy.oid = oid;
 	copy.storage_oid = storage_oid;
 	copy.expression = expression ? expression->Copy() : nullptr;
@@ -185,7 +185,7 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
-		dependencies.push_back(name);
+		dependencies.emplace_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		if (expr.GetExpressionType() == ExpressionType::LAMBDA) {

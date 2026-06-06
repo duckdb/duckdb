@@ -16,8 +16,8 @@ struct DBGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	uint32_t children = 1;
@@ -31,8 +31,8 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 	// Set the current catalog and schema.
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
 	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
-	result->catalog = current_catalog.GetName();
-	result->schema = current_schema.GetName();
+	result->catalog = current_catalog;
+	result->schema = current_schema;
 
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
@@ -41,9 +41,9 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -75,9 +75,10 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	if (data.finished) {
 		return;
 	}
-	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
-	                                 data.step);
+	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog.GetIdentifierName(), data.schema.GetIdentifierName(),
+	                                     data.suffix);
+	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog.GetIdentifierName(),
+	                                 data.schema.GetIdentifierName(), data.suffix, data.children, data.step);
 
 	data.finished = true;
 }

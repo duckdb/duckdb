@@ -130,7 +130,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 	auto &bind_context = binder->bind_context;
 	auto table_index = binder->GenerateTableIndex();
-	bind_context.AddGenericBinding(table_index, "copy_csv", names, sql_types);
+	bind_context.AddGenericBinding(table_index, "copy_csv", StringsToIdentifiers(names), sql_types);
 
 	// Create the ParsedExpressions (cast, strftime, etc..)
 	vector<unique_ptr<ParsedExpression>> unbound_expressions;

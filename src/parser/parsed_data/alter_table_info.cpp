@@ -25,9 +25,9 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog.GetName(), schema.GetName(),
-	                                                      name.GetName(), owner_schema.GetName(), owner_name.GetName(),
-	                                                      if_not_found);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(
+	    entry_catalog_type, catalog.GetIdentifierName(), schema.GetIdentifierName(), name.GetIdentifierName(),
+	    owner_schema.GetIdentifierName(), owner_name.GetIdentifierName(), if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -61,8 +61,9 @@ CatalogType SetCommentInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog.GetName(), schema.GetName(),
-	                                                 name.GetName(), comment_value, if_not_found);
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog.GetIdentifierName(),
+	                                                 schema.GetIdentifierName(), name.GetIdentifierName(),
+	                                                 comment_value, if_not_found);
 }
 
 string SetCommentInfo::ToString() const {
@@ -114,7 +115,8 @@ RenameColumnInfo::~RenameColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name.GetName(), new_name.GetName());
+	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name.GetIdentifierName(),
+	                                                   new_name.GetIdentifierName());
 }
 
 string RenameColumnInfo::ToString() const {
@@ -147,7 +149,7 @@ RenameFieldInfo::~RenameFieldInfo() {
 }
 
 unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name.GetName());
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name.GetIdentifierName());
 }
 
 string RenameFieldInfo::ToString() const {
@@ -184,7 +186,7 @@ RenameTableInfo::~RenameTableInfo() {
 }
 
 unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name.GetName());
+	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name.GetIdentifierName());
 }
 
 string RenameTableInfo::ToString() const {
@@ -294,8 +296,8 @@ RemoveColumnInfo::~RemoveColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column.GetName(), if_column_exists,
-	                                                   cascade);
+	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column.GetIdentifierName(),
+	                                                   if_column_exists, cascade);
 }
 
 string RemoveColumnInfo::ToString() const {
@@ -420,7 +422,7 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name.GetName(),
+	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name.GetIdentifierName(),
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
@@ -456,7 +458,7 @@ SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name.GetName());
+	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name.GetIdentifierName());
 }
 
 string SetNotNullInfo::ToString() const {
@@ -486,7 +488,7 @@ DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name.GetName());
+	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name.GetIdentifierName());
 }
 
 string DropNotNullInfo::ToString() const {
@@ -520,7 +522,7 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
-	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table.GetName(), pk_columns,
+	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table.GetIdentifierName(), pk_columns,
 	                                                      fk_columns, pk_keys, fk_keys, type);
 }
 
@@ -558,7 +560,7 @@ RenameViewInfo::~RenameViewInfo() {
 }
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name.GetName());
+	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name.GetIdentifierName());
 }
 
 string RenameViewInfo::ToString() const {

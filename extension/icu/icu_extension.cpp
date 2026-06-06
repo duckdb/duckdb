@@ -161,7 +161,7 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &
 		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 
-	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName().GetName());
+	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName().GetIdentifierName());
 	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");
@@ -200,7 +200,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 
 static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction,
+	                      ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
 	result.SetSerializeCallback(IcuBindData::Serialize);

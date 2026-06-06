@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.FunctionName().GetName())) {
+		if (IsUnnestFunction(function.FunctionName().GetIdentifierName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
@@ -401,7 +401,7 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 		return true;
 	}
 	if (colref.ColumnNames().size() == 2) {
-		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+		return colref.GetTableName() == "alias";
 	}
 	return false;
 }

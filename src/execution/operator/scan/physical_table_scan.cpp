@@ -346,7 +346,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Function"] = StringUtil::Upper(function.name.GetName());
+		result["Function"] = StringUtil::Upper(function.name.GetIdentifierName());
 	}
 	if (function.projection_pushdown) {
 		string projections;

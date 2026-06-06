@@ -37,7 +37,7 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	}
 	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.ColumnNames().back());
 	for (idx_t i = struct_start; i + 1 < colref.ColumnNames().size(); i++) {
-		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i].GetName());
+		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i]);
 	}
 	return BindExpression(result, 0);
 }

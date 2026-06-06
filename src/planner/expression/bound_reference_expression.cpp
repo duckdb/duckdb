@@ -21,7 +21,7 @@ string BoundReferenceExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias.GetName();
+		return alias.GetIdentifierName();
 	}
 	return "#" + to_string(index);
 }

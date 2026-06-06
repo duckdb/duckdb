@@ -34,7 +34,7 @@ WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
 void WALWriteState::SwitchTable(DuckTableEntry &table_entry, UndoFlags new_op) {
 	if (current_table_entry.get() != &table_entry) {
 		// write the current table to the log
-		log.WriteSetTable(table_entry.schema.name.GetName(), table_entry.name.GetName());
+		log.WriteSetTable(table_entry.schema.name.GetIdentifierName(), table_entry.name.GetIdentifierName());
 		current_table_entry = table_entry;
 	}
 }

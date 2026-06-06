@@ -74,7 +74,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 		D_ASSERT(!expr_list.values.empty());
 		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(),
-		                               table.name.GetName());
+		                               table.name.GetIdentifierName());
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -84,7 +84,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table.GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
-			expr_list.expected_names[col_idx] = column.Name().GetName();
+			expr_list.expected_names[col_idx] = column.Name();
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
@@ -149,7 +149,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 		}
 
 		// Don't qualify lambda parameters.
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName().GetIdentifierName())) {
 			return;
 		}
 
@@ -278,7 +278,7 @@ static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &stor
 	unordered_set<string> conflict_column_names;
 	for (auto &col : table.GetColumns().Physical()) {
 		if (conflict_column_ids.count(col.Physical().index)) {
-			conflict_column_names.insert(col.Name().GetName());
+			conflict_column_names.insert(col.Name().GetIdentifierName());
 		}
 	}
 	return conflict_column_names;
@@ -290,7 +290,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto &on_conflict_info = *node.on_conflict_info;
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
-	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias.GetName() : node.table.GetName();
+	string table_name =
+	    !node.table_ref->alias.empty() ? node.table_ref->alias.GetIdentifierName() : node.table.GetIdentifierName();
 	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
@@ -583,7 +584,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		root_select = select_binder->Bind(*node.select_statement);
 		MoveCorrelatedExpressions(*select_binder);
 
-		node.columns = StringsToIdentifiers(root_select.names);
+		node.columns = root_select.names;
 	}
 
 	vector<LogicalIndex> named_column_map;
@@ -593,7 +594,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name.GetName(), schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
 	insert->bound_constraints = BindConstraints(table);
 	if (!node.select_statement && !node.default_values) {
 		result.plan = std::move(insert);
@@ -613,7 +615,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		}
 		// inserting from a select - check if the column count matches
 		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(),
-		                               table.name.GetName());
+		                               table.name.GetIdentifierName());
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {
@@ -628,7 +630,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
 		return BindReturning(std::move(node.returning_list), table,
-		                     node.table_ref ? node.table_ref->alias.GetName() : string(), insert_table_index,
+		                     node.table_ref ? node.table_ref->alias.GetIdentifierName() : string(), insert_table_index,
 		                     std::move(index_as_logicaloperator));
 	}
 

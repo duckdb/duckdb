@@ -69,10 +69,16 @@ QueryResult::~QueryResult() {
 }
 
 void QueryResult::DeduplicateColumns(vector<string> &names) {
+	auto identifiers = StringsToIdentifiers(names);
+	DeduplicateColumns(identifiers);
+	names = IdentifiersToStrings(identifiers);
+}
+
+void QueryResult::DeduplicateColumns(vector<Identifier> &names) {
 	unordered_map<string, idx_t> name_map;
 	for (auto &column_name : names) {
 		// put it all lower_case
-		auto low_column_name = StringUtil::Lower(column_name);
+		auto low_column_name = StringUtil::Lower(column_name.GetIdentifierName());
 		if (name_map.find(low_column_name) == name_map.end()) {
 			// Name does not exist yet
 			name_map[low_column_name]++;
@@ -86,7 +92,7 @@ void QueryResult::DeduplicateColumns(vector<string> &names) {
 				new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
 				new_column_name_low = StringUtil::Lower(new_column_name);
 			}
-			column_name = new_column_name;
+			column_name = Identifier(new_column_name);
 			name_map[new_column_name_low]++;
 		}
 	}

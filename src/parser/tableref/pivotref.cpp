@@ -147,7 +147,7 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
-				if (!unique_names.insert(child.GetExpression().GetAlias().GetName()).second) {
+				if (!unique_names.insert(child.GetExpression().GetAlias().GetIdentifierName()).second) {
 					return false;
 				}
 				Value child_value;

@@ -34,11 +34,13 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
-			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias().GetName());
+			                      colref.GetAlias().empty() ? colref.ToString()
+			                                                : colref.GetAlias().GetIdentifierName());
 		}
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
-			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias().GetName());
+			                      colref.GetAlias().empty() ? colref.ToString()
+			                                                : colref.GetAlias().GetIdentifierName());
 		}
 	});
 }
@@ -179,7 +181,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			action.expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
 		CheckInsertColumnCountMismatch(expected_types.size(), action.expressions.size(), !action.insert_columns.empty(),
-		                               table.name.GetName());
+		                               table.name.GetIdentifierName());
 		// explicit expressions - plan them
 		for (idx_t i = 0; i < action.expressions.size(); i++) {
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
@@ -269,7 +271,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
-	string table_alias = node.target->alias.GetName();
+	string table_alias = node.target->alias.GetIdentifierName();
 	auto bound_table = target_binder->Bind(*node.target);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
@@ -327,7 +329,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		auto &column_names = binding.GetColumnNames();
 		for (idx_t c = 0; c < column_names.size(); c++) {
 			source_aliases.push_back(binding.GetBindingAlias());
-			source_names.push_back(column_names[c].GetName());
+			source_names.push_back(column_names[c].GetIdentifierName());
 		}
 	}
 
@@ -381,7 +383,8 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind table constraints/default values in case these are referenced
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetName(), schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
 
 	merge_into->bound_constraints = BindConstraints(table);
 

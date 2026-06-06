@@ -113,7 +113,7 @@
       {
         "id": 206,
         "name": "names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 207,
@@ -204,7 +204,7 @@
       {
         "id": 201,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
@@ -219,7 +219,7 @@
       {
         "id": 204,
         "name": "names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,

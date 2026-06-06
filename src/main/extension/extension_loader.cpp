@@ -46,7 +46,7 @@ void ExtensionLoader::SetDescription(const string &description) {
 
 void ExtensionLoader::UseDedicatedSchemaForExtension(const Identifier &extension_schema_name) {
 	CreateSchema(extension_schema_name);
-	UseDefaultSchema(extension_schema_name.GetName());
+	UseDefaultSchema(extension_schema_name.GetIdentifierName());
 	AddSchemaToSearchPath(extension_schema_name);
 }
 
@@ -103,7 +103,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	}
 
 	// TODO: remove extension schema from search path if loading extension failed
-	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema.GetName());
+	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema.GetIdentifierName());
 }
 
 void ExtensionLoader::RefreshSearchPath(ClientContext &context) {
@@ -120,7 +120,7 @@ void ExtensionLoader::FinalizeLoad() {
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
-	ScalarFunctionSet set(function.name.GetName());
+	ScalarFunctionSet set(function.name.GetIdentifierName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -144,7 +144,7 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
-	AggregateFunctionSet set(function.name.GetName());
+	AggregateFunctionSet set(function.name.GetIdentifierName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -168,7 +168,7 @@ void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunction function) {
-	WindowFunctionSet set(function.name.GetName());
+	WindowFunctionSet set(function.name.GetIdentifierName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -198,7 +198,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(TableFunction function) {
-	TableFunctionSet set(function.name.GetName());
+	TableFunctionSet set(function.name.GetIdentifierName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -224,14 +224,14 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 	D_ASSERT(!function.name.empty());
-	PragmaFunctionSet set(function.name.GetName());
+	PragmaFunctionSet set(function.name.GetIdentifierName());
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	auto function_name = function.name.GetName();
+	auto function_name = function.name.GetIdentifierName();
 	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
 	info.extension_name = Identifier(GetRegisteredExtensionName());
 	info.schema = Identifier(loader_info.extension_schema);
@@ -284,13 +284,13 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
-	auto &scalar_function = GetFunction(function.name.GetName());
+	auto &scalar_function = GetFunction(function.name.GetIdentifierName());
 	scalar_function.functions.AddFunction(std::move(function));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
-	auto &scalar_function = GetFunction(functions.name.GetName());
+	auto &scalar_function = GetFunction(functions.name.GetIdentifierName());
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		scalar_function.functions.AddFunction(std::move(function));
@@ -298,7 +298,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
-	auto &table_function = GetTableFunction(functions.name.GetName());
+	auto &table_function = GetTableFunction(functions.name.GetIdentifierName());
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		table_function.functions.AddFunction(std::move(function));

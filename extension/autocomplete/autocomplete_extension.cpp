@@ -128,7 +128,7 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = *entry_ref;
-		AutoCompleteCandidate candidate(entry.name.GetName(), SuggestionState::SUGGEST_CATALOG_NAME, 0);
+		AutoCompleteCandidate candidate(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_CATALOG_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -140,7 +140,7 @@ static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
 	auto all_entries = GetAllSchemas(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = entry_ref.get();
-		AutoCompleteCandidate candidate(entry.name.GetName(), SuggestionState::SUGGEST_SCHEMA_NAME, 0);
+		AutoCompleteCandidate candidate(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_SCHEMA_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -154,7 +154,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		// prioritize user-defined entries (views & tables)
 		int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
-		suggestions.emplace_back(entry.name.GetName(), SuggestionState::SUGGEST_TABLE_NAME, bonus);
+		suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_TABLE_NAME, bonus);
 	}
 	return suggestions;
 }
@@ -166,7 +166,7 @@ static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		// prioritize user-defined types
 		int32_t bonus = (entry.internal) ? 0 : 1;
-		suggestions.emplace_back(entry.name.GetName(), SuggestionState::SUGGEST_TYPE_NAME, bonus,
+		suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_TYPE_NAME, bonus,
 		                         CandidateType::KEYWORD);
 	}
 	return suggestions;
@@ -189,7 +189,7 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 			if (column_info) {
 				// view has names
 				for (idx_t n = 0; n < column_info->names.size(); n++) {
-					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+					auto name = n < view.aliases.size() ? Identifier(view.aliases[n]) : column_info->names[n];
 					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 				}
 			} else {
@@ -199,11 +199,11 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 				}
 			}
 		} else {
-			if (StringUtil::CharacterIsOperator(entry.name.GetName()[0])) {
+			if (StringUtil::CharacterIsOperator(entry.name.GetIdentifierName()[0])) {
 				continue;
 			}
 			int32_t bonus = entry.internal ? 0 : 2;
-			suggestions.emplace_back(entry.name.GetName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 		};
 	}
 	return suggestions;
@@ -223,7 +223,7 @@ static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
 	for (const auto &pragma : all_pragmas) {
-		AutoCompleteCandidate candidate(pragma.get().name.GetName(), SuggestionState::SUGGEST_PRAGMA_NAME, 0);
+		AutoCompleteCandidate candidate(pragma.get().name.GetIdentifierName(), SuggestionState::SUGGEST_PRAGMA_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
@@ -253,7 +253,7 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 	vector<AutoCompleteCandidate> suggestions;
 	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
 	for (const auto &scalar_function : scalar_functions) {
-		AutoCompleteCandidate candidate(scalar_function.get().name.GetName(),
+		AutoCompleteCandidate candidate(scalar_function.get().name.GetIdentifierName(),
 		                                SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
@@ -265,7 +265,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 	vector<AutoCompleteCandidate> suggestions;
 	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
 	for (const auto &table_function : table_functions) {
-		AutoCompleteCandidate candidate(table_function.get().name.GetName(),
+		AutoCompleteCandidate candidate(table_function.get().name.GetIdentifierName(),
 		                                SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}

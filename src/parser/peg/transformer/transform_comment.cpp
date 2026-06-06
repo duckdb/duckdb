@@ -21,18 +21,18 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 			throw ParserException("Invalid column reference: '%s'", column_name);
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
-		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog.GetName(), qualified_name.schema.GetName(),
-		                                       qualified_name.name.GetName(), column_name, comment_value,
-		                                       OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetColumnCommentInfo>(
+		    qualified_name.catalog.GetIdentifierName(), qualified_name.schema.GetIdentifierName(),
+		    qualified_name.name.GetIdentifierName(), column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
 	} else if (comment_on_type == CatalogType::SCHEMA_ENTRY) {
 		throw NotImplementedException("Adding comments to schemas is not implemented");
 	} else {
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
-		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.catalog.GetName(),
-		                                 qualified_name.schema.GetName(), qualified_name.name.GetName(), comment_value,
-		                                 OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetCommentInfo>(
+		    comment_on_type, qualified_name.catalog.GetIdentifierName(), qualified_name.schema.GetIdentifierName(),
+		    qualified_name.name.GetIdentifierName(), comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	if (!info) {
 		throw NotImplementedException("Cannot comment on this type");

@@ -89,10 +89,10 @@ string TypeExpression::ToString() const {
 		return "INTERVAL";
 	}
 
-	auto type_id = TransformStringToLogicalTypeId(type_name.GetName());
+	auto type_id = TransformStringToLogicalTypeId(type_name.GetIdentifierName());
 	if (type_id != LogicalTypeId::UNBOUND && type_id != LogicalTypeId::SQLNULL) {
 		// Built-in type name
-		result += type_name.GetName();
+		result += type_name.GetIdentifierName();
 	} else {
 		result += SQLIdentifier(type_name);
 	}

@@ -65,7 +65,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
 	for (idx_t i = 0; i < statement.aliases.size() && i < result.names.size(); i++) {
-		result.names[i] = statement.aliases[i].GetName();
+		result.names[i] = statement.aliases[i];
 	}
 
 	// This allows the right side to reference the CTE recursively
@@ -294,7 +294,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		                                   std::move(right_node), LogicalOperatorType::LOGICAL_UNION, union_all);
 		result.plan = std::move(root);
 	} else {
-		auto root = make_uniq<LogicalRecursiveCTE>(ctename.GetName(), setop_index, result.types.size(), union_all,
+		auto root = make_uniq<LogicalRecursiveCTE>(ctename, setop_index, result.types.size(), union_all,
 		                                           std::move(key_targets), std::move(left_node), std::move(right_node));
 		root->ref_recurring = ref_recurring;
 		root->internal_types = std::move(internal_types);

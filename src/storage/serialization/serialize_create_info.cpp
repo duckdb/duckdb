@@ -251,10 +251,10 @@ unique_ptr<CreateInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
 void CreateViewInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "view_name", view_name);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "aliases", aliases);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(204, "names", names);
 	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
 	}
@@ -266,10 +266,10 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto view_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "view_name");
-	auto aliases = deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases");
+	auto aliases = deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "aliases");
 	auto types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types");
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
-	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(204, "names");
+	auto names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "names");
 	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
 	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<identifier_map_t<Value>>(
 	    206, "column_comments_map", identifier_map_t<Value>());

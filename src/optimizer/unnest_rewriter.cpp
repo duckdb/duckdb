@@ -113,7 +113,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	curr_op = &delim_join.children[other_idx];
 	if (curr_op->get()->type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = curr_op->get()->Cast<LogicalGet>();
-		if (!ExpressionBinder::IsUnnestFunction(get.function.name.GetName())) {
+		if (!ExpressionBinder::IsUnnestFunction(get.function.name.GetIdentifierName())) {
 			return;
 		}
 		// pattern2: delim_get -> projection -> table_in_out(unnest)
@@ -398,7 +398,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
 			auto &proj = op.Cast<LogicalProjection>();
-			lhs_bindings.back().alias = proj.expressions[i]->GetAlias().GetName();
+			lhs_bindings.back().alias = proj.expressions[i]->GetAlias().GetIdentifierName();
 		}
 	}
 }

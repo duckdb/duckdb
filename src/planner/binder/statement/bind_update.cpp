@@ -40,10 +40,12 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		if (!table.ColumnExists(colname)) {
 			vector<string> column_names;
 			for (auto &col : table.GetColumns().Physical()) {
-				column_names.emplace_back(col.Name().GetName());
+				column_names.emplace_back(col.Name().GetIdentifierName());
 			}
-			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname.GetName(), "Did you mean");
-			throw BinderException("Referenced update column %s not found in table!\n%s", colname.GetName(), candidates);
+			auto candidates =
+			    StringUtil::CandidatesErrorMessage(column_names, colname.GetIdentifierName(), "Did you mean");
+			throw BinderException("Referenced update column %s not found in table!\n%s", colname.GetIdentifierName(),
+			                      candidates);
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
@@ -168,7 +170,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name.GetName(), schema_name.GetName());
+	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
@@ -204,8 +207,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	if (!node.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(node.returning_list), table, node.table->alias.GetName(), update_table_index,
-		                     std::move(update_as_logicaloperator));
+		return BindReturning(std::move(node.returning_list), table, node.table->alias.GetIdentifierName(),
+		                     update_table_index, std::move(update_as_logicaloperator));
 	}
 
 	BoundStatement result;

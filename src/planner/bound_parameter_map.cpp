@@ -49,14 +49,14 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	// No value has been supplied yet,
 	// We return a shared pointer to an object that will get populated with a Value later
 	// When the BoundParameterExpression gets executed, this will be used to get the corresponding value
-	auto param_data = CreateOrGetData(identifier);
+	auto param_data = CreateOrGetData(identifier.GetIdentifierName());
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 
 	bound_expr->ParameterDataMutable() = param_data;
 	bound_expr->SetAlias(expr.GetAlias());
 
 	auto param_type = param_data->return_type;
-	auto identifier_type = GetReturnType(identifier);
+	auto identifier_type = GetReturnType(identifier.GetIdentifierName());
 
 	// we found a type for this bound parameter, but now we found another occurrence with the same identifier,
 	// a CAST around this consecutive occurrence might swallow the unknown type of this consecutive occurrence,

@@ -9,7 +9,7 @@ ScalarFunctionSet::ScalarFunctionSet() : FunctionSet("") {
 ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
-ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move(fun.name.GetName())) {
+ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move(fun.name.GetIdentifierName())) {
 	functions.push_back(std::move(fun));
 }
 
@@ -31,7 +31,8 @@ AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
 AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
-AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(std::move(fun.name.GetName())) {
+AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun)
+    : FunctionSet(std::move(fun.name.GetIdentifierName())) {
 	functions.push_back(std::move(fun));
 }
 
@@ -72,7 +73,7 @@ WindowFunctionSet::WindowFunctionSet() : FunctionSet("") {
 WindowFunctionSet::WindowFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
-WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name.GetName())) {
+WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name.GetIdentifierName())) {
 	functions.push_back(std::move(fun));
 }
 
@@ -91,7 +92,7 @@ const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &c
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
-TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fun.name.GetName())) {
+TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fun.name.GetIdentifierName())) {
 	functions.push_back(std::move(fun));
 }
 
@@ -110,7 +111,7 @@ const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &con
 PragmaFunctionSet::PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
-PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(std::move(fun.name.GetName())) {
+PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(std::move(fun.name.GetIdentifierName())) {
 	functions.push_back(std::move(fun));
 }
 

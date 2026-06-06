@@ -42,9 +42,9 @@ LogicalDependency::LogicalDependency() : entry(), catalog() {
 
 static string GetSchema(CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name.GetName();
+		return entry.name.GetIdentifierName();
 	}
-	return entry.ParentSchema().name.GetName();
+	return entry.ParentSchema().name.GetIdentifierName();
 }
 
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
@@ -64,7 +64,7 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, Identifier catalog_str)
     : entry(std::move(entry_p)), catalog(std::move(catalog_str)) {
 	if (catalog_p) {
-		catalog = Identifier(catalog_p->GetName());
+		catalog = catalog_p->GetName();
 	}
 }
 

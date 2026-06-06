@@ -65,7 +65,8 @@ public:
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
 			for (auto &child_entry : StructType::GetChildTypes(type)) {
-				result.children.push_back(CreateFromNameAndType(child_entry.first.GetName(), child_entry.second));
+				result.children.push_back(
+				    CreateFromNameAndType(child_entry.first.GetIdentifierName(), child_entry.second));
 			}
 		}
 		return result;

@@ -335,9 +335,9 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	}
 
 	auto &type_expr = expr->Cast<TypeExpression>();
-	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName().GetName());
-	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog().GetName());
-	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema().GetName());
+	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName().GetIdentifierName());
+	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog().GetIdentifierName());
+	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema().GetIdentifierName());
 
 	// Try to write the user type mods too
 	vector<Value> user_type_mods;

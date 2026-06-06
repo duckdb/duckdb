@@ -63,7 +63,7 @@ ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context,
 	if (names_p.empty()) {
 		auto &first_list = expressions_p[0];
 		for (auto &expr : first_list) {
-			names_p.push_back(expr->GetName());
+			names_p.emplace_back(expr->GetName());
 		}
 	}
 	names = std::move(names_p);
@@ -85,7 +85,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	if (columns.empty()) {
 		// no columns yet: only set up names
 		for (idx_t i = 0; i < names.size(); i++) {
-			table_ref->expected_names.push_back(names[i]);
+			table_ref->expected_names.push_back(Identifier(names[i]));
 		}
 	} else {
 		for (idx_t i = 0; i < columns.size(); i++) {

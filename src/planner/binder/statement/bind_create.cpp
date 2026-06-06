@@ -95,10 +95,10 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &c
 		if (!catalog_ptr) {
 			continue;
 		}
-		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema.GetName())) {
+		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema.GetIdentifierName())) {
 			throw BinderException(
 			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-			    schema.GetName(), catalog_name.GetName(), schema.GetName());
+			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
 		}
 	}
 	catalog = schema;
@@ -181,7 +181,8 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 
 void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
                       const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
+                      const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+                      vector<Identifier> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
@@ -354,20 +355,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		vector<LogicalType> dummy_types;
-		vector<string> dummy_names;
+		vector<Identifier> dummy_names;
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
-			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
+			dummy_names.emplace_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
 
 		if (!type_overloads.insert(dummy_types).second) {
 			throw BinderException(
 			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
-			    base.name.GetName());
+			    base.name.GetIdentifierName());
 		}
 
-		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetName());
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetIdentifierName());
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
@@ -550,7 +551,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
-	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name.GetName();
+	validation_binder->global_binder_state->trigger_creation_name =
+	    create_trigger_info.trigger_name.GetIdentifierName();
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {

@@ -2106,7 +2106,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 	}
 
 	// Try to bind as far as we can
-	auto result = DefaultTypeGenerator::TryDefaultBind(name.GetName(), bound_args);
+	auto result = DefaultTypeGenerator::TryDefaultBind(name.GetIdentifierName(), bound_args);
 	if (result.id() != LogicalTypeId::INVALID) {
 		return result;
 	}

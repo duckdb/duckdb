@@ -21,14 +21,14 @@ struct AliasBindData : public FunctionData {
 };
 
 unique_ptr<FunctionData> AliasBind(BindScalarFunctionInput &input) {
-	return make_uniq<AliasBindData>(input.GetArguments()[0]->GetName());
+	return make_uniq<AliasBindData>(input.GetArguments()[0]->GetName().GetIdentifierName());
 }
 } // namespace
 
 static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_data = func_expr.BindInfo()->Cast<AliasBindData>();
-	Value v(state.expr.GetAlias().empty() ? bind_data.alias : state.expr.GetAlias().GetName());
+	Value v(state.expr.GetAlias().empty() ? bind_data.alias : state.expr.GetAlias().GetIdentifierName());
 	result.Reference(v, count_t(args.size()));
 }
 

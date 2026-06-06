@@ -37,10 +37,10 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
 		res = table_function.get_multi_file_reader(table_function);
-		res->function_name = table_function.name.GetName();
+		res->function_name = table_function.name.GetIdentifierName();
 	} else {
 		res = make_uniq<MultiFileReader>();
-		res->function_name = table_function.name.GetName();
+		res->function_name = table_function.name.GetIdentifierName();
 	}
 	return res;
 }
@@ -191,7 +191,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
-			const string &name = StructType::GetChildName(val.type(), i).GetName();
+			const string &name = StructType::GetChildName(val.type(), i).GetIdentifierName();
 			options.hive_types_schema[name] = transformed_type;
 		}
 		D_ASSERT(!options.hive_types_schema.empty());
@@ -524,7 +524,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
-	TableFunctionSet function_set(table_function.name.GetName());
+	TableFunctionSet function_set(table_function.name.GetIdentifierName());
 	function_set.AddFunction(table_function);
 	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
 	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);

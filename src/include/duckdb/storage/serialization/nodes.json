@@ -8,7 +8,7 @@
       {
         "id": 100,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 101,

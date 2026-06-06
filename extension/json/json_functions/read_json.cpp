@@ -15,7 +15,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 		case_insensitive_set_t child_names;
 		child_list_t<LogicalType> child_types;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
-			auto insert_success = child_names.insert(child_type.first.GetName()).second;
+			auto insert_success = child_names.insert(child_type.first.GetIdentifierName()).second;
 			if (!insert_success) {
 				if (ignore_errors) {
 					continue;

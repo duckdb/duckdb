@@ -34,7 +34,7 @@ const Identifier &EntryLookupInfo::GetEntryIdentifier() const {
 }
 
 const string &EntryLookupInfo::GetEntryName() const {
-	return name.GetName();
+	return name.GetIdentifierName();
 }
 
 const QueryErrorContext &EntryLookupInfo::GetErrorContext() const {

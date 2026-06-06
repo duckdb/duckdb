@@ -127,8 +127,8 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 	auto identifier_list = ExtractParseResultsFromList(extract_parens);
 	ColumnList result;
 	for (auto identifier : identifier_list) {
-		result.AddColumn(
-		    ColumnDefinition(identifier.get().Cast<IdentifierParseResult>().identifier, LogicalType::UNKNOWN));
+		result.AddColumn(ColumnDefinition(Identifier(identifier.get().Cast<IdentifierParseResult>().identifier),
+		                                  LogicalType::UNKNOWN));
 	}
 	return result;
 }
@@ -303,7 +303,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				}
 			} else if (cc_entry.constraint_name == "ForeignKeyConstraint") {
 				auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
-				fk_constraint.fk_columns.emplace_back(qualified_name.name.GetName());
+				fk_constraint.fk_columns.emplace_back(qualified_name.name.GetIdentifierName());
 				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (generated_opt.HasResult()) {
@@ -318,7 +318,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 						throw InternalException("Expected a type expression");
 					}
 					auto &type_expr = expr->Cast<TypeExpression>();
-					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName().GetName()) !=
+					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName().GetIdentifierName()) !=
 					    LogicalTypeId::VARCHAR) {
 						throw ParserException("Only VARCHAR columns can have collations!");
 					}
@@ -347,8 +347,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 			                      qualified_name.name);
 		}
 
-		ColumnDefinition col(qualified_name.name.GetName(), type, std::move(generated.expr),
-		                     TableColumnType::GENERATED);
+		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
 		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
 			throw ParserException("Not allowed to set default on a generated column");
@@ -358,7 +357,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		return result;
 	}
 
-	ColumnDefinition col(qualified_name.name.GetName(), type);
+	ColumnDefinition col(qualified_name.name, type);
 
 	if (column_constraint.default_value) {
 		col.SetDefaultValue(std::move(column_constraint.default_value));

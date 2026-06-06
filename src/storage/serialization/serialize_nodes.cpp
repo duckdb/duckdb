@@ -217,7 +217,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression");
 	auto category = deserializer.ReadProperty<TableColumnType>(103, "category");
-	ColumnDefinition result(name.GetName(), std::move(type), std::move(expression), category);
+	ColumnDefinition result(name, std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "comment", result.comment, Value());
 	deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(
@@ -269,7 +269,7 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 }
 
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "aliases", aliases);
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query",
 		                                                                 GetQueryForSerialization(serializer));
@@ -284,7 +284,7 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
-	auto aliases = deserializer.ReadPropertyWithDefault<vector<string>>(100, "aliases");
+	auto aliases = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "aliases");
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query");
 	auto materialized = deserializer.ReadProperty<CTEMaterialize>(102, "materialized");
 	auto key_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets");

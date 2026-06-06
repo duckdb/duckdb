@@ -26,7 +26,7 @@ BindContext::BindContext(Binder &binder) : binder(binder) {
 
 string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) {
 	if (alias.GetAlias() != other.GetAlias()) {
-		return alias.GetAlias().GetName();
+		return alias.GetAlias().GetIdentifierName();
 	}
 	if (alias.GetSchema() != other.GetSchema()) {
 		return alias.GetSchema() + "." + alias.GetAlias();
@@ -62,11 +62,11 @@ vector<string> BindContext::GetSimilarBindings(const Identifier &column_name) {
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
 		for (auto &name : binding.GetColumnNames()) {
-			double distance = StringUtil::SimilarityRating(name.GetName(), column_name.GetName());
+			double distance = StringUtil::SimilarityRating(name.GetIdentifierName(), column_name.GetIdentifierName());
 			// check if we need to qualify the column
 			auto matching_bindings = GetMatchingBindings(name);
 			if (matching_bindings.size() > 1) {
-				scores.emplace_back(binding.GetAlias() + "." + name.GetName(), distance);
+				scores.emplace_back(binding.GetAlias() + "." + name.GetIdentifierName(), distance);
 			} else {
 				scores.emplace_back(name, distance);
 			}
@@ -160,7 +160,7 @@ string BindContext::GetActualColumnName(Binding &binding, const Identifier &colu
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding.GetAlias(),
 		                        column_name);
 	} // LCOV_EXCL_STOP
-	return binding.GetColumnNames()[binding_index].GetName();
+	return binding.GetColumnNames()[binding_index].GetIdentifierName();
 }
 
 string BindContext::GetActualColumnName(const BindingAlias &binding_alias, const Identifier &column_name) {
@@ -229,13 +229,13 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	ErrorData error;
 	vector<string> names;
 	if (!catalog_name.empty()) {
-		names.push_back(catalog_name.GetName());
+		names.push_back(catalog_name.GetIdentifierName());
 	}
 	if (!schema_name.empty()) {
-		names.push_back(schema_name.GetName());
+		names.push_back(schema_name.GetIdentifierName());
 	}
-	names.push_back(table_name.GetName());
-	names.push_back(column_name.GetName());
+	names.push_back(table_name.GetIdentifierName());
+	names.push_back(column_name.GetIdentifierName());
 
 	BindingAlias alias {Identifier(catalog_name), Identifier(schema_name), Identifier(table_name)};
 	auto result = make_uniq<ColumnRefExpression>(StringsToIdentifiers(names));
@@ -424,13 +424,13 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 		idx_t entry_column_count = column_names.size();
 		if (ref.Index() == 0) {
 			// this is a row id
-			table_name = binding.GetAlias().GetName();
+			table_name = binding.GetAlias().GetIdentifierName();
 			column_name = "rowid";
 			return string();
 		}
 		if (current_position < entry_column_count) {
-			table_name = binding.GetAlias().GetName();
-			column_name = column_names[current_position].GetName();
+			table_name = binding.GetAlias().GetIdentifierName();
+			column_name = column_names[current_position].GetIdentifierName();
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -471,7 +471,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 
 bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
                   unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
-	auto replace_entry = expr.ReplaceList().find(qualified_name.column.GetName());
+	auto replace_entry = expr.ReplaceList().find(qualified_name.column.GetIdentifierName());
 	if (replace_entry != expr.ReplaceList().end()) {
 		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
 			new_expr = replace_entry->second->Copy();
@@ -575,14 +575,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 			auto &struct_children = StructType::GetChildTypes(col_type);
 			vector<string> column_names(3);
-			column_names[0] = binding->GetAlias().GetName();
-			column_names[1] = expr.RelationName().GetName();
+			column_names[0] = binding->GetAlias().GetIdentifierName();
+			column_names[1] = expr.RelationName().GetIdentifierName();
 			for (auto &child : struct_children) {
 				QualifiedColumnName qualified_name(Identifier(child.first));
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				column_names[2] = child.first.GetName();
+				column_names[2] = child.first.GetIdentifierName();
 				unique_ptr<ParsedExpression> new_expr =
 				    make_uniq<ColumnRefExpression>(StringsToIdentifiers(column_names));
 				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
@@ -630,14 +630,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	}
 }
 
-void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types) {
+void BindContext::GetTypesAndNames(vector<Identifier> &result_names, vector<LogicalType> &result_types) {
 	for (auto &binding_entry : bindings_list) {
 		auto &binding = *binding_entry;
 		auto &column_names = binding.GetColumnNames();
 		auto &column_types = binding.GetColumnTypes();
 		D_ASSERT(column_names.size() == column_types.size());
 		for (idx_t i = 0; i < column_names.size(); i++) {
-			result_names.push_back(column_names[i].GetName());
+			result_names.push_back(column_names[i]);
 			result_types.push_back(column_types[i]);
 		}
 	}
@@ -647,14 +647,14 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 	bindings_list.push_back(std::move(binding));
 }
 
-void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, virtual_column_map_t virtual_columns) {
 	AddBinding(
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
 }
 
-void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, bool add_virtual_columns) {
 	virtual_column_map_t virtual_columns;
@@ -664,7 +664,7 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
 	AddBaseTable(index, alias, names, types, bound_column_ids, entry, std::move(virtual_columns));
 }
 
-void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const Identifier &table_name) {
 	virtual_column_map_t virtual_columns;
@@ -672,7 +672,7 @@ void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const 
 	                                   index, std::move(virtual_columns)));
 }
 
-void BindContext::AddTableFunction(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddTableFunction(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                    const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                    optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns) {
 	AddBinding(
@@ -689,9 +689,9 @@ static string AddColumnNameToBinding(const string &base_name, case_insensitive_s
 	return name;
 }
 
-vector<string> BindContext::AliasColumnNames(const Identifier &table_name, const vector<string> &names,
-                                             const vector<Identifier> &column_aliases) {
-	vector<string> result;
+vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, const vector<Identifier> &names,
+                                                 const vector<Identifier> &column_aliases) {
+	vector<Identifier> result;
 	if (column_aliases.size() > names.size()) {
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
@@ -699,11 +699,11 @@ vector<string> BindContext::AliasColumnNames(const Identifier &table_name, const
 	case_insensitive_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
-		result.push_back(AddColumnNameToBinding(column_aliases[i].GetName(), current_names));
+		result.push_back(Identifier(AddColumnNameToBinding(column_aliases[i].GetIdentifierName(), current_names)));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
 	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-		result.push_back(AddColumnNameToBinding(names[i], current_names));
+		result.push_back(Identifier(AddColumnNameToBinding(names[i].GetIdentifierName(), current_names)));
 	}
 	return result;
 }
@@ -713,7 +713,7 @@ void BindContext::AddSubquery(TableIndex index, const Identifier &alias, Subquer
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddEntryBinding(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddEntryBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                   const vector<LogicalType> &types, StandardEntry &entry) {
 	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
@@ -730,7 +730,7 @@ void BindContext::AddSubquery(TableIndex index, const Identifier &alias, TableFu
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<string> &names,
+void BindContext::AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
                                     const vector<LogicalType> &types) {
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
@@ -744,7 +744,7 @@ void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
 	cte_bindings.push_back(std::move(binding));
 }
 
-void BindContext::AddCTEBinding(TableIndex index, BindingAlias alias_p, const vector<string> &names,
+void BindContext::AddCTEBinding(TableIndex index, BindingAlias alias_p, const vector<Identifier> &names,
                                 const vector<LogicalType> &types, CTEType cte_type) {
 	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
 	AddCTEBinding(std::move(binding));
@@ -790,7 +790,7 @@ void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 				using_set.bindings.erase(it, using_set.bindings.end());
 				if (using_set.bindings.empty() || using_set.primary_binding == alias) {
 					// if the using column is no longer referred to - remove it entirely
-					removed_using_columns.push_back(using_sets.first.GetName());
+					removed_using_columns.push_back(using_sets.first.GetIdentifierName());
 				}
 			}
 		}

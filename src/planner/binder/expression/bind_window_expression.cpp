@@ -382,8 +382,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// move the WINDOW expression into the set of bound windows
 	auto &window_type = result->GetReturnType();
 	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
-	auto colref = make_uniq<BoundColumnRefExpression>(Identifier(name.GetName()), window_type,
-	                                                  ColumnBinding(node.window_index, window_idx), depth);
+	auto colref =
+	    make_uniq<BoundColumnRefExpression>(name, window_type, ColumnBinding(node.window_index, window_idx), depth);
 	return BindResult(std::move(colref));
 }
 

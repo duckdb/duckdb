@@ -663,6 +663,11 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 	return TopNStrings(scores, n, threshold);
 }
 
+vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const Identifier &target, idx_t n,
+                                           double threshold) {
+	return TopNJaroWinkler(strings, StringUtil::Lower(target.GetIdentifierName()), n, threshold);
+}
+
 vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,
                                            double threshold) {
 	vector<pair<string, double>> scores;
@@ -1074,7 +1079,7 @@ uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enu
 	for (idx_t i = 0; i < enum_count; i++) {
 		candidates.push_back(enum_list[i].string);
 	}
-	auto closest_values = TopNJaroWinkler(candidates, str_value);
+	auto closest_values = TopNJaroWinkler(candidates, string(str_value));
 	auto message = CandidatesMessage(closest_values, "Candidates");
 	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name,
 	                              message);

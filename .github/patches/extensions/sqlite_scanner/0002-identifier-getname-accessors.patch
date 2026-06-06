@@ -14,7 +14,7 @@ index 5f09b0b..516b9d8 100644
  
  } // namespace duckdb
 diff --git a/src/sqlite_db.cpp b/src/sqlite_db.cpp
-index 27eaf27..aac5cf1 100644
+index 27eaf27..8603c14 100644
 --- a/src/sqlite_db.cpp
 +++ b/src/sqlite_db.cpp
 @@ -174,7 +174,7 @@ void SQLiteDB::GetTableInfo(const string &table_name, ColumnList &columns, vecto
@@ -26,17 +26,20 @@ index 27eaf27..aac5cf1 100644
  
  	bool found = false;
  
-@@ -191,7 +191,7 @@ void SQLiteDB::GetTableInfo(const string &table_name, ColumnList &columns, vecto
+@@ -191,9 +191,9 @@ void SQLiteDB::GetTableInfo(const string &table_name, ColumnList &columns, vecto
  
  		if (pk) {
  			primary_key_index = cid;
 -			primary_keys.push_back(sqlite_colname);
 +			primary_keys.emplace_back(sqlite_colname);
  		}
- 		ColumnDefinition column(std::move(sqlite_colname), std::move(column_type));
+-		ColumnDefinition column(std::move(sqlite_colname), std::move(column_type));
++		ColumnDefinition column(Identifier(std::move(sqlite_colname)), std::move(column_type));
  		if (!default_value.empty() && default_value != "\"\"") {
+ 			auto expressions = Parser::ParseExpressionList(default_value);
+ 			if (expressions.empty()) {
 diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
-index 4268928..ebb07f3 100644
+index 4268928..d060a99 100644
 --- a/src/sqlite_scanner.cpp
 +++ b/src/sqlite_scanner.cpp
 @@ -68,7 +68,7 @@ static unique_ptr<FunctionData> SqliteBind(ClientContext &context, TableFunction
@@ -44,7 +47,7 @@ index 4268928..ebb07f3 100644
  	db.GetTableInfo(result->table_name, columns, constraints, result->all_varchar);
  	for (auto &column : columns.Logical()) {
 -		names.push_back(column.GetName());
-+		names.emplace_back(column.GetName().GetName());
++		names.emplace_back(column.GetName().GetIdentifierName());
  		return_types.push_back(column.GetType());
  	}
  
@@ -58,7 +61,7 @@ index 4268928..ebb07f3 100644
  	}
  	{
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
-index a35686e..582b3ce 100644
+index a35686e..4e239f8 100644
 --- a/src/storage/sqlite_delete.cpp
 +++ b/src/storage/sqlite_delete.cpp
 @@ -68,7 +68,7 @@ SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataCh
@@ -66,7 +69,7 @@ index a35686e..582b3ce 100644
  		if (!insert_gstate.statement.IsOpen()) {
  			auto &transaction = SQLiteTransaction::Get(context.client, insert_gstate.table.catalog);
 -			insert_gstate.statement = transaction.GetDB().Prepare(GetDeleteSQL(insert_gstate.table.name));
-+			insert_gstate.statement = transaction.GetDB().Prepare(GetDeleteSQL(insert_gstate.table.name.GetName()));
++			insert_gstate.statement = transaction.GetDB().Prepare(GetDeleteSQL(insert_gstate.table.name.GetIdentifierName()));
  		}
  		for (auto row_id : insert_gstate.rowids) {
  			insert_gstate.statement.Bind<int64_t>(0, row_id);
@@ -75,7 +78,7 @@ index a35686e..582b3ce 100644
  InsertionOrderPreservingMap<string> SQLiteDelete::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
 -	result["Table Name"] = table.name;
-+	result["Table Name"] = table.name.GetName();
++	result["Table Name"] = table.name.GetIdentifierName();
  	return result;
  }
  
@@ -100,7 +103,7 @@ index 8f92089..9443ae9 100644
  
  } // namespace duckdb
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index 44502ef..fb2bd77 100644
+index 44502ef..b12c42f 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
 @@ -40,7 +40,7 @@ public:
@@ -108,7 +111,7 @@ index 44502ef..fb2bd77 100644
  string GetInsertSQL(const SQLiteInsert &insert, SQLiteTableEntry *entry) {
  	string result;
 -	result = "INSERT INTO " + KeywordHelper::WriteOptionallyQuoted(entry->name);
-+	result = "INSERT INTO " + KeywordHelper::WriteOptionallyQuoted(entry->name.GetName());
++	result = "INSERT INTO " + KeywordHelper::WriteOptionallyQuoted(entry->name.GetIdentifierName());
  	auto &columns = entry->GetColumns();
  	idx_t column_count;
  	if (!insert.column_index_map.empty()) {
@@ -117,7 +120,7 @@ index 44502ef..fb2bd77 100644
  			}
  			auto &col = columns.GetColumn(column_indexes[c]);
 -			result += KeywordHelper::WriteOptionallyQuoted(col.GetName());
-+			result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetName());
++			result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetIdentifierName());
  		}
  		result += ")";
  	} else {
@@ -126,7 +129,7 @@ index 44502ef..fb2bd77 100644
  InsertionOrderPreservingMap<string> SQLiteInsert::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
 -	result["Table Name"] = table ? table->name : info->Base().table;
-+	result["Table Name"] = table ? table->name.GetName() : info->Base().table.GetName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
  	return result;
  }
  
@@ -144,7 +147,7 @@ index e776f5c..81d063d 100644
  		throw BinderException("Failed to find attached database \"%s\" referenced in sqlite_query", db_name);
  	}
 diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
-index e43f0f9..fcd0042 100644
+index e43f0f9..5693fdd 100644
 --- a/src/storage/sqlite_schema_entry.cpp
 +++ b/src/storage/sqlite_schema_entry.cpp
 @@ -37,7 +37,7 @@ string GetCreateTableSQL(CreateTableInfo &info) {
@@ -152,7 +155,7 @@ index e43f0f9..fcd0042 100644
  		ss << "IF NOT EXISTS ";
  	}
 -	ss << KeywordHelper::WriteOptionallyQuoted(info.table);
-+	ss << KeywordHelper::WriteOptionallyQuoted(info.table.GetName());
++	ss << KeywordHelper::WriteOptionallyQuoted(info.table.GetIdentifierName());
  	ss << TableCatalogEntry::ColumnsToSQL(info.columns, info.constraints);
  	ss << ";";
  	return ss.str();
@@ -170,7 +173,7 @@ index e43f0f9..fcd0042 100644
  	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
  		// CREATE OR REPLACE - drop any existing entries first (if any)
 -		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name);
-+		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name.GetName());
++		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name.GetIdentifierName());
  	}
  
  	sqlite_transaction.GetDB().Execute(GetCreateTableSQL(base_info));
@@ -179,10 +182,10 @@ index e43f0f9..fcd0042 100644
  		sql += " IF NOT EXISTS ";
  	}
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.index_name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.index_name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.index_name.GetIdentifierName());
  	sql += " ON ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(tbl.name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(tbl.name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(tbl.name.GetIdentifierName());
  	sql += "(";
  	for (idx_t i = 0; i < info.parsed_expressions.size(); i++) {
  		if (i > 0) {
@@ -191,16 +194,25 @@ index e43f0f9..fcd0042 100644
  		sql += "IF NOT EXISTS ";
  	}
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.view_name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.view_name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.view_name.GetIdentifierName());
  	sql += " ";
  	if (!info.aliases.empty()) {
  		sql += "(";
+@@ -126,7 +126,7 @@ string GetCreateViewSQL(CreateViewInfo &info) {
+ 				sql += ", ";
+ 			}
+ 			auto &alias = info.aliases[i];
+-			sql += KeywordHelper::WriteOptionallyQuoted(alias);
++			sql += KeywordHelper::WriteOptionallyQuoted(alias.GetIdentifierName());
+ 		}
+ 		sql += ") ";
+ 	}
 @@ -142,7 +142,7 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateView(CatalogTransaction tran
  	}
  	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
  		// CREATE OR REPLACE - drop any existing entries first (if any)
 -		TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name);
-+		TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name.GetName());
++		TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name.GetIdentifierName());
  	}
  	auto &sqlite_transaction = GetSQLiteTransaction(transaction);
  	sqlite_transaction.GetDB().Execute(GetCreateViewSQL(info));
@@ -209,39 +221,39 @@ index e43f0f9..fcd0042 100644
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RenameTableInfo &info) {
  	string sql = "ALTER TABLE ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetIdentifierName());
  	sql += " RENAME TO ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.new_table_name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.new_table_name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.new_table_name.GetIdentifierName());
  	sqlite_transaction.GetDB().Execute(sql);
  }
  
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RenameColumnInfo &info) {
  	string sql = "ALTER TABLE ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetIdentifierName());
  	sql += " RENAME COLUMN  ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.old_name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.old_name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.old_name.GetIdentifierName());
  	sql += " TO ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.new_name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.new_name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.new_name.GetIdentifierName());
  	sqlite_transaction.GetDB().Execute(sql);
  }
  
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, AddColumnInfo &info) {
  	if (info.if_column_not_exists) {
 -		if (sqlite_transaction.GetDB().ColumnExists(info.name, info.new_column.GetName())) {
-+		if (sqlite_transaction.GetDB().ColumnExists(info.name.GetName(), info.new_column.GetName().GetName())) {
++		if (sqlite_transaction.GetDB().ColumnExists(info.name.GetIdentifierName(), info.new_column.GetName().GetIdentifierName())) {
  			return;
  		}
  	}
  	string sql = "ALTER TABLE ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetIdentifierName());
  	sql += " ADD COLUMN  ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name());
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name().GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name().GetIdentifierName());
  	sql += " ";
  	sql += info.new_column.Type().ToString();
  	sqlite_transaction.GetDB().Execute(sql);
@@ -250,16 +262,16 @@ index e43f0f9..fcd0042 100644
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RemoveColumnInfo &info) {
  	if (info.if_column_exists) {
 -		if (!sqlite_transaction.GetDB().ColumnExists(info.name, info.removed_column)) {
-+		if (!sqlite_transaction.GetDB().ColumnExists(info.name.GetName(), info.removed_column.GetName())) {
++		if (!sqlite_transaction.GetDB().ColumnExists(info.name.GetIdentifierName(), info.removed_column.GetIdentifierName())) {
  			return;
  		}
  	}
  	string sql = "ALTER TABLE ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.name);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetIdentifierName());
  	sql += " DROP COLUMN  ";
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.removed_column);
-+	sql += KeywordHelper::WriteOptionallyQuoted(info.removed_column.GetName());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.removed_column.GetIdentifierName());
  	sqlite_transaction.GetDB().Execute(sql);
  }
  
@@ -268,7 +280,7 @@ index e43f0f9..fcd0042 100644
  		                      "ADD COLUMN and DROP COLUMN");
  	}
 -	transaction.ClearTableEntry(info.name);
-+	transaction.ClearTableEntry(info.name.GetName());
++	transaction.ClearTableEntry(info.name.GetIdentifierName());
  }
  
  void SQLiteSchemaEntry::Scan(ClientContext &context, CatalogType type,
@@ -286,12 +298,12 @@ index e43f0f9..fcd0042 100644
  	}
  	auto &transaction = SQLiteTransaction::Get(context, catalog);
 -	transaction.DropEntry(info.type, info.name, info.cascade);
-+	transaction.DropEntry(info.type, info.name.GetName(), info.cascade);
++	transaction.DropEntry(info.type, info.name.GetIdentifierName(), info.cascade);
  }
  
  optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction transaction,
 diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
-index f7c0316..b0d5444 100644
+index f7c0316..e19aa7d 100644
 --- a/src/storage/sqlite_table_entry.cpp
 +++ b/src/storage/sqlite_table_entry.cpp
 @@ -23,18 +23,18 @@ void SQLiteTableEntry::BindUpdateConstraints(Binder &, LogicalGet &, LogicalProj
@@ -299,20 +311,20 @@ index f7c0316..b0d5444 100644
  	auto result = make_uniq<SqliteBindData>();
  	for (auto &col : columns.Logical()) {
 -		result->names.push_back(col.GetName());
-+		result->names.emplace_back(col.GetName().GetName());
++		result->names.emplace_back(col.GetName().GetIdentifierName());
  		result->types.push_back(col.GetType());
  	}
  	auto &sqlite_catalog = catalog.Cast<SQLiteCatalog>();
  	result->file_name = sqlite_catalog.path;
 -	result->table_name = name;
-+	result->table_name = name.GetName();
++	result->table_name = name.GetIdentifierName();
  	result->all_varchar = all_varchar;
  
  	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
  	auto &db = transaction.GetDB();
  
 -	if (!db.GetRowIdInfo(name, result->row_id_info)) {
-+	if (!db.GetRowIdInfo(name.GetName(), result->row_id_info)) {
++	if (!db.GetRowIdInfo(name.GetIdentifierName(), result->row_id_info)) {
  		result->rows_per_group = optional_idx();
  	}
  
@@ -321,7 +333,7 @@ index f7c0316..b0d5444 100644
  
  	RowIdInfo info;
 -	if (!db.GetRowIdInfo(name, info)) {
-+	if (!db.GetRowIdInfo(name.GetName(), info)) {
++	if (!db.GetRowIdInfo(name.GetIdentifierName(), info)) {
  		// probably
  		result.cardinality = 10000;
  	} else {
@@ -329,12 +341,12 @@ index f7c0316..b0d5444 100644
  	}
  
 -	result.index_info = db.GetIndexInfo(name);
-+	result.index_info = db.GetIndexInfo(name.GetName());
++	result.index_info = db.GetIndexInfo(name.GetIdentifierName());
  	return result;
  }
  
 diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
-index 08ea220..3b6469e 100644
+index 08ea220..34b115c 100644
 --- a/src/storage/sqlite_transaction.cpp
 +++ b/src/storage/sqlite_transaction.cpp
 @@ -108,7 +108,7 @@ void ExtractColumnIds(const ParsedExpression &expr, TableCatalogEntry &table, Cr
@@ -360,12 +372,12 @@ index 08ea220..3b6469e 100644
  		} catch (std::exception &ex) {
  			auto view_sql = ExtractSelectStatement(sql);
 -			auto catalog_name = StringUtil::Replace(sqlite_catalog.GetName(), "\"", "\"\"");
-+			auto catalog_name = StringUtil::Replace(sqlite_catalog.GetName().GetName(), "\"", "\"\"");
++			auto catalog_name = StringUtil::Replace(sqlite_catalog.GetName().GetIdentifierName(), "\"", "\"\"");
  			auto escaped_view_sql = StringUtil::Replace(view_sql, "'", "''");
  			auto view_def = StringUtil::Format("CREATE VIEW %s AS FROM sqlite_query(\"%s\", '%s')", entry_name,
  			                                   catalog_name, escaped_view_sql);
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index 29ab390..aa3e314 100644
+index 29ab390..cc6e095 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
 @@ -29,14 +29,14 @@ public:
@@ -373,7 +385,7 @@ index 29ab390..aa3e314 100644
  string GetUpdateSQL(SQLiteTableEntry &table, const vector<PhysicalIndex> &index) {
  	string result;
 -	result = "UPDATE " + KeywordHelper::WriteOptionallyQuoted(table.name);
-+	result = "UPDATE " + KeywordHelper::WriteOptionallyQuoted(table.name.GetName());
++	result = "UPDATE " + KeywordHelper::WriteOptionallyQuoted(table.name.GetIdentifierName());
  	result += " SET ";
  	for (idx_t i = 0; i < index.size(); i++) {
  		if (i > 0) {
@@ -381,7 +393,7 @@ index 29ab390..aa3e314 100644
  		}
  		auto &col = table.GetColumn(LogicalIndex(index[i].index));
 -		result += KeywordHelper::WriteOptionallyQuoted(col.GetName());
-+		result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetName());
++		result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetIdentifierName());
  		result += " = ?";
  	}
  	result += " WHERE rowid = ?";
@@ -390,7 +402,7 @@ index 29ab390..aa3e314 100644
  InsertionOrderPreservingMap<string> SQLiteUpdate::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
 -	result["Table Name"] = table.name;
-+	result["Table Name"] = table.name.GetName();
++	result["Table Name"] = table.name.GetIdentifierName();
  	return result;
  }
  

@@ -34,7 +34,7 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names,
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<Identifier> names,
 	        TableIndex index);
 	virtual ~Binding() = default;
 
@@ -98,7 +98,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
 
 public:
-	EntryBinding(const Identifier &alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+	EntryBinding(const Identifier &alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index,
 	             StandardEntry &entry);
 	StandardEntry &entry;
 
@@ -113,7 +113,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::TABLE;
 
 public:
-	TableBinding(const Identifier &alias, vector<LogicalType> types, vector<string> names,
+	TableBinding(const Identifier &alias, vector<LogicalType> types, vector<Identifier> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
 	             virtual_column_map_t virtual_columns);
 
@@ -145,7 +145,7 @@ public:
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name);
+	DummyBinding(vector<LogicalType> types, vector<Identifier> names, string dummy_name);
 
 	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
@@ -166,16 +166,16 @@ enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };
 struct CTEBinding;
 
 struct CTEBindState {
-	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<string> &aliases);
+	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<Identifier> &aliases);
 	~CTEBindState();
 
 	Binder &parent_binder;
 	QueryNode &cte_def;
-	const vector<string> &aliases;
+	const vector<Identifier> &aliases;
 	idx_t active_binder_count;
 	shared_ptr<Binder> query_binder;
 	BoundStatement query;
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> types;
 
 public:
@@ -188,7 +188,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CTE;
 
 public:
-	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, TableIndex index, CTEType type);
+	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index, CTEType type);
 	CTEBinding(BindingAlias alias, shared_ptr<CTEBindState> bind_state, TableIndex index);
 
 public:

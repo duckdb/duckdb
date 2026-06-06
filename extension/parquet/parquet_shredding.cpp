@@ -83,7 +83,7 @@ static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 		ShreddingType res(type);
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &entry : children) {
-			res.AddChild(entry.first.GetName(), ConvertShreddingTypeRecursive(entry.second));
+			res.AddChild(entry.first.GetIdentifierName(), ConvertShreddingTypeRecursive(entry.second));
 		}
 		return res;
 	}

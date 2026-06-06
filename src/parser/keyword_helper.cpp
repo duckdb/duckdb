@@ -83,7 +83,7 @@ string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool
 	return WriteQuotedAndEscaped(text, quote);
 }
 
-SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetName()) {
+SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
 }
 
 string SQLIdentifier::ToString(const string &identifier) {
