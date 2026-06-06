@@ -353,7 +353,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	}
 
 	// create and query a view
-	REQUIRE_NOTHROW(complex_join->CreateView(Identifier("test123")));
+	REQUIRE_NOTHROW(complex_join->CreateView("test123"));
 	result = con.Query("SELECT * FROM test123");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
@@ -418,7 +418,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 
 	// simple view creation
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
-	REQUIRE_NOTHROW(result = tbl->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> expressions;
@@ -426,11 +426,10 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	duckdb::vector<duckdb::string> aliases;
 	aliases.push_back("j");
 
-	REQUIRE_NOTHROW(result =
-	                    tbl->Project(std::move(expressions), aliases)->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Project(std::move(expressions), aliases)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	// add a projection
-	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
 	// multiple projections
@@ -440,43 +439,42 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	}
 	REQUIRE_NOTHROW(result = proj->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
-	REQUIRE_NOTHROW(result = proj->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = proj->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
 
 	// we can also use more complex SQL
-	REQUIRE_NOTHROW(result =
-	                    proj->Query(Identifier("test"), "SELECT SUM(t1.i) FROM test t1 JOIN test t2 ON t1.i=t2.i"));
+	REQUIRE_NOTHROW(result = proj->Query("test", "SELECT SUM(t1.i) FROM test t1 JOIN test t2 ON t1.i=t2.i"));
 	REQUIRE(CHECK_COLUMN(result, 0, {39}));
 
 	// limit
-	REQUIRE_NOTHROW(result = tbl->Limit(1)->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Limit(1)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// order
-	REQUIRE_NOTHROW(result = tbl->Order("i DESC")->Limit(1)->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Order("i DESC")->Limit(1)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// union
 	auto node = tbl->Order("i DESC")->Limit(1);
-	REQUIRE_NOTHROW(result = node->Union(node)->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = node->Union(node)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3}));
 	// distinct
-	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->Query(Identifier("test"), "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// manually create views and query from them
 	result = con.Query("SELECT i+1 FROM integers UNION SELECT i+10 FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
 
-	REQUIRE_NOTHROW(tbl->Project("i + 1")->CreateView(Identifier("test1")));
-	REQUIRE_NOTHROW(tbl->Project("i + 10")->CreateView(Identifier("test2")));
+	REQUIRE_NOTHROW(tbl->Project("i + 1")->CreateView("test1"));
+	REQUIRE_NOTHROW(tbl->Project("i + 10")->CreateView("test2"));
 	result = con.Query("SELECT * FROM test1 UNION SELECT * FROM test2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
 
 	// project <> alias column count mismatch
 	REQUIRE_THROWS(proj->Project("i + 1, i + 2", "i"));
 	// view already exists
-	REQUIRE_THROWS(tbl->Project("i + 10")->CreateView(Identifier("test2"), false));
+	REQUIRE_THROWS(tbl->Project("i + 10")->CreateView("test2", false));
 	// table already exists
-	REQUIRE_THROWS(tbl->Project("i + 10")->Create(Identifier("test2")));
+	REQUIRE_THROWS(tbl->Project("i + 10")->Create("test2"));
 }
 
 TEST_CASE("Test table creations using the relation API", "[relation_api]") {
@@ -488,24 +486,22 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 
 	// create a table from a Values statement
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
-	REQUIRE_NOTHROW(values->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(values->Create("integers"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
 	// insert from a set of values
-	REQUIRE_NOTHROW(con.Values({{4, 7}, {5, 8}})->Insert(Identifier("integers")));
+	REQUIRE_NOTHROW(con.Values({{4, 7}, {5, 8}})->Insert("integers"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4, 7, 8}));
 
 	// create a table from a query
-	REQUIRE_NOTHROW(con.Table("integers")
-	                    ->Filter("i BETWEEN 3 AND 4")
-	                    ->Project("i + 1 AS k, 'hello' AS l")
-	                    ->Create(Identifier("new_values")));
+	REQUIRE_NOTHROW(
+	    con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
@@ -531,29 +527,29 @@ TEST_CASE("Test table creations with on_create_conflict using the relation API",
 
 	// create a table from a Values statement
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
-	REQUIRE_NOTHROW(values->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(values->Create("integers"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
 	REQUIRE_NOTHROW(values1 = con.Values({{4, 14}, {5, 15}, {6, 16}}, {"i", "j"}));
-	REQUIRE_THROWS(values1->Create(Identifier("integers")));
+	REQUIRE_THROWS(values1->Create("integers"));
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
-	REQUIRE_THROWS(values1->Create(Identifier("integers"), false, OnCreateConflict::ERROR_ON_CONFLICT));
+	REQUIRE_THROWS(values1->Create("integers", false, OnCreateConflict::ERROR_ON_CONFLICT));
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
-	REQUIRE_NOTHROW(values1->Create(Identifier("integers"), false, OnCreateConflict::IGNORE_ON_CONFLICT));
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::IGNORE_ON_CONFLICT));
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
-	REQUIRE_NOTHROW(values1->Create(Identifier("integers"), false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::REPLACE_ON_CONFLICT));
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {14, 15, 16}));
@@ -567,7 +563,7 @@ TEST_CASE("Test table create from query with on_create_conflict using the relati
 	duckdb::shared_ptr<Relation> values, values1, proj;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 20}, {3, 30}, {4, 40}}, {"i", "j"}));
-	REQUIRE_NOTHROW(values->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(values->Create("integers"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
@@ -576,22 +572,22 @@ TEST_CASE("Test table create from query with on_create_conflict using the relati
 	REQUIRE_NOTHROW(con.Table("integers")
 	                    ->Filter("i BETWEEN 2 AND 3")
 	                    ->Project("i + 100 AS k, 'hello' AS l")
-	                    ->Create(Identifier("new_values")));
+	                    ->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 
 	REQUIRE_NOTHROW(proj = con.Table("integers")->Filter("i BETWEEN 1 AND 2")->Project("i + 200 AS k, 'hi' AS l"));
-	REQUIRE_THROWS(proj->Create(Identifier("new_values")));
-	REQUIRE_THROWS(proj->Create(Identifier("new_values"), false, OnCreateConflict::ERROR_ON_CONFLICT));
-	REQUIRE_NOTHROW(proj->Create(Identifier("new_values"), false, OnCreateConflict::IGNORE_ON_CONFLICT));
+	REQUIRE_THROWS(proj->Create("new_values"));
+	REQUIRE_THROWS(proj->Create("new_values", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::IGNORE_ON_CONFLICT));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 
-	REQUIRE_NOTHROW(proj->Create(Identifier("new_values"), false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::REPLACE_ON_CONFLICT));
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {201, 202}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hi", "hi"}));
@@ -640,7 +636,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	duckdb::unique_ptr<QueryResult> result;
 
 	// create a table
-	REQUIRE_NOTHROW(con.Values("(1, 5), (2, 6), (1, 7)", {"i", "j"})->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(con.Values("(1, 5), (2, 6), (1, 7)", {"i", "j"})->Create("integers"));
 
 	// perform some aggregates
 	auto tbl = con.Table("integers");
@@ -745,7 +741,7 @@ TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
 	con2.BeginTransaction();
 
 	// create a table in con1
-	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create("integers"));
 
 	// con1 can see it, but con2 can't see it yet
 	REQUIRE_NOTHROW(con1.Table("integers"));
@@ -758,7 +754,7 @@ TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
 	REQUIRE_THROWS(con2.Table("integers"));
 
 	// recreate the table, this time in auto-commit mode
-	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create(Identifier("integers")));
+	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create("integers"));
 
 	// con2 still can't see it, because it is in its own transaction
 	REQUIRE_NOTHROW(con1.Table("integers"));
@@ -1142,7 +1138,7 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		auto &materialized_result = result->Cast<MaterializedQueryResult>();
 		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
 		    con.context, materialized_result.TakeCollection(), result->names, "vw");
-		materialized_relation->CreateView(Identifier("vw"));
+		materialized_relation->CreateView("vw");
 		materialized_relation.reset();
 
 		result = con.Query("SELECT * FROM vw");
@@ -1165,5 +1161,5 @@ TEST_CASE("Test create table with empty name", "[relation_api]") {
 	REQUIRE_FAIL(result);
 
 	auto values = con.Values("(42)");
-	REQUIRE_THROWS_AS(values->Create(Identifier("")), ParserException);
+	REQUIRE_THROWS_AS(values->Create(""), ParserException);
 }

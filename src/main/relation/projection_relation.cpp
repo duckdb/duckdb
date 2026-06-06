@@ -47,7 +47,7 @@ unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
 	return result;
 }
 
-string ProjectionRelation::GetAlias() {
+Identifier ProjectionRelation::GetAlias() {
 	return child->GetAlias();
 }
 

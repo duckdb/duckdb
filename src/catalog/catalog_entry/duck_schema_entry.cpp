@@ -307,9 +307,9 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		string name = info.name.GetName();
-		if (!set.AlterEntry(transaction, Identifier(name), info)) {
-			throw CatalogException::MissingEntry(type, Identifier(name), string());
+		auto &name = info.name;
+		if (!set.AlterEntry(transaction, name, info)) {
+			throw CatalogException::MissingEntry(type, name, string());
 		}
 	}
 }

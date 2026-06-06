@@ -342,7 +342,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformVariantType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformUnionType(PEGTransformer &transformer, ParseResult &parse_result);
 	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer, ParseResult &parse_result);
-	static pair<string, LogicalType> TransformColIdType(PEGTransformer &transformer, ParseResult &parse_result);
+	static pair<Identifier, LogicalType> TransformColIdType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformBitType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalInterval(PEGTransformer &transformer,

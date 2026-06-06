@@ -29,9 +29,6 @@ public:
 	void SetName(Identifier name_p) {
 		name = std::move(name_p);
 	}
-	void SetName(const string &name_p) {
-		name = Identifier(name_p);
-	}
 	//! The set of functions.
 	vector<T> functions;
 

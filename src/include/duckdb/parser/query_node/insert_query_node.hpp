@@ -34,7 +34,7 @@ public:
 	//! The select statement to insert from
 	unique_ptr<SelectStatement> select_statement;
 	//! Column names to insert into
-	vector<string> columns;
+	vector<Identifier> columns;
 
 	//! Table name to insert to
 	Identifier table;

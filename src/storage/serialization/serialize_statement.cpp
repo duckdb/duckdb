@@ -16,7 +16,7 @@ void MergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MergeActionType>(100, "action_type", action_type);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "condition", condition);
 	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", update_info);
-	serializer.WritePropertyWithDefault<vector<string>>(103, "insert_columns", insert_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(103, "insert_columns", insert_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", expressions);
 	serializer.WritePropertyWithDefault<InsertColumnOrder>(105, "column_order", column_order,
 	                                                       InsertColumnOrder::INSERT_BY_POSITION);
@@ -29,7 +29,7 @@ unique_ptr<MergeIntoAction> MergeIntoAction::Deserialize(Deserializer &deseriali
 	deserializer.ReadProperty<MergeActionType>(100, "action_type", result->action_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "condition", result->condition);
 	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", result->update_info);
-	deserializer.ReadPropertyWithDefault<vector<string>>(103, "insert_columns", result->insert_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(103, "insert_columns", result->insert_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", result->expressions);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(105, "column_order", result->column_order,
 	                                                                InsertColumnOrder::INSERT_BY_POSITION);
@@ -40,7 +40,7 @@ unique_ptr<MergeIntoAction> MergeIntoAction::Deserialize(Deserializer &deseriali
 
 void OnConflictInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnConflictAction>(100, "action_type", action_type);
-	serializer.WritePropertyWithDefault<vector<string>>(101, "indexed_columns", indexed_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(101, "indexed_columns", indexed_columns);
 	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", set_info);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", condition);
 }
@@ -48,7 +48,7 @@ void OnConflictInfo::Serialize(Serializer &serializer) const {
 unique_ptr<OnConflictInfo> OnConflictInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<OnConflictInfo>(new OnConflictInfo());
 	deserializer.ReadProperty<OnConflictAction>(100, "action_type", result->action_type);
-	deserializer.ReadPropertyWithDefault<vector<string>>(101, "indexed_columns", result->indexed_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(101, "indexed_columns", result->indexed_columns);
 	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "set_info", result->set_info);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(103, "condition", result->condition);
 	return result;
@@ -68,14 +68,14 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deseriali
 
 void UpdateSetInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(100, "condition", condition);
-	serializer.WritePropertyWithDefault<vector<string>>(101, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(101, "columns", columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "expressions", expressions);
 }
 
 unique_ptr<UpdateSetInfo> UpdateSetInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<UpdateSetInfo>(new UpdateSetInfo());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(100, "condition", result->condition);
-	deserializer.ReadPropertyWithDefault<vector<string>>(101, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(101, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(102, "expressions", result->expressions);
 	return result;
 }

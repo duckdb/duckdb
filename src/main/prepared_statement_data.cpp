@@ -22,7 +22,7 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
-bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
+bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name,
                           const StatementProperties::CatalogIdentity catalog_identity) {
 	// some catalogs don't support catalog version, we can't check identity in that case
 	if (!catalog_identity.catalog_version.IsValid()) {

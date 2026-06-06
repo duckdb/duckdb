@@ -38,7 +38,7 @@ void DependencyCatalogSet::Scan(CatalogTransaction transaction, const std::funct
 		    }
 		    callback(entry);
 	    },
-	    mangled_name.name.GetName());
+	    mangled_name.name);
 }
 
 bool DependencyCatalogSet::DropEntry(CatalogTransaction transaction, const MangledEntryName &name, bool cascade,

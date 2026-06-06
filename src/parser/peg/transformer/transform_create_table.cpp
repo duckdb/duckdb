@@ -318,7 +318,8 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 						throw InternalException("Expected a type expression");
 					}
 					auto &type_expr = expr->Cast<TypeExpression>();
-					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
+					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName().GetName()) !=
+					    LogicalTypeId::VARCHAR) {
 						throw ParserException("Only VARCHAR columns can have collations!");
 					}
 				} else {
@@ -579,7 +580,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCollation(PEGTransfo
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	string collation = StringUtil::Join(dotted_identifier, ".");
 	auto expr = make_uniq<ConstantExpression>(Value(collation));
-	expr->SetAlias(Identifier("collation"));
+	expr->SetAlias("collation");
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "ColumnCollation";
 	entry.expression = std::move(expr);

@@ -238,7 +238,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
 	// The positional/named split and (for legacy calls) the alias capture are resolved later, per candidate overload.
-	vector<pair<string, unique_ptr<Expression>>> arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.FunctionName() == "mode");

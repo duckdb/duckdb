@@ -269,7 +269,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	return true;
 }
 
-bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
+bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const Identifier &new_name,
                                      AlterInfo &alter_info, unique_lock<mutex> &read_lock) {
 	auto &original_name = old.name;
 
@@ -287,8 +287,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 
 	// Add a RENAMED_ENTRY before adding a DELETED_ENTRY, this makes it so that when this is committed
 	// we know that this was not a DROP statement.
-	auto renamed_tombstone =
-	    make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, old.ParentCatalog(), Identifier(original_name.GetName()));
+	auto renamed_tombstone = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, old.ParentCatalog(), original_name);
 	renamed_tombstone->timestamp = transaction.transaction_id;
 	renamed_tombstone->deleted = false;
 	renamed_tombstone->set = this;
@@ -364,7 +363,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	value->set = this;
 
 	if (!StringUtil::CIEquals(value->name.GetName(), entry->name.GetName())) {
-		if (!RenameEntryInternal(transaction, *entry, value->name.GetName(), alter_info, read_lock)) {
+		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
 	}
@@ -749,14 +748,14 @@ void CatalogSet::ScanWithReturn(ClientContext &context, const std::function<bool
 }
 
 void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
-                                const string &prefix) {
+                                const Identifier &prefix) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
 	auto &entries = map.Entries();
-	auto it = entries.lower_bound(Identifier(prefix));
-	auto end = entries.upper_bound(Identifier(prefix + char(255)));
+	auto it = entries.lower_bound(prefix);
+	auto end = entries.upper_bound(Identifier(prefix.GetName() + char(255)));
 	for (; it != end; it++) {
 		auto &entry = *it->second;
 		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);

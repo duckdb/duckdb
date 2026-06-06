@@ -23,11 +23,11 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::STAR;
 
 public:
-	explicit StarExpression(string relation_name = string());
+	explicit StarExpression(Identifier relation_name = Identifier());
 
 public:
-	const string &RelationName() const {
-		return relation_name.GetName();
+	const Identifier &RelationName() const {
+		return relation_name;
 	}
 	string &RelationNameMutable() {
 		return relation_name.GetNameMutable();

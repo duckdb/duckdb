@@ -12,7 +12,7 @@ string SubqueryRef::ToString() const {
 SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {
 }
 
-SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
+SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, Identifier alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(std::move(subquery_p)) {
 	this->alias = Identifier(std::move(alias_p));
 }
@@ -26,8 +26,7 @@ bool SubqueryRef::Equals(const TableRef &other_p) const {
 }
 
 unique_ptr<TableRef> SubqueryRef::Copy() {
-	auto copy =
-	    make_uniq<SubqueryRef>(unique_ptr_cast<SQLStatement, SelectStatement>(subquery->Copy()), alias.GetName());
+	auto copy = make_uniq<SubqueryRef>(unique_ptr_cast<SQLStatement, SelectStatement>(subquery->Copy()), alias);
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 	return std::move(copy);

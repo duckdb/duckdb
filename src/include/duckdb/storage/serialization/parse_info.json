@@ -95,7 +95,7 @@
       {
         "id": 400,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 401,
@@ -152,7 +152,7 @@
       {
         "id": 402,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
     "constructor": ["new_field"]
@@ -187,7 +187,7 @@
       {
         "id": 400,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 401,

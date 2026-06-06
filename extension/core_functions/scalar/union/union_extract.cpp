@@ -73,7 +73,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	if (key_val.IsNull() || key_str.empty()) {
 		throw BinderException("Key name for union_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_str);
+	auto key = Identifier(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;
@@ -81,7 +81,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 
 	for (size_t i = 0; i < union_member_count; i++) {
 		auto &member_name = UnionType::GetMemberName(arguments[0]->GetReturnType(), i);
-		if (StringUtil::Lower(member_name) == key) {
+		if (member_name == key) {
 			found_key = true;
 			key_index = i;
 			return_type = UnionType::GetMemberType(arguments[0]->GetReturnType(), i);
@@ -93,15 +93,15 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 		vector<string> candidates;
 		candidates.reserve(union_member_count);
 		for (idx_t i = 0; i < union_member_count; i++) {
-			candidates.push_back(UnionType::GetMemberName(arguments[0]->GetReturnType(), i));
+			candidates.emplace_back(UnionType::GetMemberName(arguments[0]->GetReturnType(), i));
 		}
-		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, StringUtil::Lower(key.GetName()));
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
-		throw BinderException("Could not find key \"%s\" in union\n%s", key, message);
+		throw BinderException("Could not find key \"%s\" in union\n%s", key.GetName(), message);
 	}
 
 	bound_function.SetReturnType(return_type);
-	return make_uniq<UnionExtractBindData>(key, key_index, return_type);
+	return make_uniq<UnionExtractBindData>(key.GetName(), key_index, return_type);
 }
 
 } // namespace

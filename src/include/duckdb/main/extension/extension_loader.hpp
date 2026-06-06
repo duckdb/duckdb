@@ -28,10 +28,10 @@ struct CreateTableFunctionInfo;
 struct CreateWindowFunctionInfo;
 
 struct ExtensionLoaderInfo {
-	string extension_name;
-	string extension_alias;
+	Identifier extension_name;
+	Identifier extension_alias;
 	string extension_description;
-	string extension_schema = DEFAULT_SCHEMA;
+	Identifier extension_schema = Identifier::DefaultSchema();
 };
 
 class ExtensionLoader {
@@ -49,18 +49,18 @@ public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
 	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
-	DUCKDB_API void UseDedicatedSchemaForExtension(const string &extension_schema_name);
+	DUCKDB_API void UseDedicatedSchemaForExtension(const Identifier &extension_schema_name);
 	//! Explicitly sets, creates and registers all functions in the registered extension schema
 	DUCKDB_API void UseDedicatedSchemaForExtension();
 	//! Creates a schema in the catalog with the extension name
-	DUCKDB_API void CreateSchema(const string &extension_schema_name) const;
+	DUCKDB_API void CreateSchema(const Identifier &extension_schema_name) const;
 	//! Adds the created extension schema to the search path
-	DUCKDB_API void AddSchemaToSearchPath(const string &schema_name) const;
+	DUCKDB_API void AddSchemaToSearchPath(const Identifier &schema_name) const;
 	//! Sets the default extension schema for this extension
 	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
 	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
 	//! Gets registered extension name (or alias)
-	DUCKDB_API const string &GetRegisteredExtensionName() const {
+	DUCKDB_API const Identifier &GetRegisteredExtensionName() const {
 		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
 	}
 

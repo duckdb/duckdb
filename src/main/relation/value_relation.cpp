@@ -89,7 +89,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		}
 	} else {
 		for (idx_t i = 0; i < columns.size(); i++) {
-			table_ref->expected_names.push_back(columns[i].Name());
+			table_ref->expected_names.emplace_back(columns[i].Name());
 			table_ref->expected_types.push_back(columns[i].Type());
 			D_ASSERT(names.size() == 0 || columns[i].Name() == names[i]);
 		}
@@ -107,8 +107,8 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	return std::move(table_ref);
 }
 
-string ValueRelation::GetAlias() {
-	return alias;
+Identifier ValueRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 const vector<ColumnDefinition> &ValueRelation::Columns() {

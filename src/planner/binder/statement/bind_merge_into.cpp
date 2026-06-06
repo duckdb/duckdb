@@ -115,7 +115,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 					if (action.exclude_columns.count(source_names[i])) {
 						continue;
 					}
-					action.update_info->columns.push_back(source_names[i]);
+					action.update_info->columns.emplace_back(source_names[i]);
 					action.update_info->expressions.push_back(
 					    bind_context.CreateColumnReference(source_aliases[i], Identifier(source_names[i]),
 					                                       ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
@@ -123,7 +123,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			} else {
 				// UPDATE BY POSITION - get the name list from the table
 				for (auto &col : table.GetColumns().Physical()) {
-					action.update_info->columns.push_back(col.Name());
+					action.update_info->columns.emplace_back(col.Name());
 				}
 				if (source_names.size() != action.update_info->columns.size()) {
 					throw BinderException(
@@ -165,7 +165,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			if (!action.insert_columns.empty()) {
 				throw InternalException("INSERT BY NAME cannot be combined with a column list");
 			}
-			action.insert_columns = source_names;
+			action.insert_columns = StringsToIdentifiers(source_names);
 		}
 		vector<LogicalIndex> named_column_map;
 		vector<LogicalType> expected_types;
@@ -414,7 +414,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->SetAlias(Identifier("source_marker"));
+		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -435,7 +435,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->SetAlias(Identifier("source_marker"));
+		marker_ref->SetAlias("source_marker");
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

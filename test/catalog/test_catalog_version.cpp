@@ -17,21 +17,21 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	Connection con1(db);
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 0);
 	});
 
 	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE foo as SELECT 42"));
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 1);
 	});
 
 	{
 		REQUIRE_NOTHROW(con1.BeginTransaction());
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE foo2 as SELECT 42"));
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		auto catalog_version_1 = catalog.GetCatalogVersion(*con1.context);
 		REQUIRE(catalog_version_1.GetIndex() > TRANSACTION_ID_START);
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE foo3 as SELECT 42"));
@@ -41,7 +41,7 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	}
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 
@@ -49,14 +49,14 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE IF NOT EXISTS foo3 as SELECT 42"));
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 
 	REQUIRE_NO_FAIL(con1.Query("CREATE SCHEMA IF NOT EXISTS my_schema"));
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 3);
 	});
 
@@ -64,24 +64,24 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	REQUIRE_NO_FAIL(con1.Query("CREATE SCHEMA IF NOT EXISTS my_schema"));
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier(""));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 3);
 	});
 
 	// check catalog version of system catalog
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier("system"));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 1);
 	});
 	REQUIRE_NO_FAIL(con1.Query("ATTACH ':memory:' as foo"));
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier("system"));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 
 	// check new version of attached DB starts at 0
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier("foo"));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "foo");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 0);
 	});
 
@@ -93,7 +93,7 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	loader.RegisterFunction(tf);
 
 	con1.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con1.context, Identifier("system"));
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 }

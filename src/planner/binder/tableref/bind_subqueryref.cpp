@@ -7,7 +7,7 @@ BoundStatement Binder::Bind(SubqueryRef &ref) {
 	auto binder = Binder::CreateBinder(context, this);
 	binder->SetCanContainNulls(true);
 	auto subquery = binder->BindNode(*ref.subquery->node);
-	binder->alias = ref.alias.empty() ? Identifier("unnamed_subquery") : ref.alias;
+	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto bind_index = subquery.plan->GetRootIndex();
 	string subquery_alias;
 	if (ref.alias.empty()) {

@@ -81,7 +81,7 @@ public:
 	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode() = 0;
 	DUCKDB_API virtual string GetQuery();
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
-	DUCKDB_API virtual string GetAlias();
+	DUCKDB_API virtual Identifier GetAlias();
 
 	DUCKDB_API unique_ptr<QueryResult> ExecuteOrThrow();
 	DUCKDB_API unique_ptr<QueryResult> Execute();

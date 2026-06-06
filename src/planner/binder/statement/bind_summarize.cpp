@@ -24,8 +24,8 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
-	auto aggregate_function = make_uniq<FunctionExpression>(aggregate, std::move(children));
+	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
+	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
 	return std::move(cast_function);
 }
@@ -33,9 +33,9 @@ static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggre
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
                                                              const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
+	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
 	children.push_back(make_uniq<ConstantExpression>(modifier));
-	auto aggregate_function = make_uniq<FunctionExpression>(aggregate, std::move(children));
+	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
 	return std::move(cast_function);
 }
@@ -51,7 +51,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
-	auto binary_function = make_uniq<FunctionExpression>(op, std::move(children));
+	auto binary_function = make_uniq<FunctionExpression>(Identifier(op), std::move(children));
 	return std::move(binary_function);
 }
 

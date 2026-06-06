@@ -23,8 +23,7 @@ struct DemoSecretType {
 		if (scope.empty()) {
 			scope = {""};
 		}
-		auto return_value =
-		    make_uniq<KeyValueSecret>(scope, input.type.GetName(), input.provider.GetName(), input.name.GetName());
+		auto return_value = make_uniq<KeyValueSecret>(scope, input.type, input.provider, input.name);
 		return std::move(return_value);
 	}
 
@@ -38,7 +37,7 @@ struct DemoSecretType {
 		secret_type.default_provider = "config";
 		loader.RegisterSecretType(secret_type);
 
-		CreateSecretFunction secret_fun = {type_name, Identifier("config"), CreateDemoSecret};
+		CreateSecretFunction secret_fun = {type_name, "config", CreateDemoSecret};
 		loader.RegisterFunction(secret_fun);
 	}
 };

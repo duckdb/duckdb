@@ -1,5 +1,5 @@
 diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
-index f56c177..c2ee448 100644
+index f56c177..fbf4bcd 100644
 --- a/src/functions/uc_checkpoint.cpp
 +++ b/src/functions/uc_checkpoint.cpp
 @@ -28,9 +28,9 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
@@ -9,8 +9,8 @@ index f56c177..c2ee448 100644
 -	result.catalog_name = qname.catalog.empty() ? search_path.catalog : qname.catalog;
 -	result.schema_name = qname.schema.empty() ? search_path.schema : qname.schema;
 -	result.table_name = qname.name;
-+	result.catalog_name = qname.catalog.empty() ? search_path.catalog : qname.catalog.GetName();
-+	result.schema_name = qname.schema.empty() ? search_path.schema : qname.schema.GetName();
++	result.catalog_name = qname.catalog.empty() ? search_path.catalog.GetName() : qname.catalog.GetName();
++	result.schema_name = qname.schema.empty() ? search_path.schema.GetName() : qname.schema.GetName();
 +	result.table_name = qname.name.GetName();
  
  	if (result.catalog_name.empty()) {
@@ -104,7 +104,7 @@ index 282e824..8ceca78 100644
  	auto table_entry = schema.LookupEntry(transaction, lookup_info);
  	D_ASSERT(table_entry);
 diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
-index 5068777..d4924bc 100644
+index 5068777..1b7c1d1 100644
 --- a/src/storage/uc_table_set.cpp
 +++ b/src/storage/uc_table_set.cpp
 @@ -60,7 +60,7 @@ optional_ptr<CatalogEntry> TableInformation::GetVersion(ClientContext &context,
@@ -116,19 +116,33 @@ index 5068777..d4924bc 100644
  	auto transaction = schema.GetCatalogTransaction(context);
  	auto table_entry = schema.LookupEntry(transaction, lookup_info);
  	auto create_info = table_entry->GetInfo();
-@@ -94,9 +94,9 @@ void TableInformation::RefreshCredentials(ClientContext &context) {
+@@ -94,7 +94,7 @@ void TableInformation::RefreshCredentials(ClientContext &context) {
  	CreateSecretInput input;
  	input.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
  	input.persist_type = SecretPersistType::TEMPORARY;
 -	input.name = "__internal_uc_" + table_data->table_id;
--	input.type = "s3";
--	input.provider = "config";
 +	input.name = Identifier("__internal_uc_" + table_data->table_id);
-+	input.type = Identifier("s3");
-+	input.provider = Identifier("config");
+ 	input.type = "s3";
+ 	input.provider = "config";
  	input.options = {
- 	    {"key_id", table_credentials.key_id},
- 	    {"secret", table_credentials.secret},
+@@ -150,12 +150,12 @@ Value TableInformation::BuildLogTail(ClientContext &context) {
+ 	vector<Value> commit_values;
+ 	for (const auto &commit : commits.commits) {
+ 		child_list_t<Value> commit_struct;
+-		commit_struct.push_back(make_pair("version", Value::BIGINT(commit.version)));
+-		commit_struct.push_back(make_pair("timestamp", Value::BIGINT(commit.timestamp)));
+-		commit_struct.push_back(make_pair(
++		commit_struct.emplace_back(make_pair("version", Value::BIGINT(commit.version)));
++		commit_struct.emplace_back(make_pair("timestamp", Value::BIGINT(commit.timestamp)));
++		commit_struct.emplace_back(make_pair(
+ 		    "file_name", Value(table_data->storage_location + "/_delta_log/_staged_commits/" + commit.file_name)));
+-		commit_struct.push_back(make_pair("file_size", Value::BIGINT(commit.file_size)));
+-		commit_struct.push_back(
++		commit_struct.emplace_back(make_pair("file_size", Value::BIGINT(commit.file_size)));
++		commit_struct.emplace_back(
+ 		    make_pair("file_modification_timestamp", Value::BIGINT(commit.file_modification_timestamp)));
+ 		commit_values.push_back(Value::STRUCT(std::move(commit_struct)));
+ 	}
 @@ -181,7 +181,7 @@ void TableInformation::InternalAttach(ClientContext &context) {
  
  	// Create the attach info for the table
@@ -178,8 +192,21 @@ index 682bfec..0229076 100644
  	}
  	auto entry = schemas.GetEntry(transaction.GetContext(), schema_lookup);
  	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
+diff --git a/src/uc_utils.cpp b/src/uc_utils.cpp
+index c5dd224..b2c89db 100644
+--- a/src/uc_utils.cpp
++++ b/src/uc_utils.cpp
+@@ -134,7 +134,7 @@ LogicalType UCUtils::TypeToLogicalType(ClientContext &context, const string &typ
+ 				}
+ 				auto child_name = child_str.substr(0, type_sep);
+ 				auto child_type = UCUtils::TypeToLogicalType(context, child_str.substr(type_sep + 1, string::npos));
+-				children.push_back({child_name, child_type});
++				children.emplace_back(child_name, child_type);
+ 				if (next_sep == type_end) {
+ 					break;
+ 				}
 diff --git a/src/unity_catalog_extension.cpp b/src/unity_catalog_extension.cpp
-index 6ad27dc..0a13278 100644
+index 6ad27dc..0c806c5 100644
 --- a/src/unity_catalog_extension.cpp
 +++ b/src/unity_catalog_extension.cpp
 @@ -27,7 +27,7 @@ static unique_ptr<BaseSecret> CreateUCSecretFunction(ClientContext &, CreateSecr
@@ -187,34 +214,7 @@ index 6ad27dc..0a13278 100644
  	}
  
 -	auto result = make_uniq<KeyValueSecret>(prefix_paths, name, "config", input.name);
-+	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier(name), Identifier("config"), input.name);
++	auto result = make_uniq<KeyValueSecret>(prefix_paths, Identifier(name), "config", input.name);
  	for (const auto &named_param : input.options) {
  		auto lower_name = StringUtil::Lower(named_param.first);
- 
-@@ -167,22 +167,22 @@ public:
- static void LoadInternal(ExtensionLoader &loader) {
- 	// Register unity_catalog secret type
- 	SecretType secret_type;
--	secret_type.name = "unity_catalog";
-+	secret_type.name = Identifier("unity_catalog");
- 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
- 	secret_type.default_provider = "config";
- 	loader.RegisterSecretType(secret_type);
- 
- 	// Also register the short alias
--	secret_type.name = "uc";
-+	secret_type.name = Identifier("uc");
- 	loader.RegisterSecretType(secret_type);
- 
- 	// Register the create secret function
--	CreateSecretFunction mysql_secret_function = {"unity_catalog", "config", CreateUCSecretFunction};
-+	CreateSecretFunction mysql_secret_function = {"unity_catalog", Identifier("config"), CreateUCSecretFunction};
- 	SetUCSecretParameters(mysql_secret_function);
- 	loader.RegisterFunction(mysql_secret_function);
- 
- 	// Register the create secret function for the short alias
--	CreateSecretFunction mysql_secret_function_deprecated = {"uc", "config", CreateUCSecretFunction<true>};
-+	CreateSecretFunction mysql_secret_function_deprecated = {"uc", Identifier("config"), CreateUCSecretFunction<true>};
- 	SetUCSecretParameters(mysql_secret_function_deprecated);
- 	loader.RegisterFunction(mysql_secret_function_deprecated);
  

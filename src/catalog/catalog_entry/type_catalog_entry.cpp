@@ -35,7 +35,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
-	result->extension_name = Identifier(extension_name.GetName());
+	result->extension_name = extension_name;
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;

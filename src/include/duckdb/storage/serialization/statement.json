@@ -31,7 +31,7 @@
       {
         "id": 101,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -54,7 +54,7 @@
       {
         "id": 101,
         "name": "indexed_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -92,7 +92,7 @@
       {
         "id": 103,
         "name": "insert_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 104,

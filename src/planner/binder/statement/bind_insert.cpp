@@ -84,7 +84,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table.GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
-			expr_list.expected_names[col_idx] = column.Name();
+			expr_list.expected_names[col_idx] = column.Name().GetName();
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
@@ -154,7 +154,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 		}
 
 		// Qualify the column reference.
-		expr = make_uniq<ColumnRefExpression>(col_ref.GetColumnName(), table_name);
+		expr = make_uniq<ColumnRefExpression>(Identifier(col_ref.GetColumnName()), Identifier(table_name));
 		return;
 	}
 	case ExpressionClass::FUNCTION: {
@@ -200,7 +200,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
-			columns.push_back(column.Name());
+			columns.emplace_back(column.Name());
 		}
 	} else {
 		// a list of columns was explicitly supplied, only update those
@@ -221,14 +221,14 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	return set_info;
 }
 
-void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,
                                   vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
                                   IndexVector<idx_t, PhysicalIndex> &column_index_map) {
 	if (!columns.empty() || default_values) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		case_insensitive_map_t<idx_t> column_name_map;
+		identifier_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
@@ -278,7 +278,7 @@ static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &stor
 	unordered_set<string> conflict_column_names;
 	for (auto &col : table.GetColumns().Physical()) {
 		if (conflict_column_ids.count(col.Physical().index)) {
-			conflict_column_names.insert(col.Name());
+			conflict_column_names.insert(col.Name().GetName());
 		}
 	}
 	return conflict_column_names;
@@ -316,12 +316,12 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 				if (!indexed_columns.count(column.Physical().index)) {
 					continue;
 				}
-				auto lhs = make_uniq<ColumnRefExpression>(column.Name(), table_name);
+				auto lhs = make_uniq<ColumnRefExpression>(column.Name(), Identifier(table_name));
 				auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
 				auto new_condition =
 				    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
 				and_children.push_back(std::move(new_condition));
-				distinct_on_columns.push_back(column.Name());
+				distinct_on_columns.emplace_back(column.Name());
 			}
 			all_distinct_on_columns.push_back(std::move(distinct_on_columns));
 			if (and_children.empty()) {
@@ -361,7 +361,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	} else {
 		// when on conflict columns are explicitly provided - use them directly
 		// first figure out if there is an index on the columns or not
-		case_insensitive_map_t<idx_t> specified_columns;
+		identifier_map_t<idx_t> specified_columns;
 		for (idx_t i = 0; i < on_conflict_info.indexed_columns.size(); i++) {
 			specified_columns[on_conflict_info.indexed_columns[i]] = i;
 			auto column_index = table.GetColumnIndex(on_conflict_info.indexed_columns[i]);
@@ -398,8 +398,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
 			                      "CONSTRAINT or INDEX");
 		}
-		all_distinct_on_columns.push_back(on_conflict_info.indexed_columns);
-		merge_into->node->using_columns = StringsToIdentifiers(on_conflict_info.indexed_columns);
+		all_distinct_on_columns.emplace_back(IdentifiersToStrings(on_conflict_info.indexed_columns));
+		merge_into->node->using_columns = on_conflict_info.indexed_columns;
 	}
 
 	// expand any default values
@@ -430,12 +430,12 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		// if we are inserting by position add the columns of the target table as an alias to the source
 		if (!node.columns.empty() || node.default_values) {
 			// we are not emitting all columns - set the column set as the set of aliases
-			source->column_name_alias = StringsToIdentifiers(node.columns);
+			source->column_name_alias = node.columns;
 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			unordered_set<string> set_columns;
+			identifier_set_t set_columns;
 			for (auto &set_col : node.columns) {
 				set_columns.insert(set_col);
 			}
@@ -472,7 +472,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		auto select_node = make_uniq<SelectNode>();
 		auto distinct = make_uniq<DistinctModifier>();
 		for (auto &col : distinct_on_columns) {
-			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
+			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(Identifier(col)));
 		}
 		select_node->modifiers.push_back(std::move(distinct));
 		select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -583,7 +583,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		root_select = select_binder->Bind(*node.select_statement);
 		MoveCorrelatedExpressions(*select_binder);
 
-		node.columns = root_select.names;
+		node.columns = StringsToIdentifiers(root_select.names);
 	}
 
 	vector<LogicalIndex> named_column_map;

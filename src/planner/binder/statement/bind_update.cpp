@@ -37,15 +37,15 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
-		if (!table.ColumnExists(Identifier(colname))) {
+		if (!table.ColumnExists(colname)) {
 			vector<string> column_names;
 			for (auto &col : table.GetColumns().Physical()) {
-				column_names.push_back(col.Name());
+				column_names.emplace_back(col.Name().GetName());
 			}
-			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname, "Did you mean");
-			throw BinderException("Referenced update column %s not found in table!\n%s", colname, candidates);
+			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname.GetName(), "Did you mean");
+			throw BinderException("Referenced update column %s not found in table!\n%s", colname.GetName(), candidates);
 		}
-		auto &column = table.GetColumn(Identifier(colname));
+		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}

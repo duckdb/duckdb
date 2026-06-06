@@ -106,7 +106,7 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				break;
 			case 2:
 				// schema_name, LogicalType::VARCHAR
-				col_vector.Append(Value(view.schema.name.GetName()));
+				col_vector.Append(Value(view.schema.name));
 				break;
 			case 3:
 				// schema_oid, LogicalType::BIGINT
@@ -114,7 +114,7 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				break;
 			case 4:
 				// view_name, LogicalType::VARCHAR
-				col_vector.Append(Value(view.name.GetName()));
+				col_vector.Append(Value(view.name));
 				break;
 			case 5:
 				// view_oid, LogicalType::BIGINT

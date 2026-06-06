@@ -19,10 +19,10 @@ namespace duckdb {
 class ClientContext;
 
 struct CatalogSearchEntry {
-	CatalogSearchEntry(string catalog, string schema);
+	CatalogSearchEntry(Identifier catalog, Identifier schema);
 
-	string catalog;
-	string schema;
+	Identifier catalog;
+	Identifier schema;
 
 public:
 	string ToString() const;
@@ -55,9 +55,9 @@ public:
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
 	//! FIXME: this method is deprecated
-	DUCKDB_API string GetDefaultSchema(const Identifier &catalog) const;
-	DUCKDB_API string GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
-	DUCKDB_API string GetDefaultCatalog(const Identifier &schema) const;
+	DUCKDB_API Identifier GetDefaultSchema(const Identifier &catalog) const;
+	DUCKDB_API Identifier GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
+	DUCKDB_API Identifier GetDefaultCatalog(const Identifier &schema) const;
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const Identifier &catalog) const;
 	DUCKDB_API vector<string> GetCatalogsForSchema(const Identifier &schema) const;

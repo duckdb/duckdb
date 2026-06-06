@@ -222,7 +222,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		// bind the aggregate
 		ErrorData error_aggr;
 		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func.name.GetName(), func.functions, types, error_aggr);
+		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
 		if (!best_function.IsValid()) {
 			error_aggr.AddQueryLocation(window);
 			error_aggr.Throw();
@@ -243,7 +243,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		// bind the aggregate
 		ErrorData error_aggr;
 		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func.name.GetName(), func.functions, types, error_aggr);
+		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
 		if (!best_function.IsValid()) {
 			error_aggr.AddQueryLocation(window);
 			error_aggr.Throw();
@@ -382,7 +382,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// move the WINDOW expression into the set of bound windows
 	auto &window_type = result->GetReturnType();
 	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
-	auto colref = make_uniq<BoundColumnRefExpression>(name.GetName(), window_type,
+	auto colref = make_uniq<BoundColumnRefExpression>(Identifier(name.GetName()), window_type,
 	                                                  ColumnBinding(node.window_index, window_idx), depth);
 	return BindResult(std::move(colref));
 }

@@ -89,7 +89,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 			GroupingSet set;
 			for (idx_t gr = 0; gr < pivot_group_list.size(); gr++) {
 				auto &group = pivot_group_list[gr];
-				auto colref = make_uniq<ColumnRefExpression>(group);
+				auto colref = make_uniq<ColumnRefExpression>(Identifier(group));
 				select_node->select_list.push_back(colref->Copy());
 				select_node->groups.group_expressions.push_back(std::move(colref));
 				set.insert(ProjectionIndex(gr));

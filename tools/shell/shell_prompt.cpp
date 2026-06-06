@@ -289,17 +289,17 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 	if (component.literal == "connect_name_prefix" || component.literal == "connect_display_prefix") {
 		return string();
 	}
-	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
+	auto current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
-		return current_db;
+		return current_db.GetName();
 	}
 	if (component.literal == "current_schema") {
-		return current_schema;
+		return current_schema.GetName();
 	}
 	if (component.literal == "current_database_and_schema") {
 		if (current_schema == "main") {
-			return current_db;
+			return current_db.GetName();
 		} else {
 			return current_db + "." + current_schema;
 		}

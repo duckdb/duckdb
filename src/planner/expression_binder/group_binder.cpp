@@ -90,7 +90,7 @@ void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state
 	expr_ptr = std::move(node.select_list[select_list_idx]);
 	// now replace the original expression in the select list with a reference to this group
 	bind_state.group_alias_map[Identifier(to_string(select_list_idx))] = group_index;
-	node.select_list[select_list_idx] = make_uniq<ColumnRefExpression>(to_string(select_list_idx));
+	node.select_list[select_list_idx] = make_uniq<ColumnRefExpression>(Identifier(to_string(select_list_idx)));
 	// insert into the set of used aliases
 	used_aliases.insert(select_list_idx);
 }

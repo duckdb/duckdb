@@ -211,8 +211,8 @@ shared_ptr<Relation> Relation::Aggregate(vector<unique_ptr<ParsedExpression>> ex
 	return make_shared_ptr<AggregateRelation>(shared_from_this(), std::move(expressions), std::move(groups));
 }
 
-string Relation::GetAlias() {
-	return alias;
+Identifier Relation::GetAlias() {
+	return Identifier(alias);
 }
 
 unique_ptr<TableRef> Relation::GetTableRef() {

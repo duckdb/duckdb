@@ -119,14 +119,14 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 
 struct ExtraConstraintInfo {
 	vector<LogicalIndex> column_indexes;
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	string referenced_table;
-	vector<string> referenced_columns;
+	vector<Identifier> referenced_columns;
 };
 
-void ExtractReferencedColumns(const ParsedExpression &root_expr, vector<string> &result) {
+void ExtractReferencedColumns(const ParsedExpression &root_expr, vector<Identifier> &result) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
-	    root_expr, [&](const ColumnRefExpression &colref) { result.push_back(colref.GetColumnName()); });
+	    root_expr, [&](const ColumnRefExpression &colref) { result.emplace_back(colref.GetColumnName()); });
 }
 
 ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const Constraint &constraint) {
@@ -147,15 +147,15 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 		if (unique.HasIndex()) {
 			result.column_indexes.push_back(unique.GetIndex());
 		} else {
-			result.column_names = IdentifiersToStrings(unique.GetColumnNames());
+			result.column_names = unique.GetColumnNames();
 		}
 		break;
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
-		result.referenced_columns = IdentifiersToStrings(fk.pk_columns);
+		result.referenced_columns = fk.pk_columns;
 		result.referenced_table = fk.info.table.GetName();
-		result.column_names = IdentifiersToStrings(fk.fk_columns);
+		result.column_names = fk.fk_columns;
 		break;
 	}
 	default:
@@ -164,12 +164,13 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	if (result.column_indexes.empty()) {
 		// generate column indexes from names
 		for (auto &name : result.column_names) {
-			result.column_indexes.push_back(table.GetColumnIndex(name));
+			auto col_name = name;
+			result.column_indexes.push_back(table.GetColumnIndex(col_name));
 		}
 	} else {
 		// generate names from column indexes
 		for (auto &index : result.column_indexes) {
-			result.column_names.push_back(table.GetColumn(index).GetName());
+			result.column_names.emplace_back(table.GetColumn(index).GetName());
 		}
 	}
 	return result;
@@ -178,10 +179,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
 	string result = table.name + "_";
 	for (auto &col : info.column_names) {
-		result += StringUtil::Lower(col) + "_";
+		result += StringUtil::Lower(col.GetName()) + "_";
 	}
 	for (auto &col : info.referenced_columns) {
-		result += StringUtil::Lower(col) + "_";
+		result += StringUtil::Lower(col.GetName()) + "_";
 	}
 	switch (constraint.type) {
 	case ConstraintType::CHECK:
@@ -281,9 +282,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			database_name.Append(Value(table.schema.catalog.GetName()));
 			database_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.schema.catalog.GetOid())));
-			schema_name.Append(Value(table.schema.name.GetName()));
+			schema_name.Append(Value(table.schema.name));
 			schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.schema.oid)));
-			table_name.Append(Value(table.name.GetName()));
+			table_name.Append(Value(table.name));
 			table_oid.Append(Value::BIGINT(NumericCast<int64_t>(table.oid)));
 
 			auto info = GetExtraConstraintInfo(table, *constraint);

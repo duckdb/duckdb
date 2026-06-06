@@ -36,7 +36,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	    TransformAndMaterializeAlter(alter_entry_data,
 	                                 make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
 	                                                          add_column.if_column_not_exists),
-	                                 column_entry.GetName(), column_entry.DefaultValue().Copy())));
+	                                 column_entry.GetName().GetName(), column_entry.DefaultValue().Copy())));
 }
 
 unique_ptr<AlterInfo>
@@ -165,7 +165,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
-	set_info->columns.push_back(column_name);
+	set_info->columns.emplace_back(column_name);
 	set_info->expressions.push_back(original_expression->Copy());
 	node.set_info = std::move(set_info);
 
@@ -217,7 +217,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists);
 	} else {
 		const auto parent_path =
-		    vector<string>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
+		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
 		result = make_uniq<AddFieldInfo>(AlterEntryData(), parent_path, std::move(column_definition), if_not_exists);
 	}
 	return result;
@@ -260,8 +260,8 @@ PEGTransformerFactory::TransformDropColumn(PEGTransformer &transformer, const bo
 		                                          if_exists, drop_behavior);
 		return std::move(result);
 	}
-	auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), IdentifiersToStrings(nested_column_name->ColumnNames()),
-	                                         if_exists, drop_behavior);
+	auto result =
+	    make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists, drop_behavior);
 	return std::move(result);
 }
 
@@ -335,8 +335,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
 		    make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0].GetName(), identifier);
 		return std::move(result);
 	}
-	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), IdentifiersToStrings(nested_column_name->ColumnNames()),
-	                                         identifier);
+	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), identifier);
 	return std::move(result);
 }
 
@@ -405,7 +404,7 @@ unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName
                                                                                  const string &column_name) {
 	vector<string> column_names = identifier_dot;
 	column_names.push_back(column_name);
-	return make_uniq<ColumnRefExpression>(std::move(column_names));
+	return make_uniq<ColumnRefExpression>(StringsToIdentifiers(column_names));
 }
 
 string PEGTransformerFactory::TransformIdentifierDot(PEGTransformer &transformer, const string &identifier) {

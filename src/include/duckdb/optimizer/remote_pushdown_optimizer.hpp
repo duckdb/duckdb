@@ -90,15 +90,15 @@ private:
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
-	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
-	static void StripCatalogName(QueryNode &node, const string &catalog_name);
-	static void StripCatalogName(TableRef &ref, const string &catalog_name);
+	static void StripCatalogName(SQLStatement &statement, const Identifier &catalog_name);
+	static void StripCatalogName(QueryNode &node, const Identifier &catalog_name);
+	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
-	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
+	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
 	bool RefersToLocalTable(const ColumnRefExpression &col_ref) const;
 
-	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;
+	bool RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const;
 
 private:
 	Binder &binder;

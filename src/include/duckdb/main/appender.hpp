@@ -107,7 +107,7 @@ public:
 	virtual void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
 	//! Appends a column to the active column list.
 	//! Immediately flushes all previous data.
-	virtual void AddColumn(const string &name);
+	virtual void AddColumn(const Identifier &name);
 	//! Removes all columns from the active column list.
 	//! Immediately flushes all previous data.
 	virtual void ClearColumns();
@@ -144,18 +144,18 @@ protected:
 
 class Appender : public BaseAppender {
 public:
-	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
-	                    const string &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name,
+	DUCKDB_API Appender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+	                    const Identifier &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
 	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
-	DUCKDB_API Appender(Connection &con, const string &table_name,
+	DUCKDB_API Appender(Connection &con, const Identifier &table_name,
 	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~Appender() override;
 
 public:
 	void AppendDefault() override;
 	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
-	void AddColumn(const string &name) override;
+	void AddColumn(const Identifier &name) override;
 	void ClearColumns() override;
 	//! Get the expected names based on the active columns.
 	vector<string> GetExpectedNames();

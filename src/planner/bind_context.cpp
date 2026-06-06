@@ -147,10 +147,10 @@ void BindContext::RemoveUsingBinding(const Identifier &column_name, UsingColumnS
 }
 
 void BindContext::TransferUsingBinding(BindContext &current_context, optional_ptr<UsingColumnSet> current_set,
-                                       UsingColumnSet &new_set, const string &using_column) {
-	AddUsingBinding(Identifier(using_column), new_set);
+                                       UsingColumnSet &new_set, const Identifier &using_column) {
+	AddUsingBinding(using_column, new_set);
 	if (current_set) {
-		current_context.RemoveUsingBinding(Identifier(using_column), *current_set);
+		current_context.RemoveUsingBinding(using_column, *current_set);
 	}
 }
 
@@ -238,7 +238,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	names.push_back(column_name.GetName());
 
 	BindingAlias alias {Identifier(catalog_name), Identifier(schema_name), Identifier(table_name)};
-	auto result = make_uniq<ColumnRefExpression>(std::move(names));
+	auto result = make_uniq<ColumnRefExpression>(StringsToIdentifiers(names));
 	auto binding = GetBinding(alias, Identifier(column_name), error);
 	if (!binding) {
 		return std::move(result);
@@ -384,8 +384,8 @@ optional_ptr<Binding> BindContext::GetBinding(const BindingAlias &alias, ErrorDa
 	return &matching_bindings[0].get();
 }
 
-optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
-	return GetBinding(BindingAlias(Identifier(name)), out_error);
+optional_ptr<Binding> BindContext::GetBinding(const Identifier &name, ErrorData &out_error) {
+	return GetBinding(BindingAlias(name), out_error);
 }
 
 BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
@@ -447,7 +447,7 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 	if (!error.empty()) {
 		throw BinderException(error);
 	}
-	return make_uniq<ColumnRefExpression>(column_name, table_name);
+	return make_uniq<ColumnRefExpression>(Identifier(column_name), Identifier(table_name));
 }
 
 struct ExclusionListInfo {
@@ -525,7 +525,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
 							coalesce->Cast<OperatorExpression>().GetChildrenMutable().push_back(
-							    make_uniq<ColumnRefExpression>(column_name.GetName(), child_binding));
+							    make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->SetAlias(column_name);
 						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
@@ -534,7 +534,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					} else {
 						// primary binding: output the qualified column ref
 						auto new_expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(
-						    column_name.GetName(), using_binding.primary_binding);
+						    column_name, using_binding.primary_binding);
 						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
 							new_select_list.push_back(std::move(new_expr));
 						}
@@ -576,14 +576,15 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &struct_children = StructType::GetChildTypes(col_type);
 			vector<string> column_names(3);
 			column_names[0] = binding->GetAlias().GetName();
-			column_names[1] = expr.RelationName();
+			column_names[1] = expr.RelationName().GetName();
 			for (auto &child : struct_children) {
 				QualifiedColumnName qualified_name(Identifier(child.first));
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				column_names[2] = child.first;
-				unique_ptr<ParsedExpression> new_expr = make_uniq<ColumnRefExpression>(column_names);
+				column_names[2] = child.first.GetName();
+				unique_ptr<ParsedExpression> new_expr =
+				    make_uniq<ColumnRefExpression>(StringsToIdentifiers(column_names));
 				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}

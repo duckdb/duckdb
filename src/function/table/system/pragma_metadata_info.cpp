@@ -36,7 +36,7 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 
 	string db_name;
 	if (input.inputs.empty()) {
-		db_name = DatabaseManager::GetDefaultDatabase(context);
+		db_name = DatabaseManager::GetDefaultDatabase(context).GetName();
 	} else {
 		if (input.inputs[0].IsNull()) {
 			throw BinderException("Database argument for pragma_metadata_info cannot be NULL");

@@ -80,7 +80,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &context,
                                                             const vector<unique_ptr<Constraint>> &constraints,
-                                                            const string &table_name, const ColumnList &columns) {
+                                                            const Identifier &table_name, const ColumnList &columns) {
 	auto binder = Binder::CreateBinder(context);
 	return binder->BindConstraints(constraints, Identifier(table_name), columns);
 }
@@ -99,8 +99,9 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
-                                                               const string &table_name, const ColumnList &columns) {
-	auto bound_constraints = BindConstraints(constraints, Identifier(table_name), columns);
+                                                               const Identifier &table_name,
+                                                               const ColumnList &columns) {
+	auto bound_constraints = BindConstraints(constraints, table_name, columns);
 
 	// Handle PK and NOT NULL constraints.
 	bool has_primary_key = false;
@@ -146,7 +147,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	return bound_constraints;
 }
 
-unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint &constraint, const Identifier &table,
                                                 const ColumnList &columns) {
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	auto &bound_check = bound_constraint->Cast<BoundCheckConstraint>();
@@ -230,7 +231,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
                                                    const ColumnList &columns) {
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {
-		return BindCheckConstraint(*this, constraint, table.GetName(), columns);
+		return BindCheckConstraint(*this, constraint, table, columns);
 	}
 	case ConstraintType::NOT_NULL: {
 		auto &not_null = constraint.Cast<NotNullConstraint>();
@@ -256,7 +257,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
 	for (auto &col : base.columns.Logical()) {
-		names.push_back(col.Name());
+		names.emplace_back(col.Name());
 		types.push_back(col.Type());
 	}
 	auto table_index = GenerateTableIndex();
@@ -267,7 +268,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	ErrorData ignore;
-	auto table_binding = binder->bind_context.GetBinding(base.table.GetName(), ignore);
+	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && !ignore.HasError());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
@@ -379,7 +380,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.Name());
+		generated_columns.insert(col.Name().GetName());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -690,7 +691,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (AnyConstraintReferencesGeneratedColumn(base)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
-		bound_constraints = BindNewConstraints(base.constraints, base.table.GetName(), base.columns);
+		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();

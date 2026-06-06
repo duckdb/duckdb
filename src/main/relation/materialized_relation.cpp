@@ -37,14 +37,14 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
 	auto table_ref = make_uniq<ColumnDataRef>(collection);
 	for (auto &col : columns) {
-		table_ref->expected_names.push_back(col.Name());
+		table_ref->expected_names.emplace_back(col.Name());
 	}
 	table_ref->alias = Identifier(GetAlias());
 	return std::move(table_ref);
 }
 
-string MaterializedRelation::GetAlias() {
-	return alias;
+Identifier MaterializedRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 const vector<ColumnDefinition> &MaterializedRelation::Columns() {

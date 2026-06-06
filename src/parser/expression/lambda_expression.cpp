@@ -14,16 +14,16 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), syntax_type(LambdaSyntaxType::LAMBDA_KEYWORD),
       expr(std::move(expr)) {
 	if (named_parameters_p.size() == 1) {
-		lhs = make_uniq<ColumnRefExpression>(named_parameters_p.back());
+		lhs = make_uniq<ColumnRefExpression>(Identifier(named_parameters_p.back()));
 		return;
 	}
 	// Create a dummy row function and insert the children.
 	vector<unique_ptr<ParsedExpression>> children;
 	for (const auto &name : named_parameters_p) {
-		auto child = make_uniq<ColumnRefExpression>(name);
+		auto child = make_uniq<ColumnRefExpression>(Identifier(name));
 		children.push_back(std::move(child));
 	}
-	lhs = make_uniq<FunctionExpression>(Identifier("row"), std::move(children));
+	lhs = make_uniq<FunctionExpression>("row", std::move(children));
 }
 
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)

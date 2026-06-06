@@ -85,7 +85,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// Hackity-hack some comparisons with column refs
 		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
 		// the function binder likes
-		auto column_ref = make_uniq<ColumnRefExpression>(parameter.first);
+		auto column_ref = make_uniq<ColumnRefExpression>(Identifier(parameter.first));
 		auto constant_value = make_uniq<ConstantExpression>(parameter.second);
 		auto comparison = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
 		                                                  std::move(constant_value));
@@ -98,8 +98,8 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	return std::move(table_function);
 }
 
-string TableFunctionRelation::GetAlias() {
-	return name.GetName();
+Identifier TableFunctionRelation::GetAlias() {
+	return name;
 }
 
 const vector<ColumnDefinition> &TableFunctionRelation::Columns() {

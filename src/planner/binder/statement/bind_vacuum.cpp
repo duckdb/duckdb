@@ -57,7 +57,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 			    col.GetName());
 		}
 		non_generated_column_names.emplace_back(col_name);
-		ColumnRefExpression colref(col_name.GetName(), table.name.GetName());
+		ColumnRefExpression colref(col_name, table.name);
 		auto result = bind_context.BindColumn(colref, 0);
 		if (result.HasError()) {
 			result.error.Throw();

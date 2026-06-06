@@ -16,7 +16,7 @@
 namespace duckdb {
 
 static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const BindingAlias &alias,
-                                               const string &column_name) {
+                                               const Identifier &column_name) {
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
@@ -25,16 +25,16 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
                                                  const BindingAlias &left_alias, const BindingAlias &right_alias,
-                                                 const string &column_name, ExpressionType type) {
+                                                 const Identifier &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
 	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
-bool Binder::TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result) {
+bool Binder::TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result) {
 	// for each using column, get the matching binding
-	auto bindings = bind_context.GetMatchingBindings(Identifier(using_column));
+	auto bindings = bind_context.GetMatchingBindings(using_column);
 	if (bindings.empty()) {
 		return false;
 	}
@@ -51,7 +51,7 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 				error += "\n\t";
 				error += other_binding.GetAlias();
 				error += ".";
-				error += bind_context.GetActualColumnName(other_binding, Identifier(using_column));
+				error += bind_context.GetActualColumnName(other_binding, using_column);
 			}
 			throw BinderException(error);
 		} else {
@@ -61,10 +61,10 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 	return true;
 }
 
-BindingAlias Binder::FindBinding(const string &using_column, const string &join_side) {
+BindingAlias Binder::FindBinding(const Identifier &using_column, const string &join_side) {
 	BindingAlias result;
 	if (!TryFindBinding(using_column, join_side, result)) {
-		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column, join_side);
+		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column.GetName(), join_side);
 	}
 	return result;
 }
@@ -100,7 +100,7 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const Bin
 }
 
 BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-                                          const string &using_column, const string &join_side) {
+                                          const Identifier &using_column, const string &join_side) {
 	BindingAlias binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);
@@ -110,9 +110,9 @@ BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<U
 	return binding;
 }
 
-static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_columns) {
-	vector<string> result;
-	case_insensitive_set_t handled_columns;
+static vector<Identifier> RemoveDuplicateUsingColumns(const vector<Identifier> &using_columns) {
+	vector<Identifier> result;
+	identifier_set_t handled_columns;
 	for (auto &using_column : using_columns) {
 		if (handled_columns.find(using_column) == handled_columns.end()) {
 			handled_columns.insert(using_column);
@@ -183,21 +183,21 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
-	vector<string> extra_using_columns;
+	vector<Identifier> extra_using_columns;
 	switch (ref.ref_type) {
 	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
-		case_insensitive_set_t lhs_columns;
+		identifier_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding->GetColumnNames()) {
-				lhs_columns.insert(column_name.GetName());
+				lhs_columns.insert(column_name);
 			}
 		}
 		// now bind the rhs
 		for (auto &column_name : lhs_columns) {
-			auto right_using_binding = right_binder.bind_context.GetUsingBinding(Identifier(column_name));
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(column_name);
 
 			BindingAlias right_binding;
 			// loop over the set of lhs columns, and figure out if there is a table in the rhs with the same name
@@ -245,7 +245,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);
-			extra_using_columns = IdentifiersToStrings(ref.using_columns);
+			extra_using_columns = ref.using_columns;
 		}
 		break;
 
@@ -264,13 +264,13 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			// we check if there is ALREADY a using column of the same name in the left and right set
 			// this can happen if we chain USING clauses
 			// e.g. x JOIN y USING (c) JOIN z USING (c)
-			auto left_using_binding = left_binder.bind_context.GetUsingBinding(Identifier(using_column));
-			auto right_using_binding = right_binder.bind_context.GetUsingBinding(Identifier(using_column));
+			auto left_using_binding = left_binder.bind_context.GetUsingBinding(using_column);
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(using_column);
 			if (!left_using_binding) {
-				left_binder.bind_context.GetMatchingBinding(Identifier(using_column));
+				left_binder.bind_context.GetMatchingBinding(using_column);
 			}
 			if (!right_using_binding) {
-				right_binder.bind_context.GetMatchingBinding(Identifier(using_column));
+				right_binder.bind_context.GetMatchingBinding(using_column);
 			}
 			left_using_bindings.push_back(left_using_binding);
 			right_using_bindings.push_back(right_using_binding);

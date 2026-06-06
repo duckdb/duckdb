@@ -96,7 +96,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
                                              unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
-	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 	binder.lambda_bindings = lambda_bindings;
 	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name.GetName(), function,
 	                                                    positional_arguments, named_arguments, depth);

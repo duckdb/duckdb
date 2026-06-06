@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-StarExpression::StarExpression(string relation_name_p)
+StarExpression::StarExpression(Identifier relation_name_p)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)) {
 }
 

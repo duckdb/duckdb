@@ -24,7 +24,7 @@ public:
 public:
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
-	string GetAlias() override;
+	Identifier GetAlias() override;
 	unique_ptr<TableRef> GetTableRef() override;
 	unique_ptr<QueryNode> GetQueryNode() override;
 };

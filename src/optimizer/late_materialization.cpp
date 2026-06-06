@@ -53,7 +53,8 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 			// push projection of the row-id columns
 			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 				auto &r_col = row_id_columns[r_idx];
-				auto row_id_ref = make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]);
+				auto row_id_ref =
+				    make_uniq<BoundColumnRefExpression>(Identifier(r_col.name), r_col.type, row_id_bindings[r_idx]);
 				auto row_id_proj = ColumnBinding::PushExpression(proj.expressions, std::move(row_id_ref));
 				// modify the row-id-binding to the new projection
 				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, row_id_proj);
@@ -134,7 +135,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -298,7 +299,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 			auto &row_id_col = row_id_columns[r_idx];
 			auto row_id_expr =
-			    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
+			    make_uniq<BoundColumnRefExpression>(Identifier(row_id_col.name), row_id_col.type, lhs_bindings[r_idx]);
 			final_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(row_id_expr));
 		}
 	}
@@ -331,8 +332,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 		auto &row_id_col = row_id_columns[r_idx];
 		JoinCondition condition(
-		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]),
-		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]),
+		    make_uniq<BoundColumnRefExpression>(Identifier(row_id_col.name), row_id_col.type, lhs_bindings[r_idx]),
+		    make_uniq<BoundColumnRefExpression>(Identifier(row_id_col.name), row_id_col.type, rhs_bindings[r_idx]),
 		    ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}

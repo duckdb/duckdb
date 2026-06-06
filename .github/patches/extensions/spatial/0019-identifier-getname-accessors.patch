@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index 83fd983..a0dfdb3 100644
+index 83fd983..c688289 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -78,7 +78,8 @@ RTreeIndex::RTreeIndex(const string &name, IndexConstraintType index_constraint_
@@ -17,12 +17,12 @@ index 83fd983..a0dfdb3 100644
  	auto &source_type = unbound_expressions[0]->GetReturnType();
  	auto &catalog = Catalog::GetSystemCatalog(context);
 -	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
-+	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier("ST_Extent_Approx"));
++	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
  	const auto &func = entry.functions.GetFunctionByArguments(context, {source_type});
  	auto child_expr = make_uniq<BoundReferenceExpression>(source_type, 0);
  
 diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
-index 9539b16..2e75db9 100644
+index 9539b16..747748c 100644
 --- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
 +++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
 @@ -51,7 +51,7 @@ static PhysicalOperator &CreateNullFilter(PhysicalPlanGenerator &generator, cons
@@ -30,7 +30,7 @@ index 9539b16..2e75db9 100644
  	// Filter IS_NOT_EMPTY on the GEOMETRY column
  	auto &catalog = Catalog::GetSystemCatalog(context);
 -	auto &is_empty_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "ST_IsEmpty")
-+	auto &is_empty_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), Identifier("ST_IsEmpty"))
++	auto &is_empty_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), "ST_IsEmpty")
  	                           .Cast<ScalarFunctionCatalogEntry>();
  
  	auto is_empty_func = is_empty_entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
@@ -39,7 +39,7 @@ index 9539b16..2e75db9 100644
  	// Get the bounding box function
  	auto &bbox_func_entry =
 -	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "ST_Extent_Approx")
-+	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), Identifier("ST_Extent_Approx"))
++	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), "ST_Extent_Approx")
  	        .Cast<ScalarFunctionCatalogEntry>();
  	const auto &bbox_func = bbox_func_entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
  
@@ -48,7 +48,7 @@ index 9539b16..2e75db9 100644
  	// Get the centroid value function
  	auto &centroid_func_entry =
 -	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_centroid")
-+	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), Identifier("st_centroid"))
++	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), "st_centroid")
  	        .Cast<ScalarFunctionCatalogEntry>();
  	const auto &centroid_func = centroid_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::BOX_2DF()});
  	vector<unique_ptr<Expression>> centroid_func_args;
@@ -57,7 +57,7 @@ index 9539b16..2e75db9 100644
  
  	// Get the xmin value function
 -	auto &xmin_func_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_xmin")
-+	auto &xmin_func_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), Identifier("st_xmin"))
++	auto &xmin_func_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier::DefaultSchema(), "st_xmin")
  	                            .Cast<ScalarFunctionCatalogEntry>();
  	const auto &xmin_func = xmin_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::POINT_2D()});
  	vector<unique_ptr<Expression>> xmin_func_args;
@@ -75,7 +75,7 @@ index b4d5601..b7c1e6f 100644
  
  	gstate->max_node_capacity = gstate->rtree->tree->GetConfig().max_node_capacity;
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index 687f129..34e62dc 100644
+index 687f129..83c59bd 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 @@ -94,7 +94,7 @@ public:
@@ -92,7 +92,7 @@ index 687f129..34e62dc 100644
  		// make a new box expression
  		auto &catalog = Catalog::GetSystemCatalog(context);
 -		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
-+		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier("ST_Extent_Approx"));
++		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
  		const auto &func = entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
  
  		vector<unique_ptr<Expression>> children;
@@ -162,6 +162,19 @@ index a1bfbe3..70f4c13 100644
  	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
  		throw SerializationException("Cant find table for %s.%s", schema, table);
  	}
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index f0c19f8..93f63fc 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -982,7 +982,7 @@ struct ST_AsMVT {
+ 					                            "DOUBLE, INTEGER, BIGINT, BOOLEAN",
+ 					                            name.c_str(), type_name.c_str());
+ 				}
+-				result->tag_names.push_back(name);
++				result->tag_names.emplace_back(name);
+ 			}
+ 		}
+ 
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
 index 8262a8c..cd93419 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
@@ -266,7 +279,7 @@ index cabbe23..75e7081 100644
  		}
  		needs_flipping = true;
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 3c707b6..05d3886 100644
+index 3c707b6..4121338 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -386,7 +386,7 @@ private:
@@ -274,7 +287,7 @@ index 3c707b6..05d3886 100644
  static unique_ptr<Expression> GetBBOXExpression(ClientContext &context, const LogicalType &geom_type) {
  	auto &catalog = Catalog::GetSystemCatalog(context);
 -	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
-+	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier("ST_Extent_Approx"));
++	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
  	const auto &func = entry.functions.GetFunctionByArguments(context, {geom_type});
  
  	auto child_expr = make_uniq<BoundReferenceExpression>(geom_type, 0);
@@ -284,7 +297,7 @@ index 3c707b6..05d3886 100644
  		auto &catalog = Catalog::GetSystemCatalog(context);
 -		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_IsEmpty");
 +		auto &entry =
-+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier("ST_IsEmpty"));
++	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_IsEmpty");
  		const auto &func = entry.functions.GetFunctionByArguments(context, {geom_type});
  
  		vector<unique_ptr<Expression>> children;

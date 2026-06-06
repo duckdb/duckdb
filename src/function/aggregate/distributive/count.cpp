@@ -272,7 +272,7 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
 		// count on a column without null values: use count star
 		expr.FunctionMutable().ReplaceImplementation(CountStarFun::GetFunction());
-		expr.FunctionMutable().SetName(Identifier("count_star"));
+		expr.FunctionMutable().SetName("count_star");
 		expr.GetChildrenMutable().clear();
 	}
 	return nullptr;

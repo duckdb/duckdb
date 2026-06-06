@@ -12,10 +12,21 @@ index 9756d93..438add7 100644
  	if (index_constraint_type != IndexConstraintType::NONE) {
  		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
 diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
-index b5d60f5..87a5fcf 100644
+index b5d60f5..d7b0c52 100644
 --- a/src/hnsw/hnsw_index_macros.cpp
 +++ b/src/hnsw/hnsw_index_macros.cpp
-@@ -95,8 +95,8 @@ static void RegisterTableMacro(ExtensionLoader &loader, const string &name, cons
+@@ -86,17 +86,17 @@ static void RegisterTableMacro(ExtensionLoader &loader, const string &name, cons
+ 
+ 	auto func = make_uniq<TableMacroFunction>(std::move(node));
+ 	for (auto &param : params) {
+-		func->parameters.push_back(make_uniq<ColumnRefExpression>(param));
++		func->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(param)));
+ 	}
+ 
+ 	for (auto &param : named_params) {
+ 		func->parameters.push_back(make_uniq<ColumnRefExpression>(param.first));
+-		func->default_parameters[param.first] = make_uniq<ConstantExpression>(param.second);
++		func->default_parameters[Identifier(param.first)] = make_uniq<ConstantExpression>(Value(param.second));
  	}
  
  	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
@@ -97,7 +108,7 @@ index 8cd23f3..f4d7f10 100644
  }
  
 diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
-index 89f48b2..5a2926b 100644
+index 89f48b2..e519d60 100644
 --- a/src/hnsw/hnsw_optimize_expr.cpp
 +++ b/src/hnsw/hnsw_optimize_expr.cpp
 @@ -56,7 +56,8 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
@@ -106,7 +117,7 @@ index 89f48b2..5a2926b 100644
  		auto &context = GetContext();
 -		auto func_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, "", "", "array_cosine_distance",
 +		auto func_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, Identifier(), Identifier(),
-+	                                                                Identifier("array_cosine_distance"),
++	                                                                "array_cosine_distance",
  		                                                                OnEntryNotFound::RETURN_NULL);
  
  		if (!func_entry) {
@@ -126,7 +137,7 @@ index 995a189..9b9f3bd 100644
  	SetEstimatedCardinality(result, estimated_cardinality);
  	return result;
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index 51c91f0..20e4762 100644
+index 51c91f0..79a5e6a 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -27,7 +27,8 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
@@ -134,7 +145,7 @@ index 51c91f0..20e4762 100644
                                                      unique_ptr<Expression> filter_expr) {
  	auto func_entry =
 -	    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", "list", OnEntryNotFound::RETURN_NULL);
-+	    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(), Identifier("list"),
++	    Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(), "list",
 +		                                                     OnEntryNotFound::RETURN_NULL);
  	if (!func_entry) {
  		return nullptr;

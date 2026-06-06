@@ -58,7 +58,7 @@ void DuckDBSecretTypesFunction(ClientContext &context, TableFunctionInput &data_
 	while (data.offset < data.types.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.types[data.offset++];
 
-		type.Append(Value(entry.name.GetName()));
+		type.Append(Value(entry.name));
 		default_provider.Append(Value(entry.default_provider));
 		extension.Append(Value(entry.extension));
 

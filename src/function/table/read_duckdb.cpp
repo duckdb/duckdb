@@ -192,7 +192,7 @@ AttachedDatabaseWrapper::~AttachedDatabaseWrapper() {
 		auto &db_manager = DatabaseManager::Get(context);
 		auto name = attached_database->GetName();
 		attached_database.reset();
-		db_manager.DetachDatabase(context, name.GetName(), OnEntryNotFound::RETURN_NULL);
+		db_manager.DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
 	}
 }
 DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)
@@ -230,7 +230,7 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	}
 	auto &table = tables[0].get();
 	for (auto &col : table.GetColumns().Logical()) {
-		columns.emplace_back(col.Name(), col.Type());
+		columns.emplace_back(col.Name().GetName(), col.Type());
 	}
 	column_count = columns.size();
 	schema_name = table.ParentSchema().name.GetName();

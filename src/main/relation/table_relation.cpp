@@ -34,8 +34,8 @@ unique_ptr<TableRef> TableRelation::GetTableRef() {
 	return std::move(table_ref);
 }
 
-string TableRelation::GetAlias() {
-	return description->table.GetName();
+Identifier TableRelation::GetAlias() {
+	return description->table;
 }
 
 const vector<ColumnDefinition> &TableRelation::Columns() {

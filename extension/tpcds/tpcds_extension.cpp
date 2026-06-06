@@ -28,8 +28,8 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
 	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
-	result->catalog = current_catalog;
-	result->schema = current_schema;
+	result->catalog = current_catalog.GetName();
+	result->schema = current_schema.GetName();
 
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {

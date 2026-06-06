@@ -17,7 +17,7 @@ const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &c
                                                                 const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name.GetName(), *this, arguments, error);
+	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());
@@ -39,7 +39,7 @@ const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientCont
                                                                       const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name.GetName(), *this, arguments, error);
+	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
 		// check if the arguments are a prefix of any of the arguments
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
@@ -80,7 +80,7 @@ const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &c
                                                                 const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name.GetName(), *this, arguments, error);
+	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());
@@ -99,7 +99,7 @@ const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &con
                                                               const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
-	auto index = binder.BindFunction(name.GetName(), *this, arguments, error);
+	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
 		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                      error.RawMessage());

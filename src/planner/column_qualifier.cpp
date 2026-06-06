@@ -135,7 +135,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 		child_expressions.emplace_back(column_name.GetName(), std::move(ref));
 	}
-	return make_uniq<FunctionExpression>(Identifier("struct_pack"), std::move(child_expressions));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr, const string &column_name,
@@ -153,7 +153,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 			auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 			coalesce->GetChildrenMutable().reserve(using_binding->bindings.size());
 			for (auto &entry : using_binding->bindings) {
-				coalesce->GetChildrenMutable().push_back(make_uniq<ColumnRefExpression>(column_name, entry));
+				coalesce->GetChildrenMutable().push_back(
+				    make_uniq<ColumnRefExpression>(Identifier(column_name), entry));
 			}
 			return std::move(coalesce);
 		}
@@ -290,9 +291,9 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	ErrorData error;
 	unique_ptr<ColumnRefExpression> colref;
 	if (function.Catalog().empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.Schema().GetName());
+		colref = make_uniq<ColumnRefExpression>(function.Schema());
 	} else {
-		colref = make_uniq<ColumnRefExpression>(function.Schema().GetName(), function.Catalog().GetName());
+		colref = make_uniq<ColumnRefExpression>(function.Schema(), function.Catalog());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {

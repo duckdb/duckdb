@@ -29,23 +29,23 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 	fields["table"] = "";
 
 	for (idx_t i = 0; i < field_types.size(); i++) {
-		auto field_name = StringUtil::Lower(field_types[i].first);
+		auto field_name = StringUtil::Lower(field_types[i].first.GetName());
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first);
+			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetName());
 		}
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			throw BinderException("index_key: path field '%s' cannot be NULL", field_types[i].first);
+			throw BinderException("index_key: path field '%s' cannot be NULL", field_types[i].first.GetName());
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("index_key: path field '%s' must be VARCHAR", field_types[i].first);
+			throw BinderException("index_key: path field '%s' must be VARCHAR", field_types[i].first.GetName());
 		}
 
 		auto value = StringValue::Get(field_value);
 		if (value.empty()) {
-			throw BinderException("index_key: path field '%s' cannot be empty", field_types[i].first);
+			throw BinderException("index_key: path field '%s' cannot be empty", field_types[i].first.GetName());
 		}
 		fields[field_name] = value;
 	}
@@ -54,7 +54,7 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		throw BinderException("index_key: path must contain a 'table' field");
 	}
 
-	return TableDescription(fields["catalog"], fields["schema"], fields["table"]);
+	return TableDescription(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"]));
 }
 
 static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {

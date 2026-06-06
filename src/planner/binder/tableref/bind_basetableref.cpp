@@ -79,7 +79,7 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 			replacement_function = std::move(subquery);
 		}
 		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
-			AddReplacementScan(ref.table_name.GetName(), replacement_function->Copy());
+			AddReplacementScan(ref.table_name, replacement_function->Copy());
 		}
 		return Bind(*replacement_function);
 	}
@@ -100,14 +100,14 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
 	if (!schema_name.empty()) {
-		view_search_path.emplace_back(catalog_name.GetName(), schema_name.GetName());
+		view_search_path.emplace_back(catalog_name, schema_name);
 	}
 	auto default_schema = catalog.GetDefaultSchema();
 	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog_name.GetName(), default_schema);
+		view_search_path.emplace_back(catalog_name, Identifier(default_schema));
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
-	view_search_path.emplace_back(catalog_name.GetName(), INVALID_SCHEMA);
+	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
 	return view_search_path;
 }
 
@@ -248,9 +248,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<string> return_names;
 		for (auto &col : table.GetColumns().Logical()) {
 			table_types.push_back(col.Type());
-			table_names.push_back(col.Name());
+			table_names.emplace_back(col.Name());
 			return_types.push_back(col.Type());
-			return_names.push_back(col.Name());
+			return_names.emplace_back(col.Name());
 		}
 		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
@@ -303,8 +303,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
-		auto view_search_path = GetSearchPath(view_catalog_entry.ParentCatalog(),
-		                                      Identifier(view_catalog_entry.ParentSchema().name.GetName()));
+		auto view_search_path =
+		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// propagate the AT clause through the view
 		view_binder->entry_retriever.SetAtClause(entry_at_clause);

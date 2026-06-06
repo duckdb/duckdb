@@ -433,7 +433,7 @@ void BaseAppender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
 	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
 }
 
-void BaseAppender::AddColumn(const string &name) {
+void BaseAppender::AddColumn(const Identifier &name) {
 	throw NotImplementedException("AddColumn is only supported when directly appending to a table");
 }
 
@@ -502,8 +502,8 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 //===--------------------------------------------------------------------===//
 // Table Appender
 //===--------------------------------------------------------------------===//
-Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
-                   const idx_t flush_memory_threshold_p)
+Appender::Appender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+                   const Identifier &table_name, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
 	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
 	                             ? optional_idx::Invalid()
@@ -564,13 +564,13 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name,
+Appender::Appender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
                    const idx_t flush_memory_threshold_p)
-    : Appender(con, INVALID_CATALOG, schema_name, table_name, flush_memory_threshold_p) {
+    : Appender(con, Identifier::InvalidCatalog(), schema_name, table_name, flush_memory_threshold_p) {
 }
 
-Appender::Appender(Connection &con, const string &table_name, const idx_t flush_memory_threshold_p)
-    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, flush_memory_threshold_p) {
+Appender::Appender(Connection &con, const Identifier &table_name, const idx_t flush_memory_threshold_p)
+    : Appender(con, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name, flush_memory_threshold_p) {
 }
 
 Appender::~Appender() {
@@ -581,7 +581,7 @@ vector<string> Appender::GetExpectedNames() {
 	vector<string> expected_names;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &col_name = description->columns[column_ids[i].index].Name();
-		expected_names.push_back(col_name);
+		expected_names.emplace_back(col_name);
 	}
 	return expected_names;
 }
@@ -655,7 +655,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	return it->second;
 }
 
-void Appender::AddColumn(const string &name) {
+void Appender::AddColumn(const Identifier &name) {
 	Flush();
 
 	auto exists = false;

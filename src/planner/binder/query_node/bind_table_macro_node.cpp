@@ -20,7 +20,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
                                              idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
-	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 
 	auto bind_result = MacroFunction::BindMacroFunction(*this, macro_func.macros, macro_func.name.GetName(), function,
 	                                                    positional_arguments, named_arguments, depth);

@@ -78,7 +78,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	// schema is specified - but catalog is not
 	// try searching for the catalog instead
 	auto &db_manager = DatabaseManager::Get(context);
-	auto database = db_manager.GetDatabase(context, schema);
+	auto database = db_manager.GetDatabase(context, Identifier(schema));
 	if (!database) {
 		//! No database by that name was found
 		return;
@@ -88,7 +88,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(Identifier(schema));
 	if (catalog_names.empty()) {
-		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, Identifier(catalog_name));
@@ -116,11 +116,11 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 
 const string Binder::BindCatalog(string &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
-	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
+	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, Identifier(catalog));
 	if (database) {
-		return db_manager.GetDatabase(context, catalog).get()->GetName().GetName();
+		return db_manager.GetDatabase(context, Identifier(catalog)).get()->GetName().GetName();
 	} else {
-		return db_manager.GetDefaultDatabase(context);
+		return db_manager.GetDefaultDatabase(context).GetName();
 	}
 }
 
@@ -341,7 +341,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			auto it = function->default_parameters.find(param_name);
+			auto it = function->default_parameters.find(Identifier(param_name));
 			if (it != function->default_parameters.end()) {
 				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
@@ -477,9 +477,9 @@ void Binder::BindLogicalType(LogicalType &type) {
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
-	TableDescription table_description(create_trigger_info.base_table->catalog_name.GetName(),
-	                                   create_trigger_info.base_table->schema_name.GetName(),
-	                                   create_trigger_info.base_table->table_name.GetName());
+	TableDescription table_description(create_trigger_info.base_table->catalog_name,
+	                                   create_trigger_info.base_table->schema_name,
+	                                   create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -631,8 +631,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
 		// Plan the table scan.
-		TableDescription table_description(create_index_info.catalog.GetName(), create_index_info.schema.GetName(),
-		                                   create_index_info.table.GetName());
+		TableDescription table_description(create_index_info.catalog, create_index_info.schema,
+		                                   create_index_info.table);
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);

@@ -10,12 +10,12 @@ namespace duckdb {
 ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
-                                             : vector<string> {std::move(table_name), std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(Identifier column_name, Identifier table_name)
+    : ColumnRefExpression(table_name.empty() ? vector<Identifier> {std::move(column_name)}
+                                             : vector<Identifier> {std::move(table_name), std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name, const BindingAlias &alias)
+ColumnRefExpression::ColumnRefExpression(Identifier column_name, const BindingAlias &alias)
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 	if (alias.IsSet()) {
 		if (!alias.GetCatalog().empty()) {
@@ -29,11 +29,11 @@ ColumnRefExpression::ColumnRefExpression(string column_name, const BindingAlias 
 	column_names.emplace_back(std::move(column_name));
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name)
-    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(Identifier column_name)
+    : ColumnRefExpression(vector<Identifier> {std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
+ColumnRefExpression::ColumnRefExpression(vector<Identifier> column_names_p)
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 	column_names.reserve(column_names_p.size());
 	for (auto &col_name : column_names_p) {

@@ -11,7 +11,7 @@ UniqueConstraint::UniqueConstraint() : Constraint(ConstraintType::UNIQUE), index
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, string column_name_p, const bool is_primary_key)
+UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key)
     : UniqueConstraint(index, is_primary_key) {
 	columns.emplace_back(std::move(column_name_p));
 }
@@ -37,7 +37,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	}
 
-	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? string() : columns[0].GetName(), is_primary_key);
+	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key);
 	return std::move(result);
 }
 

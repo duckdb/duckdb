@@ -185,7 +185,7 @@ bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
-bool AttachedDatabase::NameIsReserved(const string &name) {
+bool AttachedDatabase::NameIsReserved(const Identifier &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
@@ -207,7 +207,7 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 		return "memory";
 	}
 	auto name = RemoveQueryParams(fs.ExtractBaseName(dbpath));
-	if (NameIsReserved(name)) {
+	if (NameIsReserved(Identifier(name))) {
 		name += "_db";
 	}
 	return name;

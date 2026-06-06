@@ -139,7 +139,7 @@ public:
 	void RemoveUsingBinding(const Identifier &column_name, UsingColumnSet &set);
 	//! Transfer a using binding from one bind context to this bind context
 	void TransferUsingBinding(BindContext &current_context, optional_ptr<UsingColumnSet> current_set,
-	                          UsingColumnSet &new_set, const string &using_column);
+	                          UsingColumnSet &new_set, const Identifier &using_column);
 
 	//! Fetch the actual column name from the given binding, or throws if none exists
 	//! This can be different from "column_name" because of case insensitivity
@@ -159,7 +159,7 @@ public:
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
-	optional_ptr<Binding> GetBinding(const string &name, ErrorData &out_error);
+	optional_ptr<Binding> GetBinding(const Identifier &name, ErrorData &out_error);
 
 	optional_ptr<Binding> GetBinding(const BindingAlias &alias, ErrorData &out_error);
 

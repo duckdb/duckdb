@@ -103,7 +103,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 			throw InternalException("Expected a single expression");
 		}
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
-		function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
+		function->default_parameters.insert(Identifier(named_param.name), std::move(expr_list[0]));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;

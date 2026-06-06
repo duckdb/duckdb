@@ -387,7 +387,8 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransf
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
 		auto table_name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
-		const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
+		const auto description =
+		    TableDescription(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), Identifier(table_name));
 		return make_uniq<BaseTableRef>(description);
 	}
 	return transformer.Transform<unique_ptr<BaseTableRef>>(choice_pr.GetResult());
@@ -400,7 +401,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEG
 	auto schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto table_name = list_pr.Child<IdentifierParseResult>(1).identifier;
 
-	const auto description = TableDescription(INVALID_CATALOG, schema, table_name);
+	const auto description = TableDescription(Identifier::InvalidCatalog(), Identifier(schema), Identifier(table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -411,7 +412,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTa
 	auto catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	auto table_name = list_pr.Child<IdentifierParseResult>(2).identifier;
-	const auto description = TableDescription(catalog, schema, table_name);
+	const auto description = TableDescription(Identifier(catalog), Identifier(schema), Identifier(table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -687,7 +688,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
 		for (auto &col : col_ref_expr.ColumnNames()) {
-			result.push_back(Value(col.GetName()));
+			result.push_back(Value(col));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
@@ -978,8 +979,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
 	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function = make_uniq<FunctionExpression>(
-	    qualified_table_function.catalog.GetName(), qualified_table_function.schema.GetName(),
-	    qualified_table_function.name.GetName(), std::move(table_function_arguments));
+	    Identifier(qualified_table_function.catalog.GetName()), Identifier(qualified_table_function.schema.GetName()),
+	    Identifier(qualified_table_function.name.GetName()), std::move(table_function_arguments));
 	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(4);
 	if (table_alias_opt.HasResult()) {
 		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
@@ -1001,9 +1002,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
 	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function = make_uniq<FunctionExpression>(
-	    qualified_table_function.catalog.GetName(), qualified_table_function.schema.GetName(),
-	    qualified_table_function.name.GetName(), std::move(table_function_arguments));
+	result->function =
+	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->alias = Identifier(table_alias);
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
 	return std::move(result);
@@ -1169,7 +1170,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformValuesClause(PEGTran
 		}
 	}
 	auto result = make_uniq<ExpressionListRef>();
-	result->alias = Identifier("valueslist");
+	result->alias = "valueslist";
 	result->values = std::move(values_list);
 
 	auto select_node = make_uniq<SelectNode>();

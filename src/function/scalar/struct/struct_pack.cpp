@@ -62,7 +62,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			}
 			name_collision_set.insert(alias);
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
+		struct_children.emplace_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons

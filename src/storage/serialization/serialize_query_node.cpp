@@ -105,7 +105,7 @@ unique_ptr<QueryNode> DeleteQueryNode::Deserialize(Deserializer &deserializer) {
 void InsertQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", select_statement);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "columns", columns);
 	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
 	serializer.WritePropertyWithDefault<Identifier>(203, "schema", schema);
 	serializer.WritePropertyWithDefault<Identifier>(204, "catalog", catalog);
@@ -121,7 +121,7 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement",
 	                                                                  result->select_statement);
-	deserializer.ReadPropertyWithDefault<vector<string>>(201, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
 	deserializer.ReadPropertyWithDefault<Identifier>(203, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault<Identifier>(204, "catalog", result->catalog);

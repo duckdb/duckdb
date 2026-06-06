@@ -15,7 +15,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 		case_insensitive_set_t child_names;
 		child_list_t<LogicalType> child_types;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
-			auto insert_success = child_names.insert(child_type.first).second;
+			auto insert_success = child_names.insert(child_type.first.GetName()).second;
 			if (!insert_success) {
 				if (ignore_errors) {
 					continue;
@@ -253,7 +253,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 
 TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
-	table_function.name = Identifier(std::move(name));
+	table_function.SetName(Identifier(std::move(name)));
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;

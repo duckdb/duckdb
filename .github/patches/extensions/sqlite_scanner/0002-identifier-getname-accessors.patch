@@ -36,9 +36,18 @@ index 27eaf27..aac5cf1 100644
  		ColumnDefinition column(std::move(sqlite_colname), std::move(column_type));
  		if (!default_value.empty() && default_value != "\"\"") {
 diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
-index 4268928..c6cccb9 100644
+index 4268928..ebb07f3 100644
 --- a/src/sqlite_scanner.cpp
 +++ b/src/sqlite_scanner.cpp
+@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> SqliteBind(ClientContext &context, TableFunction
+ 	}
+ 	db.GetTableInfo(result->table_name, columns, constraints, result->all_varchar);
+ 	for (auto &column : columns.Logical()) {
+-		names.push_back(column.GetName());
++		names.emplace_back(column.GetName().GetName());
+ 		return_types.push_back(column.GetType());
+ 	}
+ 
 @@ -427,7 +427,7 @@ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, D
  		auto tables = db.GetTables();
  		for (auto &table_name : tables) {
@@ -71,7 +80,7 @@ index a35686e..582b3ce 100644
  }
  
 diff --git a/src/storage/sqlite_index_entry.cpp b/src/storage/sqlite_index_entry.cpp
-index 8f92089..7c18c9f 100644
+index 8f92089..9443ae9 100644
 --- a/src/storage/sqlite_index_entry.cpp
 +++ b/src/storage/sqlite_index_entry.cpp
 @@ -8,12 +8,12 @@ SQLiteIndexEntry::SQLiteIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema,
@@ -79,9 +88,8 @@ index 8f92089..7c18c9f 100644
  }
  
 -string SQLiteIndexEntry::GetSchemaName() const {
--	return schema.name;
 +Identifier SQLiteIndexEntry::GetSchemaName() const {
-+	return Identifier(schema.name.GetName());
+ 	return schema.name;
  }
  
 -string SQLiteIndexEntry::GetTableName() const {
@@ -92,7 +100,7 @@ index 8f92089..7c18c9f 100644
  
  } // namespace duckdb
 diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
-index 44502ef..1108f95 100644
+index 44502ef..fb2bd77 100644
 --- a/src/storage/sqlite_insert.cpp
 +++ b/src/storage/sqlite_insert.cpp
 @@ -40,7 +40,7 @@ public:
@@ -104,6 +112,15 @@ index 44502ef..1108f95 100644
  	auto &columns = entry->GetColumns();
  	idx_t column_count;
  	if (!insert.column_index_map.empty()) {
+@@ -63,7 +63,7 @@ string GetInsertSQL(const SQLiteInsert &insert, SQLiteTableEntry *entry) {
+ 				result += ", ";
+ 			}
+ 			auto &col = columns.GetColumn(column_indexes[c]);
+-			result += KeywordHelper::WriteOptionallyQuoted(col.GetName());
++			result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetName());
+ 		}
+ 		result += ")";
+ 	} else {
 @@ -136,7 +136,7 @@ string SQLiteInsert::GetName() const {
  
  InsertionOrderPreservingMap<string> SQLiteInsert::ParamsToString() const {
@@ -113,8 +130,21 @@ index 44502ef..1108f95 100644
  	return result;
  }
  
+diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
+index e776f5c..81d063d 100644
+--- a/src/storage/sqlite_query.cpp
++++ b/src/storage/sqlite_query.cpp
+@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 	// look up the database to query
+ 	auto db_name = input.inputs[0].GetValue<string>();
+ 	auto &db_manager = DatabaseManager::Get(context);
+-	auto db = db_manager.GetDatabase(context, db_name);
++	auto db = db_manager.GetDatabase(context, Identifier(db_name));
+ 	if (!db) {
+ 		throw BinderException("Failed to find attached database \"%s\" referenced in sqlite_query", db_name);
+ 	}
 diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
-index e43f0f9..c7741f5 100644
+index e43f0f9..fcd0042 100644
 --- a/src/storage/sqlite_schema_entry.cpp
 +++ b/src/storage/sqlite_schema_entry.cpp
 @@ -37,7 +37,7 @@ string GetCreateTableSQL(CreateTableInfo &info) {
@@ -174,7 +204,7 @@ index e43f0f9..c7741f5 100644
  	}
  	auto &sqlite_transaction = GetSQLiteTransaction(transaction);
  	sqlite_transaction.GetDB().Execute(GetCreateViewSQL(info));
-@@ -179,30 +179,30 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateType(CatalogTransaction tran
+@@ -179,32 +179,32 @@ optional_ptr<CatalogEntry> SQLiteSchemaEntry::CreateType(CatalogTransaction tran
  
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RenameTableInfo &info) {
  	string sql = "ALTER TABLE ";
@@ -202,7 +232,7 @@ index e43f0f9..c7741f5 100644
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, AddColumnInfo &info) {
  	if (info.if_column_not_exists) {
 -		if (sqlite_transaction.GetDB().ColumnExists(info.name, info.new_column.GetName())) {
-+		if (sqlite_transaction.GetDB().ColumnExists(info.name.GetName(), info.new_column.GetName())) {
++		if (sqlite_transaction.GetDB().ColumnExists(info.name.GetName(), info.new_column.GetName().GetName())) {
  			return;
  		}
  	}
@@ -210,8 +240,11 @@ index e43f0f9..c7741f5 100644
 -	sql += KeywordHelper::WriteOptionallyQuoted(info.name);
 +	sql += KeywordHelper::WriteOptionallyQuoted(info.name.GetName());
  	sql += " ADD COLUMN  ";
- 	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name());
+-	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name());
++	sql += KeywordHelper::WriteOptionallyQuoted(info.new_column.Name().GetName());
  	sql += " ";
+ 	sql += info.new_column.Type().ToString();
+ 	sqlite_transaction.GetDB().Execute(sql);
 @@ -212,14 +212,14 @@ void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, AddCol
  
  void SQLiteSchemaEntry::AlterTable(SQLiteTransaction &sqlite_transaction, RemoveColumnInfo &info) {
@@ -258,10 +291,16 @@ index e43f0f9..c7741f5 100644
  
  optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction transaction,
 diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
-index f7c0316..e338167 100644
+index f7c0316..b0d5444 100644
 --- a/src/storage/sqlite_table_entry.cpp
 +++ b/src/storage/sqlite_table_entry.cpp
-@@ -28,13 +28,13 @@ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_p
+@@ -23,18 +23,18 @@ void SQLiteTableEntry::BindUpdateConstraints(Binder &, LogicalGet &, LogicalProj
+ TableFunction SQLiteTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+ 	auto result = make_uniq<SqliteBindData>();
+ 	for (auto &col : columns.Logical()) {
+-		result->names.push_back(col.GetName());
++		result->names.emplace_back(col.GetName().GetName());
+ 		result->types.push_back(col.GetType());
  	}
  	auto &sqlite_catalog = catalog.Cast<SQLiteCatalog>();
  	result->file_name = sqlite_catalog.path;
@@ -326,10 +365,10 @@ index 08ea220..3b6469e 100644
  			auto view_def = StringUtil::Format("CREATE VIEW %s AS FROM sqlite_query(\"%s\", '%s')", entry_name,
  			                                   catalog_name, escaped_view_sql);
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index 29ab390..99a87ff 100644
+index 29ab390..aa3e314 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
-@@ -29,7 +29,7 @@ public:
+@@ -29,14 +29,14 @@ public:
  
  string GetUpdateSQL(SQLiteTableEntry &table, const vector<PhysicalIndex> &index) {
  	string result;
@@ -338,6 +377,14 @@ index 29ab390..99a87ff 100644
  	result += " SET ";
  	for (idx_t i = 0; i < index.size(); i++) {
  		if (i > 0) {
+ 			result += ", ";
+ 		}
+ 		auto &col = table.GetColumn(LogicalIndex(index[i].index));
+-		result += KeywordHelper::WriteOptionallyQuoted(col.GetName());
++		result += KeywordHelper::WriteOptionallyQuoted(col.GetName().GetName());
+ 		result += " = ?";
+ 	}
+ 	result += " WHERE rowid = ?";
 @@ -99,7 +99,7 @@ string SQLiteUpdate::GetName() const {
  
  InsertionOrderPreservingMap<string> SQLiteUpdate::ParamsToString() const {

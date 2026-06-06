@@ -48,17 +48,17 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 		const auto &child_types = StructType::GetChildTypes(arg->GetReturnType());
 		for (const auto &child : child_types) {
 			if (!child.first.empty()) {
-				auto it = name_set.find(child.first);
+				auto it = name_set.find(child.first.GetName());
 				if (it != name_set.end()) {
-					if (*it == child.first) {
+					if (*it == child.first.GetName()) {
 						throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
-						                            child.first);
+						                            child.first.GetName());
 					}
 					throw InvalidInputException(
 					    "struct_concat: Arguments contain case-insensitive duplicate STRUCT entry \"%s\" and \"%s\"",
-					    child.first, *it);
+					    child.first.GetName(), *it);
 				}
-				name_set.insert(child.first);
+				name_set.insert(child.first.GetName());
 			} else {
 				has_unnamed = true;
 			}

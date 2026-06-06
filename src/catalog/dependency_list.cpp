@@ -57,7 +57,7 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 		this->entry.schema = Identifier(GetSchema(entry));
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
-		catalog = Identifier(entry.ParentCatalog().GetName());
+		catalog = entry.ParentCatalog().GetName();
 	}
 }
 

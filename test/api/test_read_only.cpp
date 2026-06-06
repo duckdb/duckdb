@@ -120,7 +120,7 @@ TEST_CASE("Test view creation using a read only database", "[readonly]") {
 	// create the database file and initialize it with data
 	con = make_uniq<Connection>(*db);
 
-	REQUIRE_NOTHROW(con->TableFunction("duckdb_tables")->CreateView(Identifier("boo"), true, true));
+	REQUIRE_NOTHROW(con->TableFunction("duckdb_tables")->CreateView("boo", true, true));
 	con.reset();
 	db.reset();
 

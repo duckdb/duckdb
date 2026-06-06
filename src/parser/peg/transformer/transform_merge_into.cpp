@@ -117,7 +117,7 @@ unique_ptr<MergeIntoAction>
 PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer, const vector<string> &insert_column_list,
                                                  vector<unique_ptr<ParsedExpression>> expression) {
 	auto result = make_uniq<MergeIntoAction>();
-	result->insert_columns = insert_column_list;
+	result->insert_columns = StringsToIdentifiers(insert_column_list);
 	result->expressions = std::move(expression);
 	return result;
 }

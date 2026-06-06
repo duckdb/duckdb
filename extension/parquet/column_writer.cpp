@@ -345,9 +345,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 				is_optional = true;
 			}
 
-			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              allow_geometry, child_field_ids, child_shredding, max_repeat,
-			                                              max_define + 1, is_optional));
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type,
+			                                              child_name.GetName(), allow_geometry, child_field_ids,
+			                                              child_shredding, max_repeat, max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
 		                                      std::move(child_writers));
@@ -368,9 +368,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		for (auto &entry : child_types) {
 			auto &child_type = entry.second;
 			auto &child_name = entry.first;
-			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
-			                                              max_define + 1, true));
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type,
+			                                              child_name.GetName(), allow_geometry, child_field_ids,
+			                                              shredding_type, max_repeat, max_define + 1, true));
 		}
 		return make_uniq<StructColumnWriter>(writer, std::move(struct_column), std::move(path_in_schema),
 		                                     std::move(child_writers));
@@ -424,7 +424,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			auto &child_name = key_value[i].first;
 			auto &child_type = key_value[i].second;
 			auto child_writer =
-			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name, allow_geometry,
+			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name.GetName(), allow_geometry,
 			                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));

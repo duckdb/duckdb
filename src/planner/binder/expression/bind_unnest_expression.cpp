@@ -224,7 +224,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(
-		    std::move(alias), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
+		    Identifier(std::move(alias)), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
 	}
 	// now perform struct unnests, if any
 	if (struct_unnests > 0) {
@@ -250,7 +250,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 							if (keep_parent_names && expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 								current_key_path.emplace_back(expr->GetAlias());
 							}
-							current_key_path.push_back(entry.first);
+							current_key_path.emplace_back(entry.first);
 							new_expressions.push_back(
 							    CreateBoundStructExtract(context, expr->Copy(), current_key_path, keep_parent_names));
 						}

@@ -29,7 +29,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				}
 				vector<unique_ptr<ParsedExpression>> func_children;
 				for (const auto &partition : option.children) {
-					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
+					func_children.push_back(make_uniq<ColumnRefExpression>(Identifier(partition.GetValue<string>())));
 				}
 				auto row_func =
 				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
@@ -96,7 +96,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithout
                                                                                      const string &col_id,
                                                                                      const string &col_id_1) {
 	auto result = make_uniq<PragmaStatement>();
-	result->info->name = Identifier("copy_database");
+	result->info->name = "copy_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id)));
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id_1)));
 	return std::move(result);

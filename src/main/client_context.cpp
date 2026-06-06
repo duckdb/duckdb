@@ -1359,19 +1359,19 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
-                                                      const string &table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &database_name, const Identifier &schema_name,
+                                                      const Identifier &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// Obtain the table from the catalog.
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, Identifier(database_name), Identifier(schema_name),
-		                                                  Identifier(table_name), OnEntryNotFound::RETURN_NULL);
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, database_name, schema_name, table_name,
+		                                                  OnEntryNotFound::RETURN_NULL);
 		if (!table) {
 			return;
 		}
 		// Create the table description.
 		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
-		auto &catalog = Catalog::GetCatalog(*this, Identifier(database_name));
+		auto &catalog = Catalog::GetCatalog(*this, database_name);
 		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Copy());
@@ -1380,8 +1380,8 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_nam
 	return result;
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &schema_name, const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
 void ClientContext::Append(unique_ptr<SQLStatement> stmt) {

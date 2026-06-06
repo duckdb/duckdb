@@ -25,7 +25,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 
 	optional_ptr<CatalogEntry> entry = nullptr;
 
-	binder.BindSchemaOrCatalog(context, type_catalog, type_schema);
+	binder.BindSchemaOrCatalog(context, type_catalog.GetNameMutable(), type_schema.GetNameMutable());
 
 	// Required for WAL lookup to work
 	if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {

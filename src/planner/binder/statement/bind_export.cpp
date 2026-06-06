@@ -236,11 +236,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		for (auto &constraint : table.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();
-				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+				not_null_columns.emplace_back(table.GetColumn(not_null_constraint.index).GetName().GetName());
 			}
 		}
 		for (auto &col : table.GetColumns().Physical()) {
-			select_list.push_back(std::make_pair(col.Name(), col.Type()));
+			select_list.emplace_back(std::make_pair(col.Name(), col.Type()));
 		}
 
 		ExportedTableData exported_data;

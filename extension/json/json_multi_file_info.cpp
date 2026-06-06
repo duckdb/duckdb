@@ -86,7 +86,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 			if (val.IsNull()) {
 				throw BinderException("read_json \"columns\" parameter type specification cannot be NULL.");
 			}
-			options.name_list.push_back(name);
+			options.name_list.emplace_back(name);
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
 			}

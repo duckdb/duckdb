@@ -342,12 +342,12 @@ void Binder::AddTableName(string table_name) {
 	global_binder_state->table_names.insert(std::move(table_name));
 }
 
-void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
-	auto it = global_binder_state->replacement_scans.find(Identifier(table_name));
+void Binder::AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement) {
+	auto it = global_binder_state->replacement_scans.find(table_name);
 	replacement->column_name_alias.clear();
 	replacement->alias.clear();
 	if (it == global_binder_state->replacement_scans.end()) {
-		global_binder_state->replacement_scans[Identifier(table_name)] = std::move(replacement);
+		global_binder_state->replacement_scans[table_name] = std::move(replacement);
 	} else {
 		// A replacement scan by this name was previously registered, we can just use it
 	}
@@ -524,7 +524,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
-		names.push_back(col.Name());
+		names.emplace_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
 			bound_columns.emplace_back(column_count);
@@ -577,9 +577,9 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const Identifier &catalog_
 
 	vector<CatalogSearchEntry> search_path;
 
-	search_path.emplace_back(catalog_name.GetName(), schema_name.GetName());
+	search_path.emplace_back(catalog_name, schema_name);
 	if (schema_name != DEFAULT_SCHEMA) {
-		search_path.emplace_back(catalog_name.GetName(), DEFAULT_SCHEMA);
+		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
 	}
 	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
 	return new_binder;
@@ -657,8 +657,7 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
-	outer->select_list.push_back(
-	    make_uniq<FunctionExpression>(Identifier("count_star"), vector<unique_ptr<ParsedExpression>>()));
+	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
 	from_ref->table_name = Identifier(base_cte_name);
 	outer->from_table = std::move(from_ref);

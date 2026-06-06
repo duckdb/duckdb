@@ -134,8 +134,8 @@ public:
 	const Identifier &GetType() const {
 		return type;
 	}
-	const string &GetProvider() const {
-		return provider.GetName();
+	const Identifier &GetProvider() const {
+		return provider;
 	}
 	const Identifier &GetName() const {
 		return name;
@@ -171,18 +171,12 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	//! Convenience overload: secret types/providers/names are commonly passed as string literals
-	KeyValueSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    : KeyValueSecret(prefix_paths, Identifier(type), Identifier(provider), Identifier(name)) {
-	}
 	explicit KeyValueSecret(const BaseSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()),
-	                 Identifier(secret.GetName())) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()), secret.GetName()) {
 		serializable = true;
 	};
 	KeyValueSecret(const KeyValueSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()),
-	                 Identifier(secret.GetName())) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
 		serializable = true;
@@ -211,7 +205,7 @@ public:
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1];
+			result->secret_map[Identifier(kv_struct[0].ToString())] = kv_struct[1];
 		}
 
 		Value redact_set_value;
@@ -229,7 +223,7 @@ public:
 
 	// Get a value from the secret
 	bool TryGetValue(const string &key, Value &result) const {
-		auto lookup = secret_map.find(key);
+		auto lookup = secret_map.find(Identifier(key));
 		if (lookup == secret_map.end()) {
 			return false;
 		}
@@ -240,14 +234,14 @@ public:
 	bool TrySetValue(const string &key, const CreateSecretInput &input) {
 		auto lookup = input.options.find(key);
 		if (lookup != input.options.end()) {
-			secret_map[key] = lookup->second;
+			secret_map[Identifier(key)] = lookup->second;
 			return true;
 		}
 		return false;
 	}
 
 	//! the map of key -> values that make up the secret
-	case_insensitive_tree_t<Value> secret_map;
+	identifier_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
 };

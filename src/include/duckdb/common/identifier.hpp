@@ -12,7 +12,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -25,10 +24,11 @@ namespace duckdb {
 class Identifier {
 public:
 	Identifier() = default;
-	//! Construction from a string is explicit: an Identifier carries case-insensitive semantics, so promoting a
-	//! raw string must be a deliberate choice at the call site.
-	explicit Identifier(const char *str) : value(str) {
+	//! Construction from a string literal is implicit: literals in the source are identifiers by intent.
+	Identifier(const char *str) : value(str) { // NOLINT: implicit conversion from literals is intentional
 	}
+	//! Construction from a runtime string is explicit: an Identifier carries case-insensitive semantics, so
+	//! promoting a runtime string must be a deliberate choice at the call site.
 	explicit Identifier(const string &str) : value(str) {
 	}
 	explicit Identifier(string &&str) : value(std::move(str)) {
@@ -79,30 +79,18 @@ public:
 	}
 
 	//! Case-insensitive hash of the identifier
-	hash_t Hash() const {
-		return StringUtil::CIHash(value);
-	}
+	DUCKDB_API hash_t Hash() const;
 
 private:
 	string value;
 };
 
 //! Equality (case-insensitive)
-inline bool operator==(const Identifier &a, const Identifier &b) {
-	return StringUtil::CIEquals(a.GetName(), b.GetName());
-}
-inline bool operator==(const Identifier &a, const string &b) {
-	return StringUtil::CIEquals(a.GetName(), b);
-}
-inline bool operator==(const string &a, const Identifier &b) {
-	return StringUtil::CIEquals(a, b.GetName());
-}
-inline bool operator==(const Identifier &a, const char *b) {
-	return StringUtil::CIEquals(a.GetName(), string(b));
-}
-inline bool operator==(const char *a, const Identifier &b) {
-	return StringUtil::CIEquals(string(a), b.GetName());
-}
+DUCKDB_API bool operator==(const Identifier &a, const Identifier &b);
+DUCKDB_API bool operator==(const Identifier &a, const string &b);
+DUCKDB_API bool operator==(const string &a, const Identifier &b);
+DUCKDB_API bool operator==(const Identifier &a, const char *b);
+DUCKDB_API bool operator==(const char *a, const Identifier &b);
 
 inline bool operator!=(const Identifier &a, const Identifier &b) {
 	return !(a == b);
@@ -121,9 +109,7 @@ inline bool operator!=(const char *a, const Identifier &b) {
 }
 
 //! Ordering (case-insensitive)
-inline bool operator<(const Identifier &a, const Identifier &b) {
-	return StringUtil::CILessThan(a.GetName(), b.GetName());
-}
+DUCKDB_API bool operator<(const Identifier &a, const Identifier &b);
 
 //! String concatenation (std::operator+ is a template and cannot use the implicit conversion, so we provide our own)
 inline string operator+(const Identifier &a, const string &b) {
@@ -168,7 +154,7 @@ struct IdentifierEquality {
 
 struct IdentifierCompare {
 	bool operator()(const Identifier &a, const Identifier &b) const {
-		return StringUtil::CILessThan(a.GetName(), b.GetName());
+		return a < b;
 	}
 };
 

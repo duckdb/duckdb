@@ -1752,7 +1752,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	if (needCommit) {
 		con.BeginTransaction();
 	}
-	auto table_info = con.TableInfo(table_name);
+	auto table_info = con.TableInfo(duckdb::Identifier(table_name));
 
 	string import_query;
 

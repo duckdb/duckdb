@@ -655,14 +655,14 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.schema.catalog.GetOid())));
 
 	// schema_name, LogicalType::VARCHAR
-	output.data[col++].Append(Value(function.schema.name.GetName()));
+	output.data[col++].Append(Value(function.schema.name));
 
 	// function_name, LogicalType::VARCHAR
-	output.data[col++].Append(Value(function.name.GetName()));
+	output.data[col++].Append(Value(function.name));
 
 	// alias_of, LogicalType::VARCHAR
 	output.data[col++].Append(
-	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of.GetName()));
+	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of));
 
 	// function_type, LogicalType::VARCHAR
 	output.data[col++].Append(Value(OP::GetFunctionType()));
@@ -700,7 +700,7 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.data[col++].Append(Value::BOOLEAN(function.internal));
 
 	// extension_name, LogicalType::VARCHAR - display empty as NULL
-	output.data[col++].Append(function.extension_name.empty() ? Value() : Value(function.extension_name.GetName()));
+	output.data[col++].Append(function.extension_name.empty() ? Value() : Value(function.extension_name));
 
 	// function_oid, LogicalType::BIGINT
 	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.oid)));

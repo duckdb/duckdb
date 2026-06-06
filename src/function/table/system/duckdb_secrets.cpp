@@ -122,7 +122,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		const auto &secret = *secret_entry.secret;
 
 		name.Append(Value(secret.GetName()));
-		type.Append(Value(secret.GetType().GetName()));
+		type.Append(Value(secret.GetType()));
 		provider.Append(Value(secret.GetProvider()));
 		persistent.Append(Value::BOOLEAN(secret_entry.persist_type == SecretPersistType::PERSISTENT));
 		storage.Append(Value(secret_entry.storage_mode));

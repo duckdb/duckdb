@@ -64,8 +64,8 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 	this->type = type;
 }
 
-const string &ColumnDefinition::Name() const {
-	return name.GetName();
+const Identifier &ColumnDefinition::Name() const {
+	return name;
 }
 void ColumnDefinition::SetName(const Identifier &name) {
 	this->name = name;
@@ -200,8 +200,8 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 	InnerGetListOfDependencies(*expression, dependencies);
 }
 
-string ColumnDefinition::GetName() const {
-	return name.GetName();
+Identifier ColumnDefinition::GetName() const {
+	return name;
 }
 
 LogicalType ColumnDefinition::GetType() const {

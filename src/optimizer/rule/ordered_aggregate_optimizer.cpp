@@ -60,8 +60,8 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	aggr.GetOrderBysMutable().reset();
 
 	ErrorData error;
-	auto sort_key = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("create_sort_key"),
-	                                          std::move(sort_children), error);
+	auto sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
 	if (!sort_key) {
 		error.Throw();
 	}
@@ -80,7 +80,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	for (const auto &child : children) {
 		types.emplace_back(child->GetReturnType());
 	}
-	auto best_function = binder.BindFunction(func.name.GetName(), func.functions, types, error);
+	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
 	if (!best_function.IsValid()) {
 		error.Throw();
 	}

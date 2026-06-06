@@ -28,12 +28,12 @@ namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(const ExtensionActiveLoad &load_info)
     : db(load_info.db), extension_info(load_info.info) {
-	loader_info.extension_name = load_info.extension_name;
-	loader_info.extension_alias = load_info.alias;
+	loader_info.extension_name = Identifier(load_info.extension_name);
+	loader_info.extension_alias = Identifier(load_info.alias);
 }
 
 ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db) {
-	loader_info.extension_name = name;
+	loader_info.extension_name = Identifier(name);
 }
 
 DatabaseInstance &ExtensionLoader::GetDatabaseInstance() const {
@@ -44,9 +44,9 @@ void ExtensionLoader::SetDescription(const string &description) {
 	loader_info.extension_description = description;
 }
 
-void ExtensionLoader::UseDedicatedSchemaForExtension(const string &extension_schema_name) {
+void ExtensionLoader::UseDedicatedSchemaForExtension(const Identifier &extension_schema_name) {
 	CreateSchema(extension_schema_name);
-	UseDefaultSchema(extension_schema_name);
+	UseDefaultSchema(extension_schema_name.GetName());
 	AddSchemaToSearchPath(extension_schema_name);
 }
 
@@ -55,7 +55,7 @@ void ExtensionLoader::UseDedicatedSchemaForExtension() {
 	UseDedicatedSchemaForExtension(registered_ext_name);
 }
 
-void ExtensionLoader::CreateSchema(const string &name) const {
+void ExtensionLoader::CreateSchema(const Identifier &name) const {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -77,13 +77,13 @@ void ExtensionLoader::UseDefaultSchema(const string &name) {
 		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
 	}
 	if (name == DEFAULT_SCHEMA) {
-		loader_info.extension_schema = DEFAULT_SCHEMA;
+		loader_info.extension_schema = Identifier::DefaultSchema();
 		return;
 	}
-	loader_info.extension_schema = name;
+	loader_info.extension_schema = Identifier(name);
 }
 
-void ExtensionLoader::AddSchemaToSearchPath(const string &schema_name) const {
+void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const {
 	// adds an explicitly set extension schema to the search path
 	if (loader_info.extension_schema != schema_name || schema_name == DEFAULT_SCHEMA ||
 	    loader_info.extension_schema == DEFAULT_SCHEMA) {
@@ -103,7 +103,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const string &schema_name) const {
 	}
 
 	// TODO: remove extension schema from search path if loading extension failed
-	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema);
+	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema.GetName());
 }
 
 void ExtensionLoader::RefreshSearchPath(ClientContext &context) {

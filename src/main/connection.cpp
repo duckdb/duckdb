@@ -170,17 +170,17 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	return pending->Execute();
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
-                                                   const string &table_name) {
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &database_name, const Identifier &schema_name,
+                                                   const Identifier &table_name) {
 	return context->TableInfo(database_name, schema_name, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &schema_name, const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
@@ -195,22 +195,21 @@ void Connection::Append(TableDescription &description, ColumnDataCollection &col
 	context->Append(description, collection);
 }
 
-shared_ptr<Relation> Connection::Table(const string &table_name) {
-	return Table(DEFAULT_SCHEMA, table_name);
+shared_ptr<Relation> Connection::Table(const Identifier &table_name) {
+	return Table(Identifier::DefaultSchema(), table_name);
 }
 
-shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
-	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
+shared_ptr<Relation> Connection::Table(const Identifier &schema_name, const Identifier &table_name) {
+	auto table_info = TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException(
-		    "Table %s does not exist!",
-		    ParseInfo::QualifierToString(Identifier(), Identifier(schema_name), Identifier(table_name)));
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(Identifier(), schema_name, table_name));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
 
-shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
-                                       const string &table_name) {
+shared_ptr<Relation> Connection::Table(const Identifier &catalog_name, const Identifier &schema_name,
+                                       const Identifier &table_name) {
 	unique_ptr<TableDescription> table_info;
 	do {
 		table_info = TableInfo(catalog_name, schema_name, table_name);
@@ -219,23 +218,22 @@ shared_ptr<Relation> Connection::Table(const string &catalog_name, const string 
 		}
 
 		if (catalog_name.empty() && !schema_name.empty()) {
-			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+			table_info = TableInfo(schema_name, Identifier::DefaultSchema(), table_name);
 		}
 	} while (false);
 
 	if (!table_info) {
-		throw CatalogException(
-		    "Table %s does not exist!",
-		    ParseInfo::QualifierToString(Identifier(catalog_name), Identifier(schema_name), Identifier(table_name)));
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
 
-shared_ptr<Relation> Connection::View(const string &tname) {
-	return View(DEFAULT_SCHEMA, tname);
+shared_ptr<Relation> Connection::View(const Identifier &tname) {
+	return View(Identifier::DefaultSchema(), tname);
 }
 
-shared_ptr<Relation> Connection::View(const string &schema_name, const string &table_name) {
+shared_ptr<Relation> Connection::View(const Identifier &schema_name, const Identifier &table_name) {
 	return make_shared_ptr<ViewRelation>(context, schema_name, table_name);
 }
 
@@ -302,7 +300,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 			throw ParserException("Expected a single column definition");
 		}
 		auto &col_def = col_list.GetColumnMutable(LogicalIndex(0));
-		column_list.push_back({col_def.GetName(), col_def.GetType().ToString()});
+		column_list.emplace_back(col_def.GetName().GetName(), col_def.GetType().ToString());
 	}
 	vector<string> files {csv_file};
 	return make_shared_ptr<ReadCSVRelation>(context, files, std::move(options));

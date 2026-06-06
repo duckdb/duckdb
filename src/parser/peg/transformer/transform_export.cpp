@@ -37,7 +37,7 @@ string PEGTransformerFactory::TransformExportSource(PEGTransformer &transformer,
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTransformer &transformer,
                                                                          const string &string_literal) {
 	auto result = make_uniq<PragmaStatement>();
-	result->info->name = Identifier("import_database");
+	result->info->name = "import_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(string_literal)));
 	return std::move(result);
 }

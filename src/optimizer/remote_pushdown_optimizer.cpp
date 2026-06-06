@@ -489,9 +489,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier schema = Identifier(schema_name.empty() ? local_entry.schema : schema_name);
-		auto entry = Catalog::GetEntry(binder.context, Identifier(local_entry.catalog), Identifier(schema), func_lookup,
-		                               OnEntryNotFound::RETURN_NULL);
+		const Identifier schema = schema_name.empty() ? local_entry.schema : Identifier(schema_name);
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
@@ -555,7 +555,7 @@ void RemotePushdownOptimizer::TrackLocalTable(const SubqueryRef &ref) {
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	} else {
-		local_table_names.insert(Identifier("unnamed_subquery"));
+		local_table_names.insert("unnamed_subquery");
 	}
 }
 
@@ -600,7 +600,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	return false;
 }
 
-bool RemotePushdownOptimizer::RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const {
+bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const {
 	auto entry = cte_results.find(Identifier(cte_name));
 	if (entry != cte_results.end()) {
 		result = entry->second;
@@ -621,7 +621,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
 	if (catalog_name.empty() && schema_name.empty()) {
 		CatalogPushdownResult pushdown_result;
-		if (RefersToCTE(ref.table_name.GetName(), pushdown_result)) {
+		if (RefersToCTE(ref.table_name, pushdown_result)) {
 			if (pushdown_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 				// Local/unknown CTE - track as local for correlated subquery detection
 				TrackLocalTable(ref);
@@ -655,9 +655,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
-		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry = Catalog::GetEntry(binder.context, Identifier(local_entry.catalog), Identifier(schema),
-		                               table_lookup, OnEntryNotFound::RETURN_NULL);
+		const Identifier schema = schema_name.empty() ? local_entry.schema : Identifier(schema_name);
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry) {
 			TrackLocalTable(ref);
 			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
@@ -778,15 +778,15 @@ unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPus
 	return result.catalog->RemoteExecute(binder.context, std::move(node));
 }
 
-void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &catalog_name) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (StringUtil::CIEquals(base.catalog_name.GetName(), catalog_name)) {
-			base.catalog_name = Identifier("");
-		} else if (base.catalog_name.empty() && StringUtil::CIEquals(base.schema_name.GetName(), catalog_name)) {
+		if (base.catalog_name == catalog_name) {
+			base.catalog_name = "";
+		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
-			base.schema_name = Identifier("");
+			base.schema_name = "";
 		}
 		break;
 	}
@@ -825,7 +825,7 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references, normalising to exactly table.col (2 parts).
@@ -833,8 +833,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// not catalog-qualified — so stripping would be wrong.
 		// For 3-part  catalog.table.col        → table.col   (one level stripped)
 		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
-		if (col_ref.ColumnNames().size() >= 3 &&
-		    StringUtil::CIEquals(col_ref.ColumnNames()[0].GetName(), catalog_name)) {
+		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
 			string table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2].GetName();
 			string col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1].GetName();
 			col_ref.ColumnNamesMutable() =
@@ -884,9 +883,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
 		// TypeExpression (used as a type argument) may carry catalog/schema qualifiers.
 		auto &type_expr = expr.Cast<TypeExpression>();
-		if (StringUtil::CIEquals(type_expr.GetCatalog(), catalog_name)) {
+		if (type_expr.GetCatalog() == catalog_name) {
 			type_expr.SetCatalog("");
-		} else if (type_expr.GetCatalog().empty() && StringUtil::CIEquals(type_expr.GetSchema(), catalog_name)) {
+		} else if (type_expr.GetCatalog().empty() && type_expr.GetSchema() == catalog_name) {
 			type_expr.SetSchema("");
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside type parameters
@@ -895,7 +894,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
-void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier &catalog_name) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
@@ -969,10 +968,10 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
-		if (StringUtil::CIEquals(insert.catalog.GetName(), catalog_name)) {
-			insert.catalog = Identifier("");
-		} else if (insert.catalog.empty() && StringUtil::CIEquals(insert.schema.GetName(), catalog_name)) {
-			insert.schema = Identifier("");
+		if (insert.catalog == catalog_name) {
+			insert.catalog = "";
+		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
+			insert.schema = "";
 		}
 		if (insert.select_statement) {
 			StripCatalogName(*insert.select_statement->node, catalog_name);
@@ -1149,7 +1148,7 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Identifier &catalog_name) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		StripCatalogName(*statement.Cast<SelectStatement>().node, catalog_name);
@@ -1188,7 +1187,7 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement
 		return;
 	}
 	// Strip the catalog name so the remote server doesn't recursively re-push
-	StripCatalogName(*statement, result.catalog->GetName().GetName());
+	StripCatalogName(*statement, result.catalog->GetName());
 	auto node = GetNodeFromStatement(*statement);
 	if (!node) {
 		return;
@@ -1220,7 +1219,7 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 			}
 		}
 	}
-	StripCatalogName(*node, result.catalog->GetName().GetName());
+	StripCatalogName(*node, result.catalog->GetName());
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));

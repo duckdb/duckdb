@@ -166,7 +166,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	vector<string> column_names;
 	for (auto &col : table.GetColumns().Logical()) {
 		column_types.push_back(col.Type());
-		column_names.push_back(col.Name());
+		column_names.emplace_back(col.Name());
 	}
 
 	unique_lock<mutex> lock(index_entries_lock);

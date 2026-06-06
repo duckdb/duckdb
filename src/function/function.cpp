@@ -147,7 +147,8 @@ hash_t SimpleFunction::Hash() const {
 
 string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments,
-                              const vector<pair<string, LogicalType>> &named_arguments, const LogicalType &varargs) {
+                              const vector<pair<Identifier, LogicalType>> &named_arguments,
+                              const LogicalType &varargs) {
 	string result;
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		result += catalog_name + "." + schema_name + ".";
@@ -173,7 +174,7 @@ string Function::CallToString(const Identifier &catalog_name, const Identifier &
                               const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
 	string result =
-	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<string, LogicalType>> {}, varargs);
+	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<Identifier, LogicalType>> {}, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }

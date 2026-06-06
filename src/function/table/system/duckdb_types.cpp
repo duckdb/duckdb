@@ -122,7 +122,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 		database_name.Append(Value(type_entry.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
-		schema_name.Append(Value(type_entry.schema.name.GetName()));
+		schema_name.Append(Value(type_entry.schema.name));
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.schema.oid)));
 		int64_t oid;
 		if (type_entry.internal) {
@@ -138,7 +138,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			oid_val = Value();
 		}
 		type_oid.Append(oid_val);
-		type_name.Append(Value(type_entry.name.GetName()));
+		type_name.Append(Value(type_entry.name));
 		auto internal_type = type.InternalType();
 		type_size.Append(internal_type == PhysicalType::INVALID
 		                     ? Value()
@@ -198,7 +198,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		comment.Append(Value(type_entry.comment));
 		tags.Append(Value::MAP(type_entry.tags));
 		internal.Append(Value::BOOLEAN(type_entry.internal));
-		extension_name.Append(type_entry.extension_name.empty() ? Value() : Value(type_entry.extension_name.GetName()));
+		extension_name.Append(type_entry.extension_name.empty() ? Value() : Value(type_entry.extension_name));
 		if (type.id() == LogicalTypeId::ENUM && type.AuxInfo()) {
 			auto enum_data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
 			idx_t size = EnumType::GetSize(type);

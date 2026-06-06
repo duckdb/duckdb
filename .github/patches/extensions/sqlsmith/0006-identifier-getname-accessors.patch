@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 84d44d5..d5fef39 100644
+index 84d44d5..8424f57 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
@@ -117,6 +117,15 @@ index 84d44d5..d5fef39 100644
  				if (RandomPercentage(50)) {
  					break;
  				}
+@@ -544,7 +544,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateSubqueryRef() {
+ 			current_column_names.push_back(std::move(col));
+ 		}
+ 	}
+-	auto result = make_uniq<SubqueryRef>(std::move(subquery), GenerateTableIdentifier());
++	auto result = make_uniq<SubqueryRef>(std::move(subquery), Identifier(GenerateTableIdentifier()));
+ 	return std::move(result);
+ }
+ 
 @@ -577,14 +577,14 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
  		auto name = Choose(names);
  		names.erase(std::find(names.begin(), names.end(), name));
@@ -135,6 +144,15 @@ index 84d44d5..d5fef39 100644
  	return std::move(result);
  }
  
+@@ -730,7 +730,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateColumnRef() {
+ 	if (column_name.empty()) {
+ 		return GenerateConstant();
+ 	}
+-	return make_uniq<ColumnRefExpression>(std::move(column_name));
++	return make_uniq<ColumnRefExpression>(Identifier(std::move(column_name)));
+ }
+ 
+ class AggregateChecker {
 @@ -762,7 +762,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
  		auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
  		auto offset = RandomValue(scalar_entry.functions.Size());
@@ -162,7 +180,17 @@ index 84d44d5..d5fef39 100644
  		idx_t macro_idx = RandomValue(macro_entry.macros.size());
  		min_parameters = macro_entry.macros[macro_idx]->parameters.size();
  		max_parameters = min_parameters;
-@@ -946,7 +946,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+@@ -824,7 +824,8 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		}
+ 	}
+ 	// FIXME: add export_state
+-	return make_uniq<FunctionExpression>(std::move(name), std::move(children), std::move(filter), std::move(order_bys),
++	return make_uniq<FunctionExpression>(Identifier(std::move(name)), std::move(children), std::move(filter),
++	                                     std::move(order_bys),
+ 	                                     distinct);
+ }
+ 
+@@ -946,7 +947,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
  	idx_t max_parameters;
  	if (function) {
  		type = ExpressionType::WINDOW_AGGREGATE;
@@ -171,7 +199,7 @@ index 84d44d5..d5fef39 100644
  		min_parameters = function->GetSignature().GetParameterCount();
  		max_parameters = min_parameters;
  	} else {
-@@ -1064,7 +1064,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+@@ -1064,7 +1065,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
  			if (column_name.empty()) {
  				break;
  			}
@@ -180,7 +208,7 @@ index 84d44d5..d5fef39 100644
  		}
  		while (RandomPercentage(20)) {
  			auto column_name = GenerateColumnName();
-@@ -1284,7 +1284,7 @@ string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
+@@ -1284,7 +1285,7 @@ string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
  	auto select = make_uniq<SelectStatement>();
  	auto node = make_uniq<SelectNode>();
  
@@ -189,16 +217,16 @@ index 84d44d5..d5fef39 100644
  
  	vector<unique_ptr<ParsedExpression>> children;
  	for (auto &param : base_function.GetSignature().GetParameters()) {
-@@ -1303,7 +1303,7 @@ string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
- 		children.push_back(std::move(argument));
- 	}
- 	auto from_clause = make_uniq<BaseTableRef>();
--	from_clause->table_name = "all_types";
-+	from_clause->table_name = Identifier("all_types");
- 	node->from_table = std::move(from_clause);
- 
- 	auto function_expr = make_uniq<FunctionExpression>(base_function.GetName(), std::move(children));
-@@ -1317,16 +1317,16 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
+@@ -1293,7 +1294,7 @@ string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
+ 		if (!always_null) {
+ 			for (auto &test_type : generator_context->test_types) {
+ 				if (test_type.type.id() == param.GetType().id()) {
+-					argument = make_uniq<ColumnRefExpression>(test_type.name);
++					argument = make_uniq<ColumnRefExpression>(Identifier(test_type.name));
+ 				}
+ 			}
+ 		}
+@@ -1317,17 +1318,17 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
  	auto select = make_uniq<SelectStatement>();
  	auto node = make_uniq<SelectNode>();
  
@@ -214,25 +242,18 @@ index 84d44d5..d5fef39 100644
  		if (!always_null) {
  			string argument_name = "c" + to_string(column_aliases.size() + 1);
 -			column_aliases.push_back(argument_name);
+-			argument = make_uniq<ColumnRefExpression>(std::move(argument_name));
 +			column_aliases.emplace_back(argument_name);
- 			argument = make_uniq<ColumnRefExpression>(std::move(argument_name));
++			argument = make_uniq<ColumnRefExpression>(Identifier(std::move(argument_name)));
  			auto constant_expr = make_uniq<ConstantExpression>(Value());
  			auto cast = make_uniq<CastExpression>(param.GetType(), std::move(constant_expr));
-@@ -1339,7 +1339,7 @@ string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function
- 	auto from_clause = make_uniq<TableFunctionRef>();
- 	auto vector_types_fun = make_uniq<FunctionExpression>("test_vector_types", std::move(test_vector_types));
- 	from_clause->function = std::move(vector_types_fun);
--	from_clause->alias = "test_vector_types";
-+	from_clause->alias = Identifier("test_vector_types");
- 	from_clause->column_name_alias = std::move(column_aliases);
- 	node->from_table = std::move(from_clause);
- 
-@@ -1355,7 +1355,7 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string
- 	auto node = make_uniq<SelectNode>();
- 
- 	auto from_clause = make_uniq<BaseTableRef>();
--	from_clause->table_name = "all_types";
-+	from_clause->table_name = Identifier("all_types");
+ 			test_vector_types.push_back(std::move(cast));
+@@ -1359,7 +1360,7 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string
  	node->from_table = std::move(from_clause);
  
  	unique_ptr<ParsedExpression> source;
+-	source = make_uniq<ColumnRefExpression>(source_name);
++	source = make_uniq<ColumnRefExpression>(Identifier(source_name));
+ 	if (add_varchar) {
+ 		source = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(source));
+ 	}

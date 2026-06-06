@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 			}
 			auto &children = StructValue::GetChildren(param.second);
 			for (idx_t i = 0; i < children.size(); i++) {
-				result->storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
+				result->storage_config[StructType::GetChildName(param.second.type(), i).GetName()] = children[i];
 			}
 		} else if (key == "storage_path") {
 			result->storage_config["path"] = param.second;

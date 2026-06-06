@@ -283,7 +283,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			auto &binding = bindings[i];
 			auto &name = select_node.names[i];
 			auto &type = select_node.types[i];
-			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
+			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(Identifier(name), type, binding));
 		}
 
 		auto new_select_list = function.copy_to_select(input);
@@ -416,7 +416,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	insert_node.table = stmt.info->table;
 	insert_node.schema = stmt.info->schema;
 	insert_node.catalog = stmt.info->catalog;
-	insert_node.columns = stmt.info->select_list;
+	insert_node.columns = StringsToIdentifiers(stmt.info->select_list);
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);
@@ -434,13 +434,13 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 		for (auto &col : table.GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = col.Name();
+				expected_names[bound_insert.column_index_map[i]] = col.Name().GetName();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
 		for (auto &col : table.GetColumns().Physical()) {
-			expected_names.push_back(col.Name());
+			expected_names.emplace_back(col.Name());
 		}
 	}
 	auto copy_from_function = function.copy_from_function;
@@ -565,7 +565,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
-				statement->select_list.push_back(make_uniq<ColumnRefExpression>(name));
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(name)));
 			}
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());
@@ -587,7 +587,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
 		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier("csv")),
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

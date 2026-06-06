@@ -451,12 +451,12 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 }
 
 Identifier DataTableInfo::GetSchemaName() {
-	return Identifier(schema.GetName());
+	return schema;
 }
 
 Identifier DataTableInfo::GetTableName() {
 	lock_guard<mutex> l(name_lock);
-	return Identifier(table.GetName());
+	return table;
 }
 
 void DataTableInfo::SetTableName(Identifier name) {
@@ -680,8 +680,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	// Get the column types in their physical order.
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, Identifier(db.GetName()), bound_foreign_key.info.schema, bound_foreign_key.info.table);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bound_foreign_key.info.schema,
+	                                                         bound_foreign_key.info.table);
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
@@ -907,7 +907,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 		// Verify the generated columns against the inserted values.
 		auto binder = Binder::CreateBinder(context);
 		physical_index_set_t bound_columns;
-		CheckBinder generated_check_binder(*binder, context, table.name.GetName(), table.GetColumns(), bound_columns);
+		CheckBinder generated_check_binder(*binder, context, table.name, table.GetColumns(), bound_columns);
 		for (auto &col : table.GetColumns().Logical()) {
 			if (!col.Generated()) {
 				continue;
@@ -933,7 +933,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
 			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name().GetName());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -1677,7 +1677,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 				if (column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
-					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name());
+					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name().GetName());
 					break;
 				}
 			}

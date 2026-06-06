@@ -604,7 +604,7 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = std::move(update.node->set_info->columns);
+	update_columns = IdentifiersToStrings(update.node->set_info->columns);
 	expressions = std::move(update.node->set_info->expressions);
 }
 

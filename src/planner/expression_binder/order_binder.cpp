@@ -130,7 +130,7 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 		return nullptr;
 	}
 	child_list_t<Value> values;
-	values.push_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
+	values.emplace_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 	result->SetAlias(expr.GetAlias());
 	result->SetQueryLocation(expr.GetQueryLocation());
@@ -167,8 +167,8 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto collation_index = TryGetProjectionReference(*collation.ChildMutable());
 		if (collation_index.IsValid()) {
 			child_list_t<Value> values;
-			values.push_back(make_pair("index", Value::UBIGINT(collation_index.GetIndex())));
-			values.push_back(make_pair("collation", Value(collation.Collation())));
+			values.emplace_back(make_pair("index", Value::UBIGINT(collation_index.GetIndex())));
+			values.emplace_back(make_pair("collation", Value(collation.Collation())));
 			return make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 		}
 		break;

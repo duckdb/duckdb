@@ -106,7 +106,7 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 		string child_name;
 		if (func.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
 		    !StructType::IsUnnamed(func.GetChildren()[0]->GetReturnType())) {
-			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx);
+			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx).GetName();
 		}
 		struct_path.push_back({child_idx, std::move(child_name)});
 		return true;

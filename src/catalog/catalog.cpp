@@ -75,7 +75,7 @@ Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 	return Catalog::GetSystemCatalog(*context.db);
 }
 
-const string &GetDefaultCatalog(CatalogEntryRetriever &retriever) {
+Identifier GetDefaultCatalog(CatalogEntryRetriever &retriever) {
 	return DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 }
 
@@ -88,8 +88,8 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	if (catalog_name == SYSTEM_CATALOG) {
 		return &GetSystemCatalog(context);
 	}
-	auto entry = db_manager.GetDatabase(context, IsInvalidCatalog(catalog_name) ? GetDefaultCatalog(retriever)
-	                                                                            : catalog_name.GetName());
+	auto entry =
+	    db_manager.GetDatabase(context, IsInvalidCatalog(catalog_name) ? GetDefaultCatalog(retriever) : catalog_name);
 	if (!entry) {
 		return nullptr;
 	}
@@ -361,10 +361,10 @@ string Catalog::GetConnectDisplay() {
 // Lookup Structures
 //===--------------------------------------------------------------------===//
 struct CatalogLookup {
-	CatalogLookup(Catalog &catalog, CatalogType catalog_type, string schema_p, string name_p)
+	CatalogLookup(Catalog &catalog, CatalogType catalog_type, Identifier schema_p, Identifier name_p)
 	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)), lookup_info(catalog_type, name) {
 	}
-	CatalogLookup(Catalog &catalog, string schema_p, const EntryLookupInfo &lookup_p)
+	CatalogLookup(Catalog &catalog, Identifier schema_p, const EntryLookupInfo &lookup_p)
 	    : catalog(catalog), schema(std::move(schema_p)), name(lookup_p.GetEntryName()), lookup_info(lookup_p, name) {
 	}
 
@@ -489,32 +489,32 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
-			entries.emplace_back(catalog_name, schema.GetName());
+			entries.emplace_back(Identifier(catalog_name), schema);
 		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
-				entries.emplace_back(default_entry.catalog, schema.GetName());
+				entries.emplace_back(default_entry.catalog, schema);
 			} else {
-				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema.GetName());
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 			}
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
-			entries.emplace_back(catalog.GetName(), schema_name);
+			entries.emplace_back(catalog, Identifier(schema_name));
 		}
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
 			if (catalog_entry) {
-				entries.emplace_back(catalog.GetName(), catalog_entry->GetDefaultSchema());
+				entries.emplace_back(catalog, Identifier(catalog_entry->GetDefaultSchema()));
 			} else {
-				entries.emplace_back(catalog.GetName(), DEFAULT_SCHEMA);
+				entries.emplace_back(catalog, DEFAULT_SCHEMA);
 			}
 		}
 	} else {
 		// specific catalog and schema provided
-		entries.emplace_back(catalog.GetName(), schema.GetName());
+		entries.emplace_back(catalog, schema);
 	}
 	return entries;
 }
@@ -830,7 +830,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
-			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema.GetName(), lookup_info);
 			if (result.Found()) {
 				return result;
 			}

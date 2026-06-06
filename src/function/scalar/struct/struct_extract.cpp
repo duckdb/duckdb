@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	if (key_val.IsNull() || key_str.empty()) {
 		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_str);
+	auto key = Identifier(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;
@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 
 	for (size_t i = 0; i < struct_children.size(); i++) {
 		auto &child = struct_children[i];
-		if (StringUtil::Lower(child.first) == key) {
+		if (child.first == key) {
 			found_key = true;
 			key_index = i;
 			return_type = child.second;
@@ -80,11 +80,11 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 		vector<string> candidates;
 		candidates.reserve(struct_children.size());
 		for (auto &struct_child : struct_children) {
-			candidates.push_back(struct_child.first);
+			candidates.emplace_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, StringUtil::Lower(key.GetName()));
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
-		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
+		throw BinderException("Could not find key \"%s\" in struct\n%s", key.GetName(), message);
 	}
 
 	bound_function.SetReturnType(std::move(return_type));

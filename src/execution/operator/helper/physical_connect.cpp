@@ -32,7 +32,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		                            current ? current->GetName().GetName() : "<detached>");
 	}
 
-	auto target = DatabaseManager::Get(client).GetDatabase(info->name.GetName());
+	auto target = DatabaseManager::Get(client).GetDatabase(info->name);
 	if (!target) {
 		throw InvalidInputException("Database \"%s\" is not attached", info->name);
 	}

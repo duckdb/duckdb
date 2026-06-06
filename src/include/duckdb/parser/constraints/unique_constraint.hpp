@@ -20,7 +20,7 @@ public:
 
 public:
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key);
-	DUCKDB_API UniqueConstraint(const LogicalIndex index, string column_name, const bool is_primary_key);
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key);
 	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key);
 
 public:

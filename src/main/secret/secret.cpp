@@ -61,9 +61,9 @@ string KeyValueSecret::ToString(SecretDisplayType mode) const {
 	result = result.substr(0, result.size() - 1);
 	result += ";";
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
-		result.append(it->first);
+		result.append(it->first.GetName());
 		result.append("=");
-		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
+		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first.GetName()) != redact_keys.end()) {
 			result.append("redacted");
 		} else {
 			result.append(it->second.ToString());
@@ -83,8 +83,8 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	vector<Value> map_values;
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		child_list_t<Value> map_struct;
-		map_struct.push_back(make_pair("key", Value(it->first)));
-		map_struct.push_back(make_pair("value", Value(it->second)));
+		map_struct.emplace_back(make_pair("key", Value(it->first)));
+		map_struct.emplace_back(make_pair("value", Value(it->second)));
 		map_values.push_back(Value::STRUCT(map_struct));
 	}
 
@@ -102,7 +102,7 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 }
 
 Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) const {
-	auto lookup = secret_map.find(key);
+	auto lookup = secret_map.find(Identifier(key));
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {
 			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);

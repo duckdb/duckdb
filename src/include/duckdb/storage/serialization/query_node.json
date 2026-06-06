@@ -276,7 +276,7 @@
       {
         "id": 201,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,

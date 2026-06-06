@@ -32,8 +32,8 @@ public:
 	idx_t &LambdaIndexMutable() {
 		return lambda_idx;
 	}
-	const string &ColumnName() const {
-		return column_name.GetName();
+	const Identifier &ColumnName() const {
+		return column_name;
 	}
 	string &ColumnNameMutable() {
 		return column_name.GetNameMutable();

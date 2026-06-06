@@ -40,7 +40,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
                                                                          const vector<string> &column_name,
                                                                          unique_ptr<ParsedExpression> expression) {
 	auto result = make_uniq<UpdateSetInfo>();
-	result->columns = column_name;
+	result->columns = StringsToIdentifiers(column_name);
 
 	bool is_row_assignment = false;
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
@@ -73,7 +73,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
     PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element) {
 	auto result = make_uniq<UpdateSetInfo>();
 	for (auto &element : update_set_element) {
-		result->columns.push_back(std::move(element.first));
+		result->columns.emplace_back(std::move(element.first));
 		result->expressions.push_back(std::move(element.second));
 	}
 	return result;

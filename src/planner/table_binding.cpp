@@ -111,7 +111,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.GetAlias().empty()) {
 		colref.SetAlias(names[column_index]);
 	}
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> Binding::GetStandardEntry() {
@@ -180,7 +180,7 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.ColumnNamesMutable();
 		D_ASSERT(col_names.size() == 1);
-		auto idx_entry = list.GetColumnIndex(col_names[0].GetNameMutable());
+		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = vector<Identifier> {Identifier(alias)};
 	});
@@ -293,7 +293,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
@@ -321,7 +321,8 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding(index, ProjectionIndex(column_index));
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+	return BindResult(
+	    make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), types[column_index], binding, depth));
 }
 
 BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {

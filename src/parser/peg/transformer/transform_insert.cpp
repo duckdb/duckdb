@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 	node.schema = insert_target->schema_name;
 	node.table = insert_target->table_name;
 	node.column_order = by_name_or_position;
-	node.columns = insert_column_list;
+	node.columns = StringsToIdentifiers(insert_column_list);
 	if (!node.columns.empty() && insert_values.default_values) {
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
@@ -70,7 +70,7 @@ unique_ptr<OnConflictInfo>
 PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
                                                  OnConflictExpressionTarget on_conflict_target,
                                                  unique_ptr<OnConflictInfo> on_conflict_action) {
-	on_conflict_action->indexed_columns = std::move(on_conflict_target.indexed_columns);
+	on_conflict_action->indexed_columns = StringsToIdentifiers(on_conflict_target.indexed_columns);
 	if (on_conflict_target.where_clause) {
 		on_conflict_action->condition = std::move(on_conflict_target.where_clause);
 	}

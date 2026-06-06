@@ -135,7 +135,7 @@ string RenameColumnInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 // RenameFieldInfo
 //===--------------------------------------------------------------------===//
-RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<string> column_path_p, string new_name_p)
+RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path_p, string new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_FIELD, std::move(data)), column_path(std::move(column_path_p)),
       new_name(std::move(new_name_p)) {
 }
@@ -247,7 +247,7 @@ AddFieldInfo::AddFieldInfo(ColumnDefinition new_field_p)
     : AlterTableInfo(AlterTableType::ADD_FIELD), new_field(std::move(new_field_p)) {
 }
 
-AddFieldInfo::AddFieldInfo(AlterEntryData data, vector<string> column_path_p, ColumnDefinition new_field_p,
+AddFieldInfo::AddFieldInfo(AlterEntryData data, vector<Identifier> column_path_p, ColumnDefinition new_field_p,
                            bool if_field_not_exists)
     : AlterTableInfo(AlterTableType::ADD_FIELD, std::move(data)), column_path(std::move(column_path_p)),
       new_field(std::move(new_field_p)), if_field_not_exists(if_field_not_exists) {
@@ -323,7 +323,8 @@ string RemoveColumnInfo::ToString() const {
 RemoveFieldInfo::RemoveFieldInfo() : AlterTableInfo(AlterTableType::REMOVE_FIELD) {
 }
 
-RemoveFieldInfo::RemoveFieldInfo(AlterEntryData data, vector<string> column_path_p, bool if_column_exists, bool cascade)
+RemoveFieldInfo::RemoveFieldInfo(AlterEntryData data, vector<Identifier> column_path_p, bool if_column_exists,
+                                 bool cascade)
     : AlterTableInfo(AlterTableType::REMOVE_FIELD, std::move(data)), column_path(std::move(column_path_p)),
       if_column_exists(if_column_exists), cascade(cascade) {
 }
@@ -364,7 +365,7 @@ string RemoveFieldInfo::ToString() const {
 ChangeColumnTypeInfo::ChangeColumnTypeInfo() : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE) {
 }
 
-ChangeColumnTypeInfo::ChangeColumnTypeInfo(AlterEntryData data, string column_name, LogicalType target_type,
+ChangeColumnTypeInfo::ChangeColumnTypeInfo(AlterEntryData data, Identifier column_name, LogicalType target_type,
                                            unique_ptr<ParsedExpression> expression)
     : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, std::move(data)), column_name(std::move(column_name)),
       target_type(std::move(target_type)), expression(std::move(expression)) {
@@ -373,7 +374,7 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name.GetName(), target_type,
+	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
 	                                                       expression->Copy());
 }
 

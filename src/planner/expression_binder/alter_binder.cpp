@@ -47,10 +47,10 @@ BindResult AlterBinder::BindColumnReference(ColumnRefExpression &col_ref, idx_t 
 	}
 
 	if (col_ref.ColumnNames().size() > 1) {
-		return BindQualifiedColumnName(col_ref, table.name.GetName());
+		return BindQualifiedColumnName(col_ref, table.name);
 	}
 
-	auto col_name = col_ref.ColumnNames()[0].GetName();
+	auto col_name = col_ref.ColumnNames()[0];
 	auto idx = table.GetColumnIndex(col_name, true);
 	if (!idx.IsValid()) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",

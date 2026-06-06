@@ -120,7 +120,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 
 	child_list_t<Value> column_names;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
+		column_names.emplace_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 	}
 
 	if (!file_options.union_by_name) {
@@ -131,8 +131,8 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	RemoveNamedParameterIfExists("dtypes");
 }
 
-string ReadCSVRelation::GetAlias() {
-	return alias;
+Identifier ReadCSVRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 } // namespace duckdb

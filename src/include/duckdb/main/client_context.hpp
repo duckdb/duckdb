@@ -159,10 +159,10 @@ public:
 	DUCKDB_API void Destroy();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
+	                                                  const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &schema_name, const Identifier &table_name);
 	//! Executes a query with the given collection "attached" to the query using a CTE.
 	DUCKDB_API void Append(unique_ptr<SQLStatement> stmt);
 	//! Appends a ColumnDataCollection to the described table.

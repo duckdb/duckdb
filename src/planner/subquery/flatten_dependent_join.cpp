@@ -216,8 +216,8 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 		auto delim_index = perform_delim ? i : correlated_columns.GetDelimIndex();
 		D_ASSERT(delim_index < correlated_columns.size());
 		auto &col = correlated_columns[delim_index];
-		JoinCondition cond(make_uniq<BoundColumnRefExpression>(col.name, col.type, col.binding),
-		                   make_uniq<BoundColumnRefExpression>(col.name, col.type, state[delim_index]),
+		JoinCondition cond(make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, col.binding),
+		                   make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, state[delim_index]),
 		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		delim_join.conditions.push_back(std::move(cond));
 	}
@@ -297,7 +297,7 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	row_number->OrderByMutable() = std::move(orders);
 	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
-	row_number->SetAlias(Identifier("limit_rownum"));
+	row_number->SetAlias("limit_rownum");
 
 	window->expressions.push_back(std::move(row_number));
 	window->AddChild(std::move(child));
@@ -494,7 +494,7 @@ void FlattenDependentJoins::AppendCorrelatedColumns(vector<unique_ptr<Expression
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		if (include_names) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]));
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, state[i]));
 		} else {
 			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.type, state[i]));
 		}
@@ -505,7 +505,7 @@ void FlattenDependentJoins::AddDelimColumnsToGroup(LogicalAggregate &aggr, const
 	auto key_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < key_count; i++) {
 		auto &col = correlated_columns[GetDelimKeyIndex(i)];
-		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]);
+		auto colref = make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, state[GetDelimKeyIndex(i)]);
 		auto new_group_index = ColumnBinding::PushExpression(aggr.groups, std::move(colref));
 		for (auto &set : aggr.grouping_sets) {
 			set.insert(new_group_index);
@@ -518,7 +518,7 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
-		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]);
+		auto colref = make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, state[i]);
 		vector<unique_ptr<Expression>> aggr_children;
 		aggr_children.push_back(std::move(colref));
 
@@ -597,11 +597,11 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	join->children.push_back(std::move(plan));
 	for (idx_t i = 0; i < new_group_count; i++) {
 		auto &col = correlated_columns[GetDelimKeyIndex(i)];
-		JoinCondition cond(
-		    make_uniq<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, ProjectionIndex(i))),
-		    make_uniq<BoundColumnRefExpression>(
-		        col.type, ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset + i))),
-		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		JoinCondition cond(make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type,
+		                                                       ColumnBinding(left_index, ProjectionIndex(i))),
+		                   make_uniq<BoundColumnRefExpression>(
+		                       col.type, ColumnBinding(delim_table_index, ProjectionIndex(delim_column_offset + i))),
+		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		join->conditions.push_back(std::move(cond));
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
@@ -731,7 +731,8 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 	auto delim_key_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < delim_key_count; i++) {
 		auto &col = correlated_columns[GetDelimKeyIndex(i)];
-		partitions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
+		partitions.push_back(
+		    make_uniq<BoundColumnRefExpression>(Identifier(col.name), col.type, state[GetDelimKeyIndex(i)]));
 	}
 
 	auto window = CreateRowNumberWindow(binder, std::move(child), window_index, std::move(partitions),

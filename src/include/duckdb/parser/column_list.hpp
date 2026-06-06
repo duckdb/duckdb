@@ -30,13 +30,13 @@ public:
 	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
 	DUCKDB_API ColumnDefinition &GetColumnMutable(LogicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(PhysicalIndex index);
-	DUCKDB_API ColumnDefinition &GetColumnMutable(const string &name);
+	DUCKDB_API ColumnDefinition &GetColumnMutable(const Identifier &name);
 	DUCKDB_API vector<string> GetColumnNames() const;
 	DUCKDB_API vector<LogicalType> GetColumnTypes() const;
 
 	DUCKDB_API bool ColumnExists(const Identifier &name) const;
 
-	DUCKDB_API LogicalIndex GetColumnIndex(string &column_name) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &column_name) const;
 	DUCKDB_API PhysicalIndex LogicalToPhysical(LogicalIndex index) const;
 	DUCKDB_API LogicalIndex PhysicalToLogical(PhysicalIndex index) const;
 

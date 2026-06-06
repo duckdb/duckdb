@@ -858,8 +858,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 		struct_types.reserve(2);
 		new_children.reserve(2);
 
-		struct_types.push_back(make_pair("key", key_type));
-		struct_types.push_back(make_pair("value", value_type));
+		struct_types.emplace_back(make_pair("key", key_type));
+		struct_types.emplace_back(make_pair("value", value_type));
 
 		auto key = keys[i].DefaultCastAs(key_type);
 		MapKeyCheck(unique_keys, key);

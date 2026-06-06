@@ -124,13 +124,13 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
+	                                                  const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &schema_name, const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG and
 	//! DEFAULT_SCHEMA.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &table_name);
 
 	//! Extract a set of SQL statements from a specific query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
@@ -141,13 +141,13 @@ public:
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
 	//! Returns a relation that produces a table from this connection
-	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
-	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
-	DUCKDB_API shared_ptr<Relation> Table(const string &catalog_name, const string &schema_name,
-	                                      const string &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &tname);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &schema_name, const Identifier &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &catalog_name, const Identifier &schema_name,
+	                                      const Identifier &table_name);
 	//! Returns a relation that produces a view from this connection
-	DUCKDB_API shared_ptr<Relation> View(const string &tname);
-	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> View(const Identifier &tname);
+	DUCKDB_API shared_ptr<Relation> View(const Identifier &schema_name, const Identifier &table_name);
 	//! Returns a relation that calls a specified table function
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,

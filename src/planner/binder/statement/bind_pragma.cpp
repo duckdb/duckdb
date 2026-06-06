@@ -50,7 +50,7 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	FunctionBinder function_binder(*this);
 	ErrorData error;
-	auto bound_idx = function_binder.BindFunction(entry->name.GetName(), entry->functions, params, error);
+	auto bound_idx = function_binder.BindFunction(entry->name, entry->functions, params, error);
 	if (!bound_idx.IsValid()) {
 		D_ASSERT(error.HasError());
 		error.AddQueryLocation(error_context);

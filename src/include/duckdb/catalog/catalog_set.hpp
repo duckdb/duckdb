@@ -104,7 +104,7 @@ public:
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
 	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
-	                               const string &prefix);
+	                               const Identifier &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
@@ -161,7 +161,7 @@ private:
 	bool VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry);
 	//! Start the catalog entry chain with a dummy node
 	bool StartChain(CatalogTransaction transaction, const Identifier &name, unique_lock<mutex> &read_lock);
-	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
+	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const Identifier &new_name,
 	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:

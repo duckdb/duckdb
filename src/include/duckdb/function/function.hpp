@@ -110,26 +110,17 @@ public:
 	FunctionParameter(Identifier name, LogicalType type, Value value)
 	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
 	}
-	//! Convenience overloads: parameter names are commonly passed as string literals
-	FunctionParameter(const string &name, LogicalType type) : FunctionParameter(Identifier(name), std::move(type)) {
-	}
-	FunctionParameter(const string &name, LogicalType type, Value value)
-	    : FunctionParameter(Identifier(name), std::move(type), std::move(value)) {
-	}
 
 	string ToString() const;
 
 	bool operator==(const FunctionParameter &other) const;
 	bool operator!=(const FunctionParameter &other) const;
 
-	auto GetName() const -> const string & {
-		return name.GetName();
+	auto GetName() const -> const Identifier & {
+		return name;
 	}
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
-	}
-	auto SetName(string name_p) -> void {
-		name = Identifier(std::move(name_p));
 	}
 
 	auto GetType() const -> const LogicalType & {
@@ -216,17 +207,10 @@ public:
 		parameters.emplace_back(std::move(name), std::move(type));
 		return *this;
 	}
-	//! Convenience overloads: parameter names are commonly passed as string literals
-	auto AddParameter(const string &name, LogicalType type, Value default_value) -> FunctionSignature & {
-		return AddParameter(Identifier(name), std::move(type), std::move(default_value));
-	}
-	auto AddParameter(const string &name, LogicalType type) -> FunctionSignature & {
-		return AddParameter(Identifier(name), std::move(type));
-	}
 
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
 		auto name = StringUtil::Format("col%d", parameters.size());
-		parameters.emplace_back(name, std::move(type));
+		parameters.emplace_back(Identifier(name), std::move(type));
 		return *this;
 	}
 
@@ -254,10 +238,10 @@ public:
 		// Check for duplicate parameter names
 		identifier_set_t seen_names;
 		for (const auto &param : parameters) {
-			if (seen_names.find(Identifier(param.GetName())) != seen_names.end()) {
+			if (seen_names.find(param.GetName()) != seen_names.end()) {
 				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
 			}
-			seen_names.insert(Identifier(param.GetName()));
+			seen_names.insert(param.GetName());
 		}
 
 		// Also check for default values that are not at the end of the parameter list
@@ -303,20 +287,11 @@ public:
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
 	}
-	auto SetName(string name_p) -> void {
-		name = Identifier(std::move(name_p));
-	}
 	auto SetSchemaName(Identifier schema_name_p) -> void {
 		schema_name = std::move(schema_name_p);
 	}
-	auto SetSchemaName(string schema_name_p) -> void {
-		schema_name = Identifier(std::move(schema_name_p));
-	}
 	auto SetCatalogName(Identifier catalog_name_p) -> void {
 		catalog_name = std::move(catalog_name_p);
-	}
-	auto SetCatalogName(string catalog_name_p) -> void {
-		catalog_name = Identifier(std::move(catalog_name_p));
 	}
 
 	const Identifier &GetName() const {
@@ -332,7 +307,7 @@ public:
 	//! Returns the formatted string name(arg1, arg2, ...)
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
 	                                      const Identifier &name, const vector<LogicalType> &arguments,
-	                                      const vector<pair<string, LogicalType>> &named_arguments,
+	                                      const vector<pair<Identifier, LogicalType>> &named_arguments,
 	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
@@ -519,9 +494,6 @@ protected:
 public:
 	void SetName(Identifier name_p) {
 		name = std::move(name_p);
-	}
-	void SetName(string name_p) {
-		name = Identifier(std::move(name_p));
 	}
 
 	const Identifier &GetName() const {

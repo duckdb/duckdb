@@ -31,7 +31,7 @@ string FormatMacroFunction(const MacroFunction &function, const string &name) {
 			parameters += " " + function.types[param_idx].ToString();
 		}
 
-		auto it = function.default_parameters.find(param_name);
+		auto it = function.default_parameters.find(Identifier(param_name));
 		if (it != function.default_parameters.end()) {
 			parameters += " := ";
 			parameters += it->second->ToString();
@@ -44,7 +44,8 @@ string FormatMacroFunction(const MacroFunction &function, const string &name) {
 MacroBindResult MacroFunction::BindMacroFunction(
     Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
-    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments, idx_t depth) {
+    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
+    idx_t depth) {
 	ExpressionBinder expr_binder(binder, binder.context);
 	expr_binder.lambda_bindings = binder.lambda_bindings;
 
@@ -64,7 +65,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
-	InsertionOrderPreservingMap<LogicalType> named_arg_types;
+	InsertionOrderPreservingMap<LogicalType, Identifier, identifier_map_t<idx_t>> named_arg_types;
 	for (auto &arg : function_expr.GetArgumentsMutable()) {
 		auto arg_copy = arg.GetExpression().Copy();
 		LogicalType arg_type = LogicalType::UNKNOWN;
@@ -74,12 +75,12 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		}
 		if (!arg.GetExpression().GetAlias().empty()) {
 			// Default argument
-			if (named_arguments.find(arg.GetExpression().GetAlias().GetName()) != named_arguments.end()) {
+			if (named_arguments.find(arg.GetExpression().GetAlias()) != named_arguments.end()) {
 				return MacroBindResult(StringUtil::Format("Macro %s() has named argument repeated '%s'", name,
 				                                          arg.GetExpression().GetAlias()));
 			}
-			named_arg_types.insert(arg.GetExpression().GetAlias().GetName(), std::move(arg_type));
-			named_arguments[arg.GetExpression().GetAlias().GetName()] = std::move(arg.GetExpressionMutable());
+			named_arg_types.insert(arg.GetExpression().GetAlias(), std::move(arg_type));
+			named_arguments[arg.GetExpression().GetAlias()] = std::move(arg.GetExpressionMutable());
 		} else if (!named_arguments.empty()) {
 			return MacroBindResult(
 			    StringUtil::Format("Macro %s() has positional argument following named argument", name));
@@ -111,7 +112,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		for (auto &kv : named_arguments) {
 			bool found = false;
 			for (const auto &parameter : function->parameters) {
-				if (StringUtil::CIEquals(kv.first, parameter->Cast<ColumnRefExpression>().GetColumnName())) {
+				if (kv.first == parameter->Cast<ColumnRefExpression>().GetColumnName()) {
 					found = true;
 					break;
 				}
@@ -132,7 +133,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		// Figure out best function fit, bail if any positional arguments are duplicated in named arguments
 		for (; param_idx < positional_arguments.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			if (named_arguments.find(param_name) != named_arguments.end()) {
+			if (named_arguments.find(Identifier(param_name)) != named_arguments.end()) {
 				bail = true;
 				break;
 			}
@@ -156,8 +157,8 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		// Match remaining arguments with named/defaults
 		for (; param_idx < function->parameters.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			const auto arg_it = named_arguments.find(param_name);
-			const auto default_it = function->default_parameters.find(param_name);
+			const auto arg_it = named_arguments.find(Identifier(param_name));
+			const auto default_it = function->default_parameters.find(Identifier(param_name));
 			if (arg_it == named_arguments.end() && default_it == function->default_parameters.end()) {
 				break; // The parameter has no argument (supplied/default)!
 			}
@@ -170,8 +171,8 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			if (param_type == LogicalType::UNKNOWN) {
 				macro_cost += 1000000;
 			} else {
-				const auto cast_cost =
-				    CastFunctionSet::ImplicitCastCost(binder.context, named_arg_types[param_name], param_type);
+				const auto cast_cost = CastFunctionSet::ImplicitCastCost(
+				    binder.context, named_arg_types[Identifier(param_name)], param_type);
 				if (cast_cost < 0) {
 					break; // No cast possible
 				}
@@ -230,7 +231,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	// Add the default values for parameters that have defaults, for which no argument was supplied
 	for (; param_idx < macro_def.parameters.size(); param_idx++) {
 		const auto &param_name = macro_def.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		auto named_arg_it = named_arguments.find(param_name);
+		auto named_arg_it = named_arguments.find(Identifier(param_name));
 		if (named_arg_it != named_arguments.end()) {
 			// The user has supplied an argument for this parameter
 			if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
@@ -241,9 +242,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			continue;
 		}
 
-		const auto default_it = macro_def.default_parameters.find(param_name);
+		const auto default_it = macro_def.default_parameters.find(Identifier(param_name));
 		D_ASSERT(default_it != macro_def.default_parameters.end());
-		auto &named_arg = named_arguments[param_name];
+		auto &named_arg = named_arguments[Identifier(param_name)];
 		named_arg = default_it->second->Copy();
 		if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
 			// This macro parameter is typed, add a cast
@@ -254,10 +255,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	return MacroBindResult(macro_idx);
 }
 
-unique_ptr<DummyBinding>
-MacroFunction::CreateDummyBinding(const MacroFunction &macro_def, const string &name,
-                                  vector<unique_ptr<ParsedExpression>> &positional_arguments,
-                                  InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments) {
+unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
+    const MacroFunction &macro_def, const string &name, vector<unique_ptr<ParsedExpression>> &positional_arguments,
+    InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments) {
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types = macro_def.types;
 	types.resize(macro_def.parameters.size(), LogicalType::UNKNOWN);
@@ -266,7 +266,7 @@ MacroFunction::CreateDummyBinding(const MacroFunction &macro_def, const string &
 		names.push_back(macro_def.parameters[i]->Cast<ColumnRefExpression>().GetColumnName());
 	}
 	for (auto &kv : named_arguments) {
-		names.push_back(kv.first);
+		names.emplace_back(kv.first);
 		positional_arguments.push_back(std::move(kv.second)); // push defaults into positionals
 	}
 
@@ -299,7 +299,7 @@ MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) c
 	// Serializing targeting an older version - delete all named parameters from the list of positional parameters
 	for (auto &param : parameters) {
 		auto &colref = param->Cast<ColumnRefExpression>();
-		if (default_parameters.find(colref.GetName()) != default_parameters.end()) {
+		if (default_parameters.find(Identifier(colref.GetName())) != default_parameters.end()) {
 			// This is a default parameter - do not serialize
 			continue;
 		}
@@ -313,7 +313,7 @@ void MacroFunction::FinalizeDeserialization() {
 	for (auto &kv : default_parameters) {
 		bool found = false;
 		for (const auto &parameter : parameters) {
-			if (StringUtil::CIEquals(kv.first, parameter->Cast<ColumnRefExpression>().GetColumnName())) {
+			if (kv.first == parameter->Cast<ColumnRefExpression>().GetColumnName()) {
 				found = true;
 				break;
 			}
@@ -336,7 +336,7 @@ string MacroFunction::ToSQL() const {
 		if (types[param_idx] != LogicalType::UNKNOWN) {
 			param_string += " " + types[param_idx].ToString();
 		}
-		auto it = default_parameters.find(param_name);
+		auto it = default_parameters.find(Identifier(param_name));
 		if (it != default_parameters.end()) {
 			param_string += " := " + it->second->ToString();
 		}

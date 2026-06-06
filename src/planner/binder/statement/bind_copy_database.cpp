@@ -64,14 +64,14 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		insert_node.table = table.name;
 
 		auto from_tbl = make_uniq<BaseTableRef>();
-		from_tbl->catalog_name = Identifier(source_catalog.GetName());
+		from_tbl->catalog_name = source_catalog.GetName();
 		from_tbl->schema_name = table.ParentSchema().name;
 		from_tbl->table_name = table.name;
 
 		auto select_node = make_uniq<SelectNode>();
 		auto &select_list = select_node->select_list;
 		for (auto &col : table.GetColumns().Physical()) {
-			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name.GetName()));
+			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name));
 		}
 
 		select_node->from_table = std::move(from_tbl);

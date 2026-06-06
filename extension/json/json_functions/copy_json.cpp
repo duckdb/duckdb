@@ -71,7 +71,7 @@ static unique_ptr<SubqueryRef> PushJSONFormatProjection(unique_ptr<SubqueryRef> 
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(std::move(columns_star));
 	args.push_back(make_uniq<ConstantExpression>(Value(format)));
-	format_node->select_list.push_back(make_uniq<FunctionExpression>(function_name, std::move(args)));
+	format_node->select_list.push_back(make_uniq<FunctionExpression>(Identifier(function_name), std::move(args)));
 
 	auto format_stmt = make_uniq<SelectStatement>();
 	format_stmt->node = std::move(format_node);
@@ -204,7 +204,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	// into the right files based on these columns but does not write them to disk (WRITE_PARTITION_COLUMNS is handled
 	// above by keeping the columns inside the JSON object instead).
 	for (const auto &partition_column : partition_columns) {
-		select_node.select_list.push_back(make_uniq<ColumnRefExpression>(partition_column));
+		select_node.select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(partition_column)));
 	}
 
 	// Now we can just use the CSV writer

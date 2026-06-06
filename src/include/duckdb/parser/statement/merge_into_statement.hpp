@@ -30,7 +30,7 @@ public:
 	//! The SET information (if action_type == MERGE_UPDATE)
 	unique_ptr<UpdateSetInfo> update_info;
 	//! Column names to insert into (if action_type == MERGE_INSERT)
-	vector<string> insert_columns;
+	vector<Identifier> insert_columns;
 	//! Set of expressions for INSERT
 	vector<unique_ptr<ParsedExpression>> expressions;
 	//! INSERT BY POSITION or INSERT BY NAME

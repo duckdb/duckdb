@@ -340,7 +340,7 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
-	auto rename_idx = GetColumnIndex(info.old_name.GetNameMutable());
+	auto rename_idx = GetColumnIndex(info.old_name);
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
@@ -515,7 +515,7 @@ Value ConstructMapping(const string &name, const LogicalType &type) {
 	child_list_t<Value> child_mapping;
 	auto child_types = GetChildList(type);
 	for (auto &entry : child_types) {
-		auto mapping_value = ConstructMapping(entry.first, entry.second);
+		auto mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
 		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
@@ -527,7 +527,7 @@ Value ConstructMapping(const string &name, const LogicalType &type) {
 	return Value::STRUCT(std::move(child_mapping));
 }
 
-StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string> &column_path,
+StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identifier> &column_path,
                                    const ColumnDefinition &new_field, idx_t depth = 0) {
 	if (!type.IsNested()) {
 		throw BinderException("Column '%s' is not a nested type, ADD COLUMN can only be used on nested types",
@@ -547,7 +547,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 		// root path - we are adding at this level
 		// check if a field with this name already exists
 		for (auto &entry : child_list) {
-			if (StringUtil::CIEquals(entry.first, new_field.Name())) {
+			if (entry.first == new_field.Name()) {
 				// already exists!
 				result.error = ErrorData(CatalogException("Duplicate field \"%s\" - field already exists in struct %s",
 				                                          new_field.Name(), current_component));
@@ -564,7 +564,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 		} else {
 			default_value = make_uniq<ConstantExpression>(Value(new_field.Type()));
 		}
-		result.default_value = PackExpression(std::move(default_value), new_field.Name());
+		result.default_value = PackExpression(std::move(default_value), new_field.Name().GetName());
 		return result;
 	}
 
@@ -572,8 +572,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 	auto &next_component = column_path[depth + 1];
 	bool found = false;
 	for (auto &entry : child_list) {
-		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(next_component, "element")) ||
-		    StringUtil::CIEquals(entry.first, next_component)) {
+		if ((type.id() == LogicalTypeId::LIST && next_component == "element") || entry.first == next_component) {
 			// found the entry - recurse
 			auto child_res = AddFieldToStruct(entry.second, column_path, new_field, depth + 1);
 			if (child_res.error.HasError()) {
@@ -583,7 +582,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 			if (type.id() == LogicalTypeId::LIST) {
 				result.default_value = PackExpression(std::move(child_res.default_value), "list");
 			} else {
-				result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
+				result.default_value = PackExpression(std::move(child_res.default_value), entry.first.GetName());
 			}
 			found = true;
 			break;
@@ -612,7 +611,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
 	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
-	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name(), col.Type())));
+	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name().GetName(), col.Type())));
 	D_ASSERT(res.default_value);
 	children.push_back(std::move(res.default_value));
 
@@ -726,7 +725,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto removed_index = GetColumnIndex(info.removed_column.GetNameMutable(), info.if_column_exists);
+	auto removed_index = GetColumnIndex(info.removed_column, info.if_column_exists);
 	if (!removed_index.IsValid()) {
 		if (!info.if_column_exists) {
 			throw CatalogException("Cannot drop column: rowid column cannot be dropped");
@@ -783,7 +782,7 @@ struct DroppedFieldMapping {
 	ErrorData error;
 };
 
-DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<string> &column_path, idx_t depth) {
+DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Identifier> &column_path, idx_t depth) {
 	if (!type.IsNested()) {
 		throw CatalogException("Cannot drop field from column \"%s\" - not a nested type", column_path[0]);
 	}
@@ -798,19 +797,18 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 	for (auto &entry : child_types) {
 		Value mapping_value;
 		LogicalType type_value;
-		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(dropped_entry, "element")) ||
-		    StringUtil::CIEquals(entry.first, dropped_entry)) {
+		if ((type.id() == LogicalTypeId::LIST && dropped_entry == "element") || entry.first == dropped_entry) {
 			// this is the entry we are dropping
 			found = true;
 			if (last_entry) {
 				if (type.id() != LogicalTypeId::STRUCT) {
 					throw CatalogException("Cannot drop field '%s' from column '%s' - it's not a struct",
-					                       column_path.back(), column_path.front());
+					                       column_path.back().GetName(), column_path.front().GetName());
 				}
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
 					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
-					                       column_path.back(), column_path.front());
+					                       column_path.back().GetName(), column_path.front().GetName());
 				}
 				continue;
 			} else {
@@ -825,7 +823,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first, entry.second);
+			mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
 			type_value = entry.second;
 		}
 
@@ -879,7 +877,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 	return ChangeColumnType(context, change_column_type);
 }
 
-DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<string> &column_path,
+DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<Identifier> &column_path,
                                           const string &new_name, idx_t depth) {
 	if (!type.IsNested()) {
 		throw CatalogException("Cannot rename field from column \"%s\" - not a nested type", column_path[0]);
@@ -895,26 +893,25 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		auto field_name = entry.first;
 		Value mapping_value;
 		LogicalType type_value;
-		if ((type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(rename_entry, "element")) ||
-		    StringUtil::CIEquals(field_name, rename_entry)) {
+		if ((type.id() == LogicalTypeId::LIST && rename_entry == "element") || field_name == rename_entry) {
 			// this is the entry we are renaming
 			found = true;
 			if (last_entry) {
 				if (type.id() != LogicalTypeId::STRUCT) {
 					throw CatalogException(
 					    "Cannot rename field '%s' from column '%s' - can only rename fields inside a struct",
-					    column_path.back(), column_path.front());
+					    column_path.back().GetName(), column_path.front().GetName());
 				}
 				// we are renaming this entry
 				for (auto &sub_entry : child_types) {
-					if (StringUtil::CIEquals(new_name, sub_entry.first)) {
+					if (sub_entry.first == new_name) {
 						throw CatalogException(
 						    "Cannot rename field %s from column %s to %s - a field with this name already exists",
 						    column_path.back(), column_path.front(), new_name);
 					}
 				}
-				field_name = new_name;
-				mapping_value = ConstructMapping(entry.first, entry.second);
+				field_name = Identifier(new_name);
+				mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
 				type_value = entry.second;
 			} else {
 				// we are renaming a field in this entry - recurse
@@ -928,7 +925,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first, entry.second);
+			mapping_value = ConstructMapping(entry.first.GetName(), entry.second);
 			type_value = entry.second;
 		}
 		if (entry.second.IsNested()) {
@@ -975,7 +972,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
-	auto default_idx = GetColumnIndex(info.column_name.GetNameMutable());
+	auto default_idx = GetColumnIndex(info.column_name);
 	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET DEFAULT for rowid column");
 	}
@@ -997,7 +994,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
-	auto not_null_idx = GetColumnIndex(info.column_name.GetNameMutable());
+	auto not_null_idx = GetColumnIndex(info.column_name);
 	if (columns.GetColumn(LogicalIndex(not_null_idx)).Generated()) {
 		throw BinderException("Unsupported constraint for generated column!");
 	}
@@ -1035,7 +1032,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
-	auto not_null_idx = GetColumnIndex(info.column_name.GetNameMutable());
+	auto not_null_idx = GetColumnIndex(info.column_name);
 
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
@@ -1063,7 +1060,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	type_binder->SetSearchPath(catalog, schema.name);
 	type_binder->BindLogicalType(info.target_type);
 
-	auto change_idx = GetColumnIndex(info.column_name.GetNameMutable());
+	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
@@ -1162,7 +1159,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context, SetColumnCommentInfo &info) {
-	auto col_idx = GetColumnIndex(info.column_name.GetNameMutable());
+	auto col_idx = GetColumnIndex(info.column_name);
 	if (col_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET COMMENT for rowid column");
 	}
@@ -1326,7 +1323,7 @@ void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_stat
 	auto &root_column_name = column_path[0];
 	idx_t column_position = 0;
 	for (auto &col : columns.Logical()) {
-		if (StringUtil::CIEquals(col.Name(), root_column_name)) {
+		if (col.Name() == root_column_name) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;

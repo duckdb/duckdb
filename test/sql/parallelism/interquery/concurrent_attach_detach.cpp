@@ -258,7 +258,7 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			names.push_back("obj");
 			base_appender = make_uniq<QueryAppender>(conn, query, types, names);
 		} else {
-			base_appender = make_uniq<Appender>(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
+			base_appender = make_uniq<Appender>(conn, Identifier(getDBName(db_id)), Identifier::DefaultSchema(), Identifier(tbl_str));
 		}
 		auto &appender = *base_appender;
 

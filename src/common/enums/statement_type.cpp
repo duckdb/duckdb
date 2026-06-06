@@ -93,7 +93,7 @@ string StatementReturnTypeToString(StatementReturnType type) {
 void StatementProperties::RegisterDBRead(Catalog &catalog, ClientContext &context) {
 	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
 	D_ASSERT(read_databases.count(catalog.GetName()) == 0 || read_databases[catalog.GetName()] == catalog_identity);
-	read_databases[catalog.GetName().GetName()] = catalog_identity;
+	read_databases[catalog.GetName()] = catalog_identity;
 }
 
 void StatementProperties::RegisterDBModify(Catalog &catalog, ClientContext &context,

@@ -48,17 +48,17 @@ void DatabaseManager::FinalizeStartup() {
 	}
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
+optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const Identifier &name) {
 	auto &meta_transaction = MetaTransaction::Get(context);
 	// first check if we have a local reference to this database already
-	auto database = meta_transaction.GetReferencedDatabase(name);
+	auto database = meta_transaction.GetReferencedDatabase(name.GetName());
 	if (database) {
 		// we do! return it
 		return database;
 	}
 	lock_guard<mutex> guard(databases_lock);
 	shared_ptr<AttachedDatabase> db;
-	if (StringUtil::Lower(name) == TEMP_CATALOG) {
+	if (name == TEMP_CATALOG) {
 		db = context.client_data->temporary_objects;
 	} else {
 		db = GetDatabaseInternal(guard, name);
@@ -69,16 +69,16 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return meta_transaction.UseDatabase(db);
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const string &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const Identifier &name) {
 	lock_guard<mutex> guard(databases_lock);
 	return GetDatabaseInternal(guard, name);
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const string &name) {
-	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const Identifier &name) {
+	if (name == SYSTEM_CATALOG) {
 		return system;
 	}
-	auto entry = databases.find(name);
+	auto entry = databases.find(name.GetName());
 	if (entry == databases.end()) {
 		// not found
 		return nullptr;
@@ -122,7 +122,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = GetDatabase(info.name.GetName());
+		auto existing_db = GetDatabase(info.name);
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
@@ -179,7 +179,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
 		options.stored_database_path.reset();
 	}
-	if (AttachedDatabase::NameIsReserved(info.name.GetName())) {
+	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
 		                      info.name.GetName());
 	}
@@ -251,17 +251,17 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-	if (StringUtil::CIEquals(GetDefaultDatabase(context), name)) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found) {
+	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
-		                      name);
+		                      name.GetName());
 	}
 
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+			throw BinderException("Failed to detach database with name \"%s\": database not found", name.GetName());
 		}
 		return;
 	}
@@ -278,7 +278,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.catalog.GetName(), rename_info.new_name.GetName(), db_info.if_not_found);
+		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
 		break;
 	}
 	default:
@@ -286,45 +286,45 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	}
 }
 
-void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &old_name, const Identifier &new_name,
                                      OnEntryNotFound if_not_found) {
 	if (AttachedDatabase::NameIsReserved(new_name)) {
-		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name", new_name);
+		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name", new_name.GetName());
 	}
 
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
-		auto old_entry = databases.find(old_name);
+		auto old_entry = databases.find(old_name.GetName());
 		if (old_entry == databases.end()) {
 			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw BinderException("Failed to rename database \"%s\": database not found", old_name);
+				throw BinderException("Failed to rename database \"%s\": database not found", old_name.GetName());
 			}
 			return;
 		}
 
-		auto new_entry = databases.find(new_name);
+		auto new_entry = databases.find(new_name.GetName());
 		if (new_entry != databases.end()) {
 			throw BinderException("Failed to rename database \"%s\" to \"%s\": database with new name already exists",
-			                      old_name, new_name);
+			                      old_name.GetName(), new_name.GetName());
 		}
 
 		attached_db = old_entry->second;
 		databases.erase(old_entry);
 		attached_db->SetName(new_name);
-		databases[new_name] = attached_db;
+		databases[new_name.GetName()] = attached_db;
 	}
 
-	if (StringUtil::CIEquals(default_database, old_name)) {
-		default_database = new_name;
+	if (old_name == default_database) {
+		default_database = new_name.GetName();
 	}
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
-		auto entry = databases.find(name);
+		auto entry = databases.find(name.GetName());
 		if (entry == databases.end()) {
 			return nullptr;
 		}
@@ -396,7 +396,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	}
 }
 
-const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
 	if (IsInvalidCatalog(default_entry.catalog)) {
@@ -404,14 +404,14 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
-		return result;
+		return Identifier(result);
 	}
-	return default_entry.catalog;
+	return Identifier(default_entry.catalog);
 }
 
 // LCOV_EXCL_START
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	auto db_entry = GetDatabase(context, new_value);
+	auto db_entry = GetDatabase(context, Identifier(new_value));
 
 	if (!db_entry) {
 		throw InternalException("Database \"%s\" not found", new_value);

@@ -248,21 +248,21 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 		throw InvalidInputException(
 		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
 	}
-	if (!StringUtil::CIEquals(children[0].first, "name")) {
+	if (children[0].first != "name") {
 		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
 	}
 	if (children[0].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[0].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[1].first, "type")) {
+	if (children[1].first != "type") {
 		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
 	}
 	if (children[1].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[1].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[2].first, "default_value")) {
+	if (children[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 	}
 	//! NOTE: default_value can be any type

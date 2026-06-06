@@ -522,7 +522,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				function->SetAlias(Identifier("__collated_group"));
+				function->SetAlias("__collated_group");
 
 				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
 				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;

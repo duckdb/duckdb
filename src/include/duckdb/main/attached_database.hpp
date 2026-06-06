@@ -117,8 +117,8 @@ public:
 	const Identifier &GetName() const {
 		return name;
 	}
-	void SetName(const string &new_name) {
-		name = Identifier(new_name);
+	void SetName(const Identifier &new_name) {
+		name = new_name;
 	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
@@ -137,7 +137,7 @@ public:
 		return attach_options;
 	}
 	string StoredPath() const;
-	static bool NameIsReserved(const string &name);
+	static bool NameIsReserved(const Identifier &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.

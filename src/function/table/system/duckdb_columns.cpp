@@ -304,9 +304,9 @@ void ColumnHelper::WriteColumns(idx_t start_col, idx_t end_col, DataChunk &outpu
 
 		database_name.Append(Value(entry.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
-		schema_name.Append(Value(entry.schema.name.GetName()));
+		schema_name.Append(Value(entry.schema.name));
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.schema.oid)));
-		table_name.Append(Value(entry.name.GetName()));
+		table_name.Append(Value(entry.name));
 		table_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		column_name.Append(ColumnName(i));
 		column_index.Append(Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));

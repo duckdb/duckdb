@@ -229,7 +229,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
 				D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
 				for (idx_t i = 0; i < struct_children.size(); i++) {
-					const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
+					const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i).GetName());
 					auto it = variant_names.find(col_name);
 					if (it == variant_names.end()) {
 						string names;

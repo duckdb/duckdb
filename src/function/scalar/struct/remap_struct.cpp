@@ -348,8 +348,9 @@ struct RemapEntry {
 				auto &remap_types = StructType::GetChildTypes(struct_val.type());
 				auto &remap_values = StructValue::GetChildren(struct_val);
 				for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
-					PerformRemap(remap_types[child_idx].first, remap_values[child_idx], *entry->second.child_map,
-					             *target_entry->second.child_map, *remap.child_remaps, source_type);
+					PerformRemap(remap_types[child_idx].first.GetName(), remap_values[child_idx],
+					             *entry->second.child_map, *target_entry->second.child_map, *remap.child_remaps,
+					             source_type);
 				}
 			}
 		}
@@ -389,7 +390,7 @@ struct RemapEntry {
 				if (!result_entry->second.child_remaps || !entry->second.child_map) {
 					throw BinderException("No child remaps found");
 				}
-				HandleDefault(child_idx, child_default.first, child_default.second, *entry->second.child_map,
+				HandleDefault(child_idx, child_default.first.GetName(), child_default.second, *entry->second.child_map,
 				              *result_entry->second.child_remaps);
 			}
 			return;
@@ -411,7 +412,7 @@ struct RemapEntry {
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 			auto &target_name = target_children[target_idx].first;
 			auto &child_type = target_children[target_idx].second;
-			auto entry = remap_map.find(target_name);
+			auto entry = remap_map.find(target_name.GetName());
 			if (entry == remap_map.end()) {
 				throw BinderException("Missing target value %s for remap", target_name);
 			}
@@ -576,7 +577,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
 			auto &remap_val = remap_values[remap_idx];
 			auto &remap_target = remap_types[remap_idx].first;
-			RemapEntry::PerformRemap(remap_target, remap_val, source_map, target_map, remap_map, from_type);
+			RemapEntry::PerformRemap(remap_target.GetName(), remap_val, source_map, target_map, remap_map, from_type);
 		}
 	}
 	if (!arguments[3]->IsFoldable()) {
@@ -589,7 +590,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		for (idx_t default_idx = 0; default_idx < default_types.size(); default_idx++) {
 			auto &default_target = default_types[default_idx].first;
 			auto &default_type = default_types[default_idx].second;
-			RemapEntry::HandleDefault(default_idx, default_target, default_type, target_map, remap_map);
+			RemapEntry::HandleDefault(default_idx, default_target.GetName(), default_type, target_map, remap_map);
 		}
 	}
 

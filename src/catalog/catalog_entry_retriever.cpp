@@ -101,7 +101,7 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	auto &set_paths = client_search_path.GetSetPaths();
 	for (auto path : set_paths) {
 		if (IsInvalidCatalog(path.catalog)) {
-			path.catalog = DatabaseManager::GetDefaultDatabase(context);
+			path.catalog = Identifier(DatabaseManager::GetDefaultDatabase(context).GetName());
 		}
 		new_path.push_back(std::move(path));
 	}

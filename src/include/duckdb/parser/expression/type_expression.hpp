@@ -22,30 +22,22 @@ public:
 	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
 	               vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
-	//! Convenience overloads: type names are commonly passed as string literals
-	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children)
-	    : TypeExpression(Identifier(type_name), std::move(children)) {
-	}
-	TypeExpression(const string &catalog, const string &schema, const string &type_name,
-	               vector<unique_ptr<ParsedExpression>> children)
-	    : TypeExpression(Identifier(catalog), Identifier(schema), Identifier(type_name), std::move(children)) {
-	}
 
 public:
-	const string &GetTypeName() const {
-		return type_name.GetName();
+	const Identifier &GetTypeName() const {
+		return type_name;
 	}
-	const string &GetSchema() const {
-		return schema.GetName();
+	const Identifier &GetSchema() const {
+		return schema;
 	}
-	void SetSchema(string new_schema) {
-		schema = Identifier(std::move(new_schema));
+	void SetSchema(Identifier new_schema) {
+		schema = std::move(new_schema);
 	}
-	const string &GetCatalog() const {
-		return catalog.GetName();
+	const Identifier &GetCatalog() const {
+		return catalog;
 	}
-	void SetCatalog(string new_catalog) {
-		catalog = Identifier(std::move(new_catalog));
+	void SetCatalog(Identifier new_catalog) {
+		catalog = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

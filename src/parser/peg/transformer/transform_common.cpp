@@ -63,10 +63,10 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer, Pa
 
 		auto array_size = transformer.Transform<int64_t>(array_bound);
 		if (array_size < 0) {
-			type = make_uniq<TypeExpression>(Identifier("list"), std::move(children_types));
+			type = make_uniq<TypeExpression>("list", std::move(children_types));
 		} else {
 			children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
-			type = make_uniq<TypeExpression>(Identifier("array"), std::move(children_types));
+			type = make_uniq<TypeExpression>("array", std::move(children_types));
 		}
 	}
 	return LogicalType::UNBOUND(std::move(type));
@@ -122,16 +122,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransfo
 			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIME_TZ)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
-		return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIME),
+		return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIME)),
 		                                 vector<unique_ptr<ParsedExpression>> {});
 	}
 	if (type == LogicalTypeId::TIMESTAMP) {
 		if (modifiers.empty()) {
 			if (with_timezone) {
-				return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP_TZ),
+				return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP_TZ)),
 				                                 vector<unique_ptr<ParsedExpression>> {});
 			}
-			return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP),
+			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
 		if (modifiers.size() > 1) {
@@ -148,19 +148,19 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransfo
 			throw ParserException("TIMESTAMP precision should be between 0 and 10 (inclusive)");
 		}
 		if (timestamp_precision == 0) {
-			return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP_S),
+			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP_S)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
 		if (timestamp_precision <= 3) {
-			return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP_MS),
+			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP_MS)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
 		if (timestamp_precision <= 6) {
 			// Corresponds to microseconds, which is the default TIMESTAMP
-			return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP),
+			return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP)),
 			                                 vector<unique_ptr<ParsedExpression>> {});
 		}
-		return make_uniq<TypeExpression>(EnumUtil::ToString(LogicalType::TIMESTAMP_NS),
+		return make_uniq<TypeExpression>(Identifier(EnumUtil::ToString(LogicalType::TIMESTAMP_NS)),
 		                                 vector<unique_ptr<ParsedExpression>> {});
 	}
 	throw ParserException("Unexpected time type encountered");
@@ -192,7 +192,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleNumericType(P
                                                                                ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto numeric = transformer.TransformEnum<string>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-	return make_uniq<TypeExpression>(numeric, vector<unique_ptr<ParsedExpression>> {});
+	return make_uniq<TypeExpression>(Identifier(numeric), vector<unique_ptr<ParsedExpression>> {});
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDecimalNumericType(PEGTransformer &transformer,
@@ -358,7 +358,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
 	case_insensitive_string_set_t union_names;
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : colid_list) {
-		union_names.insert(colid.first);
+		union_names.insert(colid.first.GetName());
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();
 		new_type_expr->SetAlias(Identifier(colid.first));
@@ -375,17 +375,17 @@ child_list_t<LogicalType> PEGTransformerFactory::TransformColIdTypeList(PEGTrans
 
 	child_list_t<LogicalType> result;
 	for (auto colid_type : colid_type_list) {
-		result.push_back(transformer.Transform<pair<string, LogicalType>>(colid_type));
+		result.emplace_back(transformer.Transform<pair<Identifier, LogicalType>>(colid_type));
 	}
 	return result;
 }
 
-pair<string, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
+pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTransformer &transformer,
+                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-	return make_pair(colid, type);
+	return make_pair(Identifier(colid), type);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(PEGTransformer &transformer,
@@ -404,7 +404,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalInterval(PE
 	auto &opt_interval = list_pr.Child<OptionalParseResult>(1);
 	if (opt_interval.HasResult()) {
 		auto logical_type = transformer.Transform<LogicalType>(opt_interval.GetResult());
-		return make_uniq<TypeExpression>(LogicalTypeIdToString(logical_type.id()),
+		return make_uniq<TypeExpression>(Identifier(LogicalTypeIdToString(logical_type.id())),
 		                                 vector<unique_ptr<ParsedExpression>> {});
 	}
 	return make_uniq<TypeExpression>("INTERVAL", vector<unique_ptr<ParsedExpression>> {});

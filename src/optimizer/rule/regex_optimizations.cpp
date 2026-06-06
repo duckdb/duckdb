@@ -298,8 +298,8 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 
 	FunctionBinder binder(rewriter.context);
 	ErrorData error;
-	auto extract_expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("regexp_extract"),
-	                                              std::move(extract_children), error);
+	auto extract_expr =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "regexp_extract", std::move(extract_children), error);
 	if (!extract_expr) {
 		return nullptr;
 	}

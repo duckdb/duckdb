@@ -131,7 +131,7 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 class QuackFunction : public TableFunction {
 public:
 	QuackFunction() {
-		name = Identifier("quack");
+		name = "quack";
 		arguments.push_back(LogicalType::BIGINT);
 		bind = QuackBind;
 		init_global = QuackInit;
@@ -995,9 +995,9 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	// Single overload, used to test reordering + defaults.
 	{
 		FunctionSignature sig;
-		sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
-		sig.AddParameter(Identifier("b"), LogicalType::INTEGER, Value::INTEGER(100));
-		sig.AddParameter(Identifier("c"), LogicalType::INTEGER, Value::INTEGER(200));
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.AddParameter("c", LogicalType::INTEGER, Value::INTEGER(200));
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_named_inspect", std::move(sig), TestFunctionArgs<1>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1008,8 +1008,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	// Varargs are appended trailing; named varargs have their names discarded but keep order.
 	{
 		FunctionSignature sig;
-		sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
-		sig.AddParameter(Identifier("b"), LogicalType::INTEGER, Value::INTEGER(100));
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
 		sig.SetVarArgs(LogicalType::INTEGER);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_named_varargs", std::move(sig), TestFunctionArgs<2>);
@@ -1026,8 +1026,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet set("test_named_overload");
 		{
 			FunctionSignature sig;
-			sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
-			sig.AddParameter(Identifier("b"), LogicalType::INTEGER);
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::INTEGER);
 			sig.SetReturnType(LogicalType::VARCHAR);
 			ScalarFunction fn("", std::move(sig), TestFunctionArgs<10>);
 			fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1035,8 +1035,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		}
 		{
 			FunctionSignature sig;
-			sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
-			sig.AddParameter(Identifier("b"), LogicalType::VARCHAR);
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::VARCHAR);
 			sig.SetReturnType(LogicalType::VARCHAR);
 			ScalarFunction fn("", std::move(sig), TestFunctionArgs<11>);
 			fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1044,7 +1044,7 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		}
 		{
 			FunctionSignature sig;
-			sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
+			sig.AddParameter("a", LogicalType::INTEGER);
 			sig.SetReturnType(LogicalType::VARCHAR);
 			ScalarFunction fn("", std::move(sig), TestFunctionArgs<12>);
 			fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1061,8 +1061,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		ScalarFunctionSet set("test_named_ambig");
 		{
 			FunctionSignature sig;
-			sig.AddParameter(Identifier("x"), LogicalType::INTEGER);
-			sig.AddParameter(Identifier("y"), LogicalType::BIGINT);
+			sig.AddParameter("x", LogicalType::INTEGER);
+			sig.AddParameter("y", LogicalType::BIGINT);
 			sig.SetReturnType(LogicalType::VARCHAR);
 			ScalarFunction fn("", std::move(sig), TestFunctionArgs<13>);
 			fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1070,8 +1070,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		}
 		{
 			FunctionSignature sig;
-			sig.AddParameter(Identifier("x"), LogicalType::BIGINT);
-			sig.AddParameter(Identifier("y"), LogicalType::INTEGER);
+			sig.AddParameter("x", LogicalType::BIGINT);
+			sig.AddParameter("y", LogicalType::INTEGER);
 			sig.SetReturnType(LogicalType::VARCHAR);
 			ScalarFunction fn("", std::move(sig), TestFunctionArgs<14>);
 			fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1085,8 +1085,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	// to NULL, even when arguments are named/reordered.
 	{
 		FunctionSignature sig;
-		sig.AddParameter(Identifier("a"), LogicalType::INTEGER);
-		sig.AddParameter(Identifier("b"), LogicalType::INTEGER, Value::INTEGER(100));
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
 		sig.SetReturnType(LogicalType::VARCHAR);
 		loader.RegisterFunction(ScalarFunction("test_named_nullshort", std::move(sig), TestFunctionArgs<6>));
 	}
@@ -1103,10 +1103,10 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		    AggregateFunction::StateCombine<InspectAggState, InspectAggOp>,
 		    AggregateFunction::StateFinalize<InspectAggState, string_t, InspectAggOp>, NH::DEFAULT_NULL_HANDLING);
 		auto &sig = agg.GetSignature();
-		sig.GetParameter(0).SetName(Identifier("a"));
-		sig.GetParameter(1).SetName(Identifier("b"));
+		sig.GetParameter(0).SetName("a");
+		sig.GetParameter(1).SetName("b");
 		sig.GetParameter(1).SetDefaultValue(Value::INTEGER(100));
-		sig.GetParameter(2).SetName(Identifier("c"));
+		sig.GetParameter(2).SetName("c");
 		sig.GetParameter(2).SetDefaultValue(Value::INTEGER(200));
 		loader.RegisterFunction(std::move(agg));
 	}
@@ -1133,8 +1133,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Add alias POINT type
 	string alias_name = "POINT";
 	child_list_t<LogicalType> child_types;
-	child_types.push_back(make_pair("x", LogicalType::INTEGER));
-	child_types.push_back(make_pair("y", LogicalType::INTEGER));
+	child_types.emplace_back(make_pair("x", LogicalType::INTEGER));
+	child_types.emplace_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
 	alias_info->name = Identifier(alias_name);
@@ -1176,7 +1176,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	{
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
 		tagged_table_info->schema = Identifier::DefaultSchema();
-		tagged_table_info->table = Identifier("tagged_table");
+		tagged_table_info->table = "tagged_table";
 		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
 		tagged_table_info->internal = true;
@@ -1196,7 +1196,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		tagged_table_info->columns.AddColumn(std::move(col_b));
 
 		con.BeginTransaction();
-		auto &default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
+		auto default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
 		auto &default_catalog = Catalog::GetCatalog(client_context, Identifier(default_db_name));
 		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
 		default_catalog.CreateTable(client_context, std::move(tagged_table_info));

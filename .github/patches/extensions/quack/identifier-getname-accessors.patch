@@ -1,8 +1,8 @@
 diff --git a/src/quack_extension.cpp b/src/quack_extension.cpp
-index 814a7ac..784879a 100644
+index 814a7ac..b586b5a 100644
 --- a/src/quack_extension.cpp
 +++ b/src/quack_extension.cpp
-@@ -48,13 +48,13 @@ static unique_ptr<BaseSecret> CreateQuackSecretFromConfig(ClientContext &, Creat
+@@ -48,7 +48,7 @@ static unique_ptr<BaseSecret> CreateQuackSecretFromConfig(ClientContext &, Creat
  
  static void RegisterQuackSecretType(ExtensionLoader &loader) {
  	SecretType secret_type;
@@ -11,13 +11,33 @@ index 814a7ac..784879a 100644
  	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
  	secret_type.default_provider = "config";
  	secret_type.extension = "quack";
- 	loader.RegisterSecretType(secret_type);
+diff --git a/src/quack_scan.cpp b/src/quack_scan.cpp
+index d30dfaf..f337d9a 100644
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -66,7 +66,7 @@ QuackCatalog &GetQuackCatalog(ClientContext &context, Value &catalog_name) {
+ 	// look up the database to query
+ 	auto db_name = catalog_name.GetValue<string>();
+ 	auto &db_manager = DatabaseManager::Get(context);
+-	auto db = db_manager.GetDatabase(context, db_name);
++	auto db = db_manager.GetDatabase(context, Identifier(db_name));
+ 	if (!db) {
+ 		throw BinderException("Failed to find attached database \"%s\"", db_name);
+ 	}
+diff --git a/src/quack_server.cpp b/src/quack_server.cpp
+index e376575..82f2f9a 100644
+--- a/src/quack_server.cpp
++++ b/src/quack_server.cpp
+@@ -375,7 +375,8 @@ unique_ptr<QuackMessage> QuackServer::HandleMessageInternal(DatabaseInstance &db
  
--	CreateSecretFunction config_fun = {QUACK_SECRET_TYPE, "config", CreateQuackSecretFromConfig};
-+	CreateSecretFunction config_fun = {QUACK_SECRET_TYPE, Identifier("config"), CreateQuackSecretFromConfig};
- 	config_fun.named_parameters["token"] = LogicalType::VARCHAR;
- 	loader.RegisterFunction(config_fun);
- }
+ 		std::unique_lock<std::mutex> lock(connection.lock);
+ 		auto &context = *connection.duckdb_connection->context;
+-		auto table_info = context.TableInfo(append_request_message.SchemaName(), append_request_message.TableName());
++		auto table_info = context.TableInfo(Identifier(append_request_message.SchemaName()),
++		                                    Identifier(append_request_message.TableName()));
+ 		if (!table_info) {
+ 			return make_uniq<ErrorResponse>("Table %s.%s does not exist",
+ 			                                SQLIdentifier(append_request_message.SchemaName()),
 diff --git a/src/storage/quack_catalog_set.cpp b/src/storage/quack_catalog_set.cpp
 index 7caa1f0..d214942 100644
 --- a/src/storage/quack_catalog_set.cpp
@@ -113,7 +133,7 @@ index aea6c3a..ff57cf3 100644
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
 diff --git a/src/storage/quack_table.cpp b/src/storage/quack_table.cpp
-index 8f1da8d..1618735 100644
+index 8f1da8d..256bc04 100644
 --- a/src/storage/quack_table.cpp
 +++ b/src/storage/quack_table.cpp
 @@ -49,8 +49,8 @@ QuackTableSet::QuackTableSet(ClientContext &context, QuackSchemaCatalogEntry &pa
@@ -127,12 +147,15 @@ index 8f1da8d..1618735 100644
  			info.query = CreateViewInfo::ParseSelect(info.sql);
  
  			// bind to resolve the types
-@@ -79,7 +79,7 @@ TableFunction QuackTableCatalogEntry::GetScanFunction(ClientContext &context, un
+@@ -79,9 +79,9 @@ TableFunction QuackTableCatalogEntry::GetScanFunction(ClientContext &context, un
  	auto &quack_catalog = catalog.Cast<QuackCatalog>();
  	auto bind_data = make_uniq<QuackScanBindData>();
  	bind_data->client_connection = quack_catalog.GetClientConnection();
 -	bind_data->table_name = name;
 +	bind_data->table_name = name.GetName();
  	for (auto &col : GetColumns().Physical()) {
- 		bind_data->column_names.push_back(col.Name());
+-		bind_data->column_names.push_back(col.Name());
++		bind_data->column_names.emplace_back(col.Name());
  		bind_data->column_types.push_back(col.Type());
+ 	}
+ 	bind_data->table_entry = this;

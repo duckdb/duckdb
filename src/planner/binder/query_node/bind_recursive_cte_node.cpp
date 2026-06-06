@@ -172,7 +172,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			// Find the best matching aggregate function
 			auto best_function_idx =
-			    function_binder.BindFunction(func.name.GetName(), func.functions, aggregation_input_types, error);
+			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
 			if (!best_function_idx.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}
@@ -245,7 +245,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	BindingAlias cte_alias(statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, internal_types);
 
-	BindingAlias recurring_alias(Identifier("recurring"), statement.ctename);
+	BindingAlias recurring_alias("recurring", statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
 
 	auto right = right_binder->BindNode(*statement.right);
@@ -282,7 +282,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(right.types, internal_types, std::move(right_node));
 
-	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias(Identifier("recurring"), ctename));
+	auto recurring_binding = right_binder->GetCTEBinding(BindingAlias("recurring", ctename));
 	bool ref_recurring = recurring_binding && recurring_binding->IsReferenced();
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.

@@ -112,7 +112,7 @@ public:
 	//! Get the specified Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(CatalogEntryRetriever &retriever, const Identifier &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
-	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
+	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const Identifier &catalog_name);
 	//! Gets the specified Catalog from the database if it exists
 	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const Identifier &catalog_name);
 	//! Gets the specified Catalog from the database if it exists

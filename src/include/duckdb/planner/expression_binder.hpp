@@ -117,7 +117,7 @@ public:
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
-	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
+	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name);
 
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,

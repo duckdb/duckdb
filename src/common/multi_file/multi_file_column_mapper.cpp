@@ -305,7 +305,7 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 	if (is_selected && child_map.default_value) {
 		// we have default values at a previous level wrap it in a "list"
 		vector<unique_ptr<Expression>> default_expressions;
-		child_map.default_value->SetAlias(Identifier("list"));
+		child_map.default_value->SetAlias("list");
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));

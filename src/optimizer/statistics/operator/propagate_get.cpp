@@ -47,10 +47,10 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	// Save original expression for stats update (HandleFilter may modify filter_expr)
 	auto original_expr = expr_filter.expr->Copy();
 
-	auto column_ref = make_uniq<BoundColumnRefExpression>(column_alias, stats.GetType(), stats_binding);
+	auto column_ref = make_uniq<BoundColumnRefExpression>(Identifier(column_alias), stats.GetType(), stats_binding);
 	auto filter_expr = expr_filter.ToExpression(*column_ref);
 	auto propagate_result = HandleFilter(filter_expr);
-	auto colref = make_uniq<BoundReferenceExpression>(column_alias, stats.GetType(), physical_index);
+	auto colref = make_uniq<BoundReferenceExpression>(Identifier(column_alias), stats.GetType(), physical_index);
 
 	// replace BoundColumnRefs with BoundRefs
 	ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);

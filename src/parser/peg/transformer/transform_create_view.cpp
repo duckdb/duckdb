@@ -69,11 +69,10 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
 
 	for (const auto &column : info->aliases) {
-		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
+		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(column)));
 	}
 
-	auto table_description =
-	    TableDescription(info->catalog.GetName(), info->schema.GetName(), info->view_name.GetName());
+	auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
 	outer_select->from_table = make_uniq<BaseTableRef>(table_description);
 
 	auto outer_select_statement = make_uniq<SelectStatement>();

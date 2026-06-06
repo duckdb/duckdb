@@ -98,7 +98,7 @@ private:
 	//! The set of used (referenced) databases.
 	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
 	//! Map of name -> database for databases that are in-use by this transaction.
-	case_insensitive_map_t<reference<AttachedDatabase>> used_databases;
+	identifier_map_t<reference<AttachedDatabase>> used_databases;
 };
 
 } // namespace duckdb

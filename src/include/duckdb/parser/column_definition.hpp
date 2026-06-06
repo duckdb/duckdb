@@ -40,7 +40,7 @@ public:
 	void SetType(const LogicalType &type);
 
 	//! name
-	DUCKDB_API const string &Name() const;
+	DUCKDB_API const Identifier &Name() const;
 	void SetName(const Identifier &name);
 
 	//! comment
@@ -87,7 +87,7 @@ public:
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
-	string GetName() const;
+	Identifier GetName() const;
 
 	LogicalType GetType() const;
 

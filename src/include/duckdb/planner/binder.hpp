@@ -240,12 +240,12 @@ public:
 
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,
-	                                                           const string &table_name, const ColumnList &columns);
+	                                                           const Identifier &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
 	                                                    const Identifier &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
-	                                                       const string &table_name, const ColumnList &columns);
+	                                                       const Identifier &table_name, const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const Identifier &table,
 	                                           const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
@@ -322,7 +322,7 @@ public:
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
-	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
+	void AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
 	identifier_map_t<unique_ptr<TableRef>> &GetReplacementScans();
 	CatalogEntryRetriever &EntryRetriever() {
@@ -538,12 +538,12 @@ private:
 	                                                       const vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
 
-	BindingAlias FindBinding(const string &using_column, const string &join_side);
-	bool TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result);
+	BindingAlias FindBinding(const Identifier &using_column, const string &join_side);
+	bool TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
 	BindingAlias RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-	                                  const string &column_name, const string &join_side);
+	                                  const Identifier &column_name, const string &join_side);
 
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
@@ -574,7 +574,7 @@ private:
 	BoundStatement BindShowTable(ShowRef &ref);
 	BoundStatement BindSummarize(ShowRef &ref);
 
-	void BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+	void BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);

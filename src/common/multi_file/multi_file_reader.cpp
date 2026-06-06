@@ -191,7 +191,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
-			const string &name = StructType::GetChildName(val.type(), i);
+			const string &name = StructType::GetChildName(val.type(), i).GetName();
 			options.hive_types_schema[name] = transformed_type;
 		}
 		D_ASSERT(!options.hive_types_schema.empty());

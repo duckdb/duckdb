@@ -61,8 +61,8 @@ PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer, vec
 		if (parameter.is_default) {
 			auto default_expr = std::move(parameter.expression);
 			default_expr->SetAlias(Identifier(parameter.name));
-			macro_definition_body->default_parameters[parameter.name] = std::move(default_expr);
-			macro_definition_body->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
+			macro_definition_body->default_parameters[Identifier(parameter.name)] = std::move(default_expr);
+			macro_definition_body->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(parameter.name)));
 			default_value_found = true;
 		} else {
 			if (default_value_found) {
@@ -101,7 +101,7 @@ MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &t
                                                                const string &type_func_name, const LogicalType &type) {
 	MacroParameter result;
 	result.name = type_func_name;
-	result.expression = make_uniq<ColumnRefExpression>(type_func_name);
+	result.expression = make_uniq<ColumnRefExpression>(Identifier(type_func_name));
 	if (type.id() != LogicalTypeId::INVALID) {
 		result.type = type;
 	}

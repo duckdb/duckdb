@@ -8,7 +8,7 @@ vector<SecretType> CreateHTTPSecretFunctions::GetDefaultSecretTypes() {
 
 	// HTTP secret
 	SecretType secret_type;
-	secret_type.name = Identifier("http");
+	secret_type.name = "http";
 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
 	secret_type.default_provider = "config";
 	result.push_back(std::move(secret_type));
@@ -23,7 +23,7 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	// HTTP secret CONFIG provider
 	CreateSecretFunction http_config_fun;
 	http_config_fun.secret_type = "http";
-	http_config_fun.provider = Identifier("config");
+	http_config_fun.provider = "config";
 	http_config_fun.function = CreateHTTPSecretFromConfig;
 
 	http_config_fun.named_parameters["verify_ssl"] = LogicalType::BOOLEAN;
@@ -39,7 +39,7 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	// HTTP secret ENV provider
 	CreateSecretFunction http_env_fun;
 	http_env_fun.secret_type = "http";
-	http_env_fun.provider = Identifier("env");
+	http_env_fun.provider = "env";
 	http_env_fun.function = CreateHTTPSecretFromEnv;
 
 	http_env_fun.named_parameters["verify_ssl"] = LogicalType::BOOLEAN;

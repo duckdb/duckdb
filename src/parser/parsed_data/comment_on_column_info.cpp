@@ -5,8 +5,8 @@
 namespace duckdb {
 
 SetColumnCommentInfo::SetColumnCommentInfo()
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
-                Identifier(""), OnEntryNotFound::THROW_EXCEPTION),
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier::InvalidCatalog(), Identifier::InvalidSchema(), "",
+                OnEntryNotFound::THROW_EXCEPTION),
       catalog_entry_type(CatalogType::INVALID), column_name(""), comment_value(Value()) {
 }
 

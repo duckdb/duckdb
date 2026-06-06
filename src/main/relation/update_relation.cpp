@@ -30,7 +30,7 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	node.set_info = make_uniq<UpdateSetInfo>();
 	node.set_info->condition = condition ? condition->Copy() : nullptr;
 	node.table = std::move(basetable);
-	node.set_info->columns = update_columns;
+	node.set_info->columns = StringsToIdentifiers(update_columns);
 	for (auto &expr : expressions) {
 		node.set_info->expressions.push_back(expr->Copy());
 	}

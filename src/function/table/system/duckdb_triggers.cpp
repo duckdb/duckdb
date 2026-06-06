@@ -125,11 +125,11 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		database_name.Append(Value(trigger.catalog.GetName()));
 		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.catalog.GetOid())));
-		schema_name.Append(Value(trigger.schema.name.GetName()));
+		schema_name.Append(Value(trigger.schema.name));
 		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.schema.oid)));
-		trigger_name.Append(Value(trigger.name.GetName()));
+		trigger_name.Append(Value(trigger.name));
 		trigger_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.oid)));
-		table_name.Append(Value(trigger.base_table->table_name.GetName()));
+		table_name.Append(Value(trigger.base_table->table_name));
 		action_timing.Append(Value(EnumUtil::ToString(trigger.timing)));
 		event_manipulation.Append(Value(EnumUtil::ToString(trigger.event_type)));
 		vector<Value> col_vals;

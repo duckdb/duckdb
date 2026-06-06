@@ -5,18 +5,19 @@
 
 namespace duckdb {
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(Identifier alias_p, LogicalType type, ColumnBinding binding,
+                                                   idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),
       binding(binding), depth(depth) {
 	this->alias = Identifier(std::move(alias_p));
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), std::move(type), binding, depth) {
+    : BoundColumnRefExpression(Identifier(), std::move(type), binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() const {
-	return make_uniq<BoundColumnRefExpression>(alias.GetName(), return_type, binding, depth);
+	return make_uniq<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
 hash_t BoundColumnRefExpression::Hash() const {
