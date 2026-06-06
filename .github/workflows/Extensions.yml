@@ -247,6 +247,11 @@ jobs:
 
           ls /tmp/repository_generation/*/*/*.duckdb_extension*
 
+      - name: Install rclone
+        shell: bash
+        run:
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
+
       - name: Validate extension signing
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
@@ -268,7 +273,6 @@ jobs:
           export DUCKDB_EXTENSION_SIGNING_PK
 
           rm -rf /tmp/repository_signed_validation
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
           ./scripts/verify-extension-signing.sh /tmp/repository_signed_validation "$public_key_file"
 
@@ -281,7 +285,6 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
 
       - name: Setup Build Environment
