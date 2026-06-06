@@ -70,8 +70,8 @@ SELECT k, v FROM big WHERE k IN (10, 200000, 11, 200001, 12, 200002) ORDER BY k;
 # ====================================================================
 # Case 4: Unsorted but co-located.
 # ====================================================================
-query II
-SELECT k, v FROM big WHERE k IN (42, 7, 99, 13) ORDER BY k;
+query II nosort
+SELECT k, v FROM big WHERE k IN (42, 7, 99, 13);
 ----
 7	70
 13	130
