@@ -234,6 +234,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubtractFun),
 	DUCKDB_SCALAR_FUNCTION(SuffixFun),
+	DUCKDB_SCALAR_FUNCTION(ToAggregateStateFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),

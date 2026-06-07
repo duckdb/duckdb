@@ -86,10 +86,14 @@ statement error
 select finalize(finalize(combine_aggr(state))) from states;
 ----
 
-# Can't call the aggregate combine on a legacy aggregate state
+# skewness states are struct-based and can be combined
 statement ok
-CREATE TABLE legacy_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
+CREATE TABLE skew_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
 
-statement error
-select combine_aggr(state) from legacy_states;
+query I nosort skew_res
+select skewness(d) from dummy;
+----
+
+query I nosort skew_res
+select finalize(combine_aggr(state)) from skew_states;
 ----
