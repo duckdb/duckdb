@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -645,7 +647,9 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
                         const vector<unique_ptr<Expression>> &aggregates) {
-#ifdef DEBUG
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_FUNCTIONS) {
+		return;
+	}
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 &&
@@ -653,10 +657,15 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(vdata);
-			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
+			if (vdata.validity.RowIsValid(vdata.sel->get_index(0))) {
+				throw InternalException(
+				    "VerifyNullHandling failed for aggregate function \"%s\": no rows were aggregated but the result "
+				    "is not NULL - aggregates with default NULL handling should return NULL when no rows are "
+				    "aggregated",
+				    aggr.Function().GetName());
+			}
 		}
 	}
-#endif
 }
 
 void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_offset) {
