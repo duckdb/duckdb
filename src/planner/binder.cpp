@@ -673,8 +673,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedE
 	// 1. BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE TRIGGER time)
 	for (idx_t i = 0; i < before_triggers.size(); i++) {
 		auto &trigger = before_triggers[i].get();
-		auto body_cte_name =
-		    string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+		auto body_cte_name = string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
 
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 		trig_cte->query_node = trigger.trigger_action->Copy();
