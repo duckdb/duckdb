@@ -1538,12 +1538,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEG
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto val = transformer.Transform<Value>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-	if (val.IsNull()) {
-		return make_uniq<ConstantExpression>(val);
-	} else {
-		auto varchar_val = make_uniq<ConstantExpression>(val.GetValue<string>().substr(0, 1));
-		return make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(varchar_val));
-	}
+	return make_uniq<ConstantExpression>(val);
 }
 
 Value PEGTransformerFactory::TransformFalseLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
