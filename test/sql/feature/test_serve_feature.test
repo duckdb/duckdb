@@ -162,6 +162,39 @@ C001	2024-03-02 12:00:00	data1	2024-03-02 00:00:00	300.00	2	2024-03-02 00:00:00	
 C002	2024-03-03 10:00:00	data2	2024-03-03 00:00:00	375.00	2	2024-03-03 00:00:00	187.5
 
 # ============================================================
+# SERVE FEATURE: LEFT ASOF semantics — unmatched spine rows are retained
+# with NULL feature columns instead of being dropped.
+# ============================================================
+
+statement ok
+CREATE TABLE mixed (card_no VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO mixed VALUES
+    ('C001', '2024-03-02 12:00:00'),
+    ('C001', '2024-03-01 12:00:00'),
+    ('C999', '2024-03-02 12:00:00');
+
+# C001 @ 03-02 matches the 03-02 feature row (300/2).
+# C001 @ 03-01 is earlier than any feature_timestamp for C001 -> NULL features.
+# C999 has no feature rows at all -> NULL features.
+query IIIII sort
+SERVE FEATURE daily_txn FOR mixed;
+----
+C001	2024-03-01 12:00:00	NULL	NULL	NULL
+C001	2024-03-02 12:00:00	2024-03-02 00:00:00	300.00	2
+C999	2024-03-02 12:00:00	NULL	NULL	NULL
+
+# LEFT ASOF also applies to multi-feature serving: both features are NULL
+# for unmatched spine rows.
+query IIIIIII sort
+SERVE FEATURES daily_txn, daily_txn_avg FOR mixed;
+----
+C001	2024-03-01 12:00:00	NULL	NULL	NULL	NULL	NULL
+C001	2024-03-02 12:00:00	2024-03-02 00:00:00	300.00	2	2024-03-02 00:00:00	150.0
+C999	2024-03-02 12:00:00	NULL	NULL	NULL	NULL	NULL
+
+# ============================================================
 # Cleanup
 # ============================================================
 statement ok
@@ -178,3 +211,6 @@ DROP TABLE requests2;
 
 statement ok
 DROP TABLE requests3;
+
+statement ok
+DROP TABLE mixed;

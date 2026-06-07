@@ -142,7 +142,7 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 		return StringUtil::Format("SELECT spine.*, f.feature_timestamp, "
 		                          "f.* EXCLUDE (%s, feature_timestamp, __feature_version) "
 		                          "FROM %s AS spine "
-		                          "ASOF JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS f "
+		                          "ASOF LEFT JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS f "
 		                          "ON spine.%s = f.%s AND spine.%s >= f.feature_timestamp",
 		                          feat_entity,               // EXCLUDE
 		                          spine,                     // FROM
@@ -173,7 +173,7 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 		                          "__feature_version)",
 		                          alias, feat.name, alias, feat_entity);
 
-		joins += StringUtil::Format(" ASOF JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS %s "
+		joins += StringUtil::Format(" ASOF LEFT JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS %s "
 		                            "ON spine.%s = %s.%s AND spine.%s >= %s.feature_timestamp",
 		                            feat_table, version, alias, spine_entity, alias, feat_entity, spine_ts, alias);
 	}
