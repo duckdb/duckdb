@@ -1,9 +1,11 @@
-diff --git a/vcpkg_ports/libmariadb/fix-const-array.diff b/vcpkg_ports/libmariadb/fix-const-array.diff
-new file mode 100644
-index 0000000..c523de9
---- /dev/null
-+++ b/vcpkg_ports/libmariadb/fix-const-array.diff
-@@ -0,0 +1,13 @@
+diff --git a/vcpkg_ports/libmariadb/compiler-flags.diff b/vcpkg_ports/libmariadb/compiler-flags.diff
+index 21133cf..9f00ee9 100644
+--- a/vcpkg_ports/libmariadb/compiler-flags.diff
++++ b/vcpkg_ports/libmariadb/compiler-flags.diff
+@@ -11,3 +11,16 @@ index 8994119..9ccfacb 100644
+          ENDIF()
+        ENDFOREACH()
+      ENDFOREACH()
 +diff --git a/libmariadb/ma_tls.c b/libmariadb/ma_tls.c
 +index b2de93e..042b11d 100644
 +--- a/libmariadb/ma_tls.c
@@ -17,15 +19,3 @@ index 0000000..c523de9
 +   unsigned int fp_len= EVP_MAX_MD_SIZE;
 +   unsigned int hash_type;
 + 
-diff --git a/vcpkg_ports/libmariadb/portfile.cmake b/vcpkg_ports/libmariadb/portfile.cmake
-index df98673..a016ad6 100644
---- a/vcpkg_ports/libmariadb/portfile.cmake
-+++ b/vcpkg_ports/libmariadb/portfile.cmake
-@@ -19,6 +19,7 @@ vcpkg_from_github(
-         library-linkage.diff
-         cmake-export.diff
-         no-abs-path.diff
-+        fix-const-array.diff
- )
- file(REMOVE_RECURSE
-     "${SOURCE_PATH}/cmake/FindIconv.cmake"
