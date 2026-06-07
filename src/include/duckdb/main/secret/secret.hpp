@@ -172,11 +172,11 @@ public:
 		serializable = true;
 	}
 	explicit KeyValueSecret(const BaseSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
 	KeyValueSecret(const KeyValueSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), Identifier(secret.GetProvider()), secret.GetName()) {
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
 		serializable = true;

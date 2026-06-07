@@ -25,7 +25,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const Identif
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    const Identifier &field_name) {
 	ColumnQualifier qualifier(binder);
-	return qualifier.CreateStructExtract(std::move(base), Identifier(field_name));
+	return qualifier.CreateStructExtract(std::move(base), field_name);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
@@ -92,7 +92,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		auto alias = expr->GetAlias();
 		auto result = BindExpression(expr, depth);
 		if (result.expression) {
-			result.expression->SetAlias(Identifier(std::move(alias)));
+			result.expression->SetAlias(std::move(alias));
 		}
 		return result;
 	}

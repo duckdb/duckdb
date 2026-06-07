@@ -23,7 +23,7 @@ public:
 			if (entry_name == entry) {
 				auto result = make_uniq<CreateViewInfo>();
 				result->schema = Identifier::DefaultSchema();
-				result->view_name = Identifier(entry);
+				result->view_name = entry;
 				result->sql = StringUtil::Format("SELECT * FROM %s", SQLString(file));
 				auto view_info = CreateViewInfo::FromSelect(context, std::move(result));
 				return make_uniq_base<CatalogEntry, ViewCatalogEntry>(catalog, schema, *view_info);

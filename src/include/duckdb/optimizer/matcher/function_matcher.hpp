@@ -51,7 +51,7 @@ public:
 	}
 
 	bool Match(const Identifier &name) override {
-		return names.find(Identifier(name)) != names.end();
+		return names.find(name) != names.end();
 	}
 
 private:

@@ -75,7 +75,7 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 	D_ASSERT(aliases.size() == names.size());
 
 	for (idx_t c = 0; c < aliases.size(); c++) {
-		auto colref = binder.bind_context.CreateColumnReference(aliases[c], Identifier(names[c]),
+		auto colref = binder.bind_context.CreateColumnReference(aliases[c], names[c],
 		                                                        ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 		result.push_back(std::move(colref));
 	}
@@ -118,9 +118,8 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 						continue;
 					}
 					action.update_info->columns.emplace_back(source_names[i]);
-					action.update_info->expressions.push_back(
-					    bind_context.CreateColumnReference(source_aliases[i], Identifier(source_names[i]),
-					                                       ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+					action.update_info->expressions.push_back(bind_context.CreateColumnReference(
+					    source_aliases[i], source_names[i], ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
 				}
 			} else {
 				// UPDATE BY POSITION - get the name list from the table

@@ -189,7 +189,7 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 			if (column_info) {
 				// view has names
 				for (idx_t n = 0; n < column_info->names.size(); n++) {
-					auto name = n < view.aliases.size() ? Identifier(view.aliases[n]) : column_info->names[n];
+					auto name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
 					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 				}
 			} else {

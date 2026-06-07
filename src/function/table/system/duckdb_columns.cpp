@@ -211,7 +211,7 @@ public:
 		if (types[0].id() == LogicalTypeId::INVALID) {
 			return Value();
 		}
-		return Value(col < entry.aliases.size() ? Identifier(entry.aliases[col]) : column_names[col]);
+		return Value(col < entry.aliases.size() ? entry.aliases[col] : column_names[col]);
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return types[col];

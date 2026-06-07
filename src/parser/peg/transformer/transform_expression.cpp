@@ -64,7 +64,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEG
 			}
 		} else {
 			auto base_table = make_uniq<BaseTableRef>();
-			base_table->table_name = Identifier(col_expr.GetColumnName());
+			base_table->table_name = col_expr.GetColumnName();
 			select_node->from_table = std::move(base_table);
 		}
 		select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -1789,8 +1789,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		result->ReplaceListMutable() =
 		    transformer.Transform<identifier_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
 		for (auto &replace_entry : result->ReplaceList()) {
-			if (result->ExcludeList().find(QualifiedColumnName(Identifier(replace_entry.first))) !=
-			    result->ExcludeList().end()) {
+			if (result->ExcludeList().find(QualifiedColumnName(replace_entry.first)) != result->ExcludeList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
 				                      replace_entry.first);
 			}

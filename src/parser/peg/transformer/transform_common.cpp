@@ -323,7 +323,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowType(PEGTransfor
 	for (auto &child : colid_list) {
 		auto &type_expr = UnboundType::GetTypeExpression(child.second);
 		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(Identifier(child.first));
+		new_type_expr->SetAlias(child.first);
 		struct_children.push_back(std::move(new_type_expr));
 	}
 	return make_uniq<TypeExpression>("STRUCT", std::move(struct_children));
@@ -361,7 +361,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
 		union_names.insert(Identifier(colid.first.GetIdentifierName()));
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(Identifier(colid.first));
+		new_type_expr->SetAlias(colid.first);
 		union_children.push_back(std::move(new_type_expr));
 	}
 	return make_uniq<TypeExpression>("UNION", std::move(union_children));

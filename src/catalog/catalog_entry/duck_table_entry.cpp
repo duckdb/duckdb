@@ -414,7 +414,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto col_name = info.new_column.GetName();
 
 	// We're checking for the opposite condition (ADD COLUMN IF _NOT_ EXISTS ...).
-	if (info.if_column_not_exists && ColumnExists(Identifier(col_name))) {
+	if (info.if_column_not_exists && ColumnExists(col_name)) {
 		return nullptr;
 	}
 
@@ -851,14 +851,14 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, RemoveFieldInfo &info) {
-	if (!ColumnExists(Identifier(info.column_path[0]))) {
+	if (!ColumnExists(info.column_path[0])) {
 		if (!info.if_column_exists) {
 			throw CatalogException("Cannot drop field from column \"%s\" - it does not exist", info.column_path[0]);
 		}
 		return nullptr;
 	}
 	// follow the path
-	auto &col = GetColumn(Identifier(info.column_path[0]));
+	auto &col = GetColumn(info.column_path[0]);
 	auto res = DropFieldFromStruct(col.Type(), info.column_path, 1);
 	if (res.error.HasError()) {
 		if (!info.if_column_exists) {
@@ -951,12 +951,12 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, RenameFieldInfo &info) {
-	if (!ColumnExists(Identifier(info.column_path[0]))) {
+	if (!ColumnExists(info.column_path[0])) {
 		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
 	}
 
 	// follow the path
-	auto &col = GetColumn(Identifier(info.column_path[0]));
+	auto &col = GetColumn(info.column_path[0]);
 	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name.GetIdentifierName(), 1);
 	if (res.error.HasError()) {
 		res.error.Throw();
@@ -1268,7 +1268,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		}
 		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
-			prev_indexes.RemoveIndex(Identifier(index_name));
+			prev_indexes.RemoveIndex(index_name);
 		}
 	}
 }

@@ -344,7 +344,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				// pre_count + count_star_from_scan
 				auto &pre_count_expr = agg_results[i];
 				auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref));
-				add_expr->SetAlias(Identifier(aggr.expressions[i]->GetAlias()));
+				add_expr->SetAlias(aggr.expressions[i]->GetAlias());
 				proj_expressions.push_back(std::move(add_expr));
 			} else if (fun_name == "min" || fun_name == "max") {
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
@@ -356,7 +356,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
 				coalesce->GetChildrenMutable().push_back(std::move(merged));
 				coalesce->GetChildrenMutable().push_back(pre_val_expr->Copy());
-				coalesce->SetAlias(Identifier(aggr.expressions[i]->GetAlias()));
+				coalesce->SetAlias(aggr.expressions[i]->GetAlias());
 				proj_expressions.push_back(std::move(coalesce));
 			}
 		}
@@ -383,7 +383,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 	// Set column names
 	for (idx_t expr_idx = 0; expr_idx < agg_results.size(); expr_idx++) {
-		agg_results[expr_idx]->SetAlias(Identifier(aggr.expressions[expr_idx]->GetAlias()));
+		agg_results[expr_idx]->SetAlias(aggr.expressions[expr_idx]->GetAlias());
 	}
 
 	vector<vector<unique_ptr<Expression>>> expressions;

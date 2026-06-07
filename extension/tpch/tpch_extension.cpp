@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		throw InvalidInputException("Step must be defined when children are defined");
 	}
 	if (input.binder) {
-		auto &catalog = Catalog::GetCatalog(context, Identifier(result->catalog));
+		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
 		DatabaseModificationType modification;
 		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;

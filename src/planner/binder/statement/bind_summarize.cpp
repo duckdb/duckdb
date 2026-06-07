@@ -24,7 +24,7 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
+	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
 	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
 	return std::move(cast_function);
@@ -33,7 +33,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggre
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
                                                              const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ColumnRefExpression>(Identifier(std::move(column_name))));
+	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
 	children.push_back(make_uniq<ConstantExpression>(modifier));
 	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));

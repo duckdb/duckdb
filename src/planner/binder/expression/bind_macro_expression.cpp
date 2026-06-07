@@ -61,7 +61,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 				bind_macro_parameter = true;
 			}
 		} else {
-			bind_macro_parameter = macro_binding->HasMatchingBinding(Identifier(col_ref.GetColumnName()));
+			bind_macro_parameter = macro_binding->HasMatchingBinding(col_ref.GetColumnName());
 		}
 
 		if (bind_macro_parameter) {

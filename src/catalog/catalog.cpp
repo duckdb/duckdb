@@ -448,7 +448,7 @@ bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const Identi
 		// skip this check for remote catalogs
 		return false;
 	}
-	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, Identifier(schema));
+	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema);
 	return !!GetSchema(context, schema_lookup, OnEntryNotFound::RETURN_NULL);
 }
 
@@ -489,7 +489,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
-			entries.emplace_back(Identifier(catalog_name), schema);
+			entries.emplace_back(catalog_name, schema);
 		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
@@ -502,7 +502,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
-			entries.emplace_back(catalog, Identifier(schema_name));
+			entries.emplace_back(catalog, schema_name);
 		}
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
@@ -1010,9 +1010,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	for (auto &entry : entries) {
 		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			catalog_entry = Catalog::GetCatalogEntry(retriever, Identifier(entry.catalog));
+			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
 		} else {
-			catalog_entry = &Catalog::GetCatalog(retriever, Identifier(entry.catalog));
+			catalog_entry = &Catalog::GetCatalog(retriever, entry.catalog);
 		}
 		if (!catalog_entry) {
 			return {nullptr, nullptr, ErrorData()};
@@ -1122,7 +1122,7 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
                                                     OnEntryNotFound if_not_found) {
 	auto entries = GetCatalogEntries(retriever, catalog_name, schema_lookup.GetEntryIdentifier());
 	for (idx_t i = 0; i < entries.size(); i++) {
-		auto catalog = Catalog::GetCatalogEntry(retriever, Identifier(entries[i].catalog));
+		auto catalog = Catalog::GetCatalogEntry(retriever, entries[i].catalog);
 		if (!catalog) {
 			// skip if it is not an attached database
 			continue;
@@ -1162,7 +1162,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever 
 
 		auto &search_path = retriever.GetSearchPath();
 		for (auto &entry : search_path.Get()) {
-			auto &catalog = Catalog::GetCatalog(retriever, Identifier(entry.catalog));
+			auto &catalog = Catalog::GetCatalog(retriever, entry.catalog);
 			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
 				continue;
 			}

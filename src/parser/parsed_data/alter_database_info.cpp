@@ -10,7 +10,7 @@ AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p,
                                      OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::ALTER_DATABASE, Identifier(std::move(catalog_p)), Identifier(), Identifier(), if_not_found),
+    : AlterInfo(AlterType::ALTER_DATABASE, std::move(catalog_p), Identifier(), Identifier(), if_not_found),
       alter_database_type(alter_database_type) {
 }
 

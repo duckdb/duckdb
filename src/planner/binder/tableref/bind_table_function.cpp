@@ -378,8 +378,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// fetch the function from the catalog
 
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.FunctionName(), error_context);
-	auto &func_catalog = *GetCatalogEntry(Identifier(catalog), Identifier(schema), table_function_lookup,
-	                                      OnEntryNotFound::THROW_EXCEPTION);
+	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

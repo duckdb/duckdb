@@ -196,7 +196,7 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 
 optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const Identifier &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
-	auto entry = used_databases.find(Identifier(name));
+	auto entry = used_databases.find(name);
 	if (entry != used_databases.end()) {
 		return entry->second.get();
 	}

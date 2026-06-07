@@ -274,7 +274,7 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	auto &original_name = old.name;
 
 	auto &context = *transaction.context;
-	auto entry_value = map.GetEntry(Identifier(new_name));
+	auto entry_value = map.GetEntry(new_name);
 	if (entry_value) {
 		auto &existing_entry = GetEntryForTransaction(transaction, *entry_value);
 		if (!existing_entry.deleted) {
@@ -301,11 +301,11 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 
 	// Add the renamed entry
 	// Start this off with a RENAMED_ENTRY node, for commit/cleanup/rollback purposes
-	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, catalog, Identifier(new_name));
+	auto renamed_node = make_uniq<InCatalogEntry>(CatalogType::RENAMED_ENTRY, catalog, new_name);
 	renamed_node->timestamp = transaction.transaction_id;
 	renamed_node->deleted = false;
 	renamed_node->set = this;
-	return CreateEntryInternal(transaction, Identifier(new_name), std::move(renamed_node), read_lock);
+	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
 }
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &name, AlterInfo &alter_info) {
@@ -688,14 +688,14 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 	// this catalog set has a default set defined:
 	auto default_entries = defaults->GetDefaultEntries();
 	for (auto &default_entry : default_entries) {
-		auto entry_value = map.GetEntry(Identifier(default_entry));
+		auto entry_value = map.GetEntry(default_entry);
 		if (!entry_value) {
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
 			if (unlock) {
 				read_lock.unlock();
 			}
-			auto entry = defaults->CreateDefaultEntry(transaction, Identifier(default_entry));
+			auto entry = defaults->CreateDefaultEntry(transaction, default_entry);
 			if (!entry) {
 				throw InternalException("Failed to create default entry for %s", default_entry);
 			}

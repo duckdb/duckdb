@@ -970,7 +970,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 		if (param.HasDefaultValue()) {
 			arguments[i] = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
-			arguments[i]->SetAlias(Identifier(param.GetName()));
+			arguments[i]->SetAlias(param.GetName());
 
 		} else {
 			throw BinderException("Missing value for parameter '%s' in function call to '%s'", param.GetName(),

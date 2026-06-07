@@ -152,7 +152,7 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
-	function->SetAlias(Identifier(source_alias));
+	function->SetAlias(source_alias);
 	source = std::move(function);
 	return true;
 }

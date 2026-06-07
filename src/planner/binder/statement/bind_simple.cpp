@@ -58,7 +58,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 	auto index_name = unique_constraint.GetName(Identifier(table_info.name.GetIdentifierName()));
-	create_index_info->index_name = Identifier(index_name);
+	create_index_info->index_name = index_name;
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.

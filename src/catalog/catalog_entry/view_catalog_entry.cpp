@@ -143,7 +143,7 @@ Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
 		return Value();
 	}
 	auto &name = names[column_index];
-	auto entry = column_comments.find(Identifier(name));
+	auto entry = column_comments.find(name);
 	if (entry != column_comments.end()) {
 		return entry->second;
 	}

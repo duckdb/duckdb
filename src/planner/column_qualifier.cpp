@@ -140,21 +140,20 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,
                                                                 const Identifier &column_name, ErrorData &error) {
-	auto using_binding = binder.bind_context.GetUsingBinding(Identifier(column_name));
+	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
 		// check if we can refer to one of the base columns directly
 		unique_ptr<Expression> expression;
 		if (using_binding->primary_binding.IsSet()) {
 			// we can! just assign the table name and re-bind
-			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, Identifier(column_name));
+			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
 			// we cannot! we need to bind this as COALESCE between all the relevant columns
 			auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 			coalesce->GetChildrenMutable().reserve(using_binding->bindings.size());
 			for (auto &entry : using_binding->bindings) {
-				coalesce->GetChildrenMutable().push_back(
-				    make_uniq<ColumnRefExpression>(Identifier(column_name), entry));
+				coalesce->GetChildrenMutable().push_back(make_uniq<ColumnRefExpression>(column_name, entry));
 			}
 			return std::move(coalesce);
 		}
@@ -168,11 +167,11 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	}
 
 	// find a table binding that contains this column name
-	auto table_binding = binder.bind_context.GetMatchingBinding(Identifier(column_name), expr);
+	auto table_binding = binder.bind_context.GetMatchingBinding(column_name, expr);
 
 	// throw an error if a macro parameter name conflicts with a column name
 	auto is_macro_column = false;
-	if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(column_name))) {
+	if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
 		is_macro_column = true;
 		if (table_binding) {
 			throw BinderException(expr, "Conflicting column names for column " + column_name + "!");
@@ -181,13 +180,12 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 
 	// bind as a macro column
 	if (is_macro_column) {
-		return binder.bind_context.CreateColumnReference(binder.macro_binding->GetBindingAlias(),
-		                                                 Identifier(column_name));
+		return binder.bind_context.CreateColumnReference(binder.macro_binding->GetBindingAlias(), column_name);
 	}
 
 	// bind as a regular column
 	if (table_binding) {
-		return binder.bind_context.CreateColumnReference(table_binding->GetBindingAlias(), Identifier(column_name));
+		return binder.bind_context.CreateColumnReference(table_binding->GetBindingAlias(), column_name);
 	}
 
 	// it's not, find candidates and error
@@ -567,8 +565,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
 		auto binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], error);
 		if (binding) {
 			// it is! return the column reference directly
-			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(),
-			                                                 Identifier(col_ref.GetColumnName()));
+			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.GetColumnName());
 		}
 
 		// otherwise check if we can turn this into a struct extract

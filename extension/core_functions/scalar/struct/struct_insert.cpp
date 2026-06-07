@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input)
 
 	for (idx_t i = 0; i < existing_children.size(); i++) {
 		auto &child = existing_children[i];
-		name_collision_set.insert(Identifier(child.first));
+		name_collision_set.insert(child.first);
 		new_children.push_back(make_pair(child.first, child.second));
 	}
 

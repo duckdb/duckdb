@@ -9,7 +9,7 @@ BoundColumnRefExpression::BoundColumnRefExpression(Identifier alias_p, LogicalTy
                                                    idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),
       binding(binding), depth(depth) {
-	this->alias = Identifier(std::move(alias_p));
+	this->alias = std::move(alias_p);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)

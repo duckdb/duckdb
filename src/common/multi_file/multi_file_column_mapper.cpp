@@ -393,7 +393,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
 		if (map_result.default_value) {
-			map_result.default_value->SetAlias(Identifier(name));
+			map_result.default_value->SetAlias(name);
 			default_expressions.push_back(std::move(map_result.default_value));
 		}
 	}

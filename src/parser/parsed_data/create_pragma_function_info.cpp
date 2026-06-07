@@ -10,7 +10,7 @@ CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
 }
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(Identifier name, PragmaFunctionSet functions_p)
     : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(std::move(functions_p)) {
-	this->name = Identifier(std::move(name));
+	this->name = std::move(name);
 	internal = true;
 }
 

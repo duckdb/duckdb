@@ -409,9 +409,9 @@ Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
-		return Identifier(result);
+		return result;
 	}
-	return Identifier(default_entry.catalog);
+	return default_entry.catalog;
 }
 
 // LCOV_EXCL_START

@@ -46,10 +46,10 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 			                      "the list of column names");
 		}
 		column_name_set.insert(col_name);
-		if (!table.ColumnExists(Identifier(col_name))) {
+		if (!table.ColumnExists(col_name)) {
 			throw BinderException("Column with name \"%s\" does not exist", col_name);
 		}
-		auto &col = table.GetColumn(Identifier(col_name));
+		auto &col = table.GetColumn(col_name);
 		// ignore generated column
 		if (col.Generated()) {
 			throw BinderException(

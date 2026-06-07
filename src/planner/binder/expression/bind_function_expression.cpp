@@ -464,7 +464,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// successfully bound: replace the node with a BoundExpression
 	auto alias = args[lambda_expr_idx].GetExpression().GetAlias();
-	bind_lambda_result.expression->SetAlias(Identifier(alias));
+	bind_lambda_result.expression->SetAlias(alias);
 
 	args[lambda_expr_idx].GetExpressionMutable() = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 

@@ -29,7 +29,7 @@ static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<refere
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				if (!alias.empty()) {
-					result->SetAlias(Identifier(std::move(alias)));
+					result->SetAlias(std::move(alias));
 				}
 				return result;
 			} else if (rule_made_change) {

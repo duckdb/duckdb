@@ -29,14 +29,14 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 	auto info = make_uniq<CopyDatabaseInfo>(target_database_name);
 	for (auto &entry : catalog_entries) {
 		auto create_info = entry.get().GetInfo();
-		create_info->catalog = Identifier(target_database_name);
+		create_info->catalog = target_database_name;
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
 		// Update all the dependencies of the entry to point to the newly created entries on the target database
 		LogicalDependencyList altered_dependencies;
 		for (auto &dep : create_info->dependencies.Set()) {
 			auto altered_dep = dep;
-			altered_dep.catalog = Identifier(target_database_name);
+			altered_dep.catalog = target_database_name;
 			altered_dependencies.AddDependency(altered_dep);
 		}
 		create_info->dependencies = altered_dependencies;
@@ -61,7 +61,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		// generate the insert statement
 		InsertStatement insert_stmt;
 		auto &insert_node = *insert_stmt.node;
-		insert_node.catalog = Identifier(target_database_name);
+		insert_node.catalog = target_database_name;
 		insert_node.schema = table.ParentSchema().name;
 		insert_node.table = table.name;
 

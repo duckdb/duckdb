@@ -42,13 +42,13 @@ void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state
 			return;
 		}
 		auto &alias_name = colref.GetColumnName();
-		auto entry = bind_state.alias_map.find(Identifier(alias_name));
+		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry == bind_state.alias_map.end()) {
 			// no matching alias found
 			return;
 		}
 		select_list_idx = entry->second;
-		bind_state.group_alias_map[Identifier(alias_name)] = group_index;
+		bind_state.group_alias_map[alias_name] = group_index;
 		break;
 	}
 	case ExpressionClass::CONSTANT: {
@@ -102,7 +102,7 @@ bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t de
 	// check if refers to an alias in the select clause
 
 	auto &alias_name = colref.GetColumnName();
-	auto entry = bind_state.alias_map.find(Identifier(alias_name));
+	auto entry = bind_state.alias_map.find(alias_name);
 	if (entry == bind_state.alias_map.end()) {
 		// no matching alias found
 		return false;

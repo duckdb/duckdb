@@ -100,9 +100,9 @@ ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
 	bool success = false;
-	success = TryGetBindingIndex(Identifier(colref.GetColumnName()), column_index);
+	success = TryGetBindingIndex(colref.GetColumnName(), column_index);
 	if (!success) {
-		return BindResult(ColumnNotFoundError(Identifier(colref.GetColumnName())));
+		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -182,7 +182,7 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
 		D_ASSERT(col_names.size() == 1);
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
-		col_names = vector<Identifier> {Identifier(alias)};
+		col_names = vector<Identifier> {alias};
 	});
 }
 
@@ -192,10 +192,10 @@ static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &bindi
 		auto &col_names = colref.ColumnNamesMutable();
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
 		if (!binding_alias.GetSchema().empty()) {
-			col_names.insert(col_names.begin(), Identifier(binding_alias.GetSchema()));
+			col_names.insert(col_names.begin(), binding_alias.GetSchema());
 		}
 		if (!binding_alias.GetCatalog().empty()) {
-			col_names.insert(col_names.begin(), Identifier(binding_alias.GetCatalog()));
+			col_names.insert(col_names.begin(), binding_alias.GetCatalog());
 		}
 	});
 }
@@ -265,9 +265,9 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	column_t column_index;
 	bool success = false;
-	success = TryGetBindingIndex(Identifier(column_name), column_index);
+	success = TryGetBindingIndex(column_name, column_index);
 	if (!success) {
-		return BindResult(ColumnNotFoundError(Identifier(column_name)));
+		return BindResult(ColumnNotFoundError(column_name));
 	}
 	auto entry = GetStandardEntry();
 	if (entry && !IsVirtualColumn(column_index)) {
@@ -315,7 +315,7 @@ DummyBinding::DummyBinding(vector<LogicalType> types, vector<Identifier> names, 
 
 BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(Identifier(colref.GetColumnName()), column_index)) {
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
 	}
 	ColumnBinding binding(index, ProjectionIndex(column_index));
@@ -337,7 +337,7 @@ BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
 	column_t column_index;
-	if (!TryGetBindingIndex(Identifier(colref.GetColumnName()), column_index)) {
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	auto arg = (*arguments)[column_index]->Copy();

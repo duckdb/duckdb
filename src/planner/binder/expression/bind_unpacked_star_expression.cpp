@@ -29,7 +29,7 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (new_expr->GetAlias().empty()) {
-					new_expr->SetAlias(Identifier(colref.GetColumnName()));
+					new_expr->SetAlias(colref.GetColumnName());
 				} else {
 					new_expr->SetAlias(Identifier(Binder::ReplaceColumnsAlias(
 					    new_expr->GetAlias().GetIdentifierName(), colref.GetColumnName().GetIdentifierName(), regex)));

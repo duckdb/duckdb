@@ -37,7 +37,7 @@ static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_n
 		}
 		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
-	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
 }
 
@@ -90,7 +90,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, const Identifie
 	// populate append info
 	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
-	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
@@ -98,7 +98,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, const Identifie
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table_name));
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, Identifier(table_name));
 
 		if (!table_entry.IsDuckTable()) {
 			throw InvalidInputException("dsdgen is only supported for DuckDB database files");

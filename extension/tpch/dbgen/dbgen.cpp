@@ -423,8 +423,8 @@ template <class T>
 static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                             string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = Identifier(catalog_name);
-	info->schema = Identifier(schema);
+	info->catalog = catalog_name;
+	info->schema = schema;
 	info->table = Identifier(T::Name + suffix);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
@@ -432,7 +432,7 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
-	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
 }
 
@@ -480,8 +480,7 @@ struct TPCHDBgenParameters {
 			auto tname = get_table_name(i);
 			if (!tname.empty()) {
 				string full_tname = string(tname) + string(suffix);
-				auto &tbl_catalog =
-				    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(full_tname));
+				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, Identifier(full_tname));
 				tables[i] = &tbl_catalog;
 			}
 		}
@@ -639,7 +638,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const 
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context, Identifier(catalog_name));
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
 #ifndef DUCKDB_NO_THREADS

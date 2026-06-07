@@ -60,7 +60,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// Deduplicate by catalog name.
 	case_insensitive_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
-		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, Identifier(entry.catalog));
+		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
 		if (!catalog_entry) {
 			continue;
 		}
@@ -134,7 +134,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		for (auto &key : cte_info.key_targets) {
 			cte_result = Merge(cte_result, Rewrite(*key));
 		}
-		cte_results[Identifier(cte_name)] = cte_result;
+		cte_results[cte_name] = cte_result;
 	}
 	CatalogPushdownResult result;
 	switch (node.type) {
@@ -164,7 +164,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	// FIXME: this is only necessary because we push all CTEs, including unreferenced ones, to the result
 	// if we pruned unreferenced CTEs we could remove this
 	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(Identifier(cte_pair.first));
+		auto it = cte_results.find(cte_pair.first);
 		if (it != cte_results.end()) {
 			result = Merge(result, it->second);
 		}
@@ -489,7 +489,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier schema = schema_name.empty() ? local_entry.schema : Identifier(schema_name);
+		const Identifier schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
@@ -547,7 +547,7 @@ void RemotePushdownOptimizer::TrackLocalTable(const TableFunctionRef &ref) {
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	} else {
-		local_table_names.insert(Identifier(ref.function->Cast<FunctionExpression>().FunctionName()));
+		local_table_names.insert(ref.function->Cast<FunctionExpression>().FunctionName());
 	}
 }
 
@@ -569,30 +569,30 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 		// Local catalog - check if the function is a macro
 		const Identifier schema = func.Schema().empty() ? Identifier::DefaultSchema() : func.Schema();
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
-		auto entry = Catalog::GetEntry(binder.context, func.Catalog(), Identifier(schema), macro_lookup,
-		                               OnEntryNotFound::RETURN_NULL);
+		auto entry =
+		    Catalog::GetEntry(binder.context, func.Catalog(), schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 			return true;
 		}
 		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.FunctionName());
-		auto table_entry = Catalog::GetEntry(binder.context, func.Catalog(), Identifier(schema), table_macro_lookup,
-		                                     OnEntryNotFound::RETURN_NULL);
+		auto table_entry =
+		    Catalog::GetEntry(binder.context, func.Catalog(), schema, table_macro_lookup, OnEntryNotFound::RETURN_NULL);
 		return table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY;
 	}
 
 	// Unqualified function - search local catalogs for a macro with this name
 	FindRemoteCatalogsInSearchPath();
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier schema = func.Schema().empty() ? Identifier(local_entry.schema) : func.Schema();
+		const Identifier schema = func.Schema().empty() ? local_entry.schema : func.Schema();
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.FunctionName());
-		auto entry = Catalog::GetEntry(binder.context, Identifier(local_entry.catalog), Identifier(schema),
-		                               macro_lookup, OnEntryNotFound::RETURN_NULL);
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 			return true;
 		}
 		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.FunctionName());
-		auto table_entry = Catalog::GetEntry(binder.context, Identifier(local_entry.catalog), Identifier(schema),
-		                                     table_macro_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_macro_lookup,
+		                                     OnEntryNotFound::RETURN_NULL);
 		if (table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY) {
 			return true;
 		}
@@ -601,7 +601,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 }
 
 bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const {
-	auto entry = cte_results.find(Identifier(cte_name));
+	auto entry = cte_results.find(cte_name);
 	if (entry != cte_results.end()) {
 		result = entry->second;
 		return true;
@@ -632,7 +632,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	// Case 1: catalog is explicitly specified - check if it's a remote catalog
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, Identifier(catalog_name));
+		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 		}
@@ -655,7 +655,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
-		const Identifier schema = schema_name.empty() ? local_entry.schema : Identifier(schema_name);
+		const Identifier schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry) {
@@ -728,11 +728,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const FunctionExpression 
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const WindowExpression &func) {
-	return CheckCatalogQualification(Identifier(func.Catalog()), Identifier(func.Schema()));
+	return CheckCatalogQualification(func.Catalog(), func.Schema());
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const TypeExpression &type_expr) {
-	return CheckCatalogQualification(Identifier(type_expr.GetCatalog()), Identifier(type_expr.GetSchema()));
+	return CheckCatalogQualification(type_expr.GetCatalog(), type_expr.GetSchema());
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ColumnRefExpression &col_ref) {

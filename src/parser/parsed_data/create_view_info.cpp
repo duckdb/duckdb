@@ -136,7 +136,7 @@ CreateViewInfo::CreateViewInfo(vector<Identifier> names_p, vector<Value> comment
 		if (comments[i].IsNull()) {
 			continue;
 		}
-		column_comments_map[Identifier(names[i])] = std::move(comments[i]);
+		column_comments_map[names[i]] = std::move(comments[i]);
 	}
 }
 

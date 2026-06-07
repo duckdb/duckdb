@@ -193,15 +193,15 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &ta
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAlias &table_alias,
                                                                 const Identifier &column_name,
                                                                 ColumnBindType bind_type) {
-	return CreateColumnReference(Identifier(table_alias.GetCatalog()), Identifier(table_alias.GetSchema()),
-	                             table_alias.GetAlias(), column_name, bind_type);
+	return CreateColumnReference(table_alias.GetCatalog(), table_alias.GetSchema(), table_alias.GetAlias(), column_name,
+	                             bind_type);
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier &table_name,
                                                                 const Identifier &column_name,
                                                                 ColumnBindType bind_type) {
 	string schema_name;
-	return CreateColumnReference(Identifier(schema_name), Identifier(table_name), column_name, bind_type);
+	return CreateColumnReference(Identifier(schema_name), table_name, column_name, bind_type);
 }
 
 static bool ColumnIsGenerated(Binding &binding, column_t index) {
@@ -237,9 +237,9 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	names.push_back(table_name.GetIdentifierName());
 	names.push_back(column_name.GetIdentifierName());
 
-	BindingAlias alias {Identifier(catalog_name), Identifier(schema_name), Identifier(table_name)};
+	BindingAlias alias {catalog_name, schema_name, table_name};
 	auto result = make_uniq<ColumnRefExpression>(StringsToIdentifiers(names));
-	auto binding = GetBinding(alias, Identifier(column_name), error);
+	auto binding = GetBinding(alias, column_name, error);
 	if (!binding) {
 		return std::move(result);
 	}
@@ -408,7 +408,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 
 	ErrorData error;
 	BindingAlias alias;
-	auto binding = GetBinding(GetBindingAlias(colref), Identifier(colref.GetColumnName()), error);
+	auto binding = GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
 	if (!binding) {
 		return BindResult(std::move(error));
 	}
@@ -556,7 +556,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto binding = GetBinding(expr.RelationName(), error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			binding = GetMatchingBinding(Identifier(expr.RelationName()), expr);
+			binding = GetMatchingBinding(expr.RelationName(), expr);
 			if (!binding) {
 				error.Throw();
 			}
@@ -567,7 +567,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto &column_types = binding->GetColumnTypes();
 
 		if (is_struct_ref) {
-			auto col_idx = binding->GetBindingIndex(Identifier(expr.RelationName()));
+			auto col_idx = binding->GetBindingIndex(expr.RelationName());
 			auto col_type = column_types[col_idx];
 			if (col_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException(StringUtil::Format(
@@ -578,7 +578,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->GetAlias();
 			column_names[1] = expr.RelationName();
 			for (auto &child : struct_children) {
-				QualifiedColumnName qualified_name(Identifier(child.first));
+				QualifiedColumnName qualified_name(child.first);
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
@@ -795,7 +795,7 @@ void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 			}
 		}
 		for (auto &removed_col : removed_using_columns) {
-			using_columns.erase(Identifier(removed_col));
+			using_columns.erase(removed_col);
 		}
 
 		// remove the binding from the list of bindings

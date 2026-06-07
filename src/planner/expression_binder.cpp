@@ -371,9 +371,9 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	result.expression->SetQueryLocation(query_location);
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
-	be.SetAlias(Identifier(alias));
+	be.SetAlias(alias);
 	if (!alias.empty()) {
-		be.expr->SetAlias(Identifier(alias));
+		be.expr->SetAlias(alias);
 	}
 	return ErrorData();
 }

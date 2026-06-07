@@ -41,13 +41,13 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	for (idx_t i = 0; i < select_names.size(); i++) {
 		auto &name = select_names[i];
 		// first check if the alias is already in there
-		auto entry = bind_state.alias_map.find(Identifier(name));
+		auto entry = bind_state.alias_map.find(name);
 
 		idx_t index = reorder_idx[i];
 
 		if (entry == bind_state.alias_map.end()) {
 			// the alias is not in there yet, just assign it
-			bind_state.alias_map[Identifier(name)] = index;
+			bind_state.alias_map[name] = index;
 		}
 	}
 	// check if the expression matches one of the expressions in the original expression list
@@ -87,7 +87,7 @@ void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const v
 			auto &child_names = child.names;
 			for (idx_t col_idx = 0; col_idx < child_names.size(); col_idx++) {
 				auto &col_name = child_names[col_idx];
-				auto entry = reorder_map.find(Identifier(col_name));
+				auto entry = reorder_map.find(col_name);
 				if (entry == reorder_map.end()) {
 					throw InternalException("SetOp - Column name not found in reorder_map in UNION BY NAME");
 				}

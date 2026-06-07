@@ -136,7 +136,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// names are picked from the LHS, unless aliases are explicitly specified
 	names = query.names;
 	for (idx_t i = 0; i < aliases.size() && i < names.size(); i++) {
-		names[i] = Identifier(aliases[i]);
+		names[i] = aliases[i];
 	}
 
 	// Rename columns if duplicate names are detected
@@ -163,8 +163,7 @@ BoundCTEData Binder::PrepareCTE(const Identifier &ctename, CommonTableExpression
 	// Add bindings of left side to temporary CTE bindings context
 	// as we are binding a CTE currently, we take precedence over the existing binding.
 	// This implements the CTE shadowing behavior.
-	auto cte_binding =
-	    make_uniq<CTEBinding>(BindingAlias(Identifier(ctename)), result.cte_bind_state, result.setop_index);
+	auto cte_binding = make_uniq<CTEBinding>(BindingAlias(ctename), result.cte_bind_state, result.setop_index);
 	result.child_binder->bind_context.AddCTEBinding(std::move(cte_binding));
 	return result;
 }
@@ -175,8 +174,8 @@ BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) 
 		bool is_dml = IsDMLQueryNode(node_type);
 		if (is_dml) {
 			// DML CTEs always execute even if not referenced - force bind now
-			auto dummy_binding = make_uniq<CTEBinding>(BindingAlias(Identifier(bound_cte.ctename)),
-			                                           bound_cte.cte_bind_state, bound_cte.setop_index);
+			auto dummy_binding =
+			    make_uniq<CTEBinding>(BindingAlias(bound_cte.ctename), bound_cte.cte_bind_state, bound_cte.setop_index);
 			bound_cte.cte_bind_state->Bind(*dummy_binding);
 		} else {
 			// Non-DML CTE was not referenced - just ignore it

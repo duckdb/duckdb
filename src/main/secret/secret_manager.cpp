@@ -28,7 +28,7 @@ SecretCatalogEntry::SecretCatalogEntry(unique_ptr<SecretEntry> secret_p, Catalog
 }
 
 SecretCatalogEntry::SecretCatalogEntry(unique_ptr<const BaseSecret> secret_p, Catalog &catalog)
-    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, Identifier(secret_p->GetName())) {
+    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, secret_p->GetName()) {
 	internal = true;
 	secret = make_uniq<SecretEntry>(std::move(secret_p));
 }
@@ -209,7 +209,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const Identifier &type,
                                                                          const Identifier &provider) {
 	unique_lock<mutex> lck(manager_lock);
-	auto lookup = secret_functions.find(Identifier(type));
+	auto lookup = secret_functions.find(type);
 
 	if (lookup != secret_functions.end()) {
 		if (lookup->second.ProviderExists(provider.GetIdentifierName())) {
@@ -222,7 +222,7 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const I
 	AutoloadExtensionForFunction(type.GetIdentifierName(), provider.GetIdentifierName());
 	lck.lock();
 
-	lookup = secret_functions.find(Identifier(type));
+	lookup = secret_functions.find(type);
 
 	if (lookup != secret_functions.end()) {
 		if (lookup->second.ProviderExists(provider.GetIdentifierName())) {
@@ -630,7 +630,7 @@ void SecretManager::ThrowProviderNotFoundError(const string &type, const string 
 optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const Identifier &name) {
 	lock_guard<mutex> lock(manager_lock);
 
-	auto lookup = secret_storages.find(Identifier(name));
+	auto lookup = secret_storages.find(name);
 	if (lookup != secret_storages.end()) {
 		return lookup->second.get();
 	}

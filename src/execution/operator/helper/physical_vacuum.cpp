@@ -18,7 +18,7 @@ class VacuumLocalSinkState : public LocalSinkState {
 public:
 	explicit VacuumLocalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) : hashes(LogicalType::HASH) {
 		for (const auto &column_name : info.columns) {
-			auto &column = table->GetColumn(Identifier(column_name));
+			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {
@@ -39,7 +39,7 @@ class VacuumGlobalSinkState : public GlobalSinkState {
 public:
 	explicit VacuumGlobalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) {
 		for (const auto &column_name : info.columns) {
-			auto &column = table->GetColumn(Identifier(column_name));
+			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {

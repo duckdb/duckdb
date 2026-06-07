@@ -34,14 +34,14 @@ struct NextSequenceValueOperator {
 SequenceCatalogEntry &BindSequence(Binder &binder, Identifier &catalog, Identifier &schema, const Identifier &name) {
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
-	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, Identifier(name));
+	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
 	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
 SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, Identifier &catalog, Identifier &schema,
                                               const Identifier &name) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, Identifier(name));
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, name);
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {

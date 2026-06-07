@@ -11,8 +11,8 @@ namespace duckdb {
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p,
                                          Identifier entry_schema_p, Identifier entry_name_p, Identifier owner_schema_p,
                                          Identifier owner_name_p, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, Identifier(std::move(entry_catalog_p)),
-                Identifier(std::move(entry_schema_p)), Identifier(std::move(entry_name_p)), if_not_found),
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p),
+                std::move(entry_name_p), if_not_found),
       entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
       owner_name(std::move(owner_name_p)) {
 }
@@ -50,8 +50,8 @@ string ChangeOwnershipInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p, Identifier entry_schema_p,
                                Identifier entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COMMENT, Identifier(std::move(entry_catalog_p)), Identifier(std::move(entry_schema_p)),
-                Identifier(std::move(entry_name_p)), if_not_found),
+    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
+                if_not_found),
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
 

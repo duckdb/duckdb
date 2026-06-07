@@ -99,13 +99,12 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.FunctionName(), error_context);
-	auto entry = GetCatalogEntry(Identifier(window.Catalog()), Identifier(window.Schema()), function_lookup,
-	                             OnEntryNotFound::RETURN_NULL);
+	auto entry = GetCatalogEntry(window.Catalog(), window.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
-		auto macro = make_uniq<FunctionExpression>(
-		    Identifier(window.Catalog()), Identifier(window.Schema()), Identifier(window.FunctionName()),
-		    std::move(window.GetChildrenMutable()), std::move(window.FilterMutable()), nullptr, window.Distinct());
+		auto macro = make_uniq<FunctionExpression>(window.Catalog(), window.Schema(), window.FunctionName(),
+		                                           std::move(window.GetChildrenMutable()),
+		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 

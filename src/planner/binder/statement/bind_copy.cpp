@@ -283,7 +283,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			auto &binding = bindings[i];
 			auto &name = select_node.names[i];
 			auto &type = select_node.types[i];
-			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(Identifier(name), type, binding));
+			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
 		}
 
 		auto new_select_list = function.copy_to_select(input);

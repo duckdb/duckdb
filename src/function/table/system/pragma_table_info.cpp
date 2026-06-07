@@ -259,7 +259,7 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto type = view_types[i];
-		auto name = i < view.aliases.size() ? Identifier(view.aliases[i]) : view_names[i];
+		auto name = i < view.aliases.size() ? view.aliases[i] : view_names[i];
 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name.GetIdentifierName(), type, output);

@@ -532,7 +532,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, Identifier(alias), names, types, bound_columns, table,
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table,
 	                                  std::move(virtual_columns));
 	ReturningBinder returning_binder(*binder, context);
 

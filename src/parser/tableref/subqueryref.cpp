@@ -14,7 +14,7 @@ SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {
 
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, Identifier alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(std::move(subquery_p)) {
-	this->alias = Identifier(std::move(alias_p));
+	this->alias = std::move(alias_p);
 }
 
 bool SubqueryRef::Equals(const TableRef &other_p) const {

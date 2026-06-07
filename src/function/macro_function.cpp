@@ -31,7 +31,7 @@ string FormatMacroFunction(const MacroFunction &function, const Identifier &name
 			parameters += " " + function.types[param_idx].ToString();
 		}
 
-		auto it = function.default_parameters.find(Identifier(param_name));
+		auto it = function.default_parameters.find(param_name);
 		if (it != function.default_parameters.end()) {
 			parameters += " := ";
 			parameters += it->second->ToString();
@@ -133,7 +133,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		// Figure out best function fit, bail if any positional arguments are duplicated in named arguments
 		for (; param_idx < positional_arguments.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			if (named_arguments.find(Identifier(param_name)) != named_arguments.end()) {
+			if (named_arguments.find(param_name) != named_arguments.end()) {
 				bail = true;
 				break;
 			}
@@ -157,8 +157,8 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		// Match remaining arguments with named/defaults
 		for (; param_idx < function->parameters.size(); param_idx++) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			const auto arg_it = named_arguments.find(Identifier(param_name));
-			const auto default_it = function->default_parameters.find(Identifier(param_name));
+			const auto arg_it = named_arguments.find(param_name);
+			const auto default_it = function->default_parameters.find(param_name);
 			if (arg_it == named_arguments.end() && default_it == function->default_parameters.end()) {
 				break; // The parameter has no argument (supplied/default)!
 			}
@@ -171,8 +171,8 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			if (param_type == LogicalType::UNKNOWN) {
 				macro_cost += 1000000;
 			} else {
-				const auto cast_cost = CastFunctionSet::ImplicitCastCost(
-				    binder.context, named_arg_types[Identifier(param_name)], param_type);
+				const auto cast_cost =
+				    CastFunctionSet::ImplicitCastCost(binder.context, named_arg_types[param_name], param_type);
 				if (cast_cost < 0) {
 					break; // No cast possible
 				}
@@ -231,7 +231,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	// Add the default values for parameters that have defaults, for which no argument was supplied
 	for (; param_idx < macro_def.parameters.size(); param_idx++) {
 		const auto &param_name = macro_def.parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-		auto named_arg_it = named_arguments.find(Identifier(param_name));
+		auto named_arg_it = named_arguments.find(param_name);
 		if (named_arg_it != named_arguments.end()) {
 			// The user has supplied an argument for this parameter
 			if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
@@ -242,9 +242,9 @@ MacroBindResult MacroFunction::BindMacroFunction(
 			continue;
 		}
 
-		const auto default_it = macro_def.default_parameters.find(Identifier(param_name));
+		const auto default_it = macro_def.default_parameters.find(param_name);
 		D_ASSERT(default_it != macro_def.default_parameters.end());
-		auto &named_arg = named_arguments[Identifier(param_name)];
+		auto &named_arg = named_arguments[param_name];
 		named_arg = default_it->second->Copy();
 		if (parameter_types[param_idx] != LogicalType::UNKNOWN) {
 			// This macro parameter is typed, add a cast

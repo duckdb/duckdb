@@ -154,7 +154,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 		}
 
 		// Qualify the column reference.
-		expr = make_uniq<ColumnRefExpression>(Identifier(col_ref.GetColumnName()), Identifier(table_name));
+		expr = make_uniq<ColumnRefExpression>(col_ref.GetColumnName(), Identifier(table_name));
 		return;
 	}
 	case ExpressionClass::FUNCTION: {
@@ -205,7 +205,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	} else {
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
-			auto &column = column_list.GetColumn(Identifier(name));
+			auto &column = column_list.GetColumn(name);
 			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}

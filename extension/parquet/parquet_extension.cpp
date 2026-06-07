@@ -879,7 +879,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			// Cast the column to GEOMETRY
 			auto cast_expr =
 			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
-			cast_expr->SetAlias(Identifier(name));
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -891,7 +891,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 			// Cast the column to the new type
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->SetAlias(Identifier(name));
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -904,7 +904,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			});
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->SetAlias(Identifier(name));
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}

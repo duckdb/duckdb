@@ -249,7 +249,7 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 	auto result =
 	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
 	if (result->GetAlias().empty() && index < names.size()) {
-		result->SetAlias(Identifier(names[index]));
+		result->SetAlias(names[index]);
 	}
 	return std::move(result);
 }
@@ -352,7 +352,7 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i],
 					                                                ColumnBinding(table_index, ProjectionIndex(i)));
 					if (i < names.size()) {
-						expr->SetAlias(Identifier(names[i]));
+						expr->SetAlias(names[i]);
 					}
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}

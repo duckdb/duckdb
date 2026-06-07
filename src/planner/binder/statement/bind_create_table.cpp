@@ -82,7 +82,7 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &conte
                                                             const vector<unique_ptr<Constraint>> &constraints,
                                                             const Identifier &table_name, const ColumnList &columns) {
 	auto binder = Binder::CreateBinder(context);
-	return binder->BindConstraints(constraints, Identifier(table_name), columns);
+	return binder->BindConstraints(constraints, table_name, columns);
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEntry &table) {
@@ -571,7 +571,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		string fk_schema =
 		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(Identifier(fk_catalog), Identifier(fk_schema), table_lookup);
+		auto table_entry = entry_retriever.GetEntry(fk_catalog, Identifier(fk_schema), table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

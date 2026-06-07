@@ -132,8 +132,8 @@ void Binder::SearchSchema(CreateInfo &info) {
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
 		auto &default_entry = search_path->GetDefault();
-		info.catalog = Identifier(default_entry.catalog);
-		info.schema = Identifier(default_entry.schema);
+		info.catalog = default_entry.catalog;
+		info.schema = default_entry.schema;
 	} else if (IsInvalidSchema(info.schema)) {
 		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
 	} else if (IsInvalidCatalog(info.catalog)) {
@@ -328,7 +328,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			// Save this back as a constant expression
 			auto const_expr = make_uniq<ConstantExpression>(default_val);
-			const_expr->SetAlias(Identifier(param_name));
+			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
 		}
 
@@ -342,7 +342,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			auto it = function->default_parameters.find(Identifier(param_name));
+			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
 				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
@@ -588,7 +588,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog);
-		properties.RegisterDBModify(Catalog::GetCatalog(context, Identifier(catalog)), context,
+		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
