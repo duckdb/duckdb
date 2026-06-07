@@ -27,7 +27,7 @@ public:
 
 public:
 	unique_ptr<LogicalOperator> plan;
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> types;
 	identifier_map_t<BoundParameterData> parameter_data;
 

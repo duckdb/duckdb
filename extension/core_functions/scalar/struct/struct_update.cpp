@@ -128,8 +128,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
-		auto update =
-		    incoming_children.find(Identifier(StructType::GetChildName(existing_type, field_idx).GetIdentifierName()));
+		auto update = incoming_children.find(StructType::GetChildName(existing_type, field_idx));
 		if (update == incoming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {

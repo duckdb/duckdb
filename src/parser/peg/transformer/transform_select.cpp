@@ -879,7 +879,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 	if (join_qualifier.on_clause) {
 		result->condition = std::move(join_qualifier.on_clause);
 	} else if (!join_qualifier.using_columns.empty()) {
-		result->using_columns = StringsToIdentifiers(join_qualifier.using_columns);
+		result->using_columns = join_qualifier.using_columns;
 	} else {
 		throw InternalException("Invalid join qualifier found.");
 	}
@@ -913,7 +913,7 @@ JoinQualifier PEGTransformerFactory::TransformUsingClause(PEGTransformer &transf
 		if (col_identifier.empty()) {
 			throw ParserException("Column identifier cannot be empty");
 		}
-		result.using_columns.push_back(col_identifier);
+		result.using_columns.push_back(Identifier(col_identifier));
 	}
 	return result;
 }
@@ -1615,9 +1615,9 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, Parse
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	auto cte_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	vector<string> cte_aliases;
-	transformer.TransformOptional<vector<string>>(list_pr, 1, cte_aliases);
-	result->aliases = StringsToIdentifiers(cte_aliases);
+	vector<Identifier> cte_aliases;
+	transformer.TransformOptional<vector<Identifier>>(list_pr, 1, cte_aliases);
+	result->aliases = std::move(cte_aliases);
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 2, result->key_targets);
 	auto &materialized_opt = list_pr.Child<OptionalParseResult>(4);
 	if (materialized_opt.HasResult()) {

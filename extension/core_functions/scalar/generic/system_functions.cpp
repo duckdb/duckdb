@@ -94,7 +94,7 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 // txid_current
 void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
-	auto &catalog = Catalog::GetCatalog(context, Identifier(DatabaseManager::GetDefaultDatabase(context)));
+	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
 	auto &transaction = DuckTransaction::Get(context, catalog);
 	auto val = Value::UBIGINT(transaction.start_time);
 	result.Reference(val, count_t(input.size()));

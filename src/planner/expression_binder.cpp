@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(Identifier(function.FunctionName().GetIdentifierName()))) {
+		if (IsUnnestFunction(function.FunctionName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}

@@ -49,14 +49,15 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	return false;
 }
 
-bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
+bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
                       const vector<LogicalType> &types, const vector<column_t> &column_ids,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
 	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
 	// construct the pushdown info
-	MultiFilePushdownInfo info(table_index, names, column_ids, extra_info);
+	auto name_strings = IdentifiersToStrings(names);
+	MultiFilePushdownInfo info(table_index, name_strings, column_ids, extra_info);
 
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
@@ -202,7 +203,7 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 }
 
 unique_ptr<MultiFileList> MultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                                               const vector<string> &names,
+                                                               const vector<Identifier> &names,
                                                                const vector<LogicalType> &types,
                                                                const vector<column_t> &column_ids,
                                                                TableFilterSet &filters) const {

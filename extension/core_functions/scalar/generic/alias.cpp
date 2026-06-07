@@ -5,10 +5,10 @@ namespace duckdb {
 
 namespace {
 struct AliasBindData : public FunctionData {
-	explicit AliasBindData(string alias_p) : alias(std::move(alias_p)) {
+	explicit AliasBindData(Identifier alias_p) : alias(std::move(alias_p)) {
 	}
 
-	string alias;
+	Identifier alias;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<AliasBindData>(alias);
@@ -21,14 +21,14 @@ struct AliasBindData : public FunctionData {
 };
 
 unique_ptr<FunctionData> AliasBind(BindScalarFunctionInput &input) {
-	return make_uniq<AliasBindData>(input.GetArguments()[0]->GetName().GetIdentifierName());
+	return make_uniq<AliasBindData>(input.GetArguments()[0]->GetName());
 }
 } // namespace
 
 static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_data = func_expr.BindInfo()->Cast<AliasBindData>();
-	Value v(state.expr.GetAlias().empty() ? bind_data.alias : state.expr.GetAlias().GetIdentifierName());
+	Value v(state.expr.GetAlias().empty() ? bind_data.alias : state.expr.GetAlias());
 	result.Reference(v, count_t(args.size()));
 }
 

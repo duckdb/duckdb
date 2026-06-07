@@ -496,7 +496,7 @@
       {
         "id": 203,
         "name": "select_list",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,

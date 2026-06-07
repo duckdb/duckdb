@@ -64,7 +64,7 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 	return name_to_type_map;
 }
 
-static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child_names,
+static void GetChildNamesAndTypes(const LogicalType &type, vector<Identifier> &child_names,
                                   vector<LogicalType> &child_types) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
@@ -88,7 +88,7 @@ static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child
 	} // LCOV_EXCL_STOP
 }
 
-void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
+void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<Identifier> &names,
                                const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
@@ -103,7 +103,7 @@ void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const 
 		}
 
 		// Cannot use GetChildNameToTypeMap here because we lose order, and we want to generate depth-first
-		vector<string> child_names;
+		vector<Identifier> child_names;
 		vector<LogicalType> child_types;
 		GetChildNamesAndTypes(col_type, child_names, child_types);
 		GenerateFieldIDs(inserted.first->second.child_field_ids, field_id, child_names, child_types);

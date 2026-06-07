@@ -4,7 +4,7 @@
 namespace duckdb {
 struct JoinQualifier {
 	unique_ptr<ParsedExpression> on_clause;
-	vector<string> using_columns;
+	vector<Identifier> using_columns;
 };
 
 } // namespace duckdb

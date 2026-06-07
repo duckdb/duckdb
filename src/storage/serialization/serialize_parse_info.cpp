@@ -385,7 +385,7 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", catalog);
 	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
 	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "select_list", select_list);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "select_list", select_list);
 	serializer.WritePropertyWithDefault<bool>(204, "is_from", is_from);
 	serializer.WritePropertyWithDefault<string>(205, "format", format);
 	serializer.WritePropertyWithDefault<string>(206, "file_path", file_path);
@@ -399,7 +399,7 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog", result->catalog);
 	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
-	deserializer.ReadPropertyWithDefault<vector<string>>(203, "select_list", result->select_list);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "select_list", result->select_list);
 	deserializer.ReadPropertyWithDefault<bool>(204, "is_from", result->is_from);
 	deserializer.ReadPropertyWithDefault<string>(205, "format", result->format);
 	deserializer.ReadPropertyWithDefault<string>(206, "file_path", result->file_path);

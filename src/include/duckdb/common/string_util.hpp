@@ -230,6 +230,7 @@ public:
 
 	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
 	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);
+	DUCKDB_API static idx_t CIFind(const vector<Identifier> &vec, const Identifier &str);
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>

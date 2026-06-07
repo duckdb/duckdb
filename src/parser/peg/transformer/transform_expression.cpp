@@ -1283,7 +1283,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 			collate_string = const_expr.GetValue().GetValue<string>();
 		} else if (collate_string_expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			auto &col_ref = collate_string_expr->Cast<ColumnRefExpression>();
-			collate_string = StringUtil::Join(IdentifiersToStrings(col_ref.ColumnNames()), ".");
+			collate_string = StringUtil::Join(col_ref.ColumnNames(), ".");
 		} else {
 			throw NotImplementedException("Unexpected expression encountered for collate, %s",
 			                              EnumUtil::ToString(collate_string_expr->GetExpressionClass()));
@@ -1804,8 +1804,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
 				                      rename_column.first.ToString());
 			}
-			if (result->ReplaceList().find(Identifier(rename_column.first.column.GetIdentifierName())) !=
-			    result->ReplaceList().end()) {
+			if (result->ReplaceList().find(rename_column.first.column) != result->ReplaceList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
 				                      rename_column.first.ToString());
 			}

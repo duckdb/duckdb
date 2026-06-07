@@ -5,7 +5,7 @@ namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
     PEGTransformer &transformer, const bool &unique_index, const bool &if_not_exists, const string &index_name,
-    unique_ptr<BaseTableRef> base_table_name, const vector<string> &insert_column_list, const string &index_type,
+    unique_ptr<BaseTableRef> base_table_name, const vector<Identifier> &insert_column_list, const string &index_type,
     vector<unique_ptr<ParsedExpression>> index_element, case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
     unique_ptr<ParsedExpression> where_clause) {
 	auto result = make_uniq<CreateStatement>();

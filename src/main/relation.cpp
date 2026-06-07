@@ -138,7 +138,7 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
                                     JoinRefType ref_type) {
 	if (expression_list.size() > 1 || expression_list[0]->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
-		vector<string> using_columns;
+		vector<Identifier> using_columns;
 		for (auto &expr : expression_list) {
 			if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 				throw ParserException("Expected a single expression as join condition");
@@ -147,7 +147,7 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
 			if (colref.IsQualified()) {
 				throw ParserException("Expected unqualified column for column in USING clause");
 			}
-			using_columns.push_back(colref.ColumnNames()[0].GetIdentifierName());
+			using_columns.push_back(colref.ColumnNames()[0]);
 		}
 		return make_shared_ptr<JoinRelation>(shared_from_this(), other, std::move(using_columns), type, ref_type);
 	} else {

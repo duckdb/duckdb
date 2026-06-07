@@ -318,8 +318,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 						throw InternalException("Expected a type expression");
 					}
 					auto &type_expr = expr->Cast<TypeExpression>();
-					if (DefaultTypeGenerator::GetDefaultType(Identifier(type_expr.GetTypeName().GetIdentifierName())) !=
-					    LogicalTypeId::VARCHAR) {
+					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
 						throw ParserException("Only VARCHAR columns can have collations!");
 					}
 				} else {

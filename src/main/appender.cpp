@@ -577,8 +577,8 @@ Appender::~Appender() {
 	Destructor();
 }
 
-vector<string> Appender::GetExpectedNames() {
-	vector<string> expected_names;
+vector<Identifier> Appender::GetExpectedNames() {
+	vector<Identifier> expected_names;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &col_name = description->columns[column_ids[i].index].Name();
 		expected_names.emplace_back(col_name);
@@ -587,7 +587,7 @@ vector<string> Appender::GetExpectedNames() {
 }
 
 string Appender::ConstructQuery(TableDescription &description_p, const string &table_name,
-                                const vector<string> &expected_names) {
+                                const vector<Identifier> &expected_names) {
 	string query = "INSERT INTO ";
 	if (!description_p.database.empty()) {
 		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
@@ -621,7 +621,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto expected_names = GetExpectedNames();
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
-	auto table_ref = GetColumnDataTableRef(collection, table_name, StringsToIdentifiers(expected_names));
+	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
 	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
 	context_ref->Append(std::move(stmt));
 }
@@ -702,8 +702,8 @@ void Appender::ClearColumns() {
 //===--------------------------------------------------------------------===//
 // Query Appender
 //===--------------------------------------------------------------------===//
-QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<string> names_p,
-                             string table_name_p, const idx_t flush_memory_threshold_p)
+QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<Identifier> names_p,
+                             Identifier table_name_p, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
       query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
 	types = std::move(types_p);
@@ -722,8 +722,8 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	if (!context_ref) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
-	auto table_ref = GetColumnDataTableRef(collection, table_name, StringsToIdentifiers(names));
-	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
+	auto table_ref = GetColumnDataTableRef(collection, table_name.GetIdentifierName(), names);
+	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
 }
 

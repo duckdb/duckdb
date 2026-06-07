@@ -556,7 +556,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyTableIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 0);
-	vector<string> insert_column_list {};
+	vector<Identifier> insert_column_list {};
 	transformer.TransformOptional(list_pr, 1, insert_column_list);
 	auto from_or_to = transformer.Transform<bool>(list_pr, 2);
 	auto copy_file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 3);
@@ -950,7 +950,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateIndexStmt
 		index_name = index_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 5);
-	vector<string> insert_column_list {};
+	vector<Identifier> insert_column_list {};
 	transformer.TransformOptional(list_pr, 6, insert_column_list);
 	string index_type {};
 	transformer.TransformOptional(list_pr, 7, index_type);
@@ -1600,7 +1600,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateViewStmtI
 	bool if_not_exists {};
 	transformer.TransformOptional(list_pr, 2, if_not_exists);
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 3);
-	vector<string> insert_column_list {};
+	vector<Identifier> insert_column_list {};
 	transformer.TransformOptional(list_pr, 4, insert_column_list);
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list {};
 	transformer.TransformOptional(list_pr, 5, with_list);
@@ -2213,7 +2213,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertStatement
 	auto insert_target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 4);
 	InsertColumnOrder by_name_or_position {};
 	transformer.TransformOptional(list_pr, 5, by_name_or_position);
-	vector<string> insert_column_list {};
+	vector<Identifier> insert_column_list {};
 	transformer.TransformOptional(list_pr, 6, insert_column_list);
 	auto insert_values = transformer.Transform<InsertValues>(list_pr, 7);
 	unique_ptr<OnConflictInfo> on_conflict_clause {};
@@ -2317,7 +2317,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertColumnLis
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto result = TransformInsertColumnList(transformer, column_list);
-	return make_uniq<TypedTransformResult<vector<string>>>(result);
+	return make_uniq<TypedTransformResult<vector<Identifier>>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertValuesInternal(PEGTransformer &transformer,
@@ -2619,7 +2619,7 @@ PEGTransformerFactory::TransformInsertByNameOrPositionInternal(PEGTransformer &t
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertValuesListInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> insert_column_list {};
+	vector<Identifier> insert_column_list {};
 	transformer.TransformOptional(list_pr, 0, insert_column_list);
 	vector<unique_ptr<ParsedExpression>> expression;
 	auto expression_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(2)));

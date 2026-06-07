@@ -60,7 +60,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		RunPostBindExtensions(context, *binder, bound_statement);
 
-		this->names = IdentifiersToStrings(bound_statement.names);
+		this->names = bound_statement.names;
 		this->types = bound_statement.types;
 		this->plan = std::move(bound_statement.plan);
 	} catch (const std::exception &ex) {
@@ -79,7 +79,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 				if (bound_statement.plan != nullptr) {
 					RunPostBindExtensions(context, *this->binder, bound_statement);
 
-					this->names = IdentifiersToStrings(bound_statement.names);
+					this->names = bound_statement.names;
 					this->types = bound_statement.types;
 					this->plan = std::move(bound_statement.plan);
 					break;

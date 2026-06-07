@@ -34,7 +34,7 @@ public:
 	//! The table name to copy to/from
 	Identifier table;
 	//! List of columns to copy to/from
-	vector<string> select_list;
+	vector<Identifier> select_list;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
 	//! The file format of the external file

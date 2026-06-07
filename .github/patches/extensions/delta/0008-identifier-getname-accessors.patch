@@ -67,10 +67,47 @@ index 89b3cd5..00315ed 100644
  	}
  
  	auto struct_type = LogicalType::STRUCT(children_types);
+diff --git a/src/functions/delta_metadata_scan.cpp b/src/functions/delta_metadata_scan.cpp
+index 571136d..2e0429f 100644
+--- a/src/functions/delta_metadata_scan.cpp
++++ b/src/functions/delta_metadata_scan.cpp
+@@ -87,7 +87,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
+ 	auto file_list = make_uniq<DeltaMultiFileList>(context, input_string, version);
+ 
+ 	// TODO: this is weird
+-	vector<string> _n;
++	vector<Identifier> _n;
+ 	vector<LogicalType> _t;
+ 	file_list->Bind(_t, _n);
+ 
 diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
-index f48db80..65a2b20 100644
+index f48db80..4d19ca0 100644
 --- a/src/functions/delta_scan/delta_multi_file_list.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -598,12 +598,12 @@ static bool ExtractHasNullConstraintsInArrays(const vector<DeltaMultiFileColumnD
+ 	return false;
+ }
+ 
+-void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<string> &names) {
++void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	unique_lock<mutex> lck(lock);
+ 
+ 	if (have_bound) {
+ 		for (const auto &field : global_columns) {
+-			names.push_back(field.name);
++			names.push_back(Identifier(field.name));
+ 			return_types.push_back(field.type);
+ 		}
+ 		return;
+@@ -618,7 +618,7 @@ void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<string>
+ 	}
+ 
+ 	for (const auto &field : visited_schema) {
+-		names.push_back(field.name);
++		names.push_back(Identifier(field.name));
+ 		return_types.push_back(field.type);
+ 	}
+ 
 @@ -952,13 +952,13 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
  
  	if (should_log) {
@@ -91,20 +128,46 @@ index f48db80..65a2b20 100644
  		}
  		auto struct_value = Value::STRUCT(struct_fields);
  		logger.WriteLog(delta_log_type, log_level, struct_value.ToString());
+@@ -967,7 +967,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 
+ unique_ptr<MultiFileList>
+ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                          const vector<string> &names, const vector<LogicalType> &types,
++                                          const vector<Identifier> &names, const vector<LogicalType> &types,
+                                           const vector<column_t> &column_ids, TableFilterSet &filters) const {
+ 	auto pushdown_mode = GetDeltaFilterPushdownMode(context, options);
+ 	if (pushdown_mode == DeltaFilterPushdownMode::NONE || pushdown_mode == DeltaFilterPushdownMode::CONSTANT_ONLY) {
 diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
-index 32514ee..b5bcf3b 100644
+index 32514ee..8da41a2 100644
 --- a/src/functions/delta_scan/delta_multi_file_reader.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
-@@ -146,7 +146,8 @@ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList
- 	}
+@@ -104,7 +104,7 @@ void FinalizeBindBaseOverride(MultiFileReaderData &reader_data, const MultiFileO
+ }
  
- 	// FIXME: this is slightly hacky here
--	bind_data.schema = DeltaMultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
-+	bind_data.schema = DeltaMultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(names),
-+	                                                                            return_types);
+ bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-                                vector<string> &names, MultiFileReaderBindData &bind_data) {
++                                vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+ 	auto &delta_snapshot = dynamic_cast<DeltaMultiFileList &>(files);
  
- 	// Set defaults
- 	for (auto &col : bind_data.schema) {
+ 	delta_snapshot.Bind(return_types, names);
+@@ -113,7 +113,7 @@ bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files,
+ }
+ 
+ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
+-                                       vector<LogicalType> &return_types, vector<string> &names,
++                                       vector<LogicalType> &return_types, vector<Identifier> &names,
+                                        MultiFileReaderBindData &bind_data) {
+ 	// Disable all other multifilereader options
+ 	options.auto_detect_hive_partitioning = false;
+@@ -133,7 +133,7 @@ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList
+ 		for (auto &part : partitions) {
+ 			idx_t hive_partitioning_index;
+ 			auto lookup = std::find_if(names.begin(), names.end(),
+-			                           [&](const string &col_name) { return StringUtil::CIEquals(col_name, part); });
++			                           [&](const Identifier &col_name) { return col_name == part; });
+ 			if (lookup != names.end()) {
+ 				// hive partitioning column also exists in file - override
+ 				auto idx = NumericCast<idx_t>(lookup - names.begin());
 diff --git a/src/functions/delta_scan/delta_scan.cpp b/src/functions/delta_scan/delta_scan.cpp
 index a26b9d8..b350152 100644
 --- a/src/functions/delta_scan/delta_scan.cpp
@@ -196,8 +259,47 @@ index 120e539..155728d 100644
  };
  
  class DeltaFileListFunction : public BaseMetadataFunction {
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index 8667be4..cdd6f5c 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -99,13 +99,13 @@ public:
+ 
+ 	//! MultiFileList API
+ public:
+-	void Bind(vector<LogicalType> &return_types, vector<string> &names);
++	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
+ 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+ 	                                                MultiFilePushdownInfo &info,
+ 	                                                vector<unique_ptr<Expression>> &filters) const override;
+ 
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<string> &names, const vector<LogicalType> &types,
++	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+diff --git a/src/include/functions/delta_scan/delta_multi_file_reader.hpp b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+index d56b7a0..ba8db15 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_reader.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+@@ -33,12 +33,12 @@ struct DeltaMultiFileReader : public MultiFileReader {
+ 
+ 	//! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
+ 	//! readers will try read
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 
+ 	//! Override the Options bind
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
++	                 vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 
+ 	unique_ptr<MultiFileReaderGlobalState>
+ 	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
 diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
-index c2bae88..c509b44 100644
+index c2bae88..37ab743 100644
 --- a/src/storage/delta_insert.cpp
 +++ b/src/storage/delta_insert.cpp
 @@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
@@ -229,11 +331,37 @@ index c2bae88..c509b44 100644
  		auto default_table_entry =
  		    LookupEntry(retriever, default_schema, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
  		table_entry = default_table_entry.entry->Cast<DeltaTableEntry>();
+@@ -341,7 +341,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	auto names_to_write = columns.GetColumnNames();
+ 	auto types_to_write = columns.GetColumnTypes();
+ 
+-	auto function_data = copy_fun->function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun->function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 
+ 	auto &insert = planner.Make<DeltaInsert>(op, *table_entry, op.column_index_map);
+ 
+@@ -371,7 +371,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	physical_copy_ref.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+ 	physical_copy_ref.write_partition_columns = true;
+ 	physical_copy_ref.children.push_back(*plan);
+-	physical_copy_ref.names = names_to_write;
++	physical_copy_ref.names = StringsToIdentifiers(names_to_write);
+ 	physical_copy_ref.expected_types = types_to_write;
+ 	physical_copy_ref.hive_file_pattern = true;
+ 
 diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
-index 9ce962d..5ef48c4 100644
+index 9ce962d..ac160b4 100644
 --- a/src/storage/delta_schema_entry.cpp
 +++ b/src/storage/delta_schema_entry.cpp
-@@ -117,10 +117,10 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+@@ -110,17 +110,17 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+ 
+ 	// Get the names and types from the delta snapshot
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	snapshot->Bind(return_types, names);
+ 
+ 	// TODO: forward nullability constraints
  
  	CreateTableInfo table_info;
  	for (idx_t i = 0; i < return_types.size(); i++) {
@@ -248,7 +376,7 @@ index 9ce962d..5ef48c4 100644
  	// Copy over constraints to table info TODO: these are incompatible currently
  	// table_info.constraints = snapshot->not_null_constraints;}
 diff --git a/src/storage/delta_table_entry.cpp b/src/storage/delta_table_entry.cpp
-index ac50afb..79a8e50 100644
+index ac50afb..1831d36 100644
 --- a/src/storage/delta_table_entry.cpp
 +++ b/src/storage/delta_table_entry.cpp
 @@ -36,7 +36,7 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
@@ -260,7 +388,7 @@ index ac50afb..79a8e50 100644
  	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "delta_scan");
  	if (!catalog_entry) {
  		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);
-@@ -64,7 +64,7 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+@@ -64,13 +64,13 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
  	}
  
  	function_info->snapshot = this->snapshot;
@@ -269,7 +397,25 @@ index ac50afb..79a8e50 100644
  	delta_scan_function.function_info = std::move(function_info);
  
  	vector<Value> inputs = {delta_catalog.GetDBPath()};
-@@ -90,7 +90,7 @@ case_insensitive_map_t<vector<NestedNotNullConstraint>> DeltaTableEntry::GetNotN
+ 	named_parameter_map_t param_map;
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	TableFunctionRef empty_ref;
+ 
+ 	// Propagate settings
+@@ -80,7 +80,9 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, delta_scan_function,
+ 	                                  empty_ref);
+ 
+-	auto result = delta_scan_function.bind(context, bind_input, return_types, names);
++	vector<string> bind_names;
++	auto result = delta_scan_function.bind(context, bind_input, return_types, bind_names);
++	names = StringsToIdentifiers(bind_names);
+ 	bind_data = std::move(result);
+ 
+ 	return delta_scan_function;
+@@ -90,7 +92,7 @@ case_insensitive_map_t<vector<NestedNotNullConstraint>> DeltaTableEntry::GetNotN
  	case_insensitive_map_t<vector<NestedNotNullConstraint>> result;
  	for (auto &constraint : snapshot->GetNestedNotNullConstraints()) {
  		auto &col = GetColumn(constraint.index);

@@ -180,7 +180,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			action.expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
 		CheckInsertColumnCountMismatch(expected_types.size(), action.expressions.size(), !action.insert_columns.empty(),
-		                               Identifier(table.name.GetIdentifierName()));
+		                               table.name);
 		// explicit expressions - plan them
 		for (idx_t i = 0; i < action.expressions.size(); i++) {
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);

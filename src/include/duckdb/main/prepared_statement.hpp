@@ -61,7 +61,7 @@ public:
 	//! Returns the result SQL types of the prepared statement
 	DUCKDB_API const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
-	DUCKDB_API const vector<string> &GetNames();
+	DUCKDB_API const vector<Identifier> &GetNames();
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 

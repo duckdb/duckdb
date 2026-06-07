@@ -23,8 +23,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(
-		    lambda_bindings, Identifier(col_ref.GetColumnName().GetIdentifierName()));
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
@@ -39,7 +38,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 
 	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.ColumnNames();
-	auto result_name = StringUtil::Join(IdentifiersToStrings(column_names), ".");
+	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
 		// check if this is a lateral join column/parameter
 		auto result = BindCorrelatedColumns(expr_ptr, ErrorData("error"));
@@ -53,8 +52,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	}
 
 	if (accept_sql_value_functions) {
-		auto value_function =
-		    ExpressionBinder::GetSQLValueFunction(Identifier(column_names.back().GetIdentifierName()));
+		auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 		if (value_function) {
 			return BindExpression(value_function, depth, root_expression);
 		}

@@ -93,7 +93,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	auto plan = child_binder->Bind(*ref.query);
 
 	// construct a column data collection with the result
-	vector<string> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
+	vector<Identifier> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	vector<LogicalType> return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                                    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	DataChunk output;
@@ -143,10 +143,10 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	auto table_index = GenerateTableIndex();
 
 	BoundStatement result;
-	result.names = StringsToIdentifiers(return_names);
+	result.names = return_names;
 	result.types = return_types;
 	result.plan = make_uniq<LogicalColumnDataGet>(table_index, return_types, std::move(collection));
-	bind_context.AddGenericBinding(table_index, "__show_select", StringsToIdentifiers(return_names), return_types);
+	bind_context.AddGenericBinding(table_index, "__show_select", return_names, return_types);
 	return result;
 }
 

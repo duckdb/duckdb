@@ -168,7 +168,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetDateTruncFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());

@@ -115,7 +115,7 @@ protected:
 	static constexpr uint16_t PARQUET_DEFINE_VALID = UINT16_C(65535);
 
 public:
-	ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path);
+	ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path);
 	virtual ~ColumnWriter();
 
 public:
@@ -232,7 +232,7 @@ public:
 	//! The parent writer (if this is a nested field)
 	optional_ptr<ColumnWriter> parent;
 	ParquetColumnSchema column_schema;
-	vector<string> schema_path;
+	vector<Identifier> schema_path;
 	bool can_have_nulls;
 
 protected:

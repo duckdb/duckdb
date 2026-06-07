@@ -837,7 +837,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 				throw BinderException(
 				    *unpivot_expr,
 				    "UNPIVOT clause must contain exactly one column - expression \"%s\" contains multiple (%s)",
-				    unpivot_expr->ToString(), StringUtil::Join(IdentifiersToStrings(result), ", "));
+				    unpivot_expr->ToString(), StringUtil::Join(result, ", "));
 			}
 			handled_columns.insert(result[0]);
 			entry.column_names.push_back(std::move(result[0]));

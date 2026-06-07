@@ -335,7 +335,7 @@ struct ICUStrptime : public ICUDateFunc {
 		return bound_function.GetBindCallback()(new_input);
 	}
 
-	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
+	static void TailPatch(const Identifier &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &scalar_function = loader.GetFunction(name);
 		auto &functions = scalar_function.functions.functions;
@@ -368,7 +368,7 @@ struct ICUStrptime : public ICUDateFunc {
 		bound_function.SetBindCallback(StrpTimeBindFunction);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		TailPatch(name, loader, types);
 
@@ -619,7 +619,7 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction<timestamp_tz_t>, Bind));

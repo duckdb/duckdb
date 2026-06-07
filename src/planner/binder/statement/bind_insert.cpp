@@ -73,8 +73,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
-		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(),
-		                               Identifier(table.name.GetIdentifierName()));
+		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(), table.name);
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -297,7 +296,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto storage_info = table.GetStorageInfo(context);
 	auto &columns = table.GetColumns();
 	// set up the columns on which to join
-	vector<vector<string>> all_distinct_on_columns;
+	vector<vector<Identifier>> all_distinct_on_columns;
 	if (on_conflict_info.indexed_columns.empty()) {
 		// When omitting the conflict target, we derive the join columns from the primary key/unique constraints
 		// traverse the primary key/unique constraints
@@ -312,7 +311,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 
 			vector<unique_ptr<ParsedExpression>> and_children;
 			auto &indexed_columns = index.column_set;
-			vector<string> distinct_on_columns;
+			vector<Identifier> distinct_on_columns;
 			for (auto &column : columns.Physical()) {
 				if (!indexed_columns.count(column.Physical().index)) {
 					continue;
@@ -399,7 +398,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
 			                      "CONSTRAINT or INDEX");
 		}
-		all_distinct_on_columns.emplace_back(IdentifiersToStrings(on_conflict_info.indexed_columns));
+		all_distinct_on_columns.emplace_back(on_conflict_info.indexed_columns);
 		merge_into->node->using_columns = on_conflict_info.indexed_columns;
 	}
 
@@ -614,8 +613,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 			MoveCorrelatedExpressions(*select_binder);
 		}
 		// inserting from a select - check if the column count matches
-		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(),
-		                               Identifier(table.name.GetIdentifierName()));
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(), table.name);
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {

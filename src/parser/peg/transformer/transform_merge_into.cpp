@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 	if (join_qualifier.on_clause) {
 		node.join_condition = std::move(join_qualifier.on_clause);
 	} else {
-		node.using_columns = StringsToIdentifiers(join_qualifier.using_columns);
+		node.using_columns = join_qualifier.using_columns;
 	}
 
 	set<MergeActionCondition> unconditional_actions;
@@ -114,10 +114,11 @@ PEGTransformerFactory::TransformInsertByNameOrPosition(PEGTransformer &transform
 }
 
 unique_ptr<MergeIntoAction>
-PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer, const vector<string> &insert_column_list,
+PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer,
+                                                 const vector<Identifier> &insert_column_list,
                                                  vector<unique_ptr<ParsedExpression>> expression) {
 	auto result = make_uniq<MergeIntoAction>();
-	result->insert_columns = StringsToIdentifiers(insert_column_list);
+	result->insert_columns = insert_column_list;
 	result->expressions = std::move(expression);
 	return result;
 }

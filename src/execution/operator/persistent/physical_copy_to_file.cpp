@@ -1428,7 +1428,7 @@ string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &v
 			const auto &partition_col_name = op.names[op.partition_columns[i]];
 			const auto &partition_value = values[i];
 			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name);
+			p_dir += HivePartitioning::Escape(partition_col_name.GetIdentifierName());
 			p_dir += "=";
 			if (partition_value.IsNull()) {
 				p_dir += "__HIVE_DEFAULT_PARTITION__";

@@ -21,7 +21,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(Identifier(info->name.GetIdentifierName()));
+		auto stmt_iter = statements.find(info->name);
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}

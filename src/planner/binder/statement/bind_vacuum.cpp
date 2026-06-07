@@ -39,7 +39,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	}
 
 	identifier_set_t column_name_set;
-	vector<string> non_generated_column_names;
+	vector<Identifier> non_generated_column_names;
 	for (auto &col_name : columns) {
 		if (column_name_set.count(col_name) > 0) {
 			throw BinderException("cannot vacuum or analyze the same column twice, i.e., there is a duplicate entry in "
@@ -64,7 +64,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		}
 		select_list.push_back(std::move(result.expression));
 	}
-	info.columns = StringsToIdentifiers(non_generated_column_names);
+	info.columns = non_generated_column_names;
 
 	auto &column_ids = get.GetColumnIds();
 	D_ASSERT(select_list.size() == column_ids.size());

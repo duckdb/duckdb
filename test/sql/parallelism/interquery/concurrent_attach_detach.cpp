@@ -251,14 +251,15 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			auto query = StringUtil::Format("MERGE INTO %s.main.%s USING appended_data USING (i) WHEN MATCHED THEN "
 			                                "UPDATE WHEN NOT MATCHED THEN INSERT",
 			                                SQLIdentifier(getDBName(db_id)), SQLIdentifier(tbl_str));
-			vector<string> names;
+			vector<Identifier> names;
 			names.push_back("i");
 			names.push_back("s");
 			names.push_back("ts");
 			names.push_back("obj");
 			base_appender = make_uniq<QueryAppender>(conn, query, types, names);
 		} else {
-			base_appender = make_uniq<Appender>(conn, Identifier(getDBName(db_id)), Identifier::DefaultSchema(), Identifier(tbl_str));
+			base_appender = make_uniq<Appender>(conn, Identifier(getDBName(db_id)), Identifier::DefaultSchema(),
+			                                    Identifier(tbl_str));
 		}
 		auto &appender = *base_appender;
 

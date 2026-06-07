@@ -308,7 +308,7 @@ void LogicalCTERef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<TableIndex>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<TableIndex>(201, "cte_index", cte_index);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "bound_columns", bound_columns);
 	/* [Deleted] (CTEMaterialize) "materialized_cte" */
 	serializer.WritePropertyWithDefault<bool>(205, "is_recurring", is_recurring);
 }
@@ -317,7 +317,7 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserialize
 	auto table_index = deserializer.ReadPropertyWithDefault<TableIndex>(200, "table_index");
 	auto cte_index = deserializer.ReadPropertyWithDefault<TableIndex>(201, "cte_index");
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "chunk_types");
-	auto bound_columns = deserializer.ReadPropertyWithDefault<vector<string>>(203, "bound_columns");
+	auto bound_columns = deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "bound_columns");
 	auto result = duckdb::unique_ptr<LogicalCTERef>(
 	    new LogicalCTERef(table_index, cte_index, std::move(chunk_types), std::move(bound_columns)));
 	deserializer.ReadDeletedProperty<CTEMaterialize>(204, "materialized_cte");

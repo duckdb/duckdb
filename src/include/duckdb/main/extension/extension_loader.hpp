@@ -106,10 +106,10 @@ public:
 	DUCKDB_API void RegisterCoordinateSystem(CreateCoordinateSystemInfo &info);
 
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
-	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const string &name);
-	DUCKDB_API TableFunctionCatalogEntry &GetTableFunction(const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> TryGetFunction(const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> TryGetTableFunction(const string &name);
+	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const Identifier &name);
+	DUCKDB_API TableFunctionCatalogEntry &GetTableFunction(const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> TryGetFunction(const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> TryGetTableFunction(const Identifier &name);
 
 	//! Add a function overload
 	DUCKDB_API void AddFunctionOverload(ScalarFunction function);

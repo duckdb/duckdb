@@ -239,7 +239,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
 	case ConstraintType::UNIQUE: {
-		return BindUniqueConstraint(constraint, Identifier(table.GetIdentifierName()), columns);
+		return BindUniqueConstraint(constraint, table, columns);
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		return BindForeignKey(constraint);
@@ -252,7 +252,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
 
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> types;
 
 	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
@@ -265,7 +265,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
-	binder->bind_context.AddGenericBinding(table_index, base.table, StringsToIdentifiers(names), types);
+	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
@@ -380,7 +380,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(Identifier(col.Name().GetIdentifierName()));
+		generated_columns.insert(col.Name());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -474,8 +474,8 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (find_primary_key) {
 			// found matching primary key
 			if (pk_names.size() != fk.fk_columns.size()) {
-				auto pk_name_str = StringUtil::Join(IdentifiersToStrings(pk_names), ",");
-				auto fk_name_str = StringUtil::Join(IdentifiersToStrings(fk.fk_columns), ",");
+				auto pk_name_str = StringUtil::Join(pk_names, ",");
+				auto fk_name_str = StringUtil::Join(fk.fk_columns, ",");
 				throw BinderException(
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
@@ -516,7 +516,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			    fk.info.table.GetIdentifierName(), name);
 		}
 	}
-	auto fk_names = StringUtil::Join(IdentifiersToStrings(fk.pk_columns), ",");
+	auto fk_names = StringUtil::Join(fk.pk_columns, ",");
 	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
 	                      "constraint on the columns %s",
 	                      fk.info.table.GetIdentifierName(), fk_names);
@@ -588,7 +588,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 			auto &storage = pk_table_entry_ptr.GetStorage();
 
 			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-				auto fk_column_names = StringUtil::Join(IdentifiersToStrings(fk.pk_columns), ",");
+				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
 				                      "present on these columns",
 				                      pk_table_entry_ptr.name, fk_column_names);

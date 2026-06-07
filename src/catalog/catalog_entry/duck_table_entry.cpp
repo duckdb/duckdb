@@ -688,8 +688,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 				for (const auto &col_name : unique.GetColumnNames()) {
 					if (col_name == info.removed_column) {
 						// Build constraint string for error message: UNIQUE(col1, col2, ...)
-						auto constraint_str =
-						    "UNIQUE(" + StringUtil::Join(IdentifiersToStrings(unique.GetColumnNames()), ", ") + ")";
+						auto constraint_str = "UNIQUE(" + StringUtil::Join(unique.GetColumnNames(), ", ") + ")";
 						throw CatalogException(
 						    "Cannot drop column \"%s\" because it is referenced in unique constraint %s",
 						    info.removed_column, constraint_str);

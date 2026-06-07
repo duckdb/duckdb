@@ -18,7 +18,7 @@ CopyOption::CopyOption() : type(LogicalType::ANY), mode(CopyOptionMode::READ_WRI
 CopyOption::CopyOption(LogicalType type_p, CopyOptionMode mode_p) : type(std::move(type_p)), mode(mode_p) {
 }
 
-vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type) {
+vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type) {
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		return {"Count"};

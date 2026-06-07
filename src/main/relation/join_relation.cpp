@@ -18,8 +18,8 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 	TryBindRelation(columns);
 }
 
-JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p,
-                           JoinType type, JoinRefType join_ref_type)
+JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
+                           vector<Identifier> using_columns_p, JoinType type, JoinRefType join_ref_type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       using_columns(std::move(using_columns_p)), join_type(type), join_ref_type(join_ref_type) {
 	if (left->context->GetContext() != right->context->GetContext()) {
@@ -42,7 +42,7 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	if (condition) {
 		join_ref->condition = condition->Copy();
 	}
-	join_ref->using_columns = StringsToIdentifiers(using_columns);
+	join_ref->using_columns = using_columns;
 	join_ref->type = join_type;
 	join_ref->delim_flipped = delim_flipped;
 	for (auto &col : duplicate_eliminated_columns) {

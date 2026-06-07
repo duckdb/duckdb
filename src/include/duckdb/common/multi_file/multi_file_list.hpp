@@ -109,7 +109,7 @@ public:
 	                                                        MultiFilePushdownInfo &info,
 	                                                        vector<unique_ptr<Expression>> &filters) const;
 	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-	                                                        const vector<string> &names,
+	                                                        const vector<Identifier> &names,
 	                                                        const vector<LogicalType> &types,
 	                                                        const vector<column_t> &column_ids,
 	                                                        TableFilterSet &filters) const;

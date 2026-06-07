@@ -227,18 +227,18 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
                                                                 const Identifier &column_name,
                                                                 ColumnBindType bind_type) {
 	ErrorData error;
-	vector<string> names;
+	vector<Identifier> names;
 	if (!catalog_name.empty()) {
-		names.push_back(catalog_name.GetIdentifierName());
+		names.push_back(catalog_name);
 	}
 	if (!schema_name.empty()) {
-		names.push_back(schema_name.GetIdentifierName());
+		names.push_back(schema_name);
 	}
-	names.push_back(table_name.GetIdentifierName());
-	names.push_back(column_name.GetIdentifierName());
+	names.push_back(table_name);
+	names.push_back(column_name);
 
 	BindingAlias alias {catalog_name, schema_name, table_name};
-	auto result = make_uniq<ColumnRefExpression>(StringsToIdentifiers(names));
+	auto result = make_uniq<ColumnRefExpression>(names);
 	auto binding = GetBinding(alias, column_name, error);
 	if (!binding) {
 		return std::move(result);

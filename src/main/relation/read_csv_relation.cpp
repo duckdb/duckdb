@@ -48,7 +48,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 
 	if (file_options.union_by_name) {
 		vector<LogicalType> types;
-		vector<string> names;
+		vector<Identifier> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
 		result->interface = make_uniq<CSVMultiFileInfo>();
@@ -74,12 +74,12 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	} else {
 		if (csv_options.auto_detect) {
 			vector<LogicalType> return_types;
-			vector<string> names;
+			vector<Identifier> names;
 			shared_ptr<CSVBufferManager> buffer_manager;
 			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
 			                                    names, multi_file_list);
 			for (idx_t i = 0; i < return_types.size(); i++) {
-				columns.emplace_back(Identifier(names[i]), return_types[i]);
+				columns.emplace_back(names[i], return_types[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {

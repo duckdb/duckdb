@@ -147,7 +147,7 @@ private:
 };
 
 void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
-                          vector<string> &names) {
+                          vector<Identifier> &names) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);

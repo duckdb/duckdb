@@ -264,7 +264,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, timestamp_tz_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
-	static void AddDateAddOperators(const string &name, ExtensionLoader &loader) {
+	static void AddDateAddOperators(const Identifier &name, ExtensionLoader &loader) {
 		//	temporal + interval
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetDateAddFunction<timestamp_tz_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
@@ -284,7 +284,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, interval_t, OP>(left_type, right_type, LogicalType::INTERVAL);
 	}
 
-	static void AddDateSubOperators(const string &name, ExtensionLoader &loader) {
+	static void AddDateSubOperators(const Identifier &name, ExtensionLoader &loader) {
 		//	temporal - interval
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetDateAddFunction<timestamp_tz_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
@@ -296,7 +296,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		loader.RegisterFunction(set);
 	}
 
-	static void AddDateAgeFunctions(const string &name, ExtensionLoader &loader) {
+	static void AddDateAgeFunctions(const Identifier &name, ExtensionLoader &loader) {
 		//	age(temporal, temporal)
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarAge>(

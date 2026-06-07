@@ -49,7 +49,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	// No value has been supplied yet,
 	// We return a shared pointer to an object that will get populated with a Value later
 	// When the BoundParameterExpression gets executed, this will be used to get the corresponding value
-	auto param_data = CreateOrGetData(Identifier(identifier.GetIdentifierName()));
+	auto param_data = CreateOrGetData(identifier);
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 
 	bound_expr->ParameterDataMutable() = param_data;

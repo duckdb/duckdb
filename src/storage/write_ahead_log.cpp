@@ -555,7 +555,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	auto name = unique.GetName(Identifier(parent.name.GetIdentifierName()));
+	auto name = unique.GetName(parent.name);
 	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();

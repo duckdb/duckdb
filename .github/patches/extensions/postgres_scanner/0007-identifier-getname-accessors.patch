@@ -1,3 +1,16 @@
+diff --git a/src/include/postgres_binary_copy.hpp b/src/include/postgres_binary_copy.hpp
+index f69e4fa..baecddf 100644
+--- a/src/include/postgres_binary_copy.hpp
++++ b/src/include/postgres_binary_copy.hpp
+@@ -19,7 +19,7 @@ public:
+ 	PostgresBinaryCopyFunction();
+ 
+ 	static unique_ptr<FunctionData> PostgresBinaryWriteBind(ClientContext &context, CopyFunctionBindInput &input,
+-	                                                        const vector<string> &names,
++	                                                        const vector<Identifier> &names,
+ 	                                                        const vector<LogicalType> &sql_types);
+ 
+ 	static unique_ptr<GlobalFunctionData>
 diff --git a/src/include/storage/postgres_index_entry.hpp b/src/include/storage/postgres_index_entry.hpp
 index c800f23..b468421 100644
 --- a/src/include/storage/postgres_index_entry.hpp
@@ -37,6 +50,19 @@ index 529c234..1c23ff2 100644
  	}
  
  	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/postgres_binary_copy.cpp b/src/postgres_binary_copy.cpp
+index bce7d22..faf96b8 100644
+--- a/src/postgres_binary_copy.cpp
++++ b/src/postgres_binary_copy.cpp
+@@ -62,7 +62,7 @@ struct PostgresBinaryWriteBindData : public TableFunctionData {};
+ 
+ unique_ptr<FunctionData> PostgresBinaryCopyFunction::PostgresBinaryWriteBind(ClientContext &context,
+                                                                              CopyFunctionBindInput &input,
+-                                                                             const vector<string> &names,
++                                                                             const vector<Identifier> &names,
+                                                                              const vector<LogicalType> &sql_types) {
+ 	return make_uniq<PostgresBinaryWriteBindData>();
+ }
 diff --git a/src/postgres_execute.cpp b/src/postgres_execute.cpp
 index ea9f6bb..46caebb 100644
 --- a/src/postgres_execute.cpp

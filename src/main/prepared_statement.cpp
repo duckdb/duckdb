@@ -51,7 +51,7 @@ const vector<LogicalType> &PreparedStatement::GetTypes() {
 	return data->types;
 }
 
-const vector<string> &PreparedStatement::GetNames() {
+const vector<Identifier> &PreparedStatement::GetNames() {
 	D_ASSERT(data);
 	return data->names;
 }

@@ -158,10 +158,10 @@ public:
 	void AddColumn(const Identifier &name) override;
 	void ClearColumns() override;
 	//! Get the expected names based on the active columns.
-	vector<string> GetExpectedNames();
+	vector<Identifier> GetExpectedNames();
 	//! Construct a query that appends data from, typically, a column data collection.
 	static string ConstructQuery(TableDescription &description_p, const string &table_name,
-	                             const vector<string> &expected_names);
+	                             const vector<Identifier> &expected_names);
 
 private:
 	//! A shared pointer to the context of this appender.
@@ -183,7 +183,7 @@ protected:
 class QueryAppender : public BaseAppender {
 public:
 	DUCKDB_API QueryAppender(Connection &con, string query, vector<LogicalType> types,
-	                         vector<string> names = vector<string>(), string table_name = string(),
+	                         vector<Identifier> names = vector<Identifier>(), Identifier table_name = Identifier(),
 	                         const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~QueryAppender() override;
 
@@ -193,9 +193,9 @@ private:
 	//! The query to run.
 	string query;
 	//! The column names of the to-be-appended data, or "col1, col2, ...", if empty.
-	vector<string> names;
+	vector<Identifier> names;
 	//! The table name that we can reference in the query, or "appended_data", if empty.
-	string table_name;
+	Identifier table_name;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;

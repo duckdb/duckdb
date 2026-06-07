@@ -37,10 +37,10 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
 		res = table_function.get_multi_file_reader(table_function);
-		res->function_name = Identifier(table_function.name.GetIdentifierName());
+		res->function_name = table_function.name;
 	} else {
 		res = make_uniq<MultiFileReader>();
-		res->function_name = Identifier(table_function.name.GetIdentifierName());
+		res->function_name = table_function.name;
 	}
 	return res;
 }
@@ -208,20 +208,23 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(
-    ClientContext &context, const MultiFileList &files, const MultiFileOptions &options, const vector<string> &names,
-    const vector<LogicalType> &types, const vector<column_t> &column_ids, TableFilterSet &filters) {
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
+                                                                 const MultiFileOptions &options,
+                                                                 const vector<Identifier> &names,
+                                                                 const vector<LogicalType> &types,
+                                                                 const vector<column_t> &column_ids,
+                                                                 TableFilterSet &filters) {
 	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
 }
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-                           vector<string> &names, MultiFileReaderBindData &bind_data) {
+                           vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
 	// The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
 	return false;
 }
 
 void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-                                  vector<string> &names, MultiFileReaderBindData &bind_data) {
+                                  vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
@@ -268,9 +271,8 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index;
-			auto lookup = std::find_if(names.begin(), names.end(), [&](const string &col_name) {
-				return StringUtil::CIEquals(col_name, part.first);
-			});
+			auto lookup = std::find_if(names.begin(), names.end(),
+			                           [&](const Identifier &col_name) { return col_name == part.first; });
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
@@ -524,7 +526,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
-	TableFunctionSet function_set {Identifier(table_function.name.GetIdentifierName())};
+	TableFunctionSet function_set {table_function.name};
 	function_set.AddFunction(table_function);
 	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
 	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);
@@ -549,11 +551,11 @@ unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext
 }
 
 MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-                                                         vector<string> &names, MultiFileList &files,
+                                                         vector<Identifier> &names, MultiFileList &files,
                                                          MultiFileBindData &result, BaseFileReaderOptions &options,
                                                          MultiFileOptions &file_options) {
 	D_ASSERT(file_options.union_by_name);
-	vector<string> union_col_names;
+	vector<Identifier> union_col_names;
 	vector<LogicalType> union_col_types;
 
 	// obtain the set of union column names + types by unifying the types of all of the files
@@ -575,7 +577,7 @@ MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context,
 }
 
 MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vector<LogicalType> &return_types,
-                                                    vector<string> &names, MultiFileList &files,
+                                                    vector<Identifier> &names, MultiFileList &files,
                                                     MultiFileBindData &result, BaseFileReaderOptions &options,
                                                     MultiFileOptions &file_options) {
 	if (file_options.union_by_name) {
@@ -706,12 +708,13 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
-                                    vector<LogicalType> &union_col_types, vector<string> &union_col_names,
-                                    case_insensitive_map_t<idx_t> &union_names_map) {
+                                    vector<LogicalType> &union_col_types, vector<Identifier> &union_col_names,
+                                    identifier_map_t<idx_t> &union_names_map) {
 	D_ASSERT(col_names.size() == sql_types.size());
 
 	for (idx_t col = 0; col < col_names.size(); ++col) {
-		auto union_find = union_names_map.find(col_names[col]);
+		Identifier col_name(col_names[col]);
+		auto union_find = union_names_map.find(col_name);
 
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
@@ -719,8 +722,8 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 			auto compatible_type = LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
-			union_names_map[col_names[col]] = union_col_names.size();
-			union_col_names.emplace_back(col_names[col]);
+			union_names_map[col_name] = union_col_names.size();
+			union_col_names.emplace_back(col_name);
 			union_col_types.emplace_back(sql_types[col]);
 		}
 	}

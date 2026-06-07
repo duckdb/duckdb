@@ -82,15 +82,14 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
 	vector<unique_ptr<ParsedExpression>> empty_key_targets;
-	auto result_node = ToRecursiveCTE(std::move(node), Identifier(info->view_name.GetIdentifierName()), info->aliases,
-	                                  empty_key_targets);
+	auto result_node = ToRecursiveCTE(std::move(node), info->view_name, info->aliases, empty_key_targets);
 	WrapRecursiveView(info, std::move(result_node));
 }
 
 unique_ptr<CreateStatement>
 PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const bool &create_recursive,
                                                const bool &if_not_exists, const QualifiedName &qualified_name,
-                                               const vector<string> &insert_column_list,
+                                               const vector<Identifier> &insert_column_list,
                                                case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
                                                unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<CreateStatement>();
@@ -99,7 +98,7 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
-	info->aliases = StringsToIdentifiers(insert_column_list);
+	info->aliases = insert_column_list;
 	if (!with_list.empty()) {
 		for (auto &option_entry : with_list) {
 			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {

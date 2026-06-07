@@ -151,7 +151,7 @@ struct CCopyToBindInfo : FunctionData {
 
 struct CCopyFunctionToInternalBindInfo {
 	CCopyFunctionToInternalBindInfo(ClientContext &context, CopyFunctionBindInput &input,
-	                                const vector<LogicalType> &sql_types, const vector<string> &names,
+	                                const vector<LogicalType> &sql_types, const vector<Identifier> &names,
 	                                const CCopyFunctionInfo &function_info)
 	    : context(context), input(input), sql_types(sql_types), names(names), function_info(function_info),
 	      success(true) {
@@ -160,7 +160,7 @@ struct CCopyFunctionToInternalBindInfo {
 	ClientContext &context;
 	CopyFunctionBindInput &input;
 	const vector<LogicalType> &sql_types;
-	const vector<string> &names;
+	const vector<Identifier> &names;
 	const CCopyFunctionInfo &function_info;
 	bool success;
 	string error;
@@ -170,8 +170,8 @@ struct CCopyFunctionToInternalBindInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInput &input, const vector<string> &names,
-                                     const vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInput &input,
+                                     const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	auto &info = input.function_info->Cast<CCopyFunctionInfo>();
 
 	auto result = make_uniq<CCopyToBindInfo>();

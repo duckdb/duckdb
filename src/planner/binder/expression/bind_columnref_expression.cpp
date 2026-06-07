@@ -74,7 +74,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 				return alias_result;
 			}
 
-			auto value_function = GetSQLValueFunction(Identifier(col_ref_p.GetColumnName().GetIdentifierName()));
+			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
 			if (value_function) {
 				return BindExpression(value_function, depth);
 			}
@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
-	ref.name = Identifier(col_ref.ColumnNames().back().GetIdentifierName());
+	ref.name = col_ref.ColumnNames().back();
 	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;

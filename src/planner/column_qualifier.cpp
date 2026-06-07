@@ -160,8 +160,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	}
 
 	// try binding as a lambda parameter
-	auto lambda_ref =
-	    LambdaRefExpression::FindMatchingBinding(lambda_bindings, Identifier(column_name.GetIdentifierName()));
+	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
 	if (lambda_ref) {
 		return lambda_ref;
 	}
@@ -239,7 +238,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 	case ExpressionType::FUNCTION: {
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (!ExpressionBinder::IsUnnestFunction(Identifier(function.FunctionName().GetIdentifierName()))) {
+		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName())) {
 			QualifyFunction(function);
 		}
 		if (function.IsLambdaFunction()) {
@@ -531,8 +530,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
                                                                         ErrorData &error) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(
-		    lambda_bindings, Identifier(col_ref.GetColumnName().GetIdentifierName()));
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return lambda_ref;
 		}

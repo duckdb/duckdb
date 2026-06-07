@@ -642,15 +642,291 @@ index e2e893e..54ac6b5 100644
  }
  
 diff --git a/database-connector/src/optimizer/aggregate_optimizer.cpp b/database-connector/src/optimizer/aggregate_optimizer.cpp
-index 0332bcc..edf0b18 100644
+index 9728f78..edf0b18 100644
 --- a/database-connector/src/optimizer/aggregate_optimizer.cpp
 +++ b/database-connector/src/optimizer/aggregate_optimizer.cpp
-@@ -72,7 +72,7 @@ static bool CanPushAggregate(LogicalAggregate &aggr) {
- 		if (agg_expr.GetOrderBysMutable() && !agg_expr.GetOrderBysMutable()->orders.empty()) {
+@@ -1,5 +1,7 @@
+ #include "dbconnector/optimizer/aggregate_optimizer.hpp"
+ 
++#include "fmt/format.h"
++
+ #include "duckdb/common/types/value.hpp"
+ #include "duckdb/planner/operator/logical_aggregate.hpp"
+ #include "duckdb/planner/operator/logical_comparison_join.hpp"
+@@ -64,20 +66,20 @@ static bool CanPushAggregate(LogicalAggregate &aggr) {
+ 		if (agg_expr.IsDistinct()) {
  			return false;
  		}
--		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName()) == PUSHABLE_AGGREGATES.end()) {
+-		if (agg_expr.filter) {
++		if (agg_expr.GetFilterMutable()) {
+ 			return false;
+ 		}
+-		if (agg_expr.order_bys && !agg_expr.order_bys->orders.empty()) {
++		if (agg_expr.GetOrderBysMutable() && !agg_expr.GetOrderBysMutable()->orders.empty()) {
+ 			return false;
+ 		}
+-		if (PUSHABLE_AGGREGATES.find(agg_expr.function.GetName()) == PUSHABLE_AGGREGATES.end()) {
 +		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName().GetIdentifierName()) == PUSHABLE_AGGREGATES.end()) {
  			return false;
  		}
- 		if (agg_expr.FunctionMutable().GetName() != "count_star") {
+-		if (agg_expr.function.GetName() != "count_star") {
+-			if (agg_expr.children.size() != 1) {
++		if (agg_expr.FunctionMutable().GetName() != "count_star") {
++			if (agg_expr.GetChildrenMutable().size() != 1) {
+ 				return false;
+ 			}
+-			if (agg_expr.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
++			if (agg_expr.GetChildrenMutable()[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+ 				return false;
+ 			}
+ 		}
+@@ -110,7 +112,8 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 
+ 	for (auto &group : aggr.groups) {
+ 		auto &col_ref = group->Cast<BoundColumnRefExpression>();
+-		TracedBindingColumn traced_binding = OptimizerUtil::TraceBindingToColumn(col_ref.binding, aggr_child, get);
++		TracedBindingColumn traced_binding =
++		    OptimizerUtil::TraceBindingToColumn(col_ref.BindingMutable(), aggr_child, get);
+ 		if (!traced_binding.Found()) {
+ 			return res;
+ 		}
+@@ -128,28 +131,28 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 		string fragment;
+ 		string alias = "_agg_" + to_string(agg_idx);
+ 
+-		if (agg_expr.function.GetName() == "count_star") {
++		if (agg_expr.FunctionMutable().GetName() == "count_star") {
+ 			fragment =
+ 			    "COUNT(*) AS " + dbconnector::query::QueryWriter::WriteIdentifier(alias, config.identifier_quote);
+ 		} else {
+-			auto &child_ref = agg_expr.children[0]->Cast<BoundColumnRefExpression>();
++			auto &child_ref = agg_expr.GetChildrenMutable()[0]->Cast<BoundColumnRefExpression>();
+ 			TracedBindingColumn traced_binding =
+-			    OptimizerUtil::TraceBindingToColumn(child_ref.binding, aggr_child, get);
++			    OptimizerUtil::TraceBindingToColumn(child_ref.BindingMutable(), aggr_child, get);
+ 			if (!traced_binding.Found()) {
+ 				return res;
+ 			}
+ 			string quoted_col =
+ 			    dbconnector::query::QueryWriter::WriteIdentifier(traced_binding.col_name, config.identifier_quote);
+ 			string func_upper;
+-			if (agg_expr.function.GetName() == "count") {
++			if (agg_expr.FunctionMutable().GetName() == "count") {
+ 				func_upper = "COUNT";
+-			} else if (agg_expr.function.GetName() == "sum") {
++			} else if (agg_expr.FunctionMutable().GetName() == "sum") {
+ 				func_upper = "SUM";
+-			} else if (agg_expr.function.GetName() == "avg") {
++			} else if (agg_expr.FunctionMutable().GetName() == "avg") {
+ 				func_upper = "AVG";
+-			} else if (agg_expr.function.GetName() == "min") {
++			} else if (agg_expr.FunctionMutable().GetName() == "min") {
+ 				func_upper = "MIN";
+-			} else if (agg_expr.function.GetName() == "max") {
++			} else if (agg_expr.FunctionMutable().GetName() == "max") {
+ 				func_upper = "MAX";
+ 			} else {
+ 				return res;
+@@ -230,14 +233,15 @@ struct AggregateRewriteInfo {
+ static void RewriteExpression(unique_ptr<Expression> &expr, AggregateRewriteInfo &info) {
+ 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+ 		auto &col_ref = expr->Cast<BoundColumnRefExpression>();
+-		if (col_ref.depth > 0) {
++		if (col_ref.Depth() > 0) {
+ 			return;
+ 		}
+-		if (col_ref.binding.table_index == info.group_index) {
+-			col_ref.binding.table_index = info.scan_table_index;
+-		} else if (col_ref.binding.table_index == info.aggregate_index) {
+-			col_ref.binding.table_index = info.scan_table_index;
+-			col_ref.binding.column_index = ProjectionIndex(col_ref.binding.column_index.GetIndex() + info.num_groups);
++		if (col_ref.BindingMutable().table_index == info.group_index) {
++			col_ref.BindingMutable().table_index = info.scan_table_index;
++		} else if (col_ref.BindingMutable().table_index == info.aggregate_index) {
++			col_ref.BindingMutable().table_index = info.scan_table_index;
++			col_ref.BindingMutable().column_index =
++			    ProjectionIndex(col_ref.BindingMutable().column_index.GetIndex() + info.num_groups);
+ 		}
+ 	}
+ 	ExpressionIterator::EnumerateChildren(*expr,
+diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
+index a310f59..af077d2 100644
+--- a/database-connector/src/optimizer/optimizer_util.cpp
++++ b/database-connector/src/optimizer/optimizer_util.cpp
+@@ -46,10 +46,10 @@ TracedBindingColumn OptimizerUtil::TraceBindingToColumn(ColumnBinding binding, L
+ 			return res;
+ 		}
+ 		auto &inner_ref = proj_expr.Cast<BoundColumnRefExpression>();
+-		if (inner_ref.depth > 0) {
++		if (inner_ref.Depth() > 0) {
+ 			return res;
+ 		}
+-		binding = inner_ref.binding;
++		binding = inner_ref.BindingMutable();
+ 		current = *current.get().children[0];
+ 	}
+ 
+diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+index 590db60..43b6729 100644
+--- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
++++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+@@ -42,10 +42,10 @@ static string TraceColumnToGet(const OrderByAndLimitOptimizer::Config &config, E
+ 		return std::string();
+ 	}
+ 	auto &col_ref = expr.Cast<BoundColumnRefExpression>();
+-	if (col_ref.depth > 0) {
++	if (col_ref.Depth() > 0) {
+ 		return std::string();
+ 	}
+-	auto binding = col_ref.binding;
++	auto binding = col_ref.BindingMutable();
+ 
+ 	reference<LogicalOperator> current = child;
+ 	while (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+@@ -61,10 +61,10 @@ static string TraceColumnToGet(const OrderByAndLimitOptimizer::Config &config, E
+ 			return std::string();
+ 		}
+ 		auto &inner_ref = proj_expr.Cast<BoundColumnRefExpression>();
+-		if (inner_ref.depth > 0) {
++		if (inner_ref.Depth() > 0) {
+ 			return std::string();
+ 		}
+-		binding = inner_ref.binding;
++		binding = inner_ref.BindingMutable();
+ 		current = *current.get().children[0];
+ 	}
+ 
+@@ -127,8 +127,8 @@ static string TryBuildOrderByClause(const OrderByAndLimitOptimizer::Config &conf
+ static void CollectBindingRefs(Expression &expr, idx_t target_table_index, unordered_set<idx_t> &referenced) {
+ 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+ 		auto &ref = expr.Cast<BoundColumnRefExpression>();
+-		if (ref.binding.table_index.index == target_table_index) {
+-			referenced.insert(ref.binding.column_index);
++		if (ref.BindingMutable().table_index.index == target_table_index) {
++			referenced.insert(ref.BindingMutable().column_index);
+ 		}
+ 	}
+ 	ExpressionIterator::EnumerateChildren(
+@@ -138,10 +138,10 @@ static void CollectBindingRefs(Expression &expr, idx_t target_table_index, unord
+ static void RewriteBindingRefs(Expression &expr, idx_t target_table_index, unordered_map<idx_t, idx_t> &old_to_new) {
+ 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+ 		auto &ref = expr.Cast<BoundColumnRefExpression>();
+-		if (ref.binding.table_index.index == target_table_index) {
+-			auto it = old_to_new.find(ref.binding.column_index);
++		if (ref.BindingMutable().table_index.index == target_table_index) {
++			auto it = old_to_new.find(ref.BindingMutable().column_index);
+ 			if (it != old_to_new.end()) {
+-				ref.binding.column_index = ProjectionIndex(it->second);
++				ref.BindingMutable().column_index = ProjectionIndex(it->second);
+ 			}
+ 		}
+ 	}
+diff --git a/database-connector/src/table_scan/filter_pushdown.cpp b/database-connector/src/table_scan/filter_pushdown.cpp
+index 0cd9ade..e18b74d 100644
+--- a/database-connector/src/table_scan/filter_pushdown.cpp
++++ b/database-connector/src/table_scan/filter_pushdown.cpp
+@@ -72,9 +72,9 @@ std::string FilterPushdown::TransformExpression(const std::string &column_name,
+ 		auto &right = BoundComparisonExpression::Right(comparison);
+ 		const Value *constant = nullptr;
+ 		if (IsDirectReference(left) && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+-			constant = &right.Cast<BoundConstantExpression>().value;
++			constant = &right.Cast<BoundConstantExpression>().GetValue();
+ 		} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsDirectReference(right)) {
+-			constant = &left.Cast<BoundConstantExpression>().value;
++			constant = &left.Cast<BoundConstantExpression>().GetValue();
+ 			comparison_type = FlipComparisonExpression(comparison_type);
+ 		} else {
+ 			return std::string();
+@@ -89,9 +89,9 @@ std::string FilterPushdown::TransformExpression(const std::string &column_name,
+ 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+ 		switch (conjunction.GetExpressionType()) {
+ 		case ExpressionType::CONJUNCTION_AND:
+-			return CreateExpression(column_name, conjunction.children, "AND");
++			return CreateExpression(column_name, conjunction.GetChildren(), "AND");
+ 		case ExpressionType::CONJUNCTION_OR:
+-			return CreateExpression(column_name, conjunction.children, "OR");
++			return CreateExpression(column_name, conjunction.GetChildren(), "OR");
+ 		default:
+ 			return std::string();
+ 		}
+@@ -100,28 +100,29 @@ std::string FilterPushdown::TransformExpression(const std::string &column_name,
+ 		auto &op = expr.Cast<BoundOperatorExpression>();
+ 		switch (op.GetExpressionType()) {
+ 		case ExpressionType::OPERATOR_IS_NULL:
+-			if (op.children.size() == 1 && IsDirectReference(*op.children[0])) {
++			if (op.GetChildren().size() == 1 && IsDirectReference(*op.GetChildren()[0])) {
+ 				return column_name + " IS NULL";
+ 			}
+ 			return std::string();
+ 		case ExpressionType::OPERATOR_IS_NOT_NULL:
+-			if (op.children.size() == 1 && IsDirectReference(*op.children[0])) {
++			if (op.GetChildren().size() == 1 && IsDirectReference(*op.GetChildren()[0])) {
+ 				return column_name + " IS NOT NULL";
+ 			}
+ 			return std::string();
+ 		case ExpressionType::COMPARE_IN: {
+-			if (op.children.empty() || !IsDirectReference(*op.children[0])) {
++			if (op.GetChildren().empty() || !IsDirectReference(*op.GetChildren()[0])) {
+ 				return std::string();
+ 			}
+ 			std::string in_list;
+-			for (idx_t i = 1; i < op.children.size(); i++) {
+-				if (op.children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
++			for (idx_t i = 1; i < op.GetChildren().size(); i++) {
++				if (op.GetChildren()[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+ 					return std::string();
+ 				}
+ 				if (!in_list.empty()) {
+ 					in_list += ", ";
+ 				}
+-				in_list += query::QueryWriter::WriteConstant(op.children[i]->Cast<BoundConstantExpression>().value);
++				in_list +=
++				    query::QueryWriter::WriteConstant(op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue());
+ 			}
+ 			return column_name + " IN (" + in_list + ")";
+ 		}
+@@ -131,15 +132,15 @@ std::string FilterPushdown::TransformExpression(const std::string &column_name,
+ 	}
+ 	case ExpressionClass::BOUND_FUNCTION: {
+ 		auto &func = expr.Cast<BoundFunctionExpression>();
+-		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
+ 			return data.child_filter_expr ? TransformExpression(column_name, *data.child_filter_expr) : std::string();
+ 		}
+-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+ 			return data.child_filter_expr ? TransformExpression(column_name, *data.child_filter_expr) : std::string();
+ 		}
+-		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
++		if (func.Function().GetName() == DynamicFilterScalarFun::NAME) {
+ 			return std::string();
+ 		}
+ 		return std::string();
+diff --git a/database-connector/test/extension/CMakeLists.txt b/database-connector/test/extension/CMakeLists.txt
+index 3c491d7..1454702 100644
+--- a/database-connector/test/extension/CMakeLists.txt
++++ b/database-connector/test/extension/CMakeLists.txt
+@@ -13,13 +13,19 @@ if(NOT DEFINED ENV{DUCKDB_SRC_PATH})
+ endif()
+ 
+ add_executable(${PROJECT_NAME}
++    ../../src/optimizer/aggregate_optimizer.cpp
++    ../../src/optimizer/optimizer_util.cpp
++    ../../src/optimizer/order_by_and_limit_optimizer.cpp
+     ../../src/query/query_writer.cpp
++    ../../src/table_scan/filter_pushdown.cpp
++    ../../src/table_scan/filter_util.cpp
+     ../test_common.cpp
+     test_query.cpp
+ )
+ 
+ target_include_directories(${PROJECT_NAME} PRIVATE
+     $ENV{DUCKDB_SRC_PATH}/src/include
++    $ENV{DUCKDB_SRC_PATH}/third_party/fmt/include
+     ../../src/include
+     ../catch
+     ../include

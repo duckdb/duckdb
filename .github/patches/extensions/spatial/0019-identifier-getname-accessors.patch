@@ -186,6 +186,28 @@ index a1bfbe3..ca12c7d 100644
  	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
  		throw SerializationException("Cant find table for %s.%s", schema, table);
  	}
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index d90d148..8481d14 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -1253,7 +1253,7 @@ bool MatchOption(const char *name, const pair<string, vector<Value>> &option, bo
+ 	return false;
+ }
+ 
+-auto Bind(ClientContext &context, CopyFunctionBindInput &input, const vector<string> &names,
++auto Bind(ClientContext &context, CopyFunctionBindInput &input, const vector<Identifier> &names,
+           const vector<LogicalType> &sql_types) -> unique_ptr<FunctionData> {
+ 	auto result = make_uniq<BindData>();
+ 
+@@ -1383,7 +1383,7 @@ auto Bind(ClientContext &context, CopyFunctionBindInput &input, const vector<str
+ 	// Setup arrow schema
+ 	result->props = context.GetClientProperties();
+ 	result->extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(context, sql_types);
+-	ArrowConverter::ToArrowSchema(&result->schema, sql_types, names, result->props);
++	ArrowConverter::ToArrowSchema(&result->schema, sql_types, IdentifiersToStrings(names), result->props);
+ 
+ 	return std::move(result);
+ }
 diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
 index f0c19f8..93f63fc 100644
 --- a/src/spatial/modules/mvt/mvt_module.cpp

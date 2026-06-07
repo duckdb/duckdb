@@ -241,7 +241,7 @@ index 73a96505..89854cdb 100644
  			// we would like to throw an error, but this code is also called when listing schemas,
  			// and throwing an error will abort the listing process.
 diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
-index 2ab9f927..1942017b 100644
+index 2ab9f927..53a9dfcc 100644
 --- a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
 +++ b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
 @@ -171,7 +171,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
@@ -253,6 +253,26 @@ index 2ab9f927..1942017b 100644
  	auto catalog_entry = catalog_schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "iceberg_scan");
  	if (!catalog_entry) {
  		throw InvalidInputException("Function with name \"iceberg_scan\" not found!");
+@@ -230,7 +230,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	iceberg_scan_function.function_info = scan_info;
+ 	named_parameter_map_t param_map;
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	TableFunctionRef empty_ref;
+ 
+ 	// Set the S3 path as input to table function
+@@ -238,7 +238,9 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	vector<Value> inputs = {storage_location};
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, iceberg_scan_function,
+ 	                                  empty_ref);
+-	auto result = iceberg_scan_function.bind(context, bind_input, return_types, names);
++	vector<string> bind_names;
++	auto result = iceberg_scan_function.bind(context, bind_input, return_types, bind_names);
++	names = StringsToIdentifiers(bind_names);
+ 	bind_data = std::move(result);
+ 	auto &file_bind_data = bind_data->Cast<MultiFileBindData>();
+ 	D_ASSERT(file_bind_data.file_list);
 diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
 index ce20f92f..375992d3 100644
 --- a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
@@ -605,6 +625,41 @@ index 48a026b7..4607f944 100644
  		if (!catalog_entry) {
  			break;
  		}
+diff --git a/src/core/metadata/manifest/iceberg_manifest.cpp b/src/core/metadata/manifest/iceberg_manifest.cpp
+index 531736e7..9eb5acb4 100644
+--- a/src/core/metadata/manifest/iceberg_manifest.cpp
++++ b/src/core/metadata/manifest/iceberg_manifest.cpp
+@@ -435,7 +435,7 @@ idx_t WriteToFile(const IcebergTableMetadata &table_metadata, const IcebergManif
+ 	//! Create the types for the DataChunk
+ 
+ 	child_list_t<Value> field_ids;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> types;
+ 
+ 	auto &current_partition_spec = table_metadata.GetLatestPartitionSpec();
+diff --git a/src/core/metadata/manifest/iceberg_manifest_list.cpp b/src/core/metadata/manifest/iceberg_manifest_list.cpp
+index 463e704e..0fb800fd 100644
+--- a/src/core/metadata/manifest/iceberg_manifest_list.cpp
++++ b/src/core/metadata/manifest/iceberg_manifest_list.cpp
+@@ -270,7 +270,7 @@ namespace {
+ 
+ struct AvroBindSchemaMetadata {
+ 	child_list_t<Value> field_ids;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> types;
+ };
+ 
+@@ -283,7 +283,7 @@ static Value CreateFieldID(int32_t field_id, bool nullable) {
+ 
+ static void AddSimpleColumn(AvroBindSchemaMetadata &metadata, const string &name, const LogicalType &type,
+                             int32_t field_id, bool nullable) {
+-	metadata.names.push_back(name);
++	metadata.names.push_back(Identifier(name));
+ 	metadata.types.push_back(type);
+ 	metadata.field_ids.emplace_back(name, CreateFieldID(field_id, nullable));
+ }
 diff --git a/src/core/metadata/schema/iceberg_column_definition.cpp b/src/core/metadata/schema/iceberg_column_definition.cpp
 index 25bf8174..931c5674 100644
 --- a/src/core/metadata/schema/iceberg_column_definition.cpp
@@ -671,10 +726,32 @@ index b85b2694..eb4ec6c7 100644
                                                                               optional_ptr<optional_idx> names_offset) {
  	auto res = GetFromPath(path, names_offset);
  	if (!res) {
+diff --git a/src/execution/helpers/equality_delete_helpers.cpp b/src/execution/helpers/equality_delete_helpers.cpp
+index 67db6cda..049666cb 100644
+--- a/src/execution/helpers/equality_delete_helpers.cpp
++++ b/src/execution/helpers/equality_delete_helpers.cpp
+@@ -174,7 +174,7 @@ void IcebergDelete::WriteEqualityDeleteFile(ClientContext &context, IcebergDelet
+ 	auto &copy_fun = IcebergUtils::GetCopyFunction(context, "parquet");
+ 	CopyFunctionBindInput bind_input(*info);
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	auto copy_global_state = copy_fun.function.copy_to_initialize_global(context, *function_data, delete_file_path);
+ 
+ 	ThreadContext thread_context(context);
 diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
-index dbcb29aa..2fd690de 100644
+index dbcb29aa..ec53570e 100644
 --- a/src/execution/operator/iceberg_delete.cpp
 +++ b/src/execution/operator/iceberg_delete.cpp
+@@ -180,7 +180,7 @@ void IcebergDelete::WritePositionalDeleteFile(ClientContext &context, IcebergDel
+ 	auto &copy_fun = IcebergUtils::GetCopyFunction(context, "parquet");
+ 	CopyFunctionBindInput bind_input(*info);
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	auto copy_global_state = copy_fun.function.copy_to_initialize_global(context, *function_data, delete_file_path);
+ 
+ 	// generate the physical copy to file
 @@ -444,7 +444,7 @@ string IcebergDelete::GetName() const {
  
  InsertionOrderPreservingMap<string> IcebergDelete::ParamsToString() const {
@@ -694,7 +771,7 @@ index dbcb29aa..2fd690de 100644
  	}
  
 diff --git a/src/execution/operator/iceberg_insert.cpp b/src/execution/operator/iceberg_insert.cpp
-index 0c33b81f..326f546e 100644
+index 0c33b81f..66e78bba 100644
 --- a/src/execution/operator/iceberg_insert.cpp
 +++ b/src/execution/operator/iceberg_insert.cpp
 @@ -302,7 +302,7 @@ void IcebergInsertGlobalState::AddFiles(DataChunk &chunk, const string &table_na
@@ -759,6 +836,28 @@ index 0c33b81f..326f546e 100644
  	if (!function) {
  		error.Throw();
  	}
+@@ -698,7 +698,7 @@ static void GeneratePartitionExpressions(ClientContext &context, const IcebergCo
+ 		partition_columns.push_back(partition_column_start++);
+ 
+ 		auto expr = GetPartitionExpression(context, copy_input, field);
+-		projection_names.push_back(field.GetPartitionSpecFieldName());
++		projection_names.push_back(Identifier(field.GetPartitionSpecFieldName()));
+ 		projection_types.push_back(expr->GetReturnType());
+ 		projection_expressions.push_back(std::move(expr));
+ 	}
+@@ -851,10 +851,10 @@ IcebergCopyOptions IcebergInsert::GetCopyOptions(ClientContext &context, const I
+ 
+ 	// copy_to_bind receives physical + virtual only (partition routing columns are stripped
+ 	// by PhysicalCopyToFile before writing, so including them causes a type mismatch).
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	result.bind_data = std::move(function_data);
+ 
+-	result.names = names_to_write;
++	result.names = StringsToIdentifiers(names_to_write);
+ 	result.expected_types = types_to_write;
+ 
+ 	if (copy_input.partition_spec) {
 @@ -1004,7 +1004,7 @@ static unique_ptr<IcebergTableMetadata> BuildPlaceholderMetadata(BoundCreateTabl
  	for (auto &col : create_info.columns.Logical()) {
  		auto col_def = make_uniq<IcebergColumnDefinition>();
@@ -926,10 +1025,150 @@ index 468bd8b0..2e8a12c3 100644
  	                                                         optional_ptr<optional_idx> names_offset);
  
  	static void SchemaToJson(yyjson_mut_doc *doc, yyjson_mut_val *root_object, const rest_api_objects::Schema &schema);
+diff --git a/src/include/execution/operator/iceberg_insert.hpp b/src/include/execution/operator/iceberg_insert.hpp
+index a83b9a77..0f9890cd 100644
+--- a/src/include/execution/operator/iceberg_insert.hpp
++++ b/src/include/execution/operator/iceberg_insert.hpp
+@@ -65,7 +65,7 @@ public:
+ 	bool write_partition_columns;
+ 	bool write_empty_file = true;
+ 	vector<idx_t> partition_columns;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> expected_types;
+ 
+ 	//! Set of projection columns to execute prior to inserting (if any)
+diff --git a/src/include/planning/iceberg_multi_file_list.hpp b/src/include/planning/iceberg_multi_file_list.hpp
+index 5506ac38..f1a17893 100644
+--- a/src/include/planning/iceberg_multi_file_list.hpp
++++ b/src/include/planning/iceberg_multi_file_list.hpp
+@@ -99,7 +99,7 @@ public:
+ 	const IcebergTableSchema &GetSchema() const;
+ 	bool FinishedScanningDeletes() const;
+ 
+-	void Bind(vector<LogicalType> &return_types, vector<string> &names);
++	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
+ 	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
+ 	                                                  vector<column_t> column_indexes) const;
+ 	void ScanPositionalDeleteFile(const BoundIcebergManifestEntry &manifest_entry, DataChunk &result) const;
+@@ -128,7 +128,7 @@ public:
+ public:
+ 	//! MultiFileList API
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<string> &names, const vector<LogicalType> &types,
++	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
+index 983239df..679128cc 100644
+--- a/src/include/planning/iceberg_multi_file_reader.hpp
++++ b/src/include/planning/iceberg_multi_file_reader.hpp
+@@ -44,10 +44,10 @@ public:
+ public:
+ 	shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+ 	                                         const FileGlobInput &glob_input) override;
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
++	                 vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 	unique_ptr<MultiFileReaderGlobalState>
+ 	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
+ 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
+diff --git a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+index eddf0912..23100a34 100644
+--- a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
++++ b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+@@ -20,7 +20,7 @@ public:
+ public:
+ 	shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+ 	                                         const FileGlobInput &glob_input) override;
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 
+ 	ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index 9a3bfa8a..9af19733 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -300,11 +300,11 @@ unique_ptr<ExpressionFilter> IcebergMultiFileList::GetFilterForColumnIndex(const
+ 	return make_uniq<ExpressionFilter>(std::move(child_expr));
+ }
+ 
+-void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string> &names) {
++void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	lock_guard<mutex> guard(lock);
+ 
+ 	if (have_bound) {
+-		names = this->names;
++		names = StringsToIdentifiers(this->names);
+ 		return_types = this->types;
+ 		return;
+ 	}
+@@ -334,17 +334,17 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string
+ 
+ 	auto &schema = GetSchema().columns;
+ 	for (auto &schema_entry : schema) {
+-		names.push_back(schema_entry->name);
++		names.push_back(Identifier(schema_entry->name));
+ 		return_types.push_back(schema_entry->type);
+ 	}
+ 
+ 	QueryResult::DeduplicateColumns(names);
+ 	for (idx_t i = 0; i < names.size(); i++) {
+-		schema[i]->name = names[i];
++		schema[i]->name = names[i].GetIdentifierName();
+ 	}
+ 
+ 	have_bound = true;
+-	this->names = names;
++	this->names = IdentifiersToStrings(names);
+ 	this->types = return_types;
+ }
+ 
+@@ -379,7 +379,7 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+ 
+ unique_ptr<MultiFileList>
+ IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                            const vector<string> &names, const vector<LogicalType> &types,
++                                            const vector<Identifier> &names, const vector<LogicalType> &types,
+                                             const vector<column_t> &column_ids, TableFilterSet &filters) const {
+ 	if (!filters.HasFilters()) {
+ 		return nullptr;
+@@ -1262,7 +1262,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
+ 	children.push_back(Value(delete_file_path));
+ 	named_parameter_map_t named_params;
+ 	vector<LogicalType> input_types;
+-	vector<string> input_names;
++	vector<Identifier> input_names;
+ 
+ 	TableFunctionRef empty;
+ 	OpenFileInfo res(delete_file_path);
 diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
-index 3ac91158..f2b9b945 100644
+index 3ac91158..41efa626 100644
 --- a/src/planning/iceberg_multi_file_reader.cpp
 +++ b/src/planning/iceberg_multi_file_reader.cpp
+@@ -49,7 +49,7 @@ shared_ptr<MultiFileList> IcebergMultiFileReader::CreateFileList(ClientContext &
+ }
+ 
+ bool IcebergMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-                                  vector<string> &names, MultiFileReaderBindData &bind_data) {
++                                  vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+ 	auto &iceberg_multi_file_list = dynamic_cast<IcebergMultiFileList &>(files);
+ 
+ 	iceberg_multi_file_list.Bind(return_types, names);
+@@ -65,7 +65,7 @@ bool IcebergMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &file
+ }
+ 
+ void IcebergMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
+-                                         vector<LogicalType> &return_types, vector<string> &names,
++                                         vector<LogicalType> &return_types, vector<Identifier> &names,
+                                          MultiFileReaderBindData &bind_data) {
+ 	// Disable all other multifilereader options
+ 	options.auto_detect_hive_partitioning = false;
 @@ -504,7 +504,7 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
  
  	FunctionBinder binder(context);
@@ -940,9 +1179,18 @@ index 3ac91158..f2b9b945 100644
  		error.Throw();
  	}
 diff --git a/src/planning/iceberg_optimizer.cpp b/src/planning/iceberg_optimizer.cpp
-index d07bd36d..c26d07f6 100644
+index d07bd36d..f7ca9b23 100644
 --- a/src/planning/iceberg_optimizer.cpp
 +++ b/src/planning/iceberg_optimizer.cpp
+@@ -86,7 +86,7 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
+ 
+ 				// modify the multi file reader bind data to add the extra column
+ 				mfbd.types.push_back(col_type);
+-				mfbd.names.push_back(col_info->name);
++				mfbd.names.push_back(Identifier(col_info->name));
+ 
+ 				auto new_col = col_info->GetMultiFileColumnDefinition();
+ 				if (!new_col.default_expression) {
 @@ -119,7 +119,8 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
  
  		auto &catalog = Catalog::GetSystemCatalog(context);
@@ -954,7 +1202,7 @@ index d07bd36d..c26d07f6 100644
  		vector<LogicalType> arg_types;
  		for (auto &a : args) {
 diff --git a/src/planning/metadata_io/avro/avro_scan.cpp b/src/planning/metadata_io/avro/avro_scan.cpp
-index c2ae4463..cf84bad0 100644
+index c2ae4463..0489c85e 100644
 --- a/src/planning/metadata_io/avro/avro_scan.cpp
 +++ b/src/planning/metadata_io/avro/avro_scan.cpp
 @@ -27,7 +27,7 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
@@ -966,7 +1214,14 @@ index c2ae4463..cf84bad0 100644
  	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "read_avro");
  	if (!catalog_entry) {
  		throw InvalidInputException("Function with name \"read_avro\" not found!");
-@@ -46,7 +46,7 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
+@@ -40,13 +40,13 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
+ 	children.push_back(Value(path));
+ 	named_parameter_map_t named_params;
+ 	vector<LogicalType> input_types;
+-	vector<string> input_names;
++	vector<Identifier> input_names;
+ 
+ 	const bool is_manifest_list = avro_scan_info->type == AvroScanInfoType::MANIFEST_LIST;
  
  	TableFunctionRef empty;
  	TableFunction dummy_table_function;
@@ -975,6 +1230,28 @@ index c2ae4463..cf84bad0 100644
  	dummy_table_function.get_multi_file_reader = IcebergAvroMultiFileReader::CreateInstance;
  	dummy_table_function.function_info = avro_scan_info;
  
+diff --git a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+index e811c122..c3f1b673 100644
+--- a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
++++ b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+@@ -394,7 +394,7 @@ BuildManifestSchema(const IcebergSnapshot &snapshot, const IcebergTableMetadata
+ } // namespace manifest_file
+ 
+ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files,
+-                                      vector<LogicalType> &return_types, vector<string> &names,
++                                      vector<LogicalType> &return_types, vector<Identifier> &names,
+                                       MultiFileReaderBindData &bind_data) {
+ 	auto &iceberg_avro_list = dynamic_cast<IcebergAvroMultiFileList &>(files);
+ 
+@@ -417,7 +417,7 @@ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &
+ 	// Populate return_types and names from schema
+ 	for (auto &col : schema) {
+ 		return_types.push_back(col.type);
+-		names.push_back(col.name);
++		names.push_back(Identifier(col.name));
+ 	}
+ 
+ 	// Set the schema in bind_data - framework will use this for mapping
 diff --git a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
 index 1666ebc6..758a73da 100644
 --- a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp

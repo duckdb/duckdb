@@ -358,7 +358,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
 	identifier_set_t union_names;
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : colid_list) {
-		union_names.insert(Identifier(colid.first.GetIdentifierName()));
+		union_names.insert(colid.first);
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();
 		new_type_expr->SetAlias(colid.first);

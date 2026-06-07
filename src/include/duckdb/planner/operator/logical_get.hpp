@@ -49,7 +49,7 @@ public:
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
-	vector<string> input_table_names;
+	vector<Identifier> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown and sample rate

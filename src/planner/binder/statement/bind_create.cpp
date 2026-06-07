@@ -140,7 +140,7 @@ void Binder::SearchSchema(CreateInfo &info) {
 		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
 	}
 	if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = Identifier(DatabaseManager::GetDefaultDatabase(context));
+		info.catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only

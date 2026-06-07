@@ -178,18 +178,18 @@ static string GetAlias(const TableFunctionRef &ref) {
 }
 
 static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
-                                                 vector<string> &return_names) {
+                                                 vector<Identifier> &return_names) {
 	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
 	    !ref.column_name_alias.empty() || return_names.size() != 1) {
 		return;
 	}
-	return_names[0] = ref.alias.GetIdentifierName();
+	return_names[0] = ref.alias;
 }
 
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
-                                                 vector<string> input_table_names,
+                                                 vector<Identifier> input_table_names,
                                                  optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
@@ -197,7 +197,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
-	vector<string> return_names;
+	vector<Identifier> return_names;
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
 	optional_idx ordinality_column_id;
@@ -205,7 +205,9 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
-			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
+			vector<string> operator_names;
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, operator_names);
+			return_names = StringsToIdentifiers(operator_names);
 			if (new_plan) {
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
@@ -221,9 +223,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 				}
 				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
-				bind_context.AddGenericBinding(bind_index, Identifier(function_name),
-				                               StringsToIdentifiers(return_names), new_plan->types);
-				result.names = StringsToIdentifiers(return_names);
+				bind_context.AddGenericBinding(bind_index, Identifier(function_name), return_names, new_plan->types);
+				result.names = return_names;
 				result.types = new_plan->types;
 				result.plan = std::move(new_plan);
 				return result;
@@ -245,24 +246,26 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 			                      table_function.name);
 		}
-		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		vector<string> bind_names;
+		bind_data = table_function.bind(context, bind_input, return_types, bind_names);
+		return_names = StringsToIdentifiers(bind_names);
 		if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY) {
 			// check if column name 'ordinality' already exists and if so, replace it iteratively until free name is
 			// found
-			case_insensitive_set_t ci_return_names;
+			identifier_set_t ci_return_names;
 			idx_t ordinality_name_suffix = 0;
 			for (auto &n : return_names) {
 				ci_return_names.insert(n);
 			}
 			for (auto &n : column_name_alias) {
-				ci_return_names.insert(n.GetIdentifierName());
+				ci_return_names.insert(n);
 			}
-			while (ci_return_names.find(ordinality_column_name) != ci_return_names.end()) {
+			while (ci_return_names.find(Identifier(ordinality_column_name)) != ci_return_names.end()) {
 				ordinality_column_name = ordinality_name + to_string(ordinality_name_suffix++);
 			}
 			if (!correlated_columns.empty()) {
 				return_types.emplace_back(LogicalType::BIGINT);
-				return_names.emplace_back(ordinality_column_name);
+				return_names.emplace_back(Identifier(ordinality_column_name));
 				D_ASSERT(return_names.size() == return_types.size());
 				ordinality_column_id = return_types.size() - 1;
 			}
@@ -284,11 +287,11 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
-		return_names[i] = column_name_alias[i].GetIdentifierName();
+		return_names[i] = column_name_alias[i];
 	}
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
-			return_names[i] = "C" + to_string(i);
+			return_names[i] = Identifier("C" + to_string(i));
 		}
 	}
 	virtual_column_map_t virtual_columns;
@@ -296,8 +299,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		virtual_columns = table_function.get_virtual_columns(context, bind_data.get());
 	}
 
-	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
-	                                 virtual_columns);
+	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types,
+	                                 IdentifiersToStrings(return_names), virtual_columns);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
@@ -312,19 +315,18 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
-		bind_context.AddTableFunction(bind_index, Identifier(function_name), StringsToIdentifiers(return_names),
-		                              return_types, get->GetMutableColumnIds(), get->GetTable().get(),
-		                              std::move(virtual_columns));
+		bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
+		                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number = RowNumberFun::GetFunction().Bind(context);
 		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
-		string ordinality_alias = ordinality_column_name;
+		Identifier ordinality_alias(ordinality_column_name);
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->SetAlias(column_name_alias[return_names.size()]);
-			ordinality_alias = column_name_alias[return_names.size()].GetIdentifierName();
+			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
 			row_number->SetAlias(Identifier(ordinality_column_name));
 		}
@@ -333,21 +335,20 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		window->expressions.push_back(std::move(row_number));
 		window->types.push_back(LogicalType::BIGINT);
 		window->children.push_back(std::move(get));
-		bind_context.AddGenericBinding(window_index, Identifier(function_name), {Identifier(ordinality_alias)},
+		bind_context.AddGenericBinding(window_index, Identifier(function_name), {ordinality_alias},
 		                               {LogicalType::BIGINT});
 
 		BoundStatement result;
-		result.names = StringsToIdentifiers(std::move(return_names));
+		result.names = std::move(return_names);
 		result.types = std::move(return_types);
 		result.plan = std::move(window);
 		return result;
 	}
 	// now add the table function to the bind context so its columns can be bound
 	BoundStatement result;
-	bind_context.AddTableFunction(bind_index, Identifier(function_name), StringsToIdentifiers(return_names),
-	                              return_types, get->GetMutableColumnIds(), get->GetTable().get(),
-	                              std::move(virtual_columns));
-	result.names = StringsToIdentifiers(std::move(return_names));
+	bind_context.AddTableFunction(bind_index, Identifier(function_name), return_names, return_types,
+	                              get->GetMutableColumnIds(), get->GetTable().get(), std::move(virtual_columns));
+	result.names = std::move(return_names);
 	result.types = std::move(return_types);
 	result.plan = std::move(get);
 	return result;
@@ -356,7 +357,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
 	named_parameter_map_t named_parameters;
 	vector<LogicalType> input_table_types;
-	vector<string> input_table_names;
+	vector<Identifier> input_table_names;
 
 	TableFunctionRef ref;
 	ref.alias = function.name;
@@ -441,15 +442,15 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	vector<LogicalType> input_table_types;
-	vector<string> input_table_names;
+	vector<Identifier> input_table_names;
 
 	if (subquery.plan) {
 		input_table_types = subquery.types;
-		input_table_names = IdentifiersToStrings(subquery.names);
+		input_table_names = subquery.names;
 	} else if (table_function.in_out_function) {
 		for (auto &param : parameters) {
 			input_table_types.push_back(param.type());
-			input_table_names.push_back(string());
+			input_table_names.push_back(Identifier());
 		}
 	}
 	if (!parameters.empty()) {

@@ -16,7 +16,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 
 	// Check if a parameter value has already been supplied
 	auto &parameter_data = parameters->GetParameterData();
-	auto param_data_it = parameter_data.find(Identifier(parameter_id.GetIdentifierName()));
+	auto param_data_it = parameter_data.find(parameter_id);
 	if (param_data_it != parameter_data.end()) {
 		// it has! emit a constant directly
 		auto &data = param_data_it->second;

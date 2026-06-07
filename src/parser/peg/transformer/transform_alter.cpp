@@ -69,8 +69,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<BaseTableRef> base_table_name,
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
-	auto result =
-	    make_uniq<RenameViewInfo>(AlterEntryData(), Identifier(rename_table->new_table_name.GetIdentifierName()));
+	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
 	result->catalog = base_table_name->catalog_name;
 	result->schema = base_table_name->schema_name;
 	result->name = base_table_name->table_name;
@@ -133,9 +132,9 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema =
 			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
-			owned_info = make_uniq<ChangeOwnershipInfo>(
-			    CatalogType::SEQUENCE_ENTRY, "", "", "", Identifier(schema.GetIdentifierName()),
-			    Identifier(owned_by->qualified_name.name.GetIdentifierName()), OnEntryNotFound::THROW_EXCEPTION);
+			owned_info =
+			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 	if (owned_info) {
@@ -333,9 +332,8 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransfo
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
     PEGTransformer &transformer, unique_ptr<ColumnRefExpression> nested_column_name, const string &identifier) {
 	if (nested_column_name->ColumnNames().size() == 1) {
-		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(),
-		                                          Identifier(nested_column_name->ColumnNames()[0].GetIdentifierName()),
-		                                          Identifier(identifier));
+		auto result =
+		    make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0], Identifier(identifier));
 		return std::move(result);
 	}
 	auto result =

@@ -98,25 +98,26 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &index_name, const TableDescription &path) {
-	auto found = index_list.Find(Identifier(index_name));
+static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &index_name,
+                                  const TableDescription &path) {
+	auto found = index_list.Find(index_name);
 	if (found) {
 		return *found;
 	}
 
 	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
-	vector<string> available;
+	vector<Identifier> available;
 	for (auto &idx : index_list.Indexes()) {
-		available.push_back(idx.GetIndexName().GetIdentifierName());
+		available.push_back(idx.GetIndexName());
 	}
 
 	if (available.empty()) {
 		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-		                       index_name, qualified_table);
+		                       index_name.GetIdentifierName(), qualified_table);
 	}
 	auto available_list = StringUtil::Join(available, ", ");
-	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s", index_name,
-	                       qualified_table, available_list);
+	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s",
+	                       index_name.GetIdentifierName(), qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -159,7 +160,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
-	auto &bound_index = FindBoundIndex(index_list, index_name, path);
+	auto &bound_index = FindBoundIndex(index_list, Identifier(index_name), path);
 
 	auto index_type = bound_index.GetIndexType();
 	if (index_type != ART::TYPE_NAME) {

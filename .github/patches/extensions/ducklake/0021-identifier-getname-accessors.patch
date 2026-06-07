@@ -12,9 +12,18 @@ index 2ac4a46e..20aed09a 100644
  			if (i < struct_values.size() - 1) {
  				ret += ", ";
 diff --git a/src/common/parquet_file_scanner.cpp b/src/common/parquet_file_scanner.cpp
-index b2b6b280..01a78681 100644
+index b2b6b280..40af567f 100644
 --- a/src/common/parquet_file_scanner.cpp
 +++ b/src/common/parquet_file_scanner.cpp
+@@ -23,7 +23,7 @@ ParquetFileScanner::ParquetFileScanner(ClientContext &context, const DuckLakeFil
+ 	children.push_back(Value(file.path));
+ 	named_parameter_map_t named_params;
+ 	vector<LogicalType> input_types;
+-	vector<string> input_names;
++	vector<Identifier> input_names;
+ 
+ 	// ducklake-managed paths may contain incidental key=value segments
+ 	named_params["hive_partitioning"] = Value::BOOLEAN(false);
 @@ -36,7 +36,7 @@ ParquetFileScanner::ParquetFileScanner(ClientContext &context, const DuckLakeFil
  
  	TableFunctionRef empty;
@@ -61,7 +70,7 @@ index 13f8ace3..353469ac 100644
  
  	auto result = make_uniq<DuckLakeAddDataFilesData>(catalog, table);
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index 1803b084..fe56afe4 100644
+index 1803b084..5fa6e62e 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
 @@ -56,7 +56,8 @@ vector<BoundOrderByNode> DuckLakeCompactor::BindSortOrders(Binder &binder, DuckL
@@ -85,6 +94,15 @@ index 1803b084..fe56afe4 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(source_files.size())));
  	chunk.data[3].Append(Value::BIGINT(static_cast<int64_t>(files_created)));
  	return SourceResultType::FINISHED;
+@@ -545,7 +546,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
+ 	auto virtual_columns = table.GetVirtualColumns();
+ 	auto ducklake_scan =
+ 	    make_uniq<LogicalGet>(table_idx, std::move(scan_function), std::move(bind_data), copy_options.expected_types,
+-	                          copy_options.names, std::move(virtual_columns));
++	                          IdentifiersToStrings(copy_options.names), std::move(virtual_columns));
+ 
+ 	auto &column_ids = ducklake_scan->GetMutableColumnIds();
+ 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 @@ -573,7 +574,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table
@@ -112,7 +130,7 @@ index 1803b084..fe56afe4 100644
  		auto_compact = ducklake_catalog.GetConfigOption<string>("auto_compact", dl_schema.get()->GetSchemaId(),
  		                                                        ducklake_table.GetTableId(), "true") == "true";
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
-index 216fedc0..325ce4a5 100644
+index 216fedc0..7d25de45 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp
 +++ b/src/functions/ducklake_flush_inlined_data.cpp
 @@ -86,8 +86,8 @@ SourceResultType DuckLakeFlushData::GetDataInternal(ExecutionContext &context, D
@@ -126,6 +144,15 @@ index 216fedc0..325ce4a5 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(gstate.rows_flushed)));
  	return SourceResultType::FINISHED;
  }
+@@ -318,7 +318,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
+ 	auto virtual_columns = table.GetVirtualColumns();
+ 	auto ducklake_scan =
+ 	    make_uniq<LogicalGet>(table_idx, std::move(scan_function), std::move(bind_data), copy_options.expected_types,
+-	                          copy_options.names, std::move(virtual_columns));
++	                          IdentifiersToStrings(copy_options.names), std::move(virtual_columns));
+ 	auto &column_ids = ducklake_scan->GetMutableColumnIds();
+ 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
+ 		column_ids.emplace_back(i);
 @@ -346,7 +346,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table
@@ -277,6 +304,51 @@ index 04a235e9..395117e1 100644
  	                                               optional_ptr<optional_idx> name_offset = nullptr) const;
  	idx_t GetColumnCount() {
  		return field_ids.size();
+diff --git a/src/include/storage/ducklake_insert.hpp b/src/include/storage/ducklake_insert.hpp
+index c591763c..bd8a0a88 100644
+--- a/src/include/storage/ducklake_insert.hpp
++++ b/src/include/storage/ducklake_insert.hpp
+@@ -131,7 +131,7 @@ struct DuckLakeCopyOptions {
+ 	bool write_partition_columns;
+ 	bool write_empty_file = true;
+ 	vector<idx_t> partition_columns;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> expected_types;
+ 
+ 	//! Set of projection columns to execute prior to inserting (if any)
+diff --git a/src/include/storage/ducklake_multi_file_list.hpp b/src/include/storage/ducklake_multi_file_list.hpp
+index e0a9338a..6c8d3a9a 100644
+--- a/src/include/storage/ducklake_multi_file_list.hpp
++++ b/src/include/storage/ducklake_multi_file_list.hpp
+@@ -31,7 +31,7 @@ public:
+ 	DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info, const DuckLakeInlinedTableInfo &inlined_table);
+ 
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<string> &names, const vector<LogicalType> &types,
++	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+diff --git a/src/include/storage/ducklake_multi_file_reader.hpp b/src/include/storage/ducklake_multi_file_reader.hpp
+index d89dccfd..0c90111d 100644
+--- a/src/include/storage/ducklake_multi_file_reader.hpp
++++ b/src/include/storage/ducklake_multi_file_reader.hpp
+@@ -36,12 +36,12 @@ public:
+ 
+ 	//! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
+ 	//! readers will try read
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 
+ 	//! Override the Options bind
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
++	                 vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 
+ 	ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+ 	                                      const vector<MultiFileColumnDefinition> &global_columns,
 diff --git a/src/include/storage/ducklake_table_entry.hpp b/src/include/storage/ducklake_table_entry.hpp
 index 0f97e664..ba6ddf6e 100644
 --- a/src/include/storage/ducklake_table_entry.hpp
@@ -446,9 +518,18 @@ index e0c2ca2e..928a53be 100644
  	auto info = DefaultTableFunctionGenerator::CreateTableMacroInfo(macro);
  	auto table_macro =
 diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
-index a9dd7a88..d477b2d6 100644
+index a9dd7a88..e804bd0e 100644
 --- a/src/storage/ducklake_delete.cpp
 +++ b/src/storage/ducklake_delete.cpp
+@@ -76,7 +76,7 @@ static DuckLakeDeleteFile WriteDeleteFileInternal(ClientContext &context, InputT
+ 
+ 	DuckLakeUtil::EnsureDirectoryExists(input.fs, input.data_path);
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(input.context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(input.context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	auto copy_global_state = copy_fun.function.copy_to_initialize_global(context, *function_data, delete_file_path);
+ 
+ 	// set up stats to get them from function
 @@ -623,7 +623,7 @@ string DuckLakeDelete::GetName() const {
  
  InsertionOrderPreservingMap<string> DuckLakeDelete::ParamsToString() const {
@@ -582,7 +663,7 @@ index 5f0c4b5c..5da2e91a 100644
  			}
  		}
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index e87017cd..6202f6bc 100644
+index e87017cd..2e36434b 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
 @@ -159,7 +159,7 @@ void DuckLakeInsert::AddWrittenFiles(DuckLakeInsertGlobalState &global_state, Da
@@ -613,6 +694,35 @@ index e87017cd..6202f6bc 100644
  	if (!entry) {
  		throw MissingExtensionException(
  		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension", name, name);
+@@ -457,8 +458,8 @@ static void GeneratePartitionExpressions(ClientContext &context, DuckLakeCopyInp
+ 	case_insensitive_set_t names;
+ 	for (auto &field : copy_input.partition_data->fields) {
+ 		auto expr = GetPartitionExpression(context, copy_input, field);
+-		copy_options.names.push_back(GetPartitionExpressionName(copy_input, field, names));
+-		names.insert(copy_options.names.back());
++		copy_options.names.push_back(Identifier(GetPartitionExpressionName(copy_input, field, names)));
++		names.insert(copy_options.names.back().GetIdentifierName());
+ 		copy_options.expected_types.push_back(expr->GetReturnType());
+ 		copy_options.projection_list.push_back(std::move(expr));
+ 	}
+@@ -549,7 +550,7 @@ DuckLakeCopyOptions DuckLakeInsert::GetCopyOptions(ClientContext &context, DuckL
+ 		}
+ 	}
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, casted_types);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), casted_types);
+ 
+ 	DuckLakeCopyOptions result(std::move(info), copy_fun.function);
+ 	result.bind_data = std::move(function_data);
+@@ -575,7 +576,7 @@ DuckLakeCopyOptions DuckLakeInsert::GetCopyOptions(ClientContext &context, DuckL
+ 	result.per_thread_output = per_thread_output;
+ 	result.write_partition_columns = true;
+ 	result.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+-	result.names = names_to_write;
++	result.names = StringsToIdentifiers(names_to_write);
+ 	result.expected_types = types_to_write;
+ 
+ 	if (copy_input.partition_data) {
 @@ -851,7 +852,7 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
  	}
  	auto table_uuid = duck_transaction.GenerateUUID();
@@ -650,10 +760,47 @@ index d1cdd2d1..1442cde8 100644
  
  	for (auto &file : new_files) {
  		auto data_file_index = static_cast<int64_t>(file.id.index);
+diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
+index 456cfb3f..bd557b54 100644
+--- a/src/storage/ducklake_multi_file_list.cpp
++++ b/src/storage/ducklake_multi_file_list.cpp
+@@ -57,7 +57,7 @@ void DuckLakeMultiFileList::AddFilterToPushdownInfo(FilterPushdownInfo &pushdown
+ 
+ unique_ptr<MultiFileList>
+ DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                             const vector<string> &names, const vector<LogicalType> &types,
++                                             const vector<Identifier> &names, const vector<LogicalType> &types,
+                                              const vector<column_t> &column_ids, TableFilterSet &filters) const {
+ 	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || !filters.HasFilters()) {
+ 		// filter pushdown is only supported when scanning full tables
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 4fc11c8c..1801c86a 100644
+index 4fc11c8c..e51ef3c2 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
+@@ -220,20 +220,20 @@ vector<MultiFileColumnDefinition> DuckLakeMultiFileReader::ColumnsFromFieldData(
+ }
+ 
+ bool DuckLakeMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-                                   vector<string> &names, MultiFileReaderBindData &bind_data) {
++                                   vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+ 	auto &field_data = read_info.table.GetFieldData();
+ 	auto &columns = bind_data.schema;
+ 	columns = ColumnsFromFieldData(field_data);
+ 	//	bind_data.file_row_number_idx = names.size();
+ 	bind_data.mapping = MultiFileColumnMappingMode::BY_FIELD_ID;
+-	names = read_info.column_names;
++	names = StringsToIdentifiers(read_info.column_names);
+ 	return_types = read_info.column_types;
+ 	return true;
+ }
+ 
+ //! Override the Options bind
+ void DuckLakeMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
+-                                          vector<LogicalType> &return_types, vector<string> &names,
++                                          vector<LogicalType> &return_types, vector<Identifier> &names,
+                                           MultiFileReaderBindData &bind_data) {
+ }
+ 
 @@ -596,7 +596,7 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
  
  		FunctionBinder binder(context);
@@ -917,7 +1064,7 @@ index 0666a365..1ec74d68 100644
  	}
  	options.access_mode = attach_options.access_mode;
 diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
-index fce80002..6491269f 100644
+index fce80002..b0f75d1d 100644
 --- a/src/storage/ducklake_table_entry.cpp
 +++ b/src/storage/ducklake_table_entry.cpp
 @@ -111,8 +111,8 @@ DuckLakeTableEntry::DuckLakeTableEntry(DuckLakeTableEntry &parent, CreateTableIn
@@ -976,7 +1123,25 @@ index fce80002..6491269f 100644
  	}
  	return result;
  }
-@@ -305,7 +305,7 @@ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique
+@@ -279,12 +279,15 @@ unique_ptr<FunctionData> DuckLakeFunctions::BindDuckLakeScan(ClientContext &cont
+ 	vector<Value> inputs {Value("")};
+ 	named_parameter_map_t param_map;
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	TableFunctionRef empty_ref;
+ 
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, function, empty_ref);
+ 
+-	return function.bind(context, bind_input, return_types, names);
++	vector<string> bind_names;
++	auto bound_data = function.bind(context, bind_input, return_types, bind_names);
++	names = StringsToIdentifiers(bind_names);
++	return bound_data;
+ }
+ 
+ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+@@ -305,7 +308,7 @@ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique
  		// Table has been renamed, are we then querying the correct name?
  		bool found = false;
  		for (auto &catalog_set : transaction.GetNewTables()) {
@@ -985,7 +1150,7 @@ index fce80002..6491269f 100644
  			if (table) {
  				auto &ducklake_table = table->Cast<DuckLakeTableEntry>();
  				if (ducklake_table.GetTableId() == table_id) {
-@@ -365,7 +365,7 @@ vector<string> DuckLakeTableEntry::GetPartitionSQLExpressions() const {
+@@ -365,7 +368,7 @@ vector<string> DuckLakeTableEntry::GetPartitionSQLExpressions() const {
  	}
  	for (auto &field : partition_data->fields) {
  		auto &col = GetColumnByFieldId(field.field_id);
@@ -994,7 +1159,7 @@ index fce80002..6491269f 100644
  		col_name = "CAST(" + col_name + " AS " + col.GetType().ToString() + ")";
  		result.push_back(DuckLakePartitionUtils::GetPartitionSQLExpression(field.transform, col_name));
  	}
-@@ -421,7 +421,7 @@ string GetPartitionColumnName(const ColumnRefExpression &colref) {
+@@ -421,7 +424,7 @@ string GetPartitionColumnName(const ColumnRefExpression &colref) {
  	if (colref.IsQualified()) {
  		throw InvalidInputException("Unexpected qualified column reference - only unqualified columns are supported");
  	}
@@ -1003,7 +1168,7 @@ index fce80002..6491269f 100644
  }
  
  void DuckLakeTableEntry::ValidateSortExpressionColumns(DuckLakeTableEntry &table, const vector<OrderByNode> &orders) {
-@@ -433,8 +433,8 @@ void DuckLakeTableEntry::ValidateSortExpressionColumns(DuckLakeTableEntry &table
+@@ -433,8 +436,8 @@ void DuckLakeTableEntry::ValidateSortExpressionColumns(DuckLakeTableEntry &table
  				    throw InvalidInputException(
  				        "Unexpected qualified column reference - only unqualified columns are supported");
  			    }
@@ -1014,7 +1179,7 @@ index fce80002..6491269f 100644
  				    if (std::find(missing_columns.begin(), missing_columns.end(), column_name) ==
  				        missing_columns.end()) {
  					    missing_columns.push_back(column_name);
-@@ -468,7 +468,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
+@@ -468,7 +471,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
  	}
  	case ExpressionType::FUNCTION: {
  		auto &function = expr.Cast<FunctionExpression>();
@@ -1023,7 +1188,7 @@ index fce80002..6491269f 100644
  
  		// BUCKET logic is different from the other transforms because it has two arguments.
  		if (name == "bucket") {
-@@ -524,10 +524,10 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
+@@ -524,10 +527,10 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
  		    "Unsupported partition key %s - only identity columns and year/month/day/hour/bucket are supported",
  		    expr.ToString());
  	}
@@ -1036,7 +1201,7 @@ index fce80002..6491269f 100644
  	PhysicalIndex column_index(col.StorageOid());
  	auto &field_id = table.GetFieldData().GetByRootIndex(column_index);
  	field.field_id = field_id.GetFieldIndex();
-@@ -643,7 +643,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -643,7 +646,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  }
  
  unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, RenameColumnInfo &info) {
@@ -1045,7 +1210,7 @@ index fce80002..6491269f 100644
  		throw CatalogException("Column name \"%s\" is reserved by DuckLake for internal use", info.new_name);
  	}
  	auto create_info = GetInfo();
-@@ -666,7 +666,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -666,7 +669,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	table_info.columns = std::move(new_columns);
  
  	auto new_entry = make_uniq<DuckLakeTableEntry>(*this, table_info,
@@ -1054,7 +1219,7 @@ index fce80002..6491269f 100644
  	return std::move(new_entry);
  }
  
-@@ -682,7 +682,7 @@ void DuckLakeTableEntry::RequireNextColumnId(DuckLakeTransaction &transaction) {
+@@ -682,7 +685,7 @@ void DuckLakeTableEntry::RequireNextColumnId(DuckLakeTransaction &transaction) {
  }
  
  unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, AddColumnInfo &info) {
@@ -1063,7 +1228,7 @@ index fce80002..6491269f 100644
  		throw CatalogException("Column name \"%s\" is reserved by DuckLake for internal use", info.new_column.Name());
  	}
  	auto create_info = GetInfo();
-@@ -776,7 +776,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -776,7 +779,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	ColumnList new_columns;
  	for (auto &col : columns.Logical()) {
  		auto copy = col.Copy();
@@ -1072,7 +1237,7 @@ index fce80002..6491269f 100644
  			continue;
  		}
  		new_columns.AddColumn(std::move(copy));
-@@ -896,7 +896,7 @@ string GetNestedChildName(const LogicalType &type, idx_t index) {
+@@ -896,7 +899,7 @@ string GetNestedChildName(const LogicalType &type, idx_t index) {
  	case LogicalTypeId::MAP:
  		return index == 0 ? "key" : "value";
  	case LogicalTypeId::STRUCT:
@@ -1081,7 +1246,7 @@ index fce80002..6491269f 100644
  	default:
  		throw NotImplementedException("Unimplemented nested type %s for DuckLake type evolution", type);
  	}
-@@ -1100,7 +1100,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1100,7 +1103,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  		throw CatalogException("Fields can only be added to structs - %s is a %s", parent_id.Name(), parent_id.Type());
  	}
  	for (auto &child : StructType::GetChildTypes(parent_id.Type())) {
@@ -1090,7 +1255,7 @@ index fce80002..6491269f 100644
  			if (info.if_field_not_exists) {
  				return nullptr;
  			}
-@@ -1122,7 +1122,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1122,7 +1125,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	auto new_field_ids = make_shared_ptr<DuckLakeFieldData>();
  	for (idx_t col_idx = 0; col_idx < current_field_ids.size(); col_idx++) {
  		auto &field_id = current_field_ids[col_idx];
@@ -1099,7 +1264,7 @@ index fce80002..6491269f 100644
  			auto new_field_id = field_id->AddField(info.column_path, std::move(child_field_id));
  			auto &col = table_info.columns.GetColumnMutable(PhysicalIndex(col_idx));
  			col.SetType(new_field_id->Type());
-@@ -1174,7 +1174,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1174,7 +1177,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	auto new_field_ids = make_shared_ptr<DuckLakeFieldData>();
  	for (idx_t col_idx = 0; col_idx < current_field_ids.size(); col_idx++) {
  		auto &field_id = current_field_ids[col_idx];
@@ -1108,7 +1273,7 @@ index fce80002..6491269f 100644
  			auto new_field_id = field_id->RemoveField(info.column_path);
  			auto &col = table_info.columns.GetColumnMutable(PhysicalIndex(col_idx));
  			col.SetType(new_field_id->Type());
-@@ -1214,24 +1214,24 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1214,24 +1217,24 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  		throw NotImplementedException("Only rename on top-level struct fields is supported currently");
  	}
  	for (auto &child : StructType::GetChildTypes(parent_id.Type())) {
@@ -1138,7 +1303,7 @@ index fce80002..6491269f 100644
  			auto &col = table_info.columns.GetColumnMutable(PhysicalIndex(col_idx));
  			col.SetType(new_field_id->Type());
  			new_field_ids->Add(std::move(new_field_id));
-@@ -1254,7 +1254,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1254,7 +1257,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	auto &col = table_info.columns.GetColumnMutable(info.column_name);
  	auto &field_id = GetFieldId(col.Physical());
  	col.SetDefaultValue(std::move(info.expression));
@@ -1147,7 +1312,7 @@ index fce80002..6491269f 100644
  
  	auto new_entry = make_uniq<DuckLakeTableEntry>(
  	    *this, table_info, SetDefaultLocalChange::SetDefault(field_id.GetFieldIndex(), new_column));
-@@ -1364,15 +1364,15 @@ DuckLakeColumnInfo DuckLakeTableEntry::GetColumnInfo(FieldIndex field_index) con
+@@ -1364,15 +1367,15 @@ DuckLakeColumnInfo DuckLakeTableEntry::GetColumnInfo(FieldIndex field_index) con
  	if (!field_id) {
  		throw InternalException("Field id not found in table");
  	}
@@ -1166,7 +1331,7 @@ index fce80002..6491269f 100644
  	return result;
  }
  
-@@ -1389,7 +1389,7 @@ DuckLakeColumnInfo DuckLakeTableEntry::ConvertColumn(const string &name, const L
+@@ -1389,7 +1392,7 @@ DuckLakeColumnInfo DuckLakeTableEntry::ConvertColumn(const string &name, const L
  		for (idx_t child_idx = 0; child_idx < struct_children.size(); ++child_idx) {
  			auto &child = struct_children[child_idx];
  			auto &child_id = field_id.GetChildByIndex(child_idx);
@@ -1175,7 +1340,7 @@ index fce80002..6491269f 100644
  		}
  		break;
  	}
-@@ -1425,7 +1425,7 @@ DuckLakeColumnInfo DuckLakeTableEntry::GetAddColumnInfo() const {
+@@ -1425,7 +1428,7 @@ DuckLakeColumnInfo DuckLakeTableEntry::GetAddColumnInfo() const {
  	auto &new_col = GetColumn(new_col_idx);
  
  	auto &field_id = field_data->GetByRootIndex(new_col.Physical());

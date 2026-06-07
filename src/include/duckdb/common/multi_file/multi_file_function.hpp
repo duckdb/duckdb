@@ -33,7 +33,7 @@ struct MultiFileReaderInterface {
 	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
 	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
-	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                        MultiFileBindData &bind_data) = 0;
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
@@ -108,10 +108,9 @@ public:
 		if (IsEmptyResult(*result)) {
 			result->types.emplace_back(LogicalType::BOOLEAN);
 			result->names.emplace_back("empty");
-			result->columns =
-			    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(result->names), result->types);
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
-			names = result->names;
+			names = IdentifiersToStrings(result->names);
 			return std::move(result);
 		}
 
@@ -134,7 +133,7 @@ public:
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
-			names = result->names;
+			names = IdentifiersToStrings(result->names);
 		} else {
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
@@ -176,8 +175,7 @@ public:
 			result->types = return_types;
 			result->table_columns = names;
 		}
-		result->columns =
-		    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(result->names), result->types);
+		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -756,7 +754,7 @@ public:
 		}
 
 		auto primary_index = column_index.GetPrimaryIndex();
-		const auto &col_name = bind_data.names[primary_index];
+		const auto &col_name = bind_data.names[primary_index].GetIdentifierName();
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {

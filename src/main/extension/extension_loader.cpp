@@ -46,7 +46,7 @@ void ExtensionLoader::SetDescription(const string &description) {
 
 void ExtensionLoader::UseDedicatedSchemaForExtension(const Identifier &extension_schema_name) {
 	CreateSchema(extension_schema_name);
-	UseDefaultSchema(Identifier(extension_schema_name.GetIdentifierName()));
+	UseDefaultSchema(extension_schema_name);
 	AddSchemaToSearchPath(extension_schema_name);
 }
 
@@ -120,7 +120,7 @@ void ExtensionLoader::FinalizeLoad() {
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
-	ScalarFunctionSet set {Identifier(function.name.GetIdentifierName())};
+	ScalarFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -144,7 +144,7 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
-	AggregateFunctionSet set {Identifier(function.name.GetIdentifierName())};
+	AggregateFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -168,7 +168,7 @@ void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunction function) {
-	WindowFunctionSet set {Identifier(function.name.GetIdentifierName())};
+	WindowFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -198,7 +198,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(TableFunction function) {
-	TableFunctionSet set {Identifier(function.name.GetIdentifierName())};
+	TableFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -224,7 +224,7 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 	D_ASSERT(!function.name.empty());
-	PragmaFunctionSet set {Identifier(function.name.GetIdentifierName())};
+	PragmaFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -284,13 +284,13 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
-	auto &scalar_function = GetFunction(function.name.GetIdentifierName());
+	auto &scalar_function = GetFunction(function.name);
 	scalar_function.functions.AddFunction(std::move(function));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
-	auto &scalar_function = GetFunction(functions.name.GetIdentifierName());
+	auto &scalar_function = GetFunction(functions.name);
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		scalar_function.functions.AddFunction(std::move(function));
@@ -298,14 +298,14 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 }
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
-	auto &table_function = GetTableFunction(functions.name.GetIdentifierName());
+	auto &table_function = GetTableFunction(functions.name);
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
 		table_function.functions.AddFunction(std::move(function));
 	}
 }
 
-static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string &name, CatalogType type) {
+static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const Identifier &name, CatalogType type) {
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -313,11 +313,11 @@ static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string
 	return schema.GetEntry(data, type, Identifier(name));
 }
 
-optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const string &name) {
+optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const Identifier &name) {
 	return TryGetEntry(db, name, CatalogType::SCALAR_FUNCTION_ENTRY);
 }
 
-ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const string &name) {
+ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const Identifier &name) {
 	auto catalog_entry = TryGetFunction(name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetFunction", name);
@@ -325,11 +325,11 @@ ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const string &name) {
 	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
 }
 
-optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const string &name) {
+optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const Identifier &name) {
 	return TryGetEntry(db, name, CatalogType::TABLE_FUNCTION_ENTRY);
 }
 
-TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const string &name) {
+TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &name) {
 	auto catalog_entry = TryGetTableFunction(name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);

@@ -317,7 +317,7 @@ struct RemapEntry {
 		if (entry == source_map.end()) {
 			throw BinderException("Source value %s not found", remap_source);
 		}
-		auto target_entry = target_map.find(Identifier(remap_target.GetIdentifierName()));
+		auto target_entry = target_map.find(remap_target);
 		if (target_entry == target_map.end()) {
 			throw BinderException("Target value %s not found", remap_target.GetIdentifierName());
 		}
@@ -409,7 +409,7 @@ struct RemapEntry {
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 			auto &target_name = target_children[target_idx].first;
 			auto &child_type = target_children[target_idx].second;
-			auto entry = remap_map.find(Identifier(target_name.GetIdentifierName()));
+			auto entry = remap_map.find(target_name);
 			if (entry == remap_map.end()) {
 				throw BinderException("Missing target value %s for remap", target_name);
 			}

@@ -1,5 +1,5 @@
 diff --git a/src/avro_copy.cpp b/src/avro_copy.cpp
-index 634aadc..8c56328 100644
+index 634aadc..ee47234 100644
 --- a/src/avro_copy.cpp
 +++ b/src/avro_copy.cpp
 @@ -260,13 +260,13 @@ public:
@@ -28,6 +28,33 @@ index 634aadc..8c56328 100644
  	}
  
  	std::unique_ptr<yyjson_mut_doc, YyjsonDocDeleter> doc_p(yyjson_mut_doc_new(nullptr));
+@@ -497,14 +497,14 @@ static string CreateJSONMetadata(const case_insensitive_map_t<vector<Value>> &op
+ 	return res;
+ }
+ 
+-WriteAvroBindData::WriteAvroBindData(CopyFunctionBindInput &input, const vector<string> &names,
++WriteAvroBindData::WriteAvroBindData(CopyFunctionBindInput &input, const vector<Identifier> &names,
+                                      const vector<LogicalType> &types)
+-    : names(names), types(types) {
++    : names(IdentifiersToStrings(names)), types(types) {
+ 
+ 	case_insensitive_set_t recognized;
+ 
+ 	json_metadata = CreateJSONMetadata(input.info.options, recognized);
+-	json_schema = CreateJSONSchema(input.info.options, names, types, recognized);
++	json_schema = CreateJSONSchema(input.info.options, this->names, types, recognized);
+ 
+ 	vector<string> unrecognized_options;
+ 	for (auto &option : input.info.options) {
+@@ -588,7 +588,7 @@ WriteAvroGlobalState::WriteAvroGlobalState(ClientContext &context, FunctionData
+ }
+ 
+ static unique_ptr<FunctionData> WriteAvroBind(ClientContext &context, CopyFunctionBindInput &input,
+-                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
++                                              const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
+ 	auto res = make_uniq<WriteAvroBindData>(input, names, sql_types);
+ 	return std::move(res);
+ }
 @@ -748,7 +748,7 @@ static idx_t PopulateValue(avro_value_t *target, const Value &val) {
  		auto &child_types = StructType::GetChildTypes(val.type());
  		idx_t struct_value_size = 0;
@@ -37,6 +64,19 @@ index 634aadc..8c56328 100644
  				continue;
  			}
  			const char *unused_name;
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index dad38c7..6ee3cb5 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -40,7 +40,7 @@ unique_ptr<TableFunctionData> AvroMultiFileInfo::InitializeBindData(MultiFileBin
+ 	return result;
+ }
+ 
+-void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
++void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
+                                    MultiFileBindData &bind_data) {
+ 	if (bind_data.file_options.union_by_name) {
+ 		throw NotImplementedException("'union_by_name' not implemented for Avro reader yet");
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
 index 7a37a58..766767d 100644
 --- a/src/avro_reader.cpp
@@ -92,6 +132,32 @@ index e40979d..66aba41 100644
  		if (col_name == FieldID::DUCKDB_FIELD_ID || col_name == FieldID::DUCKDB_NULLABLE_ID) {
  			continue;
  		}
+diff --git a/src/include/avro_copy.hpp b/src/include/avro_copy.hpp
+index e1d7f29..1a99b19 100644
+--- a/src/include/avro_copy.hpp
++++ b/src/include/avro_copy.hpp
+@@ -13,7 +13,7 @@ struct AvroCopyFunction {
+ 
+ struct WriteAvroBindData : public FunctionData {
+ public:
+-	WriteAvroBindData(CopyFunctionBindInput &input, const vector<string> &names, const vector<LogicalType> &types);
++	WriteAvroBindData(CopyFunctionBindInput &input, const vector<Identifier> &names, const vector<LogicalType> &types);
+ 	WriteAvroBindData() {
+ 	}
+ 	virtual ~WriteAvroBindData();
+diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
+index 194e980..ef0e7bc 100644
+--- a/src/include/avro_multi_file_info.hpp
++++ b/src/include/avro_multi_file_info.hpp
+@@ -32,7 +32,7 @@ struct AvroMultiFileInfo : MultiFileReaderInterface {
+ 	//! This is where the actual binding must happen, so in this function we either:
+ 	//! 1. union_by_name = False. We set the schema/name depending on the first file
+ 	//! 2. union_by_name = True.
+-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
++	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	                MultiFileBindData &bind_data) override;
+ 
+ 	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
 diff --git a/src/include/avro_type.hpp b/src/include/avro_type.hpp
 index 513eed1..8760abc 100644
 --- a/src/include/avro_type.hpp

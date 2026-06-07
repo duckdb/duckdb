@@ -144,8 +144,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		BoundStatement result;
 		result.types = ctebinding->GetColumnTypes();
 		result.names = names;
-		result.plan = make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, IdentifiersToStrings(names),
-		                                       is_recurring);
+		result.plan = make_uniq<LogicalCTERef>(index, ctebinding->GetIndex(), result.types, names, is_recurring);
 		return result;
 	}
 

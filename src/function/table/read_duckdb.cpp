@@ -27,7 +27,7 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
@@ -424,8 +424,8 @@ unique_ptr<TableFunctionData> DuckDBMultiFileInfo::InitializeBindData(MultiFileB
 	return std::move(result);
 }
 
-void DuckDBMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                                     MultiFileBindData &bind_data) {
+void DuckDBMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types,
+                                     vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &duckdb_bind_data = bind_data.bind_data->Cast<DuckDBReadBindData>();
 	bind_data.reader_bind =
 	    bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list, bind_data,

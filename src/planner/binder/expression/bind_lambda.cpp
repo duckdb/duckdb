@@ -35,7 +35,7 @@ static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const Bo
 	return offset;
 }
 
-static void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names,
+static void ExtractParameter(const ParsedExpression &expr, vector<Identifier> &column_names,
                              vector<string> &column_aliases) {
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
@@ -46,7 +46,8 @@ static void ExtractParameter(const ParsedExpression &expr, vector<string> &colum
 	column_aliases.push_back(column_ref.ToString());
 }
 
-static void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+static void ExtractParameters(LambdaExpression &expr, vector<Identifier> &column_names,
+                              vector<string> &column_aliases) {
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
 	string error_message;
@@ -119,7 +120,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// extract and verify lambda parameters to create dummy columns
 	vector<LogicalType> column_types;
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	vector<string> column_aliases;
 	ExtractParameters(expr, column_names, column_aliases);
 	for (idx_t i = 0; i < column_names.size(); i++) {
@@ -137,7 +138,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!lambda_bindings) {
 		lambda_bindings = &local_bindings;
 	}
-	DummyBinding new_lambda_binding(column_types, StringsToIdentifiers(column_names), table_alias);
+	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
 	if (expr.CopiedExprMutable()) {

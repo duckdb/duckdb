@@ -35,7 +35,7 @@ public:
 	unique_ptr<PhysicalPlan> physical_plan;
 
 	//! The result names of the transaction
-	vector<string> names;
+	vector<Identifier> names;
 	//! The result types of the transaction
 	vector<LogicalType> types;
 

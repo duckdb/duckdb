@@ -117,7 +117,7 @@ void BaseCSVData::Finalize() {
 }
 
 static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_data, ClientContext &context,
-                                                            const vector<string> &names,
+                                                            const vector<Identifier> &names,
                                                             const vector<LogicalType> &sql_types) {
 	auto &options = bind_data.options;
 	auto &formats = options.write_date_format;
@@ -130,7 +130,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 	auto &bind_context = binder->bind_context;
 	auto table_index = binder->GenerateTableIndex();
-	bind_context.AddGenericBinding(table_index, "copy_csv", StringsToIdentifiers(names), sql_types);
+	bind_context.AddGenericBinding(table_index, "copy_csv", names, sql_types);
 
 	// Create the ParsedExpressions (cast, strftime, etc..)
 	vector<unique_ptr<ParsedExpression>> unbound_expressions;
@@ -175,7 +175,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
-                                             const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                             const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
@@ -415,7 +415,8 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
 	auto &original_types = collection->Types();
-	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
+	auto expressions =
+	    CreateCastExpressions(csv_data, context, StringsToIdentifiers(csv_data.options.name_list), original_types);
 	ExpressionExecutor executor(context, expressions);
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 

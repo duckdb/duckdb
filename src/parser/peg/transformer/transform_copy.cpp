@@ -124,7 +124,7 @@ string PEGTransformerFactory::ExtractFormat(const string &file_path) {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer,
                                                                    unique_ptr<BaseTableRef> base_table_name,
-                                                                   const vector<string> &insert_column_list,
+                                                                   const vector<Identifier> &insert_column_list,
                                                                    const bool &from_or_to,
                                                                    unique_ptr<ParsedExpression> copy_file_name,
                                                                    const vector<GenericCopyOption> &copy_options) {

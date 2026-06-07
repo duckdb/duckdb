@@ -117,12 +117,12 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 		result.types = {LogicalType::BOOLEAN};
 		result.names = {"Success"};
 
-		plan = BindCopyDatabaseSchema(source_catalog, Identifier(target_catalog.GetName().GetIdentifierName()));
+		plan = BindCopyDatabaseSchema(source_catalog, target_catalog.GetName());
 	} else {
 		result.types = {LogicalType::BIGINT};
 		result.names = {"Count"};
 
-		plan = BindCopyDatabaseData(source_catalog, Identifier(target_catalog.GetName().GetIdentifierName()));
+		plan = BindCopyDatabaseData(source_catalog, target_catalog.GetName());
 	}
 
 	result.plan = std::move(plan);

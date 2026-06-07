@@ -555,7 +555,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	template <typename RESULT_TYPE = int64_t>
-	static void AddUnaryPartCodeFunctions(const string &name, ExtensionLoader &loader,
+	static void AddUnaryPartCodeFunctions(const Identifier &name, ExtensionLoader &loader,
 	                                      const LogicalType &result_type = LogicalType::BIGINT,
 	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set {Identifier(name)};
@@ -580,7 +580,7 @@ struct ICUDatePart : public ICUDateFunc {
 		return result;
 	}
 
-	static void AddDatePartFunctions(const string &name, ExtensionLoader &loader) {
+	static void AddDatePartFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
@@ -604,7 +604,7 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>,
 		                      BindLastDate);
 	}
-	static void AddLastDayFunctions(const string &name, ExtensionLoader &loader) {
+	static void AddLastDayFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
@@ -623,7 +623,7 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
 		                      BindMonthName);
 	}
-	static void AddMonthNameFunctions(const string &name, ExtensionLoader &loader) {
+	static void AddMonthNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
@@ -642,7 +642,7 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
 		                      BindDayName);
 	}
-	static void AddDayNameFunctions(const string &name, ExtensionLoader &loader) {
+	static void AddDayNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);

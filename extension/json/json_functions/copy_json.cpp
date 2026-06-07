@@ -61,8 +61,8 @@ static bool GetJSONCopyBoolean(Binder &binder, const string &loption, const vect
 	return values.back().CastAs(binder.context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
-static unique_ptr<SubqueryRef> PushJSONFormatProjection(unique_ptr<SubqueryRef> source_ref, const string &function_name,
-                                                        const string &format) {
+static unique_ptr<SubqueryRef> PushJSONFormatProjection(unique_ptr<SubqueryRef> source_ref,
+                                                        const Identifier &function_name, const string &format) {
 	auto format_node = make_uniq<SelectNode>();
 	format_node->from_table = std::move(source_ref);
 

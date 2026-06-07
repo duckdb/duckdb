@@ -17,14 +17,14 @@ class UpdateRelation : public Relation {
 public:
 	UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition,
 	               Identifier catalog_name, Identifier schema_name, Identifier table_name,
-	               vector<string> update_columns, vector<unique_ptr<ParsedExpression>> expressions);
+	               vector<Identifier> update_columns, vector<unique_ptr<ParsedExpression>> expressions);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;
 	Identifier catalog_name;
 	Identifier schema_name;
 	Identifier table_name;
-	vector<string> update_columns;
+	vector<Identifier> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 
 public:

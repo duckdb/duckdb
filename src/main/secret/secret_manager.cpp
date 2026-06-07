@@ -154,7 +154,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
                                                               OnCreateConflict on_conflict,
                                                               SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(Identifier(secret->GetType().GetIdentifierName()));
+	LookupTypeInternal(secret->GetType());
 
 	//! Handle default for persist type
 	if (persist_type == SecretPersistType::DEFAULT) {
@@ -241,13 +241,12 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Make a copy to set the provider to default if necessary
 	auto function_input = input;
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(Identifier(function_input.type.GetIdentifierName()));
+		auto secret_type = LookupTypeInternal(function_input.type);
 		function_input.provider = Identifier(secret_type.default_provider);
 	}
 
 	// Lookup function
-	auto function_lookup = LookupFunctionInternal(Identifier(function_input.type.GetIdentifierName()),
-	                                              Identifier(function_input.provider.GetIdentifierName()));
+	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
 	if (!function_lookup) {
 		ThrowProviderNotFoundError(input.type.GetIdentifierName(), input.provider.GetIdentifierName());
 	}
@@ -274,14 +273,13 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(Identifier(type.GetIdentifierName()));
+		auto secret_type = LookupTypeInternal(type);
 		provider = Identifier(secret_type.default_provider);
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function =
-	    LookupFunctionInternal(Identifier(type.GetIdentifierName()), Identifier(provider.GetIdentifierName()));
+	auto function = LookupFunctionInternal(type, provider);
 
 	if (!function) {
 		ThrowProviderNotFoundError(info.type.GetIdentifierName(), info.provider.GetIdentifierName(), default_provider);
