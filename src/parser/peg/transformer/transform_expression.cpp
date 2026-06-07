@@ -1787,7 +1787,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	auto &replace_list_opt = list_pr.Child<OptionalParseResult>(3);
 	if (replace_list_opt.HasResult()) {
 		result->ReplaceListMutable() =
-		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
+		    transformer.Transform<identifier_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
 		for (auto &replace_entry : result->ReplaceList()) {
 			if (result->ExcludeList().find(QualifiedColumnName(Identifier(replace_entry.first))) !=
 			    result->ExcludeList().end()) {
@@ -1805,7 +1805,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
 				                      rename_column.first.ToString());
 			}
-			if (result->ReplaceList().find(rename_column.first.column.GetIdentifierName()) !=
+			if (result->ReplaceList().find(Identifier(rename_column.first.column.GetIdentifierName())) !=
 			    result->ReplaceList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
 				                      rename_column.first.ToString());
@@ -2729,48 +2729,47 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionFi
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformReplaceList(PEGTransformer &transformer, ParseResult &parse_result) {
+identifier_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceList(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
-	    list_pr.Child<ListParseResult>(1));
+	return transformer.Transform<identifier_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>>
+identifier_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformReplaceEntries(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+	return transformer.Transform<identifier_map_t<unique_ptr<ParsedExpression>>>(
 	    list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>>
+identifier_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformReplaceEntrySingle(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto replace_entry =
-	    transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
+	    transformer.Transform<pair<Identifier, unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	identifier_map_t<unique_ptr<ParsedExpression>> entry_map;
 	entry_map.insert(std::move(replace_entry));
 	return entry_map;
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>>
+identifier_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto entry_list = ExtractParseResultsFromList(extract_parens);
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
+	identifier_map_t<unique_ptr<ParsedExpression>> entry_map;
 	for (auto entry : entry_list) {
-		auto replace_entry = transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(entry);
+		auto replace_entry = transformer.Transform<pair<Identifier, unique_ptr<ParsedExpression>>>(entry);
 		if (entry_map.find(replace_entry.first) != entry_map.end()) {
-			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
+			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first.GetIdentifierName());
 		}
 		entry_map.insert(std::move(replace_entry));
 	}
 	return entry_map;
 }
 
-pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer,
-                                                                                        ParseResult &parse_result) {
+pair<Identifier, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto column_reference = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
@@ -2779,7 +2778,7 @@ pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformRepla
 	}
 	auto &col_ref = column_reference->Cast<ColumnRefExpression>();
 	auto column_name = col_ref.GetColumnName();
-	return make_pair(column_name.GetIdentifierName(), std::move(expr));
+	return make_pair(column_name, std::move(expr));
 }
 
 ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,

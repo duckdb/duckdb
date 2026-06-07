@@ -8,7 +8,7 @@ AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
       alter_database_type(alter_database_type) {
 }
 
-AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, string catalog_p,
+AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p,
                                      OnEntryNotFound if_not_found)
     : AlterInfo(AlterType::ALTER_DATABASE, Identifier(std::move(catalog_p)), Identifier(), Identifier(), if_not_found),
       alter_database_type(alter_database_type) {
@@ -24,13 +24,13 @@ CatalogType AlterDatabaseInfo::GetCatalogType() const {
 RenameDatabaseInfo::RenameDatabaseInfo() : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE) {
 }
 
-RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found)
+RenameDatabaseInfo::RenameDatabaseInfo(Identifier catalog_p, Identifier new_name_p, OnEntryNotFound if_not_found)
     : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE, std::move(catalog_p), if_not_found),
       new_name(std::move(new_name_p)) {
 }
 
 unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
-	return make_uniq<RenameDatabaseInfo>(catalog.GetIdentifierName(), new_name.GetIdentifierName(), if_not_found);
+	return make_uniq<RenameDatabaseInfo>(catalog, new_name, if_not_found);
 }
 
 string RenameDatabaseInfo::ToString() const {

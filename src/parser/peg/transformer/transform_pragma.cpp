@@ -34,8 +34,8 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	// "PRAGMA table_info='integers'"
 	// "PRAGMA table_info('integers')"
 	// for compatibility, any pragmas that match the SQLite ones are parsed as calls
-	case_insensitive_set_t sqlite_compat_pragmas {"table_info"};
-	if (sqlite_compat_pragmas.find(info.name.GetIdentifierName()) != sqlite_compat_pragmas.end()) {
+	identifier_set_t sqlite_compat_pragmas {"table_info"};
+	if (sqlite_compat_pragmas.find(Identifier(info.name.GetIdentifierName())) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}
 	auto set_statement = make_uniq<SetVariableStatement>(info.name.GetIdentifierName(), std::move(info.parameters[0]),

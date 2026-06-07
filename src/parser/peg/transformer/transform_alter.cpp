@@ -61,7 +61,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	auto catalog_name = identifier;
 	auto new_name = identifier_1;
-	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
+	auto result = make_uniq<RenameDatabaseInfo>(Identifier(catalog_name), Identifier(new_name), not_found);
 	return std::move(result);
 }
 
@@ -69,7 +69,8 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<BaseTableRef> base_table_name,
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
-	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name.GetIdentifierName());
+	auto result =
+	    make_uniq<RenameViewInfo>(AlterEntryData(), Identifier(rename_table->new_table_name.GetIdentifierName()));
 	result->catalog = base_table_name->catalog_name;
 	result->schema = base_table_name->schema_name;
 	result->name = base_table_name->table_name;
@@ -133,8 +134,8 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			auto schema =
 			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
 			owned_info = make_uniq<ChangeOwnershipInfo>(
-			    CatalogType::SEQUENCE_ENTRY, "", "", "", schema.GetIdentifierName(),
-			    owned_by->qualified_name.name.GetIdentifierName(), OnEntryNotFound::THROW_EXCEPTION);
+			    CatalogType::SEQUENCE_ENTRY, "", "", "", Identifier(schema.GetIdentifierName()),
+			    Identifier(owned_by->qualified_name.name.GetIdentifierName()), OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 	if (owned_info) {
@@ -198,7 +199,8 @@ unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
-	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+	AddToMultiStatement(multi_statement,
+	                    make_uniq<SetDefaultInfo>(data, Identifier(column_name), std::move(expression)));
 
 	return multi_statement;
 }
@@ -332,16 +334,18 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
     PEGTransformer &transformer, unique_ptr<ColumnRefExpression> nested_column_name, const string &identifier) {
 	if (nested_column_name->ColumnNames().size() == 1) {
 		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(),
-		                                          nested_column_name->ColumnNames()[0].GetIdentifierName(), identifier);
+		                                          Identifier(nested_column_name->ColumnNames()[0].GetIdentifierName()),
+		                                          Identifier(identifier));
 		return std::move(result);
 	}
-	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), identifier);
+	auto result =
+	    make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), Identifier(identifier));
 	return std::move(result);
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameAlter(PEGTransformer &transformer,
                                                                        const string &identifier) {
-	return make_uniq<RenameTableInfo>(AlterEntryData(), identifier);
+	return make_uniq<RenameTableInfo>(AlterEntryData(), Identifier(identifier));
 }
 
 unique_ptr<AlterTableInfo>

@@ -122,7 +122,7 @@ private:
 	//! Lock for databases
 	mutex databases_lock;
 	//! The set of attached databases
-	case_insensitive_map_t<shared_ptr<AttachedDatabase>> databases;
+	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number
@@ -132,7 +132,7 @@ private:
 	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
 	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
 	//! The current default database
-	string default_database;
+	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
 

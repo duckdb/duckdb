@@ -54,7 +54,7 @@ public:
 	vector<reference<Binding>> GetMatchingBindings(const Identifier &column_name);
 	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the
 	//! matching ones
-	vector<string> GetSimilarBindings(const Identifier &column_name);
+	vector<Identifier> GetSimilarBindings(const Identifier &column_name);
 
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &ctename);
 	//! Binds a column expression to the base table. Returns the bound expression

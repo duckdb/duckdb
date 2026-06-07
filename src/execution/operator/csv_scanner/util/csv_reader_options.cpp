@@ -672,7 +672,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		// Parse into temporary lists first
 		vector<string> parsed_names;
 		vector<LogicalType> parsed_types;
-		case_insensitive_map_t<idx_t> parsed_types_per_column;
+		identifier_map_t<idx_t> parsed_types_per_column;
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &name = StructType::GetChildName(child_type, i);
 			auto &val = struct_children[i];
@@ -680,7 +680,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_csv requires a type specification as string");
 			}
-			parsed_types_per_column[name.GetIdentifierName()] = i;
+			parsed_types_per_column[name] = i;
 			parsed_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 		}
 		if (parsed_names.empty()) {
@@ -761,7 +761,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 
 		// Parse into temporary lists first
 		vector<string> sql_type_names;
-		case_insensitive_map_t<idx_t> parsed_types_per_column;
+		identifier_map_t<idx_t> parsed_types_per_column;
 		if (child_type.id() == LogicalTypeId::STRUCT) {
 			auto &struct_children = StructValue::GetChildren(val);
 			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
@@ -772,7 +772,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 					throw BinderException("read_csv %s requires a type specification as string", key);
 				}
 				sql_type_names.push_back(StringValue::Get(val));
-				parsed_types_per_column[name.GetIdentifierName()] = i;
+				parsed_types_per_column[name] = i;
 			}
 		} else {
 			auto &list_child = ListType::GetChildType(child_type);

@@ -19,8 +19,8 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-static string GetSQLValueFunctionName(const string &column_name) {
-	const auto lcase = StringUtil::Lower(column_name);
+static string GetSQLValueFunctionName(const Identifier &column_name) {
+	const auto lcase = StringUtil::Lower(column_name.GetIdentifierName());
 	if (lcase == "current_catalog") {
 		return "current_catalog";
 	}
@@ -57,12 +57,12 @@ static string GetSQLValueFunctionName(const string &column_name) {
 	return string();
 }
 
-unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_name) {
+unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const Identifier &column_name) {
 	for (auto &ext : PlannerExtension::Iterate(context)) {
 		if (ext.get_sql_value_function) {
 			PlannerExtensionInput input {context, *this, ext.planner_info.get()};
 			unique_ptr<ParsedExpression> result;
-			auto result_type = ext.get_sql_value_function(input, column_name, result);
+			auto result_type = ext.get_sql_value_function(input, column_name.GetIdentifierName(), result);
 			if (result_type == GetSQLValueFunctionReturnType::FINISH_BINDING || result) {
 				return result;
 			}
@@ -161,7 +161,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	}
 
 	// try binding as a lambda parameter
-	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name.GetIdentifierName());
+	auto lambda_ref =
+	    LambdaRefExpression::FindMatchingBinding(lambda_bindings, Identifier(column_name.GetIdentifierName()));
 	if (lambda_ref) {
 		return lambda_ref;
 	}
@@ -191,12 +192,11 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 
 	// it's not, find candidates and error
 	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-	error = ErrorData(BinderException::ColumnNotFound(column_name.GetIdentifierName(), similar_bindings));
+	error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
 	return nullptr;
 }
 
-void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
-                                         vector<unordered_set<string>> &lambda_params,
+void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
                                          const bool within_function_expression) {
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
@@ -204,7 +204,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName().GetIdentifierName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
 			return;
 		}
 
@@ -241,7 +241,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	case ExpressionType::FUNCTION: {
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName().GetIdentifierName())) {
+		if (!ExpressionBinder::IsUnnestFunction(Identifier(function.FunctionName().GetIdentifierName()))) {
 			QualifyFunction(function);
 		}
 		if (function.IsLambdaFunction()) {
@@ -308,7 +308,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 }
 
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
-                                                 vector<unordered_set<string>> &lambda_params) {
+                                                 vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
@@ -533,8 +533,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
                                                                         ErrorData &error) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref =
-		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(
+		    lambda_bindings, Identifier(col_ref.GetColumnName().GetIdentifierName()));
 		if (lambda_ref) {
 			return lambda_ref;
 		}

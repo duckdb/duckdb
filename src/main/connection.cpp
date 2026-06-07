@@ -113,22 +113,22 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
-                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        identifier_map_t<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(query, named_values, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        identifier_map_t<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
-static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
-	case_insensitive_map_t<BoundParameterData> named_values;
+static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
+	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < param_list.size(); i++) {
 		auto &val = param_list[i];
-		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(val);
 	}
 	return named_values;
 }

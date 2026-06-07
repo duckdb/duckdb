@@ -13,7 +13,7 @@
 namespace duckdb {
 
 struct CreateCoordinateSystemInfo : public CreateInfo {
-	DUCKDB_API CreateCoordinateSystemInfo(string name_p, string authority, string code, string projjson,
+	DUCKDB_API CreateCoordinateSystemInfo(Identifier name_p, string authority, string code, string projjson,
 	                                      string wkt2_2019);
 
 	//! The name of the coordinate system

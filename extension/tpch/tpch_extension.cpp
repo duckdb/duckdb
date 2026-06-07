@@ -75,10 +75,9 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	if (data.finished) {
 		return;
 	}
-	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog.GetIdentifierName(), data.schema.GetIdentifierName(),
-	                                     data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog.GetIdentifierName(),
-	                                 data.schema.GetIdentifierName(), data.suffix, data.children, data.step);
+	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
+	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
+	                                 data.step);
 
 	data.finished = true;
 }

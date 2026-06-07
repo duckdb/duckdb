@@ -164,7 +164,7 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	return std::move(bound_constraint);
 }
 
-unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const string &table,
+unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
                                                          const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
 
@@ -239,7 +239,7 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
 	case ConstraintType::UNIQUE: {
-		return BindUniqueConstraint(constraint, table.GetIdentifierName(), columns);
+		return BindUniqueConstraint(constraint, Identifier(table.GetIdentifierName()), columns);
 	}
 	case ConstraintType::FOREIGN_KEY: {
 		return BindForeignKey(constraint);
@@ -362,12 +362,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
+static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const identifier_set_t &gcols,
                                               bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
-		                                                               if (gcols.count(name.GetIdentifierName())) {
+		                                                               if (gcols.count(name)) {
 			                                                               contains_gcol = true;
 			                                                               return;
 		                                                               }
@@ -375,12 +375,12 @@ static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr,
 }
 
 static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
-	unordered_set<string> generated_columns;
+	identifier_set_t generated_columns;
 	for (auto &col : table_info.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.Name().GetIdentifierName());
+		generated_columns.insert(Identifier(col.Name().GetIdentifierName()));
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -409,7 +409,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			auto &constraint = constr->Cast<UniqueConstraint>();
 			if (!constraint.HasIndex()) {
 				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col.GetIdentifierName())) {
+					if (generated_columns.count(col)) {
 						return true;
 					}
 				}

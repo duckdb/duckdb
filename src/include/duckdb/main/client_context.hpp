@@ -59,7 +59,7 @@ class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+	optional_ptr<identifier_map_t<BoundParameterData>> parameters;
 	//! Whether a stream/buffer-managed result should be allowed
 	QueryParameters query_parameters;
 };
@@ -148,11 +148,10 @@ public:
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       case_insensitive_map_t<BoundParameterData> &values,
+	                                                       identifier_map_t<BoundParameterData> &values,
 	                                                       QueryParameters query_parameters);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
-	                                                       case_insensitive_map_t<BoundParameterData> &values,
-	                                                       QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &values, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
 
 	//! Destroy the client context
@@ -197,7 +196,7 @@ public:
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult>
 	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	        case_insensitive_map_t<BoundParameterData> &values,
+	        identifier_map_t<BoundParameterData> &values,
 	        QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);

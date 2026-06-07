@@ -20,7 +20,7 @@
 namespace duckdb {
 
 StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
-                                       const string &name)
+                                       const Identifier &name)
     : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
 }
 

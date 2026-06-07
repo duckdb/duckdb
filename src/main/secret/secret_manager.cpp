@@ -154,7 +154,7 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
                                                               OnCreateConflict on_conflict,
                                                               SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(secret->GetType().GetIdentifierName());
+	LookupTypeInternal(Identifier(secret->GetType().GetIdentifierName()));
 
 	//! Handle default for persist type
 	if (persist_type == SecretPersistType::DEFAULT) {
@@ -206,26 +206,27 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	return backend->StoreSecret(std::move(secret), on_conflict, &transaction);
 }
 
-optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const string &type, const string &provider) {
+optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const Identifier &type,
+                                                                         const Identifier &provider) {
 	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_functions.find(Identifier(type));
 
 	if (lookup != secret_functions.end()) {
-		if (lookup->second.ProviderExists(provider)) {
-			return &lookup->second.GetFunction(provider);
+		if (lookup->second.ProviderExists(provider.GetIdentifierName())) {
+			return &lookup->second.GetFunction(provider.GetIdentifierName());
 		}
 	}
 
 	// Try autoloading
 	lck.unlock();
-	AutoloadExtensionForFunction(type, provider);
+	AutoloadExtensionForFunction(type.GetIdentifierName(), provider.GetIdentifierName());
 	lck.lock();
 
 	lookup = secret_functions.find(Identifier(type));
 
 	if (lookup != secret_functions.end()) {
-		if (lookup->second.ProviderExists(provider)) {
-			return &lookup->second.GetFunction(provider);
+		if (lookup->second.ProviderExists(provider.GetIdentifierName())) {
+			return &lookup->second.GetFunction(provider.GetIdentifierName());
 		}
 	}
 
@@ -240,13 +241,13 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Make a copy to set the provider to default if necessary
 	auto function_input = input;
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(function_input.type.GetIdentifierName());
+		auto secret_type = LookupTypeInternal(Identifier(function_input.type.GetIdentifierName()));
 		function_input.provider = Identifier(secret_type.default_provider);
 	}
 
 	// Lookup function
-	auto function_lookup =
-	    LookupFunctionInternal(function_input.type.GetIdentifierName(), function_input.provider.GetIdentifierName());
+	auto function_lookup = LookupFunctionInternal(Identifier(function_input.type.GetIdentifierName()),
+	                                              Identifier(function_input.provider.GetIdentifierName()));
 	if (!function_lookup) {
 		ThrowProviderNotFoundError(input.type.GetIdentifierName(), input.provider.GetIdentifierName());
 	}
@@ -273,13 +274,14 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(type.GetIdentifierName());
+		auto secret_type = LookupTypeInternal(Identifier(type.GetIdentifierName()));
 		provider = Identifier(secret_type.default_provider);
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function = LookupFunctionInternal(type.GetIdentifierName(), provider.GetIdentifierName());
+	auto function =
+	    LookupFunctionInternal(Identifier(type.GetIdentifierName()), Identifier(provider.GetIdentifierName()));
 
 	if (!function) {
 		ThrowProviderNotFoundError(info.type.GetIdentifierName(), info.provider.GetIdentifierName(), default_provider);
@@ -429,7 +431,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 }
 
 SecretType SecretManager::LookupType(const string &type) {
-	return LookupTypeInternal(type);
+	return LookupTypeInternal(Identifier(type));
 }
 
 void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
@@ -462,10 +464,10 @@ bool SecretManager::TryLookupTypeInternal(const string &type, SecretType &type_o
 	return false;
 }
 
-SecretType SecretManager::LookupTypeInternal(const string &type) {
+SecretType SecretManager::LookupTypeInternal(const Identifier &type) {
 	SecretType return_value;
-	if (!TryLookupTypeInternal(type, return_value)) {
-		ThrowTypeNotFoundError(type);
+	if (!TryLookupTypeInternal(type.GetIdentifierName(), return_value)) {
+		ThrowTypeNotFoundError(type.GetIdentifierName());
 	}
 	return return_value;
 }

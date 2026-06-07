@@ -17,7 +17,7 @@ enum class AlterDatabaseType : uint8_t { RENAME_DATABASE = 0 };
 struct AlterDatabaseInfo : public AlterInfo {
 public:
 	explicit AlterDatabaseInfo(AlterDatabaseType alter_database_type);
-	AlterDatabaseInfo(AlterDatabaseType alter_database_type, string catalog_p, OnEntryNotFound if_not_found);
+	AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p, OnEntryNotFound if_not_found);
 	~AlterDatabaseInfo() override;
 
 	AlterDatabaseType alter_database_type;
@@ -35,7 +35,7 @@ protected:
 struct RenameDatabaseInfo : public AlterDatabaseInfo {
 public:
 	RenameDatabaseInfo();
-	RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found);
+	RenameDatabaseInfo(Identifier catalog_p, Identifier new_name_p, OnEntryNotFound if_not_found);
 
 	Identifier new_name;
 

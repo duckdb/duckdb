@@ -590,7 +590,7 @@ QueryProgress ClientContext::GetQueryProgress() {
 }
 
 void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
-	case_insensitive_map_t<BoundParameterData> owned_values;
+	identifier_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
 		for (auto &val : params) {
@@ -924,7 +924,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               case_insensitive_map_t<BoundParameterData> &values,
+                                               identifier_map_t<BoundParameterData> &values,
                                                QueryParameters query_parameters) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
@@ -1172,18 +1172,18 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLoc
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(query, empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	PendingQueryParameters params;
 	params.parameters = values;
@@ -1213,7 +1213,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	auto lock = LockContext();
 	auto query = statement->query;

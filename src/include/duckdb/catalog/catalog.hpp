@@ -243,7 +243,7 @@ public:
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup,
 	                                                      OnEntryNotFound if_not_found);
 	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
-	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema);
+	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const Identifier &schema);
 
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const Identifier &schema);

@@ -84,7 +84,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
-	case_insensitive_map_t<pair<bool, idx_t>> option_map;
+	identifier_map_t<pair<bool, idx_t>> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
 		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
 		if (!inserted) {
@@ -94,7 +94,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	result.resize(option_map.size());
 
 	for (idx_t i = 0; i < names.size(); i++) {
-		auto entry = option_map.find(names[i].GetIdentifierName());
+		auto entry = option_map.find(Identifier(names[i].GetIdentifierName()));
 		if (entry != option_map.end()) {
 			result[entry->second.second] = i;
 			entry->second.first = true;

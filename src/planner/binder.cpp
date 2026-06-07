@@ -514,7 +514,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, TableIndex update_table_index,
+                                     const Identifier &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
 	vector<Identifier> names;

@@ -163,13 +163,13 @@ private:
 	//! Register a secret type
 	void RegisterSecretTypeInternal(SecretType &type);
 	//! Lookup a SecretType, throws if not found
-	SecretType LookupTypeInternal(const string &type);
+	SecretType LookupTypeInternal(const Identifier &type);
 	//! Try to lookup a SecretType
 	bool TryLookupTypeInternal(const string &type, SecretType &type_out);
 	//! Register a secret provider
 	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
-	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
+	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const Identifier &type, const Identifier &provider);
 	//! Register a new Secret
 	unique_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
 	                                               OnCreateConflict on_conflict, SecretPersistType persist_type,

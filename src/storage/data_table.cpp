@@ -577,7 +577,7 @@ bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vector, const string &col_name) {
+static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vector, const Identifier &col_name) {
 	if (!VectorOperations::HasNull(vector)) {
 		return;
 	}
@@ -934,7 +934,8 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
 			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name().GetIdentifierName());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index],
+			                        Identifier(col.Name().GetIdentifierName()));
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -1678,7 +1679,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 				if (column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
-					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name().GetIdentifierName());
+					VerifyNotNullConstraint(table, chunk.data[col_idx], Identifier(col.Name().GetIdentifierName()));
 					break;
 				}
 			}

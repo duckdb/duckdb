@@ -558,7 +558,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddUnaryPartCodeFunctions(const string &name, ExtensionLoader &loader,
 	                                      const LogicalType &result_type = LogicalType::BIGINT,
 	                                      ArgProperties unary_arg0_props = {}) {
-		ScalarFunctionSet set(name);
+		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
 		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
@@ -581,7 +581,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void AddDatePartFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		for (auto &func : set.functions) {
@@ -605,7 +605,7 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}
@@ -624,7 +624,7 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindMonthName);
 	}
 	static void AddMonthNameFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}
@@ -643,7 +643,7 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindDayName);
 	}
 	static void AddDayNameFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+		ScalarFunctionSet set {Identifier(name)};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}

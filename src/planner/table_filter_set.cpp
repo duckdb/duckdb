@@ -26,7 +26,7 @@ namespace duckdb {
 
 struct LegacyStructPathEntry {
 	idx_t child_idx;
-	string child_name;
+	Identifier child_name;
 };
 
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
@@ -103,11 +103,10 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 		if (!TryExtractLegacySubject(*func.GetChildren()[0], struct_path)) {
 			return false;
 		}
-		string child_name;
+		Identifier child_name;
 		if (func.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
 		    !StructType::IsUnnamed(func.GetChildren()[0]->GetReturnType())) {
-			child_name =
-			    StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx).GetIdentifierName();
+			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx);
 		}
 		struct_path.push_back({child_idx, std::move(child_name)});
 		return true;

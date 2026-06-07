@@ -1246,14 +1246,14 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	// Find all index-based constraints that exist in rollback_table, but not in table.
 	// Then, remove them.
 
-	unordered_set<string> names;
+	identifier_set_t names;
 	for (const auto &constraint : prev_table.GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
 		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name.GetIdentifierName());
+			auto index_name = unique.GetName(prev_table.name);
 			names.insert(index_name);
 		}
 	}
@@ -1266,7 +1266,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		if (!unique.IsPrimaryKey()) {
 			continue;
 		}
-		auto index_name = unique.GetName(table.name.GetIdentifierName());
+		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(Identifier(index_name));
 		}

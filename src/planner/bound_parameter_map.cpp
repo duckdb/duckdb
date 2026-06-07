@@ -4,13 +4,13 @@
 
 namespace duckdb {
 
-BoundParameterMap::BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data)
+BoundParameterMap::BoundParameterMap(identifier_map_t<BoundParameterData> &parameter_data)
     : parameter_data(parameter_data) {
 }
 
 LogicalType BoundParameterMap::GetReturnType(const string &identifier) {
 	D_ASSERT(!identifier.empty());
-	auto it = parameter_data.find(identifier);
+	auto it = parameter_data.find(Identifier(identifier));
 	if (it == parameter_data.end()) {
 		return LogicalTypeId::UNKNOWN;
 	}
@@ -25,18 +25,18 @@ const bound_parameter_map_t &BoundParameterMap::GetParameters() {
 	return parameters;
 }
 
-const case_insensitive_map_t<BoundParameterData> &BoundParameterMap::GetParameterData() {
+const identifier_map_t<BoundParameterData> &BoundParameterMap::GetParameterData() {
 	return parameter_data;
 }
 
-shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const string &identifier) {
+shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const Identifier &identifier) {
 	auto entry = parameters.find(identifier);
 	if (entry == parameters.end()) {
 		// no entry yet: create a new one
 		auto data = make_shared_ptr<BoundParameterData>();
-		data->return_type = GetReturnType(identifier);
+		data->return_type = GetReturnType(identifier.GetIdentifierName());
 
-		CreateNewParameter(identifier, data);
+		CreateNewParameter(identifier.GetIdentifierName(), data);
 		return data;
 	}
 	return entry->second;
@@ -49,7 +49,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	// No value has been supplied yet,
 	// We return a shared pointer to an object that will get populated with a Value later
 	// When the BoundParameterExpression gets executed, this will be used to get the corresponding value
-	auto param_data = CreateOrGetData(identifier.GetIdentifierName());
+	auto param_data = CreateOrGetData(Identifier(identifier.GetIdentifierName()));
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 
 	bound_expr->ParameterDataMutable() = param_data;

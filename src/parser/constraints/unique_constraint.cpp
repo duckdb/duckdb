@@ -86,7 +86,7 @@ vector<LogicalIndex> UniqueConstraint::GetLogicalIndexes(const ColumnList &colum
 	return indexes;
 }
 
-string UniqueConstraint::GetName(const string &table_name) const {
+Identifier UniqueConstraint::GetName(const Identifier &table_name) const {
 	auto type = IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 	auto type_name = EnumUtil::ToString(type);
 
@@ -94,7 +94,7 @@ string UniqueConstraint::GetName(const string &table_name) const {
 	for (const auto &column_name : GetColumnNames()) {
 		name += "_" + column_name;
 	}
-	return type_name + "_" + table_name + name;
+	return Identifier(type_name + "_" + table_name + name);
 }
 
 } // namespace duckdb

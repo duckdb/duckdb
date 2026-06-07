@@ -250,13 +250,13 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 	return bind_info;
 }
 
-static bool DefaultFunctionMatches(const DefaultMacro &macro, const string &schema, const string &name) {
+static bool DefaultFunctionMatches(const DefaultMacro &macro, const Identifier &schema, const Identifier &name) {
 	return macro.schema == schema && macro.name == name;
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const Identifier &input_schema, const Identifier &input_name) {
-	auto schema = StringUtil::Lower(input_schema.GetIdentifierName());
-	auto name = StringUtil::Lower(input_name.GetIdentifierName());
+	auto &schema = input_schema;
+	auto &name = input_name;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
 			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);

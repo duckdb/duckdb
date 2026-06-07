@@ -40,7 +40,7 @@ bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name
 }
 
 bool PreparedStatementData::RequireRebind(ClientContext &context,
-                                          optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
+                                          optional_ptr<identifier_map_t<BoundParameterData>> values) {
 	idx_t count = values ? values->size() : 0;
 	CheckParameterCount(count);
 	if (!unbound_statement) {
@@ -78,15 +78,15 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	return false;
 }
 
-void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> values) {
+void PreparedStatementData::Bind(identifier_map_t<BoundParameterData> values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	CheckParameterCount(values.size());
 
 	// bind the required values
 	for (auto &it : value_map) {
-		const string &identifier = it.first;
-		auto lookup = values.find(identifier);
+		const string &identifier = it.first.GetIdentifierName();
+		auto lookup = values.find(it.first);
 		if (lookup == values.end()) {
 			throw BinderException("Could not find parameter with identifier %s", identifier);
 		}
@@ -102,7 +102,7 @@ void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> valu
 }
 
 bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &result) {
-	auto it = value_map.find(identifier);
+	auto it = value_map.find(Identifier(identifier));
 	if (it == value_map.end()) {
 		return false;
 	}

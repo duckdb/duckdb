@@ -44,7 +44,7 @@ public:
 	//! Returns the column indexes on which the constraint is defined.
 	vector<LogicalIndex> GetLogicalIndexes(const ColumnList &columns) const;
 	//! Get the name of the constraint.
-	string GetName(const string &table_name) const;
+	Identifier GetName(const Identifier &table_name) const;
 
 private:
 	UniqueConstraint();

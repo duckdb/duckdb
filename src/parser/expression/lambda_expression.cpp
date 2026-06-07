@@ -70,8 +70,8 @@ string LambdaExpression::InvalidParametersErrorMessage() {
 	return "Invalid lambda parameters! Parameters must be unqualified comma-separated names like x or (x, y).";
 }
 
-bool LambdaExpression::IsLambdaParameter(const vector<unordered_set<string>> &lambda_params,
-                                         const string &parameter_name) {
+bool LambdaExpression::IsLambdaParameter(const vector<identifier_set_t> &lambda_params,
+                                         const Identifier &parameter_name) {
 	for (const auto &level : lambda_params) {
 		if (level.find(parameter_name) != level.end()) {
 			return true;

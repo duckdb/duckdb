@@ -298,11 +298,11 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	full_error_message = error.str();
 }
 
-CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
+CSVError CSVError::ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
 	for (idx_t i = 0; i < names.size(); i++) {
-		auto it = sql_types_per_column.find(names[i]);
+		auto it = sql_types_per_column.find(Identifier(names[i]));
 		if (it != sql_types_per_column.end()) {
-			sql_types_per_column.erase(names[i]);
+			sql_types_per_column.erase(Identifier(names[i]));
 		}
 	}
 	if (sql_types_per_column.empty()) {

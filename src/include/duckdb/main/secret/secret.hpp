@@ -211,7 +211,7 @@ public:
 		Value redact_set_value;
 		deserializer.ReadProperty(202, "redact_keys", redact_set_value);
 		for (const auto &entry : ListValue::GetChildren(redact_set_value)) {
-			result->redact_keys.insert(entry.ToString());
+			result->redact_keys.insert(Identifier(entry.ToString()));
 		}
 
 		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
@@ -243,7 +243,7 @@ public:
 	//! the map of key -> values that make up the secret
 	identifier_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
-	case_insensitive_set_t redact_keys;
+	identifier_set_t redact_keys;
 };
 
 // Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct

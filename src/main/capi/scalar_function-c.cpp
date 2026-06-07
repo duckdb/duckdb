@@ -469,7 +469,7 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 		return DuckDBError;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	duckdb::ScalarFunctionSet set(scalar_function.name.GetIdentifierName());
+	duckdb::ScalarFunctionSet set {scalar_function.name};
 	set.AddFunction(scalar_function);
 	return duckdb_register_scalar_function_set(connection, reinterpret_cast<duckdb_scalar_function_set>(&set));
 }

@@ -198,7 +198,7 @@ public:
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
-	string function_name;
+	Identifier function_name;
 
 public:
 	template <class TARGET>

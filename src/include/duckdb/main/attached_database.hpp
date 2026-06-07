@@ -45,7 +45,8 @@ enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, SKIP_CHECKPOINT };
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path,
+	                   const Identifier &name);
 	~StoredDatabasePath();
 
 	DatabaseManager &db_manager;

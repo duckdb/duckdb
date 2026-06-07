@@ -19,11 +19,11 @@ using namespace duckdb;
 namespace tpcds {
 
 template <class T>
-static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
-                             bool overwrite) {
+static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
+                             string suffix, bool keys, bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = Identifier(catalog_name);
-	info->schema = Identifier(schema);
+	info->catalog = catalog_name;
+	info->schema = schema;
 	info->table = Identifier(T::Name + suffix);
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
@@ -41,8 +41,8 @@ static void CreateTPCDSTable(ClientContext &context, string catalog_name, string
 	catalog.CreateTable(context, std::move(info));
 }
 
-void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string catalog, string schema, string suffix, bool keys,
-                                      bool overwrite) {
+void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
+                                      string suffix, bool keys, bool overwrite) {
 	CreateTPCDSTable<CallCenterInfo>(context, catalog, schema, suffix, keys, overwrite);
 	CreateTPCDSTable<CatalogPageInfo>(context, catalog, schema, suffix, keys, overwrite);
 	CreateTPCDSTable<CatalogReturnsInfo>(context, catalog, schema, suffix, keys, overwrite);
@@ -69,7 +69,8 @@ void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string catalog, st
 	CreateTPCDSTable<WebSiteInfo>(context, catalog, schema, suffix, keys, overwrite);
 }
 
-void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_name, string schema, string suffix) {
+void DSDGenWrapper::DSDGen(double scale, ClientContext &context, const Identifier &catalog_name,
+                           const Identifier &schema, string suffix) {
 	if (scale <= 0) {
 		// schema only
 		return;

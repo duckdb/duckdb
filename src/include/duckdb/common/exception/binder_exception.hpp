@@ -52,7 +52,7 @@ public:
 	                      ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 
-	static BinderException ColumnNotFound(const string &name, const vector<string> &similar_bindings,
+	static BinderException ColumnNotFound(const Identifier &name, const vector<Identifier> &similar_bindings,
 	                                      QueryErrorContext context = QueryErrorContext());
 	static BinderException NoMatchingFunction(const Identifier &catalog_name, const Identifier &schema_name,
 	                                          const Identifier &name, const vector<LogicalType> &arguments,

@@ -351,7 +351,8 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			auto &json_reader = union_reader->reader->Cast<JSONReader>();
 			union_reader->names = names;
 			union_reader->types = return_types;
-			union_reader->reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
+			union_reader->reader->columns =
+			    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(names), return_types);
 			json_reader.Reset();
 		}
 	}
@@ -431,7 +432,8 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data_p) {
 	auto &json_data = bind_data_p.bind_data->Cast<JSONScanData>();
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, union_data.GetFileName());
-	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
+	reader->columns =
+	    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(union_data.names), union_data.types);
 	return std::move(reader);
 }
 
@@ -440,7 +442,8 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, file.path);
-	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+	reader->columns =
+	    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(bind_data.names), bind_data.types);
 	return std::move(reader);
 }
 

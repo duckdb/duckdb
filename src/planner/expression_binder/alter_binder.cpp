@@ -40,8 +40,8 @@ string AlterBinder::UnsupportedAggregateMessage() {
 BindResult AlterBinder::BindColumnReference(ColumnRefExpression &col_ref, idx_t depth) {
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref =
-		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(
+		    lambda_bindings, Identifier(col_ref.GetColumnName().GetIdentifierName()));
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}

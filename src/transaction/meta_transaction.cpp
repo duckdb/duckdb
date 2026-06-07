@@ -194,7 +194,7 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	}
 }
 
-optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const string &name) {
+optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const Identifier &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	auto entry = used_databases.find(Identifier(name));
 	if (entry != used_databases.end()) {
@@ -203,7 +203,7 @@ optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const stri
 	return nullptr;
 }
 
-shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const string &name) {
+shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const Identifier &name) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	for (auto &entry : referenced_databases) {
 		if (entry.first.get().name == name) {

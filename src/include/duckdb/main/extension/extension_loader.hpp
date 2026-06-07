@@ -57,7 +57,7 @@ public:
 	//! Adds the created extension schema to the search path
 	DUCKDB_API void AddSchemaToSearchPath(const Identifier &schema_name) const;
 	//! Sets the default extension schema for this extension
-	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
+	DUCKDB_API void UseDefaultSchema(const Identifier &name = DEFAULT_SCHEMA);
 	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
 	//! Gets registered extension name (or alias)
 	DUCKDB_API const Identifier &GetRegisteredExtensionName() const {

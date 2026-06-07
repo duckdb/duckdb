@@ -38,7 +38,7 @@ public:
 	//! Whether or not this is a INSERT DEFAULT VALUES
 	bool default_values = false;
 	//! INSERT_BY_NAME exclude column list - columns to skip when generating the SET list
-	unordered_set<string> exclude_columns;
+	identifier_set_t exclude_columns;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;

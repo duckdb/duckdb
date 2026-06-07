@@ -67,10 +67,8 @@ static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, D
 	if (data.finished) {
 		return;
 	}
-	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog.GetIdentifierName(), data.schema.GetIdentifierName(),
-	                                        data.suffix, data.keys, data.overwrite);
-	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.catalog.GetIdentifierName(), data.schema.GetIdentifierName(),
-	                             data.suffix);
+	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys, data.overwrite);
+	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.catalog, data.schema, data.suffix);
 
 	data.finished = true;
 }

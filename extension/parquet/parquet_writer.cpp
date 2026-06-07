@@ -486,7 +486,7 @@ void ParquetWriter::InitializeColumnWriters() {
 	column_writers.clear();
 	D_ASSERT(options.sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < options.sql_types.size(); i++) {
-		vector<string> path_in_schema;
+		vector<Identifier> path_in_schema;
 		const bool can_have_nulls = options.not_null_columns.empty() || !options.not_null_columns[i];
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
 		    context, *this, path_in_schema, types[i], unique_names[i], allow_geometry, &options.field_ids,

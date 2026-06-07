@@ -105,10 +105,10 @@ public:
 	PendingQuery(unique_ptr<SQLStatement> statement,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(unique_ptr<SQLStatement> statement, case_insensitive_map_t<BoundParameterData> &named_values,
+	PendingQuery(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &named_values,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &named_values,
+	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &named_values,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
 	PendingQuery(const string &query, vector<Value> &values,

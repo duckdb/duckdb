@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.FunctionName().GetIdentifierName())) {
+		if (IsUnnestFunction(Identifier(function.FunctionName().GetIdentifierName()))) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
@@ -171,7 +171,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		context = QueryErrorContext(position);
 	}
 	// generate a new (combined) error
-	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
+	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
 	return true;
 }
 
@@ -391,7 +391,7 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 	return BindResult(BinderException::Unsupported(expr, message));
 }
 
-bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
+bool ExpressionBinder::IsUnnestFunction(const Identifier &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 

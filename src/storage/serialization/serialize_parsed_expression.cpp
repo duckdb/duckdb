@@ -232,8 +232,7 @@ void LambdaRefExpression::Serialize(Serializer &serializer) const {
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
 	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
 	auto column_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "column_name");
-	auto result =
-	    duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, column_name.GetIdentifierName()));
+	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, column_name));
 	return std::move(result);
 }
 
@@ -274,8 +273,8 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "relation_name", relation_name);
 	serializer.WriteProperty<case_insensitive_set_t>(201, "exclude_list", SerializedExcludeList());
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list",
-	                                                                                          replace_list);
+	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list",
+	                                                                                    replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 	/* [Deleted] (bool) "unpacked" */
@@ -289,7 +288,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto relation_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "relation_name");
 	auto exclude_list = deserializer.ReadProperty<case_insensitive_set_t>(201, "exclude_list");
 	auto replace_list =
-	    deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
+	    deserializer.ReadPropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
 	auto columns = deserializer.ReadPropertyWithDefault<bool>(203, "columns");
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);

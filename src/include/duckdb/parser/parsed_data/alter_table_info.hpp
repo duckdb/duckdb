@@ -21,8 +21,9 @@ enum class AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };
 // Change Ownership
 //===--------------------------------------------------------------------===//
 struct ChangeOwnershipInfo : public AlterInfo {
-	ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_catalog, string entry_schema, string entry_name,
-	                    string owner_schema, string owner_name, OnEntryNotFound if_not_found);
+	ChangeOwnershipInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
+	                    Identifier entry_name, Identifier owner_schema, Identifier owner_name,
+	                    OnEntryNotFound if_not_found);
 
 	// Catalog type refers to the entry type, since this struct is usually built from an
 	// ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
@@ -47,8 +48,8 @@ public:
 // Set Comment
 //===--------------------------------------------------------------------===//
 struct SetCommentInfo : public AlterInfo {
-	SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog, string entry_schema, string entry_name,
-	               Value new_comment_value_p, OnEntryNotFound if_not_found);
+	SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog, Identifier entry_schema,
+	               Identifier entry_name, Value new_comment_value_p, OnEntryNotFound if_not_found);
 
 	CatalogType entry_catalog_type;
 	Value comment_value;
@@ -109,7 +110,7 @@ protected:
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
 struct RenameColumnInfo : public AlterTableInfo {
-	RenameColumnInfo(AlterEntryData data, string old_name_p, string new_name_p);
+	RenameColumnInfo(AlterEntryData data, Identifier old_name_p, Identifier new_name_p);
 	~RenameColumnInfo() override;
 
 	//! Column old name
@@ -132,7 +133,7 @@ private:
 // RenameFieldInfo
 //===--------------------------------------------------------------------===//
 struct RenameFieldInfo : public AlterTableInfo {
-	RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path, string new_name_p);
+	RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path, Identifier new_name_p);
 	~RenameFieldInfo() override;
 
 	//! Path to source field.
@@ -158,7 +159,7 @@ private:
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
-	RenameTableInfo(AlterEntryData data, string new_name);
+	RenameTableInfo(AlterEntryData data, Identifier new_name);
 	~RenameTableInfo() override;
 
 	//! Relation new name
@@ -313,7 +314,7 @@ private:
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
-	SetDefaultInfo(AlterEntryData data, string column_name, unique_ptr<ParsedExpression> new_default);
+	SetDefaultInfo(AlterEntryData data, Identifier column_name, unique_ptr<ParsedExpression> new_default);
 	~SetDefaultInfo() override;
 
 	//! The column name to alter
@@ -335,7 +336,7 @@ private:
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
 struct AlterForeignKeyInfo : public AlterTableInfo {
-	AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<Identifier> pk_columns,
+	AlterForeignKeyInfo(AlterEntryData data, Identifier fk_table, vector<Identifier> pk_columns,
 	                    vector<Identifier> fk_columns, vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys,
 	                    AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
@@ -361,7 +362,7 @@ private:
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
 struct SetNotNullInfo : public AlterTableInfo {
-	SetNotNullInfo(AlterEntryData data, string column_name);
+	SetNotNullInfo(AlterEntryData data, Identifier column_name);
 	~SetNotNullInfo() override;
 
 	//! The column name to alter
@@ -381,7 +382,7 @@ private:
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
 struct DropNotNullInfo : public AlterTableInfo {
-	DropNotNullInfo(AlterEntryData data, string column_name);
+	DropNotNullInfo(AlterEntryData data, Identifier column_name);
 	~DropNotNullInfo() override;
 
 	//! The column name to alter
@@ -421,7 +422,7 @@ protected:
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
 struct RenameViewInfo : public AlterViewInfo {
-	RenameViewInfo(AlterEntryData data, string new_name);
+	RenameViewInfo(AlterEntryData data, Identifier new_name);
 	~RenameViewInfo() override;
 
 	//! Relation new name

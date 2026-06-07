@@ -1,8 +1,13 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 9756d93..438add7 100644
+index 9756d93..3f2b26d 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
-@@ -153,7 +153,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
+@@ -149,11 +149,11 @@ public:
+ //------------------------------------------------------------------------------
+ 
+ // Constructor
+-HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
++HNSWIndex::HNSWIndex(const Identifier &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
                       TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
                       AttachedDatabase &db, const case_insensitive_map_t<Value> &options, const IndexStorageInfo &info,
                       idx_t estimated_cardinality)
@@ -11,6 +16,15 @@ index 9756d93..438add7 100644
  
  	if (index_constraint_type != IndexConstraintType::NONE) {
  		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
+@@ -662,7 +662,7 @@ bool HNSWIndex::TryMatchDistanceFunction(Expression &expr,
+ }
+ 
+ unique_ptr<ExpressionMatcher> HNSWIndex::MakeFunctionMatcher() const {
+-	unordered_set<string> distance_functions;
++	identifier_set_t distance_functions;
+ 	switch (index.metric().metric_kind()) {
+ 	case unum::usearch::metric_kind_t::l2sq_k:
+ 		distance_functions = {"array_distance", "<->"};
 diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
 index b5d60f5..d7b0c52 100644
 --- a/src/hnsw/hnsw_index_macros.cpp
@@ -37,19 +51,6 @@ index b5d60f5..d7b0c52 100644
  	info.temporary = true;
  	info.internal = true;
  	info.macros.push_back(std::move(func));
-diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
-index bd923b9..f58fb55 100644
---- a/src/hnsw/hnsw_index_physical_create.cpp
-+++ b/src/hnsw/hnsw_index_physical_create.cpp
-@@ -72,7 +72,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateHNSWIndex::GetGlobalSinkState(ClientCo
- 	auto &constraint_type = info->constraint_type;
- 	auto &db = storage.db;
- 	gstate->global_index =
--	    make_uniq<HNSWIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
-+	    make_uniq<HNSWIndex>(info->index_name.GetIdentifierName(), constraint_type, storage_ids, table_manager, unbound_expressions, db,
- 	                         info->options, IndexStorageInfo(), estimated_cardinality);
- 
- 	return std::move(gstate);
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
 index 494abb3..166ef68 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
@@ -146,3 +147,16 @@ index 51c91f0..79a5e6a 100644
  	if (!func_entry) {
  		return nullptr;
  	}
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index f213ec8..422423b 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -34,7 +34,7 @@ public:
+ 	using USearchIndexType = unum::usearch::index_dense_gt<row_t>;
+ 
+ public:
+-	HNSWIndex(const string &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
++	HNSWIndex(const Identifier &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+ 	          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+ 	          AttachedDatabase &db, const case_insensitive_map_t<Value> &options,
+ 	          const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);

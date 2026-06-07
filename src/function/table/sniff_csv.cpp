@@ -158,7 +158,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer.EmptyOrOnlyHeader()) {
 		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
 			if (!sniffer_options.sql_types_per_column.empty()) {
-				if (sniffer_options.sql_types_per_column.find(sniffer_result.names[i]) !=
+				if (sniffer_options.sql_types_per_column.find(Identifier(sniffer_result.names[i])) !=
 				    sniffer_options.sql_types_per_column.end()) {
 					continue;
 				}

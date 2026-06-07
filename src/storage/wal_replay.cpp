@@ -57,14 +57,14 @@ public:
 	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
-		                const string &table_name)
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const Identifier &table_schema,
+		                const Identifier &table_name)
 		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {};
 
 		reference<TableIndexList> index_list;
 		unique_ptr<Index> index;
-		string table_schema;
-		string table_name;
+		Identifier table_schema;
+		Identifier table_name;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -840,15 +840,15 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name.GetIdentifierName(), column_ids, unbound_expressions,
-	                       index_storage_info, index_storage_info.options);
+	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
+	                       index_storage_info.options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance),
-	                                      table_info.schema.GetIdentifierName(), table_info.name.GetIdentifierName());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.schema,
+	                                      table_info.name);
 
 	catalog.Alter(context, alter_info);
 }
@@ -1077,8 +1077,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name.GetIdentifierName(),
-	                                      table_name.GetIdentifierName());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name, table_name);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

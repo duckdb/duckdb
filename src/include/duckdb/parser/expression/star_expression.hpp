@@ -38,10 +38,10 @@ public:
 	qualified_column_set_t &ExcludeListMutable() {
 		return exclude_list;
 	}
-	const case_insensitive_map_t<unique_ptr<ParsedExpression>> &ReplaceList() const {
+	const identifier_map_t<unique_ptr<ParsedExpression>> &ReplaceList() const {
 		return replace_list;
 	}
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
+	identifier_map_t<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
 		return replace_list;
 	}
 	const qualified_column_map_t<string> &RenameList() const {
@@ -75,7 +75,7 @@ public:
 
 	static unique_ptr<ParsedExpression>
 	DeserializeStarExpression(Identifier &&relation_name, const case_insensitive_set_t &exclude_list,
-	                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
+	                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
 	                          unique_ptr<ParsedExpression> expr, bool unpacked,
 	                          const qualified_column_set_t &qualified_exclude_list,
 	                          qualified_column_map_t<string> &&rename_list);
@@ -88,7 +88,7 @@ private:
 	//! List of columns to exclude from the STAR expression
 	qualified_column_set_t exclude_list;
 	//! List of columns to replace with another expression
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
+	identifier_map_t<unique_ptr<ParsedExpression>> replace_list;
 	//! List of columns to rename
 	qualified_column_map_t<string> rename_list;
 	//! The expression to select the columns (regular expression or list)

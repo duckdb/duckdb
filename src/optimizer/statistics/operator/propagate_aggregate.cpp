@@ -60,7 +60,7 @@ struct MaxValueComp : public ValueComparator {
 };
 
 template <typename StatsType>
-unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name) {
 	if (fun_name == "min") {
 		return make_uniq<MinValueComp<StatsType>>();
 	}
@@ -68,7 +68,7 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 	return make_uniq<MaxValueComp<StatsType>>();
 }
 
-unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalType &type) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name, const LogicalType &type) {
 	if (type == LogicalType::VARCHAR) {
 		return GetComparator<StringStats>(fun_name);
 	} else if (type.IsNumeric() || type.IsTemporal()) {
@@ -145,7 +145,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate has a filter - bail
 			return;
 		}
-		auto &fun_name = aggr_expr.Function().GetName().GetIdentifierName();
+		auto &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.GetChildren().size() != 1 ||
 			    aggr_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -334,7 +334,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		vector<unique_ptr<Expression>> proj_expressions;
 		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			auto &fun_name = aggr_expr.Function().GetName().GetIdentifierName();
+			auto &fun_name = aggr_expr.Function().GetName();
 
 			// Reference to the aggregate output column
 			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(

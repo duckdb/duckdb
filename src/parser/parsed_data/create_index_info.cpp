@@ -14,7 +14,7 @@ CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
       column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
 }
 
-static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
+static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const Identifier &table_name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
 		    auto &col_names = col_ref.ColumnNamesMutable();
@@ -33,7 +33,7 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 
 		// Column reference expressions are qualified with the table name.
 		// We need to remove them to reproduce the original query.
-		RemoveTableQualificationRecursive(copy, table.GetIdentifierName());
+		RemoveTableQualificationRecursive(copy, table);
 		bool add_parenthesis = true;
 		if (copy->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &column_ref = copy->Cast<ColumnRefExpression>();

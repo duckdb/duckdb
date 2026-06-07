@@ -17,7 +17,7 @@ namespace duckdb {
 MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
-string FormatMacroFunction(const MacroFunction &function, const string &name) {
+string FormatMacroFunction(const MacroFunction &function, const Identifier &name) {
 	auto result = name + "(";
 	string parameters;
 	for (idx_t param_idx = 0; param_idx < function.parameters.size(); param_idx++) {
@@ -42,7 +42,7 @@ string FormatMacroFunction(const MacroFunction &function, const string &name) {
 }
 
 MacroBindResult MacroFunction::BindMacroFunction(
-    Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
+    Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const Identifier &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments,
     idx_t depth) {
@@ -256,7 +256,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 }
 
 unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
-    const MacroFunction &macro_def, const string &name, vector<unique_ptr<ParsedExpression>> &positional_arguments,
+    const MacroFunction &macro_def, const Identifier &name, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> &named_arguments) {
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types = macro_def.types;
@@ -270,7 +270,7 @@ unique_ptr<DummyBinding> MacroFunction::CreateDummyBinding(
 		positional_arguments.push_back(std::move(kv.second)); // push defaults into positionals
 	}
 
-	auto res = make_uniq<DummyBinding>(types, names, name);
+	auto res = make_uniq<DummyBinding>(types, names, name.GetIdentifierName());
 	res->arguments = &positional_arguments;
 	return res;
 }

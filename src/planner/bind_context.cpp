@@ -57,7 +57,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const Identifier &column_n
 	return result;
 }
 
-vector<string> BindContext::GetSimilarBindings(const Identifier &column_name) {
+vector<Identifier> BindContext::GetSimilarBindings(const Identifier &column_name) {
 	vector<pair<string, double>> scores;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
@@ -72,7 +72,7 @@ vector<string> BindContext::GetSimilarBindings(const Identifier &column_name) {
 			}
 		}
 	}
-	return StringUtil::TopNStrings(scores);
+	return StringsToIdentifiers(StringUtil::TopNStrings(scores));
 }
 
 void BindContext::AddUsingBinding(const Identifier &column_name, UsingColumnSet &set) {
@@ -456,9 +456,9 @@ struct ExclusionListInfo {
 	}
 
 	vector<unique_ptr<ParsedExpression>> &new_select_list;
-	case_insensitive_set_t excluded_columns;
+	identifier_set_t excluded_columns;
 	qualified_column_set_t excluded_qualified_columns;
-	case_insensitive_set_t replaced_columns;
+	identifier_set_t replaced_columns;
 };
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
@@ -471,11 +471,11 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 
 bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
                   unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
-	auto replace_entry = expr.ReplaceList().find(qualified_name.column.GetIdentifierName());
+	auto replace_entry = expr.ReplaceList().find(qualified_name.column);
 	if (replace_entry != expr.ReplaceList().end()) {
 		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
 			new_expr = replace_entry->second->Copy();
-			new_expr->SetAlias(Identifier(replace_entry->first));
+			new_expr->SetAlias(replace_entry->first);
 			info.replaced_columns.insert(replace_entry->first);
 			info.excluded_columns.insert(replace_entry->first);
 		} else {
@@ -574,17 +574,16 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				    "Cannot extract field from expression \"%s\" because it is not a struct", expr.ToString()));
 			}
 			auto &struct_children = StructType::GetChildTypes(col_type);
-			vector<string> column_names(3);
-			column_names[0] = binding->GetAlias().GetIdentifierName();
-			column_names[1] = expr.RelationName().GetIdentifierName();
+			vector<Identifier> column_names(3);
+			column_names[0] = binding->GetAlias();
+			column_names[1] = expr.RelationName();
 			for (auto &child : struct_children) {
 				QualifiedColumnName qualified_name(Identifier(child.first));
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
 					continue;
 				}
-				column_names[2] = child.first.GetIdentifierName();
-				unique_ptr<ParsedExpression> new_expr =
-				    make_uniq<ColumnRefExpression>(StringsToIdentifiers(column_names));
+				column_names[2] = child.first;
+				unique_ptr<ParsedExpression> new_expr = make_uniq<ColumnRefExpression>(column_names);
 				if (HandleRename(expr, qualified_name, new_expr, exclusion_info)) {
 					new_select_list.push_back(std::move(new_expr));
 				}
@@ -624,8 +623,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	//! Verify correctness of the replace list
 	for (auto &entry : expr.ReplaceList()) {
 		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
-			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str());
+			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first.GetIdentifierName(),
+			                      expr.RelationName().empty() ? string("FROM clause")
+			                                                  : expr.RelationName().GetIdentifierName());
 		}
 	}
 }
@@ -679,11 +679,11 @@ void BindContext::AddTableFunction(TableIndex index, const Identifier &alias, co
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, std::move(virtual_columns)));
 }
 
-static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
+static Identifier AddColumnNameToBinding(const Identifier &base_name, identifier_set_t &current_names) {
 	idx_t index = 1;
-	string name = base_name;
+	Identifier name = base_name;
 	while (current_names.find(name) != current_names.end()) {
-		name = base_name + "_" + std::to_string(index++);
+		name = Identifier(base_name + "_" + std::to_string(index++));
 	}
 	current_names.insert(name);
 	return name;
@@ -696,14 +696,14 @@ vector<Identifier> BindContext::AliasColumnNames(const Identifier &table_name, c
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
-	case_insensitive_set_t current_names;
+	identifier_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
-		result.push_back(Identifier(AddColumnNameToBinding(column_aliases[i].GetIdentifierName(), current_names)));
+		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
 	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-		result.push_back(Identifier(AddColumnNameToBinding(names[i].GetIdentifierName(), current_names)));
+		result.push_back(AddColumnNameToBinding(names[i], current_names));
 	}
 	return result;
 }
@@ -781,7 +781,7 @@ vector<BindingAlias> BindContext::GetBindingAliases() {
 void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 	for (auto &alias : aliases) {
 		// remove the binding from any USING columns
-		vector<string> removed_using_columns;
+		vector<Identifier> removed_using_columns;
 		for (auto &using_sets : using_columns) {
 			for (auto &using_set_ref : using_sets.second) {
 				auto &using_set = using_set_ref.get();
@@ -790,7 +790,7 @@ void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 				using_set.bindings.erase(it, using_set.bindings.end());
 				if (using_set.bindings.empty() || using_set.primary_binding == alias) {
 					// if the using column is no longer referred to - remove it entirely
-					removed_using_columns.push_back(using_sets.first.GetIdentifierName());
+					removed_using_columns.push_back(using_sets.first);
 				}
 			}
 		}

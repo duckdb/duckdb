@@ -29,13 +29,13 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 
 	if (!col_ref.IsQualified()) {
 		// Try binding as a lambda parameter.
-		auto lambda_ref =
-		    LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName().GetIdentifierName());
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(
+		    lambda_bindings, Identifier(col_ref.GetColumnName().GetIdentifierName()));
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 		// column was not found - check if it is a SQL value function
-		auto value_function = GetSQLValueFunction(col_ref.GetColumnName().GetIdentifierName());
+		auto value_function = GetSQLValueFunction(Identifier(col_ref.GetColumnName().GetIdentifierName()));
 		if (value_function) {
 			return BindExpression(value_function, depth);
 		}
@@ -80,7 +80,7 @@ BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t dept
 
 void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, nullptr, having_binder);
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 

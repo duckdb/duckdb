@@ -143,6 +143,7 @@ public:
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
+	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
 
 	//! Encode special URL characters in a string

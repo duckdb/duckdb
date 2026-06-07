@@ -803,12 +803,13 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.FunctionName() == "struct_pack") {
-			unordered_set<string> unique_names;
+			identifier_set_t unique_names;
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
-				if (!unique_names.insert(child.GetExpression().GetAlias().GetIdentifierName()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
+				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"",
+					                      child.GetExpression().GetAlias().GetIdentifierName());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {

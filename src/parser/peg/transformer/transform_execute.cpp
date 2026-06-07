@@ -29,7 +29,7 @@ PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, co
 			param_idx++;
 		}
 		arg.GetExpressionMutable()->ClearAlias();
-		result->named_values[param_name] = std::move(arg.GetExpressionMutable());
+		result->named_values[Identifier(param_name)] = std::move(arg.GetExpressionMutable());
 	}
 	return std::move(result);
 }

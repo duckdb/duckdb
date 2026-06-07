@@ -22,7 +22,8 @@ DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rew
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 
 	auto lhs = make_uniq<FunctionExpressionMatcher>();
-	lhs->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"date_trunc", "datetrunc"});
+	lhs->function =
+	    make_uniq<ManyFunctionMatcher>(identifier_set_t {Identifier("date_trunc"), Identifier("datetrunc")});
 	lhs->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	lhs->matchers.push_back(make_uniq<ExpressionMatcher>());
 	lhs->policy = SetMatcher::Policy::ORDERED;

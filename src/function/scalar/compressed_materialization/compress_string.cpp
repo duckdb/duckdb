@@ -233,7 +233,7 @@ unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserialize
 }
 
 ScalarFunctionSet GetStringDecompressFunctionSet() {
-	ScalarFunctionSet set(StringDecompressFunctionName());
+	ScalarFunctionSet set {Identifier(StringDecompressFunctionName())};
 	auto string_types = CMUtils::StringTypes();
 	// For backwards compatibility, see internal issue 5306
 	string_types.push_back(LogicalType::HUGEINT);

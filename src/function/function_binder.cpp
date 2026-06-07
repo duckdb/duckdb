@@ -830,7 +830,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 }
 
 static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
-                                   const string &function_name) {
+                                   const Identifier &function_name) {
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
 		if (t.id() == LogicalTypeId::TEMPLATE) {
@@ -875,11 +875,11 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 
 	// Finally, substitute all template types in the bound function with their concrete types.
 	for (auto &templated_type : to_substitute) {
-		SubstituteTemplateType(templated_type, bindings, bound_function.GetName().GetIdentifierName());
+		SubstituteTemplateType(templated_type, bindings, bound_function.GetName());
 	}
 }
 
-static void VerifyTemplateType(const LogicalType &type, const string &function_name) {
+static void VerifyTemplateType(const LogicalType &type, const Identifier &function_name) {
 	TypeVisitor::Contains(type, [&](const LogicalType &type) {
 		if (type.id() == LogicalTypeId::TEMPLATE) {
 			const auto msg =
@@ -893,9 +893,9 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 // Verify that all template types are bound to concrete types.
 void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function) {
 	for (const auto &arg : bound_function.GetArguments()) {
-		VerifyTemplateType(arg, bound_function.GetName().GetIdentifierName());
+		VerifyTemplateType(arg, bound_function.GetName());
 	}
-	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName().GetIdentifierName());
+	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName());
 }
 
 // Drain all named argument and insert them in the correct position according to the function signature.

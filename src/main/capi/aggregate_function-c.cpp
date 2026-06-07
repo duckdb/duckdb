@@ -227,7 +227,7 @@ duckdb_state duckdb_register_aggregate_function(duckdb_connection connection, du
 	}
 
 	auto &aggregate_function = GetCAggregateFunction(function);
-	duckdb::AggregateFunctionSet set(aggregate_function.name.GetIdentifierName());
+	duckdb::AggregateFunctionSet set {aggregate_function.name};
 	set.AddFunction(aggregate_function);
 	return duckdb_register_aggregate_function_set(connection, reinterpret_cast<duckdb_aggregate_function_set>(&set));
 }

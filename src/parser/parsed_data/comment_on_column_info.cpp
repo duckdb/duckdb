@@ -10,18 +10,16 @@ SetColumnCommentInfo::SetColumnCommentInfo()
       catalog_entry_type(CatalogType::INVALID), column_name(""), comment_value(Value()) {
 }
 
-SetColumnCommentInfo::SetColumnCommentInfo(string catalog, string schema, string name, string column_name,
-                                           Value comment_value, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier(std::move(catalog)), Identifier(std::move(schema)),
-                Identifier(std::move(name)), if_not_found),
+SetColumnCommentInfo::SetColumnCommentInfo(Identifier catalog, Identifier schema, Identifier name,
+                                           Identifier column_name, Value comment_value, OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT, std::move(catalog), std::move(schema), Identifier(std::move(name)),
+                if_not_found),
       catalog_entry_type(CatalogType::INVALID), column_name(std::move(column_name)),
       comment_value(std::move(comment_value)) {
 }
 
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	auto result = make_uniq<SetColumnCommentInfo>(catalog.GetIdentifierName(), schema.GetIdentifierName(),
-	                                              name.GetIdentifierName(), column_name.GetIdentifierName(),
-	                                              comment_value, if_not_found);
+	auto result = make_uniq<SetColumnCommentInfo>(catalog, schema, name, column_name, comment_value, if_not_found);
 	result->type = type;
 	return std::move(result);
 }

@@ -108,7 +108,8 @@ public:
 		if (IsEmptyResult(*result)) {
 			result->types.emplace_back(LogicalType::BOOLEAN);
 			result->names.emplace_back("empty");
-			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+			result->columns =
+			    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(result->names), result->types);
 			return_types = result->types;
 			names = result->names;
 			return std::move(result);
@@ -175,7 +176,8 @@ public:
 			result->types = return_types;
 			result->table_columns = names;
 		}
-		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->columns =
+		    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(result->names), result->types);
 		return std::move(result);
 	}
 

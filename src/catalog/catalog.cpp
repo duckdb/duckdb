@@ -443,7 +443,7 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const Ent
 	return *LookupSchema(transaction, schema_lookup, OnEntryNotFound::THROW_EXCEPTION);
 }
 
-bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) {
+bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const Identifier &schema) {
 	if (Supports(RemoteCapability::IS_REMOTE)) {
 		// skip this check for remote catalogs
 		return false;

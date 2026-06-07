@@ -1,8 +1,14 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index 83fd983..c688289 100644
+index 83fd983..347e815 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -78,7 +78,8 @@ RTreeIndex::RTreeIndex(const string &name, IndexConstraintType index_constraint_
+@@ -73,12 +73,13 @@ static RTreeConfig ParseOptions(const case_insensitive_map_t<Value> &options) {
+ //------------------------------------------------------------------------------
+ 
+ // Constructor
+-RTreeIndex::RTreeIndex(const string &name, IndexConstraintType index_constraint_type,
++RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constraint_type,
+                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                         const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
                         const case_insensitive_map_t<Value> &options, ClientContext &context,
                         const IndexStorageInfo &info, idx_t estimated_cardinality)
@@ -21,6 +27,19 @@ index 83fd983..c688289 100644
  	const auto &func = entry.functions.GetFunctionByArguments(context, {source_type});
  	auto child_expr = make_uniq<BoundReferenceExpression>(source_type, 0);
  
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index e69a091..7bc3e67 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -18,7 +18,7 @@ public:
+ 	static constexpr auto TYPE_NAME = "RTREE";
+ 
+ public:
+-	RTreeIndex(const string &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
++	RTreeIndex(const Identifier &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+ 	           TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+ 	           AttachedDatabase &db, const case_insensitive_map_t<Value> &options, ClientContext &context,
+ 	           const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
 diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
 index 9539b16..747748c 100644
 --- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
@@ -62,7 +81,7 @@ index 9539b16..747748c 100644
  	const auto &xmin_func = xmin_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::POINT_2D()});
  	vector<unique_ptr<Expression>> xmin_func_args;
 diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
-index b4d5601..f3d776c 100644
+index b4d5601..f6436c4 100644
 --- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
 +++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
 @@ -79,7 +79,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateRTreeIndex::GetGlobalSinkState(ClientC
@@ -70,12 +89,12 @@ index b4d5601..f3d776c 100644
  	auto &db = storage.db;
  	gstate->rtree =
 -	    make_uniq<RTreeIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
-+	    make_uniq<RTreeIndex>(info->index_name.GetIdentifierName(), constraint_type, storage_ids, table_manager, unbound_expressions, db,
++	    make_uniq<RTreeIndex>(Identifier(info->index_name.GetIdentifierName()), constraint_type, storage_ids, table_manager, unbound_expressions, db,
  	                          info->options, context, IndexStorageInfo(), estimated_cardinality);
  
  	gstate->max_node_capacity = gstate->rtree->tree->GetConfig().max_node_capacity;
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index 687f129..4aaa1b0 100644
+index 687f129..179212c 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 @@ -94,7 +94,7 @@ public:
@@ -96,6 +115,15 @@ index 687f129..4aaa1b0 100644
  		const auto &func = entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
  
  		vector<unique_ptr<Expression>> children;
+@@ -219,7 +219,7 @@ public:
+ 		auto &table_info = *table.GetStorage().GetDataTableInfo();
+ 		unique_ptr<RTreeIndexScanBindData> bind_data = nullptr;
+ 
+-		unordered_set<string> spatial_predicates = {
++		identifier_set_t spatial_predicates = {
+ 		    "ST_Equals",   "ST_Intersects", "ST_Touches",   "ST_Crosses",          "ST_Within", "ST_Contains",
+ 		    "ST_Overlaps", "ST_Covers",     "ST_CoveredBy", "ST_ContainsProperly", "&&",        "ST_Intersects_Extent"};
+ 
 diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
 index 44790d8..d21bec8 100644
 --- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
@@ -172,7 +200,7 @@ index f0c19f8..93f63fc 100644
  		}
  
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 8262a8c..61e1b0f 100644
+index 8262a8c..cb39d7b 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
 @@ -1579,14 +1579,14 @@ public:
@@ -192,15 +220,7 @@ index 8262a8c..61e1b0f 100644
  		if (parts.size() != 2) {
  			return nullptr;
  		}
-@@ -1624,20 +1624,20 @@ public:
- 
- 		proj_destroy(crs);
- 
--		auto info = CreateCoordinateSystemInfo(entry_name, auth_name, auth_code, projjson_text, wkt_text);
-+		auto info = CreateCoordinateSystemInfo(entry_name.GetIdentifierName(), auth_name, auth_code, projjson_text, wkt_text);
- 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
- 
- 		auto result = make_uniq<CoordinateSystemCatalogEntry>(catalog, schema, info);
+@@ -1631,13 +1631,13 @@ public:
  		return std::move(result);
  	}
  

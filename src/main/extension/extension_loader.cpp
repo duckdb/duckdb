@@ -46,7 +46,7 @@ void ExtensionLoader::SetDescription(const string &description) {
 
 void ExtensionLoader::UseDedicatedSchemaForExtension(const Identifier &extension_schema_name) {
 	CreateSchema(extension_schema_name);
-	UseDefaultSchema(extension_schema_name.GetIdentifierName());
+	UseDefaultSchema(Identifier(extension_schema_name.GetIdentifierName()));
 	AddSchemaToSearchPath(extension_schema_name);
 }
 
@@ -67,7 +67,7 @@ void ExtensionLoader::CreateSchema(const Identifier &name) const {
 	system_catalog.CreateSchema(data, info);
 }
 
-void ExtensionLoader::UseDefaultSchema(const string &name) {
+void ExtensionLoader::UseDefaultSchema(const Identifier &name) {
 	if (loader_info.extension_schema != DEFAULT_SCHEMA && name != DEFAULT_SCHEMA &&
 	    loader_info.extension_schema != name) {
 		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
@@ -120,7 +120,7 @@ void ExtensionLoader::FinalizeLoad() {
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
-	ScalarFunctionSet set(function.name.GetIdentifierName());
+	ScalarFunctionSet set {Identifier(function.name.GetIdentifierName())};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -144,7 +144,7 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
-	AggregateFunctionSet set(function.name.GetIdentifierName());
+	AggregateFunctionSet set {Identifier(function.name.GetIdentifierName())};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -168,7 +168,7 @@ void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunction function) {
-	WindowFunctionSet set(function.name.GetIdentifierName());
+	WindowFunctionSet set {Identifier(function.name.GetIdentifierName())};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -198,7 +198,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(TableFunction function) {
-	TableFunctionSet set(function.name.GetIdentifierName());
+	TableFunctionSet set {Identifier(function.name.GetIdentifierName())};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -224,7 +224,7 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 	D_ASSERT(!function.name.empty());
-	PragmaFunctionSet set(function.name.GetIdentifierName());
+	PragmaFunctionSet set {Identifier(function.name.GetIdentifierName())};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -232,7 +232,7 @@ void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
 	auto function_name = function.name.GetIdentifierName();
-	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
+	CreatePragmaFunctionInfo info(Identifier(std::move(function_name)), std::move(function));
 	info.extension_name = Identifier(GetRegisteredExtensionName());
 	info.schema = Identifier(loader_info.extension_schema);
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

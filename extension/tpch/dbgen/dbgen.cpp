@@ -420,7 +420,8 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
-static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
+static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
+                            string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
 	info->catalog = Identifier(catalog_name);
 	info->schema = Identifier(schema);
@@ -435,7 +436,8 @@ static void CreateTPCHTable(ClientContext &context, string catalog_name, string 
 	catalog.CreateTable(context, std::move(info));
 }
 
-void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string catalog, string schema, string suffix) {
+void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
+                                    string suffix) {
 	CreateTPCHTable<RegionInfo>(context, catalog, schema, suffix);
 	CreateTPCHTable<NationInfo>(context, catalog, schema, suffix);
 	CreateTPCHTable<SupplierInfo>(context, catalog, schema, suffix);
@@ -472,7 +474,7 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 }
 
 struct TPCHDBgenParameters {
-	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const string &schema, const string &suffix) {
+	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const Identifier &schema, const string &suffix) {
 		tables.resize(REGION + 1);
 		for (size_t i = PART; i <= REGION; i++) {
 			auto tname = get_table_name(i);
@@ -579,8 +581,8 @@ private:
 	int current_step;
 };
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string catalog_name, string schema,
-                                string suffix, int children, int current_step) {
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const Identifier &catalog_name,
+                                const Identifier &schema, string suffix, int children, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}

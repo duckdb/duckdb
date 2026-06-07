@@ -319,7 +319,7 @@ void ExportedTableData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(2, "schema_name", schema_name);
 	serializer.WritePropertyWithDefault<Identifier>(3, "database_name", database_name);
 	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
-	serializer.WritePropertyWithDefault<vector<string>>(5, "not_null_columns", not_null_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(5, "not_null_columns", not_null_columns);
 }
 
 ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
@@ -328,7 +328,7 @@ ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<Identifier>(2, "schema_name", result.schema_name);
 	deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name", result.database_name);
 	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
-	deserializer.ReadPropertyWithDefault<vector<string>>(5, "not_null_columns", result.not_null_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(5, "not_null_columns", result.not_null_columns);
 	return result;
 }
 
@@ -615,8 +615,8 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	                                                       {"reject_scans"});
 	serializer.WritePropertyWithDefault<vector<string>>(133, "name_list", options.name_list);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", options.sql_type_list);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column",
-	                                                                   options.sql_types_per_column);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column",
+	                                                             options.sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", options.columns_set, false);
 	serializer.WritePropertyWithDefault<CSVOption<char>>(
 	    137, "comment", options.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
@@ -675,7 +675,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	auto options_name_list = deserializer.ReadPropertyWithDefault<vector<string>>(133, "name_list");
 	auto options_sql_type_list = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list");
 	auto options_sql_types_per_column =
-	    deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column");
+	    deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column");
 	auto options_columns_set = deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", false);
 	auto options_dialect_options_state_machine_options_comment =
 	    deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "comment", CSVOption<char>('\0'));

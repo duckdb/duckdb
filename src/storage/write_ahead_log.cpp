@@ -377,7 +377,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
-                    const string &name) {
+                    const Identifier &name) {
 	case_insensitive_map_t<Value> options;
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
 	// Before: serialization version 3
@@ -411,7 +411,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	auto &index_entry = entry.Cast<DuckIndexEntry>();
 	auto &list = index_entry.GetDataTableInfo().GetIndexes();
 	auto &database = GetDatabase();
-	SerializeIndex(database, serializer, list, index_entry.name.GetIdentifierName());
+	SerializeIndex(database, serializer, list, index_entry.name);
 	serializer.End();
 }
 
@@ -555,7 +555,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	auto name = unique.GetName(parent.name.GetIdentifierName());
+	auto name = unique.GetName(Identifier(parent.name.GetIdentifierName()));
 	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();

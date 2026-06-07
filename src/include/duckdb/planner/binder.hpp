@@ -191,7 +191,7 @@ struct GlobalBinderState {
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
-	string trigger_creation_name;
+	Identifier trigger_creation_name;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -248,7 +248,7 @@ public:
 	                                                       const Identifier &table_name, const ColumnList &columns);
 	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const Identifier &table,
 	                                           const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
+	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
@@ -348,7 +348,7 @@ public:
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
-	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 	Identifier GetExpressionName(const ParsedExpression &expr);
 
 private:
@@ -447,7 +447,7 @@ private:
 	                            vector<unique_ptr<Expression>> &projection_expressions,
 	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-	                             const string &alias, TableIndex update_table_index,
+	                             const Identifier &alias, TableIndex update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
@@ -567,8 +567,8 @@ private:
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 
-	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
-	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const Identifier &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const Identifier &target_database_name);
 
 	BoundStatement BindShowQuery(ShowRef &ref);
 	BoundStatement BindShowTable(ShowRef &ref);
@@ -581,18 +581,17 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, TableIndex proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names, MergeActionCondition condition,
-	                                                 const unordered_set<idx_t> &source_table_indices);
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+	                vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
+	                MergeIntoAction &action, const vector<BindingAlias> &source_aliases,
+	                const vector<Identifier> &source_names, MergeActionCondition condition,
+	                const unordered_set<idx_t> &source_table_indices);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
-	                                           const string &tname);
+	                                           const Identifier &tname);
 
 	BoundCTEData PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);

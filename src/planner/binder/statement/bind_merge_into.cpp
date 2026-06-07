@@ -70,7 +70,7 @@ static void InlineProjectionReferences(unique_ptr<Expression> &expr, TableIndex 
 }
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
-                                                              const vector<string> &names) {
+                                                              const vector<Identifier> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
 	D_ASSERT(aliases.size() == names.size());
 
@@ -86,7 +86,7 @@ unique_ptr<BoundMergeIntoAction>
 Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
                         vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
                         MergeIntoAction &action, const vector<BindingAlias> &source_aliases,
-                        const vector<string> &source_names, MergeActionCondition condition,
+                        const vector<Identifier> &source_names, MergeActionCondition condition,
                         const unordered_set<idx_t> &source_table_indices) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
@@ -167,7 +167,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			if (!action.insert_columns.empty()) {
 				throw InternalException("INSERT BY NAME cannot be combined with a column list");
 			}
-			action.insert_columns = StringsToIdentifiers(source_names);
+			action.insert_columns = source_names;
 		}
 		vector<LogicalIndex> named_column_map;
 		vector<LogicalType> expected_types;
@@ -181,7 +181,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			action.expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
 		CheckInsertColumnCountMismatch(expected_types.size(), action.expressions.size(), !action.insert_columns.empty(),
-		                               table.name.GetIdentifierName());
+		                               Identifier(table.name.GetIdentifierName()));
 		// explicit expressions - plan them
 		for (idx_t i = 0; i < action.expressions.size(); i++) {
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
@@ -321,7 +321,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	// get the source names/types and collect source table indices for validation
 	vector<BindingAlias> source_aliases;
-	vector<string> source_names;
+	vector<Identifier> source_names;
 	unordered_set<idx_t> source_table_indices;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
@@ -329,7 +329,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		auto &column_names = binding.GetColumnNames();
 		for (idx_t c = 0; c < column_names.size(); c++) {
 			source_aliases.push_back(binding.GetBindingAlias());
-			source_names.push_back(column_names[c].GetIdentifierName());
+			source_names.emplace_back(column_names[c].GetIdentifierName());
 		}
 	}
 
@@ -492,7 +492,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// add the merge_action virtual column
 		virtual_column_map_t virtual_columns;
 		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
-		return BindReturning(std::move(node.returning_list), table, table_alias, merge_table_index,
+		return BindReturning(std::move(node.returning_list), table, Identifier(table_alias), merge_table_index,
 		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
 	}
 

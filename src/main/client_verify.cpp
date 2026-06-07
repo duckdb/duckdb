@@ -28,7 +28,7 @@ struct PreparedStatementVerification {
 	void ConvertConstants(QueryNode &node);
 	void ConvertConstants(unique_ptr<ParsedExpression> &child);
 
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> values;
+	identifier_map_t<unique_ptr<ParsedExpression>> values;
 };
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
@@ -43,8 +43,8 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		expr->ClearAlias();
 		// check if the value already exists
 		idx_t index = values.size();
-		auto identifier = std::to_string(index + 1);
-		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+		auto identifier = Identifier(std::to_string(index + 1));
+		const auto predicate = [&](const std::pair<const Identifier, unique_ptr<ParsedExpression>> &pair) {
 			return pair.second->Equals(*expr.get());
 		};
 		auto result = std::find_if(values.begin(), values.end(), predicate);

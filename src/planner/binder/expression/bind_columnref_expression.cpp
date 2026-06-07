@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
+unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const Identifier &column_name) {
 	return binder.GetSQLValueFunction(column_name);
 }
 
@@ -36,13 +36,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
                                           optional_ptr<ColumnAliasBinder> alias_binder) {
 	ColumnQualifier qualifier(binder, nullptr, alias_binder);
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
 void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(expression_binder.binder, expression_binder.lambda_bindings);
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
@@ -74,7 +74,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 				return alias_result;
 			}
 
-			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName().GetIdentifierName());
+			auto value_function = GetSQLValueFunction(Identifier(col_ref_p.GetColumnName().GetIdentifierName()));
 			if (value_function) {
 				return BindExpression(value_function, depth);
 			}
@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
-	ref.name = col_ref.ColumnNames().back().GetIdentifierName();
+	ref.name = Identifier(col_ref.ColumnNames().back().GetIdentifierName());
 	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;

@@ -77,8 +77,8 @@ public:
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
 		return all_transactions;
 	}
-	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
-	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
+	optional_ptr<AttachedDatabase> GetReferencedDatabase(const Identifier &name);
+	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const Identifier &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
 

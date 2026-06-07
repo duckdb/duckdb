@@ -30,8 +30,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 		recurring_cte_tables[op.table_index] = recurring_table;
 		auto &right = CreatePlan(*op.children[1]);
-		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename.GetIdentifierName(), op.table_index, op.types, op.union_all,
-		                                       left, right, op.estimated_cardinality);
+		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
+		                                       op.estimated_cardinality);
 		auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 		cast_cte.ref_recurring = op.ref_recurring;
 		cast_cte.recurring_table = recurring_table;
@@ -79,8 +79,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	recurring_cte_tables[op.table_index] = recurring_table;
 
 	auto &right = CreatePlan(*op.children[1]);
-	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename.GetIdentifierName(), op.table_index, op.types, op.union_all, left,
-	                                       right, op.estimated_cardinality);
+	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
+	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
 	cast_cte.using_key = true;
 	cast_cte.payload_aggregates = std::move(payload_aggregates);

@@ -43,7 +43,7 @@ struct DummyBinding;
 struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
-	string name;
+	Identifier name;
 	optional_idx query_location;
 };
 
@@ -146,17 +146,17 @@ public:
 
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
-	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params);
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
-	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 
 	//! Returns true if the function name is an alias for the UNNEST function
-	static bool IsUnnestFunction(const string &function_name);
+	static bool IsUnnestFunction(const Identifier &function_name);
 
 private:
 	//! Current stack depth
@@ -198,7 +198,7 @@ protected:
 	                          const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                          const vector<LogicalType> &function_child_types);
 
-	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);

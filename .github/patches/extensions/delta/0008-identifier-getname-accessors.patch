@@ -91,6 +91,20 @@ index f48db80..65a2b20 100644
  		}
  		auto struct_value = Value::STRUCT(struct_fields);
  		logger.WriteLog(delta_log_type, log_level, struct_value.ToString());
+diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
+index 32514ee..b5bcf3b 100644
+--- a/src/functions/delta_scan/delta_multi_file_reader.cpp
++++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -146,7 +146,8 @@ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList
+ 	}
+ 
+ 	// FIXME: this is slightly hacky here
+-	bind_data.schema = DeltaMultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
++	bind_data.schema = DeltaMultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(names),
++	                                                                            return_types);
+ 
+ 	// Set defaults
+ 	for (auto &col : bind_data.schema) {
 diff --git a/src/functions/delta_scan/delta_scan.cpp b/src/functions/delta_scan/delta_scan.cpp
 index a26b9d8..b350152 100644
 --- a/src/functions/delta_scan/delta_scan.cpp

@@ -8,9 +8,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // ChangeOwnershipInfo
 //===--------------------------------------------------------------------===//
-ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
-                                         string entry_name_p, string owner_schema_p, string owner_name_p,
-                                         OnEntryNotFound if_not_found)
+ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p,
+                                         Identifier entry_schema_p, Identifier entry_name_p, Identifier owner_schema_p,
+                                         Identifier owner_name_p, OnEntryNotFound if_not_found)
     : AlterInfo(AlterType::CHANGE_OWNERSHIP, Identifier(std::move(entry_catalog_p)),
                 Identifier(std::move(entry_schema_p)), Identifier(std::move(entry_name_p)), if_not_found),
       entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
@@ -25,9 +25,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(
-	    entry_catalog_type, catalog.GetIdentifierName(), schema.GetIdentifierName(), name.GetIdentifierName(),
-	    owner_schema.GetIdentifierName(), owner_name.GetIdentifierName(), if_not_found);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
+	                                                      owner_name, if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -49,8 +48,8 @@ string ChangeOwnershipInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 // SetCommentInfo
 //===--------------------------------------------------------------------===//
-SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
-                               string entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p, Identifier entry_schema_p,
+                               Identifier entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
     : AlterInfo(AlterType::SET_COMMENT, Identifier(std::move(entry_catalog_p)), Identifier(std::move(entry_schema_p)),
                 Identifier(std::move(entry_name_p)), if_not_found),
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
@@ -61,9 +60,8 @@ CatalogType SetCommentInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog.GetIdentifierName(),
-	                                                 schema.GetIdentifierName(), name.GetIdentifierName(),
-	                                                 comment_value, if_not_found);
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value,
+	                                                 if_not_found);
 }
 
 string SetCommentInfo::ToString() const {
@@ -103,7 +101,7 @@ CatalogType AlterTableInfo::GetCatalogType() const {
 //===--------------------------------------------------------------------===//
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
-RenameColumnInfo::RenameColumnInfo(AlterEntryData data, string old_name_p, string new_name_p)
+RenameColumnInfo::RenameColumnInfo(AlterEntryData data, Identifier old_name_p, Identifier new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_COLUMN, std::move(data)), old_name(std::move(old_name_p)),
       new_name(std::move(new_name_p)) {
 }
@@ -115,8 +113,7 @@ RenameColumnInfo::~RenameColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name.GetIdentifierName(),
-	                                                   new_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
 }
 
 string RenameColumnInfo::ToString() const {
@@ -137,7 +134,7 @@ string RenameColumnInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 // RenameFieldInfo
 //===--------------------------------------------------------------------===//
-RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path_p, string new_name_p)
+RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path_p, Identifier new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_FIELD, std::move(data)), column_path(std::move(column_path_p)),
       new_name(std::move(new_name_p)) {
 }
@@ -149,7 +146,7 @@ RenameFieldInfo::~RenameFieldInfo() {
 }
 
 unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name);
 }
 
 string RenameFieldInfo::ToString() const {
@@ -178,7 +175,7 @@ string RenameFieldInfo::ToString() const {
 RenameTableInfo::RenameTableInfo() : AlterTableInfo(AlterTableType::RENAME_TABLE) {
 }
 
-RenameTableInfo::RenameTableInfo(AlterEntryData data, string new_name_p)
+RenameTableInfo::RenameTableInfo(AlterEntryData data, Identifier new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_TABLE, std::move(data)), new_table_name(std::move(new_name_p)) {
 }
 
@@ -186,7 +183,7 @@ RenameTableInfo::~RenameTableInfo() {
 }
 
 unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
 }
 
 string RenameTableInfo::ToString() const {
@@ -414,7 +411,7 @@ string ChangeColumnTypeInfo::ToString() const {
 SetDefaultInfo::SetDefaultInfo() : AlterTableInfo(AlterTableType::SET_DEFAULT) {
 }
 
-SetDefaultInfo::SetDefaultInfo(AlterEntryData data, string column_name_p, unique_ptr<ParsedExpression> new_default)
+SetDefaultInfo::SetDefaultInfo(AlterEntryData data, Identifier column_name_p, unique_ptr<ParsedExpression> new_default)
     : AlterTableInfo(AlterTableType::SET_DEFAULT, std::move(data)), column_name(std::move(column_name_p)),
       expression(std::move(new_default)) {
 }
@@ -422,7 +419,7 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name.GetIdentifierName(),
+	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
@@ -451,14 +448,14 @@ string SetDefaultInfo::ToString() const {
 SetNotNullInfo::SetNotNullInfo() : AlterTableInfo(AlterTableType::SET_NOT_NULL) {
 }
 
-SetNotNullInfo::SetNotNullInfo(AlterEntryData data, string column_name_p)
+SetNotNullInfo::SetNotNullInfo(AlterEntryData data, Identifier column_name_p)
     : AlterTableInfo(AlterTableType::SET_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
 SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
 string SetNotNullInfo::ToString() const {
@@ -481,14 +478,14 @@ string SetNotNullInfo::ToString() const {
 DropNotNullInfo::DropNotNullInfo() : AlterTableInfo(AlterTableType::DROP_NOT_NULL) {
 }
 
-DropNotNullInfo::DropNotNullInfo(AlterEntryData data, string column_name_p)
+DropNotNullInfo::DropNotNullInfo(AlterEntryData data, Identifier column_name_p)
     : AlterTableInfo(AlterTableType::DROP_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
 DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
 string DropNotNullInfo::ToString() const {
@@ -511,7 +508,7 @@ string DropNotNullInfo::ToString() const {
 AlterForeignKeyInfo::AlterForeignKeyInfo() : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT) {
 }
 
-AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<Identifier> pk_columns,
+AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, Identifier fk_table, vector<Identifier> pk_columns,
                                          vector<Identifier> fk_columns, vector<PhysicalIndex> pk_keys,
                                          vector<PhysicalIndex> fk_keys, AlterForeignKeyType type_p)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, std::move(data)), fk_table(std::move(fk_table)),
@@ -522,8 +519,8 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
-	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table.GetIdentifierName(), pk_columns,
-	                                                      fk_columns, pk_keys, fk_keys, type);
+	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
+	                                                      pk_keys, fk_keys, type);
 }
 
 string AlterForeignKeyInfo::ToString() const {
@@ -553,14 +550,14 @@ CatalogType AlterViewInfo::GetCatalogType() const {
 //===--------------------------------------------------------------------===//
 RenameViewInfo::RenameViewInfo() : AlterViewInfo(AlterViewType::RENAME_VIEW) {
 }
-RenameViewInfo::RenameViewInfo(AlterEntryData data, string new_name_p)
+RenameViewInfo::RenameViewInfo(AlterEntryData data, Identifier new_name_p)
     : AlterViewInfo(AlterViewType::RENAME_VIEW, std::move(data)), new_view_name(std::move(new_name_p)) {
 }
 RenameViewInfo::~RenameViewInfo() {
 }
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
-	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name.GetIdentifierName());
+	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
 }
 
 string RenameViewInfo::ToString() const {

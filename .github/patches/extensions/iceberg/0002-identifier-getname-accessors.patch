@@ -897,6 +897,19 @@ index 87b303da..c9ef5c3b 100644
  	return parquet_scan_copy;
  }
  
+diff --git a/src/include/catalog/rest/iceberg_catalog.hpp b/src/include/catalog/rest/iceberg_catalog.hpp
+index 9831469e..725b172d 100644
+--- a/src/include/catalog/rest/iceberg_catalog.hpp
++++ b/src/include/catalog/rest/iceberg_catalog.hpp
+@@ -147,7 +147,7 @@ public:
+ 			return CatalogLookupBehavior::STANDARD;
+ 		}
+ 	}
+-	bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) override {
++	bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const Identifier &schema) override {
+ 		return false;
+ 	}
+ 	string GetDefaultSchema() const override {
 diff --git a/src/include/core/metadata/schema/iceberg_table_schema.hpp b/src/include/core/metadata/schema/iceberg_table_schema.hpp
 index 468bd8b0..2e8a12c3 100644
 --- a/src/include/core/metadata/schema/iceberg_table_schema.hpp

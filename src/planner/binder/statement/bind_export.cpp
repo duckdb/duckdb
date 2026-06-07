@@ -23,12 +23,12 @@
 namespace duckdb {
 
 //! Sanitizes a string to have only low case chars and underscores
-string SanitizeExportIdentifier(const string &str) {
+string SanitizeExportIdentifier(const Identifier &str) {
 	// Copy the original string to result
-	string result(str);
+	string result(str.GetIdentifierName());
 
-	for (idx_t i = 0; i < str.length(); ++i) {
-		auto c = str[i];
+	for (idx_t i = 0; i < result.length(); ++i) {
+		auto c = result[i];
 		if (c >= 'a' && c <= 'z') {
 			// If it is lower case just continue
 			continue;
@@ -109,11 +109,11 @@ void ReorderTableEntries(catalog_entry_vector_t &tables) {
 }
 
 string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const string &extension) {
-	auto name = SanitizeExportIdentifier(table.name.GetIdentifierName());
+	auto name = SanitizeExportIdentifier(table.name);
 	if (table.schema.name == DEFAULT_SCHEMA) {
 		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
 	}
-	auto schema = SanitizeExportIdentifier(table.schema.name.GetIdentifierName());
+	auto schema = SanitizeExportIdentifier(table.schema.name);
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
@@ -232,7 +232,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
 		// Let's verify if any on these columns have not null constraints
-		vector<string> not_null_columns;
+		vector<Identifier> not_null_columns;
 		for (auto &constraint : table.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();

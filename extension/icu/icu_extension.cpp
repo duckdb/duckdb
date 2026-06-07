@@ -105,8 +105,8 @@ struct IcuBindData : public FunctionData {
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
 	}
-	static string DecodeFunctionName(const string &fname) {
-		return fname.substr(FUNCTION_PREFIX.size());
+	static string DecodeFunctionName(const Identifier &fname) {
+		return fname.GetIdentifierName().substr(FUNCTION_PREFIX.size());
 	}
 };
 
@@ -161,7 +161,7 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &
 		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 
-	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName().GetIdentifierName());
+	const auto collation = IcuBindData::DecodeFunctionName(Identifier(bound_function.GetName().GetIdentifierName()));
 	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");
@@ -471,7 +471,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUCollateFunction(collation, ""), false, false);
+		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
 	}
 

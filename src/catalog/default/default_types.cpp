@@ -546,10 +546,10 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"geometry", LogicalTypeId::GEOMETRY, BindGeometryType},
                                            {"type", LogicalTypeId::TYPE, nullptr}}};
 
-optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
+optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const Identifier &name) {
 	auto &internal_types = BUILTIN_TYPES;
 	for (auto &type : internal_types) {
-		if (StringUtil::CIEquals(name, type.name)) {
+		if (name == type.name) {
 			return &type;
 		}
 	}
@@ -561,10 +561,10 @@ optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
 //----------------------------------------------------------------------------------------------------------------------
 // Default Type Generator
 //----------------------------------------------------------------------------------------------------------------------
-LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
+LogicalTypeId DefaultTypeGenerator::GetDefaultType(const Identifier &name) {
 	auto &internal_types = BUILTIN_TYPES;
 	for (auto &type : internal_types) {
-		if (StringUtil::CIEquals(name, type.name)) {
+		if (name == type.name) {
 			return type.type;
 		}
 	}
@@ -572,7 +572,7 @@ LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
 }
 
 LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vector<pair<string, Value>> &params) {
-	auto entry = TryGetDefaultTypeEntry(name);
+	auto entry = TryGetDefaultTypeEntry(Identifier(name));
 	if (!entry) {
 		return LogicalTypeId::INVALID;
 	}
@@ -603,7 +603,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}
-	auto entry = TryGetDefaultTypeEntry(entry_name.GetIdentifierName());
+	auto entry = TryGetDefaultTypeEntry(entry_name);
 	if (!entry || entry->type == LogicalTypeId::INVALID) {
 		return nullptr;
 	}

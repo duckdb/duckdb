@@ -97,7 +97,7 @@ void CSVFileScan::SetStart() {
 void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
 	names = names_p;
 	types = types_p;
-	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(names), types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {

@@ -207,7 +207,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	if (!node.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(node.returning_list), table, node.table->alias.GetIdentifierName(),
+		return BindReturning(std::move(node.returning_list), table, Identifier(node.table->alias.GetIdentifierName()),
 		                     update_table_index, std::move(update_as_logicaloperator));
 	}
 

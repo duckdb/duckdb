@@ -175,7 +175,7 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 	}
 	// The value_map is gone after executing the prepared statement
 	// See if this is the case and we still have a value registered for it
-	auto it = wrapper->values.find(identifier);
+	auto it = wrapper->values.find(duckdb::Identifier(identifier));
 	if (it != wrapper->values.end()) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(it->second.return_type));
 	}
@@ -251,7 +251,7 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
-	wrapper->values[identifier] = duckdb::BoundParameterData(*value);
+	wrapper->values[duckdb::Identifier(identifier)] = duckdb::BoundParameterData(*value);
 	return DuckDBSuccess;
 }
 

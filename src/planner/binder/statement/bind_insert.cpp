@@ -33,7 +33,7 @@
 namespace duckdb {
 
 void Binder::CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
-                                            const string &tname) {
+                                            const Identifier &tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
 		                                                  : "Column name/value mismatch for insert on %s: "
@@ -74,7 +74,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 		D_ASSERT(!expr_list.values.empty());
 		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !node.columns.empty(),
-		                               table.name.GetIdentifierName());
+		                               Identifier(table.name.GetIdentifierName()));
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -95,10 +95,10 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<unordered_set<string>> &lambda_params);
+                        vector<identifier_set_t> &lambda_params);
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
-                                vector<unordered_set<string>> &lambda_params) {
+                                vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
@@ -139,7 +139,7 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<unordered_set<string>> &lambda_params) {
+                        vector<identifier_set_t> &lambda_params) {
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
@@ -149,7 +149,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 		}
 
 		// Don't qualify lambda parameters.
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName().GetIdentifierName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
 			return;
 		}
 
@@ -265,7 +265,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 	}
 }
 
-static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
+static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
 	unordered_set<column_t> conflict_column_ids;
 	for (auto &index : storage_info.index_info) {
 		if (!index.is_unique) {
@@ -275,10 +275,10 @@ static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &stor
 			conflict_column_ids.insert(col_id);
 		}
 	}
-	unordered_set<string> conflict_column_names;
+	identifier_set_t conflict_column_names;
 	for (auto &col : table.GetColumns().Physical()) {
 		if (conflict_column_ids.count(col.Physical().index)) {
-			conflict_column_names.insert(col.Name().GetIdentifierName());
+			conflict_column_names.insert(col.Name());
 		}
 	}
 	return conflict_column_names;
@@ -513,11 +513,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		update_action->column_order = node.column_order;
 		if (on_conflict_info.set_info) {
 			for (auto &col : on_conflict_info.set_info->expressions) {
-				vector<unordered_set<string>> lambda_params;
+				vector<identifier_set_t> lambda_params;
 				DoUpdateSetQualify(col, table_name, lambda_params);
 			}
 			if (on_conflict_info.set_info->condition) {
-				vector<unordered_set<string>> lambda_params;
+				vector<identifier_set_t> lambda_params;
 				DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
 				update_action->condition = std::move(on_conflict_info.set_info->condition);
 			}
@@ -615,7 +615,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		}
 		// inserting from a select - check if the column count matches
 		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !node.columns.empty(),
-		                               table.name.GetIdentifierName());
+		                               Identifier(table.name.GetIdentifierName()));
 
 		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 	} else {
@@ -630,8 +630,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
 		return BindReturning(std::move(node.returning_list), table,
-		                     node.table_ref ? node.table_ref->alias.GetIdentifierName() : string(), insert_table_index,
-		                     std::move(index_as_logicaloperator));
+		                     Identifier(node.table_ref ? node.table_ref->alias.GetIdentifierName() : string()),
+		                     insert_table_index, std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

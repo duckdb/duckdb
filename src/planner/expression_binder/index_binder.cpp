@@ -42,8 +42,8 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	}
 
 	CreateIndexInput input(context, unbound_index.table_io_manager, unbound_index.db, create_info.constraint_type,
-	                       create_info.index_name.GetIdentifierName(), create_info.column_ids, unbound_expressions,
-	                       storage_info, create_info.options);
+	                       create_info.index_name, create_info.column_ids, unbound_expressions, storage_info,
+	                       create_info.options);
 
 	return index_type->create_instance(input);
 }

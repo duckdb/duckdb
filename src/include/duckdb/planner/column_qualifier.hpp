@@ -34,10 +34,10 @@ public:
 	//! Returns a qualified column reference from a column reference
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
-	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
 	//! within_function_expression state from outer expressions, or sets it
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
 	                        const bool within_function_expression = false);
 
 	optional_ptr<CatalogEntry> QualifyFunction(FunctionExpression &function);

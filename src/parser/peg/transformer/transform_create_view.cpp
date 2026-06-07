@@ -4,7 +4,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
-unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
+unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const Identifier &name,
                                                             vector<Identifier> &aliases,
                                                             vector<unique_ptr<ParsedExpression>> &key_targets) {
 	if (node->type != QueryNodeType::SET_OPERATION_NODE) {
@@ -82,8 +82,8 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
 	vector<unique_ptr<ParsedExpression>> empty_key_targets;
-	auto result_node =
-	    ToRecursiveCTE(std::move(node), info->view_name.GetIdentifierName(), info->aliases, empty_key_targets);
+	auto result_node = ToRecursiveCTE(std::move(node), Identifier(info->view_name.GetIdentifierName()), info->aliases,
+	                                  empty_key_targets);
 	WrapRecursiveView(info, std::move(result_node));
 }
 

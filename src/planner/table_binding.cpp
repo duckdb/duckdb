@@ -175,7 +175,7 @@ TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p,
 }
 
 static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
-                           const unordered_map<idx_t, string> &alias_map) {
+                           const unordered_map<idx_t, Identifier> &alias_map) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.ColumnNamesMutable();
@@ -212,9 +212,9 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifie
 	D_ASSERT(table_entry.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
-	unordered_map<idx_t, string> alias_map;
+	unordered_map<idx_t, Identifier> alias_map;
 	for (auto &entry : name_map) {
-		alias_map[entry.second] = entry.first.GetIdentifierName();
+		alias_map[entry.second] = entry.first;
 	}
 	ReplaceAliases(*expression, table_entry.GetColumns(), alias_map);
 	BakeTableName(*expression, alias);

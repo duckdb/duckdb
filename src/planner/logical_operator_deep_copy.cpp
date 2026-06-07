@@ -260,7 +260,7 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 		// correct pointer to the parameter data
 		auto &bound_parameter = expr->Cast<BoundParameterExpression>();
 		if (parameter_data) {
-			auto entry = parameter_data->find(bound_parameter.Identifier().GetIdentifierName());
+			auto entry = parameter_data->find(bound_parameter.Identifier());
 			if (entry != parameter_data->end()) {
 				bound_parameter.ParameterDataMutable() = entry->second;
 			}

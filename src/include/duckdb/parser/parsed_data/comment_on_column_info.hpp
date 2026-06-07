@@ -24,8 +24,8 @@ public:
 
 public:
 	SetColumnCommentInfo();
-	SetColumnCommentInfo(string catalog, string schema, string name, string column_name, Value comment_value,
-	                     OnEntryNotFound if_not_found);
+	SetColumnCommentInfo(Identifier catalog, Identifier schema, Identifier name, Identifier column_name,
+	                     Value comment_value, OnEntryNotFound if_not_found);
 
 	//! The resolved Catalog Type
 	CatalogType catalog_entry_type;

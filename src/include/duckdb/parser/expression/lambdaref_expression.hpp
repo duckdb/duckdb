@@ -23,7 +23,7 @@ public:
 public:
 	//! Constructs a LambdaRefExpression from a lambda_idx and a column_name. We do not specify a table name,
 	//! because we use dummy tables to bind lambda parameters
-	LambdaRefExpression(idx_t lambda_idx, string column_name_p);
+	LambdaRefExpression(idx_t lambda_idx, Identifier column_name_p);
 
 public:
 	idx_t LambdaIndex() const {
@@ -48,7 +48,7 @@ public:
 
 	//! Traverses the lambda_bindings to find a matching binding for the column_name
 	static unique_ptr<ParsedExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-	                                                        const string &parameter_name);
+	                                                        const Identifier &parameter_name);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

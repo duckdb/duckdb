@@ -28,14 +28,14 @@ struct ExportedTableData {
 	//! Path to be exported
 	string file_path;
 	//! Not Null columns, if any
-	vector<string> not_null_columns;
+	vector<Identifier> not_null_columns;
 
 	void Serialize(Serializer &serializer) const;
 	static ExportedTableData Deserialize(Deserializer &deserializer);
 };
 
 struct ExportedTableInfo {
-	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p, vector<string> &not_null_columns_p);
+	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p, vector<Identifier> &not_null_columns_p);
 	ExportedTableInfo(ClientContext &context, ExportedTableData table_data);
 
 	TableCatalogEntry &entry;

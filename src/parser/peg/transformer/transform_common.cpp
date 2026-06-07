@@ -355,10 +355,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto colid_list = transformer.Transform<child_list_t<LogicalType>>(list_pr.Child<ListParseResult>(1));
-	case_insensitive_string_set_t union_names;
+	identifier_set_t union_names;
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : colid_list) {
-		union_names.insert(colid.first.GetIdentifierName());
+		union_names.insert(Identifier(colid.first.GetIdentifierName()));
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();
 		new_type_expr->SetAlias(Identifier(colid.first));

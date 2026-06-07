@@ -859,7 +859,7 @@
       },
       {"id": 135,
         "name": "sql_types_per_column",
-        "type": "case_insensitive_map_t<idx_t>",
+        "type": "identifier_map_t<idx_t>",
         "property": "options.sql_types_per_column"
       },
       {"id": 136,
@@ -1097,7 +1097,7 @@
       {
         "id": 5,
         "name": "not_null_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
     "pointer_type": "none"

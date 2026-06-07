@@ -40,7 +40,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto &column_list = table.GetColumns();
 
 	auto bound_constraint =
-	    BindUniqueConstraint(*constraint_info.constraint, table_info.name.GetIdentifierName(), column_list);
+	    BindUniqueConstraint(*constraint_info.constraint, Identifier(table_info.name.GetIdentifierName()), column_list);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 
 	// Create the CreateIndexInfo.
@@ -57,7 +57,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	}
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
-	auto index_name = unique_constraint.GetName(table_info.name.GetIdentifierName());
+	auto index_name = unique_constraint.GetName(Identifier(table_info.name.GetIdentifierName()));
 	create_index_info->index_name = Identifier(index_name);
 	D_ASSERT(!create_index_info->index_name.empty());
 

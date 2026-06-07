@@ -202,7 +202,7 @@ unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, Bound
 }
 
 ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &result_type) {
-	ScalarFunctionSet set(IntegralCompressFunctionName(result_type));
+	ScalarFunctionSet set {Identifier(IntegralCompressFunctionName(result_type))};
 	for (const auto &input_type : LogicalType::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) < GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(CMIntegralCompressFun::GetFunction(input_type, result_type));
@@ -212,7 +212,7 @@ ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &result_type)
 }
 
 ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_type) {
-	ScalarFunctionSet set(IntegralDecompressFunctionName(result_type));
+	ScalarFunctionSet set {Identifier(IntegralDecompressFunctionName(result_type))};
 	for (const auto &input_type : CMUtils::IntegralTypes()) {
 		if (GetTypeIdSize(result_type.InternalType()) > GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(CMIntegralDecompressFun::GetFunction(input_type, result_type));

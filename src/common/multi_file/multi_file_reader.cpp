@@ -37,16 +37,16 @@ unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_f
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
 		res = table_function.get_multi_file_reader(table_function);
-		res->function_name = table_function.name.GetIdentifierName();
+		res->function_name = Identifier(table_function.name.GetIdentifierName());
 	} else {
 		res = make_uniq<MultiFileReader>();
-		res->function_name = table_function.name.GetIdentifierName();
+		res->function_name = Identifier(table_function.name.GetIdentifierName());
 	}
 	return res;
 }
 
 unique_ptr<MultiFileReader> MultiFileReader::Copy() const {
-	return CreateDefault(function_name);
+	return CreateDefault(function_name.GetIdentifierName());
 }
 
 MultiFileBindData::~MultiFileBindData() {
@@ -72,7 +72,7 @@ unique_ptr<FunctionData> MultiFileBindData::Copy() const {
 
 unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
 	auto res = make_uniq<MultiFileReader>();
-	res->function_name = function_name;
+	res->function_name = Identifier(function_name);
 	return res;
 }
 
@@ -524,7 +524,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
-	TableFunctionSet function_set(table_function.name.GetIdentifierName());
+	TableFunctionSet function_set {Identifier(table_function.name.GetIdentifierName())};
 	function_set.AddFunction(table_function);
 	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
 	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);

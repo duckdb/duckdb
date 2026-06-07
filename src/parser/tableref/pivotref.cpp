@@ -143,11 +143,11 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.FunctionName() == "struct_pack") {
-			unordered_set<string> unique_names;
+			identifier_set_t unique_names;
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
-				if (!unique_names.insert(child.GetExpression().GetAlias().GetIdentifierName()).second) {
+				if (!unique_names.insert(Identifier(child.GetExpression().GetAlias().GetIdentifierName())).second) {
 					return false;
 				}
 				Value child_value;

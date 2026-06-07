@@ -258,6 +258,11 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 	return result;
 }
 
+string StringUtil::Join(const vector<Identifier> &input, const string &separator) {
+	return StringUtil::Join(input, input.size(), separator,
+	                        [](const Identifier &id) { return id.GetIdentifierName(); });
+}
+
 string StringUtil::Join(const vector<string> &input, const string &separator) {
 	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }

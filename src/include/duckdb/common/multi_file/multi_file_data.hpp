@@ -60,19 +60,19 @@ public:
 	}
 
 public:
-	static MultiFileColumnDefinition CreateFromNameAndType(const string &name, const LogicalType &type) {
-		MultiFileColumnDefinition result(name, type);
+	static MultiFileColumnDefinition CreateFromNameAndType(const Identifier &name, const LogicalType &type) {
+		MultiFileColumnDefinition result(name.GetIdentifierName(), type);
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
 			for (auto &child_entry : StructType::GetChildTypes(type)) {
 				result.children.push_back(
-				    CreateFromNameAndType(child_entry.first.GetIdentifierName(), child_entry.second));
+				    CreateFromNameAndType(Identifier(child_entry.first.GetIdentifierName()), child_entry.second));
 			}
 		}
 		return result;
 	}
 
-	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
+	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<Identifier> &names,
 	                                                                  const vector<LogicalType> &types) {
 		vector<MultiFileColumnDefinition> columns;
 		D_ASSERT(names.size() == types.size());

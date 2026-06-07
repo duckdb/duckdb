@@ -76,14 +76,14 @@ public:
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Create a pending query result of the prepared statement with the given set named arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(case_insensitive_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(identifier_map_t<BoundParameterData> &named_values,
 	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values,
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
@@ -95,13 +95,13 @@ public:
 
 	template <class PAYLOAD>
 	static string ExcessValuesException(const identifier_map_t<idx_t> &parameters,
-	                                    const case_insensitive_map_t<PAYLOAD> &values) {
+	                                    const identifier_map_t<PAYLOAD> &values) {
 		// Too many values
 		set<string> excess_set;
 		for (auto &pair : values) {
 			auto &name = pair.first;
-			if (!parameters.count(Identifier(name))) {
-				excess_set.insert(name);
+			if (!parameters.count(name)) {
+				excess_set.insert(name.GetIdentifierName());
 			}
 		}
 		vector<string> excess_values;
@@ -114,12 +114,12 @@ public:
 
 	template <class PAYLOAD>
 	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
-	                                     const case_insensitive_map_t<PAYLOAD> &values) {
+	                                     const identifier_map_t<PAYLOAD> &values) {
 		// Missing values
 		set<string> missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
-			if (!values.count(name.GetIdentifierName())) {
+			if (!values.count(name)) {
 				missing_set.insert(name.GetIdentifierName());
 			}
 		}
@@ -132,13 +132,12 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(const case_insensitive_map_t<PAYLOAD> &provided,
-	                             const identifier_map_t<idx_t> &expected) {
+	static void VerifyParameters(const identifier_map_t<PAYLOAD> &provided, const identifier_map_t<idx_t> &expected) {
 		if (expected.size() == provided.size()) {
 			// Same amount of identifiers, if
 			for (auto &pair : expected) {
 				auto &identifier = pair.first;
-				if (!provided.count(identifier.GetIdentifierName())) {
+				if (!provided.count(identifier)) {
 					throw InvalidInputException(MissingValuesException(expected, provided));
 				}
 			}

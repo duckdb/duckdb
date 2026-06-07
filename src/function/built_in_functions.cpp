@@ -26,7 +26,7 @@ BuiltinFunctions::~BuiltinFunctions() {
 
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
-	CreateCollationInfo info(std::move(name), std::move(function), combinable, not_required_for_equality);
+	CreateCollationInfo info(Identifier(std::move(name)), std::move(function), combinable, not_required_for_equality);
 	info.internal = true;
 	catalog.CreateCollation(transaction, info);
 }
@@ -50,7 +50,7 @@ void BuiltinFunctions::AddFunction(PragmaFunction function) {
 }
 
 void BuiltinFunctions::AddFunction(const string &name, PragmaFunctionSet functions) {
-	CreatePragmaFunctionInfo info(name, std::move(functions));
+	CreatePragmaFunctionInfo info(Identifier(name), std::move(functions));
 	info.internal = true;
 	catalog.CreatePragmaFunction(transaction, info);
 }

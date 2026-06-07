@@ -242,7 +242,7 @@ public:
 	static vector<GroupingSet> GroupByExpressionUnfolding(PEGTransformer &transformer, ParseResult &group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);
 	static unique_ptr<ResultModifier> VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset);
-	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
+	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const Identifier &name,
 	                                            vector<Identifier> &aliases,
 	                                            vector<unique_ptr<ParsedExpression>> &key_targets);
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
@@ -564,16 +564,16 @@ private:
 	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer, ParseResult &parse_result);
 	static qualified_column_set_t TransformExcludeNameSingle(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedColumnName TransformExcludeName(PEGTransformer &transformer, ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceList(PEGTransformer &transformer,
-	                                                                                 ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntries(PEGTransformer &transformer,
-	                                                                                    ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntrySingle(PEGTransformer &transformer,
-	                                                                                        ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntryList(PEGTransformer &transformer,
-	                                                                                      ParseResult &parse_result);
-	static pair<string, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
+	static identifier_map_t<unique_ptr<ParsedExpression>> TransformReplaceList(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static identifier_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntries(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static identifier_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntrySingle(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static identifier_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntryList(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static pair<Identifier, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
