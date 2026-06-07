@@ -531,6 +531,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"'SEQUENCE' /\n"
 	"'SEQUENCES' /\n"
 	"'SERIALIZABLE' /\n"
+	"'SERVE' /\n"
 	"'SERVER' /\n"
 	"'SESSION' /\n"
 	"'SET' /\n"
