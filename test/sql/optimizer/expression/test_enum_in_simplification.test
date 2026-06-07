@@ -96,7 +96,7 @@ WHERE sym NOT IN (
 GROUP BY sym 
 ORDER BY sym;
 ----
-physical_plan	<!REGEX>:.*NOT.*
+physical_plan	<REGEX>:.*NOT constant_or_null.*
 
 #
 # Test no valid strings and NULL
@@ -114,7 +114,7 @@ FROM (
 	WHERE n IS NOT NULL
 ) tbl;
 ----
-physical_plan	<REGEX>:.*WHEN.*IS.*NULL.*ELSE.*false.*
+physical_plan	<REGEX>:.*constant_or_null.*IS.*NOT.*NULL.*
 
 query II
 SELECT count(*), max(n) 
@@ -136,7 +136,7 @@ FROM (
 	WHERE n IS NOT NULL
 ) tbl;
 ----
-physical_plan	<REGEX>:.*NOT.*WHEN.*IS.*NULL.*ELSE.*false.*
+physical_plan	<REGEX>:.*NOT.*constant_or_null.*IS.*NOT.*NULL.*
 
 query II
 SELECT count(*), max(n) 
