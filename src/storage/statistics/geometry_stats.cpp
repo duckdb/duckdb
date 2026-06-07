@@ -231,8 +231,10 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	// This has been checked before and needs to be true for the checks below to be valid
-	D_ASSERT(data.extent.HasXY());
+	// This has been checked before and needs to be true for the checks below to be valid.
+	// Note: only one axis needs to be set; an unknown axis is an infinite range that
+	// intersects everything, so the IntersectsXY/ContainsXY math below stays valid.
+	D_ASSERT(data.extent.CanPruneXY());
 
 	const auto &geom = StringValue::Get(constant);
 	auto extent = GeometryExtent::Empty();
@@ -300,8 +302,10 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto &data = GetDataUnsafe(stats);
 
-	if (!data.extent.HasXY()) {
-		// If the extent is empty or unknown, we cannot prune
+	if (!data.extent.CanPruneXY()) {
+		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
+		// A single known axis is enough: the unknown axis is an infinite range that
+		// intersects everything, so pruning degrades to the known axis.
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
