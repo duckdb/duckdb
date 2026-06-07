@@ -1,0 +1,157 @@
+# name: test/sql/trigger/trigger_before_after_mixed.test
+# description: Test BEFORE + AFTER triggers on the same table+event
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE target (id INTEGER);
+
+statement ok
+CREATE TABLE log (seq INTEGER, label VARCHAR);
+
+# Use a sequence to record execution order across triggers and the DML
+statement ok
+CREATE SEQUENCE log_seq;
+
+statement ok
+CREATE TRIGGER trg_before BEFORE INSERT ON target FOR EACH STATEMENT
+    INSERT INTO log VALUES (nextval('log_seq'), 'before');
+
+statement ok
+CREATE TRIGGER trg_after AFTER INSERT ON target FOR EACH STATEMENT
+    INSERT INTO log VALUES (nextval('log_seq'), 'after');
+
+statement ok
+INSERT INTO target VALUES (1);
+
+# Order must be: BEFORE -> AFTER. The DML itself doesn't write to log,
+# so we can't observe it directly, but the relative ordering of trigger
+# bodies tells us BEFORE materialized first.
+query II
+SELECT label, seq FROM log ORDER BY seq;
+----
+before	1
+after	2
+
+# BEFORE body sees old state, AFTER body sees new state
+statement ok
+CREATE TABLE state_target (id INTEGER);
+
+statement ok
+INSERT INTO state_target VALUES (1);
+
+statement ok
+CREATE TABLE state_log (phase VARCHAR, observed_count INTEGER);
+
+statement ok
+CREATE TRIGGER state_before BEFORE INSERT ON state_target FOR EACH STATEMENT
+    INSERT INTO state_log SELECT 'before', COUNT(*) FROM state_target;
+
+statement ok
+CREATE TRIGGER state_after AFTER INSERT ON state_target FOR EACH STATEMENT
+    INSERT INTO state_log SELECT 'after', COUNT(*) FROM state_target;
+
+statement ok
+INSERT INTO state_target VALUES (2);
+
+# BEFORE sees 1 row, AFTER sees 2 rows
+query TI
+SELECT phase, observed_count FROM state_log ORDER BY phase;
+----
+after	2
+before	1
+
+# Mixed BEFORE + AFTER on UPDATE
+statement ok
+CREATE TABLE upd_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO upd_target VALUES (1, 10);
+
+statement ok
+CREATE TABLE upd_log (phase VARCHAR, observed_val INTEGER);
+
+statement ok
+CREATE TRIGGER upd_before BEFORE UPDATE ON upd_target FOR EACH STATEMENT
+    INSERT INTO upd_log SELECT 'before', val FROM upd_target WHERE id = 1;
+
+statement ok
+CREATE TRIGGER upd_after AFTER UPDATE ON upd_target FOR EACH STATEMENT
+    INSERT INTO upd_log SELECT 'after', val FROM upd_target WHERE id = 1;
+
+statement ok
+UPDATE upd_target SET val = 99 WHERE id = 1;
+
+# BEFORE sees val=10, AFTER sees val=99
+query TI
+SELECT phase, observed_val FROM upd_log ORDER BY phase;
+----
+after	99
+before	10
+
+# Mixed BEFORE + AFTER on DELETE
+statement ok
+CREATE TABLE del_target (id INTEGER);
+
+statement ok
+INSERT INTO del_target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE del_log (phase VARCHAR, observed_count INTEGER);
+
+statement ok
+CREATE TRIGGER del_before BEFORE DELETE ON del_target FOR EACH STATEMENT
+    INSERT INTO del_log SELECT 'before', COUNT(*) FROM del_target;
+
+statement ok
+CREATE TRIGGER del_after AFTER DELETE ON del_target FOR EACH STATEMENT
+    INSERT INTO del_log SELECT 'after', COUNT(*) FROM del_target;
+
+statement ok
+DELETE FROM del_target WHERE id = 1;
+
+# BEFORE sees 3, AFTER sees 2
+query TI
+SELECT phase, observed_count FROM del_log ORDER BY phase;
+----
+after	2
+before	3
+
+# Failure in BEFORE body aborts everything (DML + AFTER trigger)
+statement ok
+CREATE TABLE fail_target (id INTEGER);
+
+statement ok
+CREATE TABLE fail_log (msg VARCHAR);
+
+statement ok
+CREATE TABLE fail_unique (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO fail_unique VALUES (777);
+
+statement ok
+CREATE TRIGGER fail_before BEFORE INSERT ON fail_target FOR EACH STATEMENT
+    INSERT INTO fail_unique VALUES (777);
+
+statement ok
+CREATE TRIGGER fail_after AFTER INSERT ON fail_target FOR EACH STATEMENT
+    INSERT INTO fail_log VALUES ('after_fired');
+
+statement error
+INSERT INTO fail_target VALUES (1);
+----
+Constraint Error:
+
+# Nothing in fail_target (DML rolled back)
+query I
+SELECT COUNT(*) FROM fail_target;
+----
+0
+
+# AFTER didn't fire (BEFORE aborted before the DML or AFTER ran)
+query I
+SELECT COUNT(*) FROM fail_log;
+----
+0

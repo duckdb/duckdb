@@ -585,9 +585,9 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	return new_binder;
 }
 
-unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
-                                                          vector<unique_ptr<ParsedExpression>> &returning_list,
-                                                          TableCatalogEntry &table, TriggerEventType event_type) {
+unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node,
+                                                     vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                     TableCatalogEntry &table, TriggerEventType event_type) {
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
 	if (expanded_tables.find(table) != expanded_tables.end()) {
 		if (global_binder_state->trigger_creation_table == &table) {
@@ -597,18 +597,20 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 		return nullptr;
 	}
-	auto triggers = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
-	                                          TriggerTiming::AFTER, event_type);
-	if (triggers.empty()) {
+	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
+	auto before_triggers = table.GetTriggersForEvent(txn, TriggerTiming::BEFORE, event_type);
+	auto after_triggers = table.GetTriggersForEvent(txn, TriggerTiming::AFTER, event_type);
+	if (before_triggers.empty() && after_triggers.empty()) {
 		return nullptr;
 	}
 	if (!returning_list.empty()) {
-		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
+		throw NotImplementedException("RETURNING is not yet supported on tables with triggers");
 	}
 	if (node.type == QueryNodeType::INSERT_QUERY_NODE) {
 		auto &insert_node = node.Cast<InsertQueryNode>();
 		if (insert_node.on_conflict_info && insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
-			for (auto &trigger : triggers) {
+			// Only AFTER triggers can carry REFERENCING NEW TABLE — BEFORE rejects it at CREATE time.
+			for (auto &trigger : after_triggers) {
 				if (!trigger.get().referencing_new_table.empty()) {
 					throw NotImplementedException(
 					    "ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers");
@@ -617,7 +619,7 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 	}
 	expanded_tables.insert(table);
-	auto bound = ExpandAfterTriggers(node, returning_list, triggers);
+	auto bound = ExpandTriggers(node, returning_list, before_triggers, after_triggers);
 
 	// Erasing from the set, so we will track expanded tables only while we're on the same node in the recursive stack,
 	// meaning we're on the same "trigger" in the trigger chain.
@@ -627,6 +629,7 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 
 static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
 static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
+static constexpr const char *TRIGGER_BEFORE_BODY_CTE_PREFIX = "__duckdb_trigger_before_body_";
 
 static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const string &base_cte_name) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
@@ -640,9 +643,10 @@ static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const s
 	return alias_cte;
 }
 
-BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-                                           const vector<const_reference<TriggerCatalogEntry>> &triggers) {
-	D_ASSERT(!triggers.empty());
+BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+                                      const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers) {
+	D_ASSERT(!before_triggers.empty() || !after_triggers.empty());
 
 	D_ASSERT(returning_list.empty());
 	returning_list.push_back(make_uniq<StarExpression>());
@@ -650,23 +654,46 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
 	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
 
-	auto base_cte = make_uniq<CommonTableExpressionInfo>();
-	base_cte->query_node = node.Copy();
-	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-	base_cte->is_trigger_generated = true;
-
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
 	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
+
+	// CTE registration order = materialized-CTE execution order (first registered is outermost
+	// LogicalMaterializedCTE, runs first). So:
+	//   1. BEFORE body CTEs first  -> run before the DML
+	//   2. Base CTE (the DML)      -> runs in the middle
+	//   3. AFTER  body CTEs last   -> run after the DML
+	//
+	// Within each timing the catalog returns triggers alphabetically (case-insensitive) — see
+	// GetTriggersForEvent.
+
+	// 1. BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE TRIGGER time)
+	for (idx_t i = 0; i < before_triggers.size(); i++) {
+		auto &trigger = before_triggers[i].get();
+		auto body_cte_name =
+		    string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+
+		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+		trig_cte->query_node = trigger.trigger_action->Copy();
+		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+		trig_cte->is_trigger_generated = true;
+
+		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
+	}
+
+	// 2. Base CTE: the original DML, materialized so AFTER bodies can scan it (transition tables)
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = node.Copy();
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
-	// Expand each trigger as a DML CTE.
-	// Alphabetical order by name (case-insensitive) - see GetTriggersForEvent.
-	for (idx_t i = 0; i < triggers.size(); i++) {
-		auto &trigger = triggers[i].get();
+	// 3. AFTER bodies — may reference base via REFERENCING NEW/OLD TABLE aliases
+	for (idx_t i = 0; i < after_triggers.size(); i++) {
+		auto &trigger = after_triggers[i].get();
 		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
 
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
