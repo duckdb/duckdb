@@ -926,6 +926,8 @@ void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate
 	// statistics propagation is no longer correct post
 	bound_function.SetStatisticsCallback(nullptr);
 	bound_function.SetReturnType(state_layout);
+	// exported state always produces a valid (non-NULL) struct even for empty inputs
+	bound_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	aggregate.StateExportModeMutable() = AggregateStateExportMode::STATE_EXPORT;
 	aggregate.SetReturnType(std::move(state_layout));
 }
