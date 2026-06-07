@@ -160,7 +160,6 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 	auto table_id = QuoteIdent(feature_name);
 	int64_t new_version = feat.current_version + 1;
-	bool did_work = false;
 
 	// Wrap all operations in a single transaction for atomicity
 	con.BeginTransaction();
@@ -179,15 +178,16 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			if (ins_result->RowCount() > 0) {
 				state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 			}
-			did_work = true;
 
 		} else {
-			// INCREMENTAL refresh using watermark + late-arrival detection via row count.
+			// INCREMENTAL refresh: always recompute from the last floor bucket onward,
+			// copying forward all earlier (unaffected) rows. This catches both new data
+			// and late arrivals to the most recent floor bucket without tracking row
+			// counts, and always produces a new version.
 			auto gran = GranularityToSQL(feat.granularity);
 			auto ts_col = QuoteIdent(feat.timestamp_column);
-			auto src_table = QuoteIdent(feat.source_table);
 
-			// Step 1: Get watermark (last materialized ceiling bucket in latest version)
+			// Watermark = last materialized ceiling bucket in the current version.
 			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
 			                            " WHERE __feature_version = " + duckdb::to_string(feat.current_version));
 			string watermark;
@@ -199,7 +199,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 			if (watermark.empty()) {
-				// No existing data — do a full materialization with new version
+				// No existing data — do a full materialization with the new version.
 				auto pit_sql = BuildPITQuery(feat, "");
 				auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
 				                  " AS __feature_version FROM (" + pit_sql + ")";
@@ -210,151 +210,50 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				if (ins_result->RowCount() > 0) {
 					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 				}
-				did_work = true;
 			} else {
-				// Step 2a: Check for new data beyond watermark (floor bucket >= watermark)
-				auto range_sql = "SELECT MIN(DATE_TRUNC('" + gran + "', " + ts_col +
-				                 ")), "
-				                 "MAX(DATE_TRUNC('" +
-				                 gran + "', " + ts_col +
-				                 ")) "
-				                 "FROM " +
-				                 src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + watermark +
-				                 "'::TIMESTAMP";
-				auto range_result = con.Query(range_sql);
+				// Last floor bucket = watermark - 1 gran (watermark is a ceiling boundary).
+				// Recompute everything from this floor onward; copy forward all rows whose
+				// ceiling bucket is strictly below the watermark (unaffected by recompute).
+				string recompute_from = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
 
-				string earliest_new, latest_new;
-				if (!range_result->HasError() && range_result->RowCount() > 0) {
-					auto min_val = range_result->GetValue(0, 0);
-					auto max_val = range_result->GetValue(1, 0);
-					if (!min_val.IsNull()) {
-						earliest_new = min_val.ToString();
-					}
-					if (!max_val.IsNull()) {
-						latest_new = max_val.ToString();
-					}
+				// Copy unaffected rows (feature_timestamp < watermark) to the new version.
+				auto copy_sql = "INSERT INTO " + table_id + " SELECT * REPLACE (" + duckdb::to_string(new_version) +
+				                " AS __feature_version) FROM " + table_id +
+				                " WHERE __feature_version = " + duckdb::to_string(feat.current_version) +
+				                " AND feature_timestamp < '" + watermark + "'::TIMESTAMP";
+				auto copy_result = con.Query(copy_sql);
+				if (copy_result->HasError()) {
+					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
+					                        copy_result->GetError());
 				}
-				bool has_forward_data = !earliest_new.empty();
 
-				// Step 2b: Detect late arrivals to the last processed floor bucket.
-				// The last floor bucket = watermark - 1 gran (since watermark is a ceiling).
-				string last_floor_bucket = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
-				auto count_sql = "SELECT COUNT(*) FROM " + src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col +
-				                 ") = " + last_floor_bucket;
-				auto count_result = con.Query(count_sql);
-				int64_t current_bucket_count = 0;
-				if (!count_result->HasError() && count_result->RowCount() > 0) {
-					auto val = count_result->GetValue(0, 0);
-					if (!val.IsNull()) {
-						current_bucket_count = val.GetValue<int64_t>();
-					}
+				// Recompute the last floor bucket onward with the new version tag. The spine
+				// is restricted to floors >= recompute_from while the join still looks back
+				// the full window for correct aggregation.
+				string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= " + recompute_from;
+				auto pit_sql = BuildPITQuery(feat, filter);
+				auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
+				                  " AS __feature_version FROM (" + pit_sql + ")";
+				auto ins_result = con.Query(insert_sql);
+				if (ins_result->HasError()) {
+					throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
+					                        ins_result->GetError());
 				}
-				bool has_late_arrival = (current_bucket_count != feat.last_bucket_row_count);
-
-				if (!has_forward_data && !has_late_arrival) {
-					// True no-op: no new data and no late arrivals
-					state.rows_affected = 0;
-				} else {
-					// Determine the effective scan range.
-					string effective_earliest;
-					string effective_latest;
-
-					if (has_late_arrival) {
-						// Extend back to the last floor bucket
-						auto floor_result = con.Query("SELECT " + last_floor_bucket);
-						if (!floor_result->HasError() && floor_result->RowCount() > 0) {
-							effective_earliest = floor_result->GetValue(0, 0).ToString();
-						}
-						if (!has_forward_data) {
-							effective_latest = effective_earliest;
-						}
-					}
-
-					if (has_forward_data) {
-						if (effective_earliest.empty()) {
-							effective_earliest = earliest_new;
-						}
-						effective_latest = latest_new;
-					}
-
-					// Step 3: Compute affected bucket range
-					auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
-					string upper_bound = "'" + effective_latest + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
-					auto window_plus_one = StringUtil::Format("%d %s", feat.window_size + 1, gran);
-					string upper_bound_ceiling =
-					    "'" + effective_latest + "'::TIMESTAMP + INTERVAL '" + window_plus_one + "'";
-
-					// Step 4: Copy unaffected rows from current version to new version
-					auto copy_sql = "INSERT INTO " + table_id + " SELECT * REPLACE (" + duckdb::to_string(new_version) +
-					                " AS __feature_version) FROM " + table_id +
-					                " WHERE __feature_version = " + duckdb::to_string(feat.current_version) +
-					                " AND NOT (feature_timestamp > '" + effective_earliest +
-					                "'::TIMESTAMP AND feature_timestamp < " + upper_bound_ceiling + ")";
-					auto copy_result = con.Query(copy_sql);
-					if (copy_result->HasError()) {
-						throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
-						                        copy_result->GetError());
-					}
-
-					// Step 5: Recompute affected range with new version tag
-					string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + effective_earliest +
-					                "'::TIMESTAMP"
-					                " AND DATE_TRUNC('" +
-					                gran + "', " + ts_col + ") < " + upper_bound;
-					auto pit_sql = BuildPITQuery(feat, filter);
-					auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-					                  " AS __feature_version FROM (" + pit_sql + ")";
-					auto ins_result = con.Query(insert_sql);
-					if (ins_result->HasError()) {
-						throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
-						                        ins_result->GetError());
-					}
-					if (ins_result->RowCount() > 0) {
-						state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
-					}
-					did_work = true;
+				if (ins_result->RowCount() > 0) {
+					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 			}
 		}
 
-		// Garbage-collect old versions beyond retain limit (only if we created a new version)
-		if (did_work) {
-			int64_t min_retain_version = new_version - feat.retain_versions + 1;
-			if (min_retain_version > 1) {
-				auto gc_sql =
-				    "DELETE FROM " + table_id + " WHERE __feature_version < " + duckdb::to_string(min_retain_version);
-				auto gc_result = con.Query(gc_sql);
-				if (gc_result->HasError()) {
-					throw InternalException("Failed to garbage-collect old versions for '%s': %s", feature_name,
-					                        gc_result->GetError());
-				}
-			}
-
-			// Compute new last_bucket_row_count for late-arrival detection on next refresh.
-			// New watermark = MAX(feature_timestamp) of the new version.
-			// Last floor bucket = new_watermark - 1 gran.
-			if (feat.refresh_mode == FeatureRefreshMode::INCREMENTAL) {
-				auto gran = GranularityToSQL(feat.granularity);
-				auto ts_col = QuoteIdent(feat.timestamp_column);
-				auto src_table = QuoteIdent(feat.source_table);
-				auto new_wm_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
-				                               " WHERE __feature_version = " + duckdb::to_string(new_version));
-				if (!new_wm_result->HasError() && new_wm_result->RowCount() > 0) {
-					auto new_wm_val = new_wm_result->GetValue(0, 0);
-					if (!new_wm_val.IsNull()) {
-						auto new_watermark = new_wm_val.ToString();
-						auto new_count_sql = "SELECT COUNT(*) FROM " + src_table + " WHERE DATE_TRUNC('" + gran +
-						                     "', " + ts_col + ") = '" + new_watermark + "'::TIMESTAMP - INTERVAL '1 " +
-						                     gran + "'";
-						auto new_count_result = con.Query(new_count_sql);
-						if (!new_count_result->HasError() && new_count_result->RowCount() > 0) {
-							auto cnt_val = new_count_result->GetValue(0, 0);
-							if (!cnt_val.IsNull()) {
-								feat.last_bucket_row_count = cnt_val.GetValue<int64_t>();
-							}
-						}
-					}
-				}
+		// Garbage-collect old versions beyond the retain limit.
+		int64_t min_retain_version = new_version - feat.retain_versions + 1;
+		if (min_retain_version > 1) {
+			auto gc_sql =
+			    "DELETE FROM " + table_id + " WHERE __feature_version < " + duckdb::to_string(min_retain_version);
+			auto gc_result = con.Query(gc_sql);
+			if (gc_result->HasError()) {
+				throw InternalException("Failed to garbage-collect old versions for '%s': %s", feature_name,
+				                        gc_result->GetError());
 			}
 		}
 
@@ -364,11 +263,9 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 		throw;
 	}
 
-	// Update catalog entry version only if work was done
-	if (did_work) {
-		feat.current_version = new_version;
-		feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
-	}
+	// A refresh always creates a new version.
+	feat.current_version = new_version;
+	feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
 
 	output.SetCardinality(1);
 	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(state.rows_affected)));

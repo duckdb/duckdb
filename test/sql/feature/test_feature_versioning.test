@@ -218,11 +218,12 @@ INSERT INTO events VALUES
     ('z', 20, '2024-01-03 11:00:00');
 
 # Incremental refresh -> version 2
-# Unaffected rows (01-02, 01-03) are copied forward, new ceiling bucket 01-04 computed
+# Recompute runs from the last floor bucket onward (watermark - 1 day); the 01-02
+# rows are copied forward and 01-03/01-04 are recomputed.
 query I
 REFRESH FEATURE versioned_incr;
 ----
-3
+5
 
 query I
 SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
@@ -261,7 +262,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE versioned_incr;
 ----
-2
+5
 
 query I
 SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
@@ -286,7 +287,7 @@ statement ok
 DROP FEATURE versioned_incr;
 
 # ============================================================
-# No-op refresh: version does NOT increment
+# Refresh always increments the version (even with no source changes)
 # ============================================================
 statement ok
 CREATE TABLE stable_src (
@@ -311,7 +312,7 @@ CREATE FEATURE stable_feat ON stable_src
     RETAIN 3
     AS (SELECT eid, SUM(val) AS total);
 
-# Version 1 after creation — 4 rows: a@01-02, b@01-02, c@01-03
+# Version 1 after creation — 3 rows: a@01-02, b@01-02, c@01-03
 query I
 SELECT DISTINCT __feature_version FROM stable_feat;
 ----
@@ -322,49 +323,61 @@ SELECT COUNT(*) FROM stable_feat;
 ----
 3
 
-# No new data -> no-op refresh, version stays at 1
+# No new data, but refresh still recomputes from the last floor bucket (watermark
+# 01-03 - 1 day = 01-02) and bumps the version. Only c@01-03 is recomputed.
 query I
 REFRESH FEATURE stable_feat;
 ----
-0
-
-query I
-SELECT DISTINCT __feature_version FROM stable_feat;
-----
 1
 
-# Add data, refresh -> version 2 (1 new bucket for a on 01-04)
+query I
+SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
+----
+1
+2
+
+# Data is identical across the version bump
+query II rowsort
+SELECT eid, total FROM stable_feat WHERE __feature_version = 2;
+----
+a	10
+b	20
+c	30
+
+# Add data, refresh -> version 3 (a@01-04 appears)
 statement ok
 INSERT INTO stable_src VALUES ('a', 20, '2024-01-03 08:00:00');
 
 query I
 REFRESH FEATURE stable_feat;
 ----
-1
+2
 
 query I
 SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
 ----
 1
 2
+3
 
-# New bucket correct: a@01-03 = 10+20=30
+# New bucket correct: a@01-04 = 10+20=30
 query II
-SELECT eid, total FROM stable_feat WHERE __feature_version = 2 AND feature_timestamp = '2024-01-04'::TIMESTAMP;
+SELECT eid, total FROM stable_feat WHERE __feature_version = 3 AND feature_timestamp = '2024-01-04'::TIMESTAMP;
 ----
 a	30
 
-# No-op again -> still versions 1 and 2
+# Refresh again with no new data -> version 4, version 1 GC'd (RETAIN 3)
 query I
 REFRESH FEATURE stable_feat;
 ----
-0
+1
 
 query I
 SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
 ----
-1
 2
+3
+4
 
 statement ok
 DROP FEATURE stable_feat;

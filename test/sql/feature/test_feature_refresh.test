@@ -179,12 +179,13 @@ INSERT INTO events VALUES
     ('y', 50, '2024-01-03 10:00:00'),
     ('z', 60, '2024-01-03 14:00:00');
 
+# Recompute runs from the last floor bucket (watermark - 1 day = 01-02) onward,
+# copying forward the 01-02 rows and recomputing 01-03 and 01-04.
 query I
 REFRESH FEATURE event_sum;
 ----
-3
+5
 
-# 01-02 untouched (below affected ceiling range; Jan 1 events have ceiling bucket 01-02)
 query II rowsort
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
 ----
@@ -207,13 +208,13 @@ x	70
 y	95
 z	65
 
-# ---- Scenario 2: No new data — refresh is a no-op ----
-# The row count of the last floor bucket hasn't changed, and no new data exists
-# beyond the watermark, so this is a true no-op.
+# ---- Scenario 2: No new data — refresh still recomputes the tail ----
+# A refresh always recomputes from the last floor bucket onward and bumps the
+# version, even when no source rows changed. The recomputed values are identical.
 query I
 REFRESH FEATURE event_sum;
 ----
-0
+3
 
 # ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
@@ -221,11 +222,11 @@ INSERT INTO events VALUES
     ('x', 100, '2024-01-05 12:00:00'),
     ('y',  80, '2024-01-06 09:00:00');
 
-# New data only — no late arrivals, so only forward processing from watermark.
+# New data plus the recomputed last floor bucket are processed forward.
 query I
 REFRESH FEATURE event_sum;
 ----
-2
+5
 
 # 01-06 bucket: x sees 10+20+40+100=170 (all within 7-day lookback from 01-06)
 query II rowsort
@@ -255,11 +256,11 @@ statement ok
 INSERT INTO events VALUES
     ('w', 200, '2024-01-07 10:00:00');
 
-# New entity w arrives on Jan 7; only forward processing needed.
+# New entity w arrives on Jan 7; the last floor bucket (01-06) is recomputed too.
 query I
 REFRESH FEATURE event_sum;
 ----
-1
+2
 
 query II
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-08'::TIMESTAMP;
@@ -270,8 +271,9 @@ w	200
 # INCREMENTAL refresh: late-arriving data for already-processed floor bucket
 # ============================================================
 # After an initial refresh (watermark = 2024-01-03 00:00, the ceiling of the Jan 2
-# floor bucket), a new row arrives for Jan 2.  The count-based late-arrival detection
-# notices the row count for the last floor bucket changed and recomputes accordingly.
+# floor bucket), a new row arrives for Jan 2.  Because every refresh recomputes from
+# the last floor bucket (watermark - 1 day = Jan 2) onward, the late arrival is
+# picked up automatically without any row-count tracking.
 
 statement ok
 CREATE TABLE late_events (
@@ -307,13 +309,13 @@ SELECT total, feature_timestamp FROM late_test WHERE entity = 'a';
 10	2024-01-02 00:00:00
 30	2024-01-03 00:00:00
 
-# Watermark is 2024-01-03 00:00, last_bucket_row_count = 1 (one row in Jan 2 floor bucket).
+# Watermark is 2024-01-03 00:00; the last floor bucket is Jan 2.
 # Insert a late row whose floor bucket = watermark - 1 day.
 statement ok
 INSERT INTO late_events VALUES ('a', 5, '2024-01-02 12:00:00');
 
-# Refresh detects the late arrival (source count for Jan 2 floor is now 2 != stored 1)
-# and recomputes the Jan 3 ceiling bucket.
+# Refresh recomputes from the Jan 2 floor onward, picking up the late arrival and
+# recomputing the Jan 3 ceiling bucket.
 query I
 REFRESH FEATURE late_test;
 ----
@@ -331,12 +333,12 @@ SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-
 ----
 35
 
-# After the late-arrival refresh, a no-op refresh should return 0
-# (bucket count now matches: 2 rows in Jan 2 floor bucket, and no new forward data).
+# Another refresh with no new data still recomputes the last floor bucket (Jan 2)
+# and bumps the version, returning the single recomputed Jan 3 ceiling row.
 query I
 REFRESH FEATURE late_test;
 ----
-0
+1
 
 statement ok
 DROP FEATURE late_test;

@@ -9,9 +9,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -101,67 +98,6 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 	storage.LocalAppend(*gstate.table, context.client, versioned_chunk, empty_constraints, true);
 	gstate.insert_count += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
-}
-
-SinkFinalizeType PhysicalCreateFeature::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                 OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<CreateFeatureGlobalState>();
-	if (!gstate.table || info->refresh_mode != FeatureRefreshMode::INCREMENTAL) {
-		return SinkFinalizeType::READY;
-	}
-
-	// Set initial last_bucket_row_count on the feature catalog entry.
-	// Watermark = MAX(feature_timestamp) from the freshly materialized table,
-	// last floor bucket = watermark - 1 gran, count = source rows in that bucket.
-	auto &catalog = Catalog::GetCatalog(context, info->catalog);
-	auto &schema = catalog.GetSchema(context, info->schema);
-	auto transaction = catalog.GetCatalogTransaction(context);
-	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
-	auto &set = duck_schema.GetCatalogSet(CatalogType::FEATURE_ENTRY);
-	auto feat_entry = set.GetEntry(transaction, info->feature_name);
-	if (feat_entry) {
-		auto &feat = feat_entry->Cast<FeatureCatalogEntry>();
-		auto &db = DatabaseInstance::GetDatabase(context);
-		Connection con(db);
-
-		auto table_id = SQLIdentifier::ToString(info->feature_name);
-		string gran;
-		switch (info->granularity) {
-		case FeatureGranularity::DAY:
-			gran = "day";
-			break;
-		case FeatureGranularity::HOUR:
-			gran = "hour";
-			break;
-		case FeatureGranularity::MINUTE:
-			gran = "minute";
-			break;
-		default:
-			gran = "day";
-			break;
-		}
-		auto ts_col = SQLIdentifier::ToString(info->timestamp_column);
-		auto src_table = SQLIdentifier::ToString(info->source_table);
-
-		auto wm_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id);
-		if (!wm_result->HasError() && wm_result->RowCount() > 0) {
-			auto wm_val = wm_result->GetValue(0, 0);
-			if (!wm_val.IsNull()) {
-				auto watermark = wm_val.ToString();
-				auto count_sql = "SELECT COUNT(*) FROM " + src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col +
-				                 ") = '" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
-				auto count_result = con.Query(count_sql);
-				if (!count_result->HasError() && count_result->RowCount() > 0) {
-					auto cnt_val = count_result->GetValue(0, 0);
-					if (!cnt_val.IsNull()) {
-						feat.last_bucket_row_count = cnt_val.GetValue<int64_t>();
-					}
-				}
-			}
-		}
-	}
-
-	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//
