@@ -883,7 +883,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	state_layout.SetExtensionInfo(std::move(ext_info));
 
 	SetStateExport(*child_aggregate, std::move(state_layout));
-	return std::move(child_aggregate);
+	return child_aggregate;
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
