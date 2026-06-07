@@ -16,12 +16,6 @@ struct RegrSState {
 };
 
 struct RegrBaseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<uint64_t>(state.count);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		RegrCountFunction::Combine<uint64_t, OP>(source.count, target.count, aggr_input_data);
