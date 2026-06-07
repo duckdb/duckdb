@@ -348,6 +348,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("sequence");
 	unreserved_keyword_map.insert("sequences");
 	unreserved_keyword_map.insert("serializable");
+	unreserved_keyword_map.insert("serve");
 	unreserved_keyword_map.insert("server");
 	unreserved_keyword_map.insert("session");
 	unreserved_keyword_map.insert("set");
