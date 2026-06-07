@@ -33,7 +33,8 @@ public:
 	//! The destructors
 	vector<aggregate_destructor_t> destructors;
 	//! Counts (used for verification)
-	unique_array<atomic<idx_t>> counts;
+	//! Note: these are either thread-local, or only modified while holding the global state's lock
+	unique_array<idx_t> counts;
 };
 
 struct GlobalUngroupedAggregateState {

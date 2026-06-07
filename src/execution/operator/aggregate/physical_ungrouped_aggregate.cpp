@@ -44,7 +44,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
 //===--------------------------------------------------------------------===//
 UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions)
     : aggregate_expressions(aggregate_expressions) {
-	counts = make_uniq_array<atomic<idx_t>>(aggregate_expressions.size());
+	counts = make_uniq_array<idx_t>(aggregate_expressions.size());
 	for (idx_t i = 0; i < aggregate_expressions.size(); i++) {
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -55,9 +55,7 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(aggr.BindInfo() ? aggr.BindInfo()->Copy() : nullptr);
 		destructors.push_back(aggr.Function().GetStateDestructorCallback());
-#ifdef DEBUG
 		counts[i] = 0;
-#endif
 	}
 }
 UngroupedAggregateState::~UngroupedAggregateState() {
@@ -125,9 +123,7 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 			                        " does not support combining of states");
 		}
 		aggregate.Function().GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
-#ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
-#endif
 	}
 }
 
@@ -149,9 +145,7 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 			                        " does not support combining of states");
 		}
 		aggregate.Function().GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
-#ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
-#endif
 	}
 }
 
@@ -356,9 +350,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataC
 }
 
 void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx, idx_t count) {
-#ifdef DEBUG
 	state.counts[aggr_idx] += count;
-#endif
 	auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 	idx_t payload_cnt = aggregate.GetChildren().size();
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
