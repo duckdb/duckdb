@@ -21,7 +21,9 @@ INSERT INTO transactions VALUES
     ('alice', 100.00, '2024-01-01 10:00:00'),
     ('alice', 200.00, '2024-01-01 14:00:00'),
     ('bob',   50.00,  '2024-01-01 09:00:00'),
-    ('bob',   75.00,  '2024-01-02 11:00:00');
+    ('bob',   75.00,  '2024-01-02 11:00:00'),
+    ('carol', 400.00, '2024-01-02 08:00:00'),
+    ('carol', 150.00, '2024-01-03 10:00:00');
 
 statement ok
 CREATE FEATURE total_spend ON transactions
@@ -33,46 +35,86 @@ CREATE FEATURE total_spend ON transactions
     RETAIN 1
     AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count);
 
-# Initial state: 3 rows (alice@01-01, bob@01-01, bob@01-02)
+# Initial state: alice@01-02, bob@01-02, bob@01-03, carol@01-03, carol@01-04
 query I
 SELECT COUNT(*) FROM total_spend;
 ----
-3
+5
+
+# Verify initial values for each entity
+query RT rowsort
+SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'alice';
+----
+300.00	2024-01-02 00:00:00
+
+query RT rowsort
+SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'bob';
+----
+125.00	2024-01-03 00:00:00
+50.00	2024-01-02 00:00:00
+
+query RT rowsort
+SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'carol';
+----
+400.00	2024-01-03 00:00:00
+550.00	2024-01-04 00:00:00
 
 # Add new data to source
 statement ok
 INSERT INTO transactions VALUES
     ('alice',   300.00, '2024-01-03 08:00:00'),
-    ('charlie',  25.00, '2024-01-01 12:00:00');
+    ('alice',    50.00, '2024-01-04 12:00:00'),
+    ('charlie',  25.00, '2024-01-01 12:00:00'),
+    ('charlie',  75.00, '2024-01-03 15:00:00');
 
 # FULL refresh picks up everything
+# alice: buckets 01-02, 01-04, 01-05 (3); bob: 01-02, 01-03 (2); carol: 01-03, 01-04 (2); charlie: 01-02, 01-04 (2)
 query I
 REFRESH FEATURE total_spend;
 ----
-5
+9
 
 query I
 SELECT COUNT(*) FROM total_spend;
 ----
-5
+9
 
-# New entity charlie exists
+# New entity charlie exists with 2 buckets
 query I
 SELECT COUNT(*) FROM total_spend WHERE user_id = 'charlie';
 ----
-1
+2
 
-# Alice's 01-03 bucket: 100+200+300 = 600 (all within 7-day window)
+# Alice's 01-04 bucket: 100+200+300 = 600 (all within 7-day window; Jan 3 event -> ceiling 01-04)
 query R
-SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-04'::TIMESTAMP;
 ----
 600.00
+
+# Alice's 01-05 bucket: all 4 events = 650.00 (Jan 4 event added)
+query R
+SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-05'::TIMESTAMP;
+----
+650.00
+
+# Charlie: 25.00 at 01-02, then 25+75=100.00 at 01-04
+query RT rowsort
+SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'charlie';
+----
+100.00	2024-01-04 00:00:00
+25.00	2024-01-02 00:00:00
+
+# tx_count is correct: alice @ 01-02 has 2 events (both on Jan 1)
+query I
+SELECT tx_count FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+2
 
 # Idempotent: running FULL refresh again gives same results
 query I
 REFRESH FEATURE total_spend;
 ----
-5
+9
 
 statement ok
 DROP FEATURE total_spend;
@@ -94,7 +136,9 @@ statement ok
 INSERT INTO events VALUES
     ('x', 10, '2024-01-01 08:00:00'),
     ('x', 20, '2024-01-02 08:00:00'),
-    ('y', 30, '2024-01-01 12:00:00');
+    ('y', 30, '2024-01-01 12:00:00'),
+    ('y', 15, '2024-01-02 15:00:00'),
+    ('z',  5, '2024-01-01 06:00:00');
 
 statement ok
 CREATE FEATURE event_sum ON events
@@ -106,87 +150,201 @@ CREATE FEATURE event_sum ON events
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Initial: 3 rows
-# x @ 01-01: 10
-# x @ 01-02: 10+20 = 30
-# y @ 01-01: 30
+# Initial: 7 rows
+# x @ 01-02: 10, x @ 01-03: 30
+# y @ 01-02: 30, y @ 01-03: 45
+# z @ 01-02: 5
 query I
 SELECT COUNT(*) FROM event_sum;
 ----
-3
+5
 
 query II rowsort
-SELECT customer, total_value FROM event_sum;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10
-x	30
 y	30
+z	5
+
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+x	30
+y	45
 
 # ---- Scenario 1: Append new data beyond watermark ----
 statement ok
 INSERT INTO events VALUES
     ('x', 40, '2024-01-03 09:00:00'),
-    ('y', 50, '2024-01-03 10:00:00');
+    ('y', 50, '2024-01-03 10:00:00'),
+    ('z', 60, '2024-01-03 14:00:00');
 
-# Watermark = MAX(feature_timestamp) = 01-02
-# New data: buckets at 01-03 (both > watermark)
-# Affected range: [01-03, 01-03 + 7 days) = [01-03, 01-10)
-# Only 01-03 is new (01-02 unaffected since new data can't reach it)
+# Recompute runs from the last floor bucket (watermark - 1 day = 01-02) onward,
+# copying forward the 01-02 rows and recomputing 01-03 and 01-04.
+query I
+REFRESH FEATURE event_sum;
+----
+5
+
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
+----
+x	10
+y	30
+z	5
+
+# 01-03 untouched (Jan 2 events have ceiling bucket 01-03; new Jan 3 data creates 01-04, cannot affect 01-03)
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP ORDER BY customer;
+----
+x	30
+y	45
+
+# 01-04 new bucket: x=10+20+40=70, y=30+15+50=95, z=5+60=65 (7-day window lookback)
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-04'::TIMESTAMP ORDER BY customer;
+----
+x	70
+y	95
+z	65
+
+# ---- Scenario 2: No new data — refresh still recomputes the tail ----
+# A refresh always recomputes from the last floor bucket onward and bumps the
+# version, even when no source rows changed. The recomputed values are identical.
+query I
+REFRESH FEATURE event_sum;
+----
+3
+
+# ---- Scenario 3: Add more data, verify watermark advances ----
+statement ok
+INSERT INTO events VALUES
+    ('x', 100, '2024-01-05 12:00:00'),
+    ('y',  80, '2024-01-06 09:00:00');
+
+# New data plus the recomputed last floor bucket are processed forward.
+query I
+REFRESH FEATURE event_sum;
+----
+5
+
+# 01-06 bucket: x sees 10+20+40+100=170 (all within 7-day lookback from 01-06)
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-06'::TIMESTAMP ORDER BY customer;
+----
+x	170
+
+# 01-07 bucket: y sees 30+15+50+80=175
+query II rowsort
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-07'::TIMESTAMP ORDER BY customer;
+----
+y	175
+
+# 01-02 and 01-03 still untouched from original
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP AND customer = 'x';
+----
+x	10
+
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP AND customer = 'y';
+----
+y	45
+
+# ---- Scenario 4: Add a new entity after initial materialization ----
+statement ok
+INSERT INTO events VALUES
+    ('w', 200, '2024-01-07 10:00:00');
+
+# New entity w arrives on Jan 7; the last floor bucket (01-06) is recomputed too.
 query I
 REFRESH FEATURE event_sum;
 ----
 2
 
-# 01-01 untouched (below affected range)
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP ORDER BY customer;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-08'::TIMESTAMP;
 ----
-x	10
-y	30
+w	200
 
-# 01-02 untouched (new data at 01-03 cannot affect earlier buckets)
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
-----
-x	30
+# ============================================================
+# INCREMENTAL refresh: late-arriving data for already-processed floor bucket
+# ============================================================
+# After an initial refresh (watermark = 2024-01-03 00:00, the ceiling of the Jan 2
+# floor bucket), a new row arrives for Jan 2.  Because every refresh recomputes from
+# the last floor bucket (watermark - 1 day = Jan 2) onward, the late arrival is
+# picked up automatically without any row-count tracking.
 
-# 01-03 new bucket: x sees 10+20+40=70, y sees 30+50=80 (7-day window lookback)
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP ORDER BY customer;
-----
-x	70
-y	80
-
-# ---- Scenario 2: No new data — refresh is a no-op ----
-query I
-REFRESH FEATURE event_sum;
-----
-0
-
-# ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
-INSERT INTO events VALUES
-    ('x', 100, '2024-01-05 12:00:00');
+CREATE TABLE late_events (
+    entity VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
 
-# New watermark should be 01-03, new data at 01-05
-# Affected range: [01-05, 01-05 + 7) = [01-05, 01-12)
-# Only 01-05 bucket is new (01-03 unaffected — new data at 01-05 can't reach back that far)
+statement ok
+INSERT INTO late_events VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('a', 20, '2024-01-02 08:00:00');
+
+statement ok
+CREATE FEATURE late_test ON late_events
+    ENTITY entity
+    TIMESTAMP ts
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total);
+
+# Initial materialization: a@01-02=10 (only Jan 1 in lookback), a@01-03=30 (Jan 1 + Jan 2)
 query I
-REFRESH FEATURE event_sum;
+SELECT COUNT(*) FROM late_test;
+----
+2
+
+query RT rowsort
+SELECT total, feature_timestamp FROM late_test WHERE entity = 'a';
+----
+10	2024-01-02 00:00:00
+30	2024-01-03 00:00:00
+
+# Watermark is 2024-01-03 00:00; the last floor bucket is Jan 2.
+# Insert a late row whose floor bucket = watermark - 1 day.
+statement ok
+INSERT INTO late_events VALUES ('a', 5, '2024-01-02 12:00:00');
+
+# Refresh recomputes from the Jan 2 floor onward, picking up the late arrival and
+# recomputing the Jan 3 ceiling bucket.
+query I
+REFRESH FEATURE late_test;
 ----
 1
 
-# 01-05 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-05)
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-05'::TIMESTAMP ORDER BY customer;
+# Jan 2 ceiling unchanged: only the Jan 1 event (10) is in its lookback window.
+query R
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
-x	170
+10
 
-# 01-01 and 01-02 still untouched from original
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP AND customer = 'x';
+# Jan 3 ceiling recomputed: Jan 1 (10) + Jan 2 original (20) + Jan 2 late (5) = 35.
+query R
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-03'::TIMESTAMP;
 ----
-x	10
+35
+
+# Another refresh with no new data still recomputes the last floor bucket (Jan 2)
+# and bumps the version, returning the single recomputed Jan 3 ceiling row.
+query I
+REFRESH FEATURE late_test;
+----
+1
+
+statement ok
+DROP FEATURE late_test;
+
+statement ok
+DROP TABLE late_events;
 
 # ============================================================
 # Error cases
