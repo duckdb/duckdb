@@ -227,6 +227,7 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 
 static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
                                                               const vector<ColumnBinding> &old_child_bindings);
+static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan);
 static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan);
 
 static void VerifyNoDelim(LogicalOperator &op) {
@@ -249,6 +250,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
 	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		bool filters_pushed;
+		do {
+			filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
+		} while (filters_pushed);
 		RewriteDelimJoinsToCTEs(binder, plan);
 		VerifyNoDelim(*plan);
 	}
@@ -524,6 +529,97 @@ static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, cons
 		return optional_idx();
 	}
 	return NumericCast<idx_t>(entry - bindings.begin());
+}
+
+static void AddFilterToOperator(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> filter) {
+	if (child->type == LogicalOperatorType::LOGICAL_FILTER && !child->HasProjectionMap()) {
+		child->Cast<LogicalFilter>().expressions.push_back(std::move(filter));
+		return;
+	}
+
+	auto new_filter = make_uniq<LogicalFilter>();
+	new_filter->expressions.push_back(std::move(filter));
+	new_filter->children.push_back(std::move(child));
+	child = std::move(new_filter);
+}
+
+static bool GetExpressionColumnBindings(Expression &expr, column_binding_set_t &bindings) {
+	bool depth_zero = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (colref.Depth() == 0) {
+			bindings.insert(colref.Binding());
+		} else {
+			depth_zero = false;
+		}
+	});
+	return depth_zero;
+}
+
+static bool ChildContainsBindings(LogicalOperator &child, const column_binding_set_t &bindings) {
+	column_binding_set_t child_bindings;
+	for (auto &binding : child.GetColumnBindings()) {
+		child_bindings.insert(binding);
+	}
+	for (auto &binding : bindings) {
+		if (child_bindings.find(binding) == child_bindings.end()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool FilterReferencesDelimInput(LogicalComparisonJoin &delim_join, Expression &filter) {
+	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	column_binding_set_t filter_bindings;
+	if (!GetExpressionColumnBindings(filter, filter_bindings)) {
+		return false;
+	}
+	if (filter_bindings.empty()) {
+		return false;
+	}
+	return ChildContainsBindings(*delim_join.children[0], filter_bindings);
+}
+
+static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
+	auto &filter = plan->Cast<LogicalFilter>();
+	if (filter.HasProjectionMap()) {
+		return false;
+	}
+	if (filter.children[0]->type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return false;
+	}
+
+	bool changed = false;
+	auto &delim_join = filter.children[0]->Cast<LogicalComparisonJoin>();
+	vector<unique_ptr<Expression>> remaining_expressions;
+	auto expressions = std::move(filter.expressions);
+	LogicalFilter::SplitPredicates(expressions);
+	for (auto &expr : expressions) {
+		if (FilterReferencesDelimInput(delim_join, *expr)) {
+			AddFilterToOperator(delim_join.children[0], std::move(expr));
+			changed = true;
+			continue;
+		}
+		remaining_expressions.push_back(std::move(expr));
+	}
+
+	if (remaining_expressions.empty()) {
+		plan = std::move(filter.children[0]);
+	} else {
+		filter.expressions = std::move(remaining_expressions);
+	}
+	return changed;
+}
+
+static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
+	bool changed = false;
+	for (auto &child : plan->children) {
+		changed = PushEligibleFiltersIntoDelimJoinInputs(child) || changed;
+	}
+	if (plan->type == LogicalOperatorType::LOGICAL_FILTER) {
+		changed = PushEligibleFilterExpressionsIntoDelimJoinInputs(plan) || changed;
+	}
+	return changed;
 }
 
 static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator> &plan) {
