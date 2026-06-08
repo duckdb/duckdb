@@ -259,7 +259,7 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector
 	for (idx_t i = 0; i < count; i++) {
 		auto key_idx = key_data.sel->get_index(i);
 		if (!key_data.validity.RowIsValid(key_idx)) {
-			continue;
+			throw InvalidInputException("json_object() key cannot be NULL");
 		}
 		auto key = CreateJSONValue<string_t, string_t>::Operation(doc, keys[key_idx]);
 		yyjson_mut_obj_add(objs[i], key, vals[i]);
