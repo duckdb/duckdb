@@ -607,14 +607,12 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node,
 		auto &update_node = node.Cast<UpdateQueryNode>();
 		case_insensitive_set_t updated_columns;
 		if (update_node.set_info) {
-			updated_columns.insert(update_node.set_info->columns.begin(),
-			                       update_node.set_info->columns.end());
+			updated_columns.insert(update_node.set_info->columns.begin(), update_node.set_info->columns.end());
 		}
 		auto trigger_does_not_fire = [&](const_reference<TriggerCatalogEntry> trig) {
 			const auto &of_cols = trig.get().columns;
-			return !of_cols.empty() &&
-			       std::none_of(of_cols.begin(), of_cols.end(),
-			                    [&](const string &c) { return updated_columns.count(c) > 0; });
+			return !of_cols.empty() && std::none_of(of_cols.begin(), of_cols.end(),
+			                                        [&](const string &c) { return updated_columns.count(c) > 0; });
 		};
 		auto drop_non_firing = [&](vector<const_reference<TriggerCatalogEntry>> &triggers) {
 			triggers.erase(std::remove_if(triggers.begin(), triggers.end(), trigger_does_not_fire), triggers.end());
