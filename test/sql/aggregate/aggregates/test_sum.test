@@ -75,6 +75,7 @@ statement error
 SELECT SUM(b)::BIGINT FROM bigints
 ----
 Conversion Error: Type INT128 with value 4611686018427388403500
+
 #
 # Order by
 #
