@@ -74,7 +74,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			}
 		}
 		unique_ptr<LogicalOperator> fake_root;
-		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, result->expressions,
+		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, result->expressions, merge_into.bound_defaults,
 		              expressions);
 
 		// bind any additional columns that need to be bound for update constraints

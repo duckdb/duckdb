@@ -295,11 +295,12 @@ public:
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
-	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
+	                                          UpdateSetInfo &set_info, TableCatalogEntry &table, const vector<unique_ptr<Expression>> &bound_defaults,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+	                   const vector<unique_ptr<Expression>> &bound_defaults,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions,
 	                   bool prioritize_table_when_binding = false);
