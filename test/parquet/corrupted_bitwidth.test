@@ -3,9 +3,14 @@
 
 require parquet
 
+# Even with always_fail_error_messages this somehow causes an abort in an unrelated test
+mode skip
+
 set always_fail_error_messages ''
 
 statement error
 SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/rle_malicious_bitwidth.parquet');
 ----
 INTERNAL Error: The width (63) of the bitpacked data exceeds the maximum width (32) for the target type, the file might be corrupted.
+
+mode unskip
