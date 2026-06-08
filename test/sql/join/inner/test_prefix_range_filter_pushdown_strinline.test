@@ -63,7 +63,7 @@ JOIN prf_build_string b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF.*\(k\).*
+analyzed_plan	<REGEX>:.*IN BF\(k\).*
 
 statement ok
 CREATE OR REPLACE TABLE prf_probe_string_long AS
@@ -148,7 +148,7 @@ JOIN prf_build_string_long_same_prefix b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:.*IN PRF.*\(k\).*
+analyzed_plan	<REGEX>:.*IN PRF.*\(k\).*
 
 statement ok
 ATTACH '{TEST_DIR}/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
@@ -206,4 +206,3 @@ JOIN prf_build_string_nul_stats b
  AND p.g >= b.g;
 ----
 2048
-

@@ -123,7 +123,6 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(TableFilterBloomFilterFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterDynamicFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterOptionalFun),
-	DUCKDB_SCALAR_FUNCTION(TableFilterPerfectHashJoinFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterPrefixRangeFun),
 	DUCKDB_SCALAR_FUNCTION(TableFilterSelectivityOptionalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(AddFun),
