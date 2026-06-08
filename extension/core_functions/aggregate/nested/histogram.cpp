@@ -14,11 +14,6 @@ namespace {
 template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.hist = nullptr;
-	}
-
-	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &) {
 		if (state.hist) {
 			delete state.hist;

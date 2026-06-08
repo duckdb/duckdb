@@ -759,6 +759,17 @@ struct DefaultTransactionInvalidationPolicySetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DelimJoinAsCteSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "delim_join_as_cte";
+	static constexpr const char *Description =
+	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DeprecatedUsingKeySyntaxSetting {
 	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";

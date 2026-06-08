@@ -459,32 +459,78 @@ RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// figure out which row_group to fetch from
+	if (fetch_count == 0) {
+		result.SetChildCardinality(0);
+		return;
+	}
+	ALWAYS_ASSERT(fetch_count <= STANDARD_VECTOR_SIZE);
+
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	idx_t count = 0;
 	auto row_groups = GetRowGroups();
-	for (idx_t i = 0; i < fetch_count; i++) {
-		auto row_id = row_ids[i];
+	idx_t count = 0;
+
+	// Stack-allocated scratch buffers reused across runs/iterations within this call.
+	//
+	// Row positions in the row group.
+	idx_t offsets[STANDARD_VECTOR_SIZE];
+	// Visible row positions in the row group.
+	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
+	// Filter selection vector.
+	SelectionVector filter_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
+
+	idx_t pos = 0;
+	while (pos < fetch_count) {
+		// 1. resolve the row group containing row_ids[pos]
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			idx_t segment_index;
 			auto l = row_groups->Lock();
-			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
-				// in parallel append scenarios it is possible for the row_id
+			if (!row_groups->TryGetSegmentIndex(l, NumericCast<idx_t>(row_ids[pos]), segment_index)) {
+				// row not yet visible, skip
+				pos++;
 				continue;
 			}
 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 		}
 		auto &current_row_group = row_group->GetNode();
-		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH &&
-		    !current_row_group.Fetch(transaction, offset_in_row_group)) {
+		const idx_t row_start = row_group->GetRowStart();
+		const idx_t row_end = row_start + current_row_group.count;
+
+		// 2. extend the run while consecutive row-ids stay in [row_start, row_end)
+		const idx_t run_start = pos;
+		offsets[0] = NumericCast<idx_t>(row_ids[pos]) - row_start;
+		pos++;
+		while (pos < fetch_count) {
+			const idx_t rid = NumericCast<idx_t>(row_ids[pos]);
+			if (rid < row_start || rid >= row_end) {
+				break;
+			}
+			offsets[pos - run_start] = rid - row_start;
+			pos++;
+		}
+		const idx_t run_count = pos - run_start;
+
+		// 3. bulk visibility check for the whole run.
+		idx_t visible_count = 0;
+		const_reference<SelectionVector> sel_for_fetch(*FlatVector::IncrementalSelectionVector());
+		if (state.fetch_type == FetchType::FORCE_FETCH) {
+			visible_count = run_count;
+		} else {
+			visible_count = current_row_group.Fetch(transaction, offsets, run_count, filter_sel);
+			if (visible_count != run_count) {
+				sel_for_fetch = filter_sel;
+			}
+		}
+
+		if (visible_count == 0) {
 			continue;
 		}
+
+		// 4. bulk per-column fetch
 		state.row_group = row_group;
-		current_row_group.FetchRow(transaction, state, column_ids, UnsafeNumericCast<row_t>(offset_in_row_group),
-		                           result, count);
-		count++;
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, sel_for_fetch.get(), visible_count, result,
+		                            count);
+		count += visible_count;
 	}
 	result.SetChildCardinality(count);
 }
@@ -502,7 +548,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 	}
 	auto &current_row_group = row_group->GetNode();
 	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-	return current_row_group.Fetch(transaction, offset_in_row_group);
+	SelectionVector visible_sel(1);
+	return current_row_group.Fetch(transaction, &offset_in_row_group, /*count=*/1, visible_sel) == 1;
 }
 
 //===--------------------------------------------------------------------===//
@@ -554,7 +601,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group = state.row_groups->GetLastSegment(l);
 	D_ASSERT(state.row_groups->GetBaseRowId() + next_row_id ==
 	         state.start_row_group->GetRowStart() + state.start_row_group->GetNode().count);
-	state.start_row_group->GetNode().InitializeAppend(state.row_group_append_state);
+	RowGroup::InitializeAppend(*state.start_row_group, state.row_group_append_state);
 	state.transaction = transaction;
 	state.row_group_start = state.start_row_group->GetRowStart();
 
@@ -568,16 +615,17 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	InitializeAppend(tdata, state);
 }
 
-bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify(GetDatabase());
 
-	bool new_row_group = false;
+	optional_idx flushed_row_group_idx;
 	idx_t total_append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	state.total_append_count += total_append_count;
 	while (true) {
-		auto &current_row_group = *state.row_group_append_state.row_group;
+		auto &current_row_group = state.row_group_append_state.row_group->GetNode();
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
@@ -600,14 +648,14 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			chunk.Slice(append_count, remaining);
 		}
 		// append a new row_group
-		new_row_group = true;
+		flushed_row_group_idx = state.row_group_append_state.row_group->GetIndex();
 		auto next_start = state.row_group_start + state.row_group_append_state.offset_in_row_group;
 
 		auto l = state.row_groups->Lock();
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		last_row_group->GetNode().InitializeAppend(state.row_group_append_state);
+		RowGroup::InitializeAppend(*last_row_group, state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -619,12 +667,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 
-	return new_row_group;
+	return flushed_row_group_idx;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
 	// first finalize the append of the final row group we appended to
-	auto &last_row_group = *state.row_group_append_state.row_group;
+	auto &last_row_group = state.row_group_append_state.row_group->GetNode();
 	last_row_group.FinalizeAppend(state.row_group_append_state);
 
 	// now push version info into all row groups
@@ -1031,13 +1079,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
-	vector<StorageIndex> column_ids;
-	for (auto &col : indexed_column_id_set) {
-		column_ids.emplace_back(col);
-	}
+	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
+	column_types.reserve(column_ids.size());
 	for (auto &col : column_ids) {
 		column_types.push_back(types[col.GetPrimaryIndex()]);
 	}
@@ -1069,9 +1115,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		}
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
-
-	DataChunk remaining_result_chunk;
-	unique_ptr<Vector> remaining_row_ids;
 
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
@@ -1277,14 +1320,14 @@ public:
 		auto &types = collection.GetTypes();
 
 		// create the new set of target row groups (initially empty)
-		vector<unique_ptr<RowGroup>> new_row_groups;
+		vector<unique_ptr<SegmentNode<RowGroup>>> new_row_groups;
 		vector<idx_t> append_counts;
 		idx_t row_group_rows = merge_rows;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
-			auto new_row_group = make_uniq<RowGroup>(collection, current_row_group_rows);
+			auto new_row_group = make_shared_ptr<RowGroup>(collection, current_row_group_rows);
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
-			new_row_groups.push_back(std::move(new_row_group));
+			new_row_groups.push_back(make_uniq<SegmentNode<RowGroup>>(0ULL, std::move(new_row_group), target_idx));
 			append_counts.push_back(0);
 			row_group_rows -= current_row_group_rows;
 		}
@@ -1301,7 +1344,8 @@ public:
 
 		// fill the new row group with the merged rows
 		TableAppendState append_state;
-		new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+		auto &initial_append_row_group = *new_row_groups[current_append_idx];
+		RowGroup::InitializeAppend(initial_append_row_group, append_state.row_group_append_state);
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
@@ -1333,20 +1377,22 @@ public:
 				scan_chunk.Flatten();
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
+					auto &current_append_row_group = new_row_groups[current_append_idx]->GetNode();
 					idx_t append_count = MinValue<idx_t>(remaining, row_group_size - append_counts[current_append_idx]);
-					new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
-					                                           append_count);
+					current_append_row_group.Append(append_state.row_group_append_state, scan_chunk, append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
 					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// finalize the last append
-						new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+						new_row_groups[current_append_idx]->GetNode().FinalizeAppend(
+						    append_state.row_group_append_state);
 
 						// move to the next row group
 						current_append_idx++;
-						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
+						                           append_state.row_group_append_state);
 						// slice chunk for the next append
 						scan_chunk.Slice(append_count, remaining);
 					}
@@ -1357,11 +1403,11 @@ public:
 			checkpoint_state.DropSegment(c_idx);
 		}
 		// finalize the final append
-		new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+		new_row_groups[current_append_idx]->GetNode().FinalizeAppend(append_state.row_group_append_state);
 
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-			auto &row_group = new_row_groups[target_idx];
+			auto row_group = new_row_groups[target_idx]->MoveNode();
 			row_group->Verify();
 
 			// assign the new row group to the current segment

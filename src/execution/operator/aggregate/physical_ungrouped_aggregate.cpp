@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -41,7 +43,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
 // Ungrouped Aggregate State
 //===--------------------------------------------------------------------===//
 UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions) {
-	counts = make_uniq_array<atomic<idx_t>>(aggregate_expressions.size());
+	counts = make_uniq_array<idx_t>(aggregate_expressions.size());
 	for (idx_t i = 0; i < aggregate_expressions.size(); i++) {
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -63,16 +65,14 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 UngroupedAggregateState::UngroupedAggregateState(const UngroupedAggregateState &global_state)
     : functions(global_state.functions), aggregate_types(global_state.aggregate_types),
       argument_counts(global_state.argument_counts) {
-	counts = make_uniq_array<atomic<idx_t>>(functions.size());
+	counts = make_uniq_array<idx_t>(functions.size());
 	for (idx_t i = 0; i < functions.size(); i++) {
 		auto &func = functions[i];
 		auto state = make_unsafe_uniq_array_uninitialized<data_t>(func.GetStateSizeCallback()(func));
 		func.GetStateInitCallback()(func, state.get());
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(global_state.bind_data[i] ? global_state.bind_data[i]->Copy() : nullptr);
-#ifdef DEBUG
 		counts[i] = 0;
-#endif
 	}
 }
 
@@ -143,9 +143,7 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 			throw InternalException("Aggregate function " + func.GetName() + " does not support combining of states");
 		}
 		func.GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
-#ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
-#endif
 	}
 }
 
@@ -167,9 +165,7 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 			throw InternalException("Aggregate function " + func.GetName() + " does not support combining of states");
 		}
 		func.GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
-#ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
-#endif
 	}
 }
 
@@ -373,9 +369,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataC
 }
 
 void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx, idx_t count) {
-#ifdef DEBUG
 	state.counts[aggr_idx] += count;
-#endif
 	auto &func = state.functions[aggr_idx];
 	idx_t payload_cnt = state.argument_counts[aggr_idx];
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
@@ -663,7 +657,9 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
                         const vector<unique_ptr<Expression>> &aggregates) {
-#ifdef DEBUG
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_FUNCTIONS) {
+		return;
+	}
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 &&
@@ -671,10 +667,15 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(vdata);
-			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
+			if (vdata.validity.RowIsValid(vdata.sel->get_index(0))) {
+				throw InternalException(
+				    "VerifyNullHandling failed for aggregate function \"%s\": no rows were aggregated but the result "
+				    "is not NULL - aggregates with default NULL handling should return NULL when no rows are "
+				    "aggregated",
+				    aggr.Function().GetName());
+			}
 		}
 	}
-#endif
 }
 
 void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_offset) {

@@ -36,12 +36,6 @@ struct ListAggState {
 };
 
 struct ListFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.linked_list.total_capacity = 0;
-		state.linked_list.first_segment = nullptr;
-		state.linked_list.last_segment = nullptr;
-	}
 	static bool IgnoreNull() {
 		return false;
 	}

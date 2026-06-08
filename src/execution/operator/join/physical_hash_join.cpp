@@ -1560,6 +1560,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	if (filter_min_max) {
 		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, sink.perfect_join_executor);
+		if (!use_perfect_hash) {
+			ht.PrepareBloomFilterForFinalize();
+		}
 	}
 
 	// In case of a large build side or duplicates, use regular hash join

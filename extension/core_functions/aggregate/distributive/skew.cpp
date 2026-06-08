@@ -17,12 +17,6 @@ struct SkewState {
 };
 
 struct SkewnessOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = 0;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {

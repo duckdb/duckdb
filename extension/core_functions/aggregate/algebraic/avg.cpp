@@ -15,10 +15,6 @@ struct AvgState {
 	uint64_t count;
 	T value;
 
-	void Initialize() {
-		this->count = 0;
-	}
-
 	void Combine(const AvgState<T> &other) {
 		this->count += other.count;
 		this->value += other.value;
@@ -28,11 +24,6 @@ struct AvgState {
 struct IntervalAvgState {
 	int64_t count;
 	interval_t value;
-
-	void Initialize() {
-		this->count = 0;
-		this->value = interval_t();
-	}
 
 	void Combine(const IntervalAvgState &other) {
 		this->count += other.count;
@@ -44,11 +35,6 @@ struct KahanAvgState {
 	uint64_t count;
 	double value;
 	double err;
-
-	void Initialize() {
-		this->count = 0;
-		this->err = 0.0;
-	}
 
 	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
@@ -75,10 +61,6 @@ public:
 };
 
 struct AverageSetOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
-	}
 	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
@@ -172,12 +154,6 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 };
 
 struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, IntervalAdd> {
-	// Override BaseSumOperation::Initialize because
-	// IntervalAvgState does not have an assignment constructor from 0
-	static void Initialize(IntervalAvgState &state) {
-		AverageSetOperation::Initialize<IntervalAvgState>(state);
-	}
-
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {

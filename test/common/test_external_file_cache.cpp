@@ -7,6 +7,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include <chrono>
 
@@ -56,6 +57,12 @@ idx_t TotalCachedBytes(ExternalFileCache &cache) {
 		total += info.nr_bytes;
 	}
 	return total;
+}
+
+void EvictObjectCache(ObjectCache &object_cache) {
+	const auto memory = object_cache.GetCurrentMemory();
+	REQUIRE(memory > 0);
+	REQUIRE(object_cache.EvictToReduceMemory(memory) > 0);
 }
 
 } // namespace
@@ -241,7 +248,7 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
 }
 
-TEST_CASE("Disabled external file cache does not insert into cached_files", "[external_file_cache]") {
+TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto &cache = db_instance.GetExternalFileCache();
@@ -379,6 +386,69 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 	REQUIRE(total_cached_bytes <= FILE_SIZE);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+}
+
+TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+	auto &object_cache = db_instance.GetObjectCache();
+
+	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_object_cache_disable.bin", content);
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+	}
+
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(object_cache.GetCurrentMemory() > 0);
+
+	cache.SetEnabled(false);
+	REQUIRE(CountCachedBlocks(cache) == 0);
+	REQUIRE(cache.GetCachedFileCount() == 0);
+	REQUIRE(object_cache.GetCurrentMemory() == 0);
+
+	cache.SetEnabled(true);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(ReadFull(*handle, block_size) == content);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(cache.GetCachedFileCount() == 1);
+}
+
+TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file entries", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto local_fs = FileSystem::CreateLocal();
+	const auto missing_a = TestCreatePath("test_efc_missing_a.bin");
+	const auto missing_b = TestCreatePath("test_efc_missing_b.bin");
+	local_fs->TryRemoveFile(missing_a);
+	local_fs->TryRemoveFile(missing_b);
+
+	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ));
+	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_b), FileFlags::FILE_FLAGS_READ));
+
+	REQUIRE(cache.GetCachedFileCount() == 2);
+
+	const auto content = MakeTestContent(cache.GetCacheBlockSize(missing_a));
+	WriteTestContent(missing_a, content);
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, content.size()) == content);
+	}
+	REQUIRE(cache.GetCachedFileCount() == 2);
+
+	auto &object_cache = db_instance.GetObjectCache();
+	EvictObjectCache(object_cache);
+	REQUIRE(cache.GetCachedFileCount() == 0);
 }
 
 } // namespace duckdb

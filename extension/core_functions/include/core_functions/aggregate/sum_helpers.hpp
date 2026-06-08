@@ -28,11 +28,6 @@ struct SumState {
 	bool isset;
 	T value;
 
-	void Initialize() {
-		this->isset = false;
-		this->value = 0;
-	}
-
 	void Combine(const SumState<T> &other) {
 		this->isset = other.isset || this->isset;
 		this->value += other.value;
@@ -43,11 +38,6 @@ struct KahanSumState {
 	bool isset;
 	double value;
 	double err;
-
-	void Initialize() {
-		this->isset = false;
-		this->err = 0.0;
-	}
 
 	void Combine(const KahanSumState &other) {
 		this->isset = other.isset || this->isset;
@@ -161,12 +151,6 @@ struct AddToHugeint {
 
 template <class STATEOP, class ADDOP>
 struct BaseSumOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.value = 0;
-		STATEOP::template Initialize<STATE>(state);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		STATEOP::template Combine<STATE>(source, target, aggr_input_data);

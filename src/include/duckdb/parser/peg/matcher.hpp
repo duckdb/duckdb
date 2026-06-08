@@ -147,7 +147,18 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
-enum class MatcherType { KEYWORD, LIST, OPTIONAL, CHOICE, REPEAT, VARIABLE, STRING_LITERAL, NUMBER_LITERAL, OPERATOR };
+enum class MatcherType {
+	KEYWORD,
+	LIST,
+	OPTIONAL,
+	CHOICE,
+	REPEAT,
+	VARIABLE,
+	STRING_LITERAL,
+	NUMBER_LITERAL,
+	OPERATOR,
+	END_OF_INPUT
+};
 
 class Matcher {
 public:
