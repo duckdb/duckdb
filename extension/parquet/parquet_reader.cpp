@@ -1427,9 +1427,14 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		}
 
 		auto &group = GetGroup(state);
+		const bool row_group_pruned = state.offset_in_group == (idx_t)group.num_rows;
+		if (!row_group_pruned) {
+			// the row group survived filter pruning and will actually be read
+			state.row_groups_scanned++;
+		}
 		if (state.op) {
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
-			           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
+			           row_group_pruned ? "SkipRowGroup" : "ReadRowGroup",
 			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
 		}
 

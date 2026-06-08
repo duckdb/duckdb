@@ -1,0 +1,35 @@
+# name: test/sql/types/geo/geometry_parquet_pushdown.test
+# group: [geo]
+
+require parquet
+
+require json
+
+statement ok
+COPY (
+	select
+		(x + y) as id,
+		printf('POINT(%d %d)', x, y)::GEOMETRY('OGC:CRS84') as g
+	from range(100) xx(x), range(100) yy(y)
+) TO '__TEST_DIR__/points.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'V2', ROW_GROUP_SIZE 1000);
+
+statement ok
+CALL enable_profiling(
+	format := 'json',
+	save_location := '__TEST_DIR__/output.json',
+	metrics := [ 'OPERATOR_ROW_GROUPS_SCANNED', 'OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN']
+);
+
+statement ok
+select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((10 10, 20 10, 20 20, 10 20, 10 10))'::GEOMETRY;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT
+	children[1].children[1].operator_name AS operator_name,
+	children[1].children[1].operator_row_groups_scanned AS scanned,
+	children[1].children[1].operator_total_row_groups_to_scan as total FROM '__TEST_DIR__/output.json'
+----
+PARQUET_SCAN	2	10
