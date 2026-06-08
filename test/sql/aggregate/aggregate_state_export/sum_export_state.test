@@ -1,0 +1,50 @@
+# name: test/sql/aggregate/aggregate_state_export/sum_export_state.test
+# description: Test sum aggregate export state
+# group: [aggregate_state_export]
+
+# struct-based aggregate state
+# When the return type's physical type matches the state type, the value type in the struct should use the return type
+
+# SUM(INTEGER): state is hugeint_t, return is HUGEINT -> match -> value type is HUGEINT
+query T
+SELECT typeof(sum(1::INTEGER) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# SUM(BIGINT): state is hugeint_t, return is HUGEINT -> match -> value type is HUGEINT
+query T
+SELECT typeof(sum(1::BIGINT) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# SUM(DOUBLE): state is double, return is DOUBLE -> match -> value type is DOUBLE
+query T
+SELECT typeof(sum(1.0::DOUBLE) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# SUM(DECIMAL): state is hugeint_t (INT128), return is DECIMAL(38,3) (INT128) -> match -> value type is DECIMAL(38,3)
+query T
+SELECT typeof(sum(1.12::DECIMAL) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# When the return type's physical type does NOT match the state type, the value type falls back to the state's physical logical type
+
+# SUM(BOOL): state is int64_t (INT64), return is HUGEINT (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(true) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# SUM(SMALLINT): state is int64_t (INT64), return is HUGEINT (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(1::SMALLINT) EXPORT_STATE);
+----
+AGGREGATE_STATE
+
+# SUM(DECIMAL(4,2)): state is int64_t (INT64), return is DECIMAL(38,2) (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(1.00::DECIMAL(4,2)) EXPORT_STATE);
+----
+AGGREGATE_STATE

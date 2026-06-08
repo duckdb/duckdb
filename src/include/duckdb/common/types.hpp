@@ -250,14 +250,11 @@ enum class LogicalTypeId : uint8_t {
 	LAMBDA = 106,
 	UNION = 107,
 	ARRAY = 108,
-	VARIANT = 109,
-	AGGREGATE_STATE = 110, // struct-based aggregate state
+	VARIANT = 109
 };
 
 struct ExtraTypeInfo;
 struct ExtensionTypeInfo;
-
-struct aggregate_state_t; // NOLINT: mimic std casing
 
 struct LogicalType {
 	DUCKDB_API LogicalType();
@@ -445,9 +442,6 @@ public:
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
-	DUCKDB_API static LogicalType LEGACY_AGGREGATE_STATE(aggregate_state_t state_type); // NOLINT
-	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type,  // NOLINT
-							      child_list_t<LogicalType> struct_child_types); // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
@@ -480,7 +474,7 @@ public:
 	static constexpr auto JSON_TYPE_NAME = "JSON";
 	DUCKDB_API static LogicalType JSON(); // NOLINT
 	DUCKDB_API bool IsJSONType() const;
-	DUCKDB_API bool IsAggregateStateStructType() const;
+	DUCKDB_API bool IsAggregateState() const;
 };
 
 struct DecimalType {
@@ -545,16 +539,6 @@ struct ArrayType {
 	DUCKDB_API static LogicalType ConvertToList(const LogicalType &type);
 };
 
-struct LegacyAggregateStateType {
-	DUCKDB_API static const string GetTypeName(const LogicalType &type);
-	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
-};
-
-struct AggregateStateType : public StructType {
-	DUCKDB_API static const string GetTypeName(const LogicalType &type);
-	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
-};
-
 struct AnyType {
 	DUCKDB_API static LogicalType GetTargetType(const LogicalType &type);
 	DUCKDB_API static idx_t GetCastScore(const LogicalType &type);
@@ -596,21 +580,5 @@ DUCKDB_API bool TypeIsInteger(PhysicalType type);
 
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
-
-struct aggregate_state_t {
-	aggregate_state_t() {
-	}
-	// NOLINTNEXTLINE: work around bug in clang-tidy
-	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p)
-	    : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)),
-	      bound_argument_types(std::move(bound_argument_types_p)) {
-	}
-
-	string function_name;
-	LogicalType return_type;
-	vector<LogicalType> bound_argument_types;
-};
-
-
 
 } // namespace duckdb

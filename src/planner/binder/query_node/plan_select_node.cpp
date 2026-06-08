@@ -31,12 +31,18 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		return false;
 	}
 	for (auto &aggr : statement.aggregates) {
-		auto res = aggr->GetReturnType().id();
-		if (res == LogicalTypeId::AGGREGATE_STATE || res == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
+		if (aggr->GetAlias() == "__collated_group") {
+			// collated GROUP BY adds first() aggregates to preserve original values - skip verification since
+			// ExtractPivotAggregates relies on the __collated_group alias to filter them out
+			return false;
+		}
+		auto &res_type = aggr->GetReturnType();
+		if (res_type.IsAggregateState()) {
 			// already an aggregate state export - skip verification
 			return false;
 		}
 	}
+
 	// we transform a query like "SELECT grp, SUM(col) FROM tbl GROUP BY grp" into
 	// "SELECT grp, first(finalize(sum_state)) FROM (SELECT grp, SUM(col) export_state FROM tbl GROUP BY grp) GROUP BY
 	// grp the second grouping is technically not necessary - we add this just so that subsequent binding remains

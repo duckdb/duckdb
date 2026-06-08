@@ -96,7 +96,7 @@ struct StateVector {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.Function().HasStateDestructorCallback()) {
 			ArenaAllocator allocator(Allocator::DefaultAllocator());
-			AggregateInputData aggr_input_data(aggr.BindInfo(), allocator);
+			AggregateInputData aggr_input_data(aggr, allocator);
 			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, count);
 		}
 	}
@@ -218,7 +218,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();
-	AggregateInputData aggr_input_data(aggr.BindInfo(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 
 	D_ASSERT(aggr.Function().HasStateUpdateCallback());
 
