@@ -230,21 +230,6 @@ static bool IsEqualityJoinCondition(const JoinCondition &cond) {
 	}
 }
 
-static bool ChildJoinTypeCanBeDeliminated(JoinType join_type) {
-	switch (join_type) {
-	case JoinType::INNER:
-	case JoinType::SEMI:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static bool InequalityDelimJoinCanBeEliminated(JoinType join_type) {
-	return join_type == JoinType::ANTI || join_type == JoinType::MARK || join_type == JoinType::SEMI ||
-	       join_type == JoinType::SINGLE;
-}
-
 static bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings,
                                    const vector<unique_ptr<Expression>> &expressions,
                                    const vector<ColumnBinding> &current_bindings) {
@@ -267,7 +252,59 @@ static bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings,
 	return true;
 }
 
-static optional_ptr<LogicalCTERef> GetGeneratedDedupRef(LogicalOperator &op, TableIndex dedup_cte_index) {
+class GeneratedDedupRefEliminator {
+public:
+	GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index, idx_t dedup_ref_count,
+	                            LogicalOperator &rewrite_root);
+
+	idx_t Remove();
+
+private:
+	static bool ChildJoinTypeCanBeDeliminated(JoinType join_type);
+	static bool InequalityDelimJoinCanBeEliminated(JoinType join_type);
+	static bool ExpressionReferencesTable(Expression &expr, TableIndex table_index);
+
+	optional_ptr<LogicalCTERef> GetGeneratedDedupRef(LogicalOperator &op) const;
+	bool OperatorIsGeneratedDedupRef(LogicalOperator &op) const;
+	bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const;
+	void FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op, vector<JoinWithGeneratedDedupRef> &joins,
+	                                     idx_t depth = 0) const;
+	idx_t CountGeneratedDedupRefs(LogicalOperator &op) const;
+	bool RemoveInequalityJoinConditions(LogicalOperator &target_op, const vector<JoinCondition> &join_conditions,
+	                                    idx_t dedup_idx);
+	bool RemoveInequalityJoin(unique_ptr<LogicalOperator> &join);
+	bool RemoveJoin(unique_ptr<LogicalOperator> &join);
+	bool RemoveFilterCrossProduct(unique_ptr<LogicalOperator> &filter_op);
+
+private:
+	LogicalComparisonJoin &delim_join;
+	TableIndex dedup_cte_index;
+	idx_t dedup_ref_count;
+	LogicalOperator &rewrite_root;
+};
+
+GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index,
+                                                         idx_t dedup_ref_count, LogicalOperator &rewrite_root)
+    : delim_join(delim_join), dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count),
+      rewrite_root(rewrite_root) {
+}
+
+bool GeneratedDedupRefEliminator::ChildJoinTypeCanBeDeliminated(JoinType join_type) {
+	switch (join_type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool GeneratedDedupRefEliminator::InequalityDelimJoinCanBeEliminated(JoinType join_type) {
+	return join_type == JoinType::ANTI || join_type == JoinType::MARK || join_type == JoinType::SEMI ||
+	       join_type == JoinType::SINGLE;
+}
+
+optional_ptr<LogicalCTERef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op) const {
 	optional_ptr<LogicalCTERef> result;
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op.Cast<LogicalCTERef>();
@@ -289,11 +326,11 @@ static optional_ptr<LogicalCTERef> GetGeneratedDedupRef(LogicalOperator &op, Tab
 	return result;
 }
 
-static bool OperatorIsGeneratedDedupRef(LogicalOperator &op, TableIndex dedup_cte_index) {
-	return GetGeneratedDedupRef(op, dedup_cte_index) != nullptr;
+bool GeneratedDedupRefEliminator::OperatorIsGeneratedDedupRef(LogicalOperator &op) const {
+	return GetGeneratedDedupRef(op) != nullptr;
 }
 
-static bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op, TableIndex dedup_cte_index) {
+bool GeneratedDedupRefEliminator::FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const {
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER || op.HasProjectionMap()) {
 		return false;
 	}
@@ -302,37 +339,36 @@ static bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op, TableIndex d
 		return false;
 	}
 	auto &cross_product = *filter.children[0];
-	return cross_product.children.size() == 2 &&
-	       (OperatorIsGeneratedDedupRef(*cross_product.children[0], dedup_cte_index) ||
-	        OperatorIsGeneratedDedupRef(*cross_product.children[1], dedup_cte_index));
+	return cross_product.children.size() == 2 && (OperatorIsGeneratedDedupRef(*cross_product.children[0]) ||
+	                                              OperatorIsGeneratedDedupRef(*cross_product.children[1]));
 }
 
-static void FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op, TableIndex dedup_cte_index,
-                                            vector<JoinWithGeneratedDedupRef> &joins, idx_t depth = 0) {
+void GeneratedDedupRefEliminator::FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op,
+                                                                  vector<JoinWithGeneratedDedupRef> &joins,
+                                                                  idx_t depth) const {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op->children.empty()) {
-			FindJoinsWithGeneratedDedupRefs(op->children[0], dedup_cte_index, joins, depth + 1);
+			FindJoinsWithGeneratedDedupRefs(op->children[0], joins, depth + 1);
 		}
 		return;
 	}
 
 	for (auto &child : op->children) {
-		FindJoinsWithGeneratedDedupRefs(child, dedup_cte_index, joins, depth);
+		FindJoinsWithGeneratedDedupRefs(child, joins, depth);
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	    (OperatorIsGeneratedDedupRef(*op->children[0], dedup_cte_index) ||
-	     OperatorIsGeneratedDedupRef(*op->children[1], dedup_cte_index))) {
+	    (OperatorIsGeneratedDedupRef(*op->children[0]) || OperatorIsGeneratedDedupRef(*op->children[1]))) {
 		joins.emplace_back(op, depth);
-	} else if (FilterIsGeneratedDedupCrossProduct(*op, dedup_cte_index)) {
+	} else if (FilterIsGeneratedDedupCrossProduct(*op)) {
 		joins.emplace_back(op, depth, true);
 	}
 }
 
-static idx_t CountGeneratedDedupRefs(LogicalOperator &op, TableIndex dedup_cte_index) {
+idx_t GeneratedDedupRefEliminator::CountGeneratedDedupRefs(LogicalOperator &op) const {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op.children.empty()) {
-			return CountGeneratedDedupRefs(*op.children[0], dedup_cte_index);
+			return CountGeneratedDedupRefs(*op.children[0]);
 		}
 		return 0;
 	}
@@ -342,12 +378,12 @@ static idx_t CountGeneratedDedupRefs(LogicalOperator &op, TableIndex dedup_cte_i
 		count++;
 	}
 	for (auto &child : op.children) {
-		count += CountGeneratedDedupRefs(*child, dedup_cte_index);
+		count += CountGeneratedDedupRefs(*child);
 	}
 	return count;
 }
 
-static bool ExpressionReferencesTable(Expression &expr, TableIndex table_index) {
+bool GeneratedDedupRefEliminator::ExpressionReferencesTable(Expression &expr, TableIndex table_index) {
 	bool found = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		if (colref.Depth() == 0 && colref.Binding().table_index == table_index) {
@@ -357,10 +393,9 @@ static bool ExpressionReferencesTable(Expression &expr, TableIndex table_index) 
 	return found;
 }
 
-static bool RemoveInequalityJoinConditionsWithGeneratedDedupRef(LogicalComparisonJoin &delim_join,
-                                                                idx_t dedup_ref_count, LogicalOperator &target_op,
-                                                                const vector<JoinCondition> &join_conditions,
-                                                                idx_t dedup_idx) {
+bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator &target_op,
+                                                                 const vector<JoinCondition> &join_conditions,
+                                                                 idx_t dedup_idx) {
 	auto &delim_conditions = delim_join.conditions;
 	if (dedup_ref_count != 1 || !InequalityDelimJoinCanBeEliminated(delim_join.join_type) ||
 	    delim_conditions.size() != join_conditions.size()) {
@@ -468,23 +503,19 @@ static bool RemoveInequalityJoinConditionsWithGeneratedDedupRef(LogicalCompariso
 	return found_all;
 }
 
-static bool RemoveInequalityJoinWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, idx_t dedup_ref_count,
-                                                      unique_ptr<LogicalOperator> &join, TableIndex dedup_cte_index) {
+bool GeneratedDedupRefEliminator::RemoveInequalityJoin(unique_ptr<LogicalOperator> &join) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
-	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*join->children[0], dedup_cte_index) ? 0 : 1;
-	return RemoveInequalityJoinConditionsWithGeneratedDedupRef(delim_join, dedup_ref_count, *join,
-	                                                           comparison_join.conditions, dedup_idx);
+	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*join->children[0]) ? 0 : 1;
+	return RemoveInequalityJoinConditions(*join, comparison_join.conditions, dedup_idx);
 }
 
-static bool RemoveJoinWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, idx_t dedup_ref_count,
-                                            unique_ptr<LogicalOperator> &join, TableIndex dedup_cte_index,
-                                            LogicalOperator &rewrite_root) {
+bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (!ChildJoinTypeCanBeDeliminated(comparison_join.join_type)) {
 		return false;
 	}
 
-	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*join->children[0], dedup_cte_index) ? 0 : 1;
+	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*join->children[0]) ? 0 : 1;
 
 	optional_ptr<LogicalFilter> filter;
 	vector<unique_ptr<Expression>> filter_expressions;
@@ -495,7 +526,7 @@ static bool RemoveJoinWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, i
 		}
 	}
 
-	auto dedup_ref = GetGeneratedDedupRef(*join->children[dedup_idx], dedup_cte_index);
+	auto dedup_ref = GetGeneratedDedupRef(*join->children[dedup_idx]);
 	if (!dedup_ref) {
 		return false;
 	}
@@ -533,8 +564,7 @@ static bool RemoveJoinWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, i
 		}
 	}
 
-	if (!all_equality_conditions &&
-	    !RemoveInequalityJoinWithGeneratedDedupRef(delim_join, dedup_ref_count, join, dedup_cte_index)) {
+	if (!all_equality_conditions && !RemoveInequalityJoin(join)) {
 		return false;
 	}
 
@@ -552,16 +582,14 @@ static bool RemoveJoinWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, i
 	return true;
 }
 
-static bool RemoveFilterCrossProductWithGeneratedDedupRef(LogicalComparisonJoin &delim_join, idx_t dedup_ref_count,
-                                                          unique_ptr<LogicalOperator> &filter_op,
-                                                          TableIndex dedup_cte_index, LogicalOperator &rewrite_root) {
+bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOperator> &filter_op) {
 	auto &filter = filter_op->Cast<LogicalFilter>();
 	D_ASSERT(filter.children.size() == 1);
 	auto &cross_product = *filter.children[0];
 	D_ASSERT(cross_product.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
 
-	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*cross_product.children[0], dedup_cte_index) ? 0 : 1;
-	auto dedup_ref = GetGeneratedDedupRef(*cross_product.children[dedup_idx], dedup_cte_index);
+	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*cross_product.children[0]) ? 0 : 1;
+	auto dedup_ref = GetGeneratedDedupRef(*cross_product.children[dedup_idx]);
 	if (!dedup_ref) {
 		return false;
 	}
@@ -645,8 +673,7 @@ static bool RemoveFilterCrossProductWithGeneratedDedupRef(LogicalComparisonJoin 
 		}
 	}
 
-	if (!all_equality_conditions && !RemoveInequalityJoinConditionsWithGeneratedDedupRef(
-	                                    delim_join, dedup_ref_count, *filter_op, join_conditions, dedup_idx)) {
+	if (!all_equality_conditions && !RemoveInequalityJoinConditions(*filter_op, join_conditions, dedup_idx)) {
 		return false;
 	}
 
@@ -669,10 +696,9 @@ static bool RemoveFilterCrossProductWithGeneratedDedupRef(LogicalComparisonJoin 
 	return true;
 }
 
-static idx_t RemoveRedundantGeneratedDedupRefs(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index,
-                                               idx_t dedup_ref_count, LogicalOperator &rewrite_root) {
+idx_t GeneratedDedupRefEliminator::Remove() {
 	vector<JoinWithGeneratedDedupRef> joins;
-	FindJoinsWithGeneratedDedupRefs(delim_join.children[1], dedup_cte_index, joins);
+	FindJoinsWithGeneratedDedupRefs(delim_join.children[1], joins);
 	if (joins.empty()) {
 		return dedup_ref_count;
 	}
@@ -684,14 +710,13 @@ static idx_t RemoveRedundantGeneratedDedupRefs(LogicalComparisonJoin &delim_join
 
 	for (auto &join : joins) {
 		if (join.filter_cross_product) {
-			RemoveFilterCrossProductWithGeneratedDedupRef(delim_join, dedup_ref_count, join.join.get(), dedup_cte_index,
-			                                              rewrite_root);
+			RemoveFilterCrossProduct(join.join.get());
 		} else {
-			RemoveJoinWithGeneratedDedupRef(delim_join, dedup_ref_count, join.join.get(), dedup_cte_index,
-			                                rewrite_root);
+			RemoveJoin(join.join.get());
 		}
 	}
-	return CountGeneratedDedupRefs(*delim_join.children[1], dedup_cte_index);
+	dedup_ref_count = CountGeneratedDedupRefs(*delim_join.children[1]);
+	return dedup_ref_count;
 }
 
 static void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
@@ -765,7 +790,8 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
-	dedup_ref_count = RemoveRedundantGeneratedDedupRefs(join, dedup_cte_index, dedup_ref_count, *plan);
+	GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, *plan);
+	dedup_ref_count = eliminator.Remove();
 	TrySwitchSingleToLeft(join);
 	if (dedup_ref_count == 0) {
 		join.duplicate_eliminated_columns.clear();
