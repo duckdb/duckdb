@@ -64,4 +64,28 @@ idx_t RowNumberColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	return num_values;
 }
 
+//===--------------------------------------------------------------------===//
+// Row Group Column Reader
+//===--------------------------------------------------------------------===//
+RowGroupColumnReader::RowGroupColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
+    : ColumnReader(reader, schema) {
+}
+
+void RowGroupColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
+                                          TProtocol &protocol_p) {
+	row_group_idx = row_group_idx_p;
+}
+
+idx_t RowGroupColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	auto &num_values = input.num_values;
+
+	// the row group number is constant for all rows within a row group
+	auto value = UnsafeNumericCast<int64_t>(row_group_idx);
+	auto data_ptr = FlatVector::Writer<int64_t>(result, num_values);
+	for (idx_t i = 0; i < num_values; i++) {
+		data_ptr.WriteValue(value);
+	}
+	return num_values;
+}
+
 } // namespace duckdb

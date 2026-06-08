@@ -27,6 +27,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
@@ -327,6 +328,33 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 	return result;
 }
 
+static unique_ptr<BaseStatistics> ParquetScanStatistics(ClientContext &context,
+                                                        TableFunctionGetStatisticsInput &input) {
+	auto &column_index = input.column_index;
+	if (column_index.IsVirtualColumn() &&
+	    column_index.GetPrimaryIndex() == ParquetReader::COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER) {
+		// the file_row_group_number ranges from 0 to (number of row groups in the file - 1)
+		// providing this range allows the optimizer to prune a filter on a non-existing row group to an empty scan
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		// we can only bound the range safely when scanning a single file - with multiple files the row group
+		// count can differ per file (and only the first file's metadata is read at bind time)
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+			return nullptr;
+		}
+		auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
+		if (parquet_bind.initial_file_row_groups == 0) {
+			return nullptr;
+		}
+		auto stats = NumericStats::CreateUnknown(LogicalType::BIGINT);
+		NumericStats::SetMin(stats, Value::BIGINT(0));
+		NumericStats::SetMax(stats,
+		                     Value::BIGINT(UnsafeNumericCast<int64_t>(parquet_bind.initial_file_row_groups - 1)));
+		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		return stats.ToUnique();
+	}
+	return MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended(context, input);
+}
+
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
                                                      ParquetCacheValidity validity_p, bool has_deletes_p)
     : metadata(std::move(metadata_p)), validity(validity_p), has_deletes(has_deletes_p) {
@@ -422,7 +450,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
-	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.statistics_extended = ParquetScanStatistics;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -681,6 +709,8 @@ double ParquetReader::GetProgressInFile(ClientContext &context) {
 void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
 	                        TableColumn("file_row_number", LogicalType::BIGINT)));
+	result.insert(make_pair(ParquetReader::COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER,
+	                        TableColumn("file_row_group_number", LogicalType::BIGINT)));
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,

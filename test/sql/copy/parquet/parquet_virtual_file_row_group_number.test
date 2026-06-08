@@ -1,0 +1,196 @@
+# name: test/sql/copy/parquet/parquet_virtual_file_row_group_number.test
+# description: Test file_row_group_number virtual column
+# group: [parquet]
+
+require parquet
+
+# write a parquet file with 5 row groups (2048 rows each, except the last)
+statement ok
+copy (select i, i * 2 as j from range(10000) t(i)) to '{TEST_DIR}/rg.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+# sanity check: 5 row groups
+query I
+select count(distinct row_group_id) from parquet_metadata('{TEST_DIR}/rg.parquet');
+----
+5
+
+# the file_row_group_number is the file-relative row group index, starting at 0
+query IIII
+select file_row_group_number, count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' group by file_row_group_number order by file_row_group_number;
+----
+0	2048	0	2047
+1	2048	2048	4095
+2	2048	4096	6143
+3	2048	6144	8191
+4	1808	8192	9999
+
+# row group number is virtual - no values are NULL
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number is null;
+----
+0
+
+# filtering by a specific row group returns only the rows in that row group
+query III
+select count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 2;
+----
+2048	4096	6143
+
+# filtering with a range works too
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number >= 1 and file_row_group_number <= 3;
+----
+6144
+
+# reading multiple non-contiguous row groups via IN
+query III
+select count(*), min(i), max(i) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3);
+----
+4096	2048	8191
+
+# the result only contains data from row groups 1 and 3
+query I
+select distinct file_row_group_number from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3) order by file_row_group_number;
+----
+1
+3
+
+# no data from any other row group leaks in (row group 2 covers i in [4096, 6143])
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3) and i between 4096 and 6143;
+----
+0
+
+# a row group that does not exist returns no rows
+query I
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 100;
+----
+0
+
+# filtering on a non-existing row group is pruned to a dummy scan at plan time
+# (the column statistics bound the row group number to [0, num_row_groups - 1])
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II nosort empty_result
+explain select i from '{TEST_DIR}/rg.parquet' where file_row_group_number = 100;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II nosort empty_result
+explain select i from '{TEST_DIR}/rg.parquet' where file_row_group_number >= 5;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II nosort empty_result
+explain select i from '{TEST_DIR}/rg.parquet' where file_row_group_number < 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# an existing row group is NOT pruned - it still scans the parquet file
+query II nosort parquet_scan
+explain select i from '{TEST_DIR}/rg.parquet' where file_row_group_number = 2;
+----
+logical_opt	<REGEX>:.*PARQUET_SCAN.*
+
+# combined projection with regular columns
+query III
+select i, j, file_row_group_number from '{TEST_DIR}/rg.parquet' where i in (0, 2048, 9999) order by i;
+----
+0	0	0
+2048	4096	1
+9999	19998	4
+
+#-------------------------------------------------------------------------------
+# verify that filtering by file_row_group_number short-circuits reads:
+# only the matching row group is actually read from storage, the rest are skipped
+#-------------------------------------------------------------------------------
+
+statement ok
+set threads=1;
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number = 2;
+
+statement ok
+CALL disable_logging();
+
+# exactly one row group is read (row group 2) ...
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'ReadRowGroup';
+----
+1
+
+# ... and it is the correct one
+query I
+select distinct info.row_group_id from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'ReadRowGroup';
+----
+2
+
+# the other 4 row groups are skipped without being read
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'SkipRowGroup';
+----
+4
+
+# reading multiple non-contiguous row groups (IN (1, 3)) reads ONLY those row groups
+# and does not touch the data of any other row group
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+select count(*) from '{TEST_DIR}/rg.parquet' where file_row_group_number in (1, 3);
+
+statement ok
+CALL disable_logging();
+
+# exactly row groups 1 and 3 are read ...
+query I
+select string_agg(row_group_id, ',' order by row_group_id) from (select distinct info.row_group_id from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'ReadRowGroup');
+----
+1,3
+
+# ... and row groups 0, 2 and 4 are skipped without being read
+query I
+select string_agg(row_group_id, ',' order by row_group_id) from (select distinct info.row_group_id from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'SkipRowGroup');
+----
+0,2,4
+
+#-------------------------------------------------------------------------------
+# the row group number is file-relative: each file restarts the numbering at 0
+#-------------------------------------------------------------------------------
+
+statement ok
+copy (select i from range(5000) t(i)) to '{TEST_DIR}/rg_a.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+statement ok
+copy (select i from range(3000) t(i)) to '{TEST_DIR}/rg_b.parquet' (format parquet, ROW_GROUP_SIZE 2048);
+
+query II
+select file_row_group_number, count(*) from read_parquet(['{TEST_DIR}/rg_a.parquet', '{TEST_DIR}/rg_b.parquet']) group by file_row_group_number order by file_row_group_number;
+----
+0	4096
+1	3000
+2	904
+
+# multi-file safety: rg_a has 3 row groups, rg_b has 2. Row group 2 exists only in rg_a.
+# the optimizer must NOT prune this to an empty scan (per-file row group counts differ), and the
+# filter must still return the correct rows
+query I
+select count(*) from read_parquet(['{TEST_DIR}/rg_a.parquet', '{TEST_DIR}/rg_b.parquet']) where file_row_group_number = 2;
+----
+904
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II nosort parquet_scan_multi
+explain select i from read_parquet(['{TEST_DIR}/rg_a.parquet', '{TEST_DIR}/rg_b.parquet']) where file_row_group_number = 2;
+----
+logical_opt	<REGEX>:.*PARQUET_SCAN.*
