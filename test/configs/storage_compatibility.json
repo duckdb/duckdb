@@ -7,6 +7,7 @@
       "value": "v1.0.0"
     }
   ],
+  "skip_error_messages": ["Aggregate state columns are not supported in storage versions prior to v2.0.0"],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -156,7 +157,9 @@
         "test/sql/aggregate/aggregates/test_corr_state_export.test",
         "test/sql/aggregate/aggregates/test_stddev_export_state.test",
         "test/sql/aggregate/aggregates/test_covar_export_state.test",
-        "test/sql/aggregate/aggregates/test_combine_aggr.test"
+        "test/sql/aggregate/aggregates/test_combine_aggr.test",
+        "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test"
       ]
     },
     {
@@ -189,6 +192,16 @@
       "reason": "Too many columns (20k) exceeds CSV field size limit in compatibility test script.",
       "paths": [
         "test/sql/join/test_hash_join_many_columns.test"
+      ]
+    },
+    {
+      "reason": "Triggers are a new catalog type not present in old storage files.",
+      "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_wal.test",
+        "test/sql/trigger/drop_trigger.test",
+        "test/sql/trigger/drop_trigger_wal.test"
       ]
     },
     {

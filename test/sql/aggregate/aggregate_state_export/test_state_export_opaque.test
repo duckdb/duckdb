@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_opaque.test
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test
 # description: Test the state export functionality for skewness (orginally taken from https://github.com/duckdb/duckdb/blob/02ec08120314f0bf6e2f4d0eaa36512c5c275b2d/test/sql/aggregate/aggregates/test_state_export.test
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);

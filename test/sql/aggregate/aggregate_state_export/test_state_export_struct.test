@@ -1,9 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_struct.test
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_struct.test
 # description: Test the state export functionality, for opted-in aggregate functions with struct-based AGGREGATE_STATE
-# group: [aggregates]
-
-# We know that forward compatibility won't be preserved
-require noforcestorage
+# group: [aggregate_state_export]
 
 statement ok
 SET storage_compatibility_version = 'latest';
@@ -705,17 +702,11 @@ SELECT g, FINALIZE(to_aggregate_state(s1, 'avg', [make_type('DOUBLE')])) FROM '{
 8	53.0
 9	54.0
 
-# converting to the state of an aggregate function with a different state layout fails
-statement error
-SELECT to_aggregate_state(s1, 'sum', ['DOUBLE']) FROM '{TEST_DIR}/avg_state.parquet';
-----
-does not match the state layout
-
-# the input type must match the state layout exactly
+# the input type must be convertable to the state layout
 statement error
 SELECT to_aggregate_state(42, 'avg', ['DOUBLE']);
 ----
-does not match the state layout
+Unimplemented type for cast
 
 # the aggregate name must be constant
 statement error

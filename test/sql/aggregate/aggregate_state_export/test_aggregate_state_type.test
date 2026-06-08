@@ -1,9 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_aggregate_state_type.test
+# name: test/sql/aggregate/aggregate_state_export/test_aggregate_state_type.test
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
-# group: [aggregates]
-
-# We know that forward compatibility won't be preserved
-require noforcestorage
+# group: [aggregate_state_export]
 
 foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
