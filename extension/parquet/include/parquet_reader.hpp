@@ -222,6 +222,11 @@ public:
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
 
+	//! (optional) counters (owned by the scan's global state) for row groups whose data was read / skipped,
+	//! incremented as row groups are processed and surfaced as profiling metrics
+	optional_ptr<atomic<idx_t>> row_groups_read;
+	optional_ptr<atomic<idx_t>> row_groups_skipped;
+
 	//! Prefetch cost model
 	PrefetchCostModelState cost_model_state;
 };
@@ -287,6 +292,10 @@ struct ParquetUnionData : public BaseUnionData {
 };
 
 class ParquetReader : public BaseFileReader {
+public:
+	//! Virtual column identifier for the "file_row_group_number" column (the file-relative row group index of each row)
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER = UINT64_C(9223372036854775820);
+
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);

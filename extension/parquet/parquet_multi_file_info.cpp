@@ -93,6 +93,10 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t batch_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
+	//! Number of row groups that had their data read / skipped (via row-group pruning), aggregated across all
+	//! files and threads. Surfaced as profiling metrics in EXPLAIN ANALYZE.
+	atomic<idx_t> row_groups_read {0};
+	atomic<idx_t> row_groups_skipped {0};
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -328,6 +332,22 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 	return result;
 }
 
+static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	// emit the shared multi-file metrics (files read, filenames, rows scanned)
+	MultiFileFunction<ParquetMultiFileInfo>::MultiFileGetMetrics(input);
+	// add the parquet-specific row group read/skip counts (aggregated across files and threads)
+	if (!input.global_state) {
+		return;
+	}
+	auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return;
+	}
+	auto &parquet_gstate = gstate.global_state->Cast<ParquetReadGlobalState>();
+	input.operator_metrics.AddExtraInfo("Row Groups Read", to_string(parquet_gstate.row_groups_read.load()));
+	input.operator_metrics.AddExtraInfo("Row Groups Skipped", to_string(parquet_gstate.row_groups_skipped.load()));
+}
+
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
                                                      ParquetCacheValidity validity_p, bool has_deletes_p)
     : metadata(std::move(metadata_p)), validity(validity_p), has_deletes(has_deletes_p) {
@@ -424,6 +444,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -682,6 +703,8 @@ double ParquetReader::GetProgressInFile(ClientContext &context) {
 void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
 	                        TableColumn("file_row_number", LogicalType::BIGINT)));
+	result.insert(make_pair(ParquetReader::COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER,
+	                        TableColumn("file_row_group_number", LogicalType::BIGINT)));
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
@@ -772,6 +795,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
+	local_state.scan_state.row_groups_read = &gstate.row_groups_read;
+	local_state.scan_state.row_groups_skipped = &gstate.row_groups_skipped;
 	return Scan(context, local_state.scan_state, chunk);
 }
 
