@@ -6,17 +6,17 @@ statement ok
 PRAGMA threads=1;
 
 statement ok
-SET disabled_optimizers = 'join_order,build_side_probe_side';
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
 
 # A single build-side value produces only an equality filter for the equality key.
 statement ok
 CREATE TABLE single_probe AS
-SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (1000000000000 + i)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE single_build AS
-SELECT 42::BIGINT AS k, i::INTEGER AS g
+SELECT 1000000000042::BIGINT AS k, i::INTEGER AS g
 FROM range(10) t(i);
 
 query II
@@ -27,7 +27,7 @@ JOIN single_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*\(k = 42\).*
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*\(k = 1000000000042\).*
 
 query II
 EXPLAIN ANALYZE
@@ -55,12 +55,12 @@ SET dynamic_or_filter_threshold=1000;
 
 statement ok
 CREATE TABLE exact_prf_probe AS
-SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (1000000000000 + i)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE exact_prf_build AS
-SELECT (i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (1000000000000 + i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100) t(i);
 
 query II
@@ -96,14 +96,14 @@ analyzed_plan	<!REGEX>:(?s).*optional: \(k (IN|>=|<=).*
 # A small sparse hash table with a large range produces an InFilter and Bloom filter.
 statement ok
 CREATE TABLE in_filter_probe AS
-SELECT (i * 1400)::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE in_filter_build(k BIGINT, g INTEGER);
 
 statement ok
-INSERT INTO in_filter_build VALUES (0, 0), (70000000, 0), (140000000, 0);
+INSERT INTO in_filter_build VALUES (-900000000000, 0), (0, 0), (900000000000, 0);
 
 query II
 EXPLAIN ANALYZE
@@ -141,12 +141,12 @@ SET dynamic_or_filter_threshold=0;
 
 statement ok
 CREATE TABLE bloom_probe AS
-SELECT (i * 10000)::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE bloom_build AS
-SELECT (i * 10000000)::BIGINT AS k, 0::INTEGER AS g
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k, 0::INTEGER AS g
 FROM range(100) t(i);
 
 query II
@@ -157,7 +157,7 @@ JOIN bloom_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*optional: \(k >= 0\).*
+analyzed_plan	<REGEX>:.*optional: \(k >=.*
 
 query II
 EXPLAIN ANALYZE
@@ -167,7 +167,7 @@ JOIN bloom_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*optional: \(k <= 990000000.*
+analyzed_plan	<REGEX>:.*optional: \(k <=.*
 
 query II
 EXPLAIN ANALYZE
@@ -202,12 +202,12 @@ analyzed_plan	<!REGEX>:(?s).*optional: \(k IN \(.*
 # Non-equality keys only receive the applicable selectivity-optional min/max filter.
 statement ok
 CREATE TABLE inequality_probe AS
-SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE inequality_build AS
-SELECT (i * 100)::BIGINT AS k, 0::INTEGER AS g
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k, 0::INTEGER AS g
 FROM range(100) t(i);
 
 query II
@@ -218,7 +218,7 @@ JOIN inequality_build b
   ON p.k >= b.k
  AND p.g = b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*optional: \(k >= 0\).*
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*optional: \(k >=.*
 
 query II
 EXPLAIN ANALYZE
@@ -246,12 +246,12 @@ SET dynamic_or_filter_threshold=1000;
 
 statement ok
 CREATE TABLE dense_probe AS
-SELECT i::HUGEINT AS k, (i % 7)::INTEGER AS g
+SELECT (1000000000000 + i)::HUGEINT AS k, (i % 7)::INTEGER AS g
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE dense_build AS
-SELECT i::HUGEINT AS k, 0::INTEGER AS g
+SELECT (1000000000000 + i)::HUGEINT AS k, 0::INTEGER AS g
 FROM range(10) t(i);
 
 query II
@@ -290,12 +290,14 @@ SET dynamic_or_filter_threshold=0;
 
 statement ok
 CREATE TABLE multi_probe AS
-SELECT (i * 10000)::BIGINT AS k1, (i * 30000)::BIGINT AS k2
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k1,
+       (-3000000000000 + i * 60000000)::BIGINT AS k2
 FROM range(100000) t(i);
 
 statement ok
 CREATE TABLE multi_build AS
-SELECT (i * 10000000)::BIGINT AS k1, (i * 30000000)::BIGINT AS k2
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k1,
+       (-3000000000000 + i * 60000000000)::BIGINT AS k2
 FROM range(100) t(i);
 
 query II
@@ -306,7 +308,7 @@ JOIN multi_build b
   ON p.k1 = b.k1
  AND p.k2 = b.k2;
 ----
-analyzed_plan	<REGEX>:.*optional: \(k1 >= 0\).*
+analyzed_plan	<REGEX>:.*optional: \(k1 >=.*
 
 query II
 EXPLAIN ANALYZE

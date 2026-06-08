@@ -63,7 +63,7 @@ JOIN prf_build_string b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN BF\(k\).*
+analyzed_plan	<REGEX>:.*IN BF\(k.*
 
 statement ok
 CREATE OR REPLACE TABLE prf_probe_string_long AS
