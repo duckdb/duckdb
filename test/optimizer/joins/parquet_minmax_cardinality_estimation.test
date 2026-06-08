@@ -13,6 +13,17 @@ EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_filter.parquet' WHERE i = 42
 physical_plan	<REGEX>:.*PARQUET_SCAN.*~1 row.*
 
 statement ok
+COPY (
+	SELECT (TIMESTAMP '2020-01-01 00:00:00' + range * INTERVAL '1 millisecond')::TIMESTAMP_MS AS ts
+	FROM range(10000)
+) TO '{TEST_DIR}/minmax_timestamp_filter.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_timestamp_filter.parquet' WHERE ts = TIMESTAMP_MS '2020-01-01 00:00:00.042'
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~1 row.*
+
+statement ok
 COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_sparse_a.parquet' (FORMAT PARQUET)
 
 statement ok
@@ -20,6 +31,23 @@ COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_
 
 query II
 EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_sparse_a.parquet' a JOIN '{TEST_DIR}/minmax_sparse_b.parquet' b USING (k)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~10 rows.*
+
+statement ok
+COPY (
+	SELECT TIMESTAMP '2020-01-01 00:00:00' + (range * 1000) * INTERVAL '1 second' AS ts
+	FROM range(10)
+) TO '{TEST_DIR}/minmax_timestamp_sparse_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (
+	SELECT TIMESTAMP '2020-01-01 00:00:00' + (range * 1000) * INTERVAL '1 second' AS ts
+	FROM range(10)
+) TO '{TEST_DIR}/minmax_timestamp_sparse_b.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_timestamp_sparse_a.parquet' a JOIN '{TEST_DIR}/minmax_timestamp_sparse_b.parquet' b USING (ts)
 ----
 physical_plan	<REGEX>:.*HASH_JOIN.*~10 rows.*
 

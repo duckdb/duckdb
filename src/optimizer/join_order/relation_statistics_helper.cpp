@@ -92,46 +92,31 @@ static idx_t GetBooleanMinMaxDistinctCount(const BaseStatistics &base_stats, idx
 	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
 }
 
-static idx_t GetDateMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
-	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<date_t>().days;
-	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<date_t>().days;
-	if (max_value < min_value) {
-		return 0;
-	}
-	int64_t span;
-	if (!TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(max_value, min_value, span)) {
-		return 0;
-	}
-	return GetMinMaxSpanDistinctCount(static_cast<uint64_t>(span), base_table_cardinality);
-}
-
 static idx_t GetMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
 	if (base_table_cardinality == 0 || base_stats.GetStatsType() != StatisticsType::NUMERIC_STATS ||
 	    !NumericStats::HasMinMax(base_stats)) {
 		return 0;
 	}
 
-	switch (base_stats.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
+	switch (base_stats.GetType().InternalType()) {
+	case PhysicalType::BOOL:
 		return GetBooleanMinMaxDistinctCount(base_stats, base_table_cardinality);
-	case LogicalTypeId::TINYINT:
+	case PhysicalType::INT8:
 		return GetSignedMinMaxDistinctCount<int8_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		return GetSignedMinMaxDistinctCount<int16_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::INT32:
 		return GetSignedMinMaxDistinctCount<int32_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::INT64:
 		return GetSignedMinMaxDistinctCount<int64_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::UTINYINT:
+	case PhysicalType::UINT8:
 		return GetUnsignedMinMaxDistinctCount<uint8_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::USMALLINT:
+	case PhysicalType::UINT16:
 		return GetUnsignedMinMaxDistinctCount<uint16_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::UINTEGER:
+	case PhysicalType::UINT32:
 		return GetUnsignedMinMaxDistinctCount<uint32_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::UBIGINT:
+	case PhysicalType::UINT64:
 		return GetUnsignedMinMaxDistinctCount<uint64_t>(base_stats, base_table_cardinality);
-	case LogicalTypeId::DATE:
-		return GetDateMinMaxDistinctCount(base_stats, base_table_cardinality);
 	default:
 		return 0;
 	}
