@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -207,6 +208,35 @@ static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &
 	return changed;
 }
 
+static bool HasSelection(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		for (const auto &entry : get.table_filters) {
+			auto &expr_filter =
+			    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DelimJoinCTERewriter::HasSelection");
+			auto &expr = *expr_filter.expr;
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
+				return true;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return true;
+	default:
+		break;
+	}
+
+	for (auto &child : op.children) {
+		if (HasSelection(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 struct JoinWithGeneratedDedupRef {
 	JoinWithGeneratedDedupRef(unique_ptr<LogicalOperator> &join_p, idx_t depth_p, bool filter_cross_product_p = false)
 	    : join(join_p), depth(depth_p), filter_cross_product(filter_cross_product_p) {
@@ -330,7 +360,8 @@ static bool ExpressionReferencesBinding(Expression &expr, const vector<ColumnBin
 	return found;
 }
 
-static bool CoversAllBindings(const vector<ColumnBinding> &all_bindings, const vector<ColumnBinding> &covered_bindings) {
+static bool CoversAllBindings(const vector<ColumnBinding> &all_bindings,
+                              const vector<ColumnBinding> &covered_bindings) {
 	if (all_bindings.size() != covered_bindings.size()) {
 		return false;
 	}
@@ -632,7 +663,8 @@ void GeneratedDedupRefEliminator::FindJoinsWithGeneratedDedupRefs(unique_ptr<Log
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	    (OperatorIsGeneratedDedupRefForJoin(*op->children[0]) || OperatorIsGeneratedDedupRefForJoin(*op->children[1]))) {
+	    (OperatorIsGeneratedDedupRefForJoin(*op->children[0]) ||
+	     OperatorIsGeneratedDedupRefForJoin(*op->children[1]))) {
 		joins.emplace_back(op, depth);
 	} else if (FilterIsGeneratedDedupCrossProduct(*op)) {
 		joins.emplace_back(op, depth, true);
@@ -1032,6 +1064,10 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 		          return lhs.depth > rhs.depth;
 	          });
 
+	if (!joins.empty() && HasSelection(delim_join)) {
+		joins.erase(joins.begin());
+	}
+
 	for (auto &join : joins) {
 		if (join.filter_cross_product) {
 			RemoveFilterCrossProduct(join.join.get());
@@ -1086,8 +1122,8 @@ private:
 	vector<reference<LogicalCTE>> ctes;
 };
 
-GeneratedDomainJoinEliminator::GeneratedDomainJoinEliminator(
-    unique_ptr<LogicalOperator> &rewrite_root, const vector<TableIndex> &generated_dedup_cte_indexes)
+GeneratedDomainJoinEliminator::GeneratedDomainJoinEliminator(unique_ptr<LogicalOperator> &rewrite_root,
+                                                             const vector<TableIndex> &generated_dedup_cte_indexes)
     : rewrite_root(rewrite_root), generated_dedup_cte_indexes(generated_dedup_cte_indexes) {
 }
 
@@ -1356,8 +1392,8 @@ bool GeneratedDomainJoinEliminator::ContainsRecursiveCTERef(LogicalOperator &op)
 	return false;
 }
 
-bool GeneratedDomainJoinEliminator::AddReplacement(vector<ReplacementBinding> &replacements,
-                                                   ColumnBinding old_binding, ColumnBinding new_binding) const {
+bool GeneratedDomainJoinEliminator::AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding,
+                                                   ColumnBinding new_binding) const {
 	if (old_binding == new_binding) {
 		return true;
 	}
@@ -1436,8 +1472,8 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalO
 		    BoundComparisonExpression::Create(cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy()));
 	}
 
-	auto cte_bindings =
-	    LogicalOperator::GenerateColumnBindings(dedup_ref->cte_ref->table_index, dedup_ref->cte_ref->chunk_types.size());
+	auto cte_bindings = LogicalOperator::GenerateColumnBindings(dedup_ref->cte_ref->table_index,
+	                                                            dedup_ref->cte_ref->chunk_types.size());
 	if (!CoversAllBindings(cte_bindings, covered_dedup_bindings)) {
 		return false;
 	}
