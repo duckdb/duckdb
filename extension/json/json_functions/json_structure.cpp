@@ -689,6 +689,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 	}
 	case LogicalTypeId::LIST: {
 		// Only lists can be merged into a list
+		if (type.id() != LogicalTypeId::LIST) {
+			return -1;
+		}
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
 		const auto &merged_child_type = ListType::GetChildType(merged);
 		const auto &type_child_type = ListType::GetChildType(type);

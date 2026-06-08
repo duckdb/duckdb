@@ -9,9 +9,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -149,7 +147,6 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
-	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
@@ -167,8 +164,8 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 		value_index_sel[i] = 0;
 	}
 
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
 
 	//! Perform the extract
 	ValidityMask validity(count);

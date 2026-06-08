@@ -27,7 +27,6 @@
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
-
 class SerializationOptions {
 public:
 	SerializationOptions() = default;

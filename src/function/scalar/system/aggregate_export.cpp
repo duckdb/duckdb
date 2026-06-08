@@ -22,18 +22,28 @@ namespace {
 // aggregate state export
 struct ExportAggregateBindData : public FunctionData {
 	BoundAggregateFunction aggr;
+	unique_ptr<FunctionData> bind_data;
 	idx_t state_size;
 
-	explicit ExportAggregateBindData(BoundAggregateFunction aggr_p, idx_t state_size_p)
-	    : aggr(std::move(aggr_p)), state_size(state_size_p) {
+	explicit ExportAggregateBindData(BoundAggregateFunction aggr_p, unique_ptr<FunctionData> bind_data_p,
+	                                 idx_t state_size_p)
+	    : aggr(std::move(aggr_p)), bind_data(std::move(bind_data_p)), state_size(state_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<ExportAggregateBindData>(aggr, state_size);
+		return make_uniq<ExportAggregateBindData>(aggr, bind_data ? bind_data->Copy() : nullptr, state_size);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ExportAggregateBindData>();
+		if (bind_data.get() != other.bind_data.get()) {
+			if (!bind_data || !other.bind_data) {
+				return false;
+			}
+			if (!bind_data->Equals(*other.bind_data)) {
+				return false;
+			}
+		}
 		return aggr == other.aggr && state_size == other.state_size;
 	}
 
@@ -433,7 +443,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		}
 	}
 
-	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
+	AggregateInputData aggr_input_data(bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -601,7 +611,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		}
 
 		// Single batched combine call
-		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+		AggregateInputData aggr_input_data(bind_data.bind_data.get(), local_state.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
 		                                         both_valid_count);
 
@@ -678,16 +689,13 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 
 	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
 
-	if (bind_info) {
-		throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
-	}
-
 	if (bound_aggr.GetReturnType() != state_type.return_type ||
 	    bound_aggr.GetArguments() != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
-	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
+	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
+	                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -828,7 +836,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());
 
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	AggregateInputData combine_input(nullptr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	AggregateInputData combine_input(bind_data.bind_data.get(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 }
 

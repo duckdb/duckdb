@@ -22,7 +22,9 @@
 
 namespace duckdb {
 
+#ifdef DEBUG
 bool DBConfigOptions::debug_print_bindings = false;
+#endif
 DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificationMode::NONE;
 
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
@@ -108,6 +110,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
     DUCKDB_GLOBAL(DebugVerificationModeSetting),
     DUCKDB_SETTING(DebugVerificationProjectionSetting),
+    DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
@@ -122,6 +125,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
     DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
+    DUCKDB_SETTING(DelimJoinAsCteSetting),
     DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
@@ -235,12 +239,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 28),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 28),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 120),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 54),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 141),
-                                                     DUCKDB_SETTING_ALIAS("user", 158),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 122),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 55),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 143),
+                                                     DUCKDB_SETTING_ALIAS("user", 160),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 27),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 156),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 158),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -676,7 +680,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			return NumericLimits<idx_t>::Maximum();
+			result = DConstants::INVALID_INDEX;
 		} else {
 			throw ParserException(error);
 		}

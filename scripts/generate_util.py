@@ -357,7 +357,7 @@ def generate_subclass_copy(entry):
     lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
     lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
 
-    if class_name == 'FunctionExpression':
+    if class_name == 'FunctionExpression' or class_name == 'WindowExpression':
         lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
     for member in entry.get('members', []):

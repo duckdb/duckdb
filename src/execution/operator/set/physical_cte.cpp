@@ -143,4 +143,19 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	return result;
 }
 
+ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+                                          const ProgressData source_progress) const {
+	auto &state = gstate.Cast<CTEGlobalState>();
+	lock_guard<mutex> guard(state.lhs_lock);
+	if (!state.working_table_ref) {
+		return ProgressData {0, 1, true};
+	}
+	auto &working_table = *state.working_table_ref;
+	auto count = double(working_table.Count());
+	ProgressData progress;
+	progress.done = count;
+	progress.total = count + source_progress.total;
+	return progress;
+}
+
 } // namespace duckdb

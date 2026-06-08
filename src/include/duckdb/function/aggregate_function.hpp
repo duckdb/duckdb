@@ -562,6 +562,16 @@ public:
 		return sizeof(STATE);
 	}
 
+	template <class...>
+	using initialize_void_t = void;
+
+	//! Detects whether "OP" provides an "Initialize(STATE &)" method
+	template <class STATE, class OP, class = void>
+	struct OperationHasInitialize : std::false_type {};
+	template <class STATE, class OP>
+	struct OperationHasInitialize<STATE, OP, initialize_void_t<decltype(OP::Initialize(std::declval<STATE &>()))>>
+	    : std::true_type {};
+
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {
 		// FIXME: we should remove the "destructor_type" option in the future
@@ -570,7 +580,12 @@ public:
 		                  destructor_type == AggregateDestructorType::LEGACY,
 		              "Aggregate state must be trivially move constructible");
 #endif
-		OP::Initialize(*reinterpret_cast<STATE *>(state));
+		if constexpr (OperationHasInitialize<STATE, OP>::value) {
+			OP::Initialize(*reinterpret_cast<STATE *>(state));
+		} else {
+			// if the operation does not define an Initialize method - initialize the state by zero-initializing it
+			memset(state, 0, sizeof(STATE));
+		}
 	}
 
 	template <class STATE, class OP>

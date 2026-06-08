@@ -103,12 +103,6 @@ struct ApproximateQuantileBindData : public FunctionData {
 struct ApproxQuantileOperation {
 	using SAVE_TYPE = duckdb_tdigest::Value;
 
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.pos = 0;
-		state.h = nullptr;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {

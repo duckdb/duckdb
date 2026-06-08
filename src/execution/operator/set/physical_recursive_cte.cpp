@@ -229,7 +229,6 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	for (auto &group_idx : idx_set) {
 		output_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
 	}
-	output_chunk.SetChildCardinality(input_chunk.size());
 }
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

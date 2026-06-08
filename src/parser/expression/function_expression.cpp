@@ -150,6 +150,7 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 		}
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
 	}
+
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
 	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
 	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);

@@ -152,7 +152,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
+          ./build/relassert/test/run --test-config test/configs/release_assertions.json --batch-timeout 600 "*"
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -190,7 +190,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
+          ./build/relassert/test/run --test-config test/configs/release_assertions.json --batch-timeout 600 "*"
 
   smaller-binary:
     name: Smaller Binary
@@ -272,7 +272,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
+          ./build/relassert/test/run --test-config test/configs/release_assertions.json --batch-timeout 600 "*"
 
   valgrind:
     name: Valgrind
@@ -314,7 +314,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: python3 scripts/ci/run_tests.py --retry 0 --workers 1 --batch-size 1 --batch-timeout 1200 --test-command "valgrind {binary} {flags} -f {test_list}" ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: ./build/relassert/test/run --retry 0 --workers 1 --batch-size 1 --batch-timeout 1200 --test-command "valgrind {binary} {flags} -f {test_list}" test/sql/tpch/tpch_sf001.test_slow
 
   sqllogic:
      name: Sqllogic tests
@@ -548,15 +548,15 @@ jobs:
 
       - name: All tests with 512 vector size and default block size
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/vector_size_512.json ./build/relassert/test/unittest "*"
+        run: ./build/relassert/test/run --test-config=test/configs/vector_size_512.json "*"
 
       - name: All tests with 512 vector size and 16kB block size
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
+        run: ./build/relassert/test/run --test-config=test/configs/block_size_16kB.json "*"
 
       - name: All tests with a smaller initial column segment size
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/initial_column_segment_size.json ./build/relassert/test/unittest "*"
+        run: ./build/relassert/test/run --test-config=test/configs/initial_column_segment_size.json "*"
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -589,7 +589,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/ci/run_tests.py --batch-timeout 600 build/relassert/test/unittest
+        run: ./build/relassert/test/run --batch-timeout 600
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -598,7 +598,7 @@ jobs:
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
-    - uses: mymindstorm/setup-emsdk@v16
+    - uses: emscripten-core/setup-emsdk@v16
       with:
         version: 'latest'
 

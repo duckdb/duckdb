@@ -66,6 +66,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));

@@ -10,7 +10,9 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -98,6 +100,33 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const Bin
 	default:
 		break;
 	}
+}
+
+static bool HasLateralCorrelatedColumns(const Expression &root_expr, Binder &binder) {
+	if (binder.IsInsideSubquery()) {
+		return false;
+	}
+	unordered_set<TableIndex> lateral_bindings;
+	for (auto &active_binder_ref : binder.GetActiveBinders()) {
+		auto &active_binder = active_binder_ref.get();
+		if (!active_binder.IsLateralBinder()) {
+			continue;
+		}
+		for (auto &binding : active_binder.GetBinder().bind_context.GetBindingsList()) {
+			lateral_bindings.insert(binding->GetIndex());
+		}
+	}
+	if (lateral_bindings.empty()) {
+		return false;
+	}
+	bool has_lateral_correlated_columns = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+		    if (colref.Depth() > 0 && lateral_bindings.find(colref.Binding().table_index) != lateral_bindings.end()) {
+			    has_lateral_correlated_columns = true;
+		    }
+	    });
+	return has_lateral_correlated_columns;
 }
 
 BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
@@ -339,6 +368,10 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	if (ref.condition) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
+		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
+		    HasLateralCorrelatedColumns(*result->condition, *this)) {
+			throw NotImplementedException("Non-inner join on correlated columns not supported");
+		}
 	}
 
 	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {

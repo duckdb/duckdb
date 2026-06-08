@@ -55,6 +55,9 @@ public:
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
+	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                             const ProgressData source_progress) const override;
+
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 

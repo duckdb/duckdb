@@ -3,6 +3,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -155,7 +156,15 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 }
 
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
-	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
+	if (!duckdb::Decimal::IsValidWidthScale(width, scale)) {
+		return nullptr;
+	}
+	try {
+		return reinterpret_cast<duckdb_logical_type>(
+		    new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 duckdb_type duckdb_get_type_id(duckdb_logical_type type) {

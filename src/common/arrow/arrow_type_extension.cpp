@@ -474,7 +474,6 @@ struct ArrowGeometry {
 
 				duckdb_yyjson::yyjson_doc_free(projjson_doc);
 			} else {
-				duckdb_yyjson::yyjson_mut_doc_free(doc);
 				throw SerializationException("Could not parse PROJJSON CRS for GeoArrow metadata");
 			}
 		} break;
@@ -523,6 +522,7 @@ struct ArrowGeometry {
 			duckdb_yyjson::yyjson_mut_doc_free(doc);
 			free(json_text);
 		} else {
+			duckdb_yyjson::yyjson_mut_doc_free(doc);
 			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "{}");
 		}
 

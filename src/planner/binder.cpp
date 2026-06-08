@@ -63,6 +63,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
+		inside_subquery = parent->inside_subquery;
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -238,6 +239,14 @@ optional_ptr<BoundParameterMap> Binder::GetParameters() {
 
 void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
+}
+
+void Binder::SetInsideSubquery() {
+	inside_subquery = true;
+}
+
+bool Binder::IsInsideSubquery() const {
+	return inside_subquery;
 }
 
 void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {

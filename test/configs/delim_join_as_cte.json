@@ -1,0 +1,14 @@
+{
+  "description": "Run with SET delim_join_as_cte=true.",
+  "on_init": "SET delim_join_as_cte=true;",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Unexpected plan shape change due to the new CTE-based implementation of delim joins.",
+      "paths": [
+        "test/optimizer/deliminator.test",
+        "test/issues/general/test_4950.test"
+      ]
+    }
+  ]
+}

@@ -122,6 +122,8 @@ static const DefaultExtension internal_extensions[] = {
     {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
     {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
     {"lance", "Adds support for querying Lance datasets", false},
+    {"avro", "Adds support for reading Avro files", false},
+    {"unity_catalog", "Adds support for connecting to Unity Catalog", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {

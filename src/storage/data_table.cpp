@@ -414,7 +414,6 @@ void DataTable::RebuildIndexes() {
 			for (idx_t i = 0; i < col_ids.size(); i++) {
 				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
 			}
-			table_chunk.SetChildCardinality(scan_chunk.size());
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
 
 			auto error = bound_index.Append(table_chunk, row_ids);
@@ -697,7 +696,6 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	auto count = chunk.size();
-	dst_chunk.SetChildCardinality(count);
 	if (count <= 0) {
 		return;
 	}
@@ -1495,8 +1493,6 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	D_ASSERT(IsMainTable() || removal_type == IndexRemovalType::REVERT_MAIN_INDEX ||
-	         removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY);
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
@@ -1634,7 +1630,6 @@ static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalInd
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
 	}
-	mock_chunk.SetChildCardinality(chunk.size());
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,
@@ -1756,7 +1751,6 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	if (n_local_update > 0) {
 		updates_slice.Slice(updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
-		updates_slice.SetChildCardinality(n_local_update);
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten();
 
@@ -1768,7 +1762,6 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
-		updates_slice.SetChildCardinality(n_global_update);
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten();
 

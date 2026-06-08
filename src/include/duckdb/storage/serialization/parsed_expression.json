@@ -1,453 +1,629 @@
-[{
-	"class" : "ParsedExpression",
-	"class_type" : "expression_class",
-	"set_parameters" : ["type"],
-	"includes" : ["duckdb/parser/expression/list.hpp"],
-	"functions" : [ "Equals", "Hash", "Children", "Copy" ],
-	"members" : [
-		{"id" : 100, "name" : "class", "type" : "ExpressionClass", "property" : "expression_class"},
-		{"id" : 101, "name" : "type", "type" : "ExpressionType"},
-		{"id" : 102, "name" : "alias", "type" : "Identifier", "equals_skip" : true}, {
-			"id" : 103,
-			"name" : "query_location",
-			"type" : "optional_idx",
-			"default" : "optional_idx()",
-			"equals_skip" : true
-		}
-	]
-},
- {
-	 "class" : "BetweenExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "BETWEEN",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "input",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "InputMutable()",
-			 "accessor" : "Input()"
-		 },
-		 {
-			 "id" : 201,
-			 "name" : "lower",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "LowerBoundMutable()",
-			 "accessor" : "LowerBound()"
-		 },
-		 {
-			 "id" : 202,
-			 "name" : "upper",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "UpperBoundMutable()",
-			 "accessor" : "UpperBound()"
-		 }
-	 ]
- },
- {
-	 "class" : "CaseExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "CASE",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "case_checks",
-			 "type" : "vector<CaseCheck>",
-			 "accessor_mut" : "CaseChecksMutable()",
-			 "accessor" : "CaseChecks()"
-		 },
-		 {
-			 "id" : 201,
-			 "name" : "else_expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "ElseMutable()",
-			 "accessor" : "Else()"
-		 }
-	 ]
- },
- {
-	 "class" : "CastExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "CAST",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "child",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "ChildMutable()",
-			 "accessor" : "Child()"
-		 },
-		 {"id" : 201, "name" : "cast_type", "type" : "LogicalType"}, {"id" : 202, "name" : "try_cast", "type" : "bool"}
-	 ]
- },
- {
-	 "class" : "CollateExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "COLLATE",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "child",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "ChildMutable()",
-			 "accessor" : "Child()"
-		 },
-		 {"id" : 201, "name" : "collation", "type" : "string"}
-	 ]
- },
- {
-	 "class" : "ColumnRefExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "COLUMN_REF",
-	 "members" : [ {"id" : 200, "name" : "column_names", "type" : "vector<Identifier>"} ]
- },
- {
-	 "class" : "LambdaRefExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "LAMBDA_REF",
-	 "members" : [
-		 {"id" : 200, "name" : "lambda_idx", "type" : "idx_t"},
-		 {"id" : 201, "name" : "column_name", "type" : "Identifier"}
-	 ],
-	 "constructor" : [ "lambda_idx", "column_name" ]
- },
- {
-	 "class" : "ComparisonExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "COMPARISON",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "left",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "LeftMutable()",
-			 "accessor" : "Left()"
-		 },
-		 {
-			 "id" : 201,
-			 "name" : "right",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "RightMutable()",
-			 "accessor" : "Right()"
-		 }
-	 ],
-	 "constructor" : ["type"]
- },
- {
-	 "class" : "ConjunctionExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "CONJUNCTION",
-	 "members" : [ {
-		 "id" : 200,
-		 "name" : "children",
-		 "type" : "vector<ParsedExpression*>",
-		 "accessor_mut" : "GetChildrenMutable()",
-		 "accessor" : "GetChildren()"
-	 } ],
-	 "constructor" : ["type"]
- },
- {
-	 "class" : "ConstantExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "CONSTANT",
-	 "members" : [ {"id" : 200, "name" : "value", "type" : "Value"} ]
- },
- {"class" : "DefaultExpression", "base" : "ParsedExpression", "enum" : "DEFAULT", "members" : []}, {
-	 "class" : "FunctionExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "FUNCTION",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "function_name",
-			 "type" : "Identifier",
-			 "accessor_mut" : "FunctionNameMutable()",
-			 "accessor" : "FunctionName()"
-		 },
-		 {
-			 "id" : 201,
-			 "name" : "schema",
-			 "type" : "Identifier",
-			 "accessor_mut" : "SchemaMutable()",
-			 "accessor" : "Schema()"
-		 },
-		 {
-			 "id" : 202,
-			 "name" : "children",
-			 "type" : "vector<unique_ptr<ParsedExpression>>",
-			 "version" : "2.0.0",
-			 "status" : "deleted"
-		 },
-		 {
-			 "id" : 203,
-			 "name" : "filter",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "FilterMutable()",
-			 "accessor" : "Filter()",
-			 "nullable" : true
-		 },
-		 {
-			 "id" : 204,
-			 "name" : "order_bys",
-			 "type" : "OrderModifier*",
-			 "base" : "ResultModifier",
-			 "accessor_mut" : "OrderByMutable()",
-			 "accessor" : "OrderBy()",
-			 "nullable" : true
-		 },
-		 {
-			 "id" : 205,
-			 "name" : "distinct",
-			 "type" : "bool",
-			 "accessor_mut" : "DistinctMutable()",
-			 "accessor" : "Distinct()"
-		 },
-		 {
-			 "id" : 206,
-			 "name" : "is_operator",
-			 "type" : "bool",
-			 "equals_skip" : true,
-			 "accessor_mut" : "IsOperatorMutable()",
-			 "accessor" : "IsOperator()"
-		 },
-		 {
-			 "id" : 207,
-			 "name" : "export_state",
-			 "type" : "bool",
-			 "accessor_mut" : "ExportStateMutable()",
-			 "accessor" : "ExportState()"
-		 },
-		 {
-			 "id" : 208,
-			 "name" : "catalog",
-			 "type" : "Identifier",
-			 "accessor_mut" : "CatalogMutable()",
-			 "accessor" : "Catalog()"
-		 },
-		 {
-			 "id" : 209,
-			 "name" : "arguments",
-			 "type" : "vector<FunctionArgument>",
-			 "accessor_mut" : "GetArgumentsMutable()",
-			 "accessor" : "GetArguments()"
-		 }
-	 ],
-	 "custom_implementation" : true
- },
- {
-	 "class" : "LambdaExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "LAMBDA",
-	 "members" : [
-		 {
-			 "id" : 200,
-			 "name" : "lhs",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "LeftMutable()",
-			 "accessor" : "Left()"
-		 },
-		 {
-			 "id" : 201,
-			 "name" : "expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "RightMutable()",
-			 "accessor" : "Right()"
-		 },
-		 {
-			 "id" : 202,
-			 "name" : "syntax_type",
-			 "type" : "LambdaSyntaxType",
-			 "default" : "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
-			 "version" : "v1.3.0",
-			 "equals_skip" : true,
-			 "accessor_mut" : "GetLambdaSyntaxTypeMutable()",
-			 "accessor" : "GetLambdaSyntaxType()"
-		 }
-	 ]
- },
- {
-	 "class" : "OperatorExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "OPERATOR",
-	 "members" : [ {
-		 "id" : 200,
-		 "name" : "children",
-		 "type" : "vector<ParsedExpression*>",
-		 "accessor_mut" : "GetChildrenMutable()",
-		 "accessor" : "GetChildren()"
-	 } ],
-	 "constructor" : ["type"]
- },
- {
-	 "class" : "ParameterExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "PARAMETER",
-	 "members" : [ {"id" : 200, "name" : "identifier", "type" : "duckdb::Identifier"} ]
- },
- {
-	 "class" : "PositionalReferenceExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "POSITIONAL_REFERENCE",
-	 "members" : [ {"id" : 200, "name" : "index", "type" : "idx_t"} ]
- },
- {
-	 "class" : "StarExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "STAR",
-	 "members" : [
-		 {"id" : 200, "name" : "relation_name", "type" : "Identifier"}, {
-			 "id" : 201,
-			 "name" : "exclude_list",
-			 "type" : "case_insensitive_set_t",
-			 "serialize_property" : "SerializedExcludeList()",
-			 "hash_skip" : true
-		 },
-		 {
-			 "id" : 202,
-			 "name" : "replace_list",
-			 "type" : "identifier_map_t<ParsedExpression*>",
-			 "accessor_mut" : "ReplaceListMutable()",
-			 "accessor" : "ReplaceList()"
-		 },
-		 {"id" : 203, "name" : "columns", "type" : "bool"}, {
-			 "id" : 204,
-			 "name" : "expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "ExpressionMutable()",
-			 "accessor" : "Expression()",
-			 "nullable" : true
-		 },
-		 {"id" : 205, "name" : "unpacked", "type" : "bool", "default" : "false", "status" : "read_only"}, {
-			 "id" : 206,
-			 "name" : "qualified_exclude_list",
-			 "type" : "qualified_column_set_t",
-			 "default" : "qualified_column_set_t()",
-			 "serialize_property" : "SerializedQualifiedExcludeList()",
-			 "equals_skip" : true
-		 },
-		 {
-			 "id" : 207,
-			 "name" : "rename_list",
-			 "type" : "qualified_column_map_t<Identifier>",
-			 "default" : "qualified_column_map_t<Identifier>()"
-		 }
-	 ],
-	 "constructor_method" : "StarExpression::DeserializeStarExpression"
- },
- {
-	 "class" : "SubqueryExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "SUBQUERY",
-	 "members" : [
-		 {"id" : 200, "name" : "subquery_type", "type" : "SubqueryType"},
-		 {"id" : 201, "name" : "subquery", "type" : "SelectStatement*"}, {
-			 "id" : 202,
-			 "name" : "child",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "GetChildMutable()",
-			 "accessor" : "GetChild()",
-			 "nullable" : true
-		 },
-		 {"id" : 203, "name" : "comparison_type", "type" : "ExpressionType"}
-	 ]
- },
- {
-	 "class" : "WindowExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "WINDOW",
-	 "members" : [
-		 {"id" : 200, "name" : "function_name", "type" : "Identifier"},
-		 {"id" : 201, "name" : "schema", "type" : "Identifier"},
-		 {"id" : 202, "name" : "catalog", "type" : "Identifier"}, {
-			 "id" : 203,
-			 "name" : "children",
-			 "type" : "vector<ParsedExpression*>",
-			 "serialize_property" : "SerializedChildren(serializer)",
-			 "accessor_mut" : "GetChildrenMutable()",
-			 "accessor" : "GetChildren()"
-		 },
-		 {
-			 "id" : 204,
-			 "name" : "partitions",
-			 "type" : "vector<ParsedExpression*>",
-			 "accessor_mut" : "PartitionsMutable()",
-			 "accessor" : "Partitions()"
-		 },
-		 {
-			 "id" : 205,
-			 "name" : "orders",
-			 "type" : "vector<OrderByNode>",
-			 "accessor_mut" : "OrderByMutable()",
-			 "accessor" : "OrderBy()"
-		 },
-		 {"id" : 206, "name" : "start", "type" : "WindowBoundary"},
-		 {"id" : 207, "name" : "end", "type" : "WindowBoundary"}, {
-			 "id" : 208,
-			 "name" : "start_expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "StartExprMutable()",
-			 "accessor" : "StartExpr()",
-			 "nullable" : true
-		 },
-		 {
-			 "id" : 209,
-			 "name" : "end_expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "EndExprMutable()",
-			 "accessor" : "EndExpr()",
-			 "nullable" : true
-		 },
-		 {
-			 "id" : 210,
-			 "name" : "offset_expr",
-			 "type" : "ParsedExpression*",
-			 "serialize_property" : "SerializedOffset(serializer)",
-			 "equals_skip" : true
-		 },
-		 {
-			 "id" : 211,
-			 "name" : "default_expr",
-			 "type" : "ParsedExpression*",
-			 "serialize_property" : "SerializedDefault(serializer)",
-			 "equals_skip" : true
-		 },
-		 {"id" : 212, "name" : "ignore_nulls", "type" : "bool"}, {
-			 "id" : 213,
-			 "name" : "filter_expr",
-			 "type" : "ParsedExpression*",
-			 "accessor_mut" : "FilterMutable()",
-			 "accessor" : "Filter()",
-			 "nullable" : true
-		 },
-		 {
-			 "id" : 214,
-			 "name" : "exclude_clause",
-			 "type" : "WindowExcludeMode",
-			 "default" : "WindowExcludeMode::NO_OTHER"
-		 },
-		 {"id" : 215, "name" : "distinct", "type" : "bool"}, {
-			 "id" : 216,
-			 "name" : "arg_orders",
-			 "type" : "vector<OrderByNode>",
-			 "accessor_mut" : "ArgOrdersMutable()",
-			 "accessor" : "ArgOrders()"
-		 },
-		 {"id" : 217, "name" : "has_ignore_nulls", "type" : "bool", "version" : "v2.0.0"}
-	 ],
-	 "constructor" : [ "type", "children", "offset_expr", "default_expr" ]
- },
- {
-	 "class" : "TypeExpression",
-	 "base" : "ParsedExpression",
-	 "enum" : "TYPE",
-	 "members" : [
-		 {"id" : 200, "name" : "catalog", "type" : "Identifier"},
-		 {"id" : 201, "name" : "schema", "type" : "Identifier"},
-		 {"id" : 202, "name" : "type_name", "type" : "Identifier"}, {
-			 "id" : 203,
-			 "name" : "children",
-			 "type" : "vector<unique_ptr<ParsedExpression>>",
-			 "accessor_mut" : "GetChildren()"
-		 }
-	 ]
- }]
+[
+  {
+    "class": "ParsedExpression",
+    "class_type": "expression_class",
+    "set_parameters": [
+      "type"
+    ],
+    "includes": [
+      "duckdb/parser/expression/list.hpp"
+    ],
+    "functions": [
+      "Equals",
+      "Hash",
+      "Children",
+      "Copy"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "class",
+        "type": "ExpressionClass",
+        "property": "expression_class"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "ExpressionType"
+      },
+      {
+        "id": 102,
+        "name": "alias",
+        "type": "Identifier",
+        "equals_skip": true
+      },
+      {
+        "id": 103,
+        "name": "query_location",
+        "type": "optional_idx",
+        "default": "optional_idx()",
+        "equals_skip": true
+      }
+    ]
+  },
+  {
+    "class": "BetweenExpression",
+    "base": "ParsedExpression",
+    "enum": "BETWEEN",
+    "members": [
+      {
+        "id": 200,
+        "name": "input",
+        "type": "ParsedExpression*",
+        "accessor_mut": "InputMutable()",
+        "accessor": "Input()"
+      },
+      {
+        "id": 201,
+        "name": "lower",
+        "type": "ParsedExpression*",
+        "accessor_mut": "LowerBoundMutable()",
+        "accessor": "LowerBound()"
+      },
+      {
+        "id": 202,
+        "name": "upper",
+        "type": "ParsedExpression*",
+        "accessor_mut": "UpperBoundMutable()",
+        "accessor": "UpperBound()"
+      }
+    ]
+  },
+  {
+    "class": "CaseExpression",
+    "base": "ParsedExpression",
+    "enum": "CASE",
+    "members": [
+      {
+        "id": 200,
+        "name": "case_checks",
+        "type": "vector<CaseCheck>",
+        "accessor_mut": "CaseChecksMutable()",
+        "accessor": "CaseChecks()"
+      },
+      {
+        "id": 201,
+        "name": "else_expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "ElseMutable()",
+        "accessor": "Else()"
+      }
+    ]
+  },
+  {
+    "class": "CastExpression",
+    "base": "ParsedExpression",
+    "enum": "CAST",
+    "members": [
+      {
+        "id": 200,
+        "name": "child",
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
+      },
+      {
+        "id": 201,
+        "name": "cast_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 202,
+        "name": "try_cast",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "CollateExpression",
+    "base": "ParsedExpression",
+    "enum": "COLLATE",
+    "members": [
+      {
+        "id": 200,
+        "name": "child",
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
+      },
+      {
+        "id": 201,
+        "name": "collation",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "ColumnRefExpression",
+    "base": "ParsedExpression",
+    "enum": "COLUMN_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "column_names",
+        "type": "vector<Identifier>"
+      }
+    ]
+  },
+  {
+    "class": "LambdaRefExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "lambda_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "column_name",
+        "type": "Identifier"
+      }
+    ],
+    "constructor": [
+      "lambda_idx",
+      "column_name"
+    ]
+  },
+  {
+    "class": "ComparisonExpression",
+    "base": "ParsedExpression",
+    "enum": "COMPARISON",
+    "members": [
+      {
+        "id": 200,
+        "name": "left",
+        "type": "ParsedExpression*",
+        "accessor_mut": "LeftMutable()",
+        "accessor": "Left()"
+      },
+      {
+        "id": 201,
+        "name": "right",
+        "type": "ParsedExpression*",
+        "accessor_mut": "RightMutable()",
+        "accessor": "Right()"
+      }
+    ],
+    "constructor": [
+      "type"
+    ]
+  },
+  {
+    "class": "ConjunctionExpression",
+    "base": "ParsedExpression",
+    "enum": "CONJUNCTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "children",
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
+      }
+    ],
+    "constructor": [
+      "type"
+    ]
+  },
+  {
+    "class": "ConstantExpression",
+    "base": "ParsedExpression",
+    "enum": "CONSTANT",
+    "members": [
+      {
+        "id": 200,
+        "name": "value",
+        "type": "Value"
+      }
+    ]
+  },
+  {
+    "class": "DefaultExpression",
+    "base": "ParsedExpression",
+    "enum": "DEFAULT",
+    "members": []
+  },
+  {
+    "class": "FunctionExpression",
+    "base": "ParsedExpression",
+    "enum": "FUNCTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "function_name",
+        "type": "Identifier",
+        "accessor_mut": "FunctionNameMutable()",
+        "accessor": "FunctionName()"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "Identifier",
+        "accessor_mut": "SchemaMutable()",
+        "accessor": "Schema()"
+      },
+      {
+        "id": 202,
+        "name": "children",
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
+      },
+      {
+        "id": 203,
+        "name": "filter",
+        "type": "ParsedExpression*",
+        "accessor_mut": "FilterMutable()",
+        "accessor": "Filter()",
+        "nullable": true
+      },
+      {
+        "id": 204,
+        "name": "order_bys",
+        "type": "OrderModifier*",
+        "base": "ResultModifier",
+        "accessor_mut": "OrderByMutable()",
+        "accessor": "OrderBy()",
+        "nullable": true
+      },
+      {
+        "id": 205,
+        "name": "distinct",
+        "type": "bool",
+        "accessor_mut": "DistinctMutable()",
+        "accessor": "Distinct()"
+      },
+      {
+        "id": 206,
+        "name": "is_operator",
+        "type": "bool",
+        "equals_skip": true,
+        "accessor_mut": "IsOperatorMutable()",
+        "accessor": "IsOperator()"
+      },
+      {
+        "id": 207,
+        "name": "export_state",
+        "type": "bool",
+        "accessor_mut": "ExportStateMutable()",
+        "accessor": "ExportState()"
+      },
+      {
+        "id": 208,
+        "name": "catalog",
+        "type": "Identifier",
+        "accessor_mut": "CatalogMutable()",
+        "accessor": "Catalog()"
+      },
+      {
+        "id": 209,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
+      }
+    ],
+    "custom_implementation": true
+  },
+  {
+    "class": "LambdaExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA",
+    "members": [
+      {
+        "id": 200,
+        "name": "lhs",
+        "type": "ParsedExpression*",
+        "accessor_mut": "LeftMutable()",
+        "accessor": "Left()"
+      },
+      {
+        "id": 201,
+        "name": "expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "RightMutable()",
+        "accessor": "Right()"
+      },
+      {
+        "id": 202,
+        "name": "syntax_type",
+        "type": "LambdaSyntaxType",
+        "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
+        "version": "v1.3.0",
+        "equals_skip": true,
+        "accessor_mut": "GetLambdaSyntaxTypeMutable()",
+        "accessor": "GetLambdaSyntaxType()"
+      }
+    ]
+  },
+  {
+    "class": "OperatorExpression",
+    "base": "ParsedExpression",
+    "enum": "OPERATOR",
+    "members": [
+      {
+        "id": 200,
+        "name": "children",
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
+      }
+    ],
+    "constructor": [
+      "type"
+    ]
+  },
+  {
+    "class": "ParameterExpression",
+    "base": "ParsedExpression",
+    "enum": "PARAMETER",
+    "members": [
+      {
+        "id": 200,
+        "name": "identifier",
+        "type": "Identifier"
+      }
+    ]
+  },
+  {
+    "class": "PositionalReferenceExpression",
+    "base": "ParsedExpression",
+    "enum": "POSITIONAL_REFERENCE",
+    "members": [
+      {
+        "id": 200,
+        "name": "index",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "StarExpression",
+    "base": "ParsedExpression",
+    "enum": "STAR",
+    "members": [
+      {
+        "id": 200,
+        "name": "relation_name",
+        "type": "Identifier"
+      },
+      {
+        "id": 201,
+        "name": "exclude_list",
+        "type": "case_insensitive_set_t",
+        "serialize_property": "SerializedExcludeList()",
+        "hash_skip": true
+      },
+      {
+        "id": 202,
+        "name": "replace_list",
+        "type": "identifier_map_t<ParsedExpression*>",
+        "accessor_mut": "ReplaceListMutable()",
+        "accessor": "ReplaceList()"
+      },
+      {
+        "id": 203,
+        "name": "columns",
+        "type": "bool"
+      },
+      {
+        "id": 204,
+        "name": "expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "ExpressionMutable()",
+        "accessor": "Expression()",
+        "nullable": true
+      },
+      {
+        "id": 205,
+        "name": "unpacked",
+        "type": "bool",
+        "default": "false",
+        "status": "read_only"
+      },
+      {
+        "id": 206,
+        "name": "qualified_exclude_list",
+        "type": "qualified_column_set_t",
+        "default": "qualified_column_set_t()",
+        "serialize_property": "SerializedQualifiedExcludeList()",
+        "equals_skip": true
+      },
+      {
+        "id": 207,
+        "name": "rename_list",
+        "type": "qualified_column_map_t<Identifier>",
+        "default": "qualified_column_map_t<Identifier>()"
+      }
+    ],
+    "constructor_method": "StarExpression::DeserializeStarExpression"
+  },
+  {
+    "class": "SubqueryExpression",
+    "base": "ParsedExpression",
+    "enum": "SUBQUERY",
+    "members": [
+      {
+        "id": 200,
+        "name": "subquery_type",
+        "type": "SubqueryType"
+      },
+      {
+        "id": 201,
+        "name": "subquery",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 202,
+        "name": "child",
+        "type": "ParsedExpression*",
+        "accessor_mut": "GetChildMutable()",
+        "accessor": "GetChild()",
+        "nullable": true
+      },
+      {
+        "id": 203,
+        "name": "comparison_type",
+        "type": "ExpressionType"
+      }
+    ]
+  },
+  {
+    "class": "WindowExpression",
+    "base": "ParsedExpression",
+    "enum": "WINDOW",
+    "members": [
+      {
+        "id": 200,
+        "name": "function_name",
+        "type": "Identifier"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "Identifier"
+      },
+      {
+        "id": 202,
+        "name": "catalog",
+        "type": "Identifier"
+      },
+      {
+        "id": 203,
+        "name": "children",
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
+      },
+      {
+        "id": 204,
+        "name": "partitions",
+        "type": "vector<ParsedExpression*>",
+        "accessor_mut": "PartitionsMutable()",
+        "accessor": "Partitions()"
+      },
+      {
+        "id": 205,
+        "name": "orders",
+        "type": "vector<OrderByNode>",
+        "accessor_mut": "OrderByMutable()",
+        "accessor": "OrderBy()"
+      },
+      {
+        "id": 206,
+        "name": "start",
+        "type": "WindowBoundary"
+      },
+      {
+        "id": 207,
+        "name": "end",
+        "type": "WindowBoundary"
+      },
+      {
+        "id": 208,
+        "name": "start_expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "StartExprMutable()",
+        "accessor": "StartExpr()",
+        "nullable": true
+      },
+      {
+        "id": 209,
+        "name": "end_expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "EndExprMutable()",
+        "accessor": "EndExpr()",
+        "nullable": true
+      },
+      {
+        "id": 210,
+        "name": "offset_expr",
+        "type": "ParsedExpression*",
+        "serialize_property": "SerializedOffset(serializer)",
+        "equals_skip": true
+      },
+      {
+        "id": 211,
+        "name": "default_expr",
+        "type": "ParsedExpression*",
+        "serialize_property": "SerializedDefault(serializer)",
+        "equals_skip": true
+      },
+      {
+        "id": 212,
+        "name": "ignore_nulls",
+        "type": "bool"
+      },
+      {
+        "id": 213,
+        "name": "filter_expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "FilterMutable()",
+        "accessor": "Filter()",
+        "nullable": true
+      },
+      {
+        "id": 214,
+        "name": "exclude_clause",
+        "type": "WindowExcludeMode",
+        "default": "WindowExcludeMode::NO_OTHER"
+      },
+      {
+        "id": 215,
+        "name": "distinct",
+        "type": "bool"
+      },
+      {
+        "id": 216,
+        "name": "arg_orders",
+        "type": "vector<OrderByNode>",
+        "accessor_mut": "ArgOrdersMutable()",
+        "accessor": "ArgOrders()"
+      },
+      {
+        "id": 217,
+        "name": "has_ignore_nulls",
+        "type": "bool",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 218,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
+      }
+    ],
+    "custom_implementation": true
+  },
+  {
+    "class": "TypeExpression",
+    "base": "ParsedExpression",
+    "enum": "TYPE",
+    "members": [
+      {
+        "id": 200,
+        "name": "catalog",
+        "type": "Identifier"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "Identifier"
+      },
+      {
+        "id": 202,
+        "name": "type_name",
+        "type": "Identifier"
+      },
+      {
+        "id": 203,
+        "name": "children",
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "accessor_mut": "GetChildren()"
+      }
+    ]
+  }
+]

@@ -61,7 +61,9 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			UpdateBinder binder(*expr_binder_ptr, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
-			PlanSubqueries(bound_expr, root);
+			if (root) {
+				PlanSubqueries(bound_expr, root);
+			}
 
 			auto bound_type = bound_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));

@@ -92,7 +92,7 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 		adbc_driver->ConnectionSetOptionDouble = duckdb_adbc::ConnectionSetOptionDouble;
 
 		adbc_driver->StatementCancel = duckdb_adbc::StatementCancel;
-		adbc_driver->StatementExecuteSchema = nullptr;
+		adbc_driver->StatementExecuteSchema = duckdb_adbc::StatementExecuteSchema;
 		adbc_driver->StatementGetOption = duckdb_adbc::StatementGetOption;
 		adbc_driver->StatementGetOptionBytes = duckdb_adbc::StatementGetOptionBytes;
 		adbc_driver->StatementGetOptionDouble = duckdb_adbc::StatementGetOptionDouble;
@@ -1490,6 +1490,62 @@ AdbcStatusCode StatementCancel(struct AdbcStatement *statement, struct AdbcError
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	duckdb_interrupt(wrapper->connection);
+	return ADBC_STATUS_OK;
+}
+
+AdbcStatusCode StatementExecuteSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                      struct AdbcError *error) {
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!schema) {
+		SetError(error, "Missing schema object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+	if (!wrapper->statement) {
+		SetError(error, "Must call StatementSetSqlQuery before StatementExecuteSchema");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+
+	if (wrapper->conn_wrapper) {
+		wrapper->conn_wrapper->MaterializeStreams();
+	}
+
+	auto count = duckdb_prepared_statement_column_count(wrapper->statement);
+	std::vector<duckdb_logical_type> types(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
+	duckdb::vector<const char *> names(count);
+
+	for (idx_t i = 0; i < count; i++) {
+		types[i] = duckdb_prepared_statement_column_logical_type(wrapper->statement, i);
+		auto column_name = duckdb_prepared_statement_column_name(wrapper->statement, i);
+		owned_names.emplace_back(column_name ? column_name : "");
+		names[i] = owned_names.back().c_str();
+		duckdb_free(const_cast<char *>(column_name));
+	}
+
+	duckdb_arrow_options arrow_options;
+	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
+
+	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, schema);
+
+	for (auto &type : types) {
+		duckdb_destroy_logical_type(&type);
+	}
+	duckdb_destroy_arrow_options(&arrow_options);
+
+	if (res) {
+		SetError(error, duckdb_error_data_message(res));
+		duckdb_destroy_error_data(&res);
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	return ADBC_STATUS_OK;
 }
 

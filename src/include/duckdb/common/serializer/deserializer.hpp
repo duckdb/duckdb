@@ -19,6 +19,7 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 

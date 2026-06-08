@@ -278,12 +278,13 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			}
 		} else {
 			//	Slice to [begin, end)
-			if (begin) {
+			if (begin == 0 && end == sink_chunk.size()) {
+				inputs.Reference(payload_chunk);
+			} else {
+				//	we cannot resize non-flat vectors (e.g. dictionary vectors), so we have to slice
 				for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
 					inputs.data[c].Slice(payload_chunk.data[c], begin, end);
 				}
-			} else {
-				inputs.Reference(payload_chunk);
 			}
 			inputs.SetChildCardinality(end - begin);
 		}
