@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_corr_state_export.test
+# name: test/sql/aggregate/aggregate_state_export/test_corr_state_export.test
 # description: Test the state export functionality for corr
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 require noforcestorage
 
