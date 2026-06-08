@@ -73,17 +73,23 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
-		auto metadata_offset = Load<uint32_t>(segment_data);
-		metadata_ptr = segment_data + metadata_offset;
-
 		const auto block_size = segment.GetBlockSize();
+
 		idx_t total_segment_offset = segment.GetBlockOffset();
-		total_segment_offset += metadata_offset;
-		if (total_segment_offset + AlpRDConstants::HEADER_SIZE > block_size) {
+		auto metadata_offset = Load<uint32_t>(segment_data);
+		auto segment_ptr = segment_data + AlpRDConstants::METADATA_POINTER_SIZE;
+		total_segment_offset += AlpRDConstants::METADATA_POINTER_SIZE;
+
+		metadata_ptr = segment_data + metadata_offset;
+		const idx_t metadata_ptr_offset = segment.GetBlockOffset() + metadata_offset;
+		if (metadata_ptr_offset > block_size) {
 			throw InternalException("Corrupted ALPRD segment: metadata_offset value is corrupted");
 		}
 
-		auto segment_ptr = segment_data + AlpRDConstants::METADATA_POINTER_SIZE;
+		if (total_segment_offset + AlpRDConstants::HEADER_SIZE > block_size) {
+			throw InternalException("Corrupted ALPRD segment: reading header bytes would exceed block space");
+		}
+
 		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
 		vector_state.right_bit_width = Load<uint8_t>(segment_ptr);
 		segment_ptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
@@ -98,7 +104,7 @@ public:
 		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		const idx_t left_parts_dict_max_size = sizeof(vector_state.left_parts_dict);
-		if (total_segment_offset + actual_dictionary_size_bytes > block_size ||
+		if (total_segment_offset + actual_dictionary_size_bytes > metadata_ptr_offset ||
 		    actual_dictionary_size_bytes > left_parts_dict_max_size) {
 			throw InternalException("Corrupted ALPRD segment: actual_dictionary_size is corrupted");
 		}
