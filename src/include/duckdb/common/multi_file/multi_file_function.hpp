@@ -62,6 +62,9 @@ struct MultiFileReaderInterface {
 		return GetCardinality(bind_data, file_count);
 	}
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
+	//! (Optional) add format-specific profiling metrics for this scan, shown in EXPLAIN ANALYZE. The global_state is
+	//! the format-specific GlobalTableFunctionState returned by InitializeGlobalState.
+	virtual void GetMetrics(optional_ptr<GlobalTableFunctionState> global_state, OperatorMetrics &metrics);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 	virtual FileGlobInput GetGlobInput();
 };
@@ -908,6 +911,9 @@ public:
 			auto list_of_types = StringUtil::Join(file_path_names, ", ");
 			input.operator_metrics.AddExtraInfo("Filename(s)", list_of_types);
 		}
+
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		bind_data.interface->GetMetrics(gstate.global_state.get(), input.operator_metrics);
 	}
 
 	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,

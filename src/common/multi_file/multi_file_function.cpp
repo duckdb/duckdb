@@ -37,6 +37,10 @@ void MultiFileReaderInterface::GetVirtualColumns(ClientContext &context, MultiFi
                                                  virtual_column_map_t &result) {
 }
 
+void MultiFileReaderInterface::GetMetrics(optional_ptr<GlobalTableFunctionState> global_state,
+                                          OperatorMetrics &metrics) {
+}
+
 void MultiFileReaderInterface::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
                                              LocalTableFunctionState &local_state) {
 }

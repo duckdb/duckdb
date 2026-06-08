@@ -94,6 +94,10 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t batch_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
+	//! Number of row groups that had their data read / skipped (via row-group pruning), aggregated across all
+	//! files and threads. Surfaced as profiling metrics in EXPLAIN ANALYZE.
+	atomic<idx_t> row_groups_read {0};
+	atomic<idx_t> row_groups_skipped {0};
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -801,7 +805,18 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
+	local_state.scan_state.row_groups_read = &gstate.row_groups_read;
+	local_state.scan_state.row_groups_skipped = &gstate.row_groups_skipped;
 	return Scan(context, local_state.scan_state, chunk);
+}
+
+void ParquetMultiFileInfo::GetMetrics(optional_ptr<GlobalTableFunctionState> global_state, OperatorMetrics &metrics) {
+	if (!global_state) {
+		return;
+	}
+	auto &gstate = global_state->Cast<ParquetReadGlobalState>();
+	metrics.AddExtraInfo("Row Groups Read", to_string(gstate.row_groups_read.load()));
+	metrics.AddExtraInfo("Row Groups Skipped", to_string(gstate.row_groups_skipped.load()));
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {
