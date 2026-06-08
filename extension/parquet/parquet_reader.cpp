@@ -1904,7 +1904,8 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 }
 
 // When doing ParquetPrefetchStrategy::PREFETCH_FILTERS, we gotta block mid processing to get the other columns.
-// on the re-entry the chunk is reset in the multifilescan which borkes our datachunk, hence we need to copy for ownership.
+// on the re-entry the chunk is reset in the multifilescan which borkes our datachunk, hence we need to copy for
+// ownership.
 // FIXME: maybe we can change this to be able to move? or not have the multifile reset? bigger refactor though.
 static void CopyFilterColumns(const vector<ParquetScanFilter> &scan_filters, DataChunk &src, DataChunk &dst,
                               idx_t count) {
