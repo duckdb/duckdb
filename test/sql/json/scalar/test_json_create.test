@@ -199,6 +199,11 @@ select array_to_json([42])
 ----
 [42]
 
+query T
+select array_to_json(array_value(42))
+----
+[42]
+
 statement error
 select array_to_json([42], [21])
 ----
