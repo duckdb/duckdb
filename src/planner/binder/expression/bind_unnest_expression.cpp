@@ -93,7 +93,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!args[i].GetExpression().IsScalar()) {
 				break;
 			}
-			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias().GetIdentifierName());
+			auto alias = args[i].GetExpression().GetAlias();
 			BindChild(args[i].GetExpressionMutable(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
@@ -113,7 +113,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			} else if (alias == "keep_parent_names") {
 				keep_parent_names = value.GetValue<bool>();
 			} else if (!alias.empty()) {
-				throw BinderException("Unsupported parameter \"%s\" for unnest", alias);
+				throw BinderException("Unsupported parameter \"%s\" for unnest", alias.GetIdentifierName());
 			} else {
 				break;
 			}
@@ -206,7 +206,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->ChildMutable() = std::move(unnest_expr);
-		auto alias = function.GetAlias().empty() ? result->ToString() : function.GetAlias().GetIdentifierName();
+		Identifier alias = function.GetAlias().empty() ? Identifier(result->ToString()) : function.GetAlias();
 
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);
@@ -224,7 +224,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(
-		    Identifier(std::move(alias)), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
+		    std::move(alias), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
 	}
 	// now perform struct unnests, if any
 	if (struct_unnests > 0) {

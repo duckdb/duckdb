@@ -74,10 +74,10 @@ PEGTransformerFactory::TransformWithList(PEGTransformer &transformer,
 
 case_insensitive_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformRelOptionList(PEGTransformer &transformer,
-                                              vector<pair<string, unique_ptr<ParsedExpression>>> rel_option) {
+                                              vector<pair<Identifier, unique_ptr<ParsedExpression>>> rel_option) {
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> result;
 	for (auto &option : rel_option) {
-		result.insert({option.first, std::move(option.second)});
+		result.insert({option.first.GetIdentifierName(), std::move(option.second)});
 	}
 	return result;
 }
@@ -102,13 +102,13 @@ Identifier PEGTransformerFactory::TransformRelOptionName(PEGTransformer &transfo
 	return Identifier(child);
 }
 
-pair<string, unique_ptr<ParsedExpression>>
+pair<Identifier, unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
                                           unique_ptr<ParsedExpression> rel_option_argument_opt) {
 	if (!rel_option_argument_opt) {
-		return {rel_option_name.GetIdentifierName(), make_uniq<ConstantExpression>(Value())};
+		return {rel_option_name, make_uniq<ConstantExpression>(Value())};
 	}
-	return {rel_option_name.GetIdentifierName(), std::move(rel_option_argument_opt)};
+	return {rel_option_name, std::move(rel_option_argument_opt)};
 }
 
 // RelOptionArgumentOpt <- '=' DefArg

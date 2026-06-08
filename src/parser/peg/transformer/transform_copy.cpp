@@ -15,14 +15,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyStatement(PEGTransf
 void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &options) {
 	case_insensitive_string_set_t option_names;
 	for (auto &option : options) {
-		if (option_names.find(option.name) != option_names.end()) {
+		if (option_names.find(option.name.GetIdentifierName()) != option_names.end()) {
 			throw ParserException("Unexpected duplicate option \"%s\"", option.name);
 		}
-		option_names.insert(option.name);
-		if (StringUtil::CIEquals(option.name, "PARTITION_BY") || StringUtil::CIEquals(option.name, "FORCE_QUOTE") ||
-		    StringUtil::CIEquals(option.name, "FORCE_NOT_NULL") || StringUtil::CIEquals(option.name, "FORCE_NULL")) {
+		option_names.insert(option.name.GetIdentifierName());
+		if (option.name == "PARTITION_BY" || option.name == "FORCE_QUOTE" || option.name == "FORCE_NOT_NULL" ||
+		    option.name == "FORCE_NULL") {
 			if (option.expression) {
-				info->parsed_options[option.name] = std::move(option.expression);
+				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
 			} else {
 				if (option.children.empty()) {
 					throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
@@ -33,25 +33,27 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				}
 				auto row_func =
 				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
-				info->parsed_options[option.name] = std::move(row_func);
+				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);
 			}
-		} else if (StringUtil::CIEquals(option.name, "HEADER") || StringUtil::CIEquals(option.name, "ESCAPE")) {
+		} else if (option.name == "HEADER" || option.name == "ESCAPE") {
 			if (option.children.empty()) {
-				info->parsed_options[option.name] = nullptr;
+				info->parsed_options[option.name.GetIdentifierName()] = nullptr;
 			} else {
-				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name.GetIdentifierName()] =
+				    make_uniq<ConstantExpression>(option.children[0]);
 			}
-		} else if (StringUtil::CIEquals(option.name, "NULL") || StringUtil::CIEquals(option.name, "NULLSTR")) {
+		} else if (option.name == "NULL" || option.name == "NULLSTR") {
 			if (option.children.empty()) {
-				info->parsed_options[option.name] = std::move(option.expression);
+				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
 			} else {
-				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name.GetIdentifierName()] =
+				    make_uniq<ConstantExpression>(option.children[0]);
 			}
 		} else {
 			if (option.expression) {
-				info->parsed_options[option.name] = std::move(option.expression);
+				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
 			} else {
-				info->options[option.name] = option.children;
+				info->options[option.name.GetIdentifierName()] = option.children;
 			}
 		}
 	}
@@ -166,10 +168,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameStringL
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameIdentifier(PEGTransformer &transformer,
                                                                                     const Identifier &identifier) {
-	auto file_name = identifier.GetIdentifierName();
-	if (StringUtil::CIEquals(file_name, "stdout")) {
-		file_name = "/dev/stdout";
-	}
+	string file_name = identifier == "stdout" ? "/dev/stdout" : identifier.GetIdentifierName();
 	return make_uniq<ConstantExpression>(Value(file_name));
 }
 
@@ -209,7 +208,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
                                                                    const vector<Identifier> &star_symbol_column_list) {
 	string func_name = force_quote ? "force_quote" : "quote";
 	auto result = GenericCopyOption();
-	result.name = func_name;
+	result.name = Identifier(func_name);
 	if (star_symbol_column_list.empty()) {
 		result.expression = make_uniq<StarExpression>();
 		return result;

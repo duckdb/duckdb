@@ -231,8 +231,8 @@ void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	auto function_name = function.name.GetIdentifierName();
-	CreatePragmaFunctionInfo info(Identifier(std::move(function_name)), std::move(function));
+	auto &function_name = function.name;
+	CreatePragmaFunctionInfo info(function_name, std::move(function));
 	info.extension_name = GetRegisteredExtensionName();
 	info.schema = loader_info.extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

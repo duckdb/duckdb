@@ -214,7 +214,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				throw NotImplementedException("The 'auto' option is not yet implemented for 'shredding'");
 			} else {
-				case_insensitive_set_t variant_names;
+				identifier_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;
@@ -232,7 +232,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				for (idx_t i = 0; i < struct_children.size(); i++) {
 					const auto &col_name =
 					    StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
-					auto it = variant_names.find(col_name);
+					auto it = variant_names.find(Identifier(col_name));
 					if (it == variant_names.end()) {
 						string names;
 						for (const auto &entry : variant_names) {

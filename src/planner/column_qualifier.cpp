@@ -20,38 +20,37 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
 }
 
 static Identifier GetSQLValueFunctionName(const Identifier &column_name) {
-	const auto lcase = StringUtil::Lower(column_name.GetIdentifierName());
-	if (lcase == "current_catalog") {
+	if (column_name == "current_catalog") {
 		return "current_catalog";
 	}
-	if (lcase == "current_date") {
+	if (column_name == "current_date") {
 		return "current_date";
 	}
-	if (lcase == "current_schema") {
+	if (column_name == "current_schema") {
 		return "current_schema";
 	}
-	if (lcase == "current_role") {
+	if (column_name == "current_role") {
 		return "current_role";
 	}
-	if (lcase == "current_time") {
+	if (column_name == "current_time") {
 		return "get_current_time";
 	}
-	if (lcase == "current_timestamp") {
+	if (column_name == "current_timestamp") {
 		return "get_current_timestamp";
 	}
-	if (lcase == "current_user") {
+	if (column_name == "current_user") {
 		return "current_user";
 	}
-	if (lcase == "localtime") {
+	if (column_name == "localtime") {
 		return "current_localtime";
 	}
-	if (lcase == "localtimestamp") {
+	if (column_name == "localtimestamp") {
 		return "current_localtimestamp";
 	}
-	if (lcase == "session_user") {
+	if (column_name == "session_user") {
 		return "session_user";
 	}
-	if (lcase == "user") {
+	if (column_name == "user") {
 		return "user";
 	}
 	return Identifier();

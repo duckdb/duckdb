@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	bool storage_isset = false;
 
 	for (const auto &param : input.named_parameters) {
-		auto key = StringUtil::Lower(param.first.GetIdentifierName());
+		auto &key = param.first;
 		if (key == "level") {
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
 		} else if (key == "storage") {

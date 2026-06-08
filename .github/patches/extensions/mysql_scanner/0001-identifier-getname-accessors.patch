@@ -523,7 +523,7 @@ index bb6d76f..d1abfee 100644
  }
  
 diff --git a/src/storage/mysql_table_set.cpp b/src/storage/mysql_table_set.cpp
-index e2e893e..54ac6b5 100644
+index e2e893e..e6be4a9 100644
 --- a/src/storage/mysql_table_set.cpp
 +++ b/src/storage/mysql_table_set.cpp
 @@ -33,7 +33,7 @@ void MySQLTableSet::AddColumn(ClientContext &context, MySQLResult &result, MySQL
@@ -553,6 +553,15 @@ index e2e893e..54ac6b5 100644
  	auto result = transaction.Query(query);
  	auto table_info = make_uniq<MySQLTableInfo>(schema, table_name);
  	while (result->Next()) {
+@@ -126,7 +126,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
+ 	logical_index_set_t not_null_columns;
+ 	logical_index_set_t unique_columns;
+ 	logical_index_set_t pk_columns;
+-	unordered_set<string> multi_key_pks;
++	identifier_set_t multi_key_pks;
+ 	vector<string> extra_constraints;
+ 	for (auto &constraint : constraints) {
+ 		if (constraint->type == ConstraintType::NOT_NULL) {
 @@ -134,7 +134,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
  			not_null_columns.insert(not_null.index);
  		} else if (constraint->type == ConstraintType::UNIQUE) {
@@ -562,15 +571,6 @@ index e2e893e..54ac6b5 100644
  			if (pk.index.index != DConstants::INVALID_INDEX) {
  				// no columns specified: single column constraint
  				if (pk.is_primary_key) {
-@@ -148,7 +148,7 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
- 				if (pk.is_primary_key) {
- 					// multi key pk column: insert set of columns into multi_key_pks
- 					for (auto &col : pk.columns) {
--						multi_key_pks.insert(col);
-+						multi_key_pks.insert(col.GetIdentifierName());
- 					}
- 				}
- 				extra_constraints.push_back(constraint->ToString());
 @@ -168,11 +168,11 @@ string MySQLColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Cons
  		if (column.Oid() > 0) {
  			ss << ", ";
@@ -581,7 +581,7 @@ index e2e893e..54ac6b5 100644
  		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
  		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
 -		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
-+		bool is_multi_key_pk = multi_key_pks.find(column.Name().GetIdentifierName()) != multi_key_pks.end();
++		bool is_multi_key_pk = multi_key_pks.find(Identifier(column.Name().GetIdentifierName())) != multi_key_pks.end();
  		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
  		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
  			// NOT NULL but not a primary key column

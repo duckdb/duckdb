@@ -150,7 +150,7 @@ public:
 	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
 	//! The name of the dummy binding
-	string dummy_name;
+	Identifier dummy_name;
 
 public:
 	//! Binding macros

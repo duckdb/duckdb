@@ -362,7 +362,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 
-	if (!StringUtil::CIEquals(value->name.GetIdentifierName(), entry->name.GetIdentifierName())) {
+	if (!(value->name == entry->name)) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
@@ -575,7 +575,7 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 		auto entry_score = StringUtil::SimilarityRating(kv.first.GetIdentifierName(), name.GetIdentifierName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = kv.first.GetIdentifierName();
+			result.name = Identifier(kv.first.GetIdentifierName());
 		}
 	}
 	return result;

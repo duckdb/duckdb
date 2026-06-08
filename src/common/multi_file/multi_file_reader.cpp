@@ -344,7 +344,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 	if (file_options.union_by_name) {
 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 			auto &column = local_columns[col_idx];
-			name_map[column.name] = col_idx;
+			name_map[column.name.GetIdentifierName()] = col_idx;
 		}
 	}
 	std::map<string, string> hive_partitions;
@@ -368,7 +368,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			auto &name = column.name;
 			auto &type = column.type;
 
-			auto entry = name_map.find(name);
+			auto entry = name_map.find(name.GetIdentifierName());
 			bool not_present_in_file = entry == name_map.end();
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file

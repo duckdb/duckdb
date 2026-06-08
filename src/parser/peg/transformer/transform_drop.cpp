@@ -244,7 +244,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
                                                                      const SecretPersistType &temporary,
                                                                      const bool &if_exists,
                                                                      const Identifier &secret_name,
-                                                                     const string &drop_secret_storage) {
+                                                                     const Identifier &drop_secret_storage) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	info->type = CatalogType::SECRET_ENTRY;
@@ -253,14 +253,15 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
 
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->name = secret_name;
-	extra_drop_info->secret_storage = drop_secret_storage;
+	extra_drop_info->secret_storage = drop_secret_storage.GetIdentifierName();
 	info->extra_drop_info = std::move(extra_drop_info);
 	result->info = std::move(info);
 	return result;
 }
 
-string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer, const Identifier &identifier) {
-	return identifier.GetIdentifierName();
+Identifier PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer,
+                                                             const Identifier &identifier) {
+	return identifier;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,

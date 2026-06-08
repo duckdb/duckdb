@@ -131,10 +131,8 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 
 static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
                                                               const Identifier &input_name) {
-	auto schema = StringUtil::Lower(input_schema.GetIdentifierName());
-	auto name = StringUtil::Lower(input_name.GetIdentifierName());
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
-		if (internal_table_macros[index].schema == schema && internal_table_macros[index].name == name) {
+		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
 			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index]);
 		}
 	}

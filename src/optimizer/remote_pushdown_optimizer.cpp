@@ -58,7 +58,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
 	// Deduplicate by catalog name.
-	case_insensitive_set_t seen_remote_catalogs;
+	identifier_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
 		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
 		if (!catalog_entry) {
@@ -67,7 +67,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 		if (!catalog_entry->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			pushdown_state.local_catalogs_in_search_path.push_back(entry);
 		} else {
-			if (seen_remote_catalogs.insert(catalog_entry->GetName().GetIdentifierName()).second) {
+			if (seen_remote_catalogs.insert(catalog_entry->GetName()).second) {
 				pushdown_state.remote_catalogs_in_search_path.push_back(*catalog_entry);
 			}
 		}
@@ -834,10 +834,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 		// For 3-part  catalog.table.col        → table.col   (one level stripped)
 		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
 		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
-			string table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2].GetIdentifierName();
-			string col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1].GetIdentifierName();
-			col_ref.ColumnNamesMutable() =
-			    vector<Identifier> {Identifier(std::move(table_name)), Identifier(std::move(col_name))};
+			auto &table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
+			auto &col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
+			col_ref.ColumnNamesMutable() = vector<Identifier> {table_name, col_name};
 		}
 		return;
 	}

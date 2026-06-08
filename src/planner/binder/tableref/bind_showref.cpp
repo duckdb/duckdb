@@ -151,7 +151,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 }
 
 BoundStatement Binder::BindShowTable(ShowRef &ref) {
-	auto lname = StringUtil::Lower(ref.table_name.GetIdentifierName());
+	auto &lname = ref.table_name;
 
 	string sql;
 	if (lname == "\"databases\"") {

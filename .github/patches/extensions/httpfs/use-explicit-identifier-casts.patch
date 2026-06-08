@@ -1,5 +1,5 @@
 diff --git a/src/create_secret_functions.cpp b/src/create_secret_functions.cpp
-index aa5c9b2..3c47ddd 100644
+index aa5c9b2..7b82c9c 100644
 --- a/src/create_secret_functions.cpp
 +++ b/src/create_secret_functions.cpp
 @@ -22,7 +22,7 @@ static Value MapToStruct(const Value &map) {
@@ -36,7 +36,7 @@ index aa5c9b2..3c47ddd 100644
  		auto &key = StructType::GetChildName(refresh_info.type(), i);
  		auto &value = refresh_info_children[i];
 -		result.options[key] = value;
-+		result.options[key.GetIdentifierName()] = value;
++		result.options[Identifier(key.GetIdentifierName()).GetIdentifierName()] = value;
  	}
  
  	return result;

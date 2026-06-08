@@ -159,7 +159,7 @@ index 194e980..ef0e7bc 100644
  
  	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
 diff --git a/src/include/avro_type.hpp b/src/include/avro_type.hpp
-index 513eed1..8760abc 100644
+index 513eed1..01962c6 100644
 --- a/src/include/avro_type.hpp
 +++ b/src/include/avro_type.hpp
 @@ -44,7 +44,7 @@ public:
@@ -171,7 +171,7 @@ index 513eed1..8760abc 100644
  				type_children.emplace_back(child_col.name, child_col.type);
  				children.push_back(std::move(child_col));
  			}
-@@ -89,7 +89,7 @@ public:
+@@ -89,11 +89,11 @@ public:
  				if (child.second.duckdb_type == LogicalTypeId::SQLNULL) {
  					continue;
  				}
@@ -180,3 +180,8 @@ index 513eed1..8760abc 100644
  				children.push_back(std::move(member));
  			}
  			if (children.size() == 1) {
+-				children[0].name = name;
++				children[0].name = Identifier(name);
+ 
+ 				if (avro_type.HasFieldId()) {
+ 					children[0].identifier = Value::INTEGER(avro_type.GetFieldId());

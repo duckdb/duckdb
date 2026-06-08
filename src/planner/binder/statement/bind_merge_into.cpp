@@ -270,7 +270,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
-	string table_alias = node.target->alias.GetIdentifierName();
+	auto &table_alias = node.target->alias;
 	auto bound_table = target_binder->Bind(*node.target);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
@@ -491,7 +491,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// add the merge_action virtual column
 		virtual_column_map_t virtual_columns;
 		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
-		return BindReturning(std::move(node.returning_list), table, Identifier(table_alias), merge_table_index,
+		return BindReturning(std::move(node.returning_list), table, table_alias, merge_table_index,
 		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
 	}
 

@@ -117,7 +117,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	logical_index_set_t not_null_columns;
 	logical_index_set_t unique_columns;
 	logical_index_set_t pk_columns;
-	unordered_set<string> multi_key_pks;
+	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
@@ -137,7 +137,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				if (pk.IsPrimaryKey()) {
 					// multi key pk column: insert set of columns into multi_key_pks
 					for (auto &col : pk.GetColumnNames()) {
-						multi_key_pks.insert(col.GetIdentifierName());
+						multi_key_pks.insert(col);
 					}
 				}
 				extra_constraints.push_back(constraint->ToString());
@@ -160,7 +160,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		ss << column.ToSQLString();
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
-		bool is_multi_key_pk = multi_key_pks.find(column.Name().GetIdentifierName()) != multi_key_pks.end();
+		bool is_multi_key_pk = multi_key_pks.find(Identifier(column.Name().GetIdentifierName())) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column

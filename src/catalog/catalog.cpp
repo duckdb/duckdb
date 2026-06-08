@@ -787,7 +787,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 		}
 	} else if (!entries.empty()) {
 		for (auto &entry : entries) {
-			suggestions.insert(entry.name);
+			suggestions.insert(entry.name.GetIdentifierName());
 		}
 	}
 

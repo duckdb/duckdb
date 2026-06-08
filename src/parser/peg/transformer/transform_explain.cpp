@@ -36,7 +36,7 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 	auto explain_format = ExplainFormat::DEFAULT;
 	if (!explain_option_list.empty()) {
 		for (auto option : explain_option_list) {
-			auto option_name = StringUtil::Lower(option.name);
+			auto option_name = StringUtil::Lower(option.name.GetIdentifierName());
 			if (option_name == "format") {
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
@@ -74,7 +74,7 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
                                                                 const Identifier &explain_option_name,
                                                                 unique_ptr<ParsedExpression> expression) {
 	GenericCopyOption copy_option;
-	copy_option.name = StringUtil::Lower(explain_option_name.GetIdentifierName());
+	copy_option.name = Identifier(StringUtil::Lower(explain_option_name.GetIdentifierName()));
 	if (!expression) {
 		return copy_option;
 	}

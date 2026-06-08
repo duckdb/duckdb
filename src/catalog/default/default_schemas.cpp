@@ -12,9 +12,8 @@ struct DefaultSchema {
 static const DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
 
 bool DefaultSchemaGenerator::IsDefaultSchema(const Identifier &input_schema) {
-	auto schema = StringUtil::Lower(input_schema.GetIdentifierName());
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {
-		if (internal_schemas[index].name == schema) {
+		if (internal_schemas[index].name == input_schema) {
 			return true;
 		}
 	}

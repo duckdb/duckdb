@@ -28,7 +28,7 @@ public:
 	//! The type of secret
 	unique_ptr<ParsedExpression> type;
 	//! Which storage to use (empty for default)
-	string storage_type;
+	Identifier storage_type;
 	//! (optionally) the provider of the secret credentials
 	unique_ptr<ParsedExpression> provider;
 	//! (optionally) the name of the secret

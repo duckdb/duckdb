@@ -33,7 +33,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 		auto entry_score = StringUtil::SimilarityRating(entry.name.GetIdentifierName(), lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = entry.name.GetIdentifierName();
+			result.name = Identifier(entry.name.GetIdentifierName());
 		}
 	});
 	return result;

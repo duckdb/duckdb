@@ -991,10 +991,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionOrOids
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionListInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<pair<string, unique_ptr<ParsedExpression>>> rel_option;
+	vector<pair<Identifier, unique_ptr<ParsedExpression>>> rel_option;
 	auto rel_option_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
 	for (auto &rel_option_item : rel_option_items) {
-		rel_option.push_back(transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(rel_option_item));
+		rel_option.push_back(transformer.Transform<pair<Identifier, unique_ptr<ParsedExpression>>>(rel_option_item));
 	}
 	auto result = TransformRelOptionList(transformer, std::move(rel_option));
 	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
@@ -1061,7 +1061,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionIntern
 	unique_ptr<ParsedExpression> rel_option_argument_opt {};
 	transformer.TransformOptional(list_pr, 1, rel_option_argument_opt);
 	auto result = TransformRelOption(transformer, rel_option_name, std::move(rel_option_argument_opt));
-	return make_uniq<TypedTransformResult<pair<string, unique_ptr<ParsedExpression>>>>(std::move(result));
+	return make_uniq<TypedTransformResult<pair<Identifier, unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionNameInternal(PEGTransformer &transformer,
@@ -2008,7 +2008,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSecretInter
 	bool if_exists {};
 	transformer.TransformOptional(list_pr, 2, if_exists);
 	auto secret_name = transformer.Transform<Identifier>(list_pr, 3);
-	string drop_secret_storage {};
+	Identifier drop_secret_storage {};
 	transformer.TransformOptional(list_pr, 4, drop_secret_storage);
 	auto result = TransformDropSecret(transformer, temporary, if_exists, secret_name, drop_secret_storage);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
@@ -2106,7 +2106,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSecretStora
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
 	auto result = TransformDropSecretStorage(transformer, identifier);
-	return make_uniq<TypedTransformResult<string>>(result);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatementInternal(PEGTransformer &transformer,

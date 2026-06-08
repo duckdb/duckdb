@@ -455,7 +455,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 hash_t ColumnRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	for (auto &s : column_names) {
-		hash = CombineHash(hash, StringUtil::CIHash(s.GetIdentifierName()));
+		hash = CombineHash(hash, s.Hash());
 	}
 	return hash;
 }
@@ -484,7 +484,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 hash_t LambdaRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<uint64_t>(lambda_idx));
-	hash = CombineHash(hash, StringUtil::CIHash(column_name.GetIdentifierName()));
+	hash = CombineHash(hash, column_name.Hash());
 	return hash;
 }
 
@@ -610,11 +610,11 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 
 hash_t FunctionExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(function_name.GetIdentifierName()));
-	hash = CombineHash(hash, StringUtil::CIHash(schema.GetIdentifierName()));
+	hash = CombineHash(hash, function_name.Hash());
+	hash = CombineHash(hash, schema.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(distinct));
 	hash = CombineHash(hash, duckdb::Hash<bool>(export_state));
-	hash = CombineHash(hash, StringUtil::CIHash(catalog.GetIdentifierName()));
+	hash = CombineHash(hash, catalog.Hash());
 	return hash;
 }
 
@@ -692,7 +692,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ParameterExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(identifier.GetIdentifierName()));
+	hash = CombineHash(hash, identifier.Hash());
 	return hash;
 }
 
@@ -764,7 +764,7 @@ bool StarExpression::Equals(const ParsedExpression &other) const {
 
 hash_t StarExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(relation_name.GetIdentifierName()));
+	hash = CombineHash(hash, relation_name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(columns));
 	return hash;
 }
@@ -900,9 +900,9 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 
 hash_t WindowExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(function_name.GetIdentifierName()));
-	hash = CombineHash(hash, StringUtil::CIHash(schema.GetIdentifierName()));
-	hash = CombineHash(hash, StringUtil::CIHash(catalog.GetIdentifierName()));
+	hash = CombineHash(hash, function_name.Hash());
+	hash = CombineHash(hash, schema.Hash());
+	hash = CombineHash(hash, catalog.Hash());
 	for (idx_t i = 0; i < orders.size(); i++) {
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].type)));
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].null_order)));
@@ -972,9 +972,9 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 
 hash_t TypeExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(catalog.GetIdentifierName()));
-	hash = CombineHash(hash, StringUtil::CIHash(schema.GetIdentifierName()));
-	hash = CombineHash(hash, StringUtil::CIHash(type_name.GetIdentifierName()));
+	hash = CombineHash(hash, catalog.Hash());
+	hash = CombineHash(hash, schema.Hash());
+	hash = CombineHash(hash, type_name.Hash());
 	return hash;
 }
 

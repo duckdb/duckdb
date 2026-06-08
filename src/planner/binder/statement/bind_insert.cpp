@@ -628,8 +628,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
 		return BindReturning(std::move(node.returning_list), table,
-		                     Identifier(node.table_ref ? node.table_ref->alias.GetIdentifierName() : string()),
-		                     insert_table_index, std::move(index_as_logicaloperator));
+		                     node.table_ref ? node.table_ref->alias : Identifier(), insert_table_index,
+		                     std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

@@ -710,7 +710,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	result->names.reserve(columns.size());
 	result->types.reserve(columns.size());
 	for (auto &column : columns) {
-		result->names.push_back(column.name);
+		result->names.push_back(column.name.GetIdentifierName());
 		result->types.push_back(column.type);
 	}
 

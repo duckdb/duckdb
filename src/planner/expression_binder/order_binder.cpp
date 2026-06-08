@@ -27,16 +27,16 @@ OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectNode &node, Se
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, const idx_t index) {
-	string alias;
+	Identifier alias;
 	if (extra_list && index < extra_list->size()) {
-		alias = extra_list->at(index)->ToString();
+		alias = Identifier(extra_list->at(index)->ToString());
 	} else {
 		if (!expr.GetAlias().empty()) {
-			alias = expr.GetAlias().GetIdentifierName();
+			alias = expr.GetAlias();
 		}
 	}
 	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
-	result->SetAlias(Identifier(std::move(alias)));
+	result->SetAlias(std::move(alias));
 	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
@@ -80,9 +80,9 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			break;
 		}
 
-		string alias_name = colref.ColumnNames().back().GetIdentifierName();
+		auto &alias_name = colref.ColumnNames().back();
 		// check the alias list
-		auto entry = bind_state.alias_map.find(Identifier(alias_name));
+		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry != bind_state.alias_map.end()) {
 			// this is an alias - return the index
 			return entry->second;

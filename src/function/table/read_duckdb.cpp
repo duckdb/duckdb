@@ -472,7 +472,7 @@ shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &cont
 shared_ptr<BaseUnionData> DuckDBReader::GetUnionData(idx_t file_idx) {
 	auto result = make_uniq<DuckDBReaderUnionData>(file);
 	for (auto &column : columns) {
-		result->names.push_back(column.name);
+		result->names.push_back(column.name.GetIdentifierName());
 		result->types.push_back(column.type);
 	}
 	result->reader = shared_from_this();

@@ -1334,7 +1334,8 @@ private:
 	static unique_ptr<TransformResultValue> TransformRelOptionListInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
-	TransformRelOptionList(PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> rel_option);
+	TransformRelOptionList(PEGTransformer &transformer,
+	                       vector<pair<Identifier, unique_ptr<ParsedExpression>>> rel_option);
 	static unique_ptr<TransformResultValue> TransformOidsInternal(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformOids(PEGTransformer &transformer,
@@ -1361,7 +1362,7 @@ private:
 	static Identifier TransformIndexType(PEGTransformer &transformer, const Identifier &identifier);
 	static unique_ptr<TransformResultValue> TransformRelOptionInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
-	static pair<string, unique_ptr<ParsedExpression>>
+	static pair<Identifier, unique_ptr<ParsedExpression>>
 	TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
 	                   unique_ptr<ParsedExpression> rel_option_argument_opt);
 	static unique_ptr<TransformResultValue> TransformRelOptionNameInternal(PEGTransformer &transformer,
@@ -1735,7 +1736,7 @@ private:
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer,
 	                                                     const SecretPersistType &temporary, const bool &if_exists,
 	                                                     const Identifier &secret_name,
-	                                                     const string &drop_secret_storage);
+	                                                     const Identifier &drop_secret_storage);
 	static unique_ptr<TransformResultValue> TransformTableOrViewInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformMaterializedViewEntryInternal(PEGTransformer &transformer,
@@ -1772,7 +1773,7 @@ private:
 	                                                    const Identifier &reserved_schema_name);
 	static unique_ptr<TransformResultValue> TransformDropSecretStorageInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
-	static string TransformDropSecretStorage(PEGTransformer &transformer, const Identifier &identifier);
+	static Identifier TransformDropSecretStorage(PEGTransformer &transformer, const Identifier &identifier);
 	static unique_ptr<TransformResultValue> TransformExecuteStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExecuteStatement(PEGTransformer &transformer, const Identifier &identifier,

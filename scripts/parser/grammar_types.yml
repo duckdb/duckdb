@@ -888,7 +888,6 @@ String:
     - CascadeKeyAction
     - SetNullKeyAction
     - SetDefaultKeyAction
-    - DropSecretStorage
     - SeqMinOrMax
     - OperatorLiteral
     - VacuumOption
@@ -906,6 +905,7 @@ IdentifierType:
   type: "Identifier"
   by_value: false
   rules:
+    - DropSecretStorage
     - AttachAlias
     - SequenceName
     - CollationName
@@ -1108,7 +1108,7 @@ overrides:
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
   # create_index.gram
-  RelOption: "pair<string, unique_ptr<ParsedExpression>>"
+  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
   WithList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   RelOptionOrOids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"

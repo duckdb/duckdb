@@ -63,7 +63,7 @@ public:
 private:
 	DatabaseInstance &db;
 	mutex lock;
-	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	identifier_map_t<unique_ptr<ExtensionInfo>> loaded_extensions_info;
 	string extension_load_prefix;
 };
 

@@ -208,19 +208,6 @@ index 318daf9..47702ca 100644
  	return result;
  }
  
-diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
-index eae13de..745e743 100644
---- a/src/storage/postgres_index.cpp
-+++ b/src/storage/postgres_index.cpp
-@@ -90,7 +90,7 @@ unique_ptr<LogicalOperator> PostgresCatalog::BindCreateIndex(Binder &binder, Cre
- 	}
- 
- 	auto &get = plan->Cast<LogicalGet>();
--	index_binder.InitCreateIndexInfo(get, *create_index_info, table.schema.name);
-+	index_binder.InitCreateIndexInfo(get, *create_index_info, table.schema.name.GetIdentifierName());
- 
- 	return make_uniq<LogicalPostgresCreateIndex>(std::move(create_index_info), table);
- }
 diff --git a/src/storage/postgres_index_entry.cpp b/src/storage/postgres_index_entry.cpp
 index a27ab3e..0f42ef3 100644
 --- a/src/storage/postgres_index_entry.cpp
@@ -470,7 +457,7 @@ index 0ce84c8..2470503 100644
  	result->attach_path = pg_catalog.attach_path;
  	result->SetCatalog(pg_catalog);
 diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
-index 624e137..9fe9627 100644
+index 624e137..0a66c70 100644
 --- a/src/storage/postgres_table_set.cpp
 +++ b/src/storage/postgres_table_set.cpp
 @@ -67,7 +67,7 @@ void PostgresTableSet::AddColumn(optional_ptr<PostgresTransaction> transaction,
@@ -513,6 +500,15 @@ index 624e137..9fe9627 100644
  	auto result = transaction.Query(query);
  	auto rows = result->Count();
  	if (rows == 0) {
+@@ -209,7 +209,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 	logical_index_set_t not_null_columns;
+ 	logical_index_set_t unique_columns;
+ 	logical_index_set_t pk_columns;
+-	unordered_set<string> multi_key_pks;
++	identifier_set_t multi_key_pks;
+ 	vector<string> extra_constraints;
+ 	for (auto &constraint : constraints) {
+ 		if (constraint->type == ConstraintType::NOT_NULL) {
 @@ -217,7 +217,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
  			not_null_columns.insert(not_null.index);
  		} else if (constraint->type == ConstraintType::UNIQUE) {
@@ -522,15 +518,6 @@ index 624e137..9fe9627 100644
  			if (pk.index.index != DConstants::INVALID_INDEX) {
  				// no columns specified: single column constraint
  				if (pk.is_primary_key) {
-@@ -231,7 +231,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
- 				if (pk.is_primary_key) {
- 					// multi key pk column: insert set of columns into multi_key_pks
- 					for (auto &col : pk.columns) {
--						multi_key_pks.insert(col);
-+						multi_key_pks.insert(col.GetIdentifierName());
- 					}
- 				}
- 				string base = pk.is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
 @@ -239,7 +239,7 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
  					if (i > 0) {
  						base += ", ";
@@ -550,7 +537,7 @@ index 624e137..9fe9627 100644
  		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
  		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
 -		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
-+		bool is_multi_key_pk = multi_key_pks.find(column.Name().GetIdentifierName()) != multi_key_pks.end();
++		bool is_multi_key_pk = multi_key_pks.find(Identifier(column.Name().GetIdentifierName())) != multi_key_pks.end();
  		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
  		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
  			// NOT NULL but not a primary key column

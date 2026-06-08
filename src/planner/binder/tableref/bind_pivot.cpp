@@ -500,9 +500,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
 	result.bound_pivot.types = types;
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetIdentifierName();
+	Identifier subquery_alias = ref.alias.empty() ? Identifier("__unnamed_pivot") : ref.alias;
 	QueryResult::DeduplicateColumns(names);
-	bind_context.AddGenericBinding(result.bind_index, Identifier(subquery_alias), names, types);
+	bind_context.AddGenericBinding(result.bind_index, subquery_alias, names, types);
 
 	MoveCorrelatedExpressions(*result.child_binder);
 
@@ -735,7 +735,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 }
 
 struct UnpivotEntry {
-	string alias;
+	Identifier alias;
 	vector<Identifier> column_names;
 	vector<unique_ptr<ParsedExpression>> expressions;
 };
@@ -745,7 +745,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias.GetIdentifierName();
+		unpivot_entry.alias = Identifier(entry.alias.GetIdentifierName());
 		for (auto &val : entry.values) {
 			auto column_name = val.ToString();
 			if (column_name.empty()) {
@@ -760,7 +760,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	vector<Identifier> column_names;
 	if (TryExtractUnpivotList(*entry.expr, column_names)) {
 		UnpivotEntry unpivot_entry;
-		unpivot_entry.alias = entry.alias.GetIdentifierName();
+		unpivot_entry.alias = Identifier(entry.alias.GetIdentifierName());
 		for (auto &column_name : column_names) {
 			if (column_name.empty()) {
 				throw BinderException("UNPIVOT - empty column name not supported");
@@ -780,7 +780,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		// create one pivot entry per result column
 		UnpivotEntry unpivot_entry;
 		if (!expr->GetAlias().empty()) {
-			unpivot_entry.alias = expr->GetAlias().GetIdentifierName();
+			unpivot_entry.alias = Identifier(expr->GetAlias().GetIdentifierName());
 		}
 		unpivot_entry.expressions.push_back(std::move(expr));
 		unpivot_entries.push_back(std::move(unpivot_entry));
@@ -881,7 +881,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 			}
 			generated_name += name_entry->second;
 		}
-		unpivot_names.emplace_back(!entry.alias.empty() ? entry.alias : generated_name);
+		unpivot_names.emplace_back(!entry.alias.empty() ? entry.alias : Identifier(generated_name));
 	}
 	vector<vector<unique_ptr<ParsedExpression>>> unpivot_expressions;
 	for (idx_t v_idx = 1; v_idx < unpivot_entries.size(); v_idx++) {
@@ -1016,8 +1016,8 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	auto root_index = result.plan->GetRootIndex();
 
 	MoveCorrelatedExpressions(*child_binder);
-	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias.GetIdentifierName();
-	SubqueryRef subquery_ref(nullptr, Identifier(subquery_alias));
+	Identifier subquery_alias = ref.alias.empty() ? Identifier("__unnamed_pivot") : ref.alias;
+	SubqueryRef subquery_ref(nullptr, subquery_alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
 	if (where_clause) {
 		// if a WHERE clause was provided - bind a subquery holding the WHERE clause

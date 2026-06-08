@@ -48,7 +48,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	return index_type->create_instance(input);
 }
 
-void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema) {
+void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema) {
 	auto &column_ids = get.GetColumnIds();
 	for (auto &column_id : column_ids) {
 		if (column_id.IsRowIdColumn()) {
@@ -88,7 +88,7 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	}
 
 	auto &get = plan->Cast<LogicalGet>();
-	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name.GetIdentifierName());
+	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name);
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 

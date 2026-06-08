@@ -304,7 +304,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 			                      matched_param->second.ToString(), error_msg);
 		}
 
-		bound_info.options[matched_param->first.GetIdentifierName()] = {cast_value};
+		bound_info.options[Identifier(matched_param->first.GetIdentifierName()).GetIdentifierName()] = {cast_value};
 	}
 
 	BoundStatement result;

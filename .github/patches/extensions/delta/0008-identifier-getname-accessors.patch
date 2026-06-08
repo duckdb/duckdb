@@ -37,7 +37,7 @@ index 0d43aba..a6570c5 100644
  	info.internal = true;
  	info.macros.push_back(std::move(func));
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index 89b3cd5..00315ed 100644
+index 89b3cd5..ede4a48 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
 @@ -283,7 +283,7 @@ void ExpressionVisitor::VisitStructLiteral(void *state, uintptr_t sibling_list_i
@@ -67,10 +67,37 @@ index 89b3cd5..00315ed 100644
  	}
  
  	auto struct_type = LogicalType::STRUCT(children_types);
+@@ -723,7 +723,7 @@ void SchemaVisitor::AppendToList(uintptr_t id, ffi::KernelStringSlice name, Delt
+ 	}
+ 
+ 	// Inject the name
+-	child.name = string(name.ptr, name.len);
++	child.name = Identifier(string(name.ptr, name.len));
+ 
+ 	it->second.emplace_back(std::move(child));
+ }
+@@ -865,7 +865,7 @@ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition>
+ 
+ 	if (filters) {
+ 		for (auto &entry : *filters) {
+-			column_filters[columns[entry.first].name] = entry.second.get();
++			column_filters[columns[entry.first].name.GetIdentifierName()] = entry.second.get();
+ 		}
+ 	}
+ }
 diff --git a/src/functions/delta_metadata_scan.cpp b/src/functions/delta_metadata_scan.cpp
-index 571136d..405456a 100644
+index 571136d..e9772a2 100644
 --- a/src/functions/delta_metadata_scan.cpp
 +++ b/src/functions/delta_metadata_scan.cpp
+@@ -26,7 +26,7 @@ static void AddFileInfo(OpenFileInfo &file_info, DeltaFileMetaData &metadata, ve
+ 	auto partitions = metadata.partition_map;
+ 	InsertionOrderPreservingMap<string> map;
+ 	for (auto &kv : partitions) {
+-		map[kv.first] = kv.second.ToString();
++		map[kv.first.GetIdentifierName()] = kv.second.ToString();
+ 	}
+ 	row_values.emplace_back(Value::MAP(map));
+ 
 @@ -71,7 +71,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
  	DeltaFileListOptions options;
  
@@ -90,9 +117,24 @@ index 571136d..405456a 100644
  	file_list->Bind(_t, _n);
  
 diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
-index f48db80..4d19ca0 100644
+index f48db80..5f86444 100644
 --- a/src/functions/delta_scan/delta_multi_file_list.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -487,12 +487,12 @@ void ScanDataCallBack::VisitCallbackInternal(ffi::NullableCvoid engine_context,
+ 		auto transform_partitions =
+ 		    FindPartitionValues(*(*parsed_transformation_expression)[0], snapshot.global_columns);
+ 
+-		case_insensitive_map_t<Value> constant_map;
++		identifier_map_t<Value> constant_map;
+ 		for (idx_t i = 0; i < snapshot.partitions.size(); ++i) {
+ 			const auto &partition_id = context->snapshot.partition_ids[i];
+ 			const auto &partition_name = context->snapshot.partitions[i];
+ 
+-			constant_map[partition_name] = transform_partitions[partition_id];
++			constant_map[Identifier(partition_name)] = transform_partitions[partition_id];
+ 		}
+ 		snapshot.metadata.back()->partition_map = std::move(constant_map);
+ 		snapshot.metadata.back()->transform_expression =
 @@ -598,12 +598,12 @@ static bool ExtractHasNullConstraintsInArrays(const vector<DeltaMultiFileColumnD
  	return false;
  }
@@ -117,6 +159,24 @@ index f48db80..4d19ca0 100644
  		return_types.push_back(field.type);
  	}
  
+@@ -925,7 +925,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 		auto column_id = entry.first;
+ 		if (column_id < global_columns.size()) {
+ 			auto &col_name = global_columns[column_id].name;
+-			old_filters_value_list.push_back(filter.ToString(col_name));
++			old_filters_value_list.push_back(filter.ToString(col_name.GetIdentifierName()));
+ 		}
+ 	}
+ 	auto old_filters_value = Value::LIST(LogicalType::VARCHAR, old_filters_value_list);
+@@ -937,7 +937,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 		auto &filter = *entry.second;
+ 		if (column_id < global_columns.size()) {
+ 			auto &col_name = global_columns[column_id].name;
+-			filters_value_list.push_back(filter.ToString(col_name));
++			filters_value_list.push_back(filter.ToString(col_name.GetIdentifierName()));
+ 		}
+ 	}
+ 	auto filters_value = Value::LIST(LogicalType::VARCHAR, filters_value_list);
 @@ -952,13 +952,13 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
  
  	if (should_log) {
@@ -147,9 +207,18 @@ index f48db80..4d19ca0 100644
  	auto pushdown_mode = GetDeltaFilterPushdownMode(context, options);
  	if (pushdown_mode == DeltaFilterPushdownMode::NONE || pushdown_mode == DeltaFilterPushdownMode::CONSTANT_ONLY) {
 diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
-index 32514ee..8da41a2 100644
+index 32514ee..07fc435 100644
 --- a/src/functions/delta_scan/delta_multi_file_reader.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -55,7 +55,7 @@ void FinalizeBindBaseOverride(MultiFileReaderData &reader_data, const MultiFileO
+ 	// create a map of name -> column index
+ 	auto &local_columns = reader_data.reader->GetColumns();
+ 	auto &filename = reader_data.reader->GetFileName();
+-	case_insensitive_map_t<idx_t> name_map;
++	identifier_map_t<idx_t> name_map;
+ 	if (file_options.union_by_name) {
+ 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+ 			auto &column = local_columns[col_idx];
 @@ -104,7 +104,7 @@ void FinalizeBindBaseOverride(MultiFileReaderData &reader_data, const MultiFileO
  }
  
@@ -177,6 +246,15 @@ index 32514ee..8da41a2 100644
  			if (lookup != names.end()) {
  				// hive partitioning column also exists in file - override
  				auto idx = NumericCast<idx_t>(lookup - names.begin());
+@@ -259,7 +259,7 @@ DeltaMultiFileReader::InitializeGlobalState(ClientContext &context, const MultiF
+ 		}
+ 
+ 		auto global_name = global_columns[global_id].name;
+-		selected_columns.insert({global_name, i});
++		selected_columns.insert({global_name.GetIdentifierName(), i});
+ 	}
+ 
+ 	auto res = make_uniq<DeltaMultiFileReaderGlobalState>(extra_columns, &file_list);
 diff --git a/src/functions/delta_scan/delta_scan.cpp b/src/functions/delta_scan/delta_scan.cpp
 index a26b9d8..b350152 100644
 --- a/src/functions/delta_scan/delta_scan.cpp
@@ -269,9 +347,18 @@ index 120e539..155728d 100644
  
  class DeltaFileListFunction : public BaseMetadataFunction {
 diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
-index 8667be4..cdd6f5c 100644
+index 8667be4..3d51ff7 100644
 --- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
 +++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -37,7 +37,7 @@ struct DeltaFileMetaData {
+ 	idx_t cardinality = DConstants::INVALID_INDEX;
+ 	ffi::KernelBoolSlice selection_vector = {nullptr, 0};
+ 
+-	case_insensitive_map_t<Value> partition_map;
++	identifier_map_t<Value> partition_map;
+ 
+ 	unique_ptr<vector<unique_ptr<ParsedExpression>>> transform_expression;
+ };
 @@ -99,13 +99,13 @@ public:
  
  	//! MultiFileList API

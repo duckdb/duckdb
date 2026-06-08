@@ -697,8 +697,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	if (has_new_dependencies ||
-	    !StringUtil::CIEquals(old_obj.name.GetIdentifierName(), new_obj.name.GetIdentifierName())) {
+	if (has_new_dependencies || !(old_obj.name == new_obj.name)) {
 		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
 		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);

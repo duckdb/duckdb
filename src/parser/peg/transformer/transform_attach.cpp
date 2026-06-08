@@ -28,18 +28,18 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 	info->name = attach_alias;
 	for (const auto &attach_option : attach_options) {
 		if (attach_option.expression) {
-			info->parsed_options[attach_option.name] = attach_option.expression->Copy();
+			info->parsed_options[attach_option.name.GetIdentifierName()] = attach_option.expression->Copy();
 			continue;
 		}
 		if (attach_option.children.empty()) {
-			info->options[attach_option.name] = Value(true);
+			info->options[attach_option.name.GetIdentifierName()] = Value(true);
 		} else if (attach_option.children.size() == 1) {
 			auto val = attach_option.children[0];
 			if (val.IsNull()) {
 				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"",
 				                      attach_option.name);
 			}
-			info->options[attach_option.name] = attach_option.children[0];
+			info->options[attach_option.name.GetIdentifierName()] = attach_option.children[0];
 		} else {
 			throw ParserException("Option %s can only have one argument", attach_option.name);
 		}

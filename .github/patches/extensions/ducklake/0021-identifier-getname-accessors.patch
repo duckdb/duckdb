@@ -716,6 +716,19 @@ index 5f0c4b5c..5da2e91a 100644
  				throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, column_name);
  			}
  		}
+diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
+index 88f4f48a..49de243d 100644
+--- a/src/storage/ducklake_inlined_data_reader.cpp
++++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -69,7 +69,7 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
+ 					continue;
+ 				}
+ 			}
+-			string projected_column = SQLIdentifier::ToString(columns[index].name);
++			string projected_column = SQLIdentifier::ToString(columns[index].name.GetIdentifierName());
+ 			auto &metadata_type = ducklake_catalog.MetadataType();
+ 			bool needs_cast = !metadata_type.empty() && metadata_type != "duckdb";
+ 			if (needs_cast) {
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
 index e87017cd..2e36434b 100644
 --- a/src/storage/ducklake_insert.cpp
@@ -828,7 +841,7 @@ index 456cfb3f..bd557b54 100644
  	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || !filters.HasFilters()) {
  		// filter pushdown is only supported when scanning full tables
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 4fc11c8c..e51ef3c2 100644
+index 4fc11c8c..2b65dec7 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
 @@ -220,20 +220,20 @@ vector<MultiFileColumnDefinition> DuckLakeMultiFileReader::ColumnsFromFieldData(
@@ -855,6 +868,15 @@ index 4fc11c8c..e51ef3c2 100644
                                            MultiFileReaderBindData &bind_data) {
  }
  
+@@ -545,7 +545,7 @@ ReaderInitializeType DuckLakeMultiFileReader::CreateMapping(
+ 		vector<string> source_names;
+ 		vector<FieldIndex> target_field_ids;
+ 		for (idx_t i = 0; i < MinValue(file_columns.size(), global_columns.size()); i++) {
+-			source_names.push_back(file_columns[i].name);
++			source_names.push_back(file_columns[i].name.GetIdentifierName());
+ 			target_field_ids.emplace_back(global_columns[i].identifier.GetValue<idx_t>());
+ 		}
+ 		auto positional_map = DuckLakeNameMap::CreatePositionalMapping(source_names, target_field_ids);
 @@ -596,7 +596,7 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
  
  		FunctionBinder binder(context);
@@ -938,7 +960,7 @@ index e5fec1e1..84c276ab 100644
  	function.function_info = DuckLakeFunctionInfo::Create(table_entry, transaction, snapshot);
  	auto &func_info = function.function_info->Cast<DuckLakeFunctionInfo>();
 diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
-index 10840d41..4738ca0f 100644
+index 10840d41..89d68e11 100644
 --- a/src/storage/ducklake_schema_entry.cpp
 +++ b/src/storage/ducklake_schema_entry.cpp
 @@ -31,7 +31,7 @@ unique_ptr<CreateInfo> DuckLakeSchemaEntry::GetInfo() const {
@@ -1050,7 +1072,7 @@ index 10840d41..4738ca0f 100644
  			if (entry_score > result.score) {
  				result.score = entry_score;
 -				result.name = entry.second->name;
-+				result.name = entry.second->name.GetIdentifierName();
++				result.name = Identifier(entry.second->name.GetIdentifierName());
  				result.schema = this;
  			}
  		}
@@ -1063,7 +1085,7 @@ index 10840d41..4738ca0f 100644
  		if (entry_score > result.score) {
  			result.score = entry_score;
 -			result.name = entry.second->name;
-+			result.name = entry.second->name.GetIdentifierName();
++			result.name = Identifier(entry.second->name.GetIdentifierName());
  			result.schema = this;
  		}
  	}

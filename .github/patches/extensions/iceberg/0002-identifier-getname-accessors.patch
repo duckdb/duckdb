@@ -1209,7 +1209,7 @@ index 9a3bfa8a..9af19733 100644
  	TableFunctionRef empty;
  	OpenFileInfo res(delete_file_path);
 diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
-index 3ac91158..41efa626 100644
+index 3ac91158..f21ca884 100644
 --- a/src/planning/iceberg_multi_file_reader.cpp
 +++ b/src/planning/iceberg_multi_file_reader.cpp
 @@ -49,7 +49,7 @@ shared_ptr<MultiFileList> IcebergMultiFileReader::CreateFileList(ClientContext &
@@ -1230,6 +1230,29 @@ index 3ac91158..41efa626 100644
                                           MultiFileReaderBindData &bind_data) {
  	// Disable all other multifilereader options
  	options.auto_detect_hive_partitioning = false;
+@@ -93,19 +93,19 @@ static void ApplyFieldMapping(MultiFileColumnDefinition &col, const vector<Icebe
+ 	}
+ 
+ 	auto name = col.name;
+-	if (parent && parent->type.id() == LogicalTypeId::MAP && StringUtil::CIEquals(name, "key_value")) {
++	if (parent && parent->type.id() == LogicalTypeId::MAP && name == "key_value") {
+ 		//! Deal with MAP, it has a 'key_value' child, which holds the 'key' + 'value' columns
+ 		for (auto &child : col.children) {
+ 			ApplyFieldMapping(child, mappings, fields, context, parent);
+ 		}
+ 		return;
+ 	}
+-	if (parent && parent->type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(name, "list")) {
++	if (parent && parent->type.id() == LogicalTypeId::LIST && name == "list") {
+ 		//! Deal with LIST, it has a 'element' child, which has the column for the underlying list data
+ 		name = "element";
+ 	}
+ 
+-	auto it = fields.find(name);
++	auto it = fields.find(name.GetIdentifierName());
+ 	if (it == fields.end()) {
+ 		DUCKDB_LOG(context, IcebergLogType, "Column '%s' does not have a field-id, and no field-mapping exists for it!",
+ 		           name);
 @@ -504,7 +504,7 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
  
  	FunctionBinder binder(context);

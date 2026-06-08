@@ -14,9 +14,9 @@
 namespace duckdb {
 //! Basic CSV Column Info
 struct CSVColumnInfo {
-	CSVColumnInfo(const string &name_p, const LogicalType &type_p) : name(name_p), type(type_p) {
+	CSVColumnInfo(const Identifier &name_p, const LogicalType &type_p) : name(name_p), type(type_p) {
 	}
-	string name;
+	Identifier name;
 	LogicalType type;
 };
 
@@ -66,7 +66,7 @@ private:
 	//! If a type can be cast to another
 	static bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination);
 	vector<CSVColumnInfo> columns;
-	unordered_map<string, idx_t> name_idx_map;
+	identifier_map_t<idx_t> name_idx_map;
 	string file_path;
 	idx_t rows_read = 0;
 	bool empty = false;

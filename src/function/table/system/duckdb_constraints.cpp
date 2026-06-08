@@ -120,7 +120,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 struct ExtraConstraintInfo {
 	vector<LogicalIndex> column_indexes;
 	vector<Identifier> column_names;
-	string referenced_table;
+	Identifier referenced_table;
 	vector<Identifier> referenced_columns;
 };
 
@@ -154,7 +154,7 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		result.referenced_columns = fk.pk_columns;
-		result.referenced_table = fk.info.table.GetIdentifierName();
+		result.referenced_table = Identifier(fk.info.table.GetIdentifierName());
 		result.column_names = fk.fk_columns;
 		break;
 	}

@@ -105,15 +105,15 @@ void CSVSchema::Initialize(const vector<Identifier> &names, const vector<Logical
 		// Populate our little schema
 		const auto &name = names.at(i);
 		const auto &type = types.at(i);
-		columns.push_back({name.GetIdentifierName(), type});
-		name_idx_map[names[i].GetIdentifierName()] = i;
+		columns.push_back({name, type});
+		name_idx_map[names[i]] = i;
 	}
 }
 
 vector<string> CSVSchema::GetNames() const {
 	vector<string> names;
 	for (auto &column : columns) {
-		names.push_back(column.name);
+		names.push_back(column.name.GetIdentifierName());
 	}
 	return names;
 }
@@ -170,7 +170,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 			bool min_sniff_match = true;
 			// If we don't have more than one row, either the names must match or the types must match.
 			for (auto &column : columns) {
-				if (current_schema.find(column.name) == current_schema.end()) {
+				if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
 					min_sniff_match = false;
 					break;
 				}
@@ -213,15 +213,15 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 	error << "Current file: " << cur_file_path << "\n";
 
 	for (auto &column : columns) {
-		if (current_schema.find(column.name) == current_schema.end()) {
-			error << "Column with name: \"" << column.name << "\" is missing"
+		if (current_schema.find(column.name.GetIdentifierName()) == current_schema.end()) {
+			error << "Column with name: \"" << column.name.GetIdentifierName() << "\" is missing"
 			      << "\n";
 			match = false;
 		} else {
-			if (!CanWeCastIt(current_schema[column.name].type.id(), column.type.id())) {
-				error << "Column with name: \"" << column.name
+			if (!CanWeCastIt(current_schema[column.name.GetIdentifierName()].type.id(), column.type.id())) {
+				error << "Column with name: \"" << column.name.GetIdentifierName()
 				      << "\" is expected to have type: " << column.type.ToString();
-				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
+				error << " But has type: " << current_schema[column.name.GetIdentifierName()].type.ToString() << "\n";
 				match = false;
 			}
 		}

@@ -104,7 +104,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto name = string("some table");
 	if (catalog_table) {
 		name = catalog_table->name.GetIdentifierName();
-		return_stats.table_name = name;
+		return_stats.table_name = Identifier(name);
 	}
 
 	// first push back basic distinct counts for each column (if we have them).
@@ -115,7 +115,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		if (distinct_count > 0) {
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
-			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
+			return_stats.column_names.push_back(Identifier(name + "." + get.names.at(column_id)));
 		} else {
 			// treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
@@ -126,7 +126,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			if (column_id < get.names.size()) {
 				column_name = get.names.at(column_id);
 			}
-			return_stats.column_names.push_back(get.GetName() + "." + column_name);
+			return_stats.column_names.push_back(Identifier(get.GetName() + "." + column_name));
 		}
 	}
 
@@ -181,13 +181,13 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context) {
 	RelationStats stats;
-	stats.table_name = delim_get.GetName();
+	stats.table_name = Identifier(delim_get.GetName());
 	idx_t card = delim_get.EstimateCardinality(context);
 	stats.cardinality = card;
 	stats.stats_initialized = true;
 	for (auto &binding : delim_get.GetColumnBindings()) {
 		stats.column_distinct_count.push_back(DistinctCount({1, false}));
-		stats.column_names.push_back("column" + to_string(binding.column_index));
+		stats.column_names.push_back(Identifier("column" + to_string(binding.column_index)));
 	}
 	return stats;
 }
@@ -195,7 +195,7 @@ RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &de
 RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection &proj, RelationStats &child_stats) {
 	auto proj_stats = RelationStats();
 	proj_stats.cardinality = child_stats.cardinality;
-	proj_stats.table_name = proj.GetName();
+	proj_stats.table_name = Identifier(proj.GetName());
 	for (auto &expr : proj.expressions) {
 		proj_stats.column_names.emplace_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
@@ -252,7 +252,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 			stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 			stats.column_names.push_back(child_stats.column_names.at(i));
 		}
-		stats.table_name += "joined with " + child_stats.table_name;
+		stats.table_name = Identifier(stats.table_name + "joined with " + child_stats.table_name);
 		max_card = MaxValue(max_card, child_stats.cardinality);
 	}
 	stats.stats_initialized = true;
@@ -319,12 +319,12 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
-	ret.table_name = string();
+	ret.table_name = Identifier(string());
 	for (auto &stats : child_stats) {
 		if (!ret.table_name.empty()) {
-			ret.table_name += " joined with ";
+			ret.table_name = Identifier(ret.table_name + " joined with ");
 		}
-		ret.table_name += stats.table_name;
+		ret.table_name = Identifier(ret.table_name + stats.table_name);
 		// MARK joins are nonreorderable. They won't return initialized stats
 		// continue in this case.
 		if (!stats.stats_initialized) {

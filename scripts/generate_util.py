@@ -423,11 +423,11 @@ def generate_member_hash(member, indent='\t'):
         return []
 
     if type_str in ('Identifier', 'duckdb::Identifier'):
-        return [f'{indent}hash = CombineHash(hash, StringUtil::CIHash({field_name}.GetIdentifierName()));']
+        return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [
             f'{indent}for (auto &s : {field_name}) {{',
-            f'{indent}\thash = CombineHash(hash, StringUtil::CIHash(s.GetIdentifierName()));',
+            f'{indent}\thash = CombineHash(hash, s.Hash());',
             f'{indent}}}',
         ]
 

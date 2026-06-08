@@ -39,6 +39,10 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
+	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	}
+	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
+	}
 	MultiFileColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
 	}
 
@@ -61,7 +65,7 @@ public:
 
 public:
 	static MultiFileColumnDefinition CreateFromNameAndType(const Identifier &name, const LogicalType &type) {
-		MultiFileColumnDefinition result(name.GetIdentifierName(), type);
+		MultiFileColumnDefinition result(name, type);
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
 			for (auto &child_entry : StructType::GetChildTypes(type)) {
@@ -88,7 +92,7 @@ public:
 		D_ASSERT(names.empty());
 		D_ASSERT(types.empty());
 		for (auto &column : columns) {
-			names.push_back(column.name);
+			names.push_back(column.name.GetIdentifierName());
 			types.push_back(column.type);
 		}
 	}
@@ -102,7 +106,7 @@ public:
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {
 			// No identifier was provided, assume the name as the identifier
-			return name;
+			return name.GetIdentifierName();
 		}
 		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
 		return identifier.GetValue<string>();
@@ -118,7 +122,7 @@ public:
 	}
 
 public:
-	string name;
+	Identifier name;
 	LogicalType type;
 	vector<MultiFileColumnDefinition> children;
 	unique_ptr<ParsedExpression> default_expression;
