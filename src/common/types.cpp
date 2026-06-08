@@ -960,11 +960,11 @@ static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left,
 	return true;
 }
 
-using CombineUnequalTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
-                                                 const LogicalType &right, LogicalType &result);
+using CombineTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
+                                          const LogicalType &right, LogicalType &result);
 struct CombineUnequalTypesRule {
 	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive
-	CombineUnequalTypesRuleFunction function;
+	CombineTypesRuleFunction function;
 };
 
 static bool MatchesVariant(const LogicalType &left, const LogicalType &right) {
@@ -1141,96 +1141,124 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 	return true;
 }
 
+struct CombineEqualTypesRule {
+	LogicalTypeId type;
+	CombineTypesRuleFunction function;
+};
+
+static bool CombineEqualStringLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                      const LogicalType &right, LogicalType &result) {
+	result = LogicalType::VARCHAR;
+	return true;
+}
+static bool CombineEqualIntegerLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                       const LogicalType &right, LogicalType &result) {
+	// for two integer literals we unify the underlying types
+	return logical_type_resolver.Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
+}
+static bool CombineEqualEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                             const LogicalType &right, LogicalType &result) {
+	// If both types are different ENUMs we do a string comparison.
+	result = left == right ? left : LogicalType::VARCHAR;
+	return true;
+}
+static bool CombineEqualVarchar(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	// varchar: use type that has collation (if any)
+	if (StringType::GetCollation(right).empty()) {
+		result = left;
+	} else {
+		result = right;
+	}
+	return true;
+}
+static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	// unify the width/scale so that the resulting decimal always fits
+	// "width - scale" gives us the number of digits on the left side of the decimal point
+	// "scale" gives us the number of digits allowed on the right of the decimal point
+	// using the max of these of the two types gives us the new decimal size
+	auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+	auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+	auto extra_width =
+	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
+	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+	auto width = NumericCast<uint8_t>(extra_width + scale);
+	if (width > DecimalType::MaxWidth()) {
+		// if the resulting decimal does not fit, we truncate the scale
+		width = DecimalType::MaxWidth();
+		scale = NumericCast<uint8_t>(width - extra_width);
+	}
+	result = LogicalType::DECIMAL(width, scale);
+	return true;
+}
+static bool CombineEqualList(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                             const LogicalType &right, LogicalType &result) {
+	// list: perform max recursively on child type
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		return false;
+	}
+	result = LogicalType::LIST(new_child);
+	return true;
+}
+static bool CombineEqualArray(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                              const LogicalType &right, LogicalType &result) {
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
+		return false;
+	}
+	auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
+	result = LogicalType::ARRAY(new_child, new_size);
+	return true;
+}
+static bool CombineEqualMap(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                            const LogicalType &right, LogicalType &result) {
+	// map: perform max recursively on child type
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		return false;
+	}
+	result = LogicalType::MAP(new_child);
+	return true;
+}
+static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                              const LogicalType &right, LogicalType &result) {
+	auto left_member_count = UnionType::GetMemberCount(left);
+	auto right_member_count = UnionType::GetMemberCount(right);
+	if (left_member_count != right_member_count) {
+		// return the "larger" type, with the most members
+		result = left_member_count > right_member_count ? left : right;
+		return true;
+	}
+	// otherwise, keep left, don't try to meld the two together.
+	result = left;
+	return true;
+}
+
+static const CombineEqualTypesRule COMBINE_EQUAL_TYPES_RULES[] = {
+    {LogicalTypeId::STRING_LITERAL, CombineEqualStringLiteral},
+    {LogicalTypeId::INTEGER_LITERAL, CombineEqualIntegerLiteral},
+    {LogicalTypeId::ENUM, CombineEqualEnum},
+    {LogicalTypeId::VARCHAR, CombineEqualVarchar},
+    {LogicalTypeId::DECIMAL, CombineEqualDecimal},
+    {LogicalTypeId::LIST, CombineEqualList},
+    {LogicalTypeId::ARRAY, CombineEqualArray},
+    {LogicalTypeId::MAP, CombineEqualMap},
+    {LogicalTypeId::STRUCT, CombineStructTypes},
+    {LogicalTypeId::UNION, CombineEqualUnion},
+};
+
 static bool CombineEqualTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                               const LogicalType &right, LogicalType &result) {
-	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
-	switch (type_id) {
-	case LogicalTypeId::STRING_LITERAL:
-		// two string literals convert to varchar
-		result = LogicalType::VARCHAR;
-		return true;
-	case LogicalTypeId::INTEGER_LITERAL:
-		// for two integer literals we unify the underlying types
-		return logical_type_resolver.Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
-	case LogicalTypeId::ENUM:
-		// If both types are different ENUMs we do a string comparison.
-		result = left == right ? left : LogicalType::VARCHAR;
-		return true;
-	case LogicalTypeId::VARCHAR:
-		// varchar: use type that has collation (if any)
-		if (StringType::GetCollation(right).empty()) {
-			result = left;
-		} else {
-			result = right;
+	for (auto &combine_rule : COMBINE_EQUAL_TYPES_RULES) {
+		if (type_id == combine_rule.type) {
+			return combine_rule.function(logical_type_resolver, left, right, result);
 		}
-		return true;
-	case LogicalTypeId::DECIMAL: {
-		// unify the width/scale so that the resulting decimal always fits
-		// "width - scale" gives us the number of digits on the left side of the decimal point
-		// "scale" gives us the number of digits allowed on the right of the decimal point
-		// using the max of these of the two types gives us the new decimal size
-		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
-		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width =
-		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
-		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-		auto width = NumericCast<uint8_t>(extra_width + scale);
-		if (width > DecimalType::MaxWidth()) {
-			// if the resulting decimal does not fit, we truncate the scale
-			width = DecimalType::MaxWidth();
-			scale = NumericCast<uint8_t>(width - extra_width);
-		}
-		result = LogicalType::DECIMAL(width, scale);
-		return true;
 	}
-	case LogicalTypeId::LIST: {
-		// list: perform max recursively on child type
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-			return false;
-		}
-		result = LogicalType::LIST(new_child);
-		return true;
-	}
-	case LogicalTypeId::ARRAY: {
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right),
-		                                     new_child)) {
-			return false;
-		}
-		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
-		result = LogicalType::ARRAY(new_child, new_size);
-		return true;
-	}
-	case LogicalTypeId::MAP: {
-		// map: perform max recursively on child type
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-			return false;
-		}
-		result = LogicalType::MAP(new_child);
-		return true;
-	}
-	case LogicalTypeId::STRUCT: {
-		return CombineStructTypes(logical_type_resolver, left, right, result);
-	}
-	case LogicalTypeId::UNION: {
-		auto left_member_count = UnionType::GetMemberCount(left);
-		auto right_member_count = UnionType::GetMemberCount(right);
-		if (left_member_count != right_member_count) {
-			// return the "larger" type, with the most members
-			result = left_member_count > right_member_count ? left : right;
-			return true;
-		}
-		// otherwise, keep left, don't try to meld the two together.
-		result = left;
-		return true;
-	}
-	default:
-		result = left;
-		return true;
-	}
+	result = left;
+	return true;
 }
 
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
