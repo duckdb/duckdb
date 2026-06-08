@@ -2,8 +2,6 @@
 # description: Test the state export functionality for corr
 # group: [aggregate_state_export]
 
-require noforcestorage
-
 statement ok
 SET storage_compatibility_version = 'latest';
 
