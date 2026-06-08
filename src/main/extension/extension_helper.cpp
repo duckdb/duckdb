@@ -2,6 +2,8 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -387,17 +389,17 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
-		auto fs = FileSystem::CreateLocal();
+		auto &fs = FileSystem::GetLocal(db);
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
-			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
+			ExtensionHelper::InstallExtension(db, fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		ExtensionHelper::LoadExternalExtension(db, fs, extension_name);
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
