@@ -57,8 +57,9 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 #endif
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p)
-    : path(std::move(path_p)), file_size(0), last_modified(0), can_seek(false), on_disk_file(false) {
+ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
+    : path(std::move(path_p)), generation(generation_p), file_size(0), last_modified(0), can_seek(false),
+      on_disk_file(false) {
 }
 
 void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &guard) const {
@@ -131,7 +132,7 @@ ExternalFileCache::CachedFile::Ranges(const unique_ptr<StorageLockKey> &guard) {
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
-    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
+    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p), generation(0) {
 }
 
 bool ExternalFileCache::IsEnabled() const {
@@ -140,10 +141,18 @@ bool ExternalFileCache::IsEnabled() const {
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
 	lock_guard<mutex> guard(lock);
+	if (enable == enable_p) {
+		return;
+	}
 	enable = enable_p;
+	generation++;
 	if (!enable) {
 		cached_files.clear();
 	}
+}
+
+idx_t ExternalFileCache::GetGeneration() const {
+	return generation;
 }
 
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
@@ -160,6 +169,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	return result;
 }
 
+idx_t ExternalFileCache::GetCachedFileCount() const {
+	const lock_guard<mutex> files_guard(lock);
+	return cached_files.size();
+}
+
 ExternalFileCache &ExternalFileCache::Get(DatabaseInstance &db) {
 	return db.GetExternalFileCache();
 }
@@ -172,13 +186,16 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
+shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
+	if (!enable) {
+		return make_shared_ptr<CachedFile>(path, generation);
+	}
 	auto &entry = cached_files[path];
 	if (!entry) {
-		entry = make_uniq<CachedFile>(path);
+		entry = make_shared_ptr<CachedFile>(path, generation);
 	}
-	return *entry;
+	return entry;
 }
 
 } // namespace duckdb
