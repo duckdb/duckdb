@@ -47,11 +47,11 @@ MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
 }
 
-string DependencyManager::GetSchema(const CatalogEntry &entry) {
+Identifier DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name.GetIdentifierName();
+		return entry.name;
 	}
-	return entry.ParentSchema().name.GetIdentifierName();
+	return entry.ParentSchema().name;
 }
 
 MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {

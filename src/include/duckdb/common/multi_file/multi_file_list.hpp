@@ -73,11 +73,11 @@ public:
 
 struct MultiFilePushdownInfo {
 	explicit MultiFilePushdownInfo(LogicalGet &get);
-	MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
+	MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
 	                      const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info);
 
 	TableIndex table_index;
-	const vector<string> &column_names;
+	const vector<Identifier> &column_names;
 	vector<column_t> column_ids;
 	vector<ColumnIndex> column_indexes;
 	ExtraOperatorInfo &extra_info;

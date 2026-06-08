@@ -19,20 +19,20 @@ CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p
 
 string CatalogSearchEntry::ToString() const {
 	if (catalog.empty()) {
-		return WriteOptionallyQuoted(schema.GetIdentifierName());
+		return WriteOptionallyQuoted(schema);
 	} else {
-		return WriteOptionallyQuoted(catalog.GetIdentifierName()) + "." +
-		       WriteOptionallyQuoted(schema.GetIdentifierName());
+		return WriteOptionallyQuoted(catalog) + "." + WriteOptionallyQuoted(schema);
 	}
 }
 
-string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
-	for (idx_t i = 0; i < input.size(); i++) {
-		if (input[i] == '.' || input[i] == ',' || input[i] == '"') {
-			return "\"" + StringUtil::Replace(input, "\"", "\"\"") + "\"";
+string CatalogSearchEntry::WriteOptionallyQuoted(const Identifier &input) {
+	auto &name = input.GetIdentifierName();
+	for (idx_t i = 0; i < name.size(); i++) {
+		if (name[i] == '.' || name[i] == ',' || name[i] == '"') {
+			return "\"" + StringUtil::Replace(name, "\"", "\"\"") + "\"";
 		}
 	}
-	return input;
+	return name;
 }
 
 string CatalogSearchEntry::ListToString(const vector<CatalogSearchEntry> &input) {

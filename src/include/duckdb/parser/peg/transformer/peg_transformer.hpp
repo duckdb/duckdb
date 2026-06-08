@@ -205,7 +205,7 @@ public:
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
-	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
+	identifier_map_t<unique_ptr<WindowExpression>> window_clauses;
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;

@@ -655,7 +655,7 @@ index e2e893e..e6be4a9 100644
  }
  
 diff --git a/database-connector/src/optimizer/aggregate_optimizer.cpp b/database-connector/src/optimizer/aggregate_optimizer.cpp
-index 9728f78..edf0b18 100644
+index 9728f78..818dfec 100644
 --- a/database-connector/src/optimizer/aggregate_optimizer.cpp
 +++ b/database-connector/src/optimizer/aggregate_optimizer.cpp
 @@ -1,5 +1,7 @@
@@ -740,6 +740,24 @@ index 9728f78..edf0b18 100644
  				func_upper = "MAX";
  			} else {
  				return res;
+@@ -189,7 +192,7 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 			if (table_col_idx >= get.names.size()) {
+ 				return res;
+ 			}
+-			auto column_name = get.names[table_col_idx];
++			auto column_name = get.names[table_col_idx].GetIdentifierName();
+ 			auto config = dbconnector::table_scan::FilterPushdown::CreateConfig('`');
+ 			auto new_filter =
+ 			    dbconnector::table_scan::FilterPushdown::TransformFilter(config, column_name, entry.Filter());
+@@ -207,7 +210,7 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 	}
+ 
+ 	get.returned_types = new_types;
+-	get.names = new_names;
++	get.names = StringsToIdentifiers(new_names);
+ 	vector<ColumnIndex> new_column_ids;
+ 	for (idx_t i = 0; i < new_types.size(); i++) {
+ 		new_column_ids.push_back(ColumnIndex(i));
 @@ -230,14 +233,15 @@ struct AggregateRewriteInfo {
  static void RewriteExpression(unique_ptr<Expression> &expr, AggregateRewriteInfo &info) {
  	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
@@ -763,7 +781,7 @@ index 9728f78..edf0b18 100644
  	}
  	ExpressionIterator::EnumerateChildren(*expr,
 diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
-index a310f59..af077d2 100644
+index a310f59..19368cf 100644
 --- a/database-connector/src/optimizer/optimizer_util.cpp
 +++ b/database-connector/src/optimizer/optimizer_util.cpp
 @@ -46,10 +46,10 @@ TracedBindingColumn OptimizerUtil::TraceBindingToColumn(ColumnBinding binding, L
@@ -779,8 +797,17 @@ index a310f59..af077d2 100644
  		current = *current.get().children[0];
  	}
  
+@@ -68,7 +68,7 @@ TracedBindingColumn OptimizerUtil::TraceBindingToColumn(ColumnBinding binding, L
+ 	if (actual_col_idx >= get.names.size()) {
+ 		return res;
+ 	}
+-	res.col_name = get.names[actual_col_idx];
++	res.col_name = get.names[actual_col_idx].GetIdentifierName();
+ 	res.col_type = get.returned_types[actual_col_idx];
+ 	return res;
+ }
 diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
-index 590db60..43b6729 100644
+index 590db60..bc7b6cd 100644
 --- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
 +++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
 @@ -42,10 +42,10 @@ static string TraceColumnToGet(const OrderByAndLimitOptimizer::Config &config, E
@@ -809,6 +836,15 @@ index 590db60..43b6729 100644
  		current = *current.get().children[0];
  	}
  
+@@ -84,7 +84,7 @@ static string TraceColumnToGet(const OrderByAndLimitOptimizer::Config &config, E
+ 	if (actual_col_idx >= get.names.size()) {
+ 		return std::string();
+ 	}
+-	return dbconnector::query::QueryWriter::WriteIdentifier(get.names[actual_col_idx], config.identifier_quote);
++	return dbconnector::query::QueryWriter::WriteIdentifier(get.names[actual_col_idx].GetIdentifierName(), config.identifier_quote);
+ }
+ 
+ static string TryBuildOrderByClause(const OrderByAndLimitOptimizer::Config &config, vector<BoundOrderByNode> &orders,
 @@ -127,8 +127,8 @@ static string TryBuildOrderByClause(const OrderByAndLimitOptimizer::Config &conf
  static void CollectBindingRefs(Expression &expr, idx_t target_table_index, unordered_set<idx_t> &referenced) {
  	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {

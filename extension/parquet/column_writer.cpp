@@ -133,7 +133,7 @@ bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
 		if (!child_writer->TryExportPreparedShreddingType(child_shredding_type)) {
 			continue;
 		}
-		writer_shredding_type.AddChild(child_writer->Schema().name, std::move(child_shredding_type));
+		writer_shredding_type.AddChild(Identifier(child_writer->Schema().name), std::move(child_shredding_type));
 		has_shredding = true;
 	}
 	if (!has_shredding) {
@@ -273,7 +273,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
                                                              vector<Identifier> path_in_schema, const LogicalType &type,
-                                                             const string &name, bool allow_geometry,
+                                                             const Identifier &name, bool allow_geometry,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
                                                              optional_ptr<const ShreddingType> shredding_types,
                                                              idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
@@ -346,9 +346,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 				is_optional = true;
 			}
 
-			child_writers.push_back(CreateWriterRecursive(
-			    context, writer, path_in_schema, child_type, child_name.GetIdentifierName(), allow_geometry,
-			    child_field_ids, child_shredding, max_repeat, max_define + 1, is_optional));
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
+			                                              allow_geometry, child_field_ids, child_shredding, max_repeat,
+			                                              max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
 		                                      std::move(child_writers));
@@ -369,9 +369,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		for (auto &entry : child_types) {
 			auto &child_type = entry.second;
 			auto &child_name = entry.first;
-			child_writers.push_back(CreateWriterRecursive(
-			    context, writer, path_in_schema, child_type, child_name.GetIdentifierName(), allow_geometry,
-			    child_field_ids, shredding_type, max_repeat, max_define + 1, true));
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
+			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              max_define + 1, true));
 		}
 		return make_uniq<StructColumnWriter>(writer, std::move(struct_column), path_in_schema,
 		                                     std::move(child_writers));
@@ -423,9 +423,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			bool is_key = i == 0;
 			auto &child_name = key_value[i].first;
 			auto &child_type = key_value[i].second;
-			auto child_writer = CreateWriterRecursive(context, writer, path_in_schema, child_type,
-			                                          child_name.GetIdentifierName(), allow_geometry, child_field_ids,
-			                                          shredding_type, max_repeat + 1, max_define + 2, !is_key);
+			auto child_writer =
+			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name, allow_geometry,
+			                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
 		}

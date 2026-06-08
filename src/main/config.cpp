@@ -587,15 +587,15 @@ void DBConfig::CheckLock(const String &name) {
 		// not locked
 		return;
 	}
-	case_insensitive_set_t allowed_settings {"schema", "search_path"};
-	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
+	identifier_set_t allowed_settings {"schema", "search_path"};
+	if (allowed_settings.find(Identifier(name.ToStdString())) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
 	}
 	if (!options.allowed_configs.empty()) {
 		auto option = GetOptionByName(name);
 		auto canonical_name = option ? string(option->name) : name.ToStdString();
-		if (options.allowed_configs.find(canonical_name) != options.allowed_configs.end()) {
+		if (options.allowed_configs.find(Identifier(canonical_name)) != options.allowed_configs.end()) {
 			// settings that are allowed through allowed_configs
 			return;
 		}
@@ -844,8 +844,8 @@ void DBConfig::AddAllowedConfig(const string &config_name) {
 	if (config_name.empty()) {
 		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
 	}
-	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
-	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
+	duckdb::identifier_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	if (always_disallowed_config.find(Identifier(config_name)) != always_disallowed_config.end()) {
 		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
 	}
 	// Validate that the config name refers to a known setting (built-in or extension)
@@ -858,14 +858,14 @@ void DBConfig::AddAllowedConfig(const string &config_name) {
 	}
 	ExtensionOption extension_option;
 	if (TryGetExtensionOption(config_name, extension_option)) {
-		options.allowed_configs.insert(config_name);
+		options.allowed_configs.insert(Identifier(config_name));
 		return;
 	}
 	// Check if the setting belongs to a known extension (even if not yet loaded)
 	auto extension_name = ExtensionHelper::FindExtensionInEntries(config_name, EXTENSION_SETTINGS);
 	if (!extension_name.empty()) {
 		// Accept the setting - the extension may be autoloaded later when the setting is used
-		options.allowed_configs.insert(config_name);
+		options.allowed_configs.insert(Identifier(config_name));
 		return;
 	}
 	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);

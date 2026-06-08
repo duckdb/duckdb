@@ -32,7 +32,7 @@ public:
 
 private:
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
-	static string WriteOptionallyQuoted(const string &input);
+	static string WriteOptionallyQuoted(const Identifier &input);
 };
 
 enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };

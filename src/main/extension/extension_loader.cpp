@@ -103,7 +103,7 @@ void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const
 	}
 
 	// TODO: remove extension schema from search path if loading extension failed
-	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema.GetIdentifierName());
+	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema);
 }
 
 void ExtensionLoader::RefreshSearchPath(ClientContext &context) {

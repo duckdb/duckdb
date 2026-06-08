@@ -1273,7 +1273,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
-	log.WriteSetTable(info->schema.GetIdentifierName(), info->table.GetIdentifierName());
+	log.WriteSetTable(info->schema, info->table);
 	if (!commit_state) {
 		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 		return;

@@ -596,12 +596,12 @@ unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer
 
 void ResetTableOptionsInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WriteProperty<case_insensitive_set_t>(400, "table_options", table_options);
+	serializer.WriteProperty<identifier_set_t>(400, "table_options", table_options);
 }
 
 unique_ptr<AlterTableInfo> ResetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ResetTableOptionsInfo>(new ResetTableOptionsInfo());
-	deserializer.ReadProperty<case_insensitive_set_t>(400, "table_options", result->table_options);
+	deserializer.ReadProperty<identifier_set_t>(400, "table_options", result->table_options);
 	return std::move(result);
 }
 

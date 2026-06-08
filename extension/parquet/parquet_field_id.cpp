@@ -17,7 +17,7 @@ namespace duckdb {
 
 constexpr const char *FieldID::DUCKDB_FIELD_ID;
 
-ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
+ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<identifier_map_t<FieldID>>()) {
 }
 
 ChildFieldIDs ChildFieldIDs::Copy() const {

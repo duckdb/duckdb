@@ -165,7 +165,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 
 	const auto &logical_get = current_op.get().Cast<LogicalGet>();
 	const auto column_index = logical_get.GetColumnIds()[column_id];
-	return logical_get.GetColumnName(column_index);
+	return logical_get.GetColumnName(column_index).GetIdentifierName();
 }
 
 } // namespace

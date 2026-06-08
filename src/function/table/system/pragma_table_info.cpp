@@ -85,7 +85,7 @@ struct PragmaTableInfoHelper {
 		output.data[5].Append(Value::BOOLEAN(constraint_info.pk));
 	}
 
-	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output) {
+	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
 		// "cid", INTEGER
 		output.data[0].Append(Value::INTEGER((int32_t)i));
 		// "name", VARCHAR
@@ -142,7 +142,7 @@ struct PragmaShowHelper {
 		output.data[5].Append(Value());
 	}
 
-	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output) {
+	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
 		// "column_name", VARCHAR
 		output.data[0].Append(Value(name));
 		// "column_type", VARCHAR
@@ -262,9 +262,9 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 		auto name = i < view.aliases.size() ? view.aliases[i] : view_names[i];
 
 		if (is_table_info) {
-			PragmaTableInfoHelper::GetViewColumns(i, name.GetIdentifierName(), type, output);
+			PragmaTableInfoHelper::GetViewColumns(i, name, type, output);
 		} else {
-			PragmaShowHelper::GetViewColumns(i, name.GetIdentifierName(), type, output);
+			PragmaShowHelper::GetViewColumns(i, name, type, output);
 		}
 	}
 	data.offset = next;

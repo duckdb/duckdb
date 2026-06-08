@@ -99,7 +99,7 @@ index 7a1cfaa5..0a842fb5 100644
  			has_timestamp = true;
  		} else {
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index 1803b084..5fa6e62e 100644
+index 1803b084..fe56afe4 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
 @@ -56,7 +56,8 @@ vector<BoundOrderByNode> DuckLakeCompactor::BindSortOrders(Binder &binder, DuckL
@@ -123,15 +123,6 @@ index 1803b084..5fa6e62e 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(source_files.size())));
  	chunk.data[3].Append(Value::BIGINT(static_cast<int64_t>(files_created)));
  	return SourceResultType::FINISHED;
-@@ -545,7 +546,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
- 	auto virtual_columns = table.GetVirtualColumns();
- 	auto ducklake_scan =
- 	    make_uniq<LogicalGet>(table_idx, std::move(scan_function), std::move(bind_data), copy_options.expected_types,
--	                          copy_options.names, std::move(virtual_columns));
-+	                          IdentifiersToStrings(copy_options.names), std::move(virtual_columns));
- 
- 	auto &column_ids = ducklake_scan->GetMutableColumnIds();
- 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 @@ -573,7 +574,7 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table
@@ -184,7 +175,7 @@ index 071b993f..f06cc86c 100644
  			has_timestamp = true;
  		} else {
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
-index 216fedc0..7d25de45 100644
+index 216fedc0..325ce4a5 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp
 +++ b/src/functions/ducklake_flush_inlined_data.cpp
 @@ -86,8 +86,8 @@ SourceResultType DuckLakeFlushData::GetDataInternal(ExecutionContext &context, D
@@ -198,15 +189,6 @@ index 216fedc0..7d25de45 100644
  	chunk.data[2].Append(Value::BIGINT(static_cast<int64_t>(gstate.rows_flushed)));
  	return SourceResultType::FINISHED;
  }
-@@ -318,7 +318,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
- 	auto virtual_columns = table.GetVirtualColumns();
- 	auto ducklake_scan =
- 	    make_uniq<LogicalGet>(table_idx, std::move(scan_function), std::move(bind_data), copy_options.expected_types,
--	                          copy_options.names, std::move(virtual_columns));
-+	                          IdentifiersToStrings(copy_options.names), std::move(virtual_columns));
- 	auto &column_ids = ducklake_scan->GetMutableColumnIds();
- 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
- 		column_ids.emplace_back(i);
 @@ -346,7 +346,7 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
  	// and instead pull the latest sort setting
  	// First, see if there are transaction local changes to the table

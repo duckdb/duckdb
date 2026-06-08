@@ -38,7 +38,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
-	case_insensitive_set_t constraint_names;
+	identifier_set_t constraint_names;
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -289,10 +289,10 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			auto info = GetExtraConstraintInfo(table, *constraint);
 			auto constraint_name = GetConstraintName(table, *constraint, info);
-			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
+			if (data.constraint_names.find(Identifier(constraint_name)) != data.constraint_names.end()) {
 				// duplicate constraint name
 				idx_t index = 2;
-				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
+				while (data.constraint_names.find(Identifier(constraint_name + "_" + to_string(index))) !=
 				       data.constraint_names.end()) {
 					index++;
 				}

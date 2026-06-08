@@ -522,10 +522,10 @@ private:
 // ResetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct ResetTableOptionsInfo : public AlterTableInfo {
-	ResetTableOptionsInfo(AlterEntryData data, case_insensitive_set_t table_options);
+	ResetTableOptionsInfo(AlterEntryData data, identifier_set_t table_options);
 	~ResetTableOptionsInfo() override;
 
-	case_insensitive_set_t table_options;
+	identifier_set_t table_options;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

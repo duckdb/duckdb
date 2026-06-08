@@ -55,7 +55,7 @@ public:
 	//! Get all secrets
 	virtual vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Drop secret by name
-	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	virtual void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get best match
 	virtual SecretMatch LookupSecret(const string &path, const string &type,
@@ -112,7 +112,7 @@ public:
 	unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
 	                                    optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	SecretMatch LookupSecret(const string &path, const string &type,
 	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;

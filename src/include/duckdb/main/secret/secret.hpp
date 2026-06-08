@@ -64,7 +64,7 @@ public:
 	explicit CreateSecretFunctionSet(string &name) : name(name) {};
 
 public:
-	bool ProviderExists(const string &provider_name);
+	bool ProviderExists(const Identifier &provider_name);
 	void AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict);
 	CreateSecretFunction &GetFunction(const string &provider);
 

@@ -74,7 +74,7 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	static unique_ptr<ParsedExpression>
-	DeserializeStarExpression(Identifier &&relation_name, const case_insensitive_set_t &exclude_list,
+	DeserializeStarExpression(Identifier &&relation_name, const identifier_set_t &exclude_list,
 	                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
 	                          unique_ptr<ParsedExpression> expr, bool unpacked,
 	                          const qualified_column_set_t &qualified_exclude_list,
@@ -98,9 +98,9 @@ private:
 
 public:
 	// these methods exist for backwards compatibility of (de)serialization
-	StarExpression(const case_insensitive_set_t &exclude_list, qualified_column_set_t qualified_set);
+	StarExpression(const identifier_set_t &exclude_list, qualified_column_set_t qualified_set);
 
-	case_insensitive_set_t SerializedExcludeList() const;
+	identifier_set_t SerializedExcludeList() const;
 	qualified_column_set_t SerializedQualifiedExcludeList() const;
 };
 } // namespace duckdb

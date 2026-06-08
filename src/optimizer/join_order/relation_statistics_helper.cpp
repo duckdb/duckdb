@@ -124,7 +124,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
 			if (column_id < get.names.size()) {
-				column_name = get.names.at(column_id);
+				column_name = get.names.at(column_id).GetIdentifierName();
 			}
 			return_stats.column_names.push_back(Identifier(get.GetName() + "." + column_name));
 		}

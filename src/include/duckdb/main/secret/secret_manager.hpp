@@ -131,10 +131,10 @@ public:
 	DUCKDB_API unique_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name,
 	                                                   const string &storage = "");
 	//! Delete a secret by name, optionally by providing the storage to drop from
-	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
+	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const Identifier &name,
 	                                 OnEntryNotFound on_entry_not_found,
 	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
-	                                 const string &storage = "");
+	                                 const Identifier &storage = "");
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
@@ -155,9 +155,9 @@ public:
 	DUCKDB_API virtual string PersistentSecretPath();
 
 	//! Utility functions
-	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
+	DUCKDB_API void DropSecretByName(ClientContext &context, const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
-	                                 const string &storage = "");
+	                                 const Identifier &storage = "");
 
 private:
 	//! Register a secret type
@@ -173,7 +173,7 @@ private:
 	//! Register a new Secret
 	unique_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
 	                                               OnCreateConflict on_conflict, SecretPersistType persist_type,
-	                                               const string &storage = "");
+	                                               const Identifier &storage = Identifier());
 	//! Initialize the secret catalog_set and persistent secrets (lazily)
 	void InitializeSecrets(CatalogTransaction transaction);
 	//! Load a secret storage
@@ -185,7 +185,7 @@ private:
 	void AutoloadExtensionForFunction(const string &type, const string &provider);
 
 	//! Will throw appropriate error message when type not found
-	[[noreturn]] void ThrowTypeNotFoundError(const string &type, const string &secret_path = "");
+	[[noreturn]] void ThrowTypeNotFoundError(const Identifier &type, const string &secret_path = "");
 	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
 
 	//! Thread-safe accessors for secret_storages
@@ -225,7 +225,7 @@ public:
 	}
 
 protected:
-	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
+	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const Identifier &entry_name);
 
 	SecretManager &secret_manager;
 	mutex lock;

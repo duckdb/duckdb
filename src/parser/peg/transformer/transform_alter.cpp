@@ -382,10 +382,10 @@ PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
 unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
                                              case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list) {
-	case_insensitive_set_t option_names;
+	identifier_set_t option_names;
 	for (auto &opt : rel_option_list) {
 		if (!opt.second) {
-			option_names.insert(opt.first);
+			option_names.insert(Identifier(opt.first));
 			continue;
 		}
 		if (opt.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -395,7 +395,7 @@ PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
 		if (!const_expr.GetValue().IsNull()) {
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
-		option_names.insert(opt.first);
+		option_names.insert(Identifier(opt.first));
 	}
 	return make_uniq<ResetTableOptionsInfo>(AlterEntryData(), std::move(option_names));
 }

@@ -658,6 +658,10 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
 
+double StringUtil::SimilarityRating(const Identifier &s1, const Identifier &s2) {
+	return SimilarityRating(s1.GetIdentifierName(), s2.GetIdentifierName());
+}
+
 double StringUtil::SimilarityRating(const string &s1, const string &s2) {
 	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
 	                                                    s2.data() + s2.size());

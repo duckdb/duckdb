@@ -116,14 +116,14 @@ public:
 	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
 	                                     const identifier_map_t<PAYLOAD> &values) {
 		// Missing values
-		set<string> missing_set;
+		identifier_set_t missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
-				missing_set.insert(name.GetIdentifierName());
+				missing_set.insert(name);
 			}
 		}
-		vector<string> missing_values;
+		vector<Identifier> missing_values;
 		for (auto &val : missing_set) {
 			missing_values.push_back(val);
 		}

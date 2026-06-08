@@ -509,14 +509,14 @@ static LogicalType ConstructNewType(const LogicalType &original_type, child_list
 	}
 }
 
-Value ConstructMapping(const string &name, const LogicalType &type) {
+Value ConstructMapping(const Identifier &name, const LogicalType &type) {
 	if (!type.IsNested()) {
 		return Value(name);
 	}
 	child_list_t<Value> child_mapping;
 	auto child_types = GetChildList(type);
 	for (auto &entry : child_types) {
-		auto mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
+		auto mapping_value = ConstructMapping(entry.first, entry.second);
 		if (entry.second.IsNested()) {
 			child_list_t<Value> child_values;
 			child_values.emplace_back(string(), Value(entry.first));
@@ -612,7 +612,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
 	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
-	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name().GetIdentifierName(), col.Type())));
+	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name(), col.Type())));
 	D_ASSERT(res.default_value);
 	children.push_back(std::move(res.default_value));
 
@@ -825,7 +825,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
+			mapping_value = ConstructMapping(entry.first, entry.second);
 			type_value = entry.second;
 		}
 
@@ -913,7 +913,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 					}
 				}
 				field_name = Identifier(new_name);
-				mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
+				mapping_value = ConstructMapping(entry.first, entry.second);
 				type_value = entry.second;
 			} else {
 				// we are renaming a field in this entry - recurse
@@ -927,7 +927,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			}
 		} else {
 			// we are not adjusting this entry - copy the type and create a straightforward mapping
-			mapping_value = ConstructMapping(entry.first.GetIdentifierName(), entry.second);
+			mapping_value = ConstructMapping(entry.first, entry.second);
 			type_value = entry.second;
 		}
 		if (entry.second.IsNested()) {

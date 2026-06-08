@@ -264,6 +264,7 @@ public:
 	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
 	//! Returns a normalized similarity rating between 0.0 - 1.0 (higher is more similar)
 	DUCKDB_API static double SimilarityRating(const string &s1, const string &s2);
+	DUCKDB_API static double SimilarityRating(const Identifier &s1, const Identifier &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! The scores should be normalized between 0.0 and 1.0, where 1.0 is the highest score
 	//! At least one entry is returned (if there is one).

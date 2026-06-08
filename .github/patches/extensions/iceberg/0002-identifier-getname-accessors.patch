@@ -521,9 +521,18 @@ index d21bd9f5..e23bc019 100644
  		}
  	}
 diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
-index 4047986d..adc22f9b 100644
+index 4047986d..a6a54518 100644
 --- a/src/catalog/rest/transaction/iceberg_transaction.cpp
 +++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -278,7 +278,7 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
+ void IcebergTransaction::DropSecrets(ClientContext &context) {
+ 	auto &secret_manager = SecretManager::Get(context);
+ 	for (auto &secret_name : created_secrets) {
+-		(void)secret_manager.DropSecretByName(context, secret_name, OnEntryNotFound::RETURN_NULL);
++		(void)secret_manager.DropSecretByName(context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
+ 	}
+ }
+ 
 @@ -527,7 +527,7 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
  	IRCAPI::CommitTableRename(context, catalog, transaction_json);
  

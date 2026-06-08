@@ -178,7 +178,7 @@ public:
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
 	                                                      vector<Identifier> path_in_schema, const LogicalType &type,
-	                                                      const string &name, bool allow_geometry,
+	                                                      const Identifier &name, bool allow_geometry,
 	                                                      optional_ptr<const ChildFieldIDs> field_ids,
 	                                                      optional_ptr<const ShreddingType> shredding_types,
 	                                                      idx_t max_repeat = 0, idx_t max_define = 1,

@@ -151,7 +151,7 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 		}
 	}
 
-	case_insensitive_set_t struct_names;
+	identifier_set_t struct_names;
 	for (idx_t i = 0; i < size; i++) {
 		auto &child = arguments[i];
 		switch (child->GetReturnType().id()) {

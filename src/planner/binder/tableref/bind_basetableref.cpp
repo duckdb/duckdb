@@ -245,7 +245,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		vector<TableColumnType> table_categories;
 
 		vector<LogicalType> return_types;
-		vector<string> return_names;
+		vector<Identifier> return_names;
 		for (auto &col : table.GetColumns().Logical()) {
 			table_types.push_back(col.Type());
 			table_names.emplace_back(col.Name());

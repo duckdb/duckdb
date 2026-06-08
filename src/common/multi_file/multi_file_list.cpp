@@ -21,7 +21,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
                                              const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
 }
@@ -34,7 +34,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
@@ -56,8 +56,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 	ExtraOperatorInfo extra_info;
 
 	// construct the pushdown info
-	auto name_strings = IdentifiersToStrings(names);
-	MultiFilePushdownInfo info(table_index, name_strings, column_ids, extra_info);
+	MultiFilePushdownInfo info(table_index, names, column_ids, extra_info);
 
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;

@@ -9,7 +9,7 @@ namespace duckdb {
 
 class OpenFileDefaultGenerator : public DefaultGenerator {
 public:
-	OpenFileDefaultGenerator(Catalog &catalog, SchemaCatalogEntry &schema, const case_insensitive_set_t &view_names_p,
+	OpenFileDefaultGenerator(Catalog &catalog, SchemaCatalogEntry &schema, const identifier_set_t &view_names_p,
 	                         string file_p)
 	    : DefaultGenerator(catalog), schema(schema), file(std::move(file_p)) {
 		for (auto &view_name : view_names_p) {
@@ -51,9 +51,9 @@ unique_ptr<Catalog> OpenFileStorageAttach(optional_ptr<StorageExtensionInfo> sto
 	auto catalog = make_uniq<DuckCatalog>(db);
 	catalog->Initialize(false);
 
-	case_insensitive_set_t view_names;
+	identifier_set_t view_names;
 	view_names.insert("file");
-	view_names.insert(name);
+	view_names.insert(Identifier(name));
 
 	// set up the default view generator for "file" and the derived name of the file
 	auto system_transaction = CatalogTransaction::GetSystemTransaction(db.GetDatabase());

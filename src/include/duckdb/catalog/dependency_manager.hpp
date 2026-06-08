@@ -108,7 +108,7 @@ private:
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
-	static string GetSchema(const CatalogEntry &entry);
+	static Identifier GetSchema(const CatalogEntry &entry);
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);

@@ -87,7 +87,7 @@ vector<SecretEntry> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTran
 	return ret_value;
 }
 
-void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+void CatalogSetSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
 	auto entry = secrets->GetEntry(GetTransactionOrDefault(transaction), Identifier(name));
 	if (!entry) {
@@ -101,7 +101,7 @@ void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFou
 	}
 
 	secrets->DropEntry(GetTransactionOrDefault(transaction), Identifier(name), true, true);
-	RemoveSecret(name, on_entry_not_found);
+	RemoveSecret(name.GetIdentifierName(), on_entry_not_found);
 }
 
 SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const string &type,

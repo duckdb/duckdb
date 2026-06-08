@@ -1352,7 +1352,7 @@ void LogicalType::Verify() const {
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
-		case_insensitive_set_t child_names;
+		identifier_set_t child_names;
 		bool all_empty = true;
 		for (auto &entry : StructType::GetChildTypes(*this)) {
 			if (entry.first.empty()) {

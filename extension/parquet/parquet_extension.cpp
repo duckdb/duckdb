@@ -254,7 +254,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.AddChild(col_name,
+					bind_data->shredding_types.AddChild(Identifier(col_name),
 					                                    ShreddingType::GetShreddingTypes(child_value, context));
 				}
 			}

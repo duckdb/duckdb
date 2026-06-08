@@ -447,7 +447,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 bound_insert.expected_types, expected_names);
+	                                 bound_insert.expected_types, StringsToIdentifiers(expected_names));
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}

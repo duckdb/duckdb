@@ -202,12 +202,12 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 			D_ASSERT(!window_func->GetAlias().empty());
 			string window_name(window_func->GetAlias());
 			window_func->ClearAlias();
-			auto it = transformer.window_clauses.find(window_name);
+			auto it = transformer.window_clauses.find(Identifier(window_name));
 			if (it != transformer.window_clauses.end()) {
 				throw ParserException("window \"%s\" is already defined", window_name);
 			}
 			auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
-			transformer.window_clauses[window_name] = std::move(window_function);
+			transformer.window_clauses[Identifier(window_name)] = std::move(window_function);
 		}
 	}
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
