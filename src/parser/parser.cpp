@@ -58,7 +58,7 @@ static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
 
-static void ValidateUTF8Query(const string &query) {
+void Parser::ValidateUTF8Query(const string &query) {
 	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
 	size_t invalid_pos = 0;
 	auto unicode_type = Utf8Proc::Analyze(query.c_str(), query.size(), &reason, &invalid_pos);
@@ -221,7 +221,7 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 }
 
 void Parser::ParseQuery(const string &query) {
-	ValidateUTF8Query(query);
+	Parser::ValidateUTF8Query(query);
 	{
 		string new_query;
 		if (StripUnicodeSpaces(query, new_query)) {
@@ -272,53 +272,11 @@ void Parser::ParseQuery(const string &query) {
 				statements.push_back(std::move(stmt));
 			}
 		} catch (ParserException &e) {
-			bool parsed = false;
-			if (options.extensions && options.extensions->HasParserExtensions()) {
-				idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
-				// SimpleToken view of the tail: text + classified type, in source order, so
-				// extensions can dispatch on the token stream without re-tokenizing. The extension
-				// reports how many of these tokens it consumed.
-				vector<SimpleToken> simple_tokens;
-				simple_tokens.reserve(tokens.size() - token_cursor);
-				for (idx_t i = token_cursor; i < tokens.size(); i++) {
-					simple_tokens.emplace_back(tokens[i].text, tokens[i].type);
-				}
-				for (auto &ext : options.extensions->ParserExtensions()) {
-					if (!ext.parse_function) {
-						continue;
-					}
-					auto result = ext.parse_function(ext.parser_info.get(), simple_tokens);
-					if (result.consumed_tokens < 0) {
-						// The extension wants to surface an error.
-						throw ParserException::SyntaxError(query, result.error, result.error_location);
-					}
-					if (result.consumed_tokens == 0) {
-						// The extension ran but did not claim this input — let the next one try.
-						continue;
-					}
-					// consumed_tokens > 0: the extension accepted that many leading tokens.
-					auto consumed = NumericCast<idx_t>(result.consumed_tokens);
-					if (consumed > simple_tokens.size()) {
-						throw ParserException(
-						    "Extension returned consumed_tokens=%llu — only %llu tokens are available",
-						    (uint64_t)consumed, (uint64_t)simple_tokens.size());
-					}
-					// The claimed span runs from the failure point to the end of the last consumed
-					// token; advancing the cursor by consumed_tokens lands on a token boundary.
-					auto &last_token = tokens[token_cursor + consumed - 1];
-					const idx_t span_end_byte = last_token.offset + last_token.length;
-					auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-					estmt->stmt_location = failure_byte;
-					estmt->stmt_length = span_end_byte - failure_byte;
-					statements.push_back(std::move(estmt));
-					token_cursor += consumed;
-					parsed = true;
-					break;
-				}
-			}
-			if (!parsed) {
+			auto ext_stmt = TryParseExtensionStatement(tokens, token_cursor, query);
+			if (!ext_stmt) {
 				throw;
 			}
+			statements.push_back(std::move(ext_stmt));
 		}
 	}
 
@@ -337,6 +295,52 @@ void Parser::ParseQuery(const string &query) {
 			}
 		}
 	}
+}
+
+unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
+                                                            const string &query) {
+	if (!options.extensions || !options.extensions->HasParserExtensions()) {
+		return nullptr;
+	}
+	idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+	// SimpleToken view of the tail: text + classified type, in source order, so extensions can
+	// dispatch on the token stream without re-tokenizing. The extension reports how many of these
+	// tokens it consumed.
+	vector<SimpleToken> simple_tokens;
+	simple_tokens.reserve(tokens.size() - token_cursor);
+	for (idx_t i = token_cursor; i < tokens.size(); i++) {
+		simple_tokens.emplace_back(tokens[i].text, tokens[i].type);
+	}
+	for (auto &ext : options.extensions->ParserExtensions()) {
+		if (!ext.parse_function) {
+			continue;
+		}
+		auto result = ext.parse_function(ext.parser_info.get(), simple_tokens);
+		if (result.consumed_tokens < 0) {
+			// The extension wants to surface an error.
+			throw ParserException::SyntaxError(query, result.error, result.error_location);
+		}
+		if (result.consumed_tokens == 0) {
+			// The extension ran but did not claim this input — let the next one try.
+			continue;
+		}
+		// consumed_tokens > 0: the extension accepted that many leading tokens.
+		auto consumed = NumericCast<idx_t>(result.consumed_tokens);
+		if (consumed > simple_tokens.size()) {
+			throw ParserException("Extension returned consumed_tokens=%llu — only %llu tokens are available",
+			                      (uint64_t)consumed, (uint64_t)simple_tokens.size());
+		}
+		// The claimed span runs from the failure point to the end of the last consumed token;
+		// advancing the cursor by consumed_tokens lands on a token boundary.
+		auto &last_token = tokens[token_cursor + consumed - 1];
+		const idx_t span_end_byte = last_token.offset + last_token.length;
+		auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+		estmt->stmt_location = failure_byte;
+		estmt->stmt_length = span_end_byte - failure_byte;
+		token_cursor += consumed;
+		return std::move(estmt);
+	}
+	return nullptr;
 }
 
 unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor) {

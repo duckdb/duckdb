@@ -990,8 +990,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
-		auto statements = con.ExtractStatements(zSql);
-		for (auto &statement : statements) {
+		auto iterator = con.context->ExtractStatements(zSql);
+		while (iterator.Peek(*con.context)) {
+			auto statement = iterator.GetStatement();
 			idx_t start_pos = statement->stmt_location;
 			idx_t len = statement->stmt_length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
@@ -1022,6 +1023,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 		} /* end while */
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
+		error.AddErrorLocation(zSql);
 		PrintDatabaseError(error.Message());
 		return SuccessState::FAILURE;
 	}
