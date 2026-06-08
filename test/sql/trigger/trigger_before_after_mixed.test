@@ -155,3 +155,39 @@ query I
 SELECT COUNT(*) FROM fail_log;
 ----
 0
+
+# Cross-timing cycle: BEFORE on A -> inserts B, AFTER on B -> inserts A
+# The second CREATE TRIGGER should be blocked because it would form a cycle
+statement ok
+CREATE TABLE cyc_ba_a (id INTEGER);
+
+statement ok
+CREATE TABLE cyc_ba_b (id INTEGER);
+
+statement ok
+CREATE TRIGGER cyc_ba_before BEFORE INSERT ON cyc_ba_a FOR EACH STATEMENT
+    INSERT INTO cyc_ba_b VALUES (1);
+
+statement error
+CREATE TRIGGER cyc_ba_after AFTER INSERT ON cyc_ba_b FOR EACH STATEMENT
+    INSERT INTO cyc_ba_a VALUES (1);
+----
+<REGEX>:.*[Rr]ecurs.*
+
+# Cross-timing cycle: AFTER on A -> inserts B, BEFORE on B -> inserts A
+# The second CREATE TRIGGER should be blocked
+statement ok
+CREATE TABLE cyc_ab_a (id INTEGER);
+
+statement ok
+CREATE TABLE cyc_ab_b (id INTEGER);
+
+statement ok
+CREATE TRIGGER cyc_ab_after AFTER INSERT ON cyc_ab_a FOR EACH STATEMENT
+    INSERT INTO cyc_ab_b VALUES (1);
+
+statement error
+CREATE TRIGGER cyc_ab_before BEFORE INSERT ON cyc_ab_b FOR EACH STATEMENT
+    INSERT INTO cyc_ab_a VALUES (1);
+----
+<REGEX>:.*[Rr]ecurs.*

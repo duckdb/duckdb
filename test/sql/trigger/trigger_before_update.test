@@ -166,6 +166,96 @@ SELECT COUNT(*) FROM t_col_audit;
 ----
 1
 
+# Updating 'other' (NOT in the OF list) does NOT fire the trigger
+statement ok
+UPDATE t_col SET other = 200 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating both 'val' and 'other' fires the trigger (overlap with OF list)
+statement ok
+UPDATE t_col SET val = 30, other = 300 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+2
+
+# Multi-column OF: trigger fires when ANY listed column is touched
+statement ok
+CREATE TABLE t_multi_col (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_multi_col VALUES (1, 2, 3);
+
+statement ok
+CREATE TABLE t_multi_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_col BEFORE UPDATE OF a, b ON t_multi_col FOR EACH STATEMENT
+    INSERT INTO t_multi_col_audit VALUES ('ab_changed');
+
+# Update 'a' alone -> fires
+statement ok
+UPDATE t_multi_col SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+1
+
+# Update 'b' alone -> fires
+statement ok
+UPDATE t_multi_col SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Update 'c' alone -> does NOT fire
+statement ok
+UPDATE t_multi_col SET c = 30;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Mixed (a + c) -> fires (a is in OF list)
+statement ok
+UPDATE t_multi_col SET a = 100, c = 300;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+3
+
+# Case-insensitive matching: trigger created with OF "VAL" must fire when SET val = ...
+statement ok
+CREATE TABLE t_case (val INTEGER);
+
+statement ok
+INSERT INTO t_case VALUES (1);
+
+statement ok
+CREATE TABLE t_case_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_case BEFORE UPDATE OF VAL ON t_case FOR EACH STATEMENT
+    INSERT INTO t_case_audit VALUES ('case');
+
+statement ok
+UPDATE t_case SET val = 2;
+
+query I
+SELECT COUNT(*) FROM t_case_audit;
+----
+1
+
 # RETURNING is rejected
 statement error
 UPDATE target SET val = 1 RETURNING id;

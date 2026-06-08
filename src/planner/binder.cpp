@@ -600,6 +600,29 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node,
 	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
 	auto before_triggers = table.GetTriggersForEvent(txn, TriggerTiming::BEFORE, event_type);
 	auto after_triggers = table.GetTriggersForEvent(txn, TriggerTiming::AFTER, event_type);
+
+	// UPDATE OF <cols>: drop triggers whose OF list is disjoint from the SET list.
+	// Triggers without an OF list are unrestricted and always fire.
+	if (event_type == TriggerEventType::UPDATE_EVENT && node.type == QueryNodeType::UPDATE_QUERY_NODE) {
+		auto &update_node = node.Cast<UpdateQueryNode>();
+		case_insensitive_set_t updated_columns;
+		if (update_node.set_info) {
+			updated_columns.insert(update_node.set_info->columns.begin(),
+			                       update_node.set_info->columns.end());
+		}
+		auto trigger_does_not_fire = [&](const_reference<TriggerCatalogEntry> trig) {
+			const auto &of_cols = trig.get().columns;
+			return !of_cols.empty() &&
+			       std::none_of(of_cols.begin(), of_cols.end(),
+			                    [&](const string &c) { return updated_columns.count(c) > 0; });
+		};
+		auto drop_non_firing = [&](vector<const_reference<TriggerCatalogEntry>> &triggers) {
+			triggers.erase(std::remove_if(triggers.begin(), triggers.end(), trigger_does_not_fire), triggers.end());
+		};
+		drop_non_firing(before_triggers);
+		drop_non_firing(after_triggers);
+	}
+
 	if (before_triggers.empty() && after_triggers.empty()) {
 		return nullptr;
 	}
@@ -661,16 +684,9 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedE
 	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
 
-	// CTE registration order = materialized-CTE execution order (first registered is outermost
-	// LogicalMaterializedCTE, runs first). So:
-	//   1. BEFORE body CTEs first  -> run before the DML
-	//   2. Base CTE (the DML)      -> runs in the middle
-	//   3. AFTER  body CTEs last   -> run after the DML
-	//
-	// Within each timing the catalog returns triggers alphabetically (case-insensitive) — see
-	// GetTriggersForEvent.
+	// CTE definition order == execution order: BEFORE bodies, then base (DML), then AFTER bodies.
 
-	// 1. BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE TRIGGER time)
+	// BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE TRIGGER time)
 	for (idx_t i = 0; i < before_triggers.size(); i++) {
 		auto &trigger = before_triggers[i].get();
 		auto body_cte_name = string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
@@ -683,14 +699,14 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedE
 		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
 
-	// 2. Base CTE: the original DML, materialized so AFTER bodies can scan it (transition tables)
+	// Base CTE: the original DML, materialized so AFTER bodies can scan it (transition tables)
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	base_cte->is_trigger_generated = true;
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
-	// 3. AFTER bodies — may reference base via REFERENCING NEW/OLD TABLE aliases
+	// AFTER bodies — may reference base via REFERENCING NEW/OLD TABLE aliases
 	for (idx_t i = 0; i < after_triggers.size(); i++) {
 		auto &trigger = after_triggers[i].get();
 		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
@@ -700,8 +716,9 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedE
 		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 		trig_cte->is_trigger_generated = true;
 
-		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
-		// a local WITH shadows the alias
+		// Inject the transition-table aliases (REFERENCING NEW/OLD TABLE) into this trigger body's own
+		// cte_map. That scopes the aliases to this trigger only (sibling triggers can't see them), and
+		// if the body has a local WITH that defines the same name, the local WITH shadows the alias.
 		auto &body_map = trig_cte->query_node->cte_map.map;
 		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
 			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
