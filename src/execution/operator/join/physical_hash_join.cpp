@@ -1429,6 +1429,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				const auto can_emit_prf =
 				    can_emit_runtime_filters && CanUsePrefixRangeFilter(ht, cmp) && can_compute_span;
 
+				const auto can_use_in_filter = ht && CanUseInFilter(context, ht, cmp);
+				bool pushed_in_filter = false;
+				if (can_use_in_filter) {
+					pushed_in_filter = PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
+				}
+
 				static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
 				if (can_emit_prf && SpanFitsInBitBudget(span, SMALL_EXACT_PRF_BITS) &&
 				    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
@@ -1436,8 +1442,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					continue;
 				}
 
-				if (ht && CanUseInFilter(context, ht, cmp)) {
-					bool pushed_filter = PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
+				if (can_use_in_filter) {
+					bool pushed_filter = pushed_in_filter;
 					if (can_emit_runtime_filters && CanUseBloomFilter(context, op, cmp, ht)) {
 						PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 						pushed_filter = true;
