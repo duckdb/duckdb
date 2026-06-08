@@ -1,0 +1,228 @@
+# name: test/sql/trigger/trigger_before_insert.test
+# description: Test BEFORE INSERT trigger firing via DML CTE expansion
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: FOR EACH STATEMENT trigger fires once before INSERT
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic BEFORE INSERT ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('inserting');
+
+statement ok
+INSERT INTO target VALUES (1, 10);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+# Second INSERT fires the trigger again
+statement ok
+INSERT INTO target VALUES (2, 20);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Multi-row INSERT fires FOR EACH STATEMENT once
+statement ok
+INSERT INTO target VALUES (3, 30), (4, 40), (5, 50);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+3
+
+# Underlying INSERT actually applied (not blocked by the trigger)
+query I
+SELECT COUNT(*) FROM target;
+----
+5
+
+# BEFORE body sees the table state PRIOR to the INSERT
+statement ok
+CREATE TABLE pre_target (id INTEGER);
+
+statement ok
+INSERT INTO pre_target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE pre_audit (count_before INTEGER);
+
+statement ok
+CREATE TRIGGER trg_pre BEFORE INSERT ON pre_target FOR EACH STATEMENT
+    INSERT INTO pre_audit SELECT COUNT(*) FROM pre_target;
+
+statement ok
+INSERT INTO pre_target VALUES (4);
+
+# Should record 3 (count before the new row was added)
+query I
+SELECT count_before FROM pre_audit;
+----
+3
+
+# Final row count is 4 (insert applied)
+query I
+SELECT COUNT(*) FROM pre_target;
+----
+4
+
+# FOR EACH ROW is rejected at CREATE TRIGGER time
+statement error
+CREATE TRIGGER trg_row BEFORE INSERT ON target FOR EACH ROW
+    INSERT INTO audit VALUES ('row');
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
+
+# REFERENCING (transition tables) is rejected for BEFORE triggers
+statement error
+CREATE TRIGGER trg_ref BEFORE INSERT ON target REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT
+    INSERT INTO audit SELECT 'ref' FROM new_rows;
+----
+Transition tables can only be specified for AFTER triggers
+
+# Trigger body failure rolls back the entire statement
+statement ok
+CREATE TABLE strict_target (id INTEGER);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail BEFORE INSERT ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+INSERT INTO strict_target VALUES (1);
+----
+Constraint Error:
+
+# strict_target still empty: BEFORE body's failure aborted the INSERT
+query I
+SELECT COUNT(*) FROM strict_target;
+----
+0
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple BEFORE triggers on the same event all fire (alphabetical)
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a BEFORE INSERT ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement ok
+CREATE TRIGGER trg_multi_b BEFORE INSERT ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
+----
+2
+
+# Trigger body can be a DELETE
+statement ok
+CREATE TABLE t_del_target (id INTEGER);
+
+statement ok
+CREATE TABLE t_scratch (id INTEGER);
+
+statement ok
+INSERT INTO t_scratch VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_del_body BEFORE INSERT ON t_del_target FOR EACH STATEMENT
+    DELETE FROM t_scratch;
+
+statement ok
+INSERT INTO t_del_target VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_scratch;
+----
+0
+
+# Trigger body can be an UPDATE
+statement ok
+CREATE TABLE t_upd_target (id INTEGER);
+
+statement ok
+CREATE TABLE t_counter (n INTEGER);
+
+statement ok
+INSERT INTO t_counter VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_upd_body BEFORE INSERT ON t_upd_target FOR EACH STATEMENT
+    UPDATE t_counter SET n = n + 1;
+
+statement ok
+INSERT INTO t_upd_target VALUES (1);
+
+query I
+SELECT n FROM t_counter;
+----
+1
+
+statement ok
+INSERT INTO t_upd_target VALUES (2);
+
+query I
+SELECT n FROM t_counter;
+----
+2
+
+# RETURNING is rejected on tables with triggers
+statement error
+INSERT INTO target VALUES (99, 99) RETURNING id;
+----
+RETURNING is not yet supported on tables with triggers
+
+# Recursive trigger chain detection (cycle through self)
+statement ok
+CREATE TABLE rec_a (id INTEGER);
+
+statement ok
+CREATE TABLE rec_b (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_cycle BEFORE INSERT ON rec_a FOR EACH STATEMENT
+    INSERT INTO rec_a VALUES (1);
+----
+Recursive trigger chains are not yet supported
+
+# DROP TRIGGER works for BEFORE triggers
+statement ok
+DROP TRIGGER trg_basic ON target;
+
+statement ok
+INSERT INTO target VALUES (100, 100);
+
+# Audit count unchanged: trigger no longer fires
+query I
+SELECT COUNT(*) FROM audit;
+----
+3

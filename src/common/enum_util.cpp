@@ -157,6 +157,7 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -1624,19 +1625,20 @@ const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
 		{ static_cast<uint32_t>(DebugVerificationMode::DEFAULT), "DEFAULT" },
 		{ static_cast<uint32_t>(DebugVerificationMode::NONE), "NONE" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_VECTORS), "VERIFY_VECTORS" },
-		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" }
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value) {
-	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
-	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", value));
+	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
@@ -1752,6 +1754,26 @@ const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 	return static_cast<DestroyBufferUpon>(StringUtil::StringToEnum(GetDestroyBufferUponValues(), 3, "DestroyBufferUpon", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDistinctCountSourceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DistinctCountSource::CARDINALITY), "CARDINALITY" },
+		{ static_cast<uint32_t>(DistinctCountSource::MIN_MAX), "MIN_MAX" },
+		{ static_cast<uint32_t>(DistinctCountSource::HLL), "HLL" },
+		{ static_cast<uint32_t>(DistinctCountSource::EXACT), "EXACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value) {
+	return StringUtil::EnumToString(GetDistinctCountSourceValues(), 4, "DistinctCountSource", static_cast<uint32_t>(value));
+}
+
+template<>
+DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value) {
+	return static_cast<DistinctCountSource>(StringUtil::StringToEnum(GetDistinctCountSourceValues(), 4, "DistinctCountSource", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {

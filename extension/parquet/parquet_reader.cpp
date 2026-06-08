@@ -1386,10 +1386,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 		}
 	}
 
-	for (auto &column_reader : state.column_readers) {
-		column_reader->InitializeRead(state.group_idx_list[state.current_group], group.columns,
-		                              *state.thrift_file_proto);
-	}
+	column_reader.InitializeRead(state.group_idx_list[state.current_group], group.columns, *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() const {
@@ -1660,6 +1657,10 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 		}
 		auto col_idx = MultiFileLocalIndex(i);
 		auto &child = state.GetColumnReader(col_idx);
+		if (child.IsSkipped()) {
+			//! Column reader is skipped entirely
+			continue;
+		}
 		child.RegisterPrefetch(trans, true);
 		if (log_prefetch) {
 			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
