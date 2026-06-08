@@ -1656,9 +1656,7 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 			}
 			already_registered[local_idx.GetIndex()] = true;
 		}
-		// Done with the filter columns, time to merge the non-filter columns. At this point the read-head list holds
-		// exactly the (coalesced) filter-column read heads; record how many so the lazy path can async-fetch only
-		// those.
+		// Done with the filter columns, time to merge the non-filter columns.
 		trans.FinalizeRegistration();
 		state.filter_head_count = trans.GetReadHeads().size();
 		if (log_prefetch) {
@@ -1792,8 +1790,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		auto read_head_count = trans.GetReadHeads().size();
 		switch (strategy) {
 		case ParquetPrefetchStrategy::PREFETCH_FILTERS:
-			// schedule only the filter columns' I/O, they are last so we do from read_head_count -
-			// state.filter_head_count
+			// schedule only the filter columns' I/O, they are last in our list
 			io_tasks = CollectIOTasks(state.thrift_file_proto->getTransport(), state.file_handle,
 			                          read_head_count - state.filter_head_count, read_head_count);
 			break;
@@ -1873,7 +1870,7 @@ idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &r
 	return filter_count;
 }
 
-// Whether column position `i` is used by a filter (already decoded by EvaluateFilters).
+// Whether column position `i` is used by a filter.
 static bool IsFilterColumn(const vector<ParquetScanFilter> &scan_filters, idx_t column_index) {
 	for (auto &scan_filter : scan_filters) {
 		if (MultiFileLocalIndex(scan_filter.filter_idx).GetIndex() == column_index) {
@@ -1906,7 +1903,9 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 	}
 }
 
-// FIXME: We now do this copy due to the Process reenter, maybe there is a better way
+// When doing ParquetPrefetchStrategy::PREFETCH_FILTERS, we gotta block mid processing to get the other columns.
+// on the re-entry the chunk is reset in the multifilescan which borkes our datachunk, hence we need to copy for ownership.
+// FIXME: maybe we can change this to be able to move? or not have the multifile reset? bigger refactor though.
 static void CopyFilterColumns(const vector<ParquetScanFilter> &scan_filters, DataChunk &src, DataChunk &dst,
                               idx_t count) {
 	for (auto &scan_filter : scan_filters) {
