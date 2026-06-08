@@ -5,9 +5,9 @@ namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
     PEGTransformer &transformer, const bool &unique_index, const bool &if_not_exists, const Identifier &index_name,
-    unique_ptr<BaseTableRef> base_table_name, const vector<Identifier> &insert_column_list,
-    const Identifier &index_type, vector<unique_ptr<ParsedExpression>> index_element,
-    case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list, unique_ptr<ParsedExpression> where_clause) {
+    unique_ptr<BaseTableRef> base_table_name, const vector<string> &insert_column_list, const Identifier &index_type,
+    vector<unique_ptr<ParsedExpression>> index_element, case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
+    unique_ptr<ParsedExpression> where_clause) {
 	auto result = make_uniq<CreateStatement>();
 	auto index_info = make_uniq<CreateIndexInfo>();
 	index_info->constraint_type = unique_index ? IndexConstraintType::UNIQUE : IndexConstraintType::NONE;
@@ -22,8 +22,10 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	index_info->schema = base_table_name->schema_name;
 	index_info->index_type = index_type.empty() ? "ART" : index_type.GetIdentifierName();
 	for (auto &column : insert_column_list) {
-		index_info->expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
-		index_info->parsed_expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
+		index_info->expressions.push_back(
+		    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
+		index_info->parsed_expressions.push_back(
+		    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
 	}
 	for (auto &expr : index_element) {
 		if (expr->GetExpressionType() == ExpressionType::COLLATE) {
@@ -46,7 +48,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 }
 
 string PEGTransformerFactory::TransformDottedIdentifierString(PEGTransformer &transformer,
-                                                              const vector<Identifier> &dotted_identifier) {
+                                                              const vector<string> &dotted_identifier) {
 	return StringUtil::Join(dotted_identifier, ".");
 }
 

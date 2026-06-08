@@ -22,6 +22,7 @@ public:
 	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
 	               vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
 	const Identifier &GetTypeName() const {

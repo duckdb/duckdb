@@ -286,17 +286,26 @@ def _box_result(return_type, return_by_value):
     return f"\treturn make_uniq<TypedTransformResult<{return_type}>>({arg});\n"
 
 
-def _emit_string_result_extraction(var_name, source_expr):
+def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
+    # Extract a terminal value from a choice over matcher identifiers / keywords / string literals.
+    # When the rule itself is an Identifier, the keyword/string-literal alternatives are wrapped so
+    # the result is produced as an Identifier directly (no lossy string round-trip).
+    def as_result(expr):
+        return f"Identifier({expr})" if result_type == "Identifier" else expr
+
+    identifier_value = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
+    if result_type != "Identifier":
+        identifier_value = f"{identifier_value}.GetIdentifierName()"
     return (
-        f"\tstring {var_name};\n"
+        f"\t{result_type} {var_name};\n"
         f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<IdentifierParseResult>().identifier;\n"
+        f"\t\t{var_name} = {identifier_value};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::KEYWORD) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<KeywordParseResult>().keyword;\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<KeywordParseResult>().keyword')};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<StringLiteralParseResult>().result;\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<StringLiteralParseResult>().result')};\n"
         f"\t}} else {{\n"
-        f"\t\t{var_name} = transformer.Transform<string>({source_expr});\n"
+        f"\t\t{var_name} = transformer.Transform<{result_type}>({source_expr});\n"
         f"\t}}\n"
     )
 
@@ -327,7 +336,7 @@ def generate_string_terminal_choice_internal(rule_name, return_type, return_by_v
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        + _emit_string_result_extraction("result", "choice_pr.GetResult()")
+        + _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -485,7 +494,7 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
     if isinstance(node, ReferenceNode):
         if node.name in identifier_override_rules:
             return ExtractionPlan(
-                kind=ExtractionKind.REFERENCE, cpp_type="string", var_name=to_snake_case(node.name), identifier=True
+                kind=ExtractionKind.REFERENCE, cpp_type="Identifier", var_name=to_snake_case(node.name), identifier=True
             )
         if node.name in rule_types:
             return ExtractionPlan(
@@ -890,7 +899,9 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
             else:
                 alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
                 if identifier_alts and not excluded_alts and alt_types <= {"string"}:
-                    if return_type == "string":
+                    if return_type in ("string", "Identifier"):
+                        # string-terminal alternatives are emitted directly as the rule's own type
+                        # (Identifier-typed rules wrap keyword/string-literal alternatives in Identifier)
                         implementations.append(
                             generate_string_terminal_choice_internal(rule_name, return_type, return_by_value)
                         )

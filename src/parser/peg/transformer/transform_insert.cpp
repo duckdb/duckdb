@@ -9,8 +9,8 @@ namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
     PEGTransformer &transformer, CommonTableExpressionMap with_clause, const OnConflictAction &or_action,
     unique_ptr<BaseTableRef> insert_target, const InsertColumnOrder &by_name_or_position,
-    const vector<Identifier> &insert_column_list, InsertValues insert_values,
-    unique_ptr<OnConflictInfo> on_conflict_clause, vector<unique_ptr<ParsedExpression>> returning_clause) {
+    const vector<string> &insert_column_list, InsertValues insert_values, unique_ptr<OnConflictInfo> on_conflict_clause,
+    vector<unique_ptr<ParsedExpression>> returning_clause) {
 	auto result = make_uniq<InsertStatement>();
 	auto &node = *result->node;
 	node.cte_map = std::move(with_clause);
@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 	node.schema = insert_target->schema_name;
 	node.table = insert_target->table_name;
 	node.column_order = by_name_or_position;
-	node.columns = insert_column_list;
+	node.columns = StringsToIdentifiers(insert_column_list);
 	if (!node.columns.empty() && insert_values.default_values) {
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
@@ -78,9 +78,9 @@ PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
 }
 
 OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictExpressionTarget(
-    PEGTransformer &transformer, const vector<Identifier> &column_id_list, unique_ptr<ParsedExpression> where_clause) {
+    PEGTransformer &transformer, const vector<string> &column_id_list, unique_ptr<ParsedExpression> where_clause) {
 	OnConflictExpressionTarget result;
-	result.indexed_columns = column_id_list;
+	result.indexed_columns = StringsToIdentifiers(column_id_list);
 	result.where_clause = std::move(where_clause);
 	return result;
 }
@@ -127,14 +127,14 @@ InsertColumnOrder PEGTransformerFactory::TransformInsertByPosition(PEGTransforme
 	return InsertColumnOrder::INSERT_BY_POSITION;
 }
 
-vector<Identifier> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &transformer,
-                                                                    const vector<Identifier> &column_list) {
+vector<string> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &transformer,
+                                                                const vector<string> &column_list) {
 	return column_list;
 }
 
-vector<Identifier> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer,
-                                                              const vector<Identifier> &col_id) {
-	return col_id;
+vector<string> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer,
+                                                          const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
 vector<unique_ptr<ParsedExpression>>

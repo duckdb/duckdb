@@ -452,11 +452,11 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 	return state;
 }
 
-static vector<string> GenerateCTEColumnNames(idx_t column_count, const string &prefix) {
-	vector<string> result;
+static vector<Identifier> GenerateCTEColumnNames(idx_t column_count, const string &prefix) {
+	vector<Identifier> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result.push_back(prefix + to_string(i));
+		result.push_back(Identifier(prefix + to_string(i)));
 	}
 	return result;
 }
@@ -642,7 +642,7 @@ static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator
 
 	vector<idx_t> dedup_column_indices;
 	vector<LogicalType> dedup_types;
-	vector<string> dedup_names;
+	vector<Identifier> dedup_names;
 	vector<unique_ptr<Expression>> extra_left_expressions;
 	dedup_column_indices.reserve(join.duplicate_eliminated_columns.size());
 	dedup_types.reserve(join.duplicate_eliminated_columns.size());
@@ -737,10 +737,11 @@ static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator
 
 	auto dedup_cte_name = "__duckdb_delim_dedup_" + to_string(dedup_cte_index.index);
 	auto dedup_cte =
-	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
-	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
-	                                             std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	    make_uniq<LogicalMaterializedCTE>(Identifier(dedup_cte_name), dedup_cte_index, dedup_types.size(),
+	                                      std::move(dedup), std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto cte =
+	    make_uniq<LogicalMaterializedCTE>(Identifier(cte_name), cte_index, left_column_count, std::move(cte_source),
+	                                      std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	plan = std::move(cte);
 }
 

@@ -33,7 +33,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransf
 }
 
 Identifier PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, const Identifier &col_id) {
-	return col_id;
+	return Identifier(col_id);
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTransformer &transformer,
@@ -70,7 +70,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
-    PEGTransformer &transformer, vector<pair<Identifier, unique_ptr<ParsedExpression>>> update_set_element) {
+    PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element) {
 	auto result = make_uniq<UpdateSetInfo>();
 	for (auto &element : update_set_element) {
 		result->columns.emplace_back(std::move(element.first));
@@ -79,18 +79,18 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
 	return result;
 }
 
-pair<Identifier, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformUpdateSetElement(
-    PEGTransformer &transformer, const Identifier &update_set_column_target, unique_ptr<ParsedExpression> expression) {
+pair<string, unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, const string &update_set_column_target,
+                                                 unique_ptr<ParsedExpression> expression) {
 	return {update_set_column_target, std::move(expression)};
 }
 
-Identifier PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer,
-                                                                 const Identifier &column_name,
-                                                                 const vector<Identifier> &dot_identifier) {
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, const Identifier &column_name,
+                                                             const vector<Identifier> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Qualified column names in UPDATE .. SET not supported");
 	}
-	return column_name;
+	return column_name.GetIdentifierName();
 }
 
 } // namespace duckdb

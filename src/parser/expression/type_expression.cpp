@@ -19,6 +19,10 @@ TypeExpression::TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExp
                      std::move(children)) {
 }
 
+TypeExpression::TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children)
+    : TypeExpression(Identifier(type_name), std::move(children)) {
+}
+
 TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE) {
 }
 

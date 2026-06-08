@@ -25,7 +25,7 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 	}
 
 	info->parsed_path = std::move(database_path);
-	info->name = attach_alias;
+	info->name = Identifier(attach_alias);
 	for (const auto &attach_option : attach_options) {
 		if (attach_option.expression) {
 			info->parsed_options[attach_option.name.GetIdentifierName()] = attach_option.expression->Copy();
@@ -49,7 +49,7 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 }
 
 Identifier PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, const Identifier &col_id) {
-	return col_id;
+	return Identifier(col_id);
 }
 
 vector<GenericCopyOption>

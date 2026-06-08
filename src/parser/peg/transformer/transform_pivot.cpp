@@ -156,16 +156,16 @@ PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
 	return target_list;
 }
 
-vector<Identifier> PEGTransformerFactory::TransformUnpivotHeaderSingle(PEGTransformer &transformer,
-                                                                       const Identifier &col_id_or_string) {
-	vector<Identifier> result;
-	result.push_back(col_id_or_string);
+vector<string> PEGTransformerFactory::TransformUnpivotHeaderSingle(PEGTransformer &transformer,
+                                                                   const Identifier &col_id_or_string) {
+	vector<string> result;
+	result.push_back(col_id_or_string.GetIdentifierName());
 	return result;
 }
 
-vector<Identifier> PEGTransformerFactory::TransformUnpivotHeaderList(PEGTransformer &transformer,
-                                                                     const vector<Identifier> &col_id_or_string) {
-	return col_id_or_string;
+vector<string> PEGTransformerFactory::TransformUnpivotHeaderList(PEGTransformer &transformer,
+                                                                 const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
 }
 
 bool PEGTransformerFactory::TransformIncludeNulls(PEGTransformer &transformer) {
@@ -254,7 +254,7 @@ UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer 
                                                                  const vector<Identifier> &identifier) {
 	UnpivotNameValues result;
 	PivotColumn column;
-	column.unpivot_names.push_back(col_id_or_string);
+	column.unpivot_names.push_back(Identifier(col_id_or_string));
 	result.column = std::move(column);
 	result.unpivot_names = identifier;
 	return result;

@@ -226,12 +226,12 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 }
 
 AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer,
-                                                              const vector<Identifier> &dotted_identifier,
+                                                              const vector<string> &dotted_identifier,
                                                               const LogicalType &type,
                                                               GeneratedColumnDefinition generated_column,
                                                               vector<ColumnConstraintEntry> column_constraint) {
 	AddColumnEntry new_column;
-	new_column.column_path = dotted_identifier;
+	new_column.column_path = StringsToIdentifiers(dotted_identifier);
 	bool has_type = type != LogicalType::INVALID;
 	bool has_generated = generated_column.expr != nullptr;
 	// TODO(Dtenwolde) this checking logic should be moved to the binder

@@ -19,14 +19,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
 QualifiedName PEGTransformerFactory::TransformSchemaNameAsUseTarget(PEGTransformer &transformer,
-                                                                    const string &schema_name) {
+                                                                    const Identifier &schema_name) {
 	QualifiedName result;
 	result.name = schema_name;
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransformer &transformer,
-                                                                     const string &catalog_name) {
+                                                                     const Identifier &catalog_name) {
 	QualifiedName result;
 	result.name = catalog_name;
 	return result;

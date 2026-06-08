@@ -61,8 +61,7 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &des
 	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(100, "sample_count");
 	auto total_count = deserializer.ReadPropertyWithDefault<idx_t>(101, "total_count");
 	auto log = deserializer.ReadPropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log");
-	auto result =
-	    duckdb::unique_ptr<DistinctStatistics>(new DistinctStatistics(std::move(log), sample_count, total_count));
+	auto result = duckdb::unique_ptr<DistinctStatistics>(new DistinctStatistics(std::move(log), sample_count, total_count));
 	return result;
 }
 
@@ -90,18 +89,15 @@ void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
 	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options,
-	                                                                   case_insensitive_map_t<Value>());
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options, case_insensitive_map_t<Value>());
 }
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	IndexStorageInfo result;
 	deserializer.ReadPropertyWithDefault<Identifier>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
-	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos",
-	                                                                     result.allocator_infos);
-	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options,
-	                                                                            case_insensitive_map_t<Value>());
+	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
+	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
 	return result;
 }
 

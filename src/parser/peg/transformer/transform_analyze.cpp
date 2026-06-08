@@ -23,10 +23,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 
 AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,
                                                             unique_ptr<BaseTableRef> base_table_name,
-                                                            const vector<Identifier> &name_list) {
+                                                            const vector<string> &name_list) {
 	AnalyzeTarget result;
 	result.ref = std::move(base_table_name);
-	result.columns = name_list;
+	result.columns = StringsToIdentifiers(name_list);
 	return result;
 }
 

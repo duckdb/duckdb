@@ -93,29 +93,29 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdate(PEGTransform
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransformer &transformer,
-                                                                      const vector<Identifier> &trigger_column_list) {
+                                                                      const vector<string> &trigger_column_list) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::UPDATE_EVENT;
-	result.columns = trigger_column_list;
+	result.columns = StringsToIdentifiers(trigger_column_list);
 	return result;
 }
 
-vector<Identifier> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
-                                                                     const vector<Identifier> &col_id) {
-	return col_id;
+vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
+                                                                 const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer,
                                                                                   const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
-	info.new_table = col_id;
+	info.new_table = Identifier(col_id);
 	return info;
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingOldTableAs(PEGTransformer &transformer,
                                                                                   const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
-	info.old_table = col_id;
+	info.old_table = Identifier(col_id);
 	return info;
 }
 

@@ -89,7 +89,7 @@ void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &i
 unique_ptr<CreateStatement>
 PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const bool &create_recursive,
                                                const bool &if_not_exists, const QualifiedName &qualified_name,
-                                               const vector<Identifier> &insert_column_list,
+                                               const vector<string> &insert_column_list,
                                                case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
                                                unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<CreateStatement>();
@@ -98,7 +98,7 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
-	info->aliases = insert_column_list;
+	info->aliases = StringsToIdentifiers(insert_column_list);
 	if (!with_list.empty()) {
 		for (auto &option_entry : with_list) {
 			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {

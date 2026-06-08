@@ -66,7 +66,7 @@ Identifier PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer
 }
 
 Identifier PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, const Identifier &col_id) {
-	return col_id;
+	return Identifier(col_id);
 }
 
 } // namespace duckdb

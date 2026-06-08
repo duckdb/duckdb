@@ -197,7 +197,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
 
-	vector<pair<string, unique_ptr<Expression>>> arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(window.GetArguments().size());
 	for (auto &arg : window.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
@@ -212,7 +212,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		if (window.IsLegacyFunctionCall()) {
-			arguments.emplace_back(string(), std::move(bound_arg));
+			arguments.emplace_back(Identifier(), std::move(bound_arg));
 		} else {
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}

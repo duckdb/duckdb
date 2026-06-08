@@ -42,15 +42,13 @@
 namespace duckdb {
 
 void BlockingSample::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample",
-	                                                                       base_reservoir_sample);
+	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
 	serializer.WriteProperty<SampleType>(101, "type", type);
 	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
 }
 
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
-	auto base_reservoir_sample =
-	    deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
+	auto base_reservoir_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
 	auto type = deserializer.ReadProperty<SampleType>(101, "type");
 	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
 	unique_ptr<BlockingSample> result;
@@ -73,11 +71,9 @@ void BaseReservoirSampling::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
 	serializer.WriteProperty<double>(101, "min_weight_threshold", min_weight_threshold);
 	serializer.WritePropertyWithDefault<idx_t>(102, "min_weighted_entry_index", min_weighted_entry_index);
-	serializer.WritePropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample",
-	                                           num_entries_to_skip_b4_next_sample);
+	serializer.WritePropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
 	serializer.WritePropertyWithDefault<idx_t>(104, "num_entries_seen_total", num_entries_seen_total);
-	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights",
-	                                                                                   reservoir_weights);
+	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", reservoir_weights);
 }
 
 unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserializer &deserializer) {
@@ -85,11 +81,9 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserialize
 	deserializer.ReadPropertyWithDefault<idx_t>(100, "next_index_to_sample", result->next_index_to_sample);
 	deserializer.ReadProperty<double>(101, "min_weight_threshold", result->min_weight_threshold);
 	deserializer.ReadPropertyWithDefault<idx_t>(102, "min_weighted_entry_index", result->min_weighted_entry_index);
-	deserializer.ReadPropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample",
-	                                            result->num_entries_to_skip_b4_next_sample);
+	deserializer.ReadPropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
 	deserializer.ReadPropertyWithDefault<idx_t>(104, "num_entries_seen_total", result->num_entries_seen_total);
-	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights",
-	                                                                                    result->reservoir_weights);
+	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", result->reservoir_weights);
 	return result;
 }
 
@@ -208,8 +202,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TableColumnType>(103, "category", category);
 	serializer.WriteProperty<duckdb::CompressionType>(104, "compression_type", compression_type);
 	serializer.WritePropertyWithDefault<Value>(105, "comment", comment, Value());
-	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(106, "tags", tags,
-	                                                                         InsertionOrderPreservingMap<string>());
+	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(106, "tags", tags, InsertionOrderPreservingMap<string>());
 }
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -220,8 +213,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "comment", result.comment, Value());
-	deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(
-	    106, "tags", result.tags, InsertionOrderPreservingMap<string>());
+	deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(106, "tags", result.tags, InsertionOrderPreservingMap<string>());
 	return result;
 }
 
@@ -238,8 +230,7 @@ ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	ColumnIndex result;
 	deserializer.ReadPropertyWithDefault<idx_t>(1, "index", result.index);
 	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
-	deserializer.ReadPropertyWithExplicitDefault<ColumnIndexType>(3, "index_type", result.index_type,
-	                                                              ColumnIndexType::FULL_READ);
+	deserializer.ReadPropertyWithExplicitDefault<ColumnIndexType>(3, "index_type", result.index_type, ColumnIndexType::FULL_READ);
 	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(4, "type", result.type, LogicalType::INVALID);
 	deserializer.ReadPropertyWithExplicitDefault<string>(5, "field", result.field, "");
 	deserializer.ReadPropertyWithExplicitDefault<bool>(6, "has_index", result.has_index, true);
@@ -271,13 +262,11 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "aliases", aliases);
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query",
-		                                                                 GetQueryForSerialization(serializer));
+		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", GetQueryForSerialization(serializer));
 	}
 	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates",
-	                                                                          payload_aggregates);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", payload_aggregates);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(105, "query_node", query_node);
 	}
@@ -288,11 +277,9 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query");
 	auto materialized = deserializer.ReadProperty<CTEMaterialize>(102, "materialized");
 	auto key_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets");
-	auto payload_aggregates =
-	    deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates");
+	auto payload_aggregates = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates");
 	auto query_node = deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(105, "query_node");
-	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(
-	    new CommonTableExpressionInfo(std::move(query), std::move(query_node)));
+	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(new CommonTableExpressionInfo(std::move(query), std::move(query_node)));
 	result->aliases = std::move(aliases);
 	result->materialized = materialized;
 	result->key_targets = std::move(key_targets);
@@ -301,16 +288,12 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 }
 
 void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<
-	    InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>, Identifier, identifier_map_t<idx_t>>>(
-	    100, "map", map);
+	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>, Identifier, identifier_map_t<idx_t>>>(100, "map", map);
 }
 
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
-	deserializer.ReadPropertyWithDefault<
-	    InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>, Identifier, identifier_map_t<idx_t>>>(
-	    100, "map", result.map);
+	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>, Identifier, identifier_map_t<idx_t>>>(100, "map", result.map);
 	return result;
 }
 
@@ -402,10 +385,8 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(102, "auto_detect_hive_partitioning", auto_detect_hive_partitioning);
 	serializer.WritePropertyWithDefault<bool>(103, "union_by_name", union_by_name);
 	serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema",
-	                                                                         hive_types_schema);
-	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column,
-	                                            MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
+	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
 }
 
@@ -413,29 +394,24 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	MultiFileOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "filename", result.filename);
 	deserializer.ReadPropertyWithDefault<bool>(101, "hive_partitioning", result.hive_partitioning);
-	deserializer.ReadPropertyWithDefault<bool>(102, "auto_detect_hive_partitioning",
-	                                           result.auto_detect_hive_partitioning);
+	deserializer.ReadPropertyWithDefault<bool>(102, "auto_detect_hive_partitioning", result.auto_detect_hive_partitioning);
 	deserializer.ReadPropertyWithDefault<bool>(103, "union_by_name", result.union_by_name);
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema",
-	                                                                          result.hive_types_schema);
-	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column,
-	                                                     MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
+	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
 	return result;
 }
 
 void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<optional_idx>(100, "filename_idx", filename_idx);
-	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes",
-	                                                                   hive_partitioning_indexes);
+	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
 }
 
 MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
 	MultiFileReaderBindData result;
 	deserializer.ReadProperty<optional_idx>(100, "filename_idx", result.filename_idx);
-	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes",
-	                                                                    result.hive_partitioning_indexes);
+	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
 	return result;
 }
 
@@ -454,18 +430,15 @@ OrderByNode OrderByNode::Deserialize(Deserializer &deserializer) {
 }
 
 void PivotColumn::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
-	                                                                          pivot_expressions);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions", pivot_expressions);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(101, "unpivot_names", unpivot_names);
-	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries",
-	                                                              GetEntriesForSerialization(serializer));
+	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", GetEntriesForSerialization(serializer));
 	serializer.WritePropertyWithDefault<Identifier>(103, "pivot_enum", pivot_enum);
 }
 
 PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	PivotColumn result;
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
-	                                                                           result.pivot_expressions);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions", result.pivot_expressions);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(101, "unpivot_names", result.unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
 	deserializer.ReadPropertyWithDefault<Identifier>(103, "pivot_enum", result.pivot_enum);
@@ -548,9 +521,7 @@ unique_ptr<RowGroupOrderOptions> RowGroupOrderOptions::Deserialize(Deserializer 
 	auto row_limit = deserializer.ReadProperty<optional_idx>(105, "row_limit");
 	auto row_group_offset = deserializer.ReadPropertyWithDefault<idx_t>(106, "row_group_offset");
 	auto leading_null_group_offset = deserializer.ReadPropertyWithDefault<idx_t>(107, "leading_null_group_offset");
-	auto result = duckdb::unique_ptr<RowGroupOrderOptions>(
-	    new RowGroupOrderOptions(column_idx, order_by, order_type, null_order, column_type, row_limit, row_group_offset,
-	                             leading_null_group_offset));
+	auto result = duckdb::unique_ptr<RowGroupOrderOptions>(new RowGroupOrderOptions(column_idx, order_by, order_type, null_order, column_type, row_limit, row_group_offset, leading_null_group_offset));
 	return result;
 }
 
@@ -602,28 +573,21 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<char>>(123, "escape", options.dialect_options.state_machine_options.escape);
 	serializer.WriteProperty<CSVOption<bool>>(124, "header", options.dialect_options.header);
 	serializer.WritePropertyWithDefault<idx_t>(125, "num_cols", options.dialect_options.num_cols);
-	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "new_line",
-	                                                       options.dialect_options.state_machine_options.new_line);
+	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "new_line", options.dialect_options.state_machine_options.new_line);
 	serializer.WriteProperty<CSVOption<idx_t>>(127, "skip_rows", options.dialect_options.skip_rows);
-	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "date_format",
-	                                                                        options.dialect_options.date_format);
-	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error",
-	                                            options.sniffer_user_mismatch_error);
+	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "date_format", options.dialect_options.date_format);
+	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", options.sniffer_user_mismatch_error);
 	serializer.WritePropertyWithDefault<bool>(130, "parallel", options.parallel);
 	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", options.was_type_manually_set);
-	serializer.WritePropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", options.rejects_scan_name,
-	                                                       {"reject_scans"});
+	serializer.WritePropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", options.rejects_scan_name, {"reject_scans"});
 	serializer.WritePropertyWithDefault<vector<string>>(133, "name_list", options.name_list);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", options.sql_type_list);
-	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column",
-	                                                             options.sql_types_per_column);
+	serializer.WritePropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column", options.sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", options.columns_set, false);
-	serializer.WritePropertyWithDefault<CSVOption<char>>(
-	    137, "comment", options.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
+	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "comment", options.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "rows_until_header", options.dialect_options.rows_until_header);
 	serializer.WritePropertyWithDefault<string>(139, "encoding", options.encoding);
-	serializer.WriteProperty<CSVOption<bool>>(140, "strict_mode",
-	                                          options.dialect_options.state_machine_options.strict_mode);
+	serializer.WriteProperty<CSVOption<bool>>(140, "strict_mode", options.dialect_options.state_machine_options.strict_mode);
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", options.GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", options.multi_file_reader);
 	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", options.buffer_size_option);
@@ -648,45 +612,32 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	deserializer.ReadDeletedProperty<idx_t>(114, "buffer_size");
 	auto file_options = deserializer.ReadProperty<MultiFileOptions>(115, "file_options");
 	auto options_force_quote = deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote");
-	auto options_rejects_table_name =
-	    deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
+	auto options_rejects_table_name = deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
 	auto options_rejects_limit = deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit");
 	deserializer.ReadDeletedProperty<vector<string>>(119, "rejects_recovery_columns");
 	deserializer.ReadDeletedProperty<vector<idx_t>>(120, "rejects_recovery_column_ids");
-	auto options_dialect_options_state_machine_options_delimiter =
-	    deserializer.ReadProperty<CSVOption<char>>(121, "delimiter");
+	auto options_dialect_options_state_machine_options_delimiter = deserializer.ReadProperty<CSVOption<char>>(121, "delimiter");
 	auto options_dialect_options_state_machine_options_quote = deserializer.ReadProperty<CSVOption<char>>(122, "quote");
-	auto options_dialect_options_state_machine_options_escape =
-	    deserializer.ReadProperty<CSVOption<char>>(123, "escape");
+	auto options_dialect_options_state_machine_options_escape = deserializer.ReadProperty<CSVOption<char>>(123, "escape");
 	auto options_dialect_options_header = deserializer.ReadProperty<CSVOption<bool>>(124, "header");
 	auto options_dialect_options_num_cols = deserializer.ReadPropertyWithDefault<idx_t>(125, "num_cols");
-	auto options_dialect_options_state_machine_options_new_line =
-	    deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "new_line");
+	auto options_dialect_options_state_machine_options_new_line = deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "new_line");
 	auto options_dialect_options_skip_rows = deserializer.ReadProperty<CSVOption<idx_t>>(127, "skip_rows");
-	auto options_dialect_options_date_format =
-	    deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "date_format");
-	auto options_sniffer_user_mismatch_error =
-	    deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error");
+	auto options_dialect_options_date_format = deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "date_format");
+	auto options_sniffer_user_mismatch_error = deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error");
 	auto options_parallel = deserializer.ReadPropertyWithDefault<bool>(130, "parallel");
-	auto options_was_type_manually_set =
-	    deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set");
-	auto options_rejects_scan_name =
-	    deserializer.ReadPropertyWithExplicitDefault<CSVOption<string>>(132, "rejects_scan_name", {"reject_scans"});
+	auto options_was_type_manually_set = deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set");
+	auto options_rejects_scan_name = deserializer.ReadPropertyWithExplicitDefault<CSVOption<string>>(132, "rejects_scan_name", {"reject_scans"});
 	auto options_name_list = deserializer.ReadPropertyWithDefault<vector<string>>(133, "name_list");
 	auto options_sql_type_list = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list");
-	auto options_sql_types_per_column =
-	    deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column");
+	auto options_sql_types_per_column = deserializer.ReadPropertyWithDefault<identifier_map_t<idx_t>>(135, "sql_types_per_column");
 	auto options_columns_set = deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", false);
-	auto options_dialect_options_state_machine_options_comment =
-	    deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "comment", CSVOption<char>('\0'));
-	auto options_dialect_options_rows_until_header =
-	    deserializer.ReadPropertyWithDefault<idx_t>(138, "rows_until_header");
+	auto options_dialect_options_state_machine_options_comment = deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "comment", CSVOption<char>('\0'));
+	auto options_dialect_options_rows_until_header = deserializer.ReadPropertyWithDefault<idx_t>(138, "rows_until_header");
 	auto options_encoding = deserializer.ReadPropertyWithDefault<string>(139, "encoding");
-	auto options_dialect_options_state_machine_options_strict_mode =
-	    deserializer.ReadProperty<CSVOption<bool>>(140, "strict_mode");
+	auto options_dialect_options_state_machine_options_strict_mode = deserializer.ReadProperty<CSVOption<bool>>(140, "strict_mode");
 	auto options_multi_byte_delimiter = deserializer.ReadProperty<CSVOption<string>>(141, "multi_byte_delimiter");
-	SerializedCSVReaderOptions result(options_dialect_options_state_machine_options_delimiter,
-	                                  options_multi_byte_delimiter);
+	SerializedCSVReaderOptions result(options_dialect_options_state_machine_options_delimiter, options_multi_byte_delimiter);
 	result.options.ignore_errors = options_ignore_errors;
 	result.options.buffer_sample_size = options_buffer_sample_size;
 	result.options.null_str = std::move(options_null_str);
@@ -709,8 +660,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	result.options.dialect_options.state_machine_options.escape = options_dialect_options_state_machine_options_escape;
 	result.options.dialect_options.header = options_dialect_options_header;
 	result.options.dialect_options.num_cols = options_dialect_options_num_cols;
-	result.options.dialect_options.state_machine_options.new_line =
-	    options_dialect_options_state_machine_options_new_line;
+	result.options.dialect_options.state_machine_options.new_line = options_dialect_options_state_machine_options_new_line;
 	result.options.dialect_options.skip_rows = options_dialect_options_skip_rows;
 	result.options.dialect_options.date_format = options_dialect_options_date_format;
 	result.options.sniffer_user_mismatch_error = std::move(options_sniffer_user_mismatch_error);
@@ -721,16 +671,13 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	result.options.sql_type_list = std::move(options_sql_type_list);
 	result.options.sql_types_per_column = std::move(options_sql_types_per_column);
 	result.options.columns_set = options_columns_set;
-	result.options.dialect_options.state_machine_options.comment =
-	    options_dialect_options_state_machine_options_comment;
+	result.options.dialect_options.state_machine_options.comment = options_dialect_options_state_machine_options_comment;
 	result.options.dialect_options.rows_until_header = options_dialect_options_rows_until_header;
 	result.options.encoding = std::move(options_encoding);
-	result.options.dialect_options.state_machine_options.strict_mode =
-	    options_dialect_options_state_machine_options_strict_mode;
+	result.options.dialect_options.state_machine_options.strict_mode = options_dialect_options_state_machine_options_strict_mode;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.options.multi_file_reader);
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.options.buffer_size_option);
-	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit",
-	                                                    result.options.rejects_line_size_limit, 10000);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
 	return result;
 }
 
@@ -803,14 +750,12 @@ TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
 }
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(
-	    100, "filters", GetTableFiltersForSerialization(serializer));
+	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", GetTableFiltersForSerialization(serializer));
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
-	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(
-	    100, "filters", result.GetTableFiltersForDeserialization(deserializer));
+	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", result.GetTableFiltersForDeserialization(deserializer));
 	return result;
 }
 

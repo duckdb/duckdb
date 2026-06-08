@@ -6,7 +6,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTransformer &transformer,
                                                                           const CatalogType &comment_on_type,
-                                                                          const vector<Identifier> &dotted_identifier,
+                                                                          const vector<string> &dotted_identifier,
                                                                           const Value &comment_value) {
 	auto result = make_uniq<AlterStatement>();
 	unique_ptr<AlterInfo> info;
@@ -15,7 +15,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 	if (comment_on_type == CatalogType::INVALID) {
 		// Column type returned
 		auto identifier = dotted_identifier;
-		column_name = identifier.back();
+		column_name = Identifier(identifier.back());
 		identifier.pop_back();
 		if (identifier.empty()) {
 			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());

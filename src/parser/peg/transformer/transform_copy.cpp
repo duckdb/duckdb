@@ -91,7 +91,7 @@ unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformCopyFromDatabaseWithFlag(PEGTransformer &transformer, const Identifier &col_id,
                                                          const Identifier &col_id_1,
                                                          const CopyDatabaseType &copy_database_flag) {
-	return make_uniq<CopyDatabaseStatement>(col_id, col_id_1, copy_database_flag);
+	return make_uniq<CopyDatabaseStatement>(Identifier(col_id), Identifier(col_id_1), copy_database_flag);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithoutFlag(PEGTransformer &transformer,
@@ -126,7 +126,7 @@ string PEGTransformerFactory::ExtractFormat(const string &file_path) {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer,
                                                                    unique_ptr<BaseTableRef> base_table_name,
-                                                                   const vector<Identifier> &insert_column_list,
+                                                                   const vector<string> &insert_column_list,
                                                                    const bool &from_or_to,
                                                                    unique_ptr<ParsedExpression> copy_file_name,
                                                                    const vector<GenericCopyOption> &copy_options) {
@@ -136,7 +136,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	info->table = base_table_name->table_name;
 	info->schema = base_table_name->schema_name;
 	info->catalog = base_table_name->catalog_name;
-	info->select_list = insert_column_list;
+	info->select_list = StringsToIdentifiers(insert_column_list);
 	info->is_from = from_or_to;
 	if (copy_file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = copy_file_name->Cast<ConstantExpression>();
@@ -181,9 +181,9 @@ PEGTransformerFactory::TransformCopyFileNameIdentifierColId(PEGTransformer &tran
 Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
                                                            const Identifier &col_id) {
 	string result;
-	result += identifier;
+	result += identifier.GetIdentifierName();
 	result += ".";
-	result += col_id;
+	result += col_id.GetIdentifierName();
 	return Identifier(result);
 }
 
@@ -205,7 +205,7 @@ GenericCopyOption PEGTransformerFactory::TransformEncodingOption(PEGTransformer 
 }
 
 GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransformer &transformer, const bool &force_quote,
-                                                                   const vector<Identifier> &star_symbol_column_list) {
+                                                                   const vector<string> &star_symbol_column_list) {
 	string func_name = force_quote ? "force_quote" : "quote";
 	auto result = GenericCopyOption();
 	result.name = Identifier(func_name);
@@ -226,7 +226,7 @@ GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &
 
 GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer &transformer,
                                                                   const bool &force_not_null,
-                                                                  const vector<Identifier> &column_list) {
+                                                                  const vector<string> &column_list) {
 	auto result = GenericCopyOption();
 	result.name = force_not_null ? "force_not_null" : "force_null";
 	for (auto &col : column_list) {
@@ -236,7 +236,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer
 }
 
 GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransformer &transformer,
-                                                                    const vector<Identifier> &star_symbol_column_list) {
+                                                                    const vector<string> &star_symbol_column_list) {
 	auto result = GenericCopyOption();
 	result.name = "partition_by";
 	if (star_symbol_column_list.empty()) {

@@ -589,7 +589,7 @@ private:
 	unique_ptr<BoundMergeIntoAction>
 	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
 	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
-	                const vector<BindingAlias> &source_aliases, const vector<string> &source_names);
+	                const vector<BindingAlias> &source_aliases, const vector<Identifier> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 

@@ -124,9 +124,9 @@ bool WindowExpression::HasBoundedParts() const {
 
 void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
+	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", function_name);
+	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(202, "catalog", catalog);
 
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// Legacy serialization.
@@ -165,9 +165,9 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(202, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->function_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog", result->catalog);
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;

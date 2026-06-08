@@ -141,17 +141,17 @@ public:
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
-	                   vector<pair<string, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
+	                   vector<pair<Identifier, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
 	                   vector<OrderByNode> &arg_orders);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
 	                                                                vector<unique_ptr<Expression>> children,
 	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_order);
+	                                                                vector<OrderByNode> &arg_orders);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunctionCatalogEntry &function,
-	                   vector<pair<string, unique_ptr<Expression>>> arguments, ErrorData &error,
+	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
 	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 
 	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
@@ -176,13 +176,13 @@ public:
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
-	                vector<pair<string, unique_ptr<Expression>>> &keyword_args,
+	                vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args,
 	                optional_ptr<vector<OrderByNode>> orders = nullptr,
 	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(const WindowFunction &function,
 	                                                                    vector<unique_ptr<Expression>> &children) {
-		vector<pair<string, unique_ptr<Expression>>> empty_keyword_args;
+		vector<pair<Identifier, unique_ptr<Expression>>> empty_keyword_args;
 		return ResolveFunction(function, children, empty_keyword_args);
 	}
 

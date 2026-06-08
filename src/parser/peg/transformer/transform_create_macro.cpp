@@ -101,8 +101,8 @@ MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &t
                                                                const Identifier &type_func_name,
                                                                const LogicalType &type) {
 	MacroParameter result;
-	result.name = type_func_name;
-	result.expression = make_uniq<ColumnRefExpression>(type_func_name);
+	result.name = Identifier(type_func_name);
+	result.expression = make_uniq<ColumnRefExpression>(Identifier(type_func_name));
 	if (type.id() != LogicalTypeId::INVALID) {
 		result.type = type;
 	}

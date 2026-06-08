@@ -132,7 +132,9 @@
         "type": "bool"
       }
     ],
-    "constructor": ["new_column"]
+    "constructor": [
+      "new_column"
+    ]
   },
   {
     "class": "AddFieldInfo",
@@ -155,7 +157,9 @@
         "type": "vector<Identifier>"
       }
     ],
-    "constructor": ["new_field"]
+    "constructor": [
+      "new_field"
+    ]
   },
   {
     "class": "RemoveColumnInfo",
@@ -345,7 +349,7 @@
     "class": "SetColumnCommentInfo",
     "base": "AlterInfo",
     "enum": "SET_COLUMN_COMMENT",
-    "includes" : [
+    "includes": [
       "duckdb/parser/parsed_data/comment_on_column_info.hpp"
     ],
     "members": [
@@ -736,7 +740,7 @@
         "id": 202,
         "name": "invalidation_policy",
         "type": "TransactionInvalidationPolicy",
-        "default" : "TransactionInvalidationPolicy::STANDARD_POLICY"
+        "default": "TransactionInvalidationPolicy::STANDARD_POLICY"
       },
       {
         "id": 203,
@@ -774,7 +778,9 @@
         "type": "vector<Identifier>"
       }
     ],
-    "constructor": ["options"]
+    "constructor": [
+      "options"
+    ]
   },
   {
     "class": "BoundExportData",
@@ -847,7 +853,7 @@
       {
         "id": 400,
         "name": "table_options",
-        "type": "case_insensitive_set_t"
+        "type": "identifier_set_t"
       }
     ]
   }
