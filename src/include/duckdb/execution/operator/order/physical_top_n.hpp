@@ -22,7 +22,8 @@ public:
 
 public:
 	PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit,
-	             idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality);
+	             idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter, idx_t estimated_cardinality,
+	             vector<idx_t> projections);
 	~PhysicalTopN() override;
 
 	vector<BoundOrderByNode> orders;
@@ -30,6 +31,7 @@ public:
 	idx_t offset;
 	//! Dynamic table filter (if any)
 	shared_ptr<DynamicFilterData> dynamic_filter;
+	vector<idx_t> projections;
 
 public:
 	// Source interface

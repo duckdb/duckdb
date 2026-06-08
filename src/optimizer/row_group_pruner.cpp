@@ -62,12 +62,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 	ColumnIndex column_index;
 	auto logical_get = FindLogicalGet(*logical_order, column_index);
-	if (!logical_get) {
-		return false;
-	}
 	StorageIndex storage_index;
-	if (!logical_get->TryGetStorageIndex(column_index, storage_index)) {
-		return false;
+	if (!logical_get || !logical_get->TryGetStorageIndex(column_index, storage_index)) {
+		return TrySetBareScanOrderHint(*logical_order, logical_get, row_limit, row_offset);
 	}
 
 	if (logical_get->table_filters.HasFilters()) {
@@ -85,6 +82,39 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	}
 	logical_get->SetScanOrder(std::move(options));
 
+	return true;
+}
+
+bool RowGroupPruner::TrySetBareScanOrderHint(const LogicalOrder &logical_order, optional_ptr<LogicalGet> logical_get,
+                                             optional_idx row_limit, optional_idx row_offset) const {
+	// FindLogicalGet bails when the scan lacks `filter_pushdown` (an
+	// unrelated capability). Walk single-child to the get directly.
+	if (!logical_get) {
+		reference<LogicalOperator> cur = *logical_order.children[0];
+		while (cur.get().type != LogicalOperatorType::LOGICAL_GET) {
+			if (cur.get().children.size() != 1) {
+				return false;
+			}
+			cur = *cur.get().children[0];
+		}
+		logical_get = cur.get().Cast<LogicalGet>();
+	}
+	if (!logical_get->function.set_scan_order) {
+		return false;
+	}
+	if (logical_order.orders.size() != 1 || logical_get->table_filters.HasFilters()) {
+		// Multi-key tie-breaking / pushed filters can't be honored without storage index.
+		row_limit.SetInvalid();
+		row_offset.SetInvalid();
+	}
+	const auto &primary_order = logical_order.orders[0];
+	const auto combined_limit =
+	    row_limit.IsValid()
+	        ? optional_idx(row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0))
+	        : optional_idx();
+	logical_get->SetScanOrder(make_uniq<RowGroupOrderOptions>(StorageIndex{}, OrderByStatistics::MAX, primary_order.type,
+	                                                          primary_order.null_order, OrderByColumnType::NUMERIC,
+	                                                          combined_limit));
 	return true;
 }
 

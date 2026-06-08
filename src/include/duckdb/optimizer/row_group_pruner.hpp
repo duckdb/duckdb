@@ -33,6 +33,8 @@ private:
 	void GetLimitAndOffset(const LogicalLimit &logical_limit, optional_idx &row_limit, optional_idx &row_offset) const;
 	optional_ptr<LogicalOrder> FindLogicalOrder(const LogicalLimit &logical_limit) const;
 	optional_ptr<LogicalGet> FindLogicalGet(const LogicalOrder &logical_order, ColumnIndex &column_index) const;
+	bool TrySetBareScanOrderHint(const LogicalOrder &logical_order, optional_ptr<LogicalGet> logical_get,
+	                             optional_idx row_limit, optional_idx row_offset) const;
 	// row_limit, row_offset, primary_order, logical_get, logical_limit
 	unique_ptr<RowGroupOrderOptions> CreateRowGroupReordererOptions(optional_idx row_limit, optional_idx row_offset,
 	                                                                const BoundOrderByNode &primary_order,

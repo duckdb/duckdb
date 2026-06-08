@@ -30,10 +30,19 @@ public:
 	idx_t offset;
 	//! Dynamic table filter (if any)
 	shared_ptr<DynamicFilterData> dynamic_filter;
+	vector<ProjectionIndex> projection_map;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
-		return children[0]->GetColumnBindings();
+		auto child_bindings = children[0]->GetColumnBindings();
+		if (!HasProjectionMap()) {
+			return child_bindings;
+		}
+		return MapBindings(child_bindings, projection_map);
+	}
+
+	bool HasProjectionMap() const override {
+		return !projection_map.empty();
 	}
 
 	void Serialize(Serializer &serializer) const override;
@@ -43,7 +52,12 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = children[0]->types;
+		const auto child_types = children[0]->types;
+		if (!HasProjectionMap()) {
+			types = child_types;
+		} else {
+			types = MapTypes(child_types, projection_map);
+		}
 	}
 };
 } // namespace duckdb

@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -129,18 +130,21 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		analyzer.StandardVisitOperator(op);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N: {
 		if (everything_referenced) {
 			break;
 		}
+		auto &projection_map = op.type == LogicalOperatorType::LOGICAL_TOP_N
+		                           ? op.Cast<LogicalTopN>().projection_map
+		                           : op.Cast<LogicalOrder>().projection_map;
 
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
 		StandardVisitOperator(op);
 
-		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, order.projection_map);
+		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, projection_map);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {

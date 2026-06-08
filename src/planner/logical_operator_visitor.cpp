@@ -42,6 +42,11 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 		VisitChildOfOperatorWithProjectionMap(op.children[0], order.projection_map);
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_TOP_N: {
+		auto &top_n = op.Cast<LogicalTopN>();
+		VisitChildOfOperatorWithProjectionMap(op.children[0], top_n.projection_map);
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		auto &filter = op.Cast<LogicalFilter>();
 		VisitChildOfOperatorWithProjectionMap(op.children[0], filter.projection_map);

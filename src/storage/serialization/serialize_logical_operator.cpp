@@ -792,6 +792,7 @@ void LogicalTopN::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
 	serializer.WritePropertyWithDefault<idx_t>(201, "limit", limit);
 	serializer.WritePropertyWithDefault<idx_t>(202, "offset", offset);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(203, "projection_map", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer) {
@@ -799,6 +800,7 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 	auto limit = deserializer.ReadPropertyWithDefault<idx_t>(201, "limit");
 	auto offset = deserializer.ReadPropertyWithDefault<idx_t>(202, "offset");
 	auto result = duckdb::unique_ptr<LogicalTopN>(new LogicalTopN(std::move(orders), limit, offset));
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(203, "projection_map", result->projection_map);
 	return std::move(result);
 }
 
