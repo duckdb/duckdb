@@ -7,7 +7,7 @@ require json
 statement error
 SELECT json_object(CAST(NULL AS VARCHAR), 'two');
 ----
-json_object() key cannot be NULL
+JSON key cannot be NULL
 
 query T
 SELECT json_object('key', NULL);
