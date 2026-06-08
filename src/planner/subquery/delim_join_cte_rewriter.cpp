@@ -217,6 +217,11 @@ struct JoinWithGeneratedDedupRef {
 	bool filter_cross_product;
 };
 
+struct GeneratedDedupRef {
+	optional_ptr<LogicalCTERef> cte_ref;
+	vector<unique_ptr<Expression>> filters;
+};
+
 static bool IsEqualityJoinCondition(const JoinCondition &cond) {
 	if (!cond.IsComparison()) {
 		return false;
@@ -262,9 +267,12 @@ public:
 private:
 	static bool ChildJoinTypeCanBeDeliminated(JoinType join_type);
 	static bool InequalityDelimJoinCanBeEliminated(JoinType join_type);
-	static bool ExpressionReferencesTable(Expression &expr, TableIndex table_index);
 
-	optional_ptr<LogicalCTERef> GetGeneratedDedupRef(LogicalOperator &op) const;
+	unique_ptr<GeneratedDedupRef> GetGeneratedDedupRef(LogicalOperator &op, bool collect_filters = false) const;
+	bool ExpressionReferencesGeneratedDedupRef(Expression &expr, const GeneratedDedupRef &dedup_ref) const;
+	bool AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding,
+	                    ColumnBinding new_binding) const;
+	bool CoversAllDedupColumns(const GeneratedDedupRef &dedup_ref, const vector<ColumnBinding> &bindings) const;
 	bool OperatorIsGeneratedDedupRef(LogicalOperator &op) const;
 	bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const;
 	void FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op, vector<JoinWithGeneratedDedupRef> &joins,
@@ -304,26 +312,80 @@ bool GeneratedDedupRefEliminator::InequalityDelimJoinCanBeEliminated(JoinType jo
 	       join_type == JoinType::SINGLE;
 }
 
-optional_ptr<LogicalCTERef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op) const {
-	optional_ptr<LogicalCTERef> result;
+unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op,
+                                                                                bool collect_filters) const {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op.Cast<LogicalCTERef>();
 		if (cteref.cte_index == dedup_cte_index) {
-			result = cteref;
+			auto result = make_uniq<GeneratedDedupRef>();
+			result->cte_ref = cteref;
+			return result;
 		}
-		return result;
+		return nullptr;
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = op.Cast<LogicalFilter>();
-		if (!filter.HasProjectionMap() && filter.children.size() == 1 &&
-		    filter.children[0]->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-			auto &cteref = filter.children[0]->Cast<LogicalCTERef>();
-			if (cteref.cte_index == dedup_cte_index) {
-				result = cteref;
+		if (filter.HasProjectionMap() || filter.children.size() != 1) {
+			return nullptr;
+		}
+		auto result = GetGeneratedDedupRef(*filter.children[0], collect_filters);
+		if (!result) {
+			return nullptr;
+		}
+		if (collect_filters) {
+			for (auto &expr : filter.expressions) {
+				result->filters.emplace_back(expr->Copy());
 			}
 		}
+		return result;
 	}
-	return result;
+	return nullptr;
+}
+
+bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedDedupRef(Expression &expr,
+                                                                        const GeneratedDedupRef &dedup_ref) const {
+	bool found = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (colref.Depth() == 0 && colref.Binding().table_index == dedup_ref.cte_ref->table_index) {
+			found = true;
+		}
+	});
+	return found;
+}
+
+bool GeneratedDedupRefEliminator::AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding,
+                                                 ColumnBinding new_binding) const {
+	if (old_binding == new_binding) {
+		return true;
+	}
+	for (auto &replacement : replacements) {
+		if (replacement.old_binding == old_binding) {
+			return replacement.new_binding == new_binding;
+		}
+	}
+	replacements.emplace_back(old_binding, new_binding);
+	return true;
+}
+
+bool GeneratedDedupRefEliminator::CoversAllDedupColumns(const GeneratedDedupRef &dedup_ref,
+                                                        const vector<ColumnBinding> &bindings) const {
+	auto cte_bindings =
+	    LogicalOperator::GenerateColumnBindings(dedup_ref.cte_ref->table_index, dedup_ref.cte_ref->chunk_types.size());
+	if (bindings.size() != cte_bindings.size()) {
+		return false;
+	}
+	for (auto &cte_binding : cte_bindings) {
+		idx_t match_count = 0;
+		for (auto &binding : bindings) {
+			if (binding == cte_binding) {
+				match_count++;
+			}
+		}
+		if (match_count != 1) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool GeneratedDedupRefEliminator::OperatorIsGeneratedDedupRef(LogicalOperator &op) const {
@@ -381,16 +443,6 @@ idx_t GeneratedDedupRefEliminator::CountGeneratedDedupRefs(LogicalOperator &op) 
 		count += CountGeneratedDedupRefs(*child);
 	}
 	return count;
-}
-
-bool GeneratedDedupRefEliminator::ExpressionReferencesTable(Expression &expr, TableIndex table_index) {
-	bool found = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		if (colref.Depth() == 0 && colref.Binding().table_index == table_index) {
-			found = true;
-		}
-	});
-	return found;
 }
 
 bool GeneratedDedupRefEliminator::RemoveInequalityJoinConditions(LogicalOperator &target_op,
@@ -517,26 +569,21 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) 
 
 	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*join->children[0]) ? 0 : 1;
 
-	optional_ptr<LogicalFilter> filter;
 	vector<unique_ptr<Expression>> filter_expressions;
-	if (join->children[dedup_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
-		filter = &join->children[dedup_idx]->Cast<LogicalFilter>();
-		for (auto &expr : filter->expressions) {
-			filter_expressions.emplace_back(expr->Copy());
-		}
-	}
-
-	auto dedup_ref = GetGeneratedDedupRef(*join->children[dedup_idx]);
+	auto dedup_ref = GetGeneratedDedupRef(*join->children[dedup_idx], true);
 	if (!dedup_ref) {
 		return false;
 	}
-	if (comparison_join.conditions.size() != dedup_ref->chunk_types.size()) {
+	filter_expressions = std::move(dedup_ref->filters);
+	if (comparison_join.conditions.size() != dedup_ref->cte_ref->chunk_types.size()) {
 		return false;
 	}
 
 	ColumnBindingReplacer replacer;
 	auto &replacement_bindings = replacer.replacement_bindings;
 	bool all_equality_conditions = true;
+	vector<ColumnBinding> covered_dedup_bindings;
+	covered_dedup_bindings.reserve(comparison_join.conditions.size());
 	for (auto &cond : comparison_join.conditions) {
 		if (!cond.IsComparison()) {
 			return false;
@@ -550,10 +597,13 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) 
 		}
 		auto &dedup_colref = dedup_side.Cast<BoundColumnRefExpression>();
 		auto &other_colref = other_side.Cast<BoundColumnRefExpression>();
-		if (dedup_colref.Binding().table_index != dedup_ref->table_index) {
+		if (dedup_colref.Binding().table_index != dedup_ref->cte_ref->table_index) {
 			return false;
 		}
-		replacement_bindings.emplace_back(dedup_colref.Binding(), other_colref.Binding());
+		if (!AddReplacement(replacement_bindings, dedup_colref.Binding(), other_colref.Binding())) {
+			return false;
+		}
+		covered_dedup_bindings.emplace_back(dedup_colref.Binding());
 
 		if (cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
 		    cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM) {
@@ -562,6 +612,9 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) 
 			is_not_null_expr->GetChildrenMutable().push_back(other_side.Copy());
 			filter_expressions.push_back(std::move(is_not_null_expr));
 		}
+	}
+	if (!CoversAllDedupColumns(*dedup_ref, covered_dedup_bindings)) {
+		return false;
 	}
 
 	if (!all_equality_conditions && !RemoveInequalityJoin(join)) {
@@ -589,18 +642,12 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 	D_ASSERT(cross_product.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
 
 	const idx_t dedup_idx = OperatorIsGeneratedDedupRef(*cross_product.children[0]) ? 0 : 1;
-	auto dedup_ref = GetGeneratedDedupRef(*cross_product.children[dedup_idx]);
+	auto dedup_ref = GetGeneratedDedupRef(*cross_product.children[dedup_idx], true);
 	if (!dedup_ref) {
 		return false;
 	}
 
-	vector<unique_ptr<Expression>> generated_filter_expressions;
-	if (cross_product.children[dedup_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
-		auto &dedup_filter = cross_product.children[dedup_idx]->Cast<LogicalFilter>();
-		for (auto &expr : dedup_filter.expressions) {
-			generated_filter_expressions.emplace_back(expr->Copy());
-		}
-	}
+	vector<unique_ptr<Expression>> generated_filter_expressions = std::move(dedup_ref->filters);
 
 	filter.SplitPredicates();
 	vector<bool> consumed(filter.expressions.size(), false);
@@ -608,6 +655,7 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 	ColumnBindingReplacer replacer;
 	auto &replacement_bindings = replacer.replacement_bindings;
 	bool all_equality_conditions = true;
+	vector<ColumnBinding> covered_dedup_bindings;
 
 	for (idx_t expr_idx = 0; expr_idx < filter.expressions.size(); expr_idx++) {
 		auto &expr = *filter.expressions[expr_idx];
@@ -624,15 +672,18 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 
 		auto &lhs_colref = lhs.Cast<BoundColumnRefExpression>();
 		auto &rhs_colref = rhs.Cast<BoundColumnRefExpression>();
-		auto lhs_dedup = lhs_colref.Binding().table_index == dedup_ref->table_index;
-		auto rhs_dedup = rhs_colref.Binding().table_index == dedup_ref->table_index;
+		auto lhs_dedup = lhs_colref.Binding().table_index == dedup_ref->cte_ref->table_index;
+		auto rhs_dedup = rhs_colref.Binding().table_index == dedup_ref->cte_ref->table_index;
 		if (lhs_dedup == rhs_dedup) {
 			continue;
 		}
 
 		auto comparison_type = expr.GetExpressionType();
 		if (lhs_dedup) {
-			replacement_bindings.emplace_back(lhs_colref.Binding(), rhs_colref.Binding());
+			if (!AddReplacement(replacement_bindings, lhs_colref.Binding(), rhs_colref.Binding())) {
+				return false;
+			}
+			covered_dedup_bindings.emplace_back(lhs_colref.Binding());
 			if (dedup_idx == 0) {
 				join_conditions.emplace_back(lhs.Copy(), rhs.Copy(), comparison_type);
 			} else {
@@ -646,7 +697,10 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 				generated_filter_expressions.push_back(std::move(is_not_null_expr));
 			}
 		} else {
-			replacement_bindings.emplace_back(rhs_colref.Binding(), lhs_colref.Binding());
+			if (!AddReplacement(replacement_bindings, rhs_colref.Binding(), lhs_colref.Binding())) {
+				return false;
+			}
+			covered_dedup_bindings.emplace_back(rhs_colref.Binding());
 			if (dedup_idx == 0) {
 				join_conditions.emplace_back(rhs.Copy(), lhs.Copy(), FlipComparisonExpression(comparison_type));
 			} else {
@@ -664,11 +718,12 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 		consumed[expr_idx] = true;
 	}
 
-	if (join_conditions.size() != dedup_ref->chunk_types.size()) {
+	if (join_conditions.size() != dedup_ref->cte_ref->chunk_types.size() ||
+	    !CoversAllDedupColumns(*dedup_ref, covered_dedup_bindings)) {
 		return false;
 	}
 	for (idx_t expr_idx = 0; expr_idx < filter.expressions.size(); expr_idx++) {
-		if (!consumed[expr_idx] && ExpressionReferencesTable(*filter.expressions[expr_idx], dedup_ref->table_index)) {
+		if (!consumed[expr_idx] && ExpressionReferencesGeneratedDedupRef(*filter.expressions[expr_idx], *dedup_ref)) {
 			return false;
 		}
 	}
@@ -775,7 +830,7 @@ static void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 }
 
-void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan) {
+void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root) {
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (join.delim_flipped) {
 		throw InternalException("Flatten dependent joins - flipped delim join CTE rewrite not supported");
@@ -790,7 +845,7 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
-	GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, *plan);
+	GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root);
 	dedup_ref_count = eliminator.Remove();
 	TrySwitchSingleToLeft(join);
 	if (dedup_ref_count == 0) {
@@ -905,14 +960,14 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	plan = std::move(cte);
 }
 
-void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan) {
+void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root) {
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
-		RewriteDelimJoinsToCTEs(child);
+		RewriteDelimJoinsToCTEs(child, rewrite_root);
 		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		MaterializeDelimJoinAsCTE(plan);
+		MaterializeDelimJoinAsCTE(plan, rewrite_root);
 	}
 }
 
@@ -926,7 +981,7 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
 	} while (filters_pushed);
-	RewriteDelimJoinsToCTEs(plan);
+	RewriteDelimJoinsToCTEs(plan, *plan);
 	VerifyNoDelim(*plan);
 }
 
