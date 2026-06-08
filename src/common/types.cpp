@@ -927,50 +927,79 @@ public:
 	}
 };
 
-static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                const LogicalType &right, LogicalType &result) {
-	D_ASSERT(right.id() != left.id());
-	if (right.id() == LogicalTypeId::VARIANT) {
-		result = right;
-		return true;
-	}
-	if (left.id() == LogicalTypeId::VARIANT) {
-		result = left;
-		return true;
-	}
-
-	// left and right are not equal
+static bool CombineNullOrUnknown(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                                 LogicalType &result) {
 	// NULL/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};
-	for (auto &other_type : other_types) {
-		if (left.id() == other_type) {
-			result = LogicalType::NormalizeType(right);
-			return true;
-		} else if (right.id() == other_type) {
-			result = LogicalType::NormalizeType(left);
-			return true;
-		}
+	if (left.id() == LogicalTypeId::SQLNULL || right.id() == LogicalTypeId::SQLNULL) {
+		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::SQLNULL ? right : left);
+	} else {
+		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::UNKNOWN ? right : left);
 	}
+	return true;
+}
 
+static bool CombineEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left, const LogicalType &right,
+                        LogicalType &result) {
 	// for enums, match the varchar rules
 	if (left.id() == LogicalTypeId::ENUM) {
 		return logical_type_resolver.Operation(LogicalType::VARCHAR, right, result);
-	} else if (right.id() == LogicalTypeId::ENUM) {
-		return logical_type_resolver.Operation(left, LogicalType::VARCHAR, result);
 	}
+	return logical_type_resolver.Operation(left, LogicalType::VARCHAR, result);
+}
 
-	// for everything but enums - string literals also take the other type
-	if (left.id() == LogicalTypeId::STRING_LITERAL) {
-		result = LogicalType::NormalizeType(right);
-		return true;
-	} else if (right.id() == LogicalTypeId::STRING_LITERAL) {
-		result = LogicalType::NormalizeType(left);
-		return true;
-	}
+static bool CombineVariant(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                           LogicalType &result) {
+	result = right.id() == LogicalTypeId::VARIANT ? right : left;
+	return true;
+}
 
-	// for other types - use implicit cast rules to check if we can combine the types.
-	// With a context: go through CastFunctionSet so that any registered casts are honored.
-	// Without a context: consult the built-in CastRules table directly.
+// for everything but enums - string literals also take the other type
+static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                                 LogicalType &result) {
+	result = LogicalType::NormalizeType(left.id() == LogicalTypeId::STRING_LITERAL ? right : left);
+	return true;
+}
+
+using CombineUnequalTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
+                                                 const LogicalType &right, LogicalType &result);
+struct CombineUnequalTypesRule {
+	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive
+	CombineUnequalTypesRuleFunction function;
+};
+
+static bool MatchesVariant(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::VARIANT || right.id() == LogicalTypeId::VARIANT;
+}
+
+static bool MatchesNullOrUnknown(const LogicalType &left, const LogicalType &right) {
+	auto null_or_unknown = [](const LogicalType &type) {
+		return type.id() == LogicalTypeId::SQLNULL || type.id() == LogicalTypeId::UNKNOWN;
+	};
+	return null_or_unknown(left) || null_or_unknown(right);
+}
+
+static bool MatchesEnum(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::ENUM || right.id() == LogicalTypeId::ENUM;
+}
+
+static bool MatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::STRING_LITERAL || right.id() == LogicalTypeId::STRING_LITERAL;
+}
+
+// Rules are matched in order, so the first matching rule wins (VARIANT and NULL/UNKNOWN are matched
+// before ENUM, ENUM before STRING_LITERAL). Each `matches` predicate is order-insensitive in (left, right).
+static const CombineUnequalTypesRule COMBINE_UNEQUAL_TYPES_RULES[] = {
+    {MatchesVariant, CombineVariant},
+    {MatchesNullOrUnknown, CombineNullOrUnknown},
+    {MatchesEnum, CombineEnum},
+    {MatchesStringLiteral, CombineStringLiteral},
+};
+
+// Generic combine engine: try the implicit cast rules in both directions and keep the cheaper one. With a
+// context we go through CastFunctionSet so that any registered casts are honored; without a context we
+// consult the built-in CastRules table directly. Returns false when neither direction can be cast.
+static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                      const LogicalType &right, LogicalType &result) {
 	auto left_to_right_cost = logical_type_resolver.context
 	                              ? CastFunctionSet::ImplicitCastCost(*logical_type_resolver.context, left, right)
 	                              : CastRules::ImplicitCast(left, right);
@@ -1005,6 +1034,22 @@ static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, cons
 		} else {
 			result = left;
 		}
+		return true;
+	}
+	return false;
+}
+
+static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	D_ASSERT(right.id() != left.id());
+	for (auto &combine_rule : COMBINE_UNEQUAL_TYPES_RULES) {
+		if (combine_rule.matches(left, right)) {
+			return combine_rule.function(logical_type_resolver, left, right, result);
+		}
+	}
+
+	// for other types - try to combine through the generic implicit cast rules
+	if (TryCombineViaImplicitCast(logical_type_resolver, left, right, result)) {
 		return true;
 	}
 	// for integer literals - rerun the operation with the underlying type
