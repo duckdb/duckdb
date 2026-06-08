@@ -28,8 +28,8 @@ namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(const ExtensionActiveLoad &load_info)
     : db(load_info.db), extension_info(load_info.info) {
-	loader_info.extension_name = Identifier(load_info.extension_name);
-	loader_info.extension_alias = Identifier(load_info.alias);
+	loader_info.extension_name = load_info.extension_name;
+	loader_info.extension_alias = load_info.alias;
 }
 
 ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db) {
@@ -310,7 +310,7 @@ static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const Identi
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
-	return schema.GetEntry(data, type, Identifier(name));
+	return schema.GetEntry(data, type, name);
 }
 
 optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const Identifier &name) {

@@ -8,8 +8,8 @@ string QualifiedName::ToString() const {
 	return ParseInfo::QualifierToString(catalog, schema, name);
 }
 
-vector<string> QualifiedName::ParseComponents(const string &input) {
-	vector<string> result;
+vector<Identifier> QualifiedName::ParseComponents(const string &input) {
+	vector<Identifier> result;
 	idx_t idx = 0;
 	string entry;
 
@@ -26,7 +26,7 @@ normal:
 	}
 	goto end;
 separator:
-	result.push_back(entry);
+	result.push_back(Identifier(entry));
 	entry = "";
 	idx++;
 	goto normal;
@@ -43,15 +43,15 @@ quoted:
 	throw ParserException("Unterminated quote in qualified name! (input: %s)", input);
 end:
 	if (!entry.empty()) {
-		result.push_back(entry);
+		result.push_back(Identifier(entry));
 	}
 	return result;
 }
 
 QualifiedName QualifiedName::Parse(const string &input) {
-	string catalog;
-	string schema;
-	string name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier name;
 
 	auto entries = ParseComponents(input);
 	if (entries.empty()) {
@@ -73,7 +73,7 @@ QualifiedName QualifiedName::Parse(const string &input) {
 		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
 		                      input);
 	}
-	return QualifiedName {Identifier(catalog), Identifier(schema), Identifier(name)};
+	return QualifiedName {catalog, schema, name};
 }
 
 QualifiedColumnName::QualifiedColumnName() {
@@ -90,21 +90,21 @@ QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, Identifier c
 QualifiedColumnName QualifiedColumnName::Parse(string &input) {
 	auto components = QualifiedName::ParseComponents(input);
 	if (components.size() == 1) {
-		return QualifiedColumnName(Identifier(components[0]));
+		return QualifiedColumnName(components[0]);
 	} else if (components.size() == 2) {
-		return QualifiedColumnName(Identifier(components[0]), Identifier(components[1]));
+		return QualifiedColumnName(components[0], components[1]);
 	} else if (components.size() == 3) {
 		QualifiedColumnName qname;
-		qname.schema = Identifier(components[0]);
-		qname.table = Identifier(components[1]);
-		qname.column = Identifier(components[2]);
+		qname.schema = components[0];
+		qname.table = components[1];
+		qname.column = components[2];
 		return qname;
 	} else if (components.size() == 4) {
 		QualifiedColumnName qname;
-		qname.catalog = Identifier(components[0]);
-		qname.schema = Identifier(components[1]);
-		qname.table = Identifier(components[2]);
-		qname.column = Identifier(components[3]);
+		qname.catalog = components[0];
+		qname.schema = components[1];
+		qname.table = components[2];
+		qname.column = components[3];
 		return qname;
 	} else {
 		throw ParserException(

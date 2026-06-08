@@ -232,7 +232,7 @@ void LambdaRefExpression::Serialize(Serializer &serializer) const {
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
 	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
 	auto column_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "column_name");
-	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, column_name));
+	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, std::move(column_name)));
 	return std::move(result);
 }
 
@@ -280,8 +280,8 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	/* [Deleted] (bool) "unpacked" */
 	serializer.WritePropertyWithDefault<qualified_column_set_t>(
 	    206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
-	serializer.WritePropertyWithDefault<qualified_column_map_t<string>>(207, "rename_list", rename_list,
-	                                                                    qualified_column_map_t<string>());
+	serializer.WritePropertyWithDefault<qualified_column_map_t<Identifier>>(207, "rename_list", rename_list,
+	                                                                        qualified_column_map_t<Identifier>());
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
@@ -294,8 +294,8 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(
 	    206, "qualified_exclude_list", qualified_column_set_t());
-	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(
-	    207, "rename_list", qualified_column_map_t<string>());
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<Identifier>>(
+	    207, "rename_list", qualified_column_map_t<Identifier>());
 	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list,
 	                                                        std::move(replace_list), columns, std::move(expr), unpacked,
 	                                                        qualified_exclude_list, std::move(rename_list));

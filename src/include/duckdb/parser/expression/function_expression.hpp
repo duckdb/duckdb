@@ -21,14 +21,14 @@ namespace duckdb {
 class FunctionArgument {
 public:
 	// NOLINTNEXTLINE (allow implicit conversions)
-	FunctionArgument(unique_ptr<ParsedExpression> expression_p) : name(""), expression(std::move(expression_p)) {
+	FunctionArgument(unique_ptr<ParsedExpression> expression_p) : expression(std::move(expression_p)) {
 	}
 
-	FunctionArgument(string name_p, unique_ptr<ParsedExpression> expression_p)
+	FunctionArgument(Identifier name_p, unique_ptr<ParsedExpression> expression_p)
 	    : name(std::move(name_p)), expression(std::move(expression_p)) {
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
 
@@ -70,7 +70,7 @@ public:
 	static FunctionArgument Deserialize(Deserializer &deserializer);
 
 private:
-	string name;
+	Identifier name;
 	unique_ptr<ParsedExpression> expression;
 };
 

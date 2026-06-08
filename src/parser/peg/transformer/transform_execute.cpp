@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, const string &identifier,
+PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, const Identifier &identifier,
                                                  vector<FunctionArgument> table_function_arguments) {
 	auto result = make_uniq<ExecuteStatement>();
 	result->name = identifier;
@@ -22,14 +22,14 @@ PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, co
 		}
 		auto param_name = arg.GetName();
 		if (table_function_arguments[i].GetName().empty()) {
-			param_name = std::to_string(param_idx + 1);
+			param_name = Identifier(std::to_string(param_idx + 1));
 			if (param_idx != i) {
 				throw NotImplementedException("Mixing named parameters and positional parameters is not supported yet");
 			}
 			param_idx++;
 		}
 		arg.GetExpressionMutable()->ClearAlias();
-		result->named_values[Identifier(param_name)] = std::move(arg.GetExpressionMutable());
+		result->named_values[param_name] = std::move(arg.GetExpressionMutable());
 	}
 	return std::move(result);
 }

@@ -10,12 +10,12 @@ PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer,
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const string &setting_name,
+PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const Identifier &setting_name,
                                              vector<unique_ptr<ParsedExpression>> variable_list) {
 	// Rule: PragmaAssign <- SettingName '=' Expression
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
-	info.name = Identifier(setting_name);
+	info.name = setting_name;
 	if (variable_list.size() != 1) {
 		throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 	}
@@ -38,17 +38,16 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}
-	auto set_statement = make_uniq<SetVariableStatement>(info.name.GetIdentifierName(), std::move(info.parameters[0]),
-	                                                     SetScope::AUTOMATIC);
+	auto set_statement = make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
 	return std::move(set_statement);
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const string &pragma_name,
+PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const Identifier &pragma_name,
                                                vector<unique_ptr<ParsedExpression>> pragma_parameters) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
-	result->info->name = Identifier(pragma_name);
+	result->info->name = pragma_name;
 	if (pragma_parameters.empty()) {
 		return std::move(result);
 	}

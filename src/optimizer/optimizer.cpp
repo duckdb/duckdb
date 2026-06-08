@@ -450,13 +450,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
                                                      unique_ptr<Expression> c2) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
@@ -464,7 +464,7 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
                                                      unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
@@ -473,10 +473,10 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name), std::move(children), error);
+	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

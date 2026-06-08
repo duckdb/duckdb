@@ -7,7 +7,7 @@ namespace duckdb {
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, const bool &or_replace,
                                                 const bool &if_not_exists, unique_ptr<ParsedExpression> database_path,
-                                                const string &attach_alias,
+                                                const Identifier &attach_alias,
                                                 const vector<GenericCopyOption> &attach_options) {
 	auto result = make_uniq<AttachStatement>();
 	auto info = make_uniq<AttachInfo>();
@@ -25,7 +25,7 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 	}
 
 	info->parsed_path = std::move(database_path);
-	info->name = Identifier(attach_alias);
+	info->name = attach_alias;
 	for (const auto &attach_option : attach_options) {
 		if (attach_option.expression) {
 			info->parsed_options[attach_option.name] = attach_option.expression->Copy();
@@ -48,7 +48,7 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, const string &col_id) {
+Identifier PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, const Identifier &col_id) {
 	return col_id;
 }
 

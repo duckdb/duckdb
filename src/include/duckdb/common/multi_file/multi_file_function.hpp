@@ -188,7 +188,7 @@ public:
 
 		MultiFileOptions file_options;
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first);
+			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
 			if (loption == "allow_empty") {
 				multi_file_reader->ParseOption(loption, kv.second, file_options, context);
 				if (file_options.allow_empty) {
@@ -204,11 +204,11 @@ public:
 
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first);
+			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (interface->ParseOption(context, kv.first, kv.second, file_options, *options)) {
+			if (interface->ParseOption(context, kv.first.GetIdentifierName(), kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);
@@ -754,7 +754,7 @@ public:
 		}
 
 		auto primary_index = column_index.GetPrimaryIndex();
-		const auto &col_name = bind_data.names[primary_index].GetIdentifierName();
+		const auto &col_name = bind_data.names[primary_index];
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {

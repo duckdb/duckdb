@@ -10,8 +10,8 @@
 namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
-                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<string> names,
-                                           string alias_p)
+                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<Identifier> names,
+                                           Identifier alias_p)
     : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
       collection(std::move(collection_p)) {
 	// create constant expressions for the values
@@ -22,7 +22,7 @@ MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &cont
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto &type = types[i];
 		auto &name = names[i];
-		auto column_definition = ColumnDefinition(Identifier(name), type);
+		auto column_definition = ColumnDefinition(name, type);
 		columns.push_back(std::move(column_definition));
 	}
 }

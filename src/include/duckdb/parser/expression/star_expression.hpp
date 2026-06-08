@@ -44,10 +44,10 @@ public:
 	identifier_map_t<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
 		return replace_list;
 	}
-	const qualified_column_map_t<string> &RenameList() const {
+	const qualified_column_map_t<Identifier> &RenameList() const {
 		return rename_list;
 	}
-	qualified_column_map_t<string> &RenameListMutable() {
+	qualified_column_map_t<Identifier> &RenameListMutable() {
 		return rename_list;
 	}
 	const unique_ptr<ParsedExpression> &Expression() const {
@@ -78,7 +78,7 @@ public:
 	                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
 	                          unique_ptr<ParsedExpression> expr, bool unpacked,
 	                          const qualified_column_set_t &qualified_exclude_list,
-	                          qualified_column_map_t<string> &&rename_list);
+	                          qualified_column_map_t<Identifier> &&rename_list);
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
@@ -90,7 +90,7 @@ private:
 	//! List of columns to replace with another expression
 	identifier_map_t<unique_ptr<ParsedExpression>> replace_list;
 	//! List of columns to rename
-	qualified_column_map_t<string> rename_list;
+	qualified_column_map_t<Identifier> rename_list;
 	//! The expression to select the columns (regular expression or list)
 	unique_ptr<ParsedExpression> expr;
 	//! Whether or not this is a COLUMNS expression

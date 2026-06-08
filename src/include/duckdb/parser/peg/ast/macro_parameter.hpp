@@ -4,7 +4,7 @@
 namespace duckdb {
 struct MacroParameter {
 	unique_ptr<ParsedExpression> expression;
-	string name;
+	Identifier name;
 	LogicalType type = LogicalType::UNKNOWN;
 	bool is_default = false;
 };

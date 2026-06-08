@@ -20,7 +20,7 @@ public:
 public:
 	ExecuteStatement();
 
-	string name;
+	Identifier name;
 	identifier_map_t<unique_ptr<ParsedExpression>> named_values;
 
 protected:

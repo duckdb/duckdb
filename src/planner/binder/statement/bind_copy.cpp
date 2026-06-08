@@ -565,7 +565,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
-				statement->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(name)));
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(name));
 			}
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());

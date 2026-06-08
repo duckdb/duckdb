@@ -39,7 +39,8 @@ public:
 		return context;
 	}
 
-	optional_ptr<CatalogEntry> GetEntry(const Identifier &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,
+	optional_ptr<CatalogEntry> GetEntry(const Identifier &catalog, const Identifier &schema,
+	                                    const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,

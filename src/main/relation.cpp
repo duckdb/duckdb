@@ -39,7 +39,8 @@ shared_ptr<Relation> Relation::Project(const string &expression, const string &a
 
 shared_ptr<Relation> Relation::Project(const string &select_list, const vector<string> &aliases) {
 	auto expressions = Parser::ParseExpressionList(select_list, context->GetContext()->GetParserOptions());
-	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(expressions), aliases);
+	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(expressions),
+	                                           StringsToIdentifiers(aliases));
 }
 
 shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
@@ -49,7 +50,8 @@ shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
 
 shared_ptr<Relation> Relation::Project(vector<unique_ptr<ParsedExpression>> expressions,
                                        const vector<string> &aliases) {
-	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(expressions), aliases);
+	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(expressions),
+	                                           StringsToIdentifiers(aliases));
 }
 
 static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const ClientContext &context,
@@ -70,7 +72,8 @@ static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const Cli
 
 shared_ptr<Relation> Relation::Project(const vector<string> &expressions, const vector<string> &aliases) {
 	auto result_list = StringListToExpressionList(*context->GetContext(), expressions);
-	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(result_list), aliases);
+	return make_shared_ptr<ProjectionRelation>(shared_from_this(), std::move(result_list),
+	                                           StringsToIdentifiers(aliases));
 }
 
 shared_ptr<Relation> Relation::Filter(const string &expression) {

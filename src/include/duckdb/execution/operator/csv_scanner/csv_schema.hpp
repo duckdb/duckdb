@@ -25,11 +25,11 @@ struct CSVSchema {
 	explicit CSVSchema(const bool empty = false) : empty(empty) {
 	}
 
-	CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path, idx_t rows_read,
-	          const bool empty = false);
+	CSVSchema(const vector<Identifier> &names, const vector<LogicalType> &types, const string &file_path,
+	          idx_t rows_read, const bool empty = false);
 
 	//! Initializes the schema based on names and types
-	void Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path);
+	void Initialize(const vector<Identifier> &names, const vector<LogicalType> &types, const string &file_path);
 
 	//! If the schema is empty
 	bool Empty() const;

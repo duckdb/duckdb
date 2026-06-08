@@ -8,7 +8,7 @@ namespace duckdb {
 
 struct AddColumnEntry {
 	LogicalType type;
-	vector<string> column_path;
+	vector<Identifier> column_path;
 	unique_ptr<ParsedExpression> default_value;
 };
 

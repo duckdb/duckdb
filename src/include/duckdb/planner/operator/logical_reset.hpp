@@ -21,7 +21,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RESET;
 
 public:
-	LogicalReset(std::string name_p, SetScope scope_p)
+	LogicalReset(Identifier name_p, SetScope scope_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_RESET), name(std::move(name_p)), scope(scope_p) {
 	}
 

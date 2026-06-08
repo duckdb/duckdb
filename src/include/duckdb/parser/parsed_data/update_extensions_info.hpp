@@ -20,7 +20,7 @@ public:
 	UpdateExtensionsInfo() : ParseInfo(TYPE) {
 	}
 
-	vector<string> extensions_to_update;
+	vector<Identifier> extensions_to_update;
 
 public:
 	unique_ptr<UpdateExtensionsInfo> Copy() const {

@@ -3,7 +3,7 @@
 
 namespace duckdb {
 struct TriggerTableReferencingInfo {
-	string new_table;
-	string old_table;
+	Identifier new_table;
+	Identifier old_table;
 };
 } // namespace duckdb

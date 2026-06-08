@@ -158,7 +158,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	}
 
 	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set {Identifier(name)};
+		ScalarFunctionSet set {name};
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);

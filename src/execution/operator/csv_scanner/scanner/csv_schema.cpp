@@ -88,13 +88,14 @@ void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	}
 }
 
-CSVSchema::CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path,
+CSVSchema::CSVSchema(const vector<Identifier> &names, const vector<LogicalType> &types, const string &file_path,
                      idx_t rows_read_p, const bool empty_p)
     : rows_read(rows_read_p), empty(empty_p) {
 	Initialize(names, types, file_path);
 }
 
-void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path_p) {
+void CSVSchema::Initialize(const vector<Identifier> &names, const vector<LogicalType> &types,
+                           const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
 	}
@@ -104,8 +105,8 @@ void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType
 		// Populate our little schema
 		const auto &name = names.at(i);
 		const auto &type = types.at(i);
-		columns.push_back({name, type});
-		name_idx_map[names[i]] = i;
+		columns.push_back({name.GetIdentifierName(), type});
+		name_idx_map[names[i].GetIdentifierName()] = i;
 	}
 }
 
@@ -161,7 +162,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 
 	for (idx_t i = 0; i < sniffer_result.names.size(); i++) {
 		// Populate our little schema
-		current_schema[sniffer_result.names[i]] = {sniffer_result.return_types[i], i};
+		current_schema[sniffer_result.names[i].GetIdentifierName()] = {sniffer_result.return_types[i], i};
 	}
 	if (is_minimal_sniffer) {
 		auto min_sniffer = static_cast<AdaptiveSnifferResult &>(sniffer_result);
@@ -194,7 +195,7 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 				// If we got here, we have the right types but the wrong names, lets fix the names
 				idx_t sniff_name_idx = 0;
 				for (auto &column : columns) {
-					sniffer_result.names[sniff_name_idx++] = column.name;
+					sniffer_result.names[sniff_name_idx++] = Identifier(column.name);
 				}
 				return true;
 			}

@@ -101,8 +101,8 @@ void PreparedStatementData::Bind(identifier_map_t<BoundParameterData> values) {
 	}
 }
 
-bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &result) {
-	auto it = value_map.find(Identifier(identifier));
+bool PreparedStatementData::TryGetType(const Identifier &identifier, LogicalType &result) {
+	auto it = value_map.find(identifier);
 	if (it == value_map.end()) {
 		return false;
 	}
@@ -114,7 +114,7 @@ bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &re
 	return true;
 }
 
-LogicalType PreparedStatementData::GetType(const string &identifier) {
+LogicalType PreparedStatementData::GetType(const Identifier &identifier) {
 	LogicalType result;
 	if (!TryGetType(identifier, result)) {
 		throw BinderException("Could not find parameter identified with: %s", identifier);

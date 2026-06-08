@@ -17,7 +17,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	// bind the prepared statement
 	auto &client_data = ClientData::Get(context);
 
-	auto entry = client_data.prepared_statements.find(Identifier(stmt.name));
+	auto entry = client_data.prepared_statements.find(stmt.name);
 	if (entry == client_data.prepared_statements.end()) {
 		throw BinderException("Prepared statement \"%s\" does not exist", stmt.name);
 	}

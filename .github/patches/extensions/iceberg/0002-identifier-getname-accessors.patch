@@ -916,7 +916,7 @@ index e97fe9f9..b03aaf26 100644
  
  	int32_t last_column_id;
 diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
-index 51275147..d7de3392 100644
+index 51275147..1192759f 100644
 --- a/src/function/ducklake/iceberg_to_ducklake.cpp
 +++ b/src/function/ducklake/iceberg_to_ducklake.cpp
 @@ -115,7 +115,7 @@ public:
@@ -937,6 +937,15 @@ index 51275147..d7de3392 100644
  	auto catalog_type = catalog.GetCatalogType();
  	if (catalog_type != "iceberg") {
  		throw InvalidInputException("First parameter must be the name of an attached Iceberg catalog");
+@@ -810,7 +810,7 @@ static unique_ptr<FunctionData> IcebergToDuckLakeBind(ClientContext &context, Ta
+ 
+ 	IcebergOptions options;
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
 @@ -940,7 +940,7 @@ public:
  		auto &bind_data = input.bind_data->Cast<iceberg::ducklake::IcebergToDuckLakeBindData>();
  		auto &input_string = bind_data.ducklake_catalog;
@@ -955,6 +964,19 @@ index 51275147..d7de3392 100644
  
  		auto &db = DatabaseInstance::GetDatabase(context);
  		auto connection = make_uniq<Connection>(db);
+diff --git a/src/function/metadata/iceberg_column_stats.cpp b/src/function/metadata/iceberg_column_stats.cpp
+index 58770948..3c0227f9 100644
+--- a/src/function/metadata/iceberg_column_stats.cpp
++++ b/src/function/metadata/iceberg_column_stats.cpp
+@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> IcebergColumnStatsBind(ClientContext &context, T
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
 diff --git a/src/function/metadata/iceberg_load_table_response.cpp b/src/function/metadata/iceberg_load_table_response.cpp
 index f7cde017..a18e748d 100644
 --- a/src/function/metadata/iceberg_load_table_response.cpp
@@ -979,6 +1001,45 @@ index f7cde017..a18e748d 100644
  	                                       OnEntryNotFound::THROW_EXCEPTION);
  
  	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
+diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/iceberg_metadata.cpp
+index b2876673..af15f8c3 100644
+--- a/src/function/metadata/iceberg_metadata.cpp
++++ b/src/function/metadata/iceberg_metadata.cpp
+@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Tabl
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+diff --git a/src/function/metadata/iceberg_partition_stats.cpp b/src/function/metadata/iceberg_partition_stats.cpp
+index 216bc6fd..a1417bd1 100644
+--- a/src/function/metadata/iceberg_partition_stats.cpp
++++ b/src/function/metadata/iceberg_partition_stats.cpp
+@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> IcebergPartitionStatsBind(ClientContext &context
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index f621d84c..547799aa 100644
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> IcebergSnapshotsBind(ClientContext &context, Tab
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
+ 	auto bind_data = make_uniq<IcebergSnaphotsBindData>();
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		if (loption == "metadata_compression_codec") {
+ 			bind_data->options.metadata_compression_codec = StringValue::Get(kv.second);
+ 		} else if (loption == "version") {
 diff --git a/src/function/scan/iceberg_scan.cpp b/src/function/scan/iceberg_scan.cpp
 index 87b303da..c9ef5c3b 100644
 --- a/src/function/scan/iceberg_scan.cpp

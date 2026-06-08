@@ -145,7 +145,7 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 		vector<unique_ptr<ParsedExpression>> children;
 		for (auto &arg : arguments) {
 			auto copy = arg.GetExpression().Copy();
-			copy->SetAlias(Identifier(arg.GetName()));
+			copy->SetAlias(arg.GetName());
 			children.push_back(std::move(copy));
 		}
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
@@ -174,7 +174,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 		result->arguments.reserve(children.size());
 		for (auto &child : children) {
 			auto alias = child->GetAlias();
-			result->arguments.emplace_back(alias.GetIdentifierName(), std::move(child));
+			result->arguments.emplace_back(alias, std::move(child));
 		}
 
 		// Mark this function expression as a legacy function call, so that the binder can handle it accordingly.

@@ -70,7 +70,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 					filters_info += "\n";
 				}
 				first_item = false;
-				filters_info += filter.ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name.GetIdentifierName());
 			}
 		} else if (col_id < names.size()) {
 			if (!first_item) {
@@ -195,7 +195,7 @@ const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
 		if (entry == virtual_columns.end()) {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
-		return entry->second.name;
+		return entry->second.name.GetIdentifierName();
 	}
 	return names[index.GetPrimaryIndex()];
 }

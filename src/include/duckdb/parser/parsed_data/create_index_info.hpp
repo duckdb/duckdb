@@ -42,7 +42,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The types of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<LogicalType> scan_types;
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)
-	vector<string> names;
+	vector<Identifier> names;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

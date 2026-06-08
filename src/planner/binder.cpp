@@ -628,12 +628,12 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
 static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
 
-static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const string &base_cte_name) {
+static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const Identifier &base_cte_name) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_ref = make_uniq<BaseTableRef>();
-	alias_ref->table_name = Identifier(base_cte_name);
+	alias_ref->table_name = base_cte_name;
 	alias_select->from_table = std::move(alias_ref);
 	alias_cte->query_node = std::move(alias_select);
 	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
@@ -648,7 +648,7 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	returning_list.push_back(make_uniq<StarExpression>());
 
 	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
-	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
+	Identifier base_cte_name(TRIGGER_BASE_CTE_PREFIX + uuid_suffix);
 
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
@@ -659,9 +659,9 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->table_name = Identifier(base_cte_name);
+	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
-	outer->cte_map.map[Identifier(base_cte_name)] = std::move(base_cte);
+	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
 	// Expand each trigger as a DML CTE.
 	// Alphabetical order by name (case-insensitive) - see GetTriggersForEvent.
@@ -677,13 +677,11 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
 		// a local WITH shadows the alias
 		auto &body_map = trig_cte->query_node->cte_map.map;
-		if (!trigger.referencing_new_table.empty() &&
-		    body_map.find(Identifier(trigger.referencing_new_table)) == body_map.end()) {
-			body_map[Identifier(trigger.referencing_new_table)] = MakeTransitionTableAliasCTE(base_cte_name);
+		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
+			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
-		if (!trigger.referencing_old_table.empty() &&
-		    body_map.find(Identifier(trigger.referencing_old_table)) == body_map.end()) {
-			body_map[Identifier(trigger.referencing_old_table)] = MakeTransitionTableAliasCTE(base_cte_name);
+		if (!trigger.referencing_old_table.empty() && body_map.find(trigger.referencing_old_table) == body_map.end()) {
+			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
 
 		outer->cte_map.map[Identifier(body_cte_name)] = std::move(trig_cte);

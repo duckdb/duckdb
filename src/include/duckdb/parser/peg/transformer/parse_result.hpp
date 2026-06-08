@@ -168,7 +168,7 @@ public:
 
 struct IdentifierParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::IDENTIFIER;
-	string identifier;
+	Identifier identifier;
 
 	explicit IdentifierParseResult(string identifier_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), identifier(std::move(identifier_p)) {
@@ -177,7 +177,7 @@ struct IdentifierParseResult : ParseResult {
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
-		ss << ": " << identifier << "\n";
+		ss << ": " << identifier.GetIdentifierName() << "\n";
 	}
 };
 

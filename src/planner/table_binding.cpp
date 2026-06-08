@@ -168,8 +168,8 @@ TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p,
 			// the row_number column cannot be queried by the user
 			continue;
 		}
-		if (name_map.find(Identifier(name)) == name_map.end()) {
-			name_map[Identifier(name)] = idx;
+		if (name_map.find(name) == name_map.end()) {
+			name_map[name] = idx;
 		}
 	}
 }

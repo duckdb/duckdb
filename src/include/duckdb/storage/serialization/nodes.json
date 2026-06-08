@@ -181,7 +181,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
           "id": 101,
@@ -339,7 +339,7 @@
       {
         "id": 101,
         "name": "unpivot_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -350,7 +350,7 @@
       {
         "id": 103,
         "name": "pivot_enum",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -1154,7 +1154,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,

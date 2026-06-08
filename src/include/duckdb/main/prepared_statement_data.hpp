@@ -56,9 +56,9 @@ public:
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(identifier_map_t<BoundParameterData> values);
 	//! Get the expected SQL Type of the bound parameter
-	DUCKDB_API LogicalType GetType(const string &identifier);
+	DUCKDB_API LogicalType GetType(const Identifier &identifier);
 	//! Try to get the expected SQL Type of the bound parameter
-	DUCKDB_API bool TryGetType(const string &identifier, LogicalType &result);
+	DUCKDB_API bool TryGetType(const Identifier &identifier, LogicalType &result);
 };
 
 } // namespace duckdb

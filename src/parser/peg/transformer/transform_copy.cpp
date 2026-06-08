@@ -86,15 +86,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformCopyFromDatabaseWithFlag(PEGTransformer &transformer, const string &col_id,
-                                                         const string &col_id_1,
+PEGTransformerFactory::TransformCopyFromDatabaseWithFlag(PEGTransformer &transformer, const Identifier &col_id,
+                                                         const Identifier &col_id_1,
                                                          const CopyDatabaseType &copy_database_flag) {
 	return make_uniq<CopyDatabaseStatement>(col_id, col_id_1, copy_database_flag);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithoutFlag(PEGTransformer &transformer,
-                                                                                     const string &col_id,
-                                                                                     const string &col_id_1) {
+                                                                                     const Identifier &col_id,
+                                                                                     const Identifier &col_id_1) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "copy_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id)));
@@ -165,8 +165,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameStringL
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameIdentifier(PEGTransformer &transformer,
-                                                                                    const string &identifier) {
-	auto file_name = identifier;
+                                                                                    const Identifier &identifier) {
+	auto file_name = identifier.GetIdentifierName();
 	if (StringUtil::CIEquals(file_name, "stdout")) {
 		file_name = "/dev/stdout";
 	}
@@ -175,17 +175,17 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileNameIdentif
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformCopyFileNameIdentifierColId(PEGTransformer &transformer,
-                                                            const string &identifier_col_id) {
+                                                            const Identifier &identifier_col_id) {
 	return make_uniq<ConstantExpression>(Value(identifier_col_id));
 }
 
-string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const string &identifier,
-                                                       const string &col_id) {
+Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
+                                                           const Identifier &col_id) {
 	string result;
 	result += identifier;
 	result += ".";
 	result += col_id;
-	return result;
+	return Identifier(result);
 }
 
 vector<GenericCopyOption>
@@ -206,7 +206,7 @@ GenericCopyOption PEGTransformerFactory::TransformEncodingOption(PEGTransformer 
 }
 
 GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransformer &transformer, const bool &force_quote,
-                                                                   const vector<string> &star_symbol_column_list) {
+                                                                   const vector<Identifier> &star_symbol_column_list) {
 	string func_name = force_quote ? "force_quote" : "quote";
 	auto result = GenericCopyOption();
 	result.name = func_name;
@@ -227,7 +227,7 @@ GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &
 
 GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer &transformer,
                                                                   const bool &force_not_null,
-                                                                  const vector<string> &column_list) {
+                                                                  const vector<Identifier> &column_list) {
 	auto result = GenericCopyOption();
 	result.name = force_not_null ? "force_not_null" : "force_null";
 	for (auto &col : column_list) {
@@ -237,7 +237,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer
 }
 
 GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransformer &transformer,
-                                                                    const vector<string> &star_symbol_column_list) {
+                                                                    const vector<Identifier> &star_symbol_column_list) {
 	auto result = GenericCopyOption();
 	result.name = "partition_by";
 	if (star_symbol_column_list.empty()) {

@@ -93,7 +93,7 @@ public:
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	string GetReaderType() const override {
 		return "duckdb";
@@ -350,15 +350,15 @@ optional_idx DuckDBReader::NumRows() {
 	return table_entry.GetStorage().GetTotalRows();
 }
 
-unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	if (!scan_function.statistics) {
 		return BaseFileReader::GetStatistics(context, name);
 	}
 	auto &table_entry = GetTableEntry();
-	if (!table_entry.ColumnExists(Identifier(name))) {
+	if (!table_entry.ColumnExists(name)) {
 		return nullptr;
 	}
-	return scan_function.statistics(context, bind_data.get(), table_entry.GetColumn(Identifier(name)).Logical().index);
+	return scan_function.statistics(context, bind_data.get(), table_entry.GetColumn(name).Logical().index);
 }
 
 double DuckDBReader::GetProgressInFile(ClientContext &context) {

@@ -654,7 +654,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto param_it = info.tf.named_parameters.find(opt.first);
+		auto param_it = info.tf.named_parameters.find(Identifier(opt.first));
 		if (param_it == info.tf.named_parameters.end()) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
@@ -686,7 +686,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 		}
 
 		// Assign the option as a named parameter
-		named_parameters[opt.first] = param_value;
+		named_parameters[Identifier(opt.first)] = param_value;
 	}
 
 	// Also pass file path as a regular parameter

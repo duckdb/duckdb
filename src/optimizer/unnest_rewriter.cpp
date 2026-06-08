@@ -312,7 +312,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		// add the new expressions
 		for (idx_t expr_idx = 0; expr_idx < lhs_bindings.size(); expr_idx++) {
 			auto new_expr = make_uniq<BoundColumnRefExpression>(
-			    Identifier(lhs_bindings[expr_idx].alias), lhs_bindings[expr_idx].type, lhs_bindings[expr_idx].binding);
+			    lhs_bindings[expr_idx].alias, lhs_bindings[expr_idx].type, lhs_bindings[expr_idx].binding);
 			proj.expressions.push_back(std::move(new_expr));
 
 			// update the table index
@@ -398,7 +398,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
 			auto &proj = op.Cast<LogicalProjection>();
-			lhs_bindings.back().alias = proj.expressions[i]->GetAlias().GetIdentifierName();
+			lhs_bindings.back().alias = proj.expressions[i]->GetAlias();
 		}
 	}
 }

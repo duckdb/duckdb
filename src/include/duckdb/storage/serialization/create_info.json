@@ -371,7 +371,7 @@
       {
         "id": 206,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 207,
@@ -386,12 +386,12 @@
       {
         "id": 209,
         "name": "referencing_new_table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 210,
         "name": "referencing_old_table",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   }

@@ -34,7 +34,7 @@ public:
 
 public:
 	//! Returns a table reference to the appended data.
-	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const Identifier &table_name,
 	                                                  const vector<Identifier> &expected_names);
 	//! Parses the statement to append data.
 	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
@@ -160,7 +160,7 @@ public:
 	//! Get the expected names based on the active columns.
 	vector<Identifier> GetExpectedNames();
 	//! Construct a query that appends data from, typically, a column data collection.
-	static string ConstructQuery(TableDescription &description_p, const string &table_name,
+	static string ConstructQuery(TableDescription &description_p, const Identifier &table_name,
 	                             const vector<Identifier> &expected_names);
 
 private:

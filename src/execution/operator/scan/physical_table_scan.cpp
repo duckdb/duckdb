@@ -327,7 +327,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				if (entry == virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
-				filters_info += filter.ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name.GetIdentifierName());
 			} else {
 				auto column_name = column_id.GetName(names[col_id]);
 				filters_info += filter.ToString(column_name);

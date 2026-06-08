@@ -775,7 +775,7 @@ void LogicalReset::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer) {
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto scope = deserializer.ReadProperty<SetScope>(201, "scope");
-	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(name.GetIdentifierName(), scope));
+	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(std::move(name), scope));
 	return std::move(result);
 }
 
@@ -801,7 +801,7 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(Deserializer &deserializer) 
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto value = deserializer.ReadProperty<Value>(201, "value");
 	auto scope = deserializer.ReadProperty<SetScope>(202, "scope");
-	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(name.GetIdentifierName(), value, scope));
+	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(std::move(name), value, scope));
 	return std::move(result);
 }
 

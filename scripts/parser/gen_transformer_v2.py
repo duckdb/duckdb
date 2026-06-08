@@ -435,7 +435,7 @@ def _classify_reference(name, idx, rule_types, excluded_rules, identifier_overri
     if name in identifier_override_rules:
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type="Identifier", extraction_lines=lines)
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         var_name = to_snake_case(name)
@@ -463,13 +463,13 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules, identifi
     var_name = to_snake_case(name)
     if name in identifier_override_rules:
         lines = [
-            f"\tstring {var_name};",
+            f"\tIdentifier {var_name};",
             f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
             f"\tif ({var_name}_opt.HasResult()) {{",
             f"\t\t{var_name} = {var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;",
             f"\t}}",
         ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type="Identifier", extraction_lines=lines)
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         lines = [
@@ -551,7 +551,7 @@ def _classify_macro(node, idx, rule_types, identifier_override_rules, optional=F
     if not is_identifier and leaf_name not in rule_types:
         return None
 
-    child_type = "string" if is_identifier else rule_types[leaf_name].cpp_type
+    child_type = "Identifier" if is_identifier else rule_types[leaf_name].cpp_type
 
     list_positions = [i for i, op in enumerate(ops) if op == 'list']
     optional_positions = [i for i, op in enumerate(ops) if op == 'optional']

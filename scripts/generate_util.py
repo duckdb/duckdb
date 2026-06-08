@@ -51,7 +51,9 @@ def is_order_modifier_ptr(type_str):
 
 
 def is_expression_map(type_str):
-    return 'case_insensitive_map_t<' in type_str and 'ParsedExpression*' in type_str
+    return (
+        'case_insensitive_map_t<' in type_str or 'identifier_map_t<' in type_str
+    ) and 'ParsedExpression*' in type_str
 
 
 def member_should_be_compared(member):
@@ -153,7 +155,7 @@ def generate_ci_vector_string_comparison(field_name, indent):
         f'{ii}return false;',
         f'{indent}}}',
         f'{indent}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
-        f'{ii}if (!StringUtil::CIEquals({field_name}[i], other_p.{field_name}[i])) {{',
+        f'{ii}if ({field_name}[i] != other_p.{field_name}[i]) {{',
         f'{iii}return false;',
         f'{ii}}}',
         f'{indent}}}',
@@ -164,9 +166,9 @@ def generate_member_comparison(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
-    if type_str == 'Identifier':
+    if type_str in ('Identifier', 'duckdb::Identifier'):
         return [
-            f'{indent}if (!StringUtil::CIEquals({field_name}, other_p.{field_name})) {{',
+            f'{indent}if ({field_name} != other_p.{field_name}) {{',
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
@@ -420,12 +422,12 @@ def generate_member_hash(member, indent='\t'):
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str == 'Identifier':
-        return [f'{indent}hash = CombineHash(hash, StringUtil::CIHash({field_name}));']
+    if type_str in ('Identifier', 'duckdb::Identifier'):
+        return [f'{indent}hash = CombineHash(hash, StringUtil::CIHash({field_name}.GetIdentifierName()));']
     if type_str == 'vector<Identifier>':
         return [
             f'{indent}for (auto &s : {field_name}) {{',
-            f'{indent}\thash = CombineHash(hash, StringUtil::CIHash(s));',
+            f'{indent}\thash = CombineHash(hash, StringUtil::CIHash(s.GetIdentifierName()));',
             f'{indent}}}',
         ]
 

@@ -19,11 +19,11 @@ static bool IsDirectFilterColumnRef(const Expression &expr) {
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
-static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
+static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, Identifier &alias) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
 		index = bound_ref.Index();
-		alias = bound_ref.GetAlias().GetIdentifierName();
+		alias = bound_ref.GetAlias();
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(*expr,
@@ -37,7 +37,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	// get physical storage index of the filter
 	// since it is a table filter, every storage index is the same
 	idx_t physical_index = DConstants::INVALID_INDEX;
-	string column_alias;
+	Identifier column_alias;
 	GetColumnIndex(expr_filter.expr, physical_index, column_alias);
 	D_ASSERT(physical_index != DConstants::INVALID_INDEX);
 
@@ -47,10 +47,10 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	// Save original expression for stats update (HandleFilter may modify filter_expr)
 	auto original_expr = expr_filter.expr->Copy();
 
-	auto column_ref = make_uniq<BoundColumnRefExpression>(Identifier(column_alias), stats.GetType(), stats_binding);
+	auto column_ref = make_uniq<BoundColumnRefExpression>(column_alias, stats.GetType(), stats_binding);
 	auto filter_expr = expr_filter.ToExpression(*column_ref);
 	auto propagate_result = HandleFilter(filter_expr);
-	auto colref = make_uniq<BoundReferenceExpression>(Identifier(column_alias), stats.GetType(), physical_index);
+	auto colref = make_uniq<BoundReferenceExpression>(column_alias, stats.GetType(), physical_index);
 
 	// replace BoundColumnRefs with BoundRefs
 	ExpressionFilter::ReplaceExpressionRecursive(filter_expr, *colref, ExpressionType::BOUND_COLUMN_REF);

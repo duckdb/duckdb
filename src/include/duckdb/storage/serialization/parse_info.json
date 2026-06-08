@@ -670,7 +670,7 @@
       {
         "id": 205,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -685,7 +685,7 @@
       {
         "id": 200,
         "name": "extensions_to_update",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   },

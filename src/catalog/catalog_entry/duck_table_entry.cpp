@@ -463,7 +463,7 @@ struct StructMappingInfo {
 	ErrorData error;
 };
 
-unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
+unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, Identifier name) {
 	vector<FunctionArgument> children;
 	children.emplace_back(std::move(name), std::move(expr));
 	return make_uniq<FunctionExpression>("struct_pack", std::move(children));
@@ -565,7 +565,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 		} else {
 			default_value = make_uniq<ConstantExpression>(Value(new_field.Type()));
 		}
-		result.default_value = PackExpression(std::move(default_value), new_field.Name().GetIdentifierName());
+		result.default_value = PackExpression(std::move(default_value), new_field.Name());
 		return result;
 	}
 
@@ -583,8 +583,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 			if (type.id() == LogicalTypeId::LIST) {
 				result.default_value = PackExpression(std::move(child_res.default_value), "list");
 			} else {
-				result.default_value =
-				    PackExpression(std::move(child_res.default_value), entry.first.GetIdentifierName());
+				result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
 			}
 			found = true;
 			break;

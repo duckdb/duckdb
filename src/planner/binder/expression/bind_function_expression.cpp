@@ -343,7 +343,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		// Only override the alias when the argument actually carries a name, otherwise we would clobber the
 		// display alias the binding assigned (e.g. clearing a column reference's name to its raw binding).
 		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(Identifier(arg.GetName()));
+			bound_arg->SetAlias(arg.GetName());
 		}
 		if (function.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));

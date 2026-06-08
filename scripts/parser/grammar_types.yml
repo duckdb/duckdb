@@ -601,7 +601,7 @@ MacroParameterList:
     - MacroParameters
 
 StringList:
-  type: "vector<string>"
+  type: "vector<Identifier>"
   by_value: false
   rules:
     - ColumnIdList
@@ -857,20 +857,9 @@ String:
   type: "string"
   by_value: false
   rules:
-    - AttachAlias
     - StringLiteral
     - DropOrSet
-    - SequenceName
-    - CollationName
-    - IndexType
-    - RelOptionName
     - DottedIdentifierString
-    - IndexName
-    - ColId
-    - ColIdOrString
-    - ColLabelOrString
-    - TypeFuncName
-    - Identifier
     - ExportSource
     - ReservedKeyword
     - VersionNumber
@@ -887,22 +876,10 @@ String:
     - Factor
     - ExponentOperator
     - PrefixOperator
-    - TableQualification
-    - ReservedTableQualification
-    - CatalogQualification
-    - SchemaQualification
-    - ReservedSchemaQualification
-    - BaseWindowName
     - Framing
     - AtUnit
-    - InsertAlias
-    - UpdateAlias
-    - TableAliasColon
     - TrimDirection
     - CubeOrRollup
-    - SecretStorageSpecifier
-    - SecretName
-    - TriggerName
     - UpdateAction
     - DeleteAction
     - KeyAction
@@ -911,25 +888,53 @@ String:
     - CascadeKeyAction
     - SetNullKeyAction
     - SetDefaultKeyAction
-    - ReservedIdentifierOrStringLiteral
     - DropSecretStorage
     - SeqMinOrMax
-    - ConstraintName
-    - ExplainOptionName
     - OperatorLiteral
-    - DotIdentifier
-    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
     - OptFreeze
     - OptVerbose
-    - ExtensionAlias
     - ExplainOptionAnalyze
     - DropNullability
     - SetNullability
     - MinValue
     - MaxValue
+
+IdentifierType:
+  type: "Identifier"
+  by_value: false
+  rules:
+    - AttachAlias
+    - SequenceName
+    - CollationName
+    - IndexType
+    - RelOptionName
+    - IndexName
+    - ColId
+    - ColIdOrString
+    - ColLabelOrString
+    - TypeFuncName
+    - Identifier
+    - TableQualification
+    - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
+    - ReservedSchemaQualification
+    - BaseWindowName
+    - InsertAlias
+    - UpdateAlias
+    - TableAliasColon
+    - SecretStorageSpecifier
+    - SecretName
+    - TriggerName
+    - ReservedIdentifierOrStringLiteral
+    - ConstraintName
+    - ExplainOptionName
+    - DotIdentifier
+    - IdentifierDot
+    - ExtensionAlias
     - IdentifierColId
 
 Bool:
@@ -1204,9 +1209,9 @@ overrides:
   BySource: "MergeActionCondition"
   ByTarget: "MergeActionCondition"
   # pivot.gram
-  UnpivotHeader: "vector<string>"
-  UnpivotHeaderSingle: "vector<string>"
-  UnpivotHeaderList: "vector<string>"
+  UnpivotHeader: "vector<Identifier>"
+  UnpivotHeaderSingle: "vector<Identifier>"
+  UnpivotHeaderList: "vector<Identifier>"
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
@@ -1232,8 +1237,8 @@ overrides:
   DescOrAsc: "OrderType"
   NullsFirstOrLast: "OrderByNullType"
   # update.gram
-  UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
-  UpdateSetColumnTarget: "string"
+  UpdateSetElement: "pair<Identifier, unique_ptr<ParsedExpression>>"
+  UpdateSetColumnTarget: "Identifier"
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides

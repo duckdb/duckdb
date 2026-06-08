@@ -19,7 +19,7 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-static string GetSQLValueFunctionName(const Identifier &column_name) {
+static Identifier GetSQLValueFunctionName(const Identifier &column_name) {
 	const auto lcase = StringUtil::Lower(column_name.GetIdentifierName());
 	if (lcase == "current_catalog") {
 		return "current_catalog";
@@ -54,7 +54,7 @@ static string GetSQLValueFunctionName(const Identifier &column_name) {
 	if (lcase == "user") {
 		return "user";
 	}
-	return string();
+	return Identifier();
 }
 
 unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const Identifier &column_name) {
@@ -75,7 +75,7 @@ unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const Identifier &colum
 	}
 
 	vector<unique_ptr<ParsedExpression>> children;
-	return make_uniq<FunctionExpression>(Identifier(value_function), std::move(children));
+	return make_uniq<FunctionExpression>(value_function, std::move(children));
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::CreateStructExtract(unique_ptr<ParsedExpression> base,
@@ -133,7 +133,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	for (const auto &column_name : column_names) {
 		auto ref = binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name,
 		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
-		child_expressions.emplace_back(column_name.GetIdentifierName(), std::move(ref));
+		child_expressions.emplace_back(column_name, std::move(ref));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
@@ -227,10 +227,10 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 	case ExpressionType::POSITIONAL_REFERENCE: {
 		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.GetAlias().empty()) {
-			string table_name, column_name;
+			Identifier table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
 			if (error.empty()) {
-				ref.SetAlias(Identifier(column_name));
+				ref.SetAlias(column_name);
 			}
 		}
 		break;

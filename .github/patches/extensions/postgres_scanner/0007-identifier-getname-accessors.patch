@@ -138,9 +138,18 @@ index 646696b..94f434b 100644
  		auto result = LogicalType::STRUCT(std::move(new_types));
  		result.SetAlias(input.GetAlias());
 diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
-index 866dcab..12942bb 100644
+index 866dcab..e84a08e 100644
 --- a/src/storage/postgres_catalog.cpp
 +++ b/src/storage/postgres_catalog.cpp
+@@ -83,7 +83,7 @@ string EscapeConnectionString(const string &input) {
+ }
+ 
+ string AddConnectionOption(const KeyValueSecret &kv_secret, const string &name) {
+-	Value input_val = kv_secret.TryGetValue(name);
++	Value input_val = kv_secret.TryGetValue(Identifier(name));
+ 	if (input_val.IsNull()) {
+ 		// not provided
+ 		return string();
 @@ -148,7 +148,7 @@ void PostgresCatalog::Initialize(bool load_builtin) {
  
  optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {

@@ -263,7 +263,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
 		if (!arg.GetName().empty()) {
-			bound_arg->SetAlias(Identifier(arg.GetName()));
+			bound_arg->SetAlias(arg.GetName());
 		}
 		if (aggr.IsLegacyFunctionCall()) {
 			arguments.emplace_back(string(), std::move(bound_arg));

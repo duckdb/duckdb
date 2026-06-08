@@ -230,9 +230,8 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(Deserializer &deser
 	auto identifier = deserializer.ReadPropertyWithDefault<duckdb::Identifier>(200, "identifier");
 	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
 	auto parameter_data = deserializer.ReadPropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data");
-	auto result = duckdb::unique_ptr<BoundParameterExpression>(
-	    new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), std::move(identifier),
-	                                 std::move(return_type), std::move(parameter_data)));
+	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(
+	    deserializer.Get<bound_parameter_map_t &>(), identifier, std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 

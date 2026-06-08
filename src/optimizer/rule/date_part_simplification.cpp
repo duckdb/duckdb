@@ -32,7 +32,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));
-	string new_function_name;
+	Identifier new_function_name;
 	switch (specifier) {
 	case DatePartSpecifier::YEAR:
 		new_function_name = "year";
@@ -94,8 +94,8 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 
 	ErrorData error;
 	FunctionBinder binder(rewriter.context);
-	auto function = binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(new_function_name),
-	                                          std::move(children), error, false);
+	auto function =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), new_function_name, std::move(children), error, false);
 	if (!function) {
 		error.Throw();
 	}

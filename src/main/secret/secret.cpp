@@ -101,8 +101,8 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(202, "redact_keys", list);
 }
 
-Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) const {
-	auto lookup = secret_map.find(Identifier(key));
+Value KeyValueSecret::TryGetValue(const Identifier &key, bool error_on_missing) const {
+	auto lookup = secret_map.find(key);
 	if (lookup == secret_map.end()) {
 		if (error_on_missing) {
 			throw InternalException("Failed to fetch key '%s' from secret '%s' of type '%s'", key, name, type);
@@ -185,7 +185,7 @@ KeyValueSecretReader::~KeyValueSecretReader() {
 }
 
 SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const string &secret_key, Value &result) {
-	if (secret && secret->TryGetValue(secret_key, result)) {
+	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	return SettingLookupResult();
@@ -193,7 +193,7 @@ SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const string &secret_k
 
 SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
                                                                    Value &result) {
-	if (secret && secret->TryGetValue(secret_key, result)) {
+	if (secret && secret->TryGetValue(Identifier(secret_key), result)) {
 		return SettingLookupResult(SettingScope::SECRET);
 	}
 	if (context) {

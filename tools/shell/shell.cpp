@@ -2143,8 +2143,8 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
 		if (components.size() >= 2) {
 			// e.g : "schema.table" or "schema.%"
-			schema_filter = "%" + components[0] + "%";
-			table_filter = "%" + components[1] + "%";
+			schema_filter = "%" + components[0].GetIdentifierName() + "%";
+			table_filter = "%" + components[1].GetIdentifierName() + "%";
 		}
 	} catch (const duckdb::ParserException &) {
 		// If parsing fails, treat as a simple table pattern
@@ -2227,8 +2227,8 @@ MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type)
 		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
 		if (components.size() >= 2) {
 			// e.g : "schema.table" or "schema.%"
-			schema_filter = components[0];
-			table_filter = components[1];
+			schema_filter = components[0].GetIdentifierName();
+			table_filter = components[1].GetIdentifierName();
 			// e.g : "schema."
 			if (table_filter.empty()) {
 				table_filter = "%";

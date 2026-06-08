@@ -179,6 +179,8 @@ DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.R
 
 MOVE_LIST = [
     'string',
+    'Identifier',
+    'identifier_set_t',
     'ParsedExpression*',
     'CommonTableExpressionMap',
     'LogicalType',
@@ -328,6 +330,8 @@ supported_member_entries = [
 
 def has_default_by_default(type):
     if is_pointer(type):
+        return True
+    if type == 'identifier_set_t':
         return True
     if is_container(type):
         if 'IndexVector' in type:

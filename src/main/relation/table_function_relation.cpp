@@ -14,12 +14,12 @@
 namespace duckdb {
 
 void TableFunctionRelation::AddNamedParameter(const string &name, Value argument) {
-	named_parameters[name] = std::move(argument);
+	named_parameters[Identifier(name)] = std::move(argument);
 }
 
 void TableFunctionRelation::RemoveNamedParameterIfExists(const string &name) {
-	if (named_parameters.find(name) != named_parameters.end()) {
-		named_parameters.erase(name);
+	if (named_parameters.find(Identifier(name)) != named_parameters.end()) {
+		named_parameters.erase(Identifier(name));
 	}
 }
 
@@ -85,7 +85,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// Hackity-hack some comparisons with column refs
 		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
 		// the function binder likes
-		auto column_ref = make_uniq<ColumnRefExpression>(Identifier(parameter.first));
+		auto column_ref = make_uniq<ColumnRefExpression>(parameter.first);
 		auto constant_value = make_uniq<ConstantExpression>(parameter.second);
 		auto comparison = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
 		                                                  std::move(constant_value));

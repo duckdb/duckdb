@@ -1098,7 +1098,7 @@ optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
 	return optional_idx();
 }
 
-unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
 	if (reader) {
 		return reader->Cast<ParquetReader>().GetStatistics(context, name);
 	}
@@ -1143,7 +1143,7 @@ static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &fil
 	return column_stats;
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name) {
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
 		if (columns[file_col_idx].name == name) {
@@ -1159,12 +1159,12 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
                                                          shared_ptr<ParquetFileMetadataCache> metadata,
-                                                         const string &name) {
+                                                         const Identifier &name) {
 	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
 	return reader.ReadStatistics(name);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const Identifier &name) {
 	const auto &col_names = union_data.names;
 
 	idx_t file_col_idx;

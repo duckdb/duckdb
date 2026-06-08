@@ -415,7 +415,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	return binding->Bind(colref, depth);
 }
 
-string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
+string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name) {
 	idx_t total_columns = 0;
 	idx_t current_position = ref.Index() - 1;
 	for (auto &entry : bindings_list) {
@@ -424,13 +424,13 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 		idx_t entry_column_count = column_names.size();
 		if (ref.Index() == 0) {
 			// this is a row id
-			table_name = binding.GetAlias().GetIdentifierName();
+			table_name = binding.GetAlias();
 			column_name = "rowid";
 			return string();
 		}
 		if (current_position < entry_column_count) {
-			table_name = binding.GetAlias().GetIdentifierName();
-			column_name = column_names[current_position].GetIdentifierName();
+			table_name = binding.GetAlias();
+			column_name = column_names[current_position];
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -441,13 +441,13 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 }
 
 unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
-	string table_name, column_name;
+	Identifier table_name, column_name;
 
 	string error = BindColumn(ref, table_name, column_name);
 	if (!error.empty()) {
 		throw BinderException(error);
 	}
-	return make_uniq<ColumnRefExpression>(Identifier(column_name), Identifier(table_name));
+	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
 struct ExclusionListInfo {
@@ -484,7 +484,7 @@ bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_nam
 	}
 	auto rename_entry = expr.RenameList().find(qualified_name);
 	if (rename_entry != expr.RenameList().end()) {
-		new_expr->SetAlias(Identifier(rename_entry->second));
+		new_expr->SetAlias(rename_entry->second);
 	}
 	return true;
 }

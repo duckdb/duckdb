@@ -170,7 +170,7 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 
 	LogicalType param_type;
 
-	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
+	if (wrapper->statement->data->TryGetType(duckdb::Identifier(identifier), param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
 	// The value_map is gone after executing the prepared statement

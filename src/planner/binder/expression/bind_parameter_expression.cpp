@@ -20,7 +20,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	if (param_data_it != parameter_data.end()) {
 		// it has! emit a constant directly
 		auto &data = param_data_it->second;
-		auto return_type = parameters->GetReturnType(parameter_id.GetIdentifierName());
+		auto return_type = parameters->GetReturnType(parameter_id);
 		bool is_literal =
 		    return_type.id() == LogicalTypeId::INTEGER_LITERAL || return_type.id() == LogicalTypeId::STRING_LITERAL;
 		auto constant = make_uniq<BoundConstantExpression>(data.GetValue());

@@ -7,6 +7,15 @@ map<string, T> order_case_insensitive_map(const case_insensitive_map_t<T> &input
 	return map<string, T>(input_map.begin(), input_map.end());
 }
 
+template <typename T>
+map<string, T> order_case_insensitive_map(const identifier_map_t<T> &input_map) {
+	map<string, T> result;
+	for (auto &entry : input_map) {
+		result[entry.first.GetIdentifierName()] = entry.second;
+	}
+	return result;
+}
+
 void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
                                  QueryErrorContext &error_context, const Identifier &func_name) {
 	for (auto &kv : values) {

@@ -83,8 +83,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
 	}
 	deserializer.Unset<CatalogType>();
-	result->catalog = catalog;
-	result->schema = schema;
+	result->catalog = std::move(catalog);
+	result->schema = std::move(schema);
 	result->temporary = temporary;
 	result->internal = internal;
 	result->on_conflict = on_conflict;
@@ -105,7 +105,7 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions",
 	                                                                          parsed_expressions);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "scan_types", scan_types);
-	serializer.WritePropertyWithDefault<vector<string>>(206, "names", names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(206, "names", names);
 	serializer.WritePropertyWithDefault<vector<column_t>>(207, "column_ids", column_ids);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", options);
 	serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type);
@@ -120,7 +120,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions",
 	                                                                           result->parsed_expressions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "scan_types", result->scan_types);
-	deserializer.ReadPropertyWithDefault<vector<string>>(206, "names", result->names);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(206, "names", result->names);
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(207, "column_ids", result->column_ids);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", result->options);
 	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type);
@@ -142,7 +142,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
 	auto result = duckdb::unique_ptr<CreateMacroInfo>(
 	    new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
-	result->name = name;
+	result->name = std::move(name);
 	return std::move(result);
 }
 
@@ -213,11 +213,11 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseTableRef>>(201, "base_table", base_table);
 	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
 	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
-	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(206, "columns", columns);
 	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
-	serializer.WritePropertyWithDefault<string>(209, "referencing_new_table", referencing_new_table);
-	serializer.WritePropertyWithDefault<string>(210, "referencing_old_table", referencing_old_table);
+	serializer.WritePropertyWithDefault<Identifier>(209, "referencing_new_table", referencing_new_table);
+	serializer.WritePropertyWithDefault<Identifier>(210, "referencing_old_table", referencing_old_table);
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
@@ -227,11 +227,11 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
 	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
 	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
-	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(206, "columns", result->columns);
 	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
-	deserializer.ReadPropertyWithDefault<string>(209, "referencing_new_table", result->referencing_new_table);
-	deserializer.ReadPropertyWithDefault<string>(210, "referencing_old_table", result->referencing_old_table);
+	deserializer.ReadPropertyWithDefault<Identifier>(209, "referencing_new_table", result->referencing_new_table);
+	deserializer.ReadPropertyWithDefault<Identifier>(210, "referencing_old_table", result->referencing_old_table);
 	return std::move(result);
 }
 
@@ -275,7 +275,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	    206, "column_comments_map", identifier_map_t<Value>());
 	auto result = duckdb::unique_ptr<CreateViewInfo>(
 	    new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
-	result->view_name = view_name;
+	result->view_name = std::move(view_name);
 	result->aliases = std::move(aliases);
 	result->types = std::move(types);
 	result->query = std::move(query);

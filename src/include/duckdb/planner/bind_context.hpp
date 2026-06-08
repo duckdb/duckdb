@@ -60,7 +60,7 @@ public:
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
-	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
+	string BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(TableBinding &table_binding, const Identifier &column_name);

@@ -127,8 +127,8 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 	auto identifier_list = ExtractParseResultsFromList(extract_parens);
 	ColumnList result;
 	for (auto identifier : identifier_list) {
-		result.AddColumn(ColumnDefinition(Identifier(identifier.get().Cast<IdentifierParseResult>().identifier),
-		                                  LogicalType::UNKNOWN));
+		result.AddColumn(
+		    ColumnDefinition(identifier.get().Cast<IdentifierParseResult>().identifier, LogicalType::UNKNOWN));
 	}
 	return result;
 }
@@ -202,7 +202,7 @@ QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTrans
 	result.catalog = Identifier::InvalidCatalog();
 	result.schema = Identifier::InvalidSchema();
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
-		result.name = Identifier(choice_pr.GetResult().Cast<IdentifierParseResult>().identifier);
+		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
 		result.name = Identifier(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
@@ -210,39 +210,39 @@ QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTrans
 	return result;
 }
 
-string PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer, ParseResult &parse_result) {
+Identifier PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<string>(choice_pr.GetResult());
+	return Identifier(transformer.Transform<string>(choice_pr.GetResult()));
 }
 
-string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {
+Identifier PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+		return Identifier(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
 	}
-	return transformer.Transform<string>(choice_pr.GetResult());
+	return Identifier(transformer.Transform<string>(choice_pr.GetResult()));
 }
 
-string PEGTransformerFactory::TransformColId(PEGTransformer &transformer, ParseResult &parse_result) {
+Identifier PEGTransformerFactory::TransformColId(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
 		return choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
-	return transformer.Transform<string>(choice_pr.GetResult());
+	return Identifier(transformer.Transform<string>(choice_pr.GetResult()));
 }
 
-string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {
+Identifier PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
-vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
+vector<Identifier> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> parts;
+	vector<Identifier> parts;
 
 	parts.push_back(list_pr.Child<IdentifierParseResult>(0).identifier);
 
@@ -251,7 +251,7 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 		auto &repeat_elements = optional_elements.GetResult().Cast<RepeatParseResult>();
 		for (auto &child_ref : repeat_elements.GetChildren()) {
 			auto &sub_list = child_ref.get().Cast<ListParseResult>();
-			parts.push_back(transformer.Transform<string>(sub_list.GetChild(1)));
+			parts.push_back(transformer.Transform<Identifier>(sub_list.GetChild(1)));
 		}
 	}
 	return parts;
@@ -268,7 +268,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
-	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
+	auto dotted_identifier = transformer.Transform<vector<Identifier>>(list_pr.Child<ListParseResult>(0));
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
 	auto &type_opt = list_pr.Child<OptionalParseResult>(1);
 	auto &generated_opt = list_pr.Child<OptionalParseResult>(2);
@@ -462,13 +462,13 @@ vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &tran
 	return result;
 }
 
-string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer, ParseResult &parse_result) {
+Identifier PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.type == ParseResultType::IDENTIFIER) {
 		return choice_pr.Cast<IdentifierParseResult>().identifier;
 	}
-	return transformer.Transform<string>(choice_pr);
+	return Identifier(transformer.Transform<string>(choice_pr));
 }
 
 ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTransformer &transformer,

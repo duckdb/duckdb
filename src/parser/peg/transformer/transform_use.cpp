@@ -21,7 +21,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.name = Identifier(choice_result.Cast<IdentifierParseResult>().identifier);
+		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -29,20 +29,20 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
-                                                                     const string &catalog_name,
-                                                                     const string &reserved_schema_name,
-                                                                     const vector<string> &dot_identifier) {
+                                                                     const Identifier &catalog_name,
+                                                                     const Identifier &reserved_schema_name,
+                                                                     const vector<Identifier> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;
 	result.catalog = Identifier::InvalidCatalog();
-	result.schema = Identifier(catalog_name);
-	result.name = Identifier(reserved_schema_name);
+	result.schema = catalog_name;
+	result.name = reserved_schema_name;
 	return result;
 }
 
-string PEGTransformerFactory::TransformDotIdentifier(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformDotIdentifier(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 } // namespace duckdb

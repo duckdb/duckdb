@@ -78,10 +78,10 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 }
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    const string &copy_option_name,
+                                                                    const Identifier &copy_option_name,
                                                                     GenericCopyOptionValue generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = StringUtil::Lower(copy_option_name);
+	copy_option.name = StringUtil::Lower(copy_option_name.GetIdentifierName());
 	if (!generic_copy_option_value.has_value) {
 		return copy_option;
 	}

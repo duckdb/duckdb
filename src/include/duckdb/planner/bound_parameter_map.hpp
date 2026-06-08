@@ -25,7 +25,7 @@ public:
 	explicit BoundParameterMap(identifier_map_t<BoundParameterData> &parameter_data);
 
 public:
-	LogicalType GetReturnType(const string &identifier);
+	LogicalType GetReturnType(const Identifier &identifier);
 
 	bound_parameter_map_t *GetParametersPtr();
 

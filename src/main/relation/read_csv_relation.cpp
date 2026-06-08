@@ -61,7 +61,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 				throw BinderException(exception.error_message);
 			}
 			for (idx_t i = 0; i < names.size(); i++) {
-				auto it = csv_options.sql_types_per_column.find(Identifier(names[i]));
+				auto it = csv_options.sql_types_per_column.find(names[i]);
 				if (it != csv_options.sql_types_per_column.end()) {
 					types[i] = csv_options.sql_type_list[it->second];
 				}
@@ -69,7 +69,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		}
 		D_ASSERT(names.size() == types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
-			columns.emplace_back(Identifier(names[i]), types[i]);
+			columns.emplace_back(names[i], types[i]);
 		}
 	} else {
 		if (csv_options.auto_detect) {

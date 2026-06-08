@@ -146,7 +146,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			if (!options.sql_types_per_column.empty()) {
-				if (options.sql_types_per_column.find(Identifier(names[i])) != options.sql_types_per_column.end()) {
+				if (options.sql_types_per_column.find(names[i]) != options.sql_types_per_column.end()) {
 					continue;
 				}
 			} else if (i < options.sql_type_list.size()) {
@@ -203,7 +203,7 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 				throw BinderException(exception.error_message);
 			}
 			for (idx_t i = 0; i < names.size(); i++) {
-				auto it = options.sql_types_per_column.find(Identifier(names[i]));
+				auto it = options.sql_types_per_column.find(names[i]);
 				if (it != options.sql_types_per_column.end()) {
 					return_types[i] = options.sql_type_list[it->second];
 				}

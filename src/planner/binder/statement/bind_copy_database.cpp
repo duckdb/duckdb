@@ -107,8 +107,8 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	BoundStatement result;
 
 	unique_ptr<LogicalOperator> plan;
-	auto &source_catalog = Catalog::GetCatalog(context, Identifier(stmt.from_database));
-	auto &target_catalog = Catalog::GetCatalog(context, Identifier(stmt.to_database));
+	auto &source_catalog = Catalog::GetCatalog(context, stmt.from_database);
+	auto &target_catalog = Catalog::GetCatalog(context, stmt.to_database);
 	if (&source_catalog == &target_catalog) {
 		throw BinderException("Cannot copy from \"%s\" to \"%s\" - FROM and TO databases are the same",
 		                      stmt.from_database, stmt.to_database);

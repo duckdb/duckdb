@@ -5,6 +5,6 @@
 namespace duckdb {
 struct TriggerEventInfo {
 	TriggerEventType event_type;
-	vector<string> columns;
+	vector<Identifier> columns;
 };
 } // namespace duckdb

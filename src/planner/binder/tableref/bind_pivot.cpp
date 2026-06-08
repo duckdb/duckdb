@@ -155,7 +155,7 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 		for (auto &row : ref.groups) {
 			subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
 			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery->select_list.size() + 1))));
-			subquery->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(row)));
+			subquery->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
 	return subquery;
@@ -639,8 +639,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
 		if (!pivot.pivot_enum.empty()) {
-			auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(
-			    context, Identifier::InvalidCatalog(), Identifier::InvalidSchema(), Identifier(pivot.pivot_enum));
+			auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, Identifier::InvalidCatalog(),
+			                                                       Identifier::InvalidSchema(), pivot.pivot_enum);
 			auto type = type_entry.user_type;
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
@@ -953,7 +953,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<unique_ptr<ParsedExpression>> unnest_name_children;
 	unnest_name_children.push_back(std::move(unpivot_name_list));
 	auto unnest_name_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_name_children));
-	unnest_name_expr->SetAlias(Identifier(unpivot.unpivot_names[0]));
+	unnest_name_expr->SetAlias(unpivot.unpivot_names[0]);
 	result_node->select_list.push_back(std::move(unnest_name_expr));
 
 	for (idx_t i = 0; i < unnest_count; i++) {
@@ -963,13 +963,12 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(unpivot_list_ref));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
-		auto unnest_name =
-		    i < ref.column_name_alias.size() ? ref.column_name_alias[i].GetIdentifierName() : ref.unpivot_names[i];
-		unnest_val_expr->SetAlias(Identifier(unnest_name));
+		auto &unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
+		unnest_val_expr->SetAlias(unnest_name);
 		result_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
 			// if we are running with EXCLUDE NULLS we need to add an IS NOT NULL filter
-			auto colref = make_uniq<ColumnRefExpression>(Identifier(unnest_name));
+			auto colref = make_uniq<ColumnRefExpression>(unnest_name);
 			auto filter = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(colref));
 			if (where_clause) {
 				where_clause = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,

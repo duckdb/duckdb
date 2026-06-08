@@ -139,7 +139,7 @@ public:
 	}
 	string StoredPath() const;
 	static bool NameIsReserved(const Identifier &name);
-	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);

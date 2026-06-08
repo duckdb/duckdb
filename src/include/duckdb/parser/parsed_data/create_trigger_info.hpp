@@ -27,13 +27,13 @@ struct CreateTriggerInfo : public CreateInfo {
 	//! The event that fires the trigger (INSERT/DELETE/UPDATE)
 	TriggerEventType event_type;
 	//! Columns for UPDATE OF
-	vector<string> columns;
+	vector<Identifier> columns;
 	//! Whether this fires FOR EACH ROW or FOR EACH STATEMENT
 	TriggerForEach for_each;
 	//! Alias for the NEW TABLE transition table (REFERENCING NEW TABLE AS <alias>)
-	string referencing_new_table;
+	Identifier referencing_new_table;
 	//! Alias for the OLD TABLE transition table (REFERENCING OLD TABLE AS <alias>)
-	string referencing_old_table;
+	Identifier referencing_old_table;
 	//! The trigger action (INSERT/UPDATE/DELETE as QueryNode)
 	unique_ptr<QueryNode> trigger_action;
 

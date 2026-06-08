@@ -24,9 +24,9 @@ void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamTy
 	}
 }
 
-bool PEGTransformer::GetParam(const string &identifier, idx_t &index, PreparedParamType type) {
+bool PEGTransformer::GetParam(const Identifier &identifier, idx_t &index, PreparedParamType type) {
 	ParamTypeCheck(last_param_type, type);
-	auto entry = named_parameter_map.find(Identifier(identifier));
+	auto entry = named_parameter_map.find(identifier);
 	if (entry == named_parameter_map.end()) {
 		return false;
 	}
@@ -34,11 +34,11 @@ bool PEGTransformer::GetParam(const string &identifier, idx_t &index, PreparedPa
 	return true;
 }
 
-void PEGTransformer::SetParam(const string &identifier, idx_t index, PreparedParamType type) {
+void PEGTransformer::SetParam(const Identifier &identifier, idx_t index, PreparedParamType type) {
 	ParamTypeCheck(last_param_type, type);
 	last_param_type = type;
 	D_ASSERT(!named_parameter_map.count(identifier));
-	named_parameter_map[Identifier(identifier)] = index;
+	named_parameter_map[identifier] = index;
 }
 
 void PEGTransformer::ClearParameters() {
@@ -149,7 +149,7 @@ bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary e
 	return start_is_default && end_is_default;
 }
 
-unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name) {
+unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &window_name) {
 	auto it = window_clauses.find(string(window_name));
 	if (it == window_clauses.end()) {
 		throw ParserException("window \"%s\" does not exist", window_name);

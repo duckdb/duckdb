@@ -27,7 +27,7 @@ public:
 	bool repo_is_alias;
 	string version;
 	LoadType load_type;
-	string alias;
+	Identifier alias;
 
 public:
 	unique_ptr<LoadInfo> Copy() const;

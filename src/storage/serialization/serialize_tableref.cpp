@@ -55,7 +55,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	default:
 		throw SerializationException("Unsupported type for deserialization of TableRef!");
 	}
-	result->alias = alias;
+	result->alias = std::move(alias);
 	result->sample = std::move(sample);
 	result->query_location = query_location;
 	return result;
@@ -166,9 +166,9 @@ void PivotRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "aggregates", aggregates);
-	serializer.WritePropertyWithDefault<vector<string>>(202, "unpivot_names", unpivot_names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "unpivot_names", unpivot_names);
 	serializer.WritePropertyWithDefault<vector<PivotColumn>>(203, "pivots", pivots);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "groups", groups);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(204, "groups", groups);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(205, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<bool>(206, "include_nulls", include_nulls);
 }
@@ -177,9 +177,9 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<PivotRef>(new PivotRef());
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "source", result->source);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "aggregates", result->aggregates);
-	deserializer.ReadPropertyWithDefault<vector<string>>(202, "unpivot_names", result->unpivot_names);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "unpivot_names", result->unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumn>>(203, "pivots", result->pivots);
-	deserializer.ReadPropertyWithDefault<vector<string>>(204, "groups", result->groups);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(205, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<bool>(206, "include_nulls", result->include_nulls);
 	return std::move(result);

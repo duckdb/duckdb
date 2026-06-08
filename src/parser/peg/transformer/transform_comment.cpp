@@ -6,24 +6,23 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTransformer &transformer,
                                                                           const CatalogType &comment_on_type,
-                                                                          const vector<string> &dotted_identifier,
+                                                                          const vector<Identifier> &dotted_identifier,
                                                                           const Value &comment_value) {
 	auto result = make_uniq<AlterStatement>();
 	unique_ptr<AlterInfo> info;
 
-	string column_name;
+	Identifier column_name;
 	if (comment_on_type == CatalogType::INVALID) {
 		// Column type returned
 		auto identifier = dotted_identifier;
 		column_name = identifier.back();
 		identifier.pop_back();
 		if (identifier.empty()) {
-			throw ParserException("Invalid column reference: '%s'", column_name);
+			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
-		info =
-		    make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
-		                                    Identifier(column_name), comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
+		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
 	} else if (comment_on_type == CatalogType::SCHEMA_ENTRY) {

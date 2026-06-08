@@ -1103,9 +1103,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			for (idx_t i = 0; i < rhs_rowid_columns.size(); i++) {
 				auto &rowid_column = rhs_rowid_columns[i];
-				op.expressions.push_back(
-				    make_uniq<BoundColumnRefExpression>(Identifier(rowid_column.name), rowid_column.type,
-				                                        ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
+				op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+				    rowid_column.name, rowid_column.type, ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
 				rhs_rowid_idxs[i] = ProjectionIndex(op.expressions.size() - 1);
 			}
 			last_table_idx = op.GetTableIndex()[0];
@@ -1152,8 +1151,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	// Change args to project rowid
 	args.clear();
 	for (idx_t i = 0; i < rhs_rowid_columns.size(); i++) {
-		args.push_back(make_uniq<BoundColumnRefExpression>(Identifier(rhs_rowid_columns[i].name),
-		                                                   rhs_rowid_columns[i].type,
+		args.push_back(make_uniq<BoundColumnRefExpression>(rhs_rowid_columns[i].name, rhs_rowid_columns[i].type,
 		                                                   ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
 	}
 

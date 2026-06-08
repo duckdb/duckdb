@@ -23,14 +23,14 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
-    PEGTransformer &transformer, const bool &if_not_exists, const string &trigger_name,
+    PEGTransformer &transformer, const bool &if_not_exists, const Identifier &trigger_name,
     const TriggerTiming &trigger_timing, const TriggerEventInfo &trigger_event,
     unique_ptr<BaseTableRef> base_table_name, const TriggerTableReferencingInfo &referencing_clause,
     const TriggerForEach &for_each_clause, unique_ptr<SQLStatement> trigger_body) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->trigger_name = Identifier(trigger_name);
+	info->trigger_name = trigger_name;
 	info->timing = trigger_timing;
 	info->event_type = trigger_event.event_type;
 	info->columns = trigger_event.columns;
@@ -43,7 +43,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
 	return result;
 }
 
-string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
@@ -93,27 +93,27 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdate(PEGTransform
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransformer &transformer,
-                                                                      const vector<string> &trigger_column_list) {
+                                                                      const vector<Identifier> &trigger_column_list) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::UPDATE_EVENT;
 	result.columns = trigger_column_list;
 	return result;
 }
 
-vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
-                                                                 const vector<string> &col_id) {
+vector<Identifier> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
+                                                                     const vector<Identifier> &col_id) {
 	return col_id;
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer,
-                                                                                  const string &col_id) {
+                                                                                  const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
 	info.new_table = col_id;
 	return info;
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingOldTableAs(PEGTransformer &transformer,
-                                                                                  const string &col_id) {
+                                                                                  const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
 	info.old_table = col_id;
 	return info;

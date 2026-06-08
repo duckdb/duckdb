@@ -8,9 +8,9 @@ BoundParameterMap::BoundParameterMap(identifier_map_t<BoundParameterData> &param
     : parameter_data(parameter_data) {
 }
 
-LogicalType BoundParameterMap::GetReturnType(const string &identifier) {
+LogicalType BoundParameterMap::GetReturnType(const Identifier &identifier) {
 	D_ASSERT(!identifier.empty());
-	auto it = parameter_data.find(Identifier(identifier));
+	auto it = parameter_data.find(identifier);
 	if (it == parameter_data.end()) {
 		return LogicalTypeId::UNKNOWN;
 	}
@@ -34,7 +34,7 @@ shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const Identifi
 	if (entry == parameters.end()) {
 		// no entry yet: create a new one
 		auto data = make_shared_ptr<BoundParameterData>();
-		data->return_type = GetReturnType(identifier.GetIdentifierName());
+		data->return_type = GetReturnType(identifier);
 
 		CreateNewParameter(identifier.GetIdentifierName(), data);
 		return data;
@@ -56,7 +56,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	bound_expr->SetAlias(expr.GetAlias());
 
 	auto param_type = param_data->return_type;
-	auto identifier_type = GetReturnType(identifier.GetIdentifierName());
+	auto identifier_type = GetReturnType(identifier);
 
 	// we found a type for this bound parameter, but now we found another occurrence with the same identifier,
 	// a CAST around this consecutive occurrence might swallow the unknown type of this consecutive occurrence,

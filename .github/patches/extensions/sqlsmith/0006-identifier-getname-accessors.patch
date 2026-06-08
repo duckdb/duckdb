@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 84d44d5..83e7b75 100644
+index 84d44d5..c56c209 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -71,10 +71,10 @@ std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientCon
@@ -136,6 +136,15 @@ index 84d44d5..83e7b75 100644
  	return std::move(result);
  }
  
+@@ -569,7 +569,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
+ 	for (idx_t i = 0; i < table_function.GetArguments().size(); i++) {
+ 		children.push_back(GenerateConstant());
+ 	}
+-	vector<string> names;
++	vector<Identifier> names;
+ 	for (auto &e : table_function.named_parameters) {
+ 		names.push_back(e.first);
+ 	}
 @@ -577,14 +577,14 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
  		auto name = Choose(names);
  		names.erase(std::find(names.begin(), names.end(), name));
@@ -154,6 +163,30 @@ index 84d44d5..83e7b75 100644
  	return std::move(result);
  }
  
+@@ -602,12 +602,12 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
+ 			}
+ 		}
+ 		while (RandomPercentage(50)) {
+-			pivot->groups.push_back(GenerateColumnName());
++			pivot->groups.push_back(Identifier(GenerateColumnName()));
+ 		}
+ 	} else {
+ 		// unpivot
+ 		while (true) {
+-			pivot->unpivot_names.push_back(GenerateColumnName());
++			pivot->unpivot_names.push_back(Identifier(GenerateColumnName()));
+ 			if (RandomPercentage(50)) {
+ 				break;
+ 			}
+@@ -621,7 +621,7 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
+ 			if (is_pivot) {
+ 				col.pivot_expressions.push_back(GenerateExpression());
+ 			} else {
+-				col.unpivot_names.push_back(GenerateColumnName());
++				col.unpivot_names.push_back(Identifier(GenerateColumnName()));
+ 			}
+ 		}
+ 		while (true) {
 @@ -730,7 +730,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateColumnRef() {
  	if (column_name.empty()) {
  		return GenerateConstant();

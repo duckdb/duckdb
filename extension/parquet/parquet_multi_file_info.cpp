@@ -670,7 +670,7 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return ReadStatistics(name);
 }
 

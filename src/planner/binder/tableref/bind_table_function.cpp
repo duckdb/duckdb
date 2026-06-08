@@ -99,7 +99,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 	}
 	bool seen_subquery = false;
 	for (auto &child : expressions) {
-		string parameter_name;
+		Identifier parameter_name;
 
 		// hack to make named parameters work
 		if (child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
@@ -108,13 +108,13 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			if (comp.Left().GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = comp.Left().Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
-					parameter_name = colref.GetColumnName().GetIdentifierName();
+					parameter_name = colref.GetColumnName();
 					child = std::move(comp.RightMutable());
 				}
 			}
 		} else if (!child->GetAlias().empty()) {
 			// <name> => <expression> will set the alias of <expression> to <name>
-			parameter_name = child->GetAlias().GetIdentifierName();
+			parameter_name = child->GetAlias();
 		}
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {

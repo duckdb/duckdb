@@ -194,7 +194,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 
 	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()
-	Value TryGetValue(const string &key, bool error_on_missing = false) const;
+	Value TryGetValue(const Identifier &key, bool error_on_missing = false) const;
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
@@ -222,8 +222,8 @@ public:
 	}
 
 	// Get a value from the secret
-	bool TryGetValue(const string &key, Value &result) const {
-		auto lookup = secret_map.find(Identifier(key));
+	bool TryGetValue(const Identifier &key, Value &result) const {
+		auto lookup = secret_map.find(key);
 		if (lookup == secret_map.end()) {
 			return false;
 		}
@@ -231,10 +231,10 @@ public:
 		return true;
 	}
 
-	bool TrySetValue(const string &key, const CreateSecretInput &input) {
-		auto lookup = input.options.find(key);
+	bool TrySetValue(const Identifier &key, const CreateSecretInput &input) {
+		auto lookup = input.options.find(key.GetIdentifierName());
 		if (lookup != input.options.end()) {
-			secret_map[Identifier(key)] = lookup->second;
+			secret_map[key] = lookup->second;
 			return true;
 		}
 		return false;

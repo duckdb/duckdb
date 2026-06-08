@@ -3,7 +3,7 @@
 
 namespace duckdb {
 struct UnpivotNameValues {
-	vector<string> unpivot_names;
+	vector<Identifier> unpivot_names;
 	PivotColumn column;
 };
 } // namespace duckdb

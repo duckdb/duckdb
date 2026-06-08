@@ -217,7 +217,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression");
 	auto category = deserializer.ReadProperty<TableColumnType>(103, "category");
-	ColumnDefinition result(name, std::move(type), std::move(expression), category);
+	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "comment", result.comment, Value());
 	deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(
@@ -359,12 +359,12 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 }
 
 void FunctionArgument::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", expression);
 }
 
 FunctionArgument FunctionArgument::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(100, "name");
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression");
 	FunctionArgument result(std::move(name), std::move(expression));
 	return result;
@@ -456,19 +456,19 @@ OrderByNode OrderByNode::Deserialize(Deserializer &deserializer) {
 void PivotColumn::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
 	                                                                          pivot_expressions);
-	serializer.WritePropertyWithDefault<vector<string>>(101, "unpivot_names", unpivot_names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(101, "unpivot_names", unpivot_names);
 	serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries",
 	                                                              GetEntriesForSerialization(serializer));
-	serializer.WritePropertyWithDefault<string>(103, "pivot_enum", pivot_enum);
+	serializer.WritePropertyWithDefault<Identifier>(103, "pivot_enum", pivot_enum);
 }
 
 PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	PivotColumn result;
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions",
 	                                                                           result.pivot_expressions);
-	deserializer.ReadPropertyWithDefault<vector<string>>(101, "unpivot_names", result.unpivot_names);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(101, "unpivot_names", result.unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
-	deserializer.ReadPropertyWithDefault<string>(103, "pivot_enum", result.pivot_enum);
+	deserializer.ReadPropertyWithDefault<Identifier>(103, "pivot_enum", result.pivot_enum);
 	return result;
 }
 
@@ -791,12 +791,12 @@ StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 }
 
 void TableColumn::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
 	serializer.WriteProperty<LogicalType>(101, "type", type);
 }
 
 TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(100, "name");
 	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
 	TableColumn result(std::move(name), std::move(type));
 	return result;

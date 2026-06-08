@@ -56,7 +56,7 @@ index d7bddc5e..89192115 100644
  }
  
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
-index 13f8ace3..353469ac 100644
+index 13f8ace3..80770331 100644
 --- a/src/functions/ducklake_add_data_files.cpp
 +++ b/src/functions/ducklake_add_data_files.cpp
 @@ -43,7 +43,8 @@ static unique_ptr<FunctionData> DuckLakeAddDataFilesBind(ClientContext &context,
@@ -69,6 +69,35 @@ index 13f8ace3..353469ac 100644
  	auto &table = entry->Cast<DuckLakeTableEntry>();
  
  	auto result = make_uniq<DuckLakeAddDataFilesData>(catalog, table);
+@@ -62,7 +63,7 @@ static unique_ptr<FunctionData> DuckLakeAddDataFilesBind(ClientContext &context,
+ 		throw InvalidInputException("File list must be a string or a list of strings");
+ 	}
+ 	for (auto &entry : input.named_parameters) {
+-		auto lower = StringUtil::Lower(entry.first);
++		auto lower = StringUtil::Lower(entry.first.GetIdentifierName());
+ 		if (lower == "allow_missing") {
+ 			result->allow_missing = BooleanValue::Get(entry.second);
+ 		} else if (lower == "ignore_extra_columns") {
+diff --git a/src/functions/ducklake_cleanup_files.cpp b/src/functions/ducklake_cleanup_files.cpp
+index 7a1cfaa5..0a842fb5 100644
+--- a/src/functions/ducklake_cleanup_files.cpp
++++ b/src/functions/ducklake_cleanup_files.cpp
+@@ -62,12 +62,11 @@ static unique_ptr<FunctionData> CleanupBind(ClientContext &context, TableFunctio
+ 	bool has_timestamp = false;
+ 	bool cleanup_all = false;
+ 	for (auto &entry : input.named_parameters) {
+-		if (StringUtil::CIEquals(entry.first, "dry_run")) {
++		if (entry.first == "dry_run") {
+ 			result->dry_run = entry.second.GetValue<bool>();
+-			;
+-		} else if (StringUtil::CIEquals(entry.first, "cleanup_all")) {
++		} else if (entry.first == "cleanup_all") {
+ 			cleanup_all = entry.second.GetValue<bool>();
+-		} else if (StringUtil::CIEquals(entry.first, "older_than")) {
++		} else if (entry.first == "older_than") {
+ 			from_timestamp = entry.second.GetValue<timestamp_tz_t>();
+ 			has_timestamp = true;
+ 		} else {
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
 index 1803b084..5fa6e62e 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
@@ -129,6 +158,31 @@ index 1803b084..5fa6e62e 100644
  		dl_schema = &schema_catalog->Cast<DuckLakeSchemaEntry>();
  		auto_compact = ducklake_catalog.GetConfigOption<string>("auto_compact", dl_schema.get()->GetSchemaId(),
  		                                                        ducklake_table.GetTableId(), "true") == "true";
+diff --git a/src/functions/ducklake_expire_snapshots.cpp b/src/functions/ducklake_expire_snapshots.cpp
+index 071b993f..f06cc86c 100644
+--- a/src/functions/ducklake_expire_snapshots.cpp
++++ b/src/functions/ducklake_expire_snapshots.cpp
+@@ -31,9 +31,9 @@ static unique_ptr<FunctionData> DuckLakeExpireSnapshotsBind(ClientContext &conte
+ 	const auto older_than_default = ducklake_catalog.GetConfigOption<string>("expire_older_than", {}, {}, "");
+ 
+ 	for (auto &entry : input.named_parameters) {
+-		if (StringUtil::CIEquals(entry.first, "dry_run")) {
++		if (entry.first == "dry_run") {
+ 			result->dry_run = BooleanValue::Get(entry.second);
+-		} else if (StringUtil::CIEquals(entry.first, "versions")) {
++		} else if (entry.first == "versions") {
+ 			has_versions = true;
+ 			for (auto &snapshot_id : ListValue::GetChildren(entry.second)) {
+ 				if (!snapshot_list.empty()) {
+@@ -41,7 +41,7 @@ static unique_ptr<FunctionData> DuckLakeExpireSnapshotsBind(ClientContext &conte
+ 				}
+ 				snapshot_list += snapshot_id.ToString();
+ 			}
+-		} else if (StringUtil::CIEquals(entry.first, "older_than")) {
++		} else if (entry.first == "older_than") {
+ 			from_timestamp = entry.second.GetValue<timestamp_tz_t>();
+ 			has_timestamp = true;
+ 		} else {
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
 index 216fedc0..7d25de45 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp

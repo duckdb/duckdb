@@ -153,6 +153,19 @@ index fea00b5..5772b79 100644
  	if (!db) {
  		throw BinderException("Failed to find attached database \"%s\" referenced in mysql_query", db_name);
  	}
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index af9ffd7..eba682f 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -54,7 +54,7 @@ string AddConnectionOption(const KeyValueSecret &kv_secret, const string &name,
+ 		// option already provided in connection string
+ 		return string();
+ 	}
+-	Value input_val = kv_secret.TryGetValue(name);
++	Value input_val = kv_secret.TryGetValue(Identifier(name));
+ 	if (input_val.IsNull()) {
+ 		// not provided
+ 		return string();
 diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
 index 8b8dd64..1aaf5d8 100644
 --- a/src/storage/mysql_catalog_set.cpp

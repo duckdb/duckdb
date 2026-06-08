@@ -142,22 +142,20 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 		if (has_dateformat && type.id() == LogicalTypeId::DATE) {
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(
-			    make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(Identifier(name), type, i)));
+			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else if (has_timestampformat && is_timestamp) {
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(
-			    make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(Identifier(name), type, i)));
+			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else {
 			// CAST <name> AS VARCHAR
-			auto column = make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(Identifier(name), type, i));
+			auto column = make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i));
 			auto expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(column));
 			unbound_expressions.push_back(std::move(expr));
 		}

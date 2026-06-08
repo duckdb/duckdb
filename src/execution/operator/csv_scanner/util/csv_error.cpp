@@ -300,9 +300,9 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 
 CSVError CSVError::ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<Identifier> &names) {
 	for (idx_t i = 0; i < names.size(); i++) {
-		auto it = sql_types_per_column.find(Identifier(names[i]));
+		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {
-			sql_types_per_column.erase(Identifier(names[i]));
+			sql_types_per_column.erase(names[i]);
 		}
 	}
 	if (sql_types_per_column.empty()) {

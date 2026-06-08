@@ -5,11 +5,11 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatement(PEGTransformer &transformer,
                                                                          const bool &if_exists,
-                                                                         const string &catalog_name) {
+                                                                         const Identifier &catalog_name) {
 	auto result = make_uniq<DetachStatement>();
 	auto info = make_uniq<DetachInfo>();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	info->name = Identifier(catalog_name);
+	info->name = catalog_name;
 	result->info = std::move(info);
 	return std::move(result);
 }

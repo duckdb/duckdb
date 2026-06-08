@@ -290,7 +290,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	// We cast the passed parameters
 	for (const auto &param : info.options) {
-		auto matched_param = function->named_parameters.find(param.first);
+		auto matched_param = function->named_parameters.find(Identifier(param.first));
 		if (matched_param == function->named_parameters.end()) {
 			throw BinderException("Unknown parameter '%s' for secret type '%s' with %sprovider '%s'", param.first, type,
 			                      default_string, provider);
@@ -304,7 +304,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 			                      matched_param->second.ToString(), error_msg);
 		}
 
-		bound_info.options[matched_param->first] = {cast_value};
+		bound_info.options[matched_param->first.GetIdentifierName()] = {cast_value};
 	}
 
 	BoundStatement result;

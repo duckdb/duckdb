@@ -71,10 +71,10 @@ PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
 }
 
 GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &transformer,
-                                                                const string &explain_option_name,
+                                                                const Identifier &explain_option_name,
                                                                 unique_ptr<ParsedExpression> expression) {
 	GenericCopyOption copy_option;
-	copy_option.name = StringUtil::Lower(explain_option_name);
+	copy_option.name = StringUtil::Lower(explain_option_name.GetIdentifierName());
 	if (!expression) {
 		return copy_option;
 	}

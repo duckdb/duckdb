@@ -34,16 +34,16 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 	names.emplace_back("free_list");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::BIGINT));
 
-	string db_name;
+	Identifier db_name;
 	if (input.inputs.empty()) {
-		db_name = DatabaseManager::GetDefaultDatabase(context).GetIdentifierName();
+		db_name = DatabaseManager::GetDefaultDatabase(context);
 	} else {
 		if (input.inputs[0].IsNull()) {
 			throw BinderException("Database argument for pragma_metadata_info cannot be NULL");
 		}
-		db_name = StringValue::Get(input.inputs[0]);
+		db_name = Identifier(StringValue::Get(input.inputs[0]));
 	}
-	auto &catalog = Catalog::GetCatalog(context, Identifier(db_name));
+	auto &catalog = Catalog::GetCatalog(context, db_name);
 	auto result = make_uniq<PragmaMetadataFunctionData>();
 	result->metadata_info = catalog.GetMetadataInfo(context);
 	return std::move(result);

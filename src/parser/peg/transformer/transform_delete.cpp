@@ -22,9 +22,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformTargetOptAlias(PEGTransformer &transformer,
                                                                         unique_ptr<BaseTableRef> base_table_name,
-                                                                        const string &col_id) {
+                                                                        const Identifier &col_id) {
 	if (!col_id.empty()) {
-		base_table_name->alias = Identifier(col_id);
+		base_table_name->alias = col_id;
 	}
 	return base_table_name;
 }

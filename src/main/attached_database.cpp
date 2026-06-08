@@ -202,15 +202,15 @@ static string RemoveQueryParams(const string &name) {
 	return vec[0];
 }
 
-string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
+Identifier AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
-		return "memory";
+		return Identifier("memory");
 	}
 	auto name = RemoveQueryParams(fs.ExtractBaseName(dbpath));
 	if (NameIsReserved(Identifier(name))) {
 		name += "_db";
 	}
-	return name;
+	return Identifier(name);
 }
 
 void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db, ClientContext &context) {

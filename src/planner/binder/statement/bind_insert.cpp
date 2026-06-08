@@ -472,7 +472,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		auto select_node = make_uniq<SelectNode>();
 		auto distinct = make_uniq<DistinctModifier>();
 		for (auto &col : distinct_on_columns) {
-			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(Identifier(col)));
+			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
 		}
 		select_node->modifiers.push_back(std::move(distinct));
 		select_node->select_list.push_back(make_uniq<StarExpression>());

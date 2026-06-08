@@ -3,7 +3,7 @@
 
 namespace duckdb {
 struct ExtensionRepositoryInfo {
-	string name;
+	Identifier name;
 	bool repository_is_alias = false;
 };
 } // namespace duckdb

@@ -8,7 +8,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTran
                                                                          AnalyzeTarget analyze_target) {
 	auto result = make_uniq<VacuumStatement>(vacuum_options);
 	if (analyze_target.ref) {
-		result->info->columns = StringsToIdentifiers(analyze_target.columns);
+		result->info->columns = analyze_target.columns;
 		result->info->ref = std::move(analyze_target.ref);
 		result->info->has_table = true;
 	}
@@ -57,12 +57,13 @@ VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer
 	return options;
 }
 
-vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, const vector<string> &col_id) {
-	vector<string> result;
-	for (auto &colid : col_id) {
-		result.push_back(colid);
-	}
-	return result;
+string PEGTransformerFactory::TransformVacuumOption(PEGTransformer &transformer, ParseResult &choice_result) {
+	return transformer.Transform<string>(choice_result);
+}
+
+vector<Identifier> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer,
+                                                            const vector<Identifier> &col_id) {
+	return col_id;
 }
 
 string PEGTransformerFactory::TransformOptAnalyze(PEGTransformer &transformer) {

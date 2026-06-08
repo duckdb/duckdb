@@ -201,7 +201,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// create the PREPARE and EXECUTE statements
 		string name = "__duckdb_verification_prepared_statement_" + UUID::ToString(UUID::GenerateRandomUUID());
 		auto prepare = make_uniq<PrepareStatement>();
-		prepare->name = name;
+		prepare->name = Identifier(name);
 		prepare->statement = std::move(prepare_base);
 
 		// execute the PREPARE
@@ -225,7 +225,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// create and return the EXECUTE statement
 		// i.e. EXECUTE p('hello', 42)
 		auto execute = make_uniq<ExecuteStatement>();
-		execute->name = name;
+		execute->name = Identifier(name);
 		execute->named_values = std::move(prep_verifier.values);
 
 		statement = std::move(execute);

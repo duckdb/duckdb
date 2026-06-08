@@ -26,7 +26,7 @@ static SessionTargetCapture TransformSessionTarget(PEGTransformer &transformer, 
 		result.name_is_string_literal = true;
 		break;
 	case ParseResultType::IDENTIFIER:
-		result.name = inner.Cast<IdentifierParseResult>().identifier;
+		result.name = inner.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
 		break;
 	default:
 		throw InternalException("Unexpected SessionTarget alternative type: %s", ParseResultToString(inner.type));

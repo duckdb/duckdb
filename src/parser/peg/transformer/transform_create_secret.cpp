@@ -13,18 +13,17 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 	return Value();
 }
 
-unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists,
-                                                 const string &secret_name, const string &secret_storage_specifier,
-                                                 const vector<GenericCopyOption> &generic_copy_option_list) {
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
+    PEGTransformer &transformer, const bool &if_not_exists, const Identifier &secret_name,
+    const Identifier &secret_storage_specifier, const vector<GenericCopyOption> &generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
 	if (!secret_name.empty()) {
-		info->name = Identifier(secret_name);
+		info->name = secret_name;
 	}
 	if (!secret_storage_specifier.empty()) {
-		info->storage_type = StringUtil::Lower(secret_storage_specifier);
+		info->storage_type = StringUtil::Lower(secret_storage_specifier.GetIdentifierName());
 	}
 	for (const auto &option : generic_copy_option_list) {
 		auto lower_name = StringUtil::Lower(option.name);
@@ -61,11 +60,12 @@ PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, co
 	return result;
 }
 
-string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer,
+                                                                  const Identifier &identifier) {
 	return identifier;
 }
 
-string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, const string &col_id) {
+Identifier PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, const Identifier &col_id) {
 	return col_id;
 }
 

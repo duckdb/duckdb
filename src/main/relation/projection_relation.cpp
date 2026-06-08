@@ -7,7 +7,8 @@
 namespace duckdb {
 
 ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
-                                       vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
+                                       vector<unique_ptr<ParsedExpression>> parsed_expressions,
+                                       vector<Identifier> aliases)
     : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(std::move(parsed_expressions)),
       child(std::move(child_p)) {
 	if (!aliases.empty()) {
@@ -15,7 +16,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
 			throw ParserException("Aliases list length must match expression list length!");
 		}
 		for (idx_t i = 0; i < aliases.size(); i++) {
-			expressions[i]->SetAlias(Identifier(aliases[i]));
+			expressions[i]->SetAlias(aliases[i]);
 		}
 	}
 	// bind the expressions

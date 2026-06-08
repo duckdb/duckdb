@@ -350,7 +350,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
 				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
 				auto &pre_val_expr = agg_results[i];
-				string merge_func = (fun_name == "min") ? "least" : "greatest";
+				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
 				auto coalesce =
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());

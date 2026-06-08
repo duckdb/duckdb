@@ -678,7 +678,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				auto local_index = global_id.RemapRootIndex(local_id.GetId());
 
 				// add the virtual column to the reader
-				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+				reader.columns.emplace_back(virtual_entry->second.name.GetIdentifierName(), virtual_column_type);
 				reader.AddVirtualColumn(global_column_id);
 
 				// set it as being projected in this spot

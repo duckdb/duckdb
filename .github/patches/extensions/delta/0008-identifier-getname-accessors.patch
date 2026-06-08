@@ -68,9 +68,18 @@ index 89b3cd5..00315ed 100644
  
  	auto struct_type = LogicalType::STRUCT(children_types);
 diff --git a/src/functions/delta_metadata_scan.cpp b/src/functions/delta_metadata_scan.cpp
-index 571136d..2e0429f 100644
+index 571136d..405456a 100644
 --- a/src/functions/delta_metadata_scan.cpp
 +++ b/src/functions/delta_metadata_scan.cpp
+@@ -71,7 +71,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
+ 	DeltaFileListOptions options;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "version") {
+ 			version = val.GetValue<idx_t>();
 @@ -87,7 +87,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
  	auto file_list = make_uniq<DeltaMultiFileList>(context, input_string, version);
  

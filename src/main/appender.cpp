@@ -441,10 +441,10 @@ void BaseAppender::ClearColumns() {
 	throw NotImplementedException("ClearColumns is only supported when directly appending to a table");
 }
 
-unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const Identifier &table_name,
                                                          const vector<Identifier> &expected_names) {
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	column_data_ref->alias = Identifier(table_name.empty() ? "appended_data" : table_name);
+	column_data_ref->alias = table_name.empty() ? "appended_data" : table_name;
 	;
 	column_data_ref->expected_names = expected_names;
 	return std::move(column_data_ref);
@@ -586,7 +586,7 @@ vector<Identifier> Appender::GetExpectedNames() {
 	return expected_names;
 }
 
-string Appender::ConstructQuery(TableDescription &description_p, const string &table_name,
+string Appender::ConstructQuery(TableDescription &description_p, const Identifier &table_name,
                                 const vector<Identifier> &expected_names) {
 	string query = "INSERT INTO ";
 	if (!description_p.database.empty()) {
@@ -617,12 +617,12 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
 	}
 
-	string table_name = "__duckdb_internal_appended_data";
+	Identifier table_name("__duckdb_internal_appended_data");
 	auto expected_names = GetExpectedNames();
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(stmt));
 }
 
@@ -722,7 +722,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	if (!context_ref) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
-	auto table_ref = GetColumnDataTableRef(collection, table_name.GetIdentifierName(), names);
+	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
 	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
 }

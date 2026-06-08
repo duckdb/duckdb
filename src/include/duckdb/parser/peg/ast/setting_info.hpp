@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct SettingInfo {
-	string name;
+	Identifier name;
 	SetScope scope = SetScope::AUTOMATIC; // Default value is defined here
 };
 

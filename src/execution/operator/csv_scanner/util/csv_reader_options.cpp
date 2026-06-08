@@ -643,11 +643,11 @@ string CSVReaderOptions::GetUserDefinedParameters() const {
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
                                            MultiFileOptions &file_options) {
 	for (auto &kv : in) {
-		auto loption = StringUtil::Lower(kv.first);
+		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
 		if (MultiFileReader().ParseOption(loption, kv.second, file_options, context)) {
 			continue;
 		}
-		ParseOption(context, kv.first, kv.second);
+		ParseOption(context, kv.first.GetIdentifierName(), kv.second);
 	}
 }
 

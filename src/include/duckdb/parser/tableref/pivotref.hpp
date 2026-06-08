@@ -38,11 +38,11 @@ struct PivotColumn {
 	//! The set of expressions to pivot on
 	vector<unique_ptr<ParsedExpression>> pivot_expressions;
 	//! The set of unpivot names
-	vector<string> unpivot_names;
+	vector<Identifier> unpivot_names;
 	//! The set of values to pivot on
 	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)
-	string pivot_enum;
+	Identifier pivot_enum;
 	//! Subquery (if any) - used during transform only
 	unique_ptr<QueryNode> subquery;
 
@@ -70,11 +70,11 @@ public:
 	//! The aggregates to compute over the pivot (PIVOT only)
 	vector<unique_ptr<ParsedExpression>> aggregates;
 	//! The names of the unpivot expressions (UNPIVOT only)
-	vector<string> unpivot_names;
+	vector<Identifier> unpivot_names;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
 	//! The groups to pivot over. If none are specified all columns not included in the pivots/aggregate are chosen.
-	vector<string> groups;
+	vector<Identifier> groups;
 	//! Whether or not to include nulls in the result (UNPIVOT only)
 	bool include_nulls;
 	//! The set of values to pivot on (bound pivot only)
