@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_struct.test
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_struct.test
 # description: Test the state export functionality, for opted-in aggregate functions with struct-based AGGREGATE_STATE
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 # We know that forward compatibility won't be preserved
 require noforcestorage

@@ -321,7 +321,7 @@ bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const 
 }
 
 shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::LegacyDeserialize() {
-	return nullptr;
+	return make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
 }
 
 //===--------------------------------------------------------------------===//
