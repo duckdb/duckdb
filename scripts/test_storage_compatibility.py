@@ -217,6 +217,9 @@ def execute_test(i, test):
             'Run Test',
         )
         if failure is not None:
+            if matches_skip_error(failure, skip_error_messages):
+                result['skipped'] = True
+                return result
             result['failures'].append(failure)
             return result
 
