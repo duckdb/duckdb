@@ -900,15 +900,8 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot convert to its state",
 		    function_name);
 	}
-	// the input type must match the state layout of the aggregate function exactly
 	auto state_layout = aggr.GetStateType();
-	if (arguments[0]->GetReturnType() != state_layout) {
-		throw BinderException(
-		    "to_aggregate_state: input type %s does not match the state layout %s of aggregate function \"%s\"",
-		    arguments[0]->GetReturnType().ToString(), state_layout.ToString(), function_name);
-	}
-
-	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr));
 	return std::move(bind_data);
 }
