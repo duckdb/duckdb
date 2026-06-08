@@ -71,10 +71,10 @@ public:
 				throw InternalException("Corrupted Patas segment: invalid backward reference");
 			}
 			if (unpacked_data[i].significant_bytes > sizeof(EXACT_TYPE) ||
-			    unpacked_data[i].trailing_zeros >= sizeof(EXACT_TYPE) * 8 ||
-			    unpacked_data[i].significant_bytes * 8 + unpacked_data[i].trailing_zeros > sizeof(EXACT_TYPE) * 8) {
+			    unpacked_data[i].trailing_zeros >= sizeof(EXACT_TYPE) * 8) {
 				throw InternalException("Corrupted Patas segment: invalid packed value metadata");
 			}
+
 			value_buffer[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
 			    byte_reader, unpacked_data[i].significant_bytes, unpacked_data[i].trailing_zeros,
 			    value_buffer[i - unpacked_data[i].index_diff]);
