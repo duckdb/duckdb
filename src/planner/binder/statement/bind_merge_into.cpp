@@ -74,8 +74,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			}
 		}
 		unique_ptr<LogicalOperator> fake_root;
-		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, result->expressions, merge_into.bound_defaults,
-		              expressions);
+		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, merge_into.bound_defaults, result->expressions, expressions);
 
 		// bind any additional columns that need to be bound for update constraints
 		// FIXME: this is pretty hacky
@@ -128,7 +127,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
 
 			InsertBinder insert_binder(*this, context);
-			insert_binder.target_type = column.Type();
+			insert_binder.target_type = table.GetExpectedTypeForInsert(column);
 
 			TryReplaceDefaultExpression(action.expressions[i], column);
 			auto insert_expr = insert_binder.Bind(action.expressions[i]);
