@@ -72,9 +72,10 @@ idx_t RowNumberColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &r
 	throw InternalException("Fetch is not supported for row number columns");
 }
 
-void RowNumberColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                   const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	throw InternalException("FetchRow is not supported for row number columns");
+void RowNumberColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                    idx_t fetch_count, Vector &result, idx_t result_offset) {
+	throw InternalException("FetchRows is not supported for row number columns");
 }
 
 void RowNumberColumnData::Skip(ColumnScanState &state, idx_t count) {
