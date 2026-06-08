@@ -15,6 +15,14 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
+FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
+	auto &fs = *default_fs;
+	if (SubSystemIsDisabled(fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
+	}
+	return fs;
+}
+
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
 
@@ -134,6 +142,17 @@ void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpen
 
 bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	return FindFileSystem(filename).TryRemoveFile(filename, opener);
+}
+
+void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	reference_map_t<FileSystem, vector<string>> files_by_fs;
+	for (const auto &filename : filenames) {
+		auto &fs = FindFileSystem(filename);
+		files_by_fs[fs].push_back(filename);
+	}
+	for (auto &entry : files_by_fs) {
+		entry.first.get().RemoveFiles(entry.second, opener);
+	}
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

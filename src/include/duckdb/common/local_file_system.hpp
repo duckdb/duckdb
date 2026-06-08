@@ -88,6 +88,10 @@ public:
 		return "LocalFileSystem";
 	}
 
+	bool IsLocalFileSystem() const override {
+		return true;
+	}
+
 	//! Returns the last Win32 error, in string format. Returns an empty string if there is no error, or on non-Windows
 	//! systems.
 	static std::string GetLastErrorAsString();

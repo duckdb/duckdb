@@ -1,0 +1,13 @@
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..a1d8d5f 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -47,7 +47,7 @@ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+ query IIII
+ SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+ FROM duckdb_logs
+-WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%'
++WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%' AND message ILIKE '%HTTPFileSystem%'
+ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
