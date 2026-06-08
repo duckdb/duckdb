@@ -17,6 +17,16 @@ namespace duckdb {
 class DelimJoinCTERewriter {
 public:
 	static void Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan);
+
+private:
+	explicit DelimJoinCTERewriter(Binder &binder);
+
+	void Rewrite(unique_ptr<LogicalOperator> &plan);
+	void RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan);
+	void MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan);
+
+private:
+	Binder &binder;
 };
 
 } // namespace duckdb

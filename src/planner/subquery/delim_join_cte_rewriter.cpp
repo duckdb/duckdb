@@ -747,7 +747,10 @@ static void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 	delim_join.join_type = JoinType::LEFT;
 }
 
-static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
+}
+
+void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan) {
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (join.delim_flipped) {
 		throw InternalException("Flatten dependent joins - flipped delim join CTE rewrite not supported");
@@ -876,23 +879,28 @@ static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator
 	plan = std::move(cte);
 }
 
-static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan) {
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
-		RewriteDelimJoinsToCTEs(binder, child);
+		RewriteDelimJoinsToCTEs(child);
 		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		MaterializeDelimJoinAsCTE(binder, plan);
+		MaterializeDelimJoinAsCTE(plan);
 	}
 }
 
 void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+	DelimJoinCTERewriter rewriter(binder);
+	rewriter.Rewrite(plan);
+}
+
+void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
 	} while (filters_pushed);
-	RewriteDelimJoinsToCTEs(binder, plan);
+	RewriteDelimJoinsToCTEs(plan);
 	VerifyNoDelim(*plan);
 }
 
