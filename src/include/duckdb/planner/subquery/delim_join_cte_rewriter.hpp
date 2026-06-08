@@ -27,6 +27,7 @@ private:
 
 private:
 	Binder &binder;
+	vector<TableIndex> generated_dedup_cte_indexes;
 };
 
 } // namespace duckdb
