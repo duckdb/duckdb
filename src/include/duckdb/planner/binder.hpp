@@ -334,6 +334,8 @@ public:
 	void SetCanContainNulls(bool can_contain_nulls);
 	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
+	void SetInsideSubquery();
+	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -364,6 +366,8 @@ private:
 	bool is_outside_flattened = true;
 	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
 	bool legacy_can_contain_nulls = false;
+	//! Whether this binder is inside a subquery boundary
+	bool inside_subquery = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -599,6 +603,8 @@ private:
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
+
+	bool DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

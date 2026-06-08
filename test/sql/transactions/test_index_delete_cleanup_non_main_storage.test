@@ -1,0 +1,194 @@
+# name: test/sql/transactions/test_index_delete_cleanup_non_main_storage.test
+# description: Index delete cleanup can target non-main table storage versions
+# group: [transactions]
+
+load {TEST_DIR}/test_index_delete_cleanup_non_main_storage.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+SET index_scan_percentage=1.0
+
+statement ok
+SET index_scan_max_count=1
+
+statement ok con3
+SET index_scan_percentage=1.0
+
+statement ok con3
+SET index_scan_max_count=1
+
+# Cleanup after DROP/recreate.
+statement ok
+CREATE TABLE t_drop (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_drop SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok con3
+BEGIN TRANSACTION
+
+query I con3
+SELECT COUNT(*) FROM t_drop
+----
+1000
+
+statement ok con2
+DELETE FROM t_drop WHERE id < 500
+
+statement ok con1
+DROP TABLE t_drop
+
+statement ok con1
+CREATE TABLE t_drop (id INTEGER PRIMARY KEY, val INTEGER)
+
+query II con3
+EXPLAIN ANALYZE SELECT val FROM t_drop WHERE id = 42
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query I con3
+SELECT val FROM t_drop WHERE id = 42
+----
+420
+
+statement ok con3
+COMMIT
+
+query I
+SELECT COUNT(*) FROM t_drop
+----
+0
+
+# Cleanup after CREATE OR REPLACE.
+statement ok
+CREATE TABLE t_replace (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_replace SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok con3
+BEGIN TRANSACTION
+
+query I con3
+SELECT COUNT(*) FROM t_replace
+----
+1000
+
+statement ok con2
+DELETE FROM t_replace WHERE id < 500
+
+statement ok con1
+CREATE OR REPLACE TABLE t_replace (id INTEGER PRIMARY KEY, val INTEGER)
+
+query II con3
+EXPLAIN ANALYZE SELECT val FROM t_replace WHERE id = 42
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query I con3
+SELECT val FROM t_replace WHERE id = 42
+----
+420
+
+statement ok con3
+COMMIT
+
+query I
+SELECT COUNT(*) FROM t_replace
+----
+0
+
+# Cleanup after ALTER.
+statement ok
+CREATE TABLE t_alter (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_alter SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok con3
+BEGIN TRANSACTION
+
+query I con3
+SELECT COUNT(*) FROM t_alter
+----
+1000
+
+statement ok con2
+DELETE FROM t_alter WHERE id < 500
+
+statement ok con1
+ALTER TABLE t_alter ADD COLUMN extra INTEGER DEFAULT 0
+
+query II con3
+EXPLAIN ANALYZE SELECT val FROM t_alter WHERE id = 42
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query I con3
+SELECT val FROM t_alter WHERE id = 42
+----
+420
+
+statement ok con3
+COMMIT
+
+query IIIII
+SELECT COUNT(*), MIN(id), MAX(id), MIN(extra), MAX(extra) FROM t_alter
+----
+500	500	999	0	0
+
+query II
+EXPLAIN ANALYZE SELECT val FROM t_alter WHERE id = 700
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query I
+SELECT val FROM t_alter WHERE id = 700
+----
+7000
+
+query I
+SELECT COUNT(*) FROM t_alter WHERE id = 42
+----
+0
+
+# Same-transaction DELETE then ALTER.
+statement ok
+CREATE TABLE t_same_tx (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t_same_tx SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM t_same_tx WHERE id < 500
+
+statement ok
+ALTER TABLE t_same_tx ADD COLUMN extra INTEGER DEFAULT 0
+
+statement ok
+COMMIT
+
+query IIIII
+SELECT COUNT(*), MIN(id), MAX(id), MIN(extra), MAX(extra) FROM t_same_tx
+----
+500	500	999	0	0
+
+query II
+EXPLAIN ANALYZE SELECT val FROM t_same_tx WHERE id = 700
+----
+analyzed_plan	<REGEX>:.*Index Scan.*
+
+query I
+SELECT val FROM t_same_tx WHERE id = 700
+----
+7000
+
+query I
+SELECT COUNT(*) FROM t_same_tx WHERE id = 42
+----
+0

@@ -102,7 +102,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
 		auto macro = make_uniq<FunctionExpression>(window.Catalog(), window.Schema(), window.FunctionName(),
-		                                           std::move(window.GetChildrenMutable()),
+		                                           std::move(window.GetArgumentsMutable()),
 		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
@@ -142,8 +142,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// we set the inside_window flag to true to prevent binding nested window functions
 	inside_window = true;
 	ErrorData error;
-	for (auto &child : window.GetChildrenMutable()) {
-		BindChild(child, depth, error);
+	for (auto &child : window.GetArgumentsMutable()) {
+		BindChild(child.GetExpressionMutable(), depth, error);
 	}
 	for (auto &child : window.PartitionsMutable()) {
 		BindChild(child, depth, error);
@@ -195,21 +195,35 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
 		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
-	// successfully bound all children: create bound window function
-	vector<LogicalType> types;
-	vector<unique_ptr<Expression>> children;
-	for (auto &child : window.GetChildrenMutable()) {
-		D_ASSERT(child.get());
-		D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		auto &bound = BoundExpression::GetExpression(*child);
-		types.push_back(bound->GetReturnType());
-		children.push_back(std::move(bound));
+
+	vector<pair<string, unique_ptr<Expression>>> arguments;
+	arguments.reserve(window.GetArguments().size());
+	for (auto &arg : window.GetArgumentsMutable()) {
+		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+
+		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
+		// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
+		// Only override the alias when the argument actually carries a name, otherwise we would clobber the
+		// display alias the binding assigned (e.g. clearing a column reference's name to its raw binding).
+		if (!arg.GetName().empty()) {
+			bound_arg->SetAlias(arg.GetName());
+		}
+
+		if (window.IsLegacyFunctionCall()) {
+			arguments.emplace_back(string(), std::move(bound_arg));
+		} else {
+			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
+		}
 	}
+
 	//  Determine the function type.
 	LogicalType sql_type;
 	unique_ptr<BoundAggregateFunction> aggregate;
 	unique_ptr<BoundWindowFunction> window_func;
 	unique_ptr<FunctionData> bind_info;
+	vector<unique_ptr<Expression>> children;
+
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 
@@ -218,38 +232,34 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// bind the aggregate
-		ErrorData error_aggr;
-		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
-		if (!best_function.IsValid()) {
-			error_aggr.AddQueryLocation(window);
-			error_aggr.Throw();
+		FunctionBinder function_binder(binder);
+		auto window_bound_aggregate = function_binder.BindAggregateFunction(func, std::move(arguments), error, nullptr);
+		// No function found, throw an error
+		if (!window_bound_aggregate) {
+			error.AddQueryLocation(window);
+			error.Throw();
 		}
 
-		// found a matching function! bind it as an aggregate
-		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-
-		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<BoundAggregateFunction>(window_bound_aggregate->Function());
 		bind_info = std::move(window_bound_aggregate->BindInfoMutable());
 		children = std::move(window_bound_aggregate->GetChildrenMutable());
 		sql_type = window_bound_aggregate->GetReturnType();
+
 	} else {
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
-		// bind the aggregate
-		ErrorData error_aggr;
-		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
-		if (!best_function.IsValid()) {
-			error_aggr.AddQueryLocation(window);
-			error_aggr.Throw();
+		FunctionBinder function_binder(binder);
+		auto window_bound_function = function_binder.BindWindowFunction(
+		    func, std::move(arguments), error, window.OrderByMutable(), window.ArgOrdersMutable());
+
+		if (!window_bound_function) {
+			error.AddQueryLocation(window);
+			error.Throw();
 		}
 
-		// found a matching function! bind it as a window
-		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-
+		// TODO: Move this into the binder
+		auto &bound_function = *window_bound_function->WindowFunction();
 		if (window.Distinct() && !bound_function.CanDistinct()) {
 			throw BinderException(error_context, "DISTINCT is not implemented for the window function \"%s\"",
 			                      window.FunctionName());
@@ -265,28 +275,19 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		if (window.WindowExclude() != WindowExcludeMode::NO_OTHER && !window.ArgOrders().empty() &&
 		    !bound_function.CanExclude()) {
 			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
-			                      bound_function.name);
+			                      window.FunctionName());
 		}
 		if (window.HasIgnoreNulls() && !bound_function.CanIgnoreNulls()) {
 			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function \"%s\"",
-			                      bound_function.name);
+			                      window.FunctionName());
 		}
-
-		//	Check for unresolved arguments
-		for (const auto &type : types) {
-			if (type.id() == LogicalTypeId::UNKNOWN) {
-				throw ParameterNotResolvedException();
-			}
-		}
-
-		auto window_bound_function = function_binder.BindWindowFunction(
-		    bound_function, std::move(children), window.OrderByMutable(), window.ArgOrdersMutable());
 
 		window_func = std::move(window_bound_function->WindowFunctionMutable());
 		bind_info = std::move(window_bound_function->BindInfoMutable());
 		children = std::move(window_bound_function->GetChildrenMutable());
 		sql_type = window_bound_function->GetReturnType();
 	}
+
 	auto result =
 	    make_uniq<BoundWindowExpression>(sql_type, std::move(aggregate), std::move(window_func), std::move(bind_info));
 	result->GetChildrenMutable() = std::move(children);

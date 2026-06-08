@@ -83,7 +83,7 @@ public:
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
-	void WriteNewRowGroup();
+	void WriteNewRowGroup(idx_t flushed_row_group_idx);
 	void FlushBlocks();
 	void Rollback();
 	idx_t EstimatedSize();

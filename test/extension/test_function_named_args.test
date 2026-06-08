@@ -390,11 +390,3 @@ create table test(a int, i int);
 query I
 select i from test order by struct_pack(a:=0, i) desc;
 ----
-
-###===--------------------------------------------------------------------===#
-## Window Functions (TODO)
-###===--------------------------------------------------------------------===#
-statement error
-select sum(x := i) over () from range(0, 10) r(i);
-----
-Named arguments are not supported in window functions

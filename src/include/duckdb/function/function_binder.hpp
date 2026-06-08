@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+class WindowFunctionCatalogEntry;
+
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
@@ -137,10 +139,20 @@ public:
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
+	DUCKDB_API unique_ptr<BoundWindowExpression>
+	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
+	                   vector<pair<string, unique_ptr<Expression>>> keyword_args, vector<OrderByNode> &orders,
+	                   vector<OrderByNode> &arg_orders);
+
 	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
 	                                                                vector<unique_ptr<Expression>> children,
 	                                                                vector<OrderByNode> &orders,
-	                                                                vector<OrderByNode> &arg_orders);
+	                                                                vector<OrderByNode> &arg_order);
+
+	DUCKDB_API unique_ptr<BoundWindowExpression>
+	BindWindowFunction(const WindowFunctionCatalogEntry &function,
+	                   vector<pair<string, unique_ptr<Expression>>> arguments, ErrorData &error,
+	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 
 	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
 	                                                                    vector<unique_ptr<Expression>> &children) {
@@ -164,8 +176,15 @@ public:
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
+	                vector<pair<string, unique_ptr<Expression>>> &keyword_args,
 	                optional_ptr<vector<OrderByNode>> orders = nullptr,
 	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
+
+	pair<BoundWindowFunction, unique_ptr<FunctionData>> ResolveFunction(const WindowFunction &function,
+	                                                                    vector<unique_ptr<Expression>> &children) {
+		vector<pair<string, unique_ptr<Expression>>> empty_keyword_args;
+		return ResolveFunction(function, children, empty_keyword_args);
+	}
 
 private:
 	//! Cast a set of expressions to the arguments of this function

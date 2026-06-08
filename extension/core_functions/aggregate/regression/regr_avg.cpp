@@ -14,12 +14,6 @@ struct RegrState {
 };
 
 struct RegrAvgFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.sum = 0;
-		state.count = 0;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.sum += source.sum;

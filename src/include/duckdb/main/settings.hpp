@@ -595,6 +595,16 @@ struct DebugVerificationProjectionSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerifyAggregateStateExportSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_aggregate_state_export";
+	static constexpr const char *Description = "DEBUG SETTING: enable verification of aggregate state export";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";
@@ -747,6 +757,17 @@ struct DefaultTransactionInvalidationPolicySetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DelimJoinAsCteSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "delim_join_as_cte";
+	static constexpr const char *Description =
+	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DeprecatedUsingKeySyntaxSetting {
