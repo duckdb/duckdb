@@ -133,7 +133,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	state.PrintF("BEGIN TRANSACTION;\n");
+	state.PrintSQL("BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
 	if (zLike.empty()) {
@@ -151,7 +151,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	for (auto &row : *result) {
 		auto schema = row.GetValue<string>(0);
 		auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
-		state.PrintF("%s;\n", create_schema.c_str());
+		state.PrintSQL(create_schema + ";\n");
 	}
 
 	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "
@@ -165,7 +165,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	                          "  AND type IN ('index','trigger','view')",
 	                          zLike);
 	state.RunTableDumpQuery(zSql);
-	state.PrintF(state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
+	state.PrintSQL(state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
 	state.shellFlgs = savedShellFlags;
 	return MetadataResult::SUCCESS;
@@ -971,7 +971,9 @@ static const MetadataCommand metadata_commands[] = {
     {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
-     "Options:\n\t--indent\tTry to pretty-print the schema"},
+     "By default the schema is pretty-printed using the SQL formatter.\nOptions:\n\t--no-indent\tPrint the schema as "
+     "it is stored, without formatting\n\t--no-format\tAlias for --no-indent\n\t--indent\tForce pretty-printing (the "
+     "default)\n\t--format\tAlias for --indent"},
     {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
     {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0, ""},
 #ifdef HAVE_LINENOISE

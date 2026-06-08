@@ -34,7 +34,7 @@ endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
 SMOKE_RUNNER ?= build/relassert/test/run
-UNITTEST_SLOW_FLAGS ?= --batch-size=5 --track-runtime=100
+UNITTEST_SLOW_FLAGS ?= --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
@@ -539,7 +539,8 @@ TEST_CONFIGS := \
 	test/configs/encryption.json \
 	test/configs/v1_storage.json \
 	test/configs/v1_storage_block_size_16kB.json \
-	test/configs/force_storage_mmap.json
+	test/configs/force_storage_mmap.json \
+	test/configs/verify_aggregate_state_export.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
@@ -762,6 +763,11 @@ format-check-silent: $(FORMAT_SETUP_DEPS)
 
 format-fix: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm $(T)
+
+format-parser-grammar: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)

@@ -225,7 +225,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer,
                                                               const vector<string> &dotted_identifier,
                                                               const LogicalType &type,
-                                                              const GeneratedColumnDefinition &generated_column,
+                                                              GeneratedColumnDefinition generated_column,
                                                               vector<ColumnConstraintEntry> column_constraint) {
 	AddColumnEntry new_column;
 	new_column.column_path = dotted_identifier;

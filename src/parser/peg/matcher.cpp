@@ -124,7 +124,10 @@ public:
 		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
-			if (list_state.token_index >= list_state.tokens.size()) {
+			bool at_autocomplete_cursor =
+			    list_state.token_index < list_state.tokens.size() &&
+			    list_state.tokens[list_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			if (at_autocomplete_cursor) {
 				if (suppress_suggestions) {
 					// this rule should not contribute autocomplete suggestions
 					// discard any suggestions added by earlier children
@@ -133,7 +136,7 @@ public:
 					                             list_state.suggestions.end());
 					return MatchResultType::FAIL;
 				}
-				// we exhausted the tokens - push suggestions for the child matcher
+				// cursor is here - push suggestions for what could follow
 				for (; child_idx < matchers.size(); child_idx++) {
 					auto suggestion_type = matchers[child_idx].get().AddSuggestion(list_state);
 					if (suggestion_type == SuggestionType::MANDATORY) {
@@ -356,9 +359,10 @@ public:
 			// update the token index we propagate upwards
 			state.token_index = repeat_state.token_index;
 
-			// check if we have tokens left
-			if (repeat_state.token_index >= state.tokens.size()) {
-				// we exhausted the tokens - suggest the element
+			bool at_autocomplete_cursor =
+			    repeat_state.token_index < state.tokens.size() &&
+			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE;
+			if (at_autocomplete_cursor) {
 				element.AddSuggestion(state);
 				return MatchResultType::SUCCESS;
 			}
@@ -395,8 +399,8 @@ public:
 			// Propagate the new state upwards.
 			state.token_index = repeat_state.token_index;
 
-			// Check if there are any tokens left.
-			if (repeat_state.token_index >= state.tokens.size()) {
+			if (repeat_state.token_index < state.tokens.size() &&
+			    state.tokens[repeat_state.token_index].type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
 				break;
 			}
 
@@ -423,6 +427,44 @@ public:
 
 private:
 	Matcher &element;
+};
+
+//! Consumes the END_OF_INPUT sentinel; wired into the grammar's EndOfInput rule.
+class EndOfInputMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::END_OF_INPUT;
+
+public:
+	EndOfInputMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (state.token_index < state.tokens.size() &&
+		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
+			state.token_index++;
+			state.UpdateMaxTokenIndex();
+			return MatchResultType::SUCCESS;
+		}
+		return MatchResultType::FAIL;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index < state.tokens.size() &&
+		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
+			state.token_index++;
+			state.UpdateMaxTokenIndex();
+			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
+		}
+		return nullptr;
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "EndOfInput";
+	}
 };
 
 class IdentifierMatcher : public Matcher {
@@ -578,6 +620,9 @@ public:
 
 private:
 	bool MatchIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
@@ -663,6 +708,9 @@ public:
 
 private:
 	bool MatchReservedIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!IsIdentifier(token_text)) {
 			return false;
@@ -794,8 +842,11 @@ public:
 
 private:
 	static bool MatchNumberLiteral(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+		if (token_text.empty() || !BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
 		// A lone '.' is a dot operator, not a number literal (e.g., '?.method()' should not consume '.')
@@ -895,6 +946,9 @@ public:
 
 private:
 	static bool MatchOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
 		if (token_text == "->" || token_text == "->>") {
@@ -962,6 +1016,9 @@ public:
 
 private:
 	static bool MatchArithmeticOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
 			if (!IsArithmeticOperatorChar(c)) {
@@ -1375,6 +1432,9 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
+
+	// EndOfInput has no grammar body; satisfied here (outside the regenerated block).
+	AddRuleOverride("EndOfInput", allocator.Allocate(make_uniq<EndOfInputMatcher>()));
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");

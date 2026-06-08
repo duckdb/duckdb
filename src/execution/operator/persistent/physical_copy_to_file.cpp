@@ -1094,7 +1094,6 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextPrepareTask() {
 			break;
 		}
 		if (prepare_batch_idx == batch_state.collections.size()) {
-			batch_state.MarkPrepared();
 			++prepare_partition_idx;
 			prepare_batch_idx = 0;
 			continue;

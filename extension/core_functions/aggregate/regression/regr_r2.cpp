@@ -19,13 +19,6 @@ struct RegrR2State {
 };
 
 struct RegrR2Operation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CorrOperation::Initialize<CorrState>(state.corr);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_x);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_y);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, y, x, idata);

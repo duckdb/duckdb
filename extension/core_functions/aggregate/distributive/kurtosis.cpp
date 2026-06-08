@@ -22,12 +22,6 @@ struct KurtosisFlagNoBiasCorrection {};
 
 template <class KURTOSIS_FLAG>
 struct KurtosisOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = state.sum_four = 0.0;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {

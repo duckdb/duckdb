@@ -21,11 +21,6 @@ struct HistogramBinState {
 	unsafe_vector<T> *bin_boundaries;
 	unsafe_vector<idx_t> *counts;
 
-	void Initialize() {
-		bin_boundaries = nullptr;
-		counts = nullptr;
-	}
-
 	void Destroy() {
 		if (bin_boundaries) {
 			delete bin_boundaries;
@@ -80,11 +75,6 @@ struct HistogramBinState {
 };
 
 struct HistogramBinFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
-	}
-
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.Destroy();

@@ -63,11 +63,6 @@ static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
 }
 
 struct MinMaxBase {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -229,11 +224,6 @@ struct VectorMinMaxBase {
 
 	static bool IgnoreNull() {
 		return true;
-	}
-
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
 	}
 
 	template <class STATE>

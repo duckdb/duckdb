@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -1144,12 +1145,31 @@ FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
 	                             aggr_type);
 }
 
+unique_ptr<BoundWindowExpression>
+FunctionBinder::BindWindowFunction(const WindowFunctionCatalogEntry &func,
+                                   vector<pair<string, unique_ptr<Expression>>> arguments, ErrorData &error,
+                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+	// select the best matching overload
+	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
+	if (!best_function.IsValid()) {
+		return nullptr;
+	}
+
+	// found a matching function!
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+	// now that the overload is fixed, split the arguments into their final positional/named children
+	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
+
+	return BindWindowFunction(bound_function, std::move(regular_args), std::move(keyword_args), orders, arg_orders);
+}
+
 pair<BoundWindowFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
+                                vector<pair<string, unique_ptr<Expression>>> &named_arguments,
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
 	// Reorder named args
-	vector<pair<string, unique_ptr<Expression>>> named_arguments;
 	ResolveArguments(function, children, named_arguments);
 
 	BoundWindowFunction bound_function(function);
@@ -1184,8 +1204,15 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const WindowFunction &function,
                                                                      vector<unique_ptr<Expression>> children,
                                                                      vector<OrderByNode> &orders,
-                                                                     vector<OrderByNode> &arg_orders) {
-	auto [bound_function, bind_info] = ResolveFunction(function, children, orders, arg_orders);
+                                                                     vector<OrderByNode> &arg_order) {
+	return BindWindowFunction(function, std::move(children), {}, orders, arg_order);
+}
+
+unique_ptr<BoundWindowExpression>
+FunctionBinder::BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
+                                   vector<pair<string, unique_ptr<Expression>>> keyword_args,
+                                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders) {
+	auto [bound_function, bind_info] = ResolveFunction(function, children, keyword_args, orders, arg_orders);
 	auto return_type = bound_function.GetReturnType();
 
 	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));

@@ -688,8 +688,6 @@ string ShellState::ModeToString(RenderMode mode) {
 		return "describe";
 	case RenderMode::ASCII:
 		return "ascii";
-	case RenderMode::PRETTY:
-		return "prettyprint";
 	case RenderMode::EQP:
 		return "eqp";
 	case RenderMode::JSON:
@@ -881,7 +879,7 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	}
 	for (auto &row : *result) {
 		auto zStr = row.GetValue<string>(0);
-		Print(zStr);
+		PrintSQL(zStr);
 		auto z = zStr.c_str();
 		if (!z) {
 			z = "";
@@ -1104,7 +1102,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 		auto zSql = row.GetValue<string>(2);
 
 		// print sql
-		Print(GetSchemaLine(zSql, ";\n"));
+		PrintSQL(GetSchemaLine(zSql, ";\n"));
 		if (zType == "table") {
 			// dump table contents
 			string sSelect;
@@ -2058,26 +2056,39 @@ bool ShellState::ReadFromFile(const string &file) {
 bool ShellState::DisplaySchemas(const vector<string> &args) {
 	const char *zName = nullptr;
 	bool bDebug = 0;
+	// statements are pretty-printed using the SQL formatter by default
+	bool bFormat = true;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
-		if (optionMatch(args[ii], "indent")) {
-			mode = RenderMode::PRETTY;
+		// --indent (and its alias --format) pretty-prints the statements using the SQL formatter (the default)
+		if (optionMatch(args[ii], "indent") || optionMatch(args[ii], "format")) {
+			bFormat = true;
+			// --no-indent (and its alias --no-format) prints the statements as they are stored
+		} else if (optionMatch(args[ii], "no-indent") || optionMatch(args[ii], "no-format")) {
+			bFormat = false;
 		} else if (optionMatch(args[ii], "debug")) {
 			bDebug = true;
+		} else if (!args[ii].empty() && args[ii][0] == '-') {
+			PrintF(PrintOutput::STDERR,
+			       "Error: unknown option \"%s\"\nUsage: .schema ?--indent|--no-indent? ?LIKE-PATTERN?\n",
+			       args[ii].c_str());
+			return false;
 		} else if (zName == 0) {
 			zName = args[ii].c_str();
 		} else {
-			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
+			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent|--no-indent? ?LIKE-PATTERN?\n");
 			return false;
 		}
 	}
-	auto renderer = GetRenderer(mode);
+	auto renderer = GetRenderer(RenderMode::SEMI);
 	renderer->show_header = false;
 
 	string sSelect;
-	sSelect += "SELECT sql FROM sqlite_master WHERE ";
+	// by default the stored SQL is pretty-printed through the duckdb_format_sql function
+	// (unless --no-indent/--no-format was passed)
+	sSelect +=
+	    bFormat ? "SELECT duckdb_format_sql(sql) FROM sqlite_master WHERE " : "SELECT sql FROM sqlite_master WHERE ";
 	if (zName) {
 		auto zQarg = StringUtil::Format("%s", SQLString(zName));
 		int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
@@ -2930,6 +2941,13 @@ void ShellState::HighlightSQL(string &sql) {
 	auto highlighted =
 	    duckdb::Highlighting::HighlightText(const_cast<char *>(sql.c_str()), sql.size(), 0, sql.size(), tokens);
 	sql = std::move(highlighted);
+}
+
+void ShellState::PrintSQL(const string &sql) {
+	string highlighted = sql;
+	// HighlightSQL is a no-op when highlighting is disabled or output is not a console
+	HighlightSQL(highlighted);
+	Print(highlighted);
 }
 
 string ShellState::ReadFileContents(FILE *f) {

@@ -15,14 +15,6 @@ struct RegrInterceptState {
 };
 
 struct RegrInterceptOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.sum_x = 0;
-		state.sum_y = 0;
-		RegrSlopeOperation::Initialize<RegrSlopeState>(state.slope);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		state.count++;
