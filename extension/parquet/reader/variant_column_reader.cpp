@@ -204,18 +204,4 @@ bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value,
 	                            typed_value.ToString());
 }
 
-static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto num_values = input.size();
-	auto &metadata_value = input.data[0];
-
-	VariantShreddedConversion::ConvertBinaryToVariant(metadata_value, 0, num_values, num_values, result);
-}
-
-ScalarFunction VariantColumnReader::GetBytesToVariantFunction() {
-	ScalarFunction transform("variant_bytes_to_variant", {LogicalType::BLOB}, LogicalType::VARIANT(),
-	                         FromParquetVariant);
-	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	return transform;
-}
-
 } // namespace duckdb

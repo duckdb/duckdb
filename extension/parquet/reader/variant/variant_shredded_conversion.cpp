@@ -339,19 +339,15 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 		if (!validity.RowIsValid(index)) {
 			continue;
 		}
+		//! 'metadata' and 'value' are the same vector: each row holds the full binary Variant value (metadata
+		//! followed by the value blob). Decode the metadata, then read the value right after it.
+		auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+		VariantMetadata variant_metadata(metadata_value);
+		auto binary_value = value_data[index].GetData();
 		if (add_metadata_offset) {
-			//! 'metadata' and 'value' are the same vector: each row holds the full binary Variant value (metadata
-			//! followed by the value blob). Decode the metadata, then read the value right after it.
-			auto &binary_blob = value_data[index];
-			VariantMetadata variant_metadata(binary_blob);
-			auto binary_value = const_data_ptr_cast(binary_blob.GetData()) + variant_metadata.total_size;
-			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, binary_value);
-		} else {
-			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
-			VariantMetadata variant_metadata(metadata_value);
-			auto binary_value = value_data[index].GetData();
-			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
+			binary_value += variant_metadata.total_size;
 		}
+		ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value));
 	}
 	return ret;
 }
@@ -563,6 +559,20 @@ void VariantShreddedConversion::ConvertBinaryToVariant(Vector &metadata_and_valu
                                                        idx_t total_size, Vector &result) {
 	auto res = ConvertBinaryEncoding(metadata_and_value, metadata_and_value, offset, length, total_size, true);
 	VariantValue::ToVARIANT(res, result);
+}
+
+static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto num_values = input.size();
+	auto &metadata_value = input.data[0];
+
+	VariantShreddedConversion::ConvertBinaryToVariant(metadata_value, 0, num_values, num_values, result);
+}
+
+ScalarFunction VariantShreddedConversion::GetBytesToVariantFunction() {
+	ScalarFunction transform("variant_bytes_to_variant", {LogicalType::BLOB}, LogicalType::VARIANT(),
+	                         FromParquetVariant);
+	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	return transform;
 }
 
 } // namespace duckdb

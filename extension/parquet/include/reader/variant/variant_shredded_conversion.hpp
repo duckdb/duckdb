@@ -19,6 +19,8 @@ public:
 	                                                 idx_t length, idx_t total_size);
 	static vector<VariantValue> ConvertShreddedObject(Vector &metadata, Vector &value, Vector &typed_value,
 	                                                  idx_t offset, idx_t length, idx_t total_size);
+	//! Inverse of GetTransformFunction: decode a binary Variant value (metadata followed by value) into a VARIANT.
+	static ScalarFunction GetBytesToVariantFunction();
 };
 
 } // namespace duckdb

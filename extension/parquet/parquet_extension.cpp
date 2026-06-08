@@ -57,6 +57,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
+#include "reader/variant/variant_shredded_conversion.hpp"
 
 namespace duckdb {
 
@@ -881,7 +882,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant
-	loader.RegisterFunction(VariantColumnReader::GetBytesToVariantFunction());
+	loader.RegisterFunction(VariantShreddedConversion::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
