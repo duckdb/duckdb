@@ -1,0 +1,20 @@
+# name: test/sql/storage/compression/alp/alp_corrupted_offsets.test
+# group: [alp]
+
+unzip data/storage/alp_corrupted_offsets.db.gz __TEST_DIR__/alp_corrupted_offsets.db
+
+statement ok
+ATTACH '__TEST_DIR__/alp_corrupted_offsets.db' AS db2
+
+statement ok
+USE db2;
+
+query I
+SELECT compression FROM pragma_storage_info('random_alp_double') WHERE compression='ALP';
+----
+ALP
+
+statement error
+SELECT * FROM random_alp_double LIMIT 1;
+----
+IO Error: Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (8192) would exceed bytes remaining in the block (7)
