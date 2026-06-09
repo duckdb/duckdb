@@ -147,10 +147,27 @@ NULL
 statement error
 select variant_array_length({'a': 1}::VARIANT, [1]);
 ----
+<REGEX>:.*No function matches the given name and argument types 'variant_array_length\(VARIANT, INTEGER\[\]\)'.*
 
 statement error
-select variant_array_length({'a': 1}::VARIANT, [NULL]);
+select variant_array_length({'a': []}::VARIANT, [NULL]);
 ----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+statement error
+select variant_array_length({'a': []}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+statement error
+select variant_array_length({'c': []}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_array_length' does not accept NULL paths
+
+query I
+select variant_array_length({'c': []}::VARIANT, []::VARCHAR[]);
+----
+[]
 
 # FIXME: malformed JSON object should result in an error
 
