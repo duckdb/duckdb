@@ -13,10 +13,6 @@ namespace {
 
 struct SumSetOperation {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
-	}
-	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
 	}
@@ -364,11 +360,6 @@ struct BignumState {
 };
 
 struct BignumOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.is_set = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {

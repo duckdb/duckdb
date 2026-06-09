@@ -18,12 +18,6 @@ struct FirstState {
 };
 
 struct FirstFunctionBase {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.is_set = false;
-		state.is_null = false;
-	}
-
 	static bool IgnoreNull() {
 		return false;
 	}

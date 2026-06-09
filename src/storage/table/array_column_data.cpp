@@ -244,31 +244,36 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                               row_t row_id, Vector &result, idx_t result_idx) {
+void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                                const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                idx_t result_offset) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
 	}
 
 	// Fetch validity
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetChildMutable(result);
 	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
 
-	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
-	ColumnScanState child_state(nullptr);
-	child_state.Initialize(state.context, child_type, nullptr);
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
+		ColumnScanState child_state(nullptr);
+		child_state.Initialize(state.context, child_type, nullptr);
 
-	const auto child_offset = UnsafeNumericCast<idx_t>(row_id) * array_size;
+		const auto row_id = offsets[sel.get_index(idx)];
+		const auto child_offset = row_id * array_size;
 
-	child_column->InitializeScanWithOffset(child_state, child_offset);
-	Vector child_scan(child_type, array_size);
-	child_column->ScanCount(child_state, child_scan, array_size);
-	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
+		child_column->InitializeScanWithOffset(child_state, child_offset);
+		Vector child_scan(child_type, array_size);
+		child_column->ScanCount(child_state, child_scan, array_size);
+		VectorOperations::Copy(child_scan, child_vec, array_size, 0, (result_offset + idx) * array_size);
+	}
 }
 
 void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {

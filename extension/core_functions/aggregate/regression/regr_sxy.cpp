@@ -16,12 +16,6 @@ struct RegrSXyState {
 };
 
 struct RegrSXYOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<uint64_t>(state.count);
-		CovarOperation::Initialize<CovarState>(state.cov_pop);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, uint64_t, OP>(state.count, y, x, idata);

@@ -238,7 +238,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		payload_chunk.data[c].Reference(sink_chunk.data[child_idx[c]]);
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), statef.allocator);
+	AggregateInputData aggr_input_data(aggr, statef.allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
@@ -278,12 +278,13 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			}
 		} else {
 			//	Slice to [begin, end)
-			if (begin) {
+			if (begin == 0 && end == sink_chunk.size()) {
+				inputs.Reference(payload_chunk);
+			} else {
+				//	we cannot resize non-flat vectors (e.g. dictionary vectors), so we have to slice
 				for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
 					inputs.data[c].Slice(payload_chunk.data[c], begin, end);
 				}
-			} else {
-				inputs.Reference(payload_chunk);
 			}
 			inputs.SetChildCardinality(end - begin);
 		}

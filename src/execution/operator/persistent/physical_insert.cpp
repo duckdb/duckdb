@@ -151,7 +151,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 		// We have not scanned the initial table, so we can just duplicate the initial chunk
 		result.Initialize(client, input_chunk.GetTypes());
 		result.Reference(input_chunk);
-		result.CheckCardinality(input_chunk.size());
 		return;
 	}
 	vector<LogicalType> combined_types;
@@ -212,7 +211,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 		if (count != chunk.size()) {
 			// Filter any conflicts not meeting the condition.
 			chunk.Slice(sel, count);
-			chunk.CheckCardinality(count);
 			row_ids.Slice(sel, count);
 			row_ids.Flatten();
 		}
@@ -252,7 +250,6 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 	// Arrange the columns in the standard table order.
 	DataChunk &append_chunk = lstate.append_chunk;
-	append_chunk.SetChildCardinality(update_chunk.size());
 	for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
 		append_chunk.data[i].Reference(chunk.data[i]);
 	}
@@ -483,7 +480,6 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	conflict_chunk.InitializeEmpty(tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
 	conflict_chunk.Slice(conflict_manager.GetInvertedSel(), conflict_count);
-	conflict_chunk.CheckCardinality(conflict_count);
 
 	// Contains the conflict chunk and the scanned chunk (wide).
 	DataChunk combined_chunk;
@@ -507,7 +503,6 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	auto &inverted_sel = conflict_manager.GetInvertedSel();
 	auto new_size = SelectionVector::Inverted(inverted_sel, sel_vec, conflict_count, tuples.size());
 	tuples.Slice(sel_vec, new_size);
-	tuples.CheckCardinality(new_size);
 
 	return affected_tuples;
 }
@@ -596,11 +591,9 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 
 			lstate.update_chunk.Reference(insert_chunk);
 			lstate.update_chunk.Slice(last_occurrences, last_occurrences_count);
-			lstate.update_chunk.CheckCardinality(last_occurrences_count);
 		}
 
 		insert_chunk.Slice(sel, sel_count);
-		insert_chunk.CheckCardinality(sel_count);
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
@@ -663,9 +656,9 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 
 	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(insert_chunk, lstate.local_append_state);
-	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
+	auto flushed_row_group_idx = collection.Append(insert_chunk, lstate.local_append_state);
+	if (flushed_row_group_idx.IsValid()) {
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -707,8 +700,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
-		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, gstate.table, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);

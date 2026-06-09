@@ -769,12 +769,6 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values) {
-	// We just wrap the STRUCT value as the Vector's values are the same underneath, and also the type is being injected
-	// We do it for consistency where all LogicalType has its Value constructor defined
-	return STRUCT(type, std::move(underlying_struct_values));
-}
-
 Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	Value result;
 	auto child_types = StructType::GetChildTypes(type);
@@ -1800,6 +1794,24 @@ string Value::ToSQLString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::MAP: {
+		// A bare `MAP {...}` literal infers its element types from the entries
+		// (and `MAP {}` infers MAP(INTEGER, INTEGER)), so it does not faithfully
+		// round-trip on its own. Append an explicit cast to the real type
+		auto &entries = MapValue::GetChildren(*this);
+		string ret = "MAP {";
+		for (idx_t i = 0; i < entries.size(); i++) {
+			auto &kv = StructValue::GetChildren(entries[i]);
+			if (i > 0) {
+				ret += ", ";
+			}
+			ret += kv[0].ToSQLString();
+			ret += ": ";
+			ret += kv[1].ToSQLString();
+		}
+		ret += "}::" + type_.ToString();
 		return ret;
 	}
 	case LogicalTypeId::UNION: {

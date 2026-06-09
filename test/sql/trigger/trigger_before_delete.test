@@ -1,0 +1,162 @@
+# name: test/sql/trigger/trigger_before_delete.test
+# description: Test BEFORE DELETE trigger firing via DML CTE expansion
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: FOR EACH STATEMENT trigger fires once before DELETE
+statement ok
+CREATE TABLE target (id INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic BEFORE DELETE ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('deleting');
+
+statement ok
+DELETE FROM target WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+statement ok
+DELETE FROM target WHERE id = 2;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Underlying DELETE actually applied
+query I
+SELECT COUNT(*) FROM target;
+----
+1
+
+# BEFORE body sees the table state PRIOR to the DELETE
+statement ok
+CREATE TABLE pre_target (id INTEGER);
+
+statement ok
+INSERT INTO pre_target VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE pre_audit (count_before INTEGER);
+
+statement ok
+CREATE TRIGGER trg_pre BEFORE DELETE ON pre_target FOR EACH STATEMENT
+    INSERT INTO pre_audit SELECT COUNT(*) FROM pre_target;
+
+statement ok
+DELETE FROM pre_target WHERE id = 1;
+
+# Should record 3 (count before the row was deleted)
+query I
+SELECT count_before FROM pre_audit;
+----
+3
+
+# Final row count is 2 (delete applied)
+query I
+SELECT COUNT(*) FROM pre_target;
+----
+2
+
+# FOR EACH ROW is rejected
+statement error
+CREATE TRIGGER trg_row BEFORE DELETE ON target FOR EACH ROW
+    INSERT INTO audit VALUES ('row');
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
+
+# REFERENCING is rejected for BEFORE triggers
+statement error
+CREATE TRIGGER trg_ref BEFORE DELETE ON target REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT
+    INSERT INTO audit SELECT 'ref' FROM old_rows;
+----
+Transition tables can only be specified for AFTER triggers
+
+# Trigger body failure rolls back the DELETE
+statement ok
+CREATE TABLE strict_target (id INTEGER);
+
+statement ok
+INSERT INTO strict_target VALUES (1);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail BEFORE DELETE ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+DELETE FROM strict_target;
+----
+Constraint Error:
+
+# Row still present: BEFORE body's failure aborted the DELETE
+query I
+SELECT COUNT(*) FROM strict_target;
+----
+1
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple BEFORE DELETE triggers all fire
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a BEFORE DELETE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement ok
+CREATE TRIGGER trg_multi_b BEFORE DELETE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+DELETE FROM t_multi;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
+----
+2
+
+# RETURNING is rejected
+statement error
+DELETE FROM target RETURNING id;
+----
+RETURNING is not yet supported on tables with triggers
+
+# DROP TRIGGER works
+statement ok
+DROP TRIGGER trg_basic ON target;
+
+statement ok
+DELETE FROM target;
+
+# Audit count unchanged
+query I
+SELECT COUNT(*) FROM audit;
+----
+2

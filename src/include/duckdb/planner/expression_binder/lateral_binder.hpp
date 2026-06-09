@@ -24,6 +24,10 @@ public:
 		return !correlated_columns.empty();
 	}
 
+	bool IsLateralBinder() const override {
+		return true;
+	}
+
 	static void ReduceExpressionDepth(LogicalOperator &op, const CorrelatedColumns &info);
 
 protected:

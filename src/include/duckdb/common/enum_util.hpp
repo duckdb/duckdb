@@ -52,6 +52,8 @@ enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
 
+enum class AggregateStateExportMode : uint8_t;
+
 enum class AggregateType : uint8_t;
 
 enum class AllowParserOverride : uint8_t;
@@ -181,6 +183,8 @@ enum class DeprecatedIndexType : uint8_t;
 enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
+
+enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
 
@@ -496,6 +500,8 @@ enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
 
+enum class TaskSchedulerType : uint8_t;
+
 enum class TemporaryBufferSize : uint64_t;
 
 enum class TemporaryCompressionLevel : int;
@@ -582,6 +588,9 @@ const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
@@ -777,6 +786,9 @@ const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
+const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -1250,6 +1262,9 @@ template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
 
 template<>
+const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value);
+
+template<>
 const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
 
 template<>
@@ -1363,6 +1378,9 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
 
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value);
+
+template<>
+AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value);
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
@@ -1558,6 +1576,9 @@ DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const ch
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
+DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
@@ -2029,6 +2050,9 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
+
+template<>
+TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value);
 
 template<>
 TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value);

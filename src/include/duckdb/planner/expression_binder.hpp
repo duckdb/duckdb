@@ -82,6 +82,14 @@ public:
 		return false;
 	}
 
+	virtual bool IsLateralBinder() const {
+		return false;
+	}
+
+	Binder &GetBinder() const {
+		return binder;
+	}
+
 	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
 	static bool IsPotentialAlias(const ColumnRefExpression &colref);
 

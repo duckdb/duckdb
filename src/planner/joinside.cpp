@@ -83,7 +83,7 @@ JoinSide JoinSide::GetJoinSide(const Expression &expression, const unordered_set
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.Depth() > 0) {
-			throw NotImplementedException("Non-inner join on correlated columns not supported");
+			return JoinSide::NONE;
 		}
 		return GetJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
 	}
