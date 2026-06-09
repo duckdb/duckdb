@@ -267,7 +267,11 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Deserial
 void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<Identifier>(200, "relation_name", relation_name);
-	serializer.WritePropertyWithDefault<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+	} else {
+		serializer.WriteProperty<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+	}
 	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);

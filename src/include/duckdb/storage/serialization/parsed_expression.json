@@ -394,6 +394,7 @@
         "name": "exclude_list",
         "type": "identifier_set_t",
         "serialize_property": "SerializedExcludeList()",
+        "required_until": "v2.0.0",
         "hash_skip": true
       },
       {

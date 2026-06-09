@@ -853,7 +853,8 @@
       {
         "id": 400,
         "name": "table_options",
-        "type": "identifier_set_t"
+        "type": "identifier_set_t",
+        "required_until": "v2.0.0"
       }
     ]
   }

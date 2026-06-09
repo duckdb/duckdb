@@ -592,7 +592,11 @@ unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer
 
 void ResetTableOptionsInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<identifier_set_t>(400, "table_options", table_options);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<identifier_set_t>(400, "table_options", table_options);
+	} else {
+		serializer.WriteProperty<identifier_set_t>(400, "table_options", table_options);
+	}
 }
 
 unique_ptr<AlterTableInfo> ResetTableOptionsInfo::Deserialize(Deserializer &deserializer) {

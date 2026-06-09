@@ -316,6 +316,7 @@ supported_member_entries = [
     'default',
     'status',
     'version',
+    'required_until',
     # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'hash_skip',
@@ -367,6 +368,7 @@ class MemberVariable:
         self.default = None
         self.status: MemberVariableStatus = MemberVariableStatus.EXISTING
         self.version: str = 'v0.10.2'
+        self.required_until = None
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
@@ -387,6 +389,13 @@ class MemberVariable:
         if self.default is None:
             # default default
             self.has_default = has_default_by_default(self.type)
+        if 'required_until' in entry:
+            # The field must be written (as a required property) for storage versions older than this version, so
+            # that older DuckDB releases - which read it as a required property - can still open the database. From
+            # this version onwards it is written as an optional property (skipped when default). Reads always tolerate
+            # absence, so a default is required.
+            self.required_until = entry['required_until']
+            self.has_default = True
         if 'base' in entry:
             self.base = entry['base']
         for key in entry.keys():
@@ -563,6 +572,26 @@ class SerializableClass:
             property_default=default_argument,
             assignment=assignment,
         )
+
+        if entry.required_until is not None:
+            # Write as a required property for versions older than required_until (so older releases can read it),
+            # and as the optional property above (skipped when default) from required_until onwards.
+            required_until_enum = version_string_to_storage_version_enum(entry.required_until)
+            required_code = SERIALIZE_ELEMENT_FORMAT.format(
+                property_name=property_name,
+                property_type=property_type,
+                property_id=str(property_id),
+                property_key=property_key,
+                property_default='',
+                assignment=assignment,
+            )
+            return (
+                f'\tif (serializer.ShouldSerialize({required_until_enum})) {{\n'
+                f'\t{serialization_code}'
+                f'\t}} else {{\n'
+                f'\t{required_code}'
+                f'\t}}\n'
+            )
 
         if conditional_serialization:
             code = []
