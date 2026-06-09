@@ -36,6 +36,8 @@ struct CreateFeatureInfo : public CreateInfo {
 	FeatureRefreshMode refresh_mode;
 	//! Number of versions to retain
 	int64_t retain_versions;
+	//! Current version number (incremented on each REFRESH); persisted so it survives restarts
+	int64_t current_version;
 	//! The SELECT query that defines the feature
 	unique_ptr<SelectStatement> query;
 	//! Column names of the materialized result (set during binding)

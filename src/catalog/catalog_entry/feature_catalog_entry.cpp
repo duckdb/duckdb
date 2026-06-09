@@ -8,7 +8,7 @@ FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
     : StandardEntry(CatalogType::FEATURE_ENTRY, schema, catalog, info.feature_name), source_table(info.source_table),
       entity_column(info.entity_column), timestamp_column(info.timestamp_column), granularity(info.granularity),
       window_size(info.window_size), refresh_mode(info.refresh_mode), retain_versions(info.retain_versions),
-      current_version(1), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()) {
+      current_version(info.current_version), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
 	}
@@ -31,6 +31,7 @@ unique_ptr<CreateInfo> FeatureCatalogEntry::GetInfo() const {
 	info->window_size = window_size;
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
+	info->current_version = current_version;
 	if (query) {
 		info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}

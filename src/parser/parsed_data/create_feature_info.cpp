@@ -6,7 +6,7 @@ namespace duckdb {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1) {
+      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -20,6 +20,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->window_size = window_size;
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
+	result->current_version = current_version;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	result->result_names = result_names;
 	result->result_types = result_types;

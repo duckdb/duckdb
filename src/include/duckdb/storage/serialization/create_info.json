@@ -424,6 +424,12 @@
         "id": 210,
         "name": "result_types",
         "type": "vector<LogicalType>"
+      },
+      {
+        "id": 211,
+        "name": "current_version",
+        "type": "int64_t",
+        "default": "1"
       }
     ]
   }

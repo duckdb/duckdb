@@ -109,6 +109,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(209, "result_names", result_names);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(210, "result_types", result_types);
+	serializer.WritePropertyWithDefault<int64_t>(211, "current_version", current_version, 1);
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -124,6 +125,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(209, "result_names", result->result_names);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(210, "result_types", result->result_types);
+	deserializer.ReadPropertyWithExplicitDefault<int64_t>(211, "current_version", result->current_version, 1);
 	return std::move(result);
 }
 

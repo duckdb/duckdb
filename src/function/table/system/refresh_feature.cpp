@@ -250,17 +250,17 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
-		// Garbage-collect old version tables beyond the retain limit.
-		int64_t min_retain_version = new_version - feat.retain_versions + 1;
-		if (min_retain_version > 1) {
-			for (int64_t v = min_retain_version - 1; v >= 1; v--) {
-				auto old_table_name = feature_name + "__v" + duckdb::to_string(v);
-				auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
-				auto drop_result = con.Query(drop_sql);
-				if (drop_result->HasError()) {
-					throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
-					                        drop_result->GetError());
-				}
+		// Garbage-collect the version table that just fell outside the retain window.
+		// Each refresh adds exactly one new version, so at most one table is evicted;
+		// older versions were already dropped by previous refreshes.
+		int64_t evicted_version = new_version - feat.retain_versions;
+		if (evicted_version >= 1) {
+			auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
+			auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
+			auto drop_result = con.Query(drop_sql);
+			if (drop_result->HasError()) {
+				throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
+				                        drop_result->GetError());
 			}
 		}
 
