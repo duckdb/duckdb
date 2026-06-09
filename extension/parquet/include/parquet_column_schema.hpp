@@ -31,7 +31,7 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::FileMetaData;
 struct ParquetOptions;
 
-enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY };
+enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY, FILE_ROW_GROUP_NUMBER };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
@@ -72,6 +72,7 @@ public:
 	                                            vector<ParquetColumnSchema> &&children,
 	                                            ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	static ParquetColumnSchema FileRowNumber();
+	static ParquetColumnSchema FileRowGroupNumber();
 
 public:
 	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,

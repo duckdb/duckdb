@@ -11,6 +11,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -499,6 +500,11 @@ public:
 		return *this;
 	}
 
+	template <class STATE_TYPE>
+	AggregateFunction &SetStructStateExport() {
+		return SetStructStateExport([](const BoundAggregateFunction &) { return STATE_TYPE::GetLogicalType(); });
+	}
+
 	AggregateFunction &SetClusterCallback(aggregate_cluster_update_t cluster_update) {
 		callbacks.cluster_update = cluster_update;
 		return *this;
@@ -517,11 +523,13 @@ public:
 
 	template <class STATE, class RESULT_TYPE, class OP>
 	static AggregateFunction NullaryAggregate(LogicalType return_type) {
-		return AggregateFunction(
+		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryClusterUpdate<STATE, OP>);
+		WireStructStateType<STATE>(result);
+		return result;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -529,12 +537,14 @@ public:
 	static AggregateFunction
 	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		return AggregateFunction(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
 		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
+		WireStructStateType<STATE>(result);
+		return result;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -549,14 +559,24 @@ public:
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
 	                                         LogicalType return_type) {
-		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
+		AggregateFunction result({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, nullptr);
+		WireStructStateType<STATE>(result);
+		return result;
 	}
 
 public:
+	template <class STATE>
+	static void WireStructStateType(AggregateFunction &result) {
+		if constexpr (HasStructStateType<STATE>::value) {
+			result.SetStructStateExport(
+			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES); });
+		}
+	}
+
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
 		return sizeof(STATE);
