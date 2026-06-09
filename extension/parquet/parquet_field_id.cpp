@@ -141,7 +141,8 @@ void FieldID::GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids
 			    "column is a partition column. Available column names: [%s]",
 			    col_name, names);
 		}
-		D_ASSERT(field_ids.ids->find(Identifier(col_name)) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
+		D_ASSERT(field_ids.ids->find(Identifier(col_name)) ==
+		         field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
 		const auto &child_value = struct_children[i];
 		const auto &child_type = child_value.type();
