@@ -256,8 +256,8 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const BoundAggregateFunction &function) {
-	return LogicalType::BIGINT;
+AggregateStateLayout GetCountStateType(const BoundAggregateFunction &function) {
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,

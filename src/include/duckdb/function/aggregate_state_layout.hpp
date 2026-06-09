@@ -7,8 +7,9 @@
 
 #pragma once
 
-#include "duckdb/common/type_util.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
 
@@ -105,6 +106,66 @@ struct StructStateType {
 		(children.emplace_back(Names[i++], FieldToLogicalType<Ts>()), ...);
 		return LogicalType::STRUCT(std::move(children));
 	}
+};
+
+//! Per-field layout information within an aggregate state.
+//! field_offset: byte offset of this field relative to the parent struct's base.
+//! is_optional: true when this field is an optional<T> (nullopt maps to SQL NULL).
+//! children: non-empty only when the field is itself a STRUCT; each child's offset is relative to this field's base.
+struct AggregateStateField {
+	idx_t field_offset = 0;
+	bool is_optional = false;
+	vector<AggregateStateField> children;
+
+	static idx_t GetPhysicalSize(const LogicalType &type) {
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return GetTypeIdSize(type.InternalType());
+		}
+		idx_t size = 0;
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			idx_t child_size = GetPhysicalSize(child.second);
+			size = AlignValue(size, MinValue<idx_t>(child_size, 8));
+			size += child_size;
+		}
+		return size;
+	}
+
+	static void PopulateChildren(const LogicalType &type, AggregateStateField &field) {
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return;
+		}
+		D_ASSERT(field.children.empty());
+		idx_t offset = 0;
+		for (auto &[name, child_type] : StructType::GetChildTypes(type)) {
+			idx_t child_size = GetPhysicalSize(child_type);
+			offset = AlignValue(offset, MinValue<idx_t>(child_size, 8));
+			AggregateStateField child_field;
+			child_field.field_offset = offset;
+			PopulateChildren(child_type, child_field);
+			field.children.push_back(std::move(child_field));
+			offset += child_size;
+		}
+	}
+};
+
+//! Top-level description of an aggregate state for export/import purposes.
+//! Returned by the aggregate_get_state_type_t callback registered via SetStructStateExport.
+//!
+//! - Primitive state (e.g. int64_t for count): type=BIGINT, field.children empty, field.is_optional=false
+//! - Optional state (e.g. optional<bool>): type=BOOLEAN, field.is_optional=true, field.children empty
+//! - Struct state: type=STRUCT(...), field.children fully populated in the constructor
+//! total_state_size is the aligned size of the full state (stride between consecutive states in a buffer).
+struct AggregateStateLayout {
+	AggregateStateLayout() = default;
+	AggregateStateLayout(LogicalType type_p, idx_t total_state_size_p, bool is_optional = false)
+	    : type(std::move(type_p)), total_state_size(total_state_size_p) {
+		field.is_optional = is_optional;
+		AggregateStateField::PopulateChildren(type, field);
+	}
+
+	LogicalType type;
+	AggregateStateField field;
+	idx_t total_state_size = 0;
 };
 
 } // namespace duckdb

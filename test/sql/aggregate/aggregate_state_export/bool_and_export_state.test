@@ -2,6 +2,16 @@
 # description: Test bool_and aggregate state export
 # group: [aggregate_state_export]
 
+query I
+SELECT bool_and(NULL) EXPORT_STATE
+----
+NULL
+
+query I
+SELECT finalize(bool_and(NULL) EXPORT_STATE)
+----
+NULL
+
 # All-true group: state exports as true
 query I
 SELECT bool_and(v) EXPORT_STATE FROM (VALUES (true), (true), (true)) t(v)
@@ -41,7 +51,7 @@ query I
 SELECT finalize(combine_aggr(s)) FROM (
     SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true), (true)) t(v)
     UNION ALL
-    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true)) t(v)
+    SELECT bool_and(NULL) EXPORT_STATE AS s
 )
 ----
 1

@@ -20,13 +20,14 @@ namespace duckdb {
 
 namespace {
 
+static constexpr const char *MinMaxStateNames[] = {"value", "isset"};
+
 template <class T>
 struct MinMaxState {
 	T value;
 	bool isset;
 
-	static constexpr const char *STATE_NAMES[] = {"value", "isset"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, T, bool>;
+	using STATE_TYPE = StructStateType<MinMaxStateNames, T, bool>;
 };
 
 template <class OP>
@@ -533,11 +534,12 @@ AggregateFunction GetMinMaxNFunction() {
 	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-LogicalType GetExportStateType(const BoundAggregateFunction &function) {
-	auto struct_children_types = child_list_t<LogicalType> {};
+AggregateStateLayout GetExportStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> struct_children_types;
 	struct_children_types.emplace_back("value", function.GetReturnType());
 	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
-	return LogicalType::STRUCT(std::move(struct_children_types));
+	return AggregateStateLayout(LogicalType::STRUCT(std::move(struct_children_types)),
+	                            AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 } // namespace

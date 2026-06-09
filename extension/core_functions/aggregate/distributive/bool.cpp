@@ -17,7 +17,8 @@ struct BoolAggregate {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		if (count > 0) {
 			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}

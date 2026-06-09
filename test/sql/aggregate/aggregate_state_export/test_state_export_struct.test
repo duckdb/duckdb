@@ -330,11 +330,6 @@ query II nosort res8a
 SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
 query II nosort res8a2
 SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 ----
@@ -342,16 +337,6 @@ SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 query II nosort res8a2
 SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
-
-query T
-SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
-query T
-SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': false}
 
 query III nosort res8b
 SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
