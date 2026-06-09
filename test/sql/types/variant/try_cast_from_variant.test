@@ -81,3 +81,23 @@ select try_cast(a as UNION(a integer, b decimal)) from cte;
 NULL
 NULL
 NULL
+
+require json
+
+# A failing element conversion must fail the whole conversion, consistently for
+# fixed-size arrays and lists (issue #23151)
+
+query I
+select try_cast(json('["1","x"]')::VARIANT as INTEGER[]);
+----
+NULL
+
+query I
+select try_cast(json('["1","x"]')::VARIANT as INTEGER[2]);
+----
+NULL
+
+statement error
+select cast(json('["1","x"]')::VARIANT as INTEGER[2]);
+----
+Conversion Error
