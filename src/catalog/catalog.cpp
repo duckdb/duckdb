@@ -26,6 +26,11 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -201,6 +206,34 @@ optional_ptr<CatalogEntry> Catalog::CreateType(ClientContext &context, CreateTyp
 optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                CreateTypeInfo &info) {
 	return schema.CreateType(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Feature
+//===--------------------------------------------------------------------===//
+optional_ptr<CatalogEntry> Catalog::CreateFeature(CatalogTransaction transaction, CreateFeatureInfo &info) {
+	auto &schema = GetSchema(transaction, info.schema);
+	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
+	auto &set = duck_schema.GetCatalogSet(CatalogType::FEATURE_ENTRY);
+	auto entry = make_uniq<FeatureCatalogEntry>(*this, schema, info);
+
+	auto &dependencies = info.dependencies;
+	if (!set.CreateEntry(transaction, info.feature_name, std::move(entry), dependencies)) {
+		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			return nullptr;
+		}
+		throw CatalogException::EntryAlreadyExists(CatalogType::FEATURE_ENTRY, info.feature_name);
+	}
+
+	// Restore the feature -> view ownership so DROP FEATURE cascades to the view.
+	// The view is created/persisted independently; it must already exist at this point.
+	auto feature_entry = set.GetEntry(transaction, info.feature_name);
+	auto view_entry = duck_schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, info.feature_name);
+	if (feature_entry && view_entry) {
+		auto &duck_catalog = Cast<DuckCatalog>();
+		duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
+	}
+	return feature_entry;
 }
 
 //===--------------------------------------------------------------------===//

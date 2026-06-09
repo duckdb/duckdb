@@ -42,6 +42,7 @@ struct CreateCoordinateSystemInfo;
 struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
+struct CreateFeatureInfo;
 struct DatabaseSize;
 struct MetadataBlockInfo;
 
@@ -171,6 +172,9 @@ public:
 	//! Creates a Enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(ClientContext &context, CreateTypeInfo &info);
+	//! Creates a feature catalog entry (and its ownership of the feature view). Used by CREATE FEATURE and
+	//! WAL replay. Does not create the backing version tables or the view — those are persisted separately.
+	DUCKDB_API optional_ptr<CatalogEntry> CreateFeature(CatalogTransaction transaction, CreateFeatureInfo &info);
 	//! Creates a collation in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(ClientContext &context, CreateCollationInfo &info);

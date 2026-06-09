@@ -21,6 +21,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -251,6 +252,9 @@ protected:
 
 	void ReplayCreateTrigger();
 	void ReplayDropTrigger();
+
+	void ReplayCreateFeature();
+	void ReplayDropFeature();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -654,6 +658,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TRIGGER:
 		ReplayDropTrigger();
 		break;
+	case WALType::CREATE_FEATURE:
+		ReplayCreateFeature();
+		break;
+	case WALType::DROP_FEATURE:
+		ReplayDropFeature();
+		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -954,6 +964,31 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.DropTrigger(transaction, info.name, info.cascade);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Feature
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayCreateFeature() {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "feature");
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
+	auto &feature_info = info->Cast<CreateFeatureInfo>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	catalog.CreateFeature(transaction, feature_info);
+}
+
+void WriteAheadLogDeserializer::ReplayDropFeature() {
+	DropInfo info;
+	info.type = CatalogType::FEATURE_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	if (DeserializeOnly()) {
+		return;
+	}
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
