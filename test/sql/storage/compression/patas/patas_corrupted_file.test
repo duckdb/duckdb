@@ -1,0 +1,17 @@
+# name: test/sql/storage/compression/patas/patas_corrupted_file.test
+# group: [patas]
+
+load data/storage/patas_corrupt.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('temperatures_double') WHERE compression='Patas';
+----
+Patas
+Patas
+Patas
+Patas
+
+statement error
+SELECT * FROM temperatures_double LIMIT 1;
+----
+IO Error: Corrupted Patas segment: invalid backward reference
