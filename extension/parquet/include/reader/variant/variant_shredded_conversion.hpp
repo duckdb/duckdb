@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types/variant_value.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
 
 namespace duckdb {
