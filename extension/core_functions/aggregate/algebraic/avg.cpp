@@ -10,13 +10,14 @@ namespace duckdb {
 
 namespace {
 
+static constexpr const char *AvgStateNames[] = {"count", "value"};
+
 template <class T>
 struct AvgState {
 	uint64_t count;
 	T value;
 
-	static constexpr const char *STATE_NAMES[] = {"count", "value"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, T>;
+	using STATE_TYPE = StructStateType<AvgStateNames, uint64_t, T>;
 
 	void Combine(const AvgState<T> &other) {
 		this->count += other.count;
