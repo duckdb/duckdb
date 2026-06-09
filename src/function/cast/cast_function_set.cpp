@@ -236,4 +236,35 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 	map_info->AddEntry(source, target, std::move(node));
 }
 
+void CastFunctionSet::RegisterCombineEqualTypesRule(CombineTypesRule rule) {
+	combine_equal_rules.push_back(rule);
+}
+
+void CastFunctionSet::RegisterCombineUnequalTypesRule(CombineTypesRule rule) {
+	combine_unequal_rules.push_back(rule);
+}
+
+static bool TryCombineTypes(vector<CombineTypesRule> &rules, LogicalTypeResolver &resolver, const LogicalType &left,
+                            const LogicalType &right, LogicalType &result, bool &success) {
+	// most-recently-registered rule wins
+	for (idx_t i = rules.size(); i > 0; i--) {
+		auto &rule = rules[i - 1];
+		if (rule.matches(left, right)) {
+			success = rule.function(resolver, left, right, result);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CastFunctionSet::TryCombineEqualTypes(LogicalTypeResolver &resolver, const LogicalType &left,
+                                           const LogicalType &right, LogicalType &result, bool &success) {
+	return TryCombineTypes(combine_equal_rules, resolver, left, right, result, success);
+}
+
+bool CastFunctionSet::TryCombineUnequalTypes(LogicalTypeResolver &resolver, const LogicalType &left,
+                                             const LogicalType &right, LogicalType &result, bool &success) {
+	return TryCombineTypes(combine_unequal_rules, resolver, left, right, result, success);
+}
+
 } // namespace duckdb

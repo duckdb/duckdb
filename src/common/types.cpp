@@ -880,18 +880,6 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 	}
 }
 
-class LogicalTypeResolver {
-public:
-	explicit LogicalTypeResolver(optional_ptr<ClientContext> context_p) : context(context_p) {
-	}
-	virtual ~LogicalTypeResolver() = default;
-
-	virtual bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) = 0;
-
-public:
-	optional_ptr<ClientContext> context;
-};
-
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                          const LogicalType &right, LogicalType &result);
 
@@ -948,13 +936,6 @@ static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left,
 	return true;
 }
 
-using CombineTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
-                                          const LogicalType &right, LogicalType &result);
-struct CombineUnequalTypesRule {
-	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive
-	CombineTypesRuleFunction function;
-};
-
 static bool MatchesVariant(const LogicalType &left, const LogicalType &right) {
 	return left.id() == LogicalTypeId::VARIANT || right.id() == LogicalTypeId::VARIANT;
 }
@@ -976,7 +957,7 @@ static bool MatchesStringLiteral(const LogicalType &left, const LogicalType &rig
 
 // Rules are matched in order, so the first matching rule wins (VARIANT and NULL/UNKNOWN are matched
 // before ENUM, ENUM before STRING_LITERAL). Each `matches` predicate is order-insensitive in (left, right).
-static const CombineUnequalTypesRule COMBINE_UNEQUAL_TYPES_RULES[] = {
+static const CombineTypesRule COMBINE_UNEQUAL_TYPES_RULES[] = {
     {MatchesVariant, CombineVariant},
     {MatchesNullOrUnknown, CombineNullOrUnknown},
     {MatchesEnum, CombineEnum},
@@ -1030,6 +1011,13 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                 const LogicalType &right, LogicalType &result) {
 	D_ASSERT(right.id() != left.id());
+	if (logical_type_resolver.context) {
+		bool success;
+		if (CastFunctionSet::Get(*logical_type_resolver.context)
+		        .TryCombineUnequalTypes(logical_type_resolver, left, right, result, success)) {
+			return success;
+		}
+	}
 	for (auto &combine_rule : COMBINE_UNEQUAL_TYPES_RULES) {
 		if (combine_rule.matches(left, right)) {
 			return combine_rule.function(logical_type_resolver, left, right, result);
@@ -1131,7 +1119,7 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 
 struct CombineEqualTypesRule {
 	LogicalTypeId type;
-	CombineTypesRuleFunction function;
+	combine_types_rule_function_t function;
 };
 
 static bool CombineEqualStringLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
@@ -1239,6 +1227,13 @@ static const CombineEqualTypesRule COMBINE_EQUAL_TYPES_RULES[] = {
 
 static bool CombineEqualTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                               const LogicalType &right, LogicalType &result) {
+	if (logical_type_resolver.context) {
+		bool success;
+		if (CastFunctionSet::Get(*logical_type_resolver.context)
+		        .TryCombineEqualTypes(logical_type_resolver, left, right, result, success)) {
+			return success;
+		}
+	}
 	auto type_id = left.id();
 	for (auto &combine_rule : COMBINE_EQUAL_TYPES_RULES) {
 		if (type_id == combine_rule.type) {
