@@ -451,14 +451,14 @@ SELECT (count(*) export_state)::bigint
 1
 
 query T
-SELECT (sum(42) export_state)::struct(isset boolean, "value" bigint);
+SELECT (sum(42) export_state)::hugeint;
 ----
-{'isset': true, 'value': 42}
+42
 
 query T
-SELECT (sum(100) export_state)::struct(isset boolean, "value" hugeint);
+SELECT (sum(100) export_state)::hugeint;
 ----
-{'isset': true, 'value': 100}
+100
 
 # EXPORT_STATAE on a window function is not supported
 statement error

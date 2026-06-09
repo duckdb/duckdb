@@ -14,11 +14,39 @@ namespace {
 struct SumSetOperation {
 	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.has_value()) {
+			return;
+		}
+		if (!target.has_value()) {
+			target = *source;
+		} else {
+			*target += *source;
+		}
+	}
+	template <class STATE>
+	static void AddValues(STATE &state, idx_t count) {
+		if (!state.has_value()) {
+			state = typename STATE::value_type {};
+		}
+	}
+	template <class STATE>
+	static typename STATE::value_type &GetRef(STATE &state) {
+		return *state;
+	}
+};
+
+struct KahanSumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
 		state.isset = true;
+	}
+	template <class STATE>
+	static STATE &GetRef(STATE &state) {
+		return state;
 	}
 };
 
@@ -26,9 +54,6 @@ template <class BASE>
 struct ClusteredSumStateCopy : public BASE, public ClusteredStateCopy {
 	template <class STATE>
 	static void FlushClusteredLocal(STATE &state, STATE &local, bool saw_value) {
-		if (saw_value) {
-			local.isset = true;
-		}
 		state = local;
 	}
 };
@@ -37,12 +62,18 @@ template <class ADD_OP>
 struct ClusteredAddOp {
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		ADD_OP::template AddNumber<STATE, INPUT_TYPE>(local, input);
+		if (!local.has_value()) {
+			local = typename STATE::value_type {};
+		}
+		ADD_OP::AddNumber(*local, input);
 	}
 
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		ADD_OP::template AddConstant<STATE, INPUT_TYPE>(local, input, count);
+		if (!local.has_value()) {
+			local = typename STATE::value_type {};
+		}
+		ADD_OP::AddConstant(*local, input, count);
 	}
 };
 
@@ -62,10 +93,10 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.has_value()) {
 			finalize_data.ReturnNull();
 		} else {
-			target = state.value;
+			target = *state;
 		}
 	}
 
@@ -80,11 +111,14 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 			if (run_count == 0) {
 				continue;
 			}
+			if (!state.has_value()) {
+				state = hugeint_t(0);
+			}
 			int64_t local64 = 0;
 			auto add_row = [&](idx_t idx) {
 				const int64_t v = static_cast<int64_t>(vals[idx]);
 				if (DUCKDB_UNLIKELY(!I64VectorSumSafe(v))) {
-					state.value = Hugeint::Add(state.value, v);
+					*state = Hugeint::Add(*state, v);
 				} else {
 					local64 += v;
 				}
@@ -111,8 +145,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				}
 			}
 			pos += run_count;
-			state.value = Hugeint::Add(state.value, local64);
-			state.isset = true;
+			*state = Hugeint::Add(*state, local64);
 		}
 	}
 
@@ -137,13 +170,15 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				}
 			}
 			if (local64 != 0) {
-				state.value = Hugeint::Add(state.value, local64);
-				state.isset = true;
-			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
+				if (!state.has_value()) {
+					state = hugeint_t(0);
+				}
+				*state = Hugeint::Add(*state, local64);
+			} else if (!state.has_value()) { // rare: we added 0 -- were all values NULL?
 				for (idx_t k = 0; k < run_count; k++) {
 					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
 					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
-						state.isset = true;
+						state = hugeint_t(0);
 						break;
 					}
 				}
@@ -156,10 +191,10 @@ struct IntegerSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.has_value()) {
 			finalize_data.ReturnNull();
 		} else {
-			target = Hugeint::Convert(state.value);
+			target = Hugeint::Convert(*state);
 		}
 	}
 };
@@ -169,7 +204,7 @@ using SumToHugeintOperation =
 using NumericSumOperation =
     ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>>;
 
-struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
+struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {

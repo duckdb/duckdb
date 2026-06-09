@@ -10,6 +10,12 @@ namespace duckdb {
 
 namespace {
 
+template <class STATE, class = void>
+struct HasErrField : std::false_type {};
+
+template <class STATE>
+struct HasErrField<STATE, std::void_t<decltype(std::declval<STATE>().err)>> : std::true_type {};
+
 template <class T>
 struct AvgState {
 	static constexpr const char *STATE_NAMES[] = {"count", "value"};
@@ -77,6 +83,14 @@ struct AverageSetOperation {
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
 		state.count += count;
+	}
+	template <class STATE>
+	static auto &GetRef(STATE &state) {
+		if constexpr (HasErrField<STATE>::value) {
+			return state;
+		} else {
+			return state.value;
+		}
 	}
 };
 
@@ -200,14 +214,14 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary) {
 		const auto micros = Time::NormalizeTimeTZ(input).micros;
 		AverageSetOperation::template AddValues<STATE>(state, 1);
-		AddToHugeint::template AddNumber<STATE, int64_t>(state, micros);
+		AddToHugeint::AddNumber(state.value, micros);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary, idx_t count) {
 		const auto micros = Time::NormalizeTimeTZ(input).micros;
 		AverageSetOperation::template AddValues<STATE>(state, count);
-		AddToHugeint::template AddConstant<STATE, int64_t>(state, micros, count);
+		AddToHugeint::AddConstant(state.value, micros, count);
 	}
 
 	template <class T, class STATE>

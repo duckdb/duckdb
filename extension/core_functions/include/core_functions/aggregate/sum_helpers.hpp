@@ -14,6 +14,7 @@
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -25,18 +26,7 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 }
 
 template <class T>
-struct SumState {
-	static constexpr const char *STATE_NAMES[] = {"isset", "value"};
-	using STATE_TYPE = StructStateType<bool, T>;
-
-	bool isset;
-	T value;
-
-	void Combine(const SumState<T> &other) {
-		this->isset = other.isset || this->isset;
-		this->value += other.value;
-	}
-};
+using SumState = optional<T>;
 
 struct KahanSumState {
 	static constexpr const char *STATE_NAMES[] = {"isset", "value", "err"};
@@ -54,40 +44,40 @@ struct KahanSumState {
 };
 
 struct RegularAdd {
-	template <class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
-		state.value += input;
+	template <class V, class T>
+	static void AddNumber(V &value, T input) {
+		value += input;
 	}
 
-	template <class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
-		state.value += input * int64_t(count);
+	template <class V, class T>
+	static void AddConstant(V &value, T input, idx_t count) {
+		value += input * int64_t(count);
 	}
 };
 
 struct HugeintAdd {
-	template <class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
-		state.value = Hugeint::Add(state.value, input);
+	template <class V, class T>
+	static void AddNumber(V &value, T input) {
+		value = Hugeint::Add(value, input);
 	}
 
-	template <class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
-		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
+	template <class V, class T>
+	static void AddConstant(V &value, T input, idx_t count) {
+		AddNumber(value, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
 	}
 };
 
 struct IntervalAdd {
-	template <class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
-		state.value = AddOperator::Operation<interval_t, interval_t, interval_t>(state.value, input);
+	template <class V, class T>
+	static void AddNumber(V &value, T input) {
+		value = AddOperator::Operation<interval_t, interval_t, interval_t>(value, input);
 	}
 
-	template <class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
+	template <class V, class T>
+	static void AddConstant(V &value, T input, idx_t count) {
 		const auto count64 = Cast::Operation<idx_t, int64_t>(count);
 		input = MultiplyOperator::Operation<interval_t, int64_t, interval_t>(input, count64);
-		state.value = AddOperator::Operation<interval_t, interval_t, interval_t>(state.value, input);
+		value = AddOperator::Operation<interval_t, interval_t, interval_t>(value, input);
 	}
 };
 
@@ -122,21 +112,21 @@ struct AddToHugeint {
 		}
 	}
 
-	template <class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
-		AddValue(state.value, uint64_t(input), input >= 0);
+	template <class T>
+	static void AddNumber(hugeint_t &value, T input) {
+		AddValue(value, uint64_t(input), input >= 0);
 	}
 
-	template <class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
+	template <class T>
+	static void AddConstant(hugeint_t &value, T input, idx_t count) {
 		// add a constant X number of times
 		// fast path: check if value * count fits into a uint64_t
 		// note that we check if value * VECTOR_SIZE fits in a uint64_t to avoid having to actually do a division
 		// this is still a pretty high number (18014398509481984) so most positive numbers will fit
 		if (input >= 0 && uint64_t(input) < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
 			// if it does just multiply it and add the value
-			uint64_t value = uint64_t(input) * count;
-			AddValue(state.value, value, 1);
+			uint64_t v = uint64_t(input) * count;
+			AddValue(value, v, 1);
 		} else {
 			// if it doesn't fit we have two choices
 			// either we loop over count and add the values individually
@@ -146,11 +136,11 @@ struct AddToHugeint {
 			// with a high count we do the hugeint multiplication
 			if (count < 8) {
 				for (idx_t i = 0; i < count; i++) {
-					AddValue(state.value, uint64_t(input), input >= 0);
+					AddValue(value, uint64_t(input), input >= 0);
 				}
 			} else {
 				hugeint_t addition = hugeint_t(input) * Hugeint::Convert(count);
-				state.value += addition;
+				value += addition;
 			}
 		}
 	}
@@ -166,13 +156,13 @@ struct BaseSumOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		STATEOP::template AddValues<STATE>(state, 1);
-		ADDOP::template AddNumber<STATE, INPUT_TYPE>(state, input);
+		ADDOP::AddNumber(STATEOP::template GetRef<STATE>(state), input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		STATEOP::template AddValues<STATE>(state, count);
-		ADDOP::template AddConstant<STATE, INPUT_TYPE>(state, input, count);
+		ADDOP::AddConstant(STATEOP::template GetRef<STATE>(state), input, count);
 	}
 	static bool IgnoreNull() {
 		return true;
