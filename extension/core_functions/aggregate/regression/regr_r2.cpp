@@ -13,12 +13,12 @@ namespace duckdb {
 
 namespace {
 struct RegrR2State {
+	static constexpr const char *STATE_NAMES[] = {"corr", "var_pop_x", "var_pop_y"};
+	using STATE_TYPE = StructStateType<CorrState, StddevState, StddevState>;
+
 	CorrState corr;
 	StddevState var_pop_x;
 	StddevState var_pop_y;
-
-	static constexpr const char *STATE_NAMES[] = {"corr", "var_pop_x", "var_pop_y"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, CorrState, StddevState, StddevState>;
 };
 
 struct RegrR2Operation {

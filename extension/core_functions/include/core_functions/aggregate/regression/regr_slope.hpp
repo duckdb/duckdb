@@ -13,11 +13,11 @@
 namespace duckdb {
 
 struct RegrSlopeState {
+	static constexpr const char *STATE_NAMES[] = {"cov_pop", "var_pop"};
+	using STATE_TYPE = StructStateType<CovarState, StddevState>;
+
 	CovarState cov_pop;
 	StddevState var_pop;
-
-	static constexpr const char *STATE_NAMES[] = {"cov_pop", "var_pop"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, CovarState, StddevState>;
 };
 
 struct RegrSlopeOperation {

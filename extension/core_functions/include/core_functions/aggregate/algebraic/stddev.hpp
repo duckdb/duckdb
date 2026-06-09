@@ -15,12 +15,12 @@
 namespace duckdb {
 
 struct StddevState {
+	static constexpr const char *STATE_NAMES[] = {"count", "mean", "dsquared"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double>;
+
 	uint64_t count;  //  n
 	double mean;     //  M1
 	double dsquared; //  M2
-
-	static constexpr const char *STATE_NAMES[] = {"count", "mean", "dsquared"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, double, double>;
 };
 
 // Streaming approximate standard deviation using Welford's

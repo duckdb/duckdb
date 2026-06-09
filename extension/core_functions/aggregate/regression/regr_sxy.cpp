@@ -11,11 +11,11 @@ namespace duckdb {
 namespace {
 
 struct RegrSXyState {
+	static constexpr const char *STATE_NAMES[] = {"count", "cov_pop"};
+	using STATE_TYPE = StructStateType<uint64_t, CovarState>;
+
 	uint64_t count;
 	CovarState cov_pop;
-
-	static constexpr const char *STATE_NAMES[] = {"count", "cov_pop"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, CovarState>;
 };
 
 struct RegrSXYOperation {

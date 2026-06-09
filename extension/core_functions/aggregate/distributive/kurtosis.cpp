@@ -9,14 +9,14 @@ namespace duckdb {
 namespace {
 
 struct KurtosisState {
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub", "sum_four"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double, double>;
+
 	idx_t n;
 	double sum;
 	double sum_sqr;
 	double sum_cub;
 	double sum_four;
-
-	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub", "sum_four"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, idx_t, double, double, double, double>;
 };
 
 struct KurtosisFlagBiasCorrection {};

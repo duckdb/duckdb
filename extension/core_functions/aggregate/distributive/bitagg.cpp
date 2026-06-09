@@ -12,15 +12,14 @@ namespace duckdb {
 
 namespace {
 
-static constexpr const char *BitStateNames[] = {"is_set", "value"};
-
 template <class T>
 struct BitState {
+	static constexpr const char *STATE_NAMES[] = {"is_set", "value"};
+	using STATE_TYPE = StructStateType<bool, T>;
+
 	using TYPE = T;
 	bool is_set;
 	T value;
-
-	using STATE_TYPE = StructStateType<BitStateNames, bool, T>;
 };
 
 template <class OP>

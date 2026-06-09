@@ -11,11 +11,11 @@ namespace duckdb {
 namespace {
 
 struct BoolState {
+	static constexpr const char *STATE_NAMES[] = {"empty", "val"};
+	using STATE_TYPE = StructStateType<bool, bool>;
+
 	bool empty;
 	bool val;
-
-	static constexpr const char *STATE_NAMES[] = {"empty", "val"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, bool, bool>;
 };
 
 using BoolAndFunFunction = EmptyValAggregate<LogicalAnd, ConstantInit<true>>;

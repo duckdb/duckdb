@@ -10,14 +10,13 @@ namespace duckdb {
 
 namespace {
 
-static constexpr const char *AvgStateNames[] = {"count", "value"};
-
 template <class T>
 struct AvgState {
+	static constexpr const char *STATE_NAMES[] = {"count", "value"};
+	using STATE_TYPE = StructStateType<uint64_t, T>;
+
 	uint64_t count;
 	T value;
-
-	using STATE_TYPE = StructStateType<AvgStateNames, uint64_t, T>;
 
 	void Combine(const AvgState<T> &other) {
 		this->count += other.count;
@@ -26,11 +25,11 @@ struct AvgState {
 };
 
 struct IntervalAvgState {
+	static constexpr const char *STATE_NAMES[] = {"count", "value"};
+	using STATE_TYPE = StructStateType<int64_t, interval_t>;
+
 	int64_t count;
 	interval_t value;
-
-	static constexpr const char *STATE_NAMES[] = {"count", "value"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, int64_t, interval_t>;
 
 	void Combine(const IntervalAvgState &other) {
 		this->count += other.count;
@@ -39,6 +38,9 @@ struct IntervalAvgState {
 };
 
 struct KahanAvgState {
+	static constexpr const char *STATE_NAMES[] = {"count", "value", "err"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double>;
+
 	uint64_t count;
 	double value;
 	double err;
@@ -48,9 +50,6 @@ struct KahanAvgState {
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}
-
-	static constexpr const char *STATE_NAMES[] = {"count", "value", "err"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, double, double>;
 };
 
 struct AverageDecimalBindData : public FunctionData {

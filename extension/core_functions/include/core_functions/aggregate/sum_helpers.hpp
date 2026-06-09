@@ -24,14 +24,13 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 	summed = newval;
 }
 
-inline constexpr const char *SumStateNames[] = {"isset", "value"};
-
 template <class T>
 struct SumState {
+	static constexpr const char *STATE_NAMES[] = {"isset", "value"};
+	using STATE_TYPE = StructStateType<bool, T>;
+
 	bool isset;
 	T value;
-
-	using STATE_TYPE = StructStateType<SumStateNames, bool, T>;
 
 	void Combine(const SumState<T> &other) {
 		this->isset = other.isset || this->isset;
@@ -40,6 +39,9 @@ struct SumState {
 };
 
 struct KahanSumState {
+	static constexpr const char *STATE_NAMES[] = {"isset", "value", "err"};
+	using STATE_TYPE = StructStateType<bool, double, double>;
+
 	bool isset;
 	double value;
 	double err;
@@ -49,9 +51,6 @@ struct KahanSumState {
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}
-
-	static constexpr const char *STATE_NAMES[] = {"isset", "value", "err"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, bool, double, double>;
 };
 
 struct RegularAdd {

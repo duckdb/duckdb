@@ -573,7 +573,7 @@ public:
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
 			result.SetStructStateExport(
-			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(); });
+			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES); });
 		}
 	}
 

@@ -9,16 +9,15 @@ namespace duckdb {
 
 namespace {
 
-static constexpr const char *FirstStateNames[] = {"value", "is_set", "is_null"};
-
 template <class T>
 struct FirstState {
+	static constexpr const char *STATE_NAMES[] = {"value", "is_set", "is_null"};
+	using STATE_TYPE = StructStateType<T, bool, bool>;
+
 	using VALUE_TYPE = T;
 	T value;
 	bool is_set;
 	bool is_null;
-
-	using STATE_TYPE = StructStateType<FirstStateNames, T, bool, bool>;
 };
 
 struct FirstFunctionBase {

@@ -9,11 +9,11 @@ namespace duckdb {
 namespace {
 
 struct RegrState {
+	static constexpr const char *STATE_NAMES[] = {"sum", "count"};
+	using STATE_TYPE = StructStateType<double, uint64_t>;
+
 	double sum;
 	uint64_t count;
-
-	static constexpr const char *STATE_NAMES[] = {"sum", "count"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, double, uint64_t>;
 };
 
 struct RegrAvgFunction {
