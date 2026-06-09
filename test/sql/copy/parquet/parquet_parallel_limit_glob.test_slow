@@ -73,3 +73,22 @@ query I
 4978324
 4978325
 4978326
+
+statement ok
+SET threads=32
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+loop iter 0 50
+
+query I
+SELECT * FROM integers WHERE i>1978321 OR i=334 LIMIT 5
+----
+334
+1978322
+1978323
+1978324
+1978325
+
+endloop

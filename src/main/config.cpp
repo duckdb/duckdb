@@ -631,7 +631,8 @@ idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
-	return GetSystemMaxThreads(fs);
+	// via benchmark, it seems that ~2x system threads is the I/O-concurrency sweet spot for remote (S3) scans
+	return 2 * GetSystemMaxThreads(fs);
 #endif
 }
 

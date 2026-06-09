@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/parquet_prefetch_error_cancel.test_slow
+# description: A runtime error mid-scan must not use-after-free in-flight async prefetch reads
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT i FROM range(0, 2000000) t(i)) TO '{TEST_DIR}/uaf.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 10000)
+
+statement ok
+SET threads=32
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+loop iter 0 50
+
+statement error
+SELECT min(CAST(CASE WHEN i = 1000000 THEN 999 ELSE 1 END AS TINYINT)) FROM '{TEST_DIR}/uaf.parquet'
+----
+Conversion Error
+
+endloop

@@ -197,7 +197,7 @@ public:
 	int64_t current_group;
 	idx_t offset_in_group;
 	idx_t group_offset;
-	unique_ptr<CachingFileHandle> file_handle;
+	shared_ptr<CachingFileHandle> file_handle;
 	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
@@ -209,6 +209,14 @@ public:
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+	//! Number of filter head counts, used for prefetching
+	idx_t filter_head_count = 0;
+	//! true once the filters ran
+	bool filter_done = false;
+	//! Surviving row count
+	idx_t filter_count = 0;
+	//! Filter columns kept across the payload BLOCKED
+	DataChunk filter_stash;
 
 	ParquetPrefetchMetrics prefetch_metrics;
 
@@ -401,7 +409,19 @@ private:
 	//! Switch to the next row group and schedule its I/O (prepare column buffers, prefetch the bytes).
 	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
-	SourceResultType Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	AsyncResult Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	//! Process filters
+	AsyncResult ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count, uint8_t *define_ptr,
+	                           uint8_t *repeat_ptr, bool log_prefetch);
+	//! Run the filters into state.sel; returns the surviving row count. Advances every filter column.
+	idx_t EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count, uint8_t *define_ptr,
+	                      uint8_t *repeat_ptr, bool log_prefetch);
+	//! Async-fetch the surviving payload columns (stashing the filter columns); empty if no fetch is needed.
+	vector<unique_ptr<AsyncTask>> ScheduleRemainingColumns(ParquetReaderScanState &state, DataChunk &result,
+	                                                       idx_t scan_count);
+	//! Read the remaining (non-filter) columns into result.
+	void DecodeRemainingColumns(ParquetReaderScanState &state, DataChunk &result, idx_t filter_count,
+	                            uint8_t *define_ptr, uint8_t *repeat_ptr);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
