@@ -533,6 +533,8 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
+		// Auto-detected structs may rename case-insensitive duplicate fields (e.g. "X" -> "X_1") in the
+		// DuckDB schema, but JSON lookup must still use the original keys from the file.
 		if (struct_json_key_names) {
 			child_names.push_back(struct_json_key_names->at(actual_i));
 		} else {

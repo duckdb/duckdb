@@ -1,5 +1,6 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parallel/async_result.hpp"
 
@@ -321,14 +322,18 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
 		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
 		// because the JSON reader gets columns by exact name, not position
+		//
+		// Maps from original key name to the number of times it has been renamed
 		case_insensitive_map_t<idx_t> name_collision_count;
 		for (auto &col_name : names) {
 			// Taken from CSV header_detection.cpp
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+			auto entry = name_collision_count.find(col_name);
+			while (entry != name_collision_count.end()) {
+				entry->second += 1;
+				col_name = StringUtil::Format("%s_%d", col_name, entry->second);
+				entry = name_collision_count.find(col_name);
 			}
-			name_collision_count[col_name] = 0;
+			name_collision_count.emplace(col_name, 0);
 		}
 	}
 	bool reuse_readers = true;
