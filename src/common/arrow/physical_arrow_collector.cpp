@@ -105,21 +105,19 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<ArrowCollectorGlobalState>();
 
-	if (gstate.chunks.empty()) {
-		if (gstate.tuple_count != 0) {
-			throw InternalException(
-			    "PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
-			    gstate.tuple_count);
-		}
-		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
-		                                            context.GetClientProperties(), record_batch_size);
-		return SinkFinalizeType::READY;
+	if (gstate.chunks.empty() && gstate.tuple_count != 0) {
+		throw InternalException("PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
+		                        gstate.tuple_count);
 	}
 
-	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-	                                            record_batch_size);
-	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
-	arrow_result.SetArrowData(std::move(gstate.chunks));
+	auto result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+	                                          record_batch_size);
+	// Cache the schema while the producing transaction is still active (see duckdb/duckdb-python#475).
+	result->BuildCachedSchema();
+	if (!gstate.chunks.empty()) {
+		result->SetArrowData(std::move(gstate.chunks));
+	}
+	gstate.result = std::move(result);
 
 	return SinkFinalizeType::READY;
 }

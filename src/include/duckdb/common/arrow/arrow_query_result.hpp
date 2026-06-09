@@ -40,12 +40,33 @@ public:
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
 	idx_t BatchSize() const;
 
+	//! True once the Arrow schema has been built and cached (see BuildCachedSchema).
+	bool HasCachedSchema() const {
+		return cached_schema.arrow_schema.release != nullptr;
+	}
+	//! Build this result's Arrow schema (from its own types/names/client
+	//! properties) and cache it. The producing arrow collector calls this during
+	//! Finalize, while the transaction is still active. Building the schema later,
+	//! at fetch time, breaks arrow type extensions whose schema callback does a
+	//! catalog lookup -- e.g. GeoArrow CRS resolution in ArrowGeometry::WriteCRS,
+	//! which asserts an active transaction that no longer exists post-commit.
+	//! See duckdb-python#475 / duckdb-spatial#788.
+	DUCKDB_API void BuildCachedSchema();
+	//! Deep-copy the cached schema into `out` (the caller owns and must release
+	//! it). This is how consumers obtain a materialized result's Arrow schema --
+	//! they must never rebuild it via ArrowConverter::ToArrowSchema post-commit.
+	//! Throws if no schema was cached.
+	DUCKDB_API void GetSchema(ArrowSchema &out) const;
+
 protected:
 	DUCKDB_API unique_ptr<DataChunk> FetchInternal() override;
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;
 	idx_t batch_size;
+	//! Owns its ArrowSchema; released by ~ArrowSchemaWrapper when the result dies.
+	//! `mutable` so GetSchema() can hand nanoarrow a (non-const) pointer to copy.
+	mutable ArrowSchemaWrapper cached_schema;
 };
 
 } // namespace duckdb

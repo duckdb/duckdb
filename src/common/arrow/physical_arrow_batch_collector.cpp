@@ -18,16 +18,21 @@ SinkFinalizeType PhysicalArrowBatchCollector::Finalize(Pipeline &pipeline, Event
 	auto total_tuple_count = gstate.data.Count();
 	if (total_tuple_count == 0) {
 		// Create the result containing a single empty result conversion
-		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
-		                                            context.GetClientProperties(), record_batch_size);
+		auto result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
+		                                          context.GetClientProperties(), record_batch_size);
+		result->BuildCachedSchema();
+		gstate.result = std::move(result);
 		return SinkFinalizeType::READY;
 	}
 
 	// Already create the final query result
-	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-	                                            record_batch_size);
+	auto result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+	                                          record_batch_size);
+	// Cache the schema while the producing transaction is still active (see duckdb/duckdb-python#475).
+	result->BuildCachedSchema();
+	auto &arrow_result = *result;
+	gstate.result = std::move(result);
 	// Spawn an event that will populate the conversion result
-	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	auto new_event = make_shared_ptr<ArrowMergeEvent>(arrow_result, gstate.data, pipeline);
 	event.InsertEvent(std::move(new_event));
 

@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,21 @@ void ArrowQueryResult::SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays
 
 idx_t ArrowQueryResult::BatchSize() const {
 	return batch_size;
+}
+
+void ArrowQueryResult::BuildCachedSchema() {
+	ArrowConverter::ToArrowSchema(&cached_schema.arrow_schema, types, names, client_properties);
+}
+
+void ArrowQueryResult::GetSchema(ArrowSchema &out) const {
+	if (!HasCachedSchema()) {
+		throw InternalException("ArrowQueryResult has no cached schema; it was not produced by an arrow collector");
+	}
+	// nanoarrow's source parameter is non-const but only read from; cached_schema
+	// is `mutable` so this stays a const accessor.
+	if (duckdb_nanoarrow::ArrowSchemaDeepCopy(&cached_schema.arrow_schema, &out) != NANOARROW_OK) {
+		throw InternalException("Failed to deep-copy cached Arrow schema");
+	}
 }
 
 } // namespace duckdb
