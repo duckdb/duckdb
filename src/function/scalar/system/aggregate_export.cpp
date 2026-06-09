@@ -140,10 +140,10 @@ struct StoreOp {
 // Serialize optional<T> state buffers into a result vector, setting NULL for disengaged optionals.
 struct StorePrimitiveOptionalOp {
 	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses) {
+	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses, idx_t base_offset) {
 		auto dst = FlatVector::Writer<T>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			const auto opt = Load<optional<T>>(addresses[i]);
+			const auto opt = Load<optional<T>>(addresses[i] + base_offset);
 			if (opt.has_value()) {
 				dst.WriteValue(*opt);
 			} else {
@@ -170,47 +170,16 @@ struct LoadPrimitiveOptionalOp {
 	}
 };
 
-void DeserializeStructFields(const LogicalType &type, const AggregateStateField &field, idx_t root_stride,
-                             const Vector &struct_vec, idx_t count, data_ptr_t dest_buffer) {
-	const auto &child_types = StructType::GetChildTypes(type);
-	const auto &struct_entries = StructVector::GetEntries(struct_vec);
-	for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
-		const auto &child = field.children[field_idx];
-		const auto &child_type = child_types[field_idx].second;
-		auto physical = child_type.InternalType();
-		const auto &child_vec = struct_entries[field_idx];
-
-		if (!child.children.empty()) {
-			DeserializeStructFields(child_type, child, root_stride, child_vec, count, dest_buffer + child.field_offset);
-		} else {
-			TemplateDispatch<LoadOp>(physical, root_stride, child_vec, count, dest_buffer, child.field_offset);
-		}
-	}
-}
-
-void SerializeStructFields(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
-                           const data_ptr_t *addresses_ptrs, idx_t base_offset = 0) {
-	const auto &child_types = StructType::GetChildTypes(type);
-	auto &struct_entries = StructVector::GetEntries(result);
-	for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
-		const auto &child = field.children[field_idx];
-		const auto &child_type = child_types[field_idx].second;
-		auto physical = child_type.InternalType();
-		auto &child_vec = struct_entries[field_idx];
-
-		if (!child.children.empty()) {
-			SerializeStructFields(child_type, child, child_vec, count, addresses_ptrs,
-			                      base_offset + child.field_offset);
-		} else {
-			TemplateDispatch<StoreOp>(physical, child_vec, count, addresses_ptrs, base_offset + child.field_offset);
-		}
-	}
-}
-
 void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                       data_ptr_t dest_buffer) {
 	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		DeserializeStructFields(layout.type, layout.field, layout.total_state_size, input_vec, count, dest_buffer);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		const auto &struct_entries = StructVector::GetEntries(input_vec);
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size, child.is_optional);
+			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset);
+		}
 	} else if (layout.field.is_optional) {
 		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.type.InternalType(), input_vec, count, dest_buffer,
 		                                          layout.total_state_size);
@@ -219,13 +188,21 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 	}
 }
 
-void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses) {
+void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
+                    idx_t base_offset = 0) {
 	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		SerializeStructFields(layout.type, layout.field, result, count, addresses);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		auto &struct_entries = StructVector::GetEntries(result);
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, 0, child.is_optional);
+			SerializeState(child_layout, struct_entries[field_idx], count, addresses,
+			               base_offset + child.field_offset);
+		}
 	} else if (layout.field.is_optional) {
-		TemplateDispatch<StorePrimitiveOptionalOp>(layout.type.InternalType(), result, count, addresses);
+		TemplateDispatch<StorePrimitiveOptionalOp>(layout.type.InternalType(), result, count, addresses, base_offset);
 	} else {
-		TemplateDispatch<StoreOp>(layout.type.InternalType(), result, count, addresses, 0);
+		TemplateDispatch<StoreOp>(layout.type.InternalType(), result, count, addresses, base_offset);
 	}
 }
 
