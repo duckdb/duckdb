@@ -13,6 +13,7 @@
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
@@ -97,6 +98,8 @@ public:
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
 	optional_idx field_id;
+	//! Column-level key/value metadata, emitted onto the leaf ColumnMetaData per row group
+	vector<pair<string, string>> kv_metadata;
 	//! Whether a column is nullable or not
 	duckdb_parquet::FieldRepetitionType::type repetition_type = duckdb_parquet::FieldRepetitionType::OPTIONAL;
 	//! Whether the column can be recognized as a GEOMETRY type

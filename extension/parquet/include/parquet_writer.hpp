@@ -28,6 +28,7 @@
 #include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_field_id.hpp"
+#include "parquet_column_kv.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_types.h"
 #include "parquet_geometry.hpp"
@@ -156,6 +157,8 @@ struct ParquetWriterOptions {
 	duckdb_parquet::CompressionCodec::type codec;
 	//! The field-ids to assign to the column(s) and their fields
 	ChildFieldIDs field_ids;
+	//! The column-level key/value metadata to attach to the leaf column chunks
+	ChildColumnKV column_kv;
 	//! The mapping of name->type to shred VARIANT on, set explicitly by the user
 	ShreddingType shredding_types;
 	//! The encryption config for the file we're writing

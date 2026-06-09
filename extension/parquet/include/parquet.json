@@ -199,5 +199,40 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "ColumnKV",
+    "includes": [
+      "parquet_column_kv.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "metadata",
+        "type": "vector<pair<string, string>>"
+      },
+      {
+        "id": 101,
+        "name": "children",
+        "type": "ChildColumnKV"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ChildColumnKV",
+    "includes": [
+      "parquet_column_kv.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "children",
+        "type": "case_insensitive_map_t<ColumnKV>",
+        "serialize_property": "children.operator*()",
+        "deserialize_property": "children.operator*()"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

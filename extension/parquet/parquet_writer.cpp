@@ -490,7 +490,7 @@ void ParquetWriter::InitializeColumnWriters() {
 		const bool can_have_nulls = options.not_null_columns.empty() || !options.not_null_columns[i];
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
 		    context, *this, path_in_schema, types[i], unique_names[i], allow_geometry, &options.field_ids,
-		    &options.shredding_types, 0, 1, can_have_nulls));
+		    &options.shredding_types, &options.column_kv, 0, 1, can_have_nulls));
 	}
 }
 
