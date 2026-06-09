@@ -437,18 +437,9 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	return sum_no_overflow;
 }
 
-LogicalType GetKahanSumStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("isset", LogicalType::BOOLEAN);
-	children.emplace_back("value", LogicalType::DOUBLE);
-	children.emplace_back("err", LogicalType::DOUBLE);
-	return LogicalType::STRUCT(std::move(children));
-}
-
 AggregateFunction KahanSumFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE)
-	    .SetStructStateExport(GetKahanSumStateType);
+	                                                                                           LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

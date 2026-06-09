@@ -18,6 +18,9 @@ struct CovarState {
 	double meanx;
 	double meany;
 	double co_moment;
+
+	static constexpr const char *STATE_NAMES[] = {"count", "meanx", "meany", "co_moment"};
+	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, double, double, double>;
 };
 
 struct CovarOperation {

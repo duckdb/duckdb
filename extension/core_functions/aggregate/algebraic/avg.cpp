@@ -41,6 +41,9 @@ struct KahanAvgState {
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}
+
+	static constexpr const char *STATE_NAMES[] = {"count", "value", "err"};
+	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, double, double>;
 };
 
 struct AverageDecimalBindData : public FunctionData {
@@ -222,13 +225,6 @@ LogicalType GetAvgStateType(const BoundAggregateFunction &function) {
 	return LogicalType::STRUCT(std::move(children));
 }
 
-LogicalType GetKahanAvgStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("count", LogicalType::UBIGINT);
-	children.emplace_back("value", LogicalType::DOUBLE);
-	children.emplace_back("err", LogicalType::DOUBLE);
-	return LogicalType::STRUCT(std::move(children));
-}
 
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
@@ -310,10 +306,8 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 }
 
 AggregateFunction FAvgFun::GetFunction() {
-	auto function = AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
-	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
-	                    .SetStructStateExport(GetKahanAvgStateType);
-	return function;
+	return AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
