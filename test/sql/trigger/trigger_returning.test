@@ -342,9 +342,9 @@ SELECT typeof(rowid) FROM d;
 BIGINT
 
 # Regression: virtual-column injection must not leak into REFERENCING OLD/NEW
-# TABLE aliases.  Trigger bodies that scan the transition table with SELECT *
-# previously broke when the user added RETURNING rowid — the synthetic rowid
-# column widened the shared base CTE.
+# TABLE aliases.  The base CTE projects rowid by name for the outer SELECT, and
+# the transition-table alias uses SELECT * EXCLUDE(rowid) so trigger bodies that
+# scan the transition table with SELECT * do not see the extra column.
 
 statement ok
 CREATE TABLE leak_d (id INTEGER);
@@ -398,8 +398,8 @@ SELECT id, v FROM leak_ucap;
 1	101
 
 # Regression: RETURNING *, rowid must not duplicate the rowid column.
-# The injected virtual column is materialised under a synthetic name and
-# excluded from the user's StarExpression so * does not re-expand it.
+# The injected virtual column is materialised under its real name (rowid) and
+# added to the StarExpression EXCLUDE list so * does not re-expand it.
 
 statement ok
 CREATE TABLE dupe_d (id INTEGER);
@@ -501,7 +501,118 @@ SELECT typeof(rowid) FROM d;
 ----
 BIGINT
 
-# INSERT/UPDATE RETURNING rowid still errors on triggered tables (same as no-trigger path)
+# ─── rowid alias binding rules ───────────────────────────────────────────────
+# When the target table has an alias, only that alias qualifies rowid — the bare
+# table name must NOT resolve (mirrors no-trigger binding rules).
+
+statement ok
+CREATE TABLE rowid_alias (id INTEGER);
+
+statement ok
+INSERT INTO rowid_alias VALUES (1);
+
+statement ok
+CREATE TABLE rowid_alias_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_alias AFTER DELETE ON rowid_alias FOR EACH STATEMENT
+    INSERT INTO rowid_alias_log VALUES ('d');
+
+# Bare table name does not qualify rowid when an alias is in effect
+statement error
+DELETE FROM rowid_alias AS x RETURNING rowid_alias.rowid;
+----
+Referenced table "rowid_alias" not found!
+
+# The alias itself does qualify rowid
+query I
+WITH d AS (DELETE FROM rowid_alias AS x RETURNING x.rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+# schema.table.rowid is valid on the no-trigger path; the trigger expansion must
+# strip catalog/schema qualifiers so binding against the CTE succeeds the same way
+statement ok
+CREATE TABLE rowid_schemaref (id INTEGER);
+
+statement ok
+INSERT INTO rowid_schemaref VALUES (1);
+
+statement ok
+CREATE TABLE rowid_schemaref_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_schemaref AFTER DELETE ON rowid_schemaref FOR EACH STATEMENT
+    INSERT INTO rowid_schemaref_log VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM rowid_schemaref RETURNING main.rowid_schemaref.rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+# Without an alias the table name qualifies rowid (fallback == table name)
+statement ok
+CREATE TABLE rowid_noalias (id INTEGER);
+
+statement ok
+INSERT INTO rowid_noalias VALUES (1);
+
+statement ok
+CREATE TABLE rowid_noalias_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_noalias AFTER DELETE ON rowid_noalias FOR EACH STATEMENT
+    INSERT INTO rowid_noalias_log VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM rowid_noalias RETURNING rowid_noalias.rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+# rowid in an expression — name is (rowid + CAST(1 AS BIGINT)), matching the no-trigger path
+statement ok
+CREATE TABLE rowid_expr (id INTEGER);
+
+statement ok
+INSERT INTO rowid_expr VALUES (1);
+
+statement ok
+CREATE TABLE rowid_expr_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_expr AFTER DELETE ON rowid_expr FOR EACH STATEMENT
+    INSERT INTO rowid_expr_log VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM rowid_expr RETURNING rowid + 1)
+SELECT "(rowid + CAST(1 AS BIGINT))" FROM d;
+----
+1
+
+# Explicit alias preserves the output column name regardless of expansion
+statement ok
+CREATE TABLE rowid_expr2 (id INTEGER);
+
+statement ok
+INSERT INTO rowid_expr2 VALUES (1);
+
+statement ok
+CREATE TABLE rowid_expr2_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_expr2 AFTER DELETE ON rowid_expr2 FOR EACH STATEMENT
+    INSERT INTO rowid_expr2_log VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM rowid_expr2 RETURNING rowid + 1 AS rid_plus_one)
+SELECT rid_plus_one FROM d;
+----
+1
+
+# ─── INSERT/UPDATE RETURNING rowid still errors on triggered tables (same as no-trigger path)
 statement ok
 CREATE TABLE rowid_ins (id INTEGER);
 
