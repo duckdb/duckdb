@@ -130,11 +130,11 @@ statement ok
 INSERT INTO ms VALUES (1, 'JAN', 10);
 
 query I
-SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM ms PIVOT (SUM(amount) FOR month IN ("JAN") GROUP BY "$id")'));
+SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM ms PIVOT (SUM(amount) FOR month IN (''JAN'') GROUP BY "$id")'));
 ----
 SELECT * FROM ms PIVOT (sum(amount) FOR ("month") IN ('JAN') GROUP BY "$id")
 
 query II
-SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM ms PIVOT (SUM(amount) FOR month IN ("JAN") GROUP BY "$id")'));
+SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM ms PIVOT (SUM(amount) FOR month IN (''JAN'') GROUP BY "$id")'));
 ----
 1	10
