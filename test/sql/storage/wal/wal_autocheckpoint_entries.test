@@ -1,0 +1,159 @@
+# name: test/sql/storage/wal/wal_autocheckpoint_entries.test
+# description: Test automatic checkpoint when WAL entry count reaches or exceeds threshold
+# group: [wal]
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+#
+# Part 1: Test autocheckpoint based on entry count threshold
+#
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+ATTACH '__TEST_DIR__/wal_autocheckpoint.db' AS autocheckpoint_db;
+
+statement ok
+CREATE TABLE autocheckpoint_db.tbl(x INTEGER);
+
+statement ok
+CREATE TABLE autocheckpoint_db.delete_tbl(x INTEGER);
+
+statement ok
+INSERT INTO autocheckpoint_db.delete_tbl SELECT * FROM range(100);
+
+statement ok
+CHECKPOINT autocheckpoint_db;
+
+query I
+SELECT wal_size FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+----
+0 bytes
+
+statement ok
+SET wal_autocheckpoint_entries=100;
+
+loop i 0 20
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO autocheckpoint_db.tbl VALUES (${i});
+
+statement ok
+DELETE FROM autocheckpoint_db.delete_tbl WHERE x = ${i};
+
+statement ok
+COMMIT;
+
+query I
+SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+----
+true
+
+endloop
+
+query I
+SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+----
+true
+
+# This INSERT triggers auto checkpoint (since entry count currently >= 100)
+statement ok
+INSERT INTO autocheckpoint_db.tbl VALUES (9999);
+
+# WAL should be 0 after checkpoint
+query I
+SELECT wal_size FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+----
+0 bytes
+
+query I
+SELECT COUNT(*) FROM autocheckpoint_db.tbl;
+----
+21
+
+statement ok
+DETACH autocheckpoint_db;
+
+#
+# Part 2: Verify entry count via WAL replay metrics
+#
+
+statement ok
+SET wal_autocheckpoint_entries=0;
+
+statement ok
+ATTACH '__TEST_DIR__/wal_entry_count.db' AS entry_count_db;
+
+statement ok
+CREATE TABLE entry_count_db.tbl(x INTEGER);
+
+statement ok
+CREATE TABLE entry_count_db.delete_tbl(x INTEGER);
+
+statement ok
+INSERT INTO entry_count_db.delete_tbl SELECT * FROM range(10000);
+
+statement ok
+CHECKPOINT entry_count_db;
+
+# Run 20 transactions with INSERT + DELETE (same as autocheckpoint test)
+loop i 0 20
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO entry_count_db.tbl VALUES (${i});
+
+statement ok
+DELETE FROM entry_count_db.delete_tbl WHERE x = ${i};
+
+statement ok
+COMMIT;
+
+endloop
+
+# Detach and re-attach with profiling to count WAL replay entries
+statement ok
+DETACH entry_count_db;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/wal_replay.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"WAL_REPLAY_ENTRY_COUNT": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+# replay happens on attach
+statement ok
+ATTACH '__TEST_DIR__/wal_entry_count.db' AS entry_count_db;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '__TEST_DIR__/wal_replay.json';
+
+query I
+SELECT wal_replay_entry_count FROM replay_metrics;
+----
+101
+
+statement ok
+DETACH entry_count_db;

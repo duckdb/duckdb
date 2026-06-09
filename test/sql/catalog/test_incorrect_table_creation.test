@@ -14,10 +14,12 @@ CREATE TABLE integers(i INTEGER, PRIMARY KEY(i, i))
 
 # multiple primary keys
 statement error
-CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)
+CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i))
 ----
+Parser Error: table "integers" has more than one primary key
 
 statement error
-CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)
+CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i))
 ----
+Parser Error: table "integers" has more than one primary key
 

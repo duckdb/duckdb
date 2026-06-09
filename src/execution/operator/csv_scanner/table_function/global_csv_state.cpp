@@ -180,7 +180,7 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	auto limit = options.rejects_limit;
 	auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
 	                                            options.rejects_table_name.GetValue());
-	lock_guard<mutex> lock(rejects->write_lock);
+	const lock_guard<mutex> lock(rejects->write_lock);
 	auto &errors_table = rejects->GetErrorsTable(context);
 	auto &scans_table = rejects->GetScansTable(context);
 	InternalAppender errors_appender(context, errors_table);

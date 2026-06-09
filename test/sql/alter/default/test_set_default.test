@@ -91,3 +91,19 @@ statement error
 ALTER TABLE test ALTER blabla DROP DEFAULT
 ----
 
+# test that SET DEFAULT preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_default_test(x INTEGER DEFAULT 1)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_default_test'
+----
+temp_default_test	temp	true
+
+statement ok
+ALTER TABLE temp_default_test ALTER x SET DEFAULT 5
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_default_test'
+----
+temp_default_test	temp	true

@@ -1,6 +1,7 @@
 #include "duckdb/parser/constraints/unique_constraint.hpp"
-
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
 
 namespace duckdb {
 

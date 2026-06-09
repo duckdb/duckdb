@@ -21,11 +21,13 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
+#include "parquet_crypto.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 namespace duckdb {
 class ParquetReader;
@@ -60,11 +62,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
+	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
@@ -76,7 +78,7 @@ public:
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
-	ParquetReader &Reader();
+	const ParquetReader &Reader();
 	const LogicalType &Type() const {
 		return column_schema.type;
 	}
@@ -92,6 +94,20 @@ public:
 	}
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
+	}
+
+	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
+	                              idx_t row_group_ordinal_p) {
+		std::string unique_file_identifier;
+		if (encryption_algorithm.__isset.AES_GCM_V1) {
+			unique_file_identifier = encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
+		} else {
+			throw InternalException("File is encrypted but no encryption algorithm is set");
+		}
+
+		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
 	}
 
 	virtual idx_t FileOffset() const;
@@ -177,6 +193,10 @@ protected:
 	                  idx_t &approved_tuple_count);
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
 	                  const SelectionVector &sel, idx_t approved_tuple_count);
+	void ReadEncrypted(duckdb_apache::thrift::TBase &object);
+	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module);
+	void Read(PageHeader &page_hdr);
+	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
 	//! Check if a previous table filter has filtered out this page
@@ -283,7 +303,7 @@ protected:
 protected:
 	const ParquetColumnSchema &column_schema;
 
-	ParquetReader &reader;
+	const ParquetReader &reader;
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 
@@ -315,6 +335,7 @@ private:
 	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
+	CryptoMetaData aad_crypto_metadata;
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];

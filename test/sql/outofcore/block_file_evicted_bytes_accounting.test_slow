@@ -1,0 +1,78 @@
+# name: test/sql/outofcore/block_file_evicted_bytes_accounting.test_slow
+# description: Regression test for the double-decrement bug in StandardBufferManager::ReadTemporaryBuffer
+# group: [outofcore]
+
+#              for the .block (variable-sized) eviction path.
+#
+# Bug location (src/storage/standard_buffer_manager.cpp):
+#   ReadTemporaryBuffer (.block path) called DeleteTemporaryFile(), which itself does
+#   `evicted_data_per_tag[tag] -= memory.GetMemoryUsage()` (~line 602). Then ReadTemporaryBuffer
+#   immediately did a SECOND `evicted_data_per_tag[tag] -= buffer->AllocSize()`.
+#   For OVERFLOW_STRINGS those two decrements have equal magnitude, so the counter was
+#   decremented by 2× the eviction size on every .block read-back. After enough cycles the
+#   uint64 counter wrapped; ClampReportedMemory then returned 0 for the tag while .block
+#   files still existed on disk.
+#
+# Test invariant (catches the bug):
+#   When .block files exist on disk for OVERFLOW_STRINGS data, the per-tag accounting in
+#   duckdb_memory() must not be 0 — that combination is only possible if the counter
+#   underflowed and got clamped.
+#
+# Why this triggers in the harness reliably:
+#   .block path is taken when buffer.AllocSize() != GetBlockAllocSize() (default 262144).
+#   Strings wider than (BLOCK_SIZE - 4) bytes are allocated as their own OVERFLOW_STRINGS
+#   block of (string_len + 4) bytes. We use ~576 KB hex(md5) strings (incompressible) so
+#   every overflow string forces a .block file on eviction. The buffer manager continually
+#   evicts AND re-reads intermediate strings during inserts; with the bug, those intra-INSERT
+#   read-backs already wrap the counter to 0 before any explicit scan is needed.
+#
+# Notes:
+#   - duckdb_temporary_files() does NOT enumerate .block files (its ListFiles callback
+#     receives basenames but passes them to OpenFile expecting full paths), so we use
+#     glob() to verify on-disk presence.
+#
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET temp_directory = '{TEST_DIR}/tmp_acct';
+
+statement ok
+SET memory_limit = '50MB';
+
+statement ok
+CREATE TABLE t (id INTEGER, val VARCHAR);
+
+# Write ~57 MB of incompressible OVERFLOW_STRINGS data in 20-row batches.
+# Each row → one OVERFLOW_STRINGS block of ~576 KB → one .block file on eviction.
+# 50 MB budget vs ~57 MB workload guarantees eviction during inserts.
+loop b 0 5
+
+statement ok
+INSERT INTO t SELECT range + ${b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+
+endloop
+
+# Sanity: .block files exist on disk after the writes.
+query I
+SELECT count(*) > 0 FROM glob('{TEST_DIR}/tmp_acct/*.block');
+----
+true
+
+# Core invariant: with .block files on disk for OVERFLOW_STRINGS data, the per-tag
+# counter must be > 0. The buffer manager performs intra-INSERT read-backs of evicted
+# overflow strings, so this single assertion is sufficient to catch the double-decrement
+# bug — it failed before the fix at standard_buffer_manager.cpp:569 was removed.
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'OVERFLOW_STRINGS';
+----
+true
+
+# Combined sanity: both signals must agree — files on disk implies tracked bytes.
+query II
+SELECT
+    (SELECT count(*) > 0 FROM glob('{TEST_DIR}/tmp_acct/*.block'))                                AS block_files_exist,
+    (SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'OVERFLOW_STRINGS')      AS bytes_tracked;
+----
+true	true

@@ -41,11 +41,11 @@ drop table temp_table;
 
 # ---------------- MAIN LOOP ----------------
 
-loop i 0 10240
+loop i 0 64
 
-# Create a temporary table containing the value we want to add to both tables
+# Create a temporary table containing the values we want to add to both tables
 statement ok
-create table temp_table as select random()::${type} * 100 + ${i};
+create table temp_table as select random()::${type} * 100 + ${i} from range(160)
 
 foreach compression ALP Uncompressed
 

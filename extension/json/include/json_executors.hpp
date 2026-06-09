@@ -80,7 +80,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						child_vals[current_size + i] = fun(val, alc, result, child_validity, current_size + i);
+						child_vals[current_size + i] = fun(val, alc, child_entry, child_validity, current_size + i);
 					}
 
 					ListVector::SetListSize(result, new_size);

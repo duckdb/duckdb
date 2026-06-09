@@ -141,6 +141,11 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		auto &right_children = StructValue::GetChildren(right);
 		// this should be enforced by the type
 		D_ASSERT(left_children.size() == right_children.size());
+		if (left_children.empty()) {
+			const auto const_true = Value::BOOLEAN(true);
+			return ValuePositionComparator::Final<OP>(const_true, const_true);
+		}
+
 		idx_t i = 0;
 		for (; i < left_children.size() - 1; ++i) {
 			if (ValuePositionComparator::Definite<OP>(left_children[i], right_children[i])) {

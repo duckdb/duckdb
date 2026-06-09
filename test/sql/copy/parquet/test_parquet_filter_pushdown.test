@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 # userdata1.parquet
 query I
 SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id > 500

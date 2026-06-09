@@ -73,41 +73,6 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 	return CompressionAvailabilityResult();
 }
 
-CompressionType CompressionTypeFromString(const string &str) {
-	auto compression = StringUtil::Lower(str);
-	//! NOTE: this explicitly does not include 'constant' and 'empty validity', these are internal compression functions
-	//! not general purpose
-	if (compression == "uncompressed") {
-		return CompressionType::COMPRESSION_UNCOMPRESSED;
-	} else if (compression == "rle") {
-		return CompressionType::COMPRESSION_RLE;
-	} else if (compression == "dictionary") {
-		return CompressionType::COMPRESSION_DICTIONARY;
-	} else if (compression == "pfor") {
-		return CompressionType::COMPRESSION_PFOR_DELTA;
-	} else if (compression == "bitpacking") {
-		return CompressionType::COMPRESSION_BITPACKING;
-	} else if (compression == "fsst") {
-		return CompressionType::COMPRESSION_FSST;
-	} else if (compression == "chimp") {
-		return CompressionType::COMPRESSION_CHIMP;
-	} else if (compression == "patas") {
-		return CompressionType::COMPRESSION_PATAS;
-	} else if (compression == "zstd") {
-		return CompressionType::COMPRESSION_ZSTD;
-	} else if (compression == "alp") {
-		return CompressionType::COMPRESSION_ALP;
-	} else if (compression == "alprd") {
-		return CompressionType::COMPRESSION_ALPRD;
-	} else if (compression == "roaring") {
-		return CompressionType::COMPRESSION_ROARING;
-	} else if (compression == "dict_fsst") {
-		return CompressionType::COMPRESSION_DICT_FSST;
-	} else {
-		return CompressionType::COMPRESSION_AUTO;
-	}
-}
-
 string CompressionTypeToString(CompressionType type) {
 	switch (type) {
 	case CompressionType::COMPRESSION_AUTO:

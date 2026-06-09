@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	if (root_expression && depth == 0) {
 		switch (expr.GetExpressionClass()) {
 		case ExpressionClass::COLUMN_REF:
-			return BindColumnRef(expr.Cast<ColumnRefExpression>());
+			return BindColumnRef(expr.Cast<ColumnRefExpression>(), expr_ptr);
 		case ExpressionClass::CONSTANT:
 			return BindConstant(expr.Cast<ConstantExpression>());
 		case ExpressionClass::PARAMETER:
@@ -79,9 +80,12 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                           BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+	// try to resolve alias references in GROUP
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
+
 	auto &alias_name = colref.GetColumnName();
 	auto entry = bind_state.alias_map.find(alias_name);
 	if (entry == bind_state.alias_map.end()) {
@@ -102,14 +106,14 @@ bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression
 	return true;
 }
 
-BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
+BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref, unique_ptr<ParsedExpression> &expr_ptr) {
 	// columns in GROUP BY clauses:
 	// FIRST refer to the original tables, and
 	// THEN if no match is found refer to aliases in the SELECT list
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
-	return ExpressionBinder::BindExpression(colref, 0, true);
+	return ExpressionBinder::BindExpression(colref, 0, true, expr_ptr);
 }
 
 } // namespace duckdb

@@ -15,6 +15,7 @@
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
+class Catalog;
 class SequenceCatalogEntry;
 class SchemaCatalogEntry;
 
@@ -33,6 +34,7 @@ class ChunkVectorInfo;
 
 struct DeleteInfo;
 struct UpdateInfo;
+struct DatabaseModificationType;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -57,6 +59,8 @@ public:
 	DUCKDB_API bool IsReadOnly();
 	//! Promotes the transaction to a read-write transaction
 	DUCKDB_API virtual void SetReadWrite();
+	//! Sets the database modifications that are planned to be performed in this transaction
+	DUCKDB_API virtual void SetModifications(DatabaseModificationType type);
 
 	virtual bool IsDuckTransaction() const {
 		return false;

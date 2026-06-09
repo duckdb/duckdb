@@ -147,6 +147,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LAMBDA";
 	case ExpressionType::ARROW:
 		return "ARROW";
+	case ExpressionType::TYPE:
+		return "TYPE";
 	case ExpressionType::BOUND_EXPANDED:
 		return "BOUND_EXPANDED";
 	case ExpressionType::INVALID:
@@ -196,6 +198,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionClass::BETWEEN:
 		return "BETWEEN";
+	case ExpressionClass::TYPE:
+		return "TYPE";
 	case ExpressionClass::BOUND_AGGREGATE:
 		return "BOUND_AGGREGATE";
 	case ExpressionClass::BOUND_CASE:
@@ -286,6 +290,12 @@ ExpressionType NegateComparisonExpression(ExpressionType type) {
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		negated_type = ExpressionType::COMPARE_LESSTHAN;
+		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		negated_type = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		negated_type = ExpressionType::COMPARE_DISTINCT_FROM;
 		break;
 	default:
 		throw InternalException("Unsupported comparison type in negation");

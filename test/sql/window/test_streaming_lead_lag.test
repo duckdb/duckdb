@@ -249,3 +249,13 @@ where id >= 2040 and id <= 2050;
 2048	4098
 2049	4099
 2050	4100
+
+query I
+SELECT LAG ( v3 , 10 , 3 ) OVER( ) 
+FROM VALUES 
+	( 0 , 1::VARCHAR , 1 ),
+	( 1 , NULL , 2 )
+	AS v0(v1, v3, v2);
+----
+3
+3

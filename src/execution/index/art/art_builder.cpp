@@ -49,7 +49,7 @@ ARTConflictType ARTBuilder::Build() {
 			// We cannot iterate into the nested leaf with the builder
 			// because row IDs are not sorted.
 			for (idx_t i = entry.start; i < entry.start + row_id_count; i++) {
-				ARTOperator::Insert(arena, art, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
+				ARTOperator::Insert(arena, art, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, DeleteIndexInfo(),
 				                    IndexAppendMode::DEFAULT);
 			}
 			ref.get().SetGateStatus(GateStatus::GATE_SET);

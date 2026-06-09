@@ -22,9 +22,6 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -99,7 +96,6 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child, table_name, lambda_params);
@@ -141,7 +137,6 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
                         vector<unordered_set<string>> &lambda_params) {
-
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
@@ -179,34 +174,36 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 }
 
 unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert,
-                                                  TableStorageInfo &storage_info) {
+                                                  const TableStorageInfo &storage_info) {
 	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;
-	// Figure out which columns are indexed on
-
-	unordered_set<column_t> indexed_columns;
+	// REPLACE is rewritten to UPDATE. Conflict-key columns are used to match existing rows and
+	// should not be part of the SET list.
+	unordered_set<column_t> conflict_columns;
 	for (auto &index : storage_info.index_info) {
+		if (!index.is_unique) {
+			continue;
+		}
 		for (auto &column_id : index.column_set) {
-			indexed_columns.insert(column_id);
+			conflict_columns.insert(column_id);
 		}
 	}
 
 	auto &column_list = table.GetColumns();
 	if (insert.columns.empty()) {
 		for (auto &column : column_list.Physical()) {
-			auto &name = column.Name();
 			// FIXME: can these column names be aliased somehow?
-			if (indexed_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
-			columns.push_back(name);
+			columns.push_back(column.Name());
 		}
 	} else {
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
 			auto &column = column_list.GetColumn(name);
-			if (indexed_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
 			columns.push_back(name);
@@ -263,6 +260,25 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &colu
 			expected_types.push_back(col.Type());
 		}
 	}
+}
+
+static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
+	unordered_set<column_t> conflict_column_ids;
+	for (auto &index : storage_info.index_info) {
+		if (!index.is_unique) {
+			continue;
+		}
+		for (auto &col_id : index.column_set) {
+			conflict_column_ids.insert(col_id);
+		}
+	}
+	unordered_set<string> conflict_column_names;
+	for (auto &col : table.GetColumns().Physical()) {
+		if (conflict_column_ids.count(col.Physical().index)) {
+			conflict_column_names.insert(col.Name());
+		}
+	}
+	return conflict_column_names;
 }
 
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table) {
@@ -416,7 +432,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			unordered_set<string> set_columns;
+			case_insensitive_set_t set_columns;
 			for (auto &set_col : stmt.columns) {
 				set_columns.insert(set_col);
 			}
@@ -488,6 +504,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 	if (on_conflict_info.action_type == OnConflictAction::UPDATE) {
 		// when doing UPDATE set up the when matched action
 		auto update_action = make_uniq<MergeIntoAction>();
+		update_action->exclude_columns = GetConflictColumnNames(storage_info, table);
 		update_action->action_type = MergeActionType::MERGE_UPDATE;
 		update_action->column_order = stmt.column_order;
 		if (on_conflict_info.set_info) {
@@ -524,15 +541,16 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		auto merge_into = GenerateMergeInto(stmt, table);
 		return Bind(*merge_into);
 	}
-	if (!table.temporary) {
+	if (table.temporary) {
+		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
+		GetStatementProperties().RegisterDBRead(table.catalog, context);
+	} else {
 		// inserting into a non-temporary table: alters underlying database
-		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
+		GetStatementProperties().RegisterDBModify(table.catalog, context, modification_type);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
 
 	auto values_list = stmt.GetValuesList();
 
@@ -605,7 +623,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.plan = std::move(insert);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

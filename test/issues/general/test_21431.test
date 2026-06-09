@@ -1,0 +1,24 @@
+# name: test/issues/general/test_21431.test
+# description: Regression test for OOM with TopN window elimination
+# group: [general]
+
+statement ok
+SET memory_limit = '300MB'
+
+query I
+WITH t AS (
+    SELECT i / 2 AS group_id, i % 10 AS category, i % 1000 AS value
+    FROM range(0, 400000) r(i)
+), counts AS (
+    SELECT group_id, category, COUNT(*) AS cnt
+    FROM t
+    GROUP BY group_id, category
+), ranked AS (
+    SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY group_id ORDER BY cnt DESC) AS rn
+    FROM counts
+    QUALIFY rn <= 50
+)
+SELECT COUNT(*) FROM ranked
+----
+400000

@@ -30,11 +30,13 @@ INSERT INTO int_maps VALUES
 	(MAP([NULL], [NULL]))
 ;
 ----
+<REGEX>:.*Invalid Input Error: Map keys can not be NULL.*
 
 # parquet does not support keys with null values
 statement error
 COPY string_map TO '__TEST_DIR__/int_maps.parquet' (FORMAT PARQUET)
 ----
+<REGEX>:.*Catalog Error.*does not exist!.*
 
 # string -> string map
 statement ok
@@ -66,6 +68,7 @@ INSERT INTO string_map VALUES
 	(MAP([NULL], [NULL]))
 ;
 ----
+<REGEX>:.*Invalid Input Error: Map keys can not be NULL.*
 
 # list -> list map
 statement ok
@@ -96,3 +99,4 @@ INSERT INTO list_map VALUES
 	(MAP([NULL], [NULL]))
 ;
 ----
+<REGEX>:.*Invalid Input Error: Map keys can not be NULL.*

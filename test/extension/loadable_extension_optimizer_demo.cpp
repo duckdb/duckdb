@@ -157,7 +157,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_optimizer_demo, loader) {
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
-	config.optimizer_extensions.push_back(WaggleExtension());
+	OptimizerExtension::Register(config, WaggleExtension());
 	config.AddExtensionOption("waggle_location_host", "host for remote callback", LogicalType::VARCHAR);
 	config.AddExtensionOption("waggle_location_port", "port for remote callback", LogicalType::INTEGER);
 }

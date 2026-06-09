@@ -1,7 +1,8 @@
 {
     "group": "safe_fetch_functions",
     "deprecated": true,
-    "description": "// These functions will perform conversions if necessary.\n// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.\n// Note that these functions are slow since they perform bounds checking and conversion\n// For fast access of values prefer using `duckdb_result_get_chunk`",
+    "use_instead": "To access the values in a result, use `duckdb_fetch_chunk` repeatedly. For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.",
+    "description": "Deprecated functions to interact with a `duckdb_result`.",
     "entries": [
         {
             "name": "duckdb_value_boolean",
@@ -417,7 +418,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.\n\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The text value at the specified location as a null-terminated string, or nullptr if the value cannot be\nconverted. The result must be freed with `duckdb_free`."
             }
         },
@@ -439,7 +440,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nNo support for nested types, and for other complex types.\nThe resulting field \"string.data\" must be freed with `duckdb_free.`\n\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The string value at the specified location. Attempts to cast the result value to string."
             }
         },
@@ -461,7 +462,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },
@@ -483,7 +484,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },

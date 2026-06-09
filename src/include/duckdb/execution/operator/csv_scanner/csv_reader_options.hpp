@@ -196,7 +196,7 @@ struct CSVReaderOptions {
 	//! Verify options are not conflicting
 	void Verify(MultiFileOptions &file_options);
 
-	string ToString(const string &current_file_path) const;
+	string ToString(const String &current_file_path) const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 

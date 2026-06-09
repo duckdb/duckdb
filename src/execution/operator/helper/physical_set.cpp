@@ -6,17 +6,17 @@
 
 namespace duckdb {
 
-void PhysicalSet::SetGenericVariable(ClientContext &context, const string &name, SetScope scope, Value target_value) {
+void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value) {
 	if (scope == SetScope::GLOBAL) {
 		auto &config = DBConfig::GetConfig(context);
-		config.SetOption(name, std::move(target_value));
+		config.SetOption(setting_index, std::move(target_value));
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context);
-		client_config.set_variables[name] = std::move(target_value);
+		client_config.user_settings.SetUserSetting(setting_index, std::move(target_value));
 	}
 }
 
-void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
                                        SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
@@ -26,37 +26,60 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	if (scope == SetScope::AUTOMATIC) {
 		scope = extension_option.default_scope;
 	}
-	SetGenericVariable(context, name, scope, std::move(target_value));
+	auto setting_index = extension_option.setting_index.GetIndex();
+	SetGenericVariable(context, setting_index, scope, std::move(target_value));
 }
 
-SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScope variable_scope) {
+	if (variable_scope == SetScope::AUTOMATIC) {
+		if (option.set_local) {
+			return SetScope::SESSION;
+		}
+		if (option.set_global) {
+			return SetScope::GLOBAL;
+		}
+		// generic setting
+		switch (option.scope) {
+		case SettingScopeTarget::LOCAL_ONLY:
+		case SettingScopeTarget::LOCAL_DEFAULT:
+			return SetScope::SESSION;
+		case SettingScopeTarget::GLOBAL_ONLY:
+		case SettingScopeTarget::GLOBAL_DEFAULT:
+			return SetScope::GLOBAL;
+		default:
+			throw InvalidInputException("Setting \"%s\" does not have a valid scope defined", option.name);
+		}
+	}
+	if (variable_scope == SetScope::SESSION && option.scope == SettingScopeTarget::GLOBAL_ONLY) {
+		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		                            option.name);
+	}
+	if (variable_scope == SetScope::GLOBAL && option.scope == SettingScopeTarget::LOCAL_ONLY) {
+		throw InvalidInputException(
+		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", option.name);
+	}
+	return variable_scope;
+}
+
+SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
 	// check if we are allowed to change the configuration option
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
+		ExtensionOption extension_option;
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name);
-		if (entry == config.extension_parameters.end()) {
+		if (!config.TryGetExtensionOption(name, extension_option)) {
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name);
-			if (entry == config.extension_parameters.end()) {
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
-		SetExtensionVariable(context.client, entry->second, name, scope, value);
+		SetExtensionVariable(context.client, extension_option, name, scope, value);
 		return SourceResultType::FINISHED;
 	}
-	SetScope variable_scope = scope;
-	if (variable_scope == SetScope::AUTOMATIC) {
-		if (option->set_local) {
-			variable_scope = SetScope::SESSION;
-		} else if (option->set_global) {
-			variable_scope = SetScope::GLOBAL;
-		} else {
-			variable_scope = option->default_scope;
-		}
-	}
+	SetScope variable_scope = GetSettingScope(*option, scope);
 
 	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
@@ -64,7 +87,8 @@ SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chun
 			SettingCallbackInfo info(context.client, variable_scope);
 			option->set_callback(info, input_val);
 		}
-		SetGenericVariable(context.client, option->name, variable_scope, std::move(input_val));
+		auto setting_index = option->setting_idx.GetIndex();
+		SetGenericVariable(context.client, setting_index, variable_scope, std::move(input_val));
 		return SourceResultType::FINISHED;
 	}
 	switch (variable_scope) {

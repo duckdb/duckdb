@@ -235,7 +235,6 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
-
 	if (NumericStats::HasMinMax(input.child_stats[0])) {
 		auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
 		bind_agg_data.min = NumericStats::Min(input.child_stats[0]);
@@ -264,13 +263,14 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	auto function =
 	    AggregateFunction::UnaryAggregateDestructor<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	        type, LogicalType::BIT);
-	function.bind = BindBitstringAgg; // create new a 'BitstringAggBindData'
-	function.serialize = BitstringAggBindData::Serialize;
-	function.deserialize = BitstringAggBindData::Deserialize;
-	function.statistics = BitstringPropagateStats; // stores min and max from column stats in BitstringAggBindData
+	function.SetBindCallback(BindBitstringAgg); // create new a 'BitstringAggBindData'
+	function.SetSerializeCallback(BitstringAggBindData::Serialize);
+	function.SetDeserializeCallback(BitstringAggBindData::Deserialize);
+	function.SetStatisticsCallback(
+	    BitstringPropagateStats);        // stores min and max from column stats in BitstringAggBindData
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
 	function.arguments = {type, type, type};
-	function.statistics = nullptr; // min and max are provided as arguments
+	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	bitstring_agg.AddFunction(function);
 }
 

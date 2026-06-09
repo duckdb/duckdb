@@ -9,8 +9,10 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
@@ -108,7 +110,6 @@ struct ParquetOptions {
 	bool variant_legacy_encoding = false;
 	bool file_row_number = false;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	bool debug_use_openssl = true;
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
@@ -134,6 +135,7 @@ struct ParquetUnionData : public BaseUnionData {
 	}
 	~ParquetUnionData() override;
 
+	optional_idx TryGetCardinalityEstimate() const override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
 
 	ParquetOptions options;
@@ -147,7 +149,7 @@ public:
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
 
-	CachingFileSystem fs;
+	mutable CachingFileSystem fs;
 	Allocator &allocator;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
@@ -166,23 +168,32 @@ public:
 
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-	          DataChunk &chunk) override;
+	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+	                 LocalTableFunctionState &lstate_p) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 
 public:
-	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
-	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read) const;
+	AsyncResult Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
+	idx_t GetFileSize() const;
+	idx_t GetDataSize() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
+	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
-	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) const;
+	uint32_t ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+	                       CryptoMetaData &aad_crypto_metadata) const;
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-	                  const uint32_t buffer_size);
+	                  const uint32_t buffer_size) const;
+	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+	                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const;
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 
@@ -195,11 +206,15 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
+	                                     ParquetColumnSchema &schema);
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 
 	void GetPartitionStats(vector<PartitionStatistics> &result);
-	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result);
+	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
+	                              optional_ptr<ParquetColumnSchema> root_schema = nullptr,
+	                              optional_ptr<ParquetOptions> parquet_options = nullptr);
 	static bool MetadataCacheEnabled(ClientContext &context);
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
 
@@ -209,16 +224,14 @@ private:
 	              shared_ptr<ParquetFileMetadataCache> metadata);
 
 	void InitializeSchema(ClientContext &context);
-	bool ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
 	                                         idx_t &next_file_idx, ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
-
+	unique_ptr<ColumnReader> CreateReader(ClientContext &context) const;
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
-	                                               const ParquetColumnSchema &schema);
+	                                               const ParquetColumnSchema &schema) const;
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
@@ -231,6 +244,8 @@ private:
 
 	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                ParquetColumnSchema &element);
+	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
+	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;

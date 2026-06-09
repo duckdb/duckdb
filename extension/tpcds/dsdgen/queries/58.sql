@@ -65,7 +65,7 @@ WHERE ss_items.item_id=cs_items.item_id
   AND cs_item_rev BETWEEN 0.9 * ws_item_rev AND 1.1 * ws_item_rev
   AND ws_item_rev BETWEEN 0.9 * ss_item_rev AND 1.1 * ss_item_rev
   AND ws_item_rev BETWEEN 0.9 * cs_item_rev AND 1.1 * cs_item_rev
-ORDER BY ss_items.item_id NULLS FIRST,
+ORDER BY item_id NULLS FIRST,
          ss_item_rev NULLS FIRST
 LIMIT 100;
 

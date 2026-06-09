@@ -11,7 +11,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-CREATE TABLE count_table_${threadid} AS SELECT * FROM integers
+CREATE TEMPORARY TABLE count_table_${threadid} AS SELECT * FROM integers
 
 loop i 0 100
 
@@ -24,7 +24,7 @@ SELECT * FROM integers EXCEPT (SELECT * FROM count_table_${threadid} UNION SELEC
 ----
 
 statement ok
-CREATE OR REPLACE TABLE count_table_${threadid} AS (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
+CREATE OR REPLACE TEMPORARY TABLE count_table_${threadid} AS (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
 
 endloop
 

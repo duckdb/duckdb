@@ -1,0 +1,37 @@
+# name: test/sql/subquery/exists/test_correlated_exists_with_derived_table.test
+# description: Test correlated EXISTS with nested derived table containing same table name
+# group: [exists]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c2 INT);
+
+statement ok
+INSERT INTO t0(c2) VALUES (NULL), (1);
+
+query I
+SELECT t0.c2 FROM t0
+WHERE NOT EXISTS (
+  SELECT 1 FROM (
+    SELECT t0.c2 AS col0 FROM t0
+  ) AS subQuery
+  WHERE ((t0.c2) IS DISTINCT FROM (subQuery.col0))
+);
+----
+
+# Test parser optimization: NOT (x IS DISTINCT FROM y) -> x IS NOT DISTINCT FROM y
+query I
+SELECT t0.c2 FROM t0
+WHERE NOT EXISTS (
+  SELECT 1 FROM (
+    SELECT t0.c2 AS col0 FROM t0
+  ) AS subQuery
+  WHERE NOT ((t0.c2) IS DISTINCT FROM (subQuery.col0))
+);
+----
+
+# Clean up
+statement ok
+DROP TABLE t0;

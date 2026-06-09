@@ -1,0 +1,120 @@
+# name: test/sql/optimizer/predicate_factoring.test
+# description: Test PredicateFactoringRule - extracts common single-column predicates from disjunctive clauses
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 5, 3), (1, 2, 3), (1, 5, 11), (2, 5, 3), (NULL, 5, 3);
+
+# Basic predicate factoring: a=1 is common to both disjuncts and should be extracted
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
+----
+1	2	3
+1	5	11
+1	5	3
+
+# Verify a=1 is pushed down into the scan as a required filter
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
+----
+physical_plan	<REGEX>:.*Filters: a=1.*
+
+# Predicate factoring on a different common column: b=5
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b=5) OR (a=2 AND b=5)
+----
+1	5	11
+1	5	3
+2	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5) OR (a=2 AND b=5)
+----
+physical_plan	<REGEX>:.*Filters:.*b=5.*
+
+# Two common predicates: both a=1 and b=5 should be factored out
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b=5 AND c>2) OR (a=1 AND b=5 AND c<6)
+----
+1	5	11
+1	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5 AND c>2) OR (a=1 AND b=5 AND c<6)
+----
+physical_plan	<REGEX>:.*Filters:.*a=1.*b=5.*
+
+# Three-way disjunction: a=1 is common to all three disjuncts
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b=5) OR (a=1 AND c>2) OR (a=1 AND b=2)
+----
+1	2	3
+1	5	11
+1	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5) OR (a=1 AND c>2) OR (a=1 AND b=2)
+----
+physical_plan	<REGEX>:.*Filters: a=1.*
+
+# No common predicates: no factoring should occur
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b>3) OR (a=2 AND c<5)
+----
+1	5	11
+1	5	3
+2	5	3
+
+# Rule does not fire for a single-column OR (already pushable)
+query III rowsort
+SELECT * FROM t WHERE a=1 OR a=2
+----
+1	2	3
+1	5	11
+1	5	3
+2	5	3
+
+# NULL handling: factored predicate correctly excludes NULLs
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND b=5) OR (a=1 AND c=3)
+----
+1	2	3
+1	5	11
+1	5	3
+
+# Rule only applies to FILTER context, not SELECT clause
+query I rowsort
+SELECT (a=1 AND b>3) OR (a=1 AND c<5) FROM t
+----
+0
+1
+1
+1
+NULL
+
+# Predicate factoring in a cross join condition
+statement ok
+CREATE TABLE s (x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO s VALUES (1, 10), (2, 20), (1, 30);
+
+query IIIII rowsort
+SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
+----
+1	2	3	1	10
+1	5	11	1	10
+1	5	11	1	30
+1	5	3	1	10
+1	5	3	1	30
+
+query II
+EXPLAIN SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
+----
+physical_plan	<REGEX>:.*Filters: x=1.*Filters: a=1.*

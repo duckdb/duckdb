@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -129,12 +130,12 @@ public:
 	}
 
 	void Print() const {
-		std::cout << "State Machine Options" << '\n';
-		std::cout << "Delim: " << state_machine_options.delimiter.GetValue() << '\n';
-		std::cout << "Quote: " << state_machine_options.quote.GetValue() << '\n';
-		std::cout << "Escape: " << state_machine_options.escape.GetValue() << '\n';
-		std::cout << "Comment: " << state_machine_options.comment.GetValue() << '\n';
-		std::cout << "---------------------" << '\n';
+		Printer::Print(OutputStream::STREAM_STDOUT, string("State Machine Options"));
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Delim: ") + state_machine_options.delimiter.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Quote: ") + state_machine_options.quote.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Escape: ") + state_machine_options.escape.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Comment: ") + state_machine_options.comment.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("---------------------"));
 	}
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters

@@ -1,0 +1,88 @@
+# name: test/sql/filter/test_variant_filter.test
+# description: test comparison logic for VARIANT columns
+# group: [filter]
+
+statement error
+WITH cte as (
+	select '12'::VARIANT a
+)
+select IF(a == 12, 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type VARCHAR (12) and type INTEGER (12) - an explicit cast is required
+
+statement error
+WITH cte as (
+	select '12'::VARIANT a
+)
+select IF(a == [1,2,3], 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type VARCHAR (12) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+
+statement error
+WITH cte as (
+	select '[1,2,3]'::VARIANT a
+)
+select IF(a == [1,2,3], 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type VARCHAR ([1,2,3]) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+
+# Different lists, not equal
+query I
+WITH cte as (
+	select [1,2,3]::VARIANT a
+)
+select IF(a == [3, 2, 1], 1, 0) from cte
+----
+0
+
+# Exact equality of list
+query I
+WITH cte as (
+	select [1,2,3]::VARIANT a
+)
+select IF(a == [1,2,3], 1, 0) from cte
+----
+1
+
+query I
+WITH cte as (
+	select [1::VARIANT,'2',3]::VARIANT a
+)
+select IF(a == [1,2,3], 1, 0) from cte
+----
+1
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a == [1,2,3], 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+
+# Compare equal because objects are compared by key, not position
+query I
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a == {b: [1,2,3], a: 21}, 1, 0) from cte
+----
+1
+
+# GreaterThan / LessThan
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a < [1,2,3], 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type INTEGER[] ([1, 2, 3]) and type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) - an explicit cast is required
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a > [1,2,3], 1, 0) from cte
+----
+Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required

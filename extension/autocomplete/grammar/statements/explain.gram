@@ -1,3 +1,24 @@
-ExplainStatement <- 'EXPLAIN'i 'ANALYZE'i? ExplainOptions? Statement
+ExplainStatement <- 'EXPLAIN' 'ANALYZE'? GenericCopyOptionList? ExplainableStatements
 
-ExplainOptions <- Parens(GenericCopyOptionList)
+ExplainableStatements <-
+    AlterStatement /
+    AnalyzeStatement /
+    CallStatement /
+    CheckpointStatement /
+    CopyStatement /
+    CreateStatement /
+    DeallocateStatement /
+    DeleteStatement /
+    DropStatement /
+    ExecuteStatement /
+    InsertStatement /
+    LoadStatement /
+    MergeIntoStatement /
+    PragmaStatement /
+    PrepareStatement /
+    SelectStatementInternal /
+    TransactionStatement /
+    UpdateStatement /
+    VacuumStatement /
+    SetStatement /
+    ResetStatement

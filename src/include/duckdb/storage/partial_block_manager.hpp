@@ -8,11 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/data_pointer.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -129,6 +127,7 @@ public:
 	unique_lock<mutex> GetLock() {
 		return unique_lock<mutex>(partial_block_lock);
 	}
+	block_id_t GetFreeBlockId();
 
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;

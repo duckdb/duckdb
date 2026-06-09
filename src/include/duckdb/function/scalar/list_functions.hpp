@@ -119,6 +119,22 @@ struct ArrayZipFun {
 	static constexpr const char *Name = "array_zip";
 };
 
+struct ListIntersectFun {
+	static constexpr const char *Name = "list_intersect";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Returns a list containing the distinct elements that are present in both `list1` and `list2`.";
+	static constexpr const char *Example = "list_intersect([1, 2, 3], [2, 3, 4])";
+	static constexpr const char *Categories = "list";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayIntersectFun {
+	using ALIAS = ListIntersectFun;
+
+	static constexpr const char *Name = "array_intersect";
+};
+
 struct ListExtractFun {
 	static constexpr const char *Name = "list_extract";
 	static constexpr const char *Parameters = "list,index";

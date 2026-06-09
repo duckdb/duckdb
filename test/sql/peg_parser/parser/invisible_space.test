@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/parser/invisible_space.test
+# description: Test invisible space in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ $TEST_PEG_PARSER$);

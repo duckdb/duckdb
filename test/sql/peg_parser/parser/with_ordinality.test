@@ -1,0 +1,11 @@
+# name: test/sql/peg_parser/parser/with_ordinality.test
+# description: Test with ordinality syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM foo() WITH ORDINALITY AS _(ordinality);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT a,my_range,my_ordinality FROM test AS t(a), LATERAL range(t.a) WITH ORDINALITY AS _(my_range,my_ordinality) ORDER BY a,my_range;$TEST_PEG_PARSER$);

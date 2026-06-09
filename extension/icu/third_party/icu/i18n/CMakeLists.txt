@@ -184,6 +184,7 @@ add_library_unity(
   winnmfmt.cpp
   wintzimpl.cpp
 )
+disable_target_warnings(duckdb_icu_i18n)
 set(ICU_LIBRARY_FILES
     ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_i18n>
     PARENT_SCOPE)

@@ -30,12 +30,11 @@ public:
 	unique_ptr<Vector> results;
 };
 
-WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientContext &context,
+WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientContext &client,
                                                                          const WindowConstantAggregator &aggregator,
                                                                          idx_t group_count,
                                                                          const ValidityMask &partition_mask)
-    : WindowAggregatorGlobalState(context, aggregator, STANDARD_VECTOR_SIZE), statef(aggr) {
-
+    : WindowAggregatorGlobalState(client, aggregator, STANDARD_VECTOR_SIZE), statef(client, aggr) {
 	// Locate the partition boundaries
 	if (partition_mask.AllValid()) {
 		partition_offsets.emplace_back(0);
@@ -104,8 +103,8 @@ public:
 
 WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
     ExecutionContext &context, const WindowConstantAggregatorGlobalState &gstate)
-    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0)), statef(gstate.statef.aggr),
-      partition(0) {
+    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0)),
+      statef(context.client, gstate.statef.aggr), partition(0) {
 	matches.Initialize();
 
 	//	Start the aggregates
@@ -114,7 +113,7 @@ WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
 	statef.Initialize(partition_offsets.size() - 1);
 
 	// Set up shared buffer
-	inputs.Initialize(Allocator::DefaultAllocator(), aggregator.arg_types);
+	inputs.Initialize(context.client, aggregator.arg_types);
 	payload_chunk.InitializeEmpty(inputs.GetTypes());
 
 	gstate.locals++;
@@ -201,7 +200,6 @@ BoundWindowExpression &WindowConstantAggregator::RebindAggregate(ClientContext &
 WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
                                                    ClientContext &context)
     : WindowAggregator(RebindAggregate(context, wexpr)) {
-
 	// We only need these values for Sink
 	for (auto &child : wexpr.children) {
 		child_idx.emplace_back(shared.RegisterSink(child));
@@ -239,7 +237,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		payload_chunk.data[c].Reference(sink_chunk.data[child_idx[c]]);
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), statef.allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
@@ -292,11 +290,13 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		//	Aggregate the filtered rows into a single state
 		const auto count = inputs.size();
 		auto state = state_f_data[partition];
-		if (aggr.function.simple_update) {
-			aggr.function.simple_update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), state, count);
+		if (aggr.function.HasStateSimpleUpdateCallback()) {
+			aggr.function.GetStateSimpleUpdateCallback()(inputs.data.data(), aggr_input_data, inputs.ColumnCount(),
+			                                             state, count);
 		} else {
 			state_p_data[0] = state_f_data[partition];
-			aggr.function.update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), statep, count);
+			aggr.function.GetStateUpdateCallback()(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), statep,
+			                                       count);
 		}
 
 		//	Skip filtered rows too!

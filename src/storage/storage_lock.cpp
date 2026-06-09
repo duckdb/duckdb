@@ -1,4 +1,6 @@
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
 

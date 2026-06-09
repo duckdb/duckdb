@@ -5,7 +5,7 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('DESCR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DESCR') LIMIT 1;
 ----
 DESCRIBE 	0
 
@@ -13,7 +13,7 @@ statement ok
 CREATE TABLE my_table(my_column INTEGER);
 
 query II
-FROM sql_auto_complete('SHOW my_') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SHOW my_') LIMIT 1;
 ----
 my_table	5
 
@@ -24,11 +24,11 @@ statement ok
 CREATE TABLE my_schema.table_in_schema(my_column INTEGER)
 
 query II
-FROM sql_auto_complete('SHOW my_s') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SHOW my_s') LIMIT 1;
 ----
 my_schema.	5
 
 query II
-FROM sql_auto_complete('DESCRIBE my_schema.t') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DESCRIBE my_schema.t') LIMIT 1;
 ----
 table_in_schema	19

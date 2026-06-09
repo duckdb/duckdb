@@ -12,7 +12,7 @@ endloop
 statement error
 PRAGMA disabled_compression_methods='uncompressed,rle'
 ----
-Uncompressed compression cannot be disabled
+cannot be disabled
 
 statement ok
 PRAGMA disabled_compression_methods='dictionary,rle'
@@ -20,4 +20,4 @@ PRAGMA disabled_compression_methods='dictionary,rle'
 statement error
 PRAGMA disabled_compression_methods='xzx'
 ----
-Unrecognized compression method
+unrecognized value

@@ -1,0 +1,40 @@
+# name: test/sql/storage/types/variant/variant_null_shredding_inconsistency_issue.test
+# group: [variant]
+
+load __TEST_DIR__/tmp_variant.db readwrite v1.5.0
+
+require json
+
+# Lower shredding threshold so we can reproduce with fewer rows
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# Bug: when a JSON object field exists in only some rows and its value is always NULL,
+# the variant shredding stats incorrectly mark it as fully_consistent=true (the all-NULL
+# early-return path in GetShreddedTypeInternal), which flattens it to INTEGER without an
+# untyped_value_index. At checkpoint/write time, rows that DON'T have the field crash
+# with "Field is missing but untyped_value_index is not set".
+
+statement ok
+CREATE TABLE messages AS
+SELECT (
+    CASE
+        WHEN i % 100 = 0 THEN '{"action": "block", "extra_field": null}'
+        ELSE '{"action": "build"}'
+    END
+)::JSON AS msg_json
+FROM range(10000) t(i);
+
+statement ok
+ALTER TABLE messages ADD COLUMN msg VARIANT;
+
+statement ok
+UPDATE messages SET msg = msg_json::VARIANT;
+
+statement ok
+CHECKPOINT;
+
+query I
+select count(*) from messages where msg.action::VARCHAR = 'block';
+----
+100

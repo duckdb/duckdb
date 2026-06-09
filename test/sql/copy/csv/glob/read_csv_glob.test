@@ -111,7 +111,7 @@ Schema mismatch between globbed files.
 
 # forcing string parsing works
 query I
-SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING')) ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
 ----
 1
 2
@@ -127,7 +127,7 @@ SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := '
 3
 
 query II
-SELECT a, b LIKE '%a_.csv' FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
+SELECT a, b LIKE '%a_.csv' FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1, header=1) t(a,b) ORDER BY 1
 ----
 1	0
 2	0

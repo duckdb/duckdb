@@ -6,7 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test arrow in C API", "[capi][arrow]") {
-
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -17,7 +16,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	SECTION("test rows changed") {
-
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER);"));
 		auto state = duckdb_query_arrow(tester.connection, "INSERT INTO test VALUES (1), (2);", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
@@ -27,7 +25,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test query arrow") {
-
 		auto state = duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE, [1,2,3,4,5] AS LST;", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
 		REQUIRE(duckdb_arrow_row_count(arrow_result) == 1);
@@ -67,7 +64,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test multiple chunks") {
-
 		// create a table that consists of multiple chunks
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER);"));
 		REQUIRE_NO_FAIL(
@@ -88,7 +84,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		int total_count = 0;
 		while (true) {
-
 			// query array data
 			ArrowArray arrow_array;
 			arrow_array.Init();
@@ -115,7 +110,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test prepare query arrow") {
-
 		auto state = duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt);
 		REQUIRE(state == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
@@ -160,7 +154,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test scan") {
-
 		const auto logical_types = duckdb::vector<LogicalType> {LogicalType(LogicalTypeId::INTEGER)};
 		const auto column_names = duckdb::vector<string> {"value"};
 
@@ -177,7 +170,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		auto arrow_array_ptr = &arrow_array;
 
 		SECTION("empty array") {
-
 			// Create an empty view with a `value` column.
 			string view_name = "foo_empty_table";
 
@@ -212,7 +204,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		}
 
 		SECTION("big array") {
-
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
 			unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;

@@ -63,6 +63,10 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	virtual idx_t MaxThreads(idx_t source_max_threads) {
+		return source_max_threads;
+	}
 };
 
 class GlobalSinkState : public StateWithBlockableTasks {

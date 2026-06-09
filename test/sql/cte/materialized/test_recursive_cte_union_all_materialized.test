@@ -97,19 +97,22 @@ SELECT * FROM t;
 statement error
 with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 order by x) select * from t
 ----
+<REGEX>:.*Parser Error.*recursive query is not allowed.*
 
 # limit is not allowed in the recursive term of ctes
 statement error
 with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 LIMIT 1) select * from t
 ----
+<REGEX>:.*Parser Error.*recursive query is not allowed.*
 
 # offset is not allowed in the recursive term of ctes
 statement error
 with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 OFFSET 1) select * from t
 ----
+<REGEX>:.*Parser Error.*recursive query is not allowed.*
 
 # offset is not allowed in the recursive term of ctes
 statement error
 with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 LIMIT 1 OFFSET 1) select * from t
 ----
-
+<REGEX>:.*Parser Error.*recursive query is not allowed.*

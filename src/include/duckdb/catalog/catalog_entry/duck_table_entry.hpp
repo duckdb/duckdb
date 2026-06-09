@@ -34,6 +34,7 @@ public:
 	DataTable &GetStorage() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &storage_index);
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 
 	unique_ptr<BlockingSample> GetSample() override;
@@ -47,7 +48,7 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo() override;
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 

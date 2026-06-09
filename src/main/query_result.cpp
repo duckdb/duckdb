@@ -41,7 +41,7 @@ const ExceptionType &BaseQueryResult::GetErrorType() const {
 	return error.Type();
 }
 
-const std::string &BaseQueryResult::GetError() {
+const std::string &BaseQueryResult::GetError() const {
 	D_ASSERT(HasError());
 	return error.Message();
 }
@@ -108,6 +108,10 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 	}
 	chunk->Flatten();
 	return chunk;
+}
+
+unique_ptr<DataChunk> QueryResult::FetchRaw() {
+	return FetchInternal();
 }
 
 bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START

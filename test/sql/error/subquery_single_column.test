@@ -6,3 +6,4 @@
 statement error
 SELECT (SELECT 42, 84)
 ----
+<REGEX>:.*Binder Error: Subquery returns.*

@@ -1,0 +1,22 @@
+# name: test/sql/types/geo/geometry_persist.test
+# group: [geo]
+
+load __TEST_DIR__/test_geo_persist.db readwrite v1.5.0
+
+statement ok
+create table t1(g GEOMETRY);
+
+statement ok
+INSERT INTO t1 VALUES ('POINT(1 2)'::GEOMETRY);
+
+query I
+select * from t1;
+----
+POINT (1 2)
+
+restart
+
+query I
+select * from t1;
+----
+POINT (1 2)

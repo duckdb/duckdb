@@ -4,6 +4,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
+#include "duckdb/common/printer.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
@@ -177,7 +178,7 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 		for (idx_t i = 0; i < materialized_arrow.types.size(); i++) {
 			if (materialized_arrow.types[i] != duck->types[i] && duck->types[i].id() != LogicalTypeId::ENUM) {
 				mismatch_error = true;
-				error_msg << "Column " << i << "mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
+				error_msg << "Column " << i << " mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
 				          << materialized_arrow.types[i].ToString() << "'\n";
 			}
 		}
@@ -238,8 +239,8 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		ScopedConfigSetting setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
-			    config.get_result_collector = [&batch_size](ClientContext &context,
-			                                                PreparedStatementData &data) -> PhysicalOperator & {
+			    config.get_result_collector =
+			        [&batch_size](ClientContext &context, PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },

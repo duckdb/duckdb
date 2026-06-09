@@ -17,7 +17,6 @@
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const vector<LogicalType> &child_types) {
-
 	idx_t param_count;
 	switch (window_type) {
 	case ExpressionType::WINDOW_RANK:
@@ -44,6 +43,11 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	if (child_types.size() != param_count) {
 		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count,
 		                      param_count == 1 ? "" : "s", child_types.size());
+	}
+	for (const auto &type : child_types) {
+		if (type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 	}
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:
@@ -115,7 +119,6 @@ static bool IsFillType(const LogicalType &type) {
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
-
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(order_expr.get());

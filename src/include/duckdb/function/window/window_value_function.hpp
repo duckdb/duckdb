@@ -79,7 +79,7 @@ protected:
 
 class WindowFillExecutor : public WindowValueExecutor {
 public:
-	WindowFillExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	WindowFillExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
 
 	//! Never ignore nulls (that's the point!)
 	bool IgnoreNulls() const override {

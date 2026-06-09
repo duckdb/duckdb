@@ -189,8 +189,8 @@ unique_ptr<GlobalSourceState> PhysicalPartitionedAggregate::GetGlobalSourceState
 	return make_uniq<PartitionedAggregateGlobalSourceState>(gstate);
 }
 
-SourceResultType PhysicalPartitionedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                       OperatorSourceInput &input) const {
+SourceResultType PhysicalPartitionedAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                               OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<PartitionedAggregateGlobalSinkState>();
 	auto &gsource = input.global_state.Cast<PartitionedAggregateGlobalSourceState>();
 	gstate.aggregate_result.Scan(gsource.scan_state, chunk);

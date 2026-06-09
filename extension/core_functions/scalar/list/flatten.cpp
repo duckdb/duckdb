@@ -10,7 +10,6 @@ namespace duckdb {
 namespace {
 
 void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
 	const auto flat_list_data = FlatVector::GetData<list_entry_t>(result);
 	auto &flat_list_mask = FlatVector::Validity(result);
 

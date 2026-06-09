@@ -479,5 +479,32 @@
       }
     ],
     "constructor": ["type"]
+  },
+  {
+    "class": "TypeExpression",
+    "base": "ParsedExpression",
+    "enum": "TYPE",
+    "members": [
+      {
+        "id": 200,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+          "id": 201,
+          "name": "schema",
+          "type": "string"
+      },
+      {
+          "id": 202,
+          "name": "type_name",
+          "type": "string"
+      },
+      {
+          "id": 203,
+          "name": "children",
+          "type": "vector<unique_ptr<ParsedExpression>>"
+      }
+    ]
   }
 ]

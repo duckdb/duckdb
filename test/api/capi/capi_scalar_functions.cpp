@@ -36,7 +36,6 @@ void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, d
 
 	// execution
 	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
-
 		// validity check
 		auto invalid = false;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
@@ -109,8 +108,8 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBSuccess);
-	// try to register it again - this should be an error
-	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBError);
+	// try to register it again - this should not be an error
+	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBSuccess);
 
 	// now call it
 	result = tester.Query("SELECT my_addition(40, 2)");
@@ -264,7 +263,6 @@ TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]
 }
 
 void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
-
 	// Get the total number of rows and columns in this chunk.
 	auto input_size = duckdb_data_chunk_get_size(input);
 	auto column_count = duckdb_data_chunk_get_column_count(input);
@@ -387,8 +385,8 @@ TEST_CASE("Test Scalar Function Overloads C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBSuccess);
-	// try to register it again - this should be an error
-	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBError);
+	// try to register it again - this should not be an error
+	CAPIRegisterAdditionOverloads(tester.connection, "my_addition", DuckDBSuccess);
 
 	// now call it
 	result = tester.Query("SELECT my_addition(40, 2)");
@@ -643,4 +641,106 @@ TEST_CASE("Test Scalar Functions - LIST", "[capi]") {
 	result = tester.Query("SELECT my_list_sum([])");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+}
+
+static void CounterFunctionBind(duckdb_bind_info info) {
+	// Get the start counter from the extra info.
+	auto extra_info_ptr = duckdb_scalar_function_bind_get_extra_info(info);
+	auto &extra_info = *static_cast<int64_t *>(extra_info_ptr);
+
+	auto bind_data_ptr = malloc(sizeof(int64_t));
+	auto &bind_data = *reinterpret_cast<int64_t *>(bind_data_ptr);
+
+	bind_data = extra_info + 10;
+
+	duckdb_scalar_function_set_bind_data(info, bind_data_ptr, free);
+}
+
+static void CounterFunctionInit(duckdb_init_info info) {
+	auto extra_info_ptr = duckdb_scalar_function_init_get_extra_info(info);
+	auto &extra_info = *static_cast<int64_t *>(extra_info_ptr);
+
+	auto bind_data_ptr = duckdb_scalar_function_init_get_bind_data(info);
+	auto &bind_data = *reinterpret_cast<int64_t *>(bind_data_ptr);
+
+	// Ensure we can get the client context
+	duckdb_client_context context;
+	duckdb_scalar_function_init_get_client_context(info, &context);
+	REQUIRE(context != nullptr);
+	duckdb_destroy_client_context(&context);
+
+	if (extra_info < 0) {
+		duckdb_scalar_function_init_set_error(info, "lower limit cannot be negative");
+		return;
+	}
+	if (bind_data > 100) {
+		duckdb_scalar_function_init_set_error(info, "upper limit cannot be greater than 100");
+		return;
+	}
+
+	auto state_ptr = malloc(sizeof(int64_t));
+	auto &state = *reinterpret_cast<int64_t *>(state_ptr);
+
+	state = extra_info;
+
+	duckdb_scalar_function_init_set_state(info, state_ptr, free);
+}
+
+static void CounterFunctionExec(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+	auto state_ptr = duckdb_scalar_function_get_state(info);
+	auto &state = *reinterpret_cast<int64_t *>(state_ptr);
+
+	auto input_size = duckdb_data_chunk_get_size(input);
+	auto result_data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(output));
+	for (idx_t row = 0; row < input_size; row++) {
+		result_data[row] = state;
+		state++;
+	}
+}
+
+static void CAPIRegisterCounterFunction(duckdb_connection connection, const char *name, int64_t start) {
+	duckdb_state status;
+
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, name);
+
+	auto bigint_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_scalar_function_add_parameter(function, bigint_type);
+	duckdb_scalar_function_set_return_type(function, bigint_type);
+	duckdb_destroy_logical_type(&bigint_type);
+
+	duckdb_scalar_function_set_bind(function, CounterFunctionBind);
+	duckdb_scalar_function_set_init(function, CounterFunctionInit);
+	duckdb_scalar_function_set_function(function, CounterFunctionExec);
+	duckdb_scalar_function_set_extra_info(function, new int64_t(start),
+	                                      [](void *ptr) { delete reinterpret_cast<int64_t *>(ptr); });
+
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == DuckDBSuccess);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Functions - Local State", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterCounterFunction(tester.connection, "my_counter", 5);
+
+	result = tester.Query("SELECT my_counter(i) FROM range(3) r(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<idx_t>(0, 0) == 5);
+	REQUIRE(result->Fetch<idx_t>(0, 1) == 6);
+	REQUIRE(result->Fetch<idx_t>(0, 2) == 7);
+
+	// Now test error conditions.
+	CAPIRegisterCounterFunction(tester.connection, "my_counter_error_low", -5);
+	result = tester.Query("SELECT my_counter_error_low(0)");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "lower limit cannot be negative"));
+
+	CAPIRegisterCounterFunction(tester.connection, "my_counter_error_high", 95);
+	result = tester.Query("SELECT my_counter_error_high(0) FROM range(10)");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "upper limit cannot be greater than 100"));
 }

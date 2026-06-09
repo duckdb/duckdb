@@ -79,6 +79,14 @@
         "aliases": ["formatReadableSize"]
     },
     {
+        "name": "parse_formatted_bytes",
+        "parameters": "string",
+        "description": "Parses a human-readable representation of a size in bytes into an integer.",
+        "example": "parse_formatted_bytes('16 KiB')",
+        "categories": ["string", "numeric"],
+        "type": "scalar_function"
+    },
+    {
         "name": "formatReadableDecimalSize",
         "parameters": "integer",
         "description": "Converts `integer` to a human-readable representation using units based on powers of 10 (KB, MB, GB, etc.).",

@@ -1,0 +1,63 @@
+# name: test/sql/merge/merge_into_bind_matching_columns.test
+# description: Test MERGE INTO
+# group: [merge]
+
+statement ok
+CREATE TABLE dest (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE src  (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO dest VALUES (1, 10);
+
+statement ok
+INSERT INTO src  VALUES (1, 100), (2, 200);
+
+# WHEN NOT MATCHED (BY TARGET)
+statement ok
+MERGE INTO dest AS DBT_INTERNAL_DEST
+USING src AS DBT_INTERNAL_SOURCE
+    ON DBT_INTERNAL_SOURCE.id = DBT_INTERNAL_DEST.id
+WHEN MATCHED THEN UPDATE SET
+    "id"  = DBT_INTERNAL_SOURCE."id",
+    "val" = DBT_INTERNAL_SOURCE."val"
+WHEN NOT MATCHED THEN INSERT
+    ("id", "val")
+VALUES
+    ("id", "val");
+
+query II
+SELECT * FROM dest
+----
+1	100
+2	200
+
+# WHEN NOT MATCHED BY SOURCE
+statement ok
+DELETE FROM dest;
+
+statement ok
+DELETE FROM src;
+
+statement ok
+INSERT INTO dest VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO src  VALUES (1, 100);
+
+statement ok
+MERGE INTO dest AS DBT_INTERNAL_DEST
+USING src AS DBT_INTERNAL_SOURCE
+    ON DBT_INTERNAL_SOURCE.id = DBT_INTERNAL_DEST.id
+WHEN MATCHED THEN UPDATE SET
+    "id"  = DBT_INTERNAL_SOURCE."id",
+    "val" = DBT_INTERNAL_SOURCE."val"
+WHEN NOT MATCHED BY SOURCE THEN
+	UPDATE SET val=val+1;
+
+query II
+SELECT * FROM dest
+----
+1	100
+2	21

@@ -84,11 +84,7 @@ unique_ptr<ColumnDataCollection> MaterializedQueryResult::TakeCollection() {
 	return std::move(collection);
 }
 
-unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
-	return FetchRaw();
-}
-
-unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
+unique_ptr<DataChunk> MaterializedQueryResult::FetchInternal() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}

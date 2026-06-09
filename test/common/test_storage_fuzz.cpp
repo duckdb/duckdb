@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "test_config.hpp"
@@ -145,7 +146,7 @@ public:
 		auto it = unflushed_chunks.find(location);
 		if (it != unflushed_chunks.end()) {
 			// Check that if there is an existing chunk - it's size matches exactly
-			REQUIRE(it->second.size() == nr_bytes);
+			REQUIRE(it->second.size() == NumericCast<size_t>(nr_bytes));
 			it->second = std::string((char *)buffer, nr_bytes);
 		} else {
 			unflushed_chunks.emplace(location, std::string((char *)buffer, nr_bytes));
@@ -174,7 +175,7 @@ public:
 				PRINT_VERBOSE("FS read cached chunk at offset=" << location << " bytes=" << nr_bytes);
 				const auto &data = it->second;
 				// Assume block-aligned reads
-				REQUIRE(data.size() == nr_bytes);
+				REQUIRE(data.size() == NumericCast<size_t>(nr_bytes));
 				memcpy(buffer, data.data(), nr_bytes);
 				return;
 			}
@@ -341,7 +342,7 @@ enum ActionType {
 	LARGE_WRITE = 3,
 	LARGE_WRITE_WITH_FAULT = 4,
 	UPDATE = 5,
-	DELETE = 6,
+	DELETE_ACTION = 6,
 	RESET_TABLE = 7,
 };
 
@@ -352,7 +353,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 	}
 	// DuckDB Configurations
 	duckdb::DBConfig config;
-	config.options.set_variables["debug_skip_checkpoint_on_commit"] = duckdb::Value(true);
+	config.SetOptionByName("debug_skip_checkpoint_on_commit", true);
 	config.options.trim_free_blocks = true;
 	config.options.checkpoint_on_shutdown = false;
 
@@ -370,7 +371,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 	                                              {0.3, ActionType::LARGE_WRITE},
 	                                              {0.5, ActionType::SMALL_WRITE},
 	                                              {0.7, ActionType::UPDATE},
-	                                              {0.85, ActionType::DELETE},
+	                                              {0.85, ActionType::DELETE_ACTION},
 	                                              {1.0, ActionType::LARGE_WRITE_WITH_FAULT}};
 
 	// Randomly generated sequence of actions
@@ -444,7 +445,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 		case ActionType::TOGGLE_SKIP_CHECKPOINTS_ON_COMMIT:
 			skip_checkpoint_on_commit = !skip_checkpoint_on_commit;
 			PRINT_INFO("Setting skip commit=" << skip_checkpoint_on_commit);
-			config.options.set_variables["debug_skip_checkpoint_on_commit"] = duckdb::Value(skip_checkpoint_on_commit);
+			config.SetOptionByName("debug_skip_checkpoint_on_commit", skip_checkpoint_on_commit);
 			break;
 		case ActionType::SMALL_WRITE: {
 			std::string small_insert = "INSERT INTO t SELECT * FROM RANGE(" + std::to_string(offset) + ", " +
@@ -474,7 +475,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 			}
 			break;
 		}
-		case ActionType::DELETE: {
+		case ActionType::DELETE_ACTION: {
 			if (offset != 0) {
 				uint64_t begin = rand() % offset;
 				uint64_t length = rand() % (offset - begin);

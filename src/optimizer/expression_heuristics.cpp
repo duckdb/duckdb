@@ -222,7 +222,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	return 1000;
 }
 
-idx_t ExpressionHeuristics::Cost(TableFilter &filter) {
+idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	switch (filter.filter_type) {
 	case TableFilterType::DYNAMIC_FILTER:
 	case TableFilterType::OPTIONAL_FILTER:

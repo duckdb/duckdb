@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
@@ -119,13 +120,21 @@ struct TupleDataChunkState {
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
 
+	optional_ptr<mutex> chunk_lock;
+
 	SelectionVector utility = SelectionVector(STANDARD_VECTOR_SIZE);
 
 	vector<unique_ptr<Vector>> cached_cast_vectors;
 	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
 
-	//! Cached vector (for InitializeChunkState)
-	unsafe_vector<reference<TupleDataChunkPart>> parts;
+	//! Re-usable arrays used while building buffer space
+	unsafe_vector<reference<TupleDataChunkPart>> chunk_parts;
+	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
+};
+
+struct SortKeyPayloadState {
+	TupleDataChunkState &sort_key_chunk_state;
+	SortKeyType sort_key_type;
 };
 
 struct TupleDataAppendState {

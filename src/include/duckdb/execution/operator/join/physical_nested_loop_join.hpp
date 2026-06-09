@@ -18,12 +18,15 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::NESTED_LOOP_JOIN;
 
 public:
-	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
 	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                       idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
-	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
 	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                       idx_t estimated_cardinality);
+
+	// Predicate (join conditions that don't reference both sides)
+	unique_ptr<Expression> predicate;
 
 public:
 	// Operator Interface
@@ -43,7 +46,8 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return PropagatesBuildSide(join_type);

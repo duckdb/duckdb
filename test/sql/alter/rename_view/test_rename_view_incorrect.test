@@ -15,9 +15,10 @@ CREATE VIEW vw2 AS SELECT 1729 AS i
 statement error
 ALTER VIEW non_view RENAME TO vw
 ----
+<REGEX>:.*Catalog Error: View.*does not exist.*
 
 # rename to an already existing view
 statement error
 ALTER VIEW vw2 RENAME TO vw
 ----
-
+Catalog Error: Could not rename

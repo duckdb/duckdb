@@ -5,7 +5,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+StructColumnReader::StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);

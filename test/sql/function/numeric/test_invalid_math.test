@@ -4,32 +4,32 @@
 
 # cannot take log of negative number or zero
 statement error
-SELECTl log(0);
+SELECT log(0);
 ----
 
 statement error
-SELECTl log(-1);
+SELECT log(-1);
 ----
 
 statement error
-SELECTl ln(0);
+SELECT ln(0);
 ----
 
 statement error
-SELECTl ln(-1);
+SELECT ln(-1);
 ----
 
 statement error
-SELECTl log10(0);
+SELECT log10(0);
 ----
 
 statement error
-SELECTl log10(-1);
+SELECT log10(-1);
 ----
 
 # cannot take square root of a negative number
 statement error
-SELECTl sqrt(-1);
+SELECT sqrt(-1);
 ----
 
 query I

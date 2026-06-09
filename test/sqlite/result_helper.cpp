@@ -255,7 +255,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				auto entry = map.find(query_label);
 				if (entry == map.end()) {
 					// not computed yet: add it tot he map
-					map.emplace(query_label, CachedLabelData(hash_value, std::move(owned_result)));
+					map.emplace(query_label, CachedLabelData(hash_value, logger.ResultToString(*owned_result)));
 				} else {
 					hash_compare_error = entry->second.hash != hash_value;
 				}
@@ -268,11 +268,11 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			hash_compare_error = expected_hash != hash_value;
 		}
 		if (hash_compare_error) {
-			QueryResult *expected_result = nullptr;
+			string expected_result;
 			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
 				auto it = map.find(query_label);
 				if (it != map.end()) {
-					expected_result = it->second.result.get();
+					expected_result = it->second.result_str;
 				}
 				logger.WrongResultHash(expected_result, result, expected_hash, hash_value);
 			});
@@ -303,7 +303,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			logger.InternalException(result);
 			return false;
 		}
-		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN || expected_result == ExpectedResult::RESULT_DONT_CARE) {
 			error = false;
 		} else {
 			error = !error;

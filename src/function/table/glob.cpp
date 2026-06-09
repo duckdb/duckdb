@@ -41,6 +41,7 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 
+	state.file_list_scan.scan_type = MultiFileListScanType::ALWAYS_FETCH;
 	idx_t count = 0;
 	while (count < STANDARD_VECTOR_SIZE) {
 		OpenFileInfo file;
@@ -48,6 +49,7 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			break;
 		}
 		output.data[0].SetValue(count++, file.path);
+		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
 	output.SetCardinality(count);
 }

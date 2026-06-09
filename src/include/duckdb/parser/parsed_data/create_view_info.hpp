@@ -30,7 +30,7 @@ public:
 	//! Names of the query
 	vector<string> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
-	vector<Value> column_comments;
+	unordered_map<string, Value> column_comments_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 
@@ -49,6 +49,11 @@ public:
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	string ToString() const override;
+
+private:
+	CreateViewInfo(vector<string> names, vector<Value> comments, unordered_map<string, Value> column_comments);
+
+	vector<Value> GetColumnCommentsList() const;
 };
 
 } // namespace duckdb

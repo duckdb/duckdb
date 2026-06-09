@@ -155,6 +155,21 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
+      },
+      {
+        "id": 204,
+        "name": "partition_keys",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 205,
+        "name": "sort_keys",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 206,
+        "name": "options",
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },
@@ -205,9 +220,19 @@
         "id": 205,
         "name": "column_comments",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "status": "read_only",
+        "serialize_property": "GetColumnCommentsList()",
+        "version": "v1.5.0"
+      },
+      {
+        "id": 206,
+        "name": "column_comments_map",
+        "type": "unordered_map<string, Value>",
+        "default": "unordered_map<string, Value>()",
+        "version": "v1.5.0"
       }
-    ]
+    ],
+    "constructor": ["names", "column_comments", "column_comments_map"]
   },
   {
     "class": "CreateTypeInfo",

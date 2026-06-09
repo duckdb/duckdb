@@ -168,7 +168,7 @@ LogicalType MetricsLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-string MetricsLogType::ConstructLogMessage(const MetricsType &metric, const Value &value) {
+string MetricsLogType::ConstructLogMessage(const MetricType &metric, const Value &value) {
 	child_list_t<Value> child_list = {
 	    {"metric", EnumUtil::ToString(metric)},
 	    {"value", value.ToString()},
@@ -216,10 +216,38 @@ string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTa
 }
 
 string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
-                                              RowGroup &row_group) {
+                                              RowGroup &row_group, idx_t row_group_start) {
 	vector<Value> map_keys = {"segment_idx", "start", "count"};
-	vector<Value> map_values = {to_string(segment_idx), to_string(row_group.start), to_string(row_group.count.load())};
+	vector<Value> map_values = {to_string(segment_idx), to_string(row_group_start), to_string(row_group.count.load())};
 	return CreateLog(db, table, "checkpoint", std::move(map_keys), std::move(map_values));
+}
+
+//===--------------------------------------------------------------------===//
+// TransactionLogType
+//===--------------------------------------------------------------------===//
+constexpr LogLevel TransactionLogType::LEVEL;
+
+TransactionLogType::TransactionLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType TransactionLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"database", LogicalType::VARCHAR},
+	    {"type", LogicalType::VARCHAR},
+	    {"transaction_id", LogicalType::UBIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
+                                               transaction_t transaction_id) {
+	child_list_t<Value> child_list = {
+	    {"database", db.name},
+	    {"type", log_type},
+	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
 }
 
 } // namespace duckdb

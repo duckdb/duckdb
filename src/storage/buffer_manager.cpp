@@ -119,7 +119,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(QueryContext context, 
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }
 
-void BufferManager::DeleteTemporaryFile(BlockHandle &block) {
+void BufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	throw NotImplementedException("This type of BufferManager does not support 'DeleteTemporaryFile");
 }
 

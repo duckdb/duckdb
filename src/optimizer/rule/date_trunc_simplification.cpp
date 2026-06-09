@@ -246,7 +246,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// date_trunc(part, column) <= constant_rhs  -->  column <= date_trunc(part, date_add(constant_rhs,
+		// date_trunc(part, column) <= constant_rhs  -->  column <  date_trunc(part, date_add(constant_rhs,
 		//                                                                                    INTERVAL 1 part))
 		// date_trunc(part, column) >  constant_rhs  -->  column >= date_trunc(part, date_add(constant_rhs,
 		//                                                                                    INTERVAL 1 part))
@@ -265,12 +265,18 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				expr.left = std::move(trunc);
 			}
 
-			// If this is a >, we need to change it to >= for correctness.
+			// > needs to become >=, and <= needs to become <.
 			if (rhs_comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 				if (col_is_lhs) {
 					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHANOREQUALTO);
 				} else {
 					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHANOREQUALTO);
+				}
+			} else {
+				if (col_is_lhs) {
+					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHAN);
+				} else {
+					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHAN);
 				}
 			}
 

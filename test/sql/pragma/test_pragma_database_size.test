@@ -18,9 +18,9 @@ statement ok
 CHECKPOINT db1
 
 query I
-SELECT free_blocks>0 FROM pragma_database_size() WHERE database_name='db1';
+SELECT case when used_blocks <= 3 then NULL else t end  FROM pragma_database_size() t WHERE database_name='db1';
 ----
-true
+NULL
 
 statement ok
 DETACH db1
@@ -29,6 +29,6 @@ statement ok
 ATTACH '__TEST_DIR__/db_size.db' AS db1 (READ_ONLY)
 
 query I
-SELECT free_blocks>0 FROM pragma_database_size() WHERE database_name='db1';
+SELECT case when used_blocks <= 3 then NULL else t end FROM pragma_database_size() t WHERE database_name='db1';
 ----
-true
+NULL

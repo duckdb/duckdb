@@ -1,0 +1,75 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.4.0
+
+statement ok
+PRAGMA force_compression='roaring';
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+statement ok
+INSERT INTO test VALUES
+(null), (true), (true), (true),
+(true), (true), (true), (true),
+(null), (null), (null), (null),
+(null), (null), (null), (null),
+(false), (false), (false), (false),
+(false), (false), (false), (false),
+(null), (true), (null), (false),
+(false), (false), (false), (false);
+
+statement ok
+checkpoint;
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Uncompressed';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
+----
+
+query I
+FROM test;
+----
+null
+true
+true
+true
+true
+true
+true
+true
+null
+null
+null
+null
+null
+null
+null
+null
+false
+false
+false
+false
+false
+false
+false
+false
+null
+true
+null
+false
+false
+false
+false
+false
+
+query I
+select count(*) from test WHERE a IS NOT NULL;
+----
+21

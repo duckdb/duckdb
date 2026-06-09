@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,8 @@ private:
 	CatalogSet collations;
 	//! The catalog set holding the types
 	CatalogSet types;
+	//! The catalog set holding the coordinate systems
+	CatalogSet coordinate_systems;
 
 public:
 	optional_ptr<CatalogEntry> AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -56,6 +59,8 @@ public:
 	optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
 	                                                CreatePragmaFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) override;
+	optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
+	                                                  CreateCoordinateSystemInfo &info) override;
 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
 	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;

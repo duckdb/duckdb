@@ -14,11 +14,12 @@
 
 namespace duckdb {
 
-class ColumnDataCollection;
 class ClientContext;
-class DuckDB;
-class TableCatalogEntry;
+class ColumnDataCollection;
 class Connection;
+class DuckDB;
+class SQLStatement;
+class TableCatalogEntry;
 
 enum class AppenderType : uint8_t {
 	LOGICAL, // Cast input -> LogicalType
@@ -30,6 +31,14 @@ class BaseAppender {
 public:
 	//! The amount of tuples that are gathered in the column data collection before flushing.
 	static constexpr const idx_t DEFAULT_FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
+
+public:
+	//! Returns a table reference to the appended data.
+	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+	                                                  const vector<string> &expected_names);
+	//! Parses the statement to append data.
+	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+	                                               const string &table_name);
 
 protected:
 	//! The allocator for the column data collection.
@@ -48,6 +57,8 @@ protected:
 	AppenderType appender_type;
 	//! The amount of rows after which the appender flushes automatically.
 	idx_t flush_count = DEFAULT_FLUSH_COUNT;
+	//! Peak allocation threshold at which to flush the allocator when appender flushs chunk.
+	optional_idx flush_memory_threshold;
 
 protected:
 	DUCKDB_API BaseAppender(Allocator &allocator, const AppenderType type);
@@ -82,6 +93,8 @@ public:
 	DUCKDB_API void Flush();
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
+	//! Clears any appended data (without flushing).
+	DUCKDB_API void Clear();
 	//! Returns the active types of the appender.
 	const vector<LogicalType> &GetActiveTypes() const;
 
@@ -104,6 +117,9 @@ protected:
 	virtual void FlushInternal(ColumnDataCollection &collection) = 0;
 	void InitializeChunk();
 	void FlushChunk();
+
+	bool ShouldFlushChunk() const;
+	bool ShouldFlush() const;
 
 	template <class T>
 	void AppendValueInternal(T value);
@@ -129,9 +145,11 @@ protected:
 class Appender : public BaseAppender {
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
-	                    const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &table_name);
+	                    const string &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name,
+	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const string &table_name,
+	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~Appender() override;
 
 public:
@@ -139,6 +157,11 @@ public:
 	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
+	//! Get the expected names based on the active columns.
+	vector<string> GetExpectedNames();
+	//! Construct a query that appends data from, typically, a column data collection.
+	static string ConstructQuery(TableDescription &description_p, const string &table_name,
+	                             const vector<string> &expected_names);
 
 private:
 	//! A shared pointer to the context of this appender.
@@ -160,17 +183,18 @@ protected:
 class QueryAppender : public BaseAppender {
 public:
 	DUCKDB_API QueryAppender(Connection &con, string query, vector<LogicalType> types,
-	                         vector<string> names = vector<string>(), string table_name = string());
+	                         vector<string> names = vector<string>(), string table_name = string(),
+	                         const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~QueryAppender() override;
 
 private:
 	//! A shared pointer to the context of this appender.
 	weak_ptr<ClientContext> context;
-	//! The query to run
+	//! The query to run.
 	string query;
-	//! The column names of the to-be-appended data, or "col1, col2, ..." if empty
+	//! The column names of the to-be-appended data, or "col1, col2, ...", if empty.
 	vector<string> names;
-	//! The table name that we can reference in the query, or "appended_data" if empty
+	//! The table name that we can reference in the query, or "appended_data", if empty.
 	string table_name;
 
 protected:
@@ -185,7 +209,8 @@ class InternalAppender : public BaseAppender {
 
 public:
 	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table,
-	                            const idx_t flush_count = DEFAULT_FLUSH_COUNT);
+	                            const idx_t flush_count = DEFAULT_FLUSH_COUNT,
+	                            const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~InternalAppender() override;
 
 protected:

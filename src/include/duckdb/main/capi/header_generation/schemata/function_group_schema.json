@@ -1,0 +1,115 @@
+{
+  "type": "object",
+  "title": "DuckDB C API function group definition",
+  "description": "The schema of a C API function group definition. Function group definitions are the main component of the C API header generation.",
+  "required": ["group", "deprecated", "description","entries"],
+  "properties": {
+    "group": {
+      "type": "string",
+      "description": "The group name of this function group."
+    },
+    "deprecated": {
+      "type": "boolean",
+      "description": "Marks the entire function group as deprecated, if true."
+    },
+    "use_instead": {
+      "type": "string",
+      "description": "Pointers on what functionality to use, if the entire function group is marked as deprecated."
+    },
+    "description": {
+      "type": "string",
+      "description": "A top-level usage description of the function group."
+    },
+    "entries": {
+      "type": "array",
+      "description": "The array of function definitions in this group.",
+      "items": {
+        "type": "object",
+        "required": ["name", "return_type", "params", "comment"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The function name."
+          },
+          "return_type": {
+            "type": "string",
+            "description": "The return type of the function."
+          },
+          "params": {
+            "type": "array",
+            "description": "The array of function parameters.",
+            "items": {
+              "type": "object",
+              "required": ["type", "name"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "The parameter type."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The parameter name."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "comment": {
+            "type": "object",
+            "description": "The function documentation.",
+            "deprecated": {
+              "type": "boolean",
+              "description": "Marks the function as deprecated, if true."
+            },
+            "outdated": {
+              "type": "boolean",
+              "description": "Marks the function as outdated, if true."
+            },
+            "use_instead": {
+              "type": "string",
+              "description": "Pointers on what functionality to use, if the function is marked as deprecated or outdated."
+            },
+            "required": ["description", "param_comments"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "The function description."
+              },
+              "param_comments": {
+                "type": "object",
+                "description": "A comment on each function parameter.",
+                "patternProperties": {
+                  ".*": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "param_destroy_functions": {
+                "type": "object",
+                "description": "Which parameters to destroy, and how.",
+                "patternProperties": {
+                  ".*": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "return_value": {
+                "type": "string",
+                "description": "A comment on the return value."
+              },
+              "return_value_destroy_function": {
+                "type": "string",
+                "function": "The function to destroy the return value with, if applicable."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

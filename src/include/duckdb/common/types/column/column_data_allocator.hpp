@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -17,21 +18,31 @@ struct VectorMetaData;
 struct SwizzleMetaData;
 
 struct BlockMetaData {
-	//! The underlying block handle
-	shared_ptr<BlockHandle> handle;
+public:
 	//! How much space is currently used within the block
 	uint32_t size;
 	//! How much space is available in the block
 	uint32_t capacity;
 
+private:
+	//! The underlying block handle
+	shared_ptr<BlockHandle> handle;
+	//! Weak pointer to underlying block handle (if ColumnDataCollectionLifetime::DATABASE_INSTANCE)
+	weak_ptr<BlockHandle> weak_handle;
+
+public:
+	shared_ptr<BlockHandle> GetHandle() const;
+	void SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle);
 	uint32_t Capacity();
 };
 
 class ColumnDataAllocator {
 public:
 	explicit ColumnDataAllocator(Allocator &allocator);
-	explicit ColumnDataAllocator(BufferManager &buffer_manager);
-	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
+	explicit ColumnDataAllocator(BufferManager &buffer_manager,
+	                             ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
+	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type,
+	                    ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
 	~ColumnDataAllocator();
 
@@ -81,6 +92,8 @@ public:
 
 	//! Prevents the block with the given id from being added to the eviction queue
 	void SetDestroyBufferUponUnpin(uint32_t block_id);
+	//! Gets a shared pointer to the database instance if ColumnDataCollectionLifetime::DATABASE_INSTANCE
+	shared_ptr<DatabaseInstance> GetDatabase() const;
 
 private:
 	void AllocateEmptyBlock(idx_t size);
@@ -116,6 +129,8 @@ private:
 	idx_t allocated_size = 0;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
+	//! Lifetime management for this allocator
+	ManagedResultSet managed_result_set;
 };
 
 } // namespace duckdb

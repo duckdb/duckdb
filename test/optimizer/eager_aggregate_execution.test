@@ -1,0 +1,82 @@
+# name: test/optimizer/eager_aggregate_execution.test
+# description: Test count_star, min, and max execution on row group statistics
+# group: [optimizer]
+
+# Alternative verify disables eager aggregate execution
+require no_alternative_verify
+
+statement ok
+ATTACH '__TEST_DIR__/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+CREATE TABLE t AS (SELECT * FROM range(8192) _(i), LATERAL (select (i*2) as j));
+
+# Work-around for unsetting version info
+statement ok
+ATTACH '__TEST_DIR__/tmp.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '__TEST_DIR__/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t GROUP BY i
+----
+physical_plan	<REGEX>:.*GROUP_BY.*
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i > 100
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM t
+----
+8192	0	8191
+
+query III
+SELECT max(i), count(i), min(i) FROM t
+----
+8191	8192	0
+
+query II
+explain SELECT count(*),max(i),min(i) FROM t where i >=2048
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*),max(i),min(i) FROM t where i >=204 and j >=4096
+----
+6144	8191	2048
+
+query II
+explain SELECT count(*),max(i),min(i) FROM t where i >=2048 and j > 20000
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+statement ok
+INSERT INTO t VALUES (9999, 9999)
+
+query III
+SELECT count(*), min(i), max(i) FROM t
+----
+8193	0	9999

@@ -15,7 +15,7 @@
 namespace duckdb {
 class SQLLogicTestRunner;
 
-enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN };
+enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN, RESULT_DONT_CARE };
 
 struct LoopDefinition {
 	string loop_iterator_name;
@@ -24,21 +24,22 @@ struct LoopDefinition {
 	int loop_end;
 	bool is_parallel;
 	vector<string> tokens;
+	bool is_skipped = false;
 };
 
 struct ExecuteContext {
 	ExecuteContext() : con(nullptr), is_parallel(false) {
 	}
-	ExecuteContext(Connection *con, vector<LoopDefinition> running_loops_p)
+	ExecuteContext(Connection &con, vector<LoopDefinition> running_loops_p)
 	    : con(con), running_loops(std::move(running_loops_p)), is_parallel(true) {
 	}
 
-	Connection *con;
+	optional_ptr<Connection> con;
 	vector<LoopDefinition> running_loops;
-	bool is_parallel;
+	bool is_parallel = false;
 	string sql_query;
 	string error_file;
-	int error_line;
+	int error_line = -1;
 };
 
 struct Condition {
@@ -50,20 +51,20 @@ struct Condition {
 
 class Command {
 public:
-	Command(SQLLogicTestRunner &runner);
+	explicit Command(SQLLogicTestRunner &runner);
 	virtual ~Command();
 
 	SQLLogicTestRunner &runner;
 	string connection_name;
-	int query_line;
+	int query_line = -1;
 	string base_sql_query;
 	string file_name;
 	vector<Condition> conditions;
 
 public:
-	Connection *CommandConnection(ExecuteContext &context) const;
+	Connection &CommandConnection(ExecuteContext &context) const;
 
-	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection,
+	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, reference<Connection> connection,
 	                                                         string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
@@ -74,7 +75,7 @@ public:
 	}
 
 private:
-	void RestartDatabase(ExecuteContext &context, Connection *&connection, string sql_query) const;
+	void RestartDatabase(ExecuteContext &context, reference<Connection> &connection, const string &sql_query) const;
 };
 
 class Statement : public Command {
@@ -152,6 +153,15 @@ public:
 
 	void ExecuteInternal(ExecuteContext &context) const override;
 
+	bool SupportsConcurrent() const override;
+};
+
+class ContinueCommand : public Command {
+public:
+	explicit ContinueCommand(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
 	bool SupportsConcurrent() const override;
 };
 

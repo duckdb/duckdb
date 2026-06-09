@@ -7,10 +7,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#ifdef __MVS__
-#define MAP_ANONYMOUS 0x0
-#endif
-
 using namespace duckdb;
 using namespace std;
 

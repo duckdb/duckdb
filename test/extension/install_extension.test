@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+# Now httpfs might be already loaded or not, we keep the test agnostic via REGEX https? that matches both http AND https
+
 statement ok
 set extension_directory='__TEST_DIR__/install_extension'
 
@@ -12,25 +14,25 @@ set extension_directory='__TEST_DIR__/install_extension'
 statement error
 INSTALL will_never_exist;
 ----
-Failed to download extension "will_never_exist" at URL "http://extensions.duckdb.org
+<REGEX>:.*Failed to download extension "will_never_exist" at URL \"https?://extensions.duckdb.org.*
 
 # Explicitly install from core
 statement error
 INSTALL will_never_exist FROM core;
 ----
-Failed to download extension "will_never_exist" at URL "http://extensions.duckdb.org
+<REGEX>:.*Failed to download extension "will_never_exist" at URL \"https?://extensions.duckdb.org.*
 
 # Explicitly install from nightly
 statement error
 INSTALL will_never_exist FROM core_nightly;
 ----
-Failed to download extension "will_never_exist" at URL "http://nightly-extensions.duckdb.org
+<REGEX>:.*Failed to download extension "will_never_exist" at URL \"https?://nightly-extensions.duckdb.org.*
 
 # Explicitly install from community
 statement error
 INSTALL will_never_exist FROM community;
 ----
-Failed to download extension "will_never_exist" at URL "http://community-extensions.duckdb.org
+<REGEX>:.*Failed to download extension "will_never_exist" at URL \"https?://community-extensions.duckdb.org.*
 
 # Alias can not quoted: string literals are interpreted as paths
 statement error

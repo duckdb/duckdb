@@ -1,8 +1,8 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 

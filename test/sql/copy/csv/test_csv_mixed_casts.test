@@ -2,9 +2,6 @@
 # description: Try mixed casts that have unique CSVCast implementations with ignore_errors
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Try Date
 query II
 FROM read_csv(

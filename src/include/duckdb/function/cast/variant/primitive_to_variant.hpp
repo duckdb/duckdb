@@ -357,6 +357,9 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResul
 	case LogicalTypeId::CHAR:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::VARCHAR, string_t>(
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
+	case LogicalTypeId::GEOMETRY:
+		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::GEOMETRY, string_t>(
+		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
 	case LogicalTypeId::BLOB:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BLOB, string_t>(
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
@@ -389,6 +392,8 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResul
 	case LogicalTypeId::BIT:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::BITSTRING, string_t>(
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);
+	case LogicalTypeId::TYPE:
+		throw NotImplementedException("Cannot convert TYPE to VARIANT");
 	default:
 		throw NotImplementedException("Invalid LogicalType (%s) for ConvertToVariant",
 		                              EnumUtil::ToString(logical_type));

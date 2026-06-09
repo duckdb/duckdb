@@ -1,0 +1,28 @@
+# name: test/parquet/variant/variant_write_partially_shredded.test
+# group: [variant]
+
+require parquet
+
+# Verify we can perform partial shredding
+statement ok
+COPY (
+	SELECT {
+		'field1': CASE WHEN i%2=0 THEN CONCAT('hello', i)::VARIANT ELSE i::VARIANT END,
+		'field2': i::INT
+	}::VARIANT AS obj
+	FROM range(5) t(i)
+) TO '{TEST_DIR}/partially_shredded_struct.parquet';
+
+query II
+SELECT p.obj.field1, p.obj.field2 FROM '{TEST_DIR}/partially_shredded_struct.parquet' p;
+----
+hello0	0
+1	1
+hello2	2
+3	3
+hello4	4
+
+query I
+SELECT COUNT(*) > 0 FROM parquet_schema('{TEST_DIR}/partially_shredded_struct.parquet') WHERE name='typed_value';
+----
+1

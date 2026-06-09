@@ -12,6 +12,16 @@ select try_cast('hello world'::variant as STRUCT(a varchar, b boolean));
 NULL
 
 query I
+select try_cast({'a': true, 'b': 'foo'}::variant as STRUCT(a varchar, b boolean));
+----
+NULL
+
+query I
+select try_cast({'c': true, 'd': 'foo'}::variant as STRUCT(a varchar, b boolean));
+----
+NULL
+
+query I
 select try_cast('hello world'::variant as INTEGER[]);
 ----
 NULL

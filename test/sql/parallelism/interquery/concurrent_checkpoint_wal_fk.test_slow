@@ -1,0 +1,79 @@
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_wal_fk.test_slow
+# description: Test concurrent optimistic appends with foreign key constraints
+# group: [interquery]
+
+statement ok
+ATTACH ':memory:' AS mem
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+foreach sleep_time 0 25 50 75 100
+
+statement ok
+SET debug_checkpoint_sleep_ms=${sleep_time}
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_checkpoint_wal_fk${sleep_time}.db' AS concurrent_checkpoint_wal
+
+# work-around for not being able to create fk tables in other databases
+statement ok
+USE concurrent_checkpoint_wal
+
+statement ok
+CREATE TABLE pk_tbl(i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE fk_tbl(i INTEGER REFERENCES pk_tbl(i))
+
+statement ok
+USE mem
+
+concurrentloop threadid 0 20
+
+loop x 0 10
+
+onlyif threadid<>10
+statement ok
+INSERT INTO concurrent_checkpoint_wal.pk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+
+# we can insert the same key into the foreign key table immediately
+onlyif threadid<>10
+statement ok
+INSERT INTO concurrent_checkpoint_wal.fk_tbl SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+
+endloop
+
+loop x 0 4
+
+onlyif threadid=10
+statement ok
+CHECKPOINT concurrent_checkpoint_wal
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.pk_tbl
+----
+19000	189940500
+
+statement ok
+DETACH concurrent_checkpoint_wal
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_checkpoint_wal_fk${sleep_time}.db' AS concurrent_checkpoint_wal
+
+query II
+SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.pk_tbl
+----
+19000	189940500
+
+statement ok
+DETACH concurrent_checkpoint_wal
+
+endloop

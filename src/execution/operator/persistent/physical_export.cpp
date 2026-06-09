@@ -205,8 +205,8 @@ catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &contex
 	return catalog_entries;
 }
 
-SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalExport::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<ExportSourceState>();
 	if (state.finished) {
 		return SourceResultType::FINISHED;

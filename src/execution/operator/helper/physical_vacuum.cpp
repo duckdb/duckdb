@@ -105,8 +105,8 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	return SinkFinalizeType::READY;
 }
 
-SourceResultType PhysicalVacuum::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalVacuum::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	// NOP
 	return SourceResultType::FINISHED;
 }

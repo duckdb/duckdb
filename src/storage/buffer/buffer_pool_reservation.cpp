@@ -1,4 +1,5 @@
-#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
+
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {

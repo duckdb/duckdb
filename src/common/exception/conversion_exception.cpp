@@ -17,7 +17,7 @@ ConversionException::ConversionException(const string &msg) : Exception(Exceptio
 }
 
 ConversionException::ConversionException(optional_idx error_location, const string &msg)
-    : Exception(ExceptionType::CONVERSION, msg, Exception::InitializeExtraInfo(error_location)) {
+    : Exception(Exception::InitializeExtraInfo(error_location), ExceptionType::CONVERSION, msg) {
 }
 
 } // namespace duckdb

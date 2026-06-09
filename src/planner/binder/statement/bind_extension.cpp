@@ -5,8 +5,6 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(ExtensionStatement &stmt) {
-	BoundStatement result;
-
 	// perform the planning of the function
 	D_ASSERT(stmt.extension.plan_function);
 	auto parse_result =
@@ -18,11 +16,9 @@ BoundStatement Binder::Bind(ExtensionStatement &stmt) {
 	properties.return_type = parse_result.return_type;
 
 	// create the plan as a scan of the given table function
-	result.plan = BindTableFunction(parse_result.function, std::move(parse_result.parameters));
+	auto result = BindTableFunction(parse_result.function, std::move(parse_result.parameters));
 	D_ASSERT(result.plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = result.plan->Cast<LogicalGet>();
-	result.names = get.names;
-	result.types = get.returned_types;
 	get.ClearColumnIds();
 	for (idx_t i = 0; i < get.returned_types.size(); i++) {
 		get.AddColumnId(i);

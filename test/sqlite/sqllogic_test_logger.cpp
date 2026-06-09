@@ -4,12 +4,13 @@
 #include "result_helper.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
-    : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
-      sql_query(context.sql_query) {
+    : connection(command.CommandConnection(context)), log_lock(command.runner.log_lock), file_name(command.file_name),
+      query_line(command.query_line), sql_query(context.sql_query) {
 }
 
 SQLLogicTestLogger::~SQLLogicTestLogger() {
@@ -108,6 +109,8 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
@@ -155,8 +158,18 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 	PrintExpectedResult(result_values, expected_column_count, false);
 }
 
+string SQLLogicTestLogger::ResultToString(MaterializedQueryResult &result) {
+	if (result.RowCount() < 100) {
+		return result.ToString();
+	}
+	BoxRendererConfig config;
+	config.max_rows = 100;
+	config.max_width = -1;
+	return result.ToBox(*connection.context, config);
+}
+
 void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
-	LogFailure(result.ToString());
+	LogFailure(ResultToString(result));
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
@@ -256,7 +269,6 @@ void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryRes
 
 void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
                                                           MaterializedQueryResult &result) {
-
 	std::ostringstream oss;
 	PrintErrorHeader("Wrong column count in query!");
 	oss << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
@@ -280,7 +292,6 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 }
 
 void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count) {
-
 	std::ostringstream oss;
 	PrintLineSep();
 	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " + to_string(row_number) +
@@ -294,19 +305,18 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+void SQLLogicTestLogger::WrongResultHash(const string &expected_result, MaterializedQueryResult &result,
                                          const string &expected_hash, const string &actual_hash) {
-	if (expected_result) {
-		expected_result->Print();
-		expected_result->ToString();
-	} else {
-		LogFailure("???\n");
-	}
 	PrintErrorHeader("Wrong result hash!");
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	PrintHeader("Expected result:");
+	if (!expected_result.empty()) {
+		LogFailure(expected_result);
+	} else {
+		LogFailure("???\n");
+	}
 	PrintLineSep();
 	PrintHeader("Actual result:");
 	PrintLineSep();

@@ -45,7 +45,7 @@ struct SortKey;
 template <class SORT_KEY>
 struct SortKeyNoPayload {
 protected:
-	SortKeyNoPayload() = default;
+	SortKeyNoPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -63,7 +63,7 @@ public:
 template <class SORT_KEY>
 struct SortKeyPayload {
 protected:
-	SortKeyPayload() = default;
+	SortKeyPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -93,7 +93,7 @@ inline bool SortKeyLessThan<1>(const uint64_t *const &lhs, const uint64_t *const
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct FixedSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	FixedSortKey() = default;
+	FixedSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -102,7 +102,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 
@@ -163,7 +163,7 @@ public:
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct VariableSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	VariableSortKey() = default;
+	VariableSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -172,7 +172,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 

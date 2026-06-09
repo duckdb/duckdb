@@ -232,22 +232,22 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
 	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
 	fun.name = "count";
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return fun;
 }
 
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	fun.window = CountStarFunction::Window<int64_t>;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetWindowCallback(CountStarFunction::Window<int64_t>);
 	return fun;
 }
 
 AggregateFunctionSet CountFun::GetFunctions() {
 	AggregateFunction count_function = CountFunctionBase::GetFunction();
-	count_function.statistics = CountPropagateStats;
+	count_function.SetStatisticsCallback(CountPropagateStats);
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

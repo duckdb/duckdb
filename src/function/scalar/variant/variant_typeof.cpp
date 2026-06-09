@@ -63,7 +63,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 ScalarFunction VariantTypeofFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
 	auto res = ScalarFunction("variant_typeof", {variant_type}, LogicalType::VARCHAR, VariantTypeofFunction);
-	res.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	res.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return res;
 }
 

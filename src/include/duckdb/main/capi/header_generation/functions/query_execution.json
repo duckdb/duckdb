@@ -1,6 +1,7 @@
 {
     "group": "query_execution",
     "deprecated": false,
+    "description": "Functions to obtain a `duckdb_result` and to retrieve metadata from it.",
     "entries": [
         {
             "name": "duckdb_query",
@@ -275,6 +276,82 @@
                     "result": "The result object to fetch the error from."
                 },
                 "return_value": "The error type of the result."
+            }
+        },
+        {
+            "name": "duckdb_result_get_chunk",
+            "return_type": "duckdb_data_chunk",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "chunk_index"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.\n\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\nThis function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data`\nfunctions. It results in significantly better performance, and should be preferred in newer code-bases.\n\nIf this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be\nmixed with the legacy result functions).\n\nUse `duckdb_result_chunk_count` to figure out how many chunks there are in the result.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the data chunk from.",
+                    "chunk_index": "The chunk index to fetch from."
+                },
+                "return_value": "The resulting data chunk. Returns `NULL` if the chunk index is out of bounds."
+            }
+        },
+        {
+            "name": "duckdb_result_is_streaming",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nChecks if the type of the internal result is StreamQueryResult.\n\n",
+                "param_comments": {
+                    "result": "The result object to check."
+                },
+                "return_value": "Whether or not the result object is of the type StreamQueryResult"
+            }
+        },
+        {
+            "name": "duckdb_result_chunk_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "deprecated": true,
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of data chunks present in the result.\n\n",
+                "param_comments": {
+                    "result": "The result object"
+                },
+                "return_value": "Number of data chunks present in the result."
+            }
+        },
+        {
+            "name": "duckdb_result_return_type",
+            "return_type": "duckdb_result_type",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error\n\n",
+                "param_comments": {
+                    "result": "The result object"
+                },
+                "return_value": "The return_type"
             }
         }
     ]

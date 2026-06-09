@@ -1,6 +1,6 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

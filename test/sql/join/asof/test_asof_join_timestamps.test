@@ -219,6 +219,7 @@ ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
 2023-03-21 12:00:00
+NULL
 
 # Return NULLs
 query II

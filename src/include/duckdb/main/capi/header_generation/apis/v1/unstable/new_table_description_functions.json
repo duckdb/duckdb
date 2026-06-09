@@ -1,0 +1,8 @@
+{
+  "version": "unstable_new_table_description_functions",
+  "description": "New functions around the table description",
+  "entries": [
+    "duckdb_table_description_get_column_count",
+    "duckdb_table_description_get_column_type"
+  ]
+}

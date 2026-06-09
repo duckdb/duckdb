@@ -1,0 +1,21 @@
+# name: test/sql/function/autocomplete/views.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require autocomplete
+
+statement ok
+CREATE VIEW v1 AS SELECT 42 my_column_name
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT my_col') LIMIT 1;
+----
+my_column_name	7
+
+statement ok
+CREATE VIEW v2(alias_name) AS SELECT 42 alias
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT alias') LIMIT 1;
+----
+alias_name	7

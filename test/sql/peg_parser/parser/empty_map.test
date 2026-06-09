@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/parser/empty_map.test
+# description: Test empty map syntax peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT MAP {};$TEST_PEG_PARSER$);

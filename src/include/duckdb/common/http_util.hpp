@@ -41,6 +41,8 @@ struct HTTPParams {
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool follow_location = true;
+	bool override_verify_ssl = false;
+	bool verify_ssl = true;
 
 	string http_proxy;
 	idx_t http_proxy_port;
@@ -130,13 +132,9 @@ public:
 
 struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
-	BaseRequest(RequestType type, const string &endpoint_p, const string &path_p, const HTTPHeaders &headers,
-	            HTTPParams &params)
-	    : type(type), url(path), path(path_p), proto_host_port(endpoint_p), headers(headers), params(params) {
-	}
 
 	RequestType type;
-	const string &url;
+	string url;
 	string path;
 	string proto_host_port;
 	HTTPHeaders headers;
@@ -173,12 +171,6 @@ struct GetRequestInfo : public BaseRequest {
 	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
 	    : BaseRequest(RequestType::GET_REQUEST, url, headers, params), content_handler(std::move(content_handler_p)),
 	      response_handler(std::move(response_handler_p)) {
-	}
-	GetRequestInfo(const string &endpoint, const string &path, const HTTPHeaders &headers, HTTPParams &params,
-	               std::function<bool(const HTTPResponse &response)> response_handler_p,
-	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
-	    : BaseRequest(RequestType::GET_REQUEST, endpoint, path, headers, params),
-	      content_handler(std::move(content_handler_p)), response_handler(std::move(response_handler_p)) {
 	}
 
 	std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler;
@@ -219,10 +211,15 @@ struct PostRequestInfo : public BaseRequest {
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
 	string buffer_out;
+	//! Used to send a GET request with a body (non-standard but supported by some servers)
+	bool send_post_as_get_request = false;
 };
 
 class HTTPClient {
 public:
+	HTTPClient() = default;
+	explicit HTTPClient(const string &proto_host_port) : base_url(proto_host_port) {
+	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
 
@@ -231,13 +228,26 @@ public:
 	virtual unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Post(PostRequestInfo &info) = 0;
+	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
+
+	const string &GetBaseUrl() const {
+		return base_url;
+	}
+
+private:
+	//! The base URL (scheme + host + port) this client was created for
+	const string base_url;
 };
 
 class HTTPUtil {
 public:
+	HTTPUtil();
 	virtual ~HTTPUtil() = default;
+	// disable copy constructors
+	HTTPUtil(const HTTPUtil &other) = delete;
+	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
@@ -251,6 +261,9 @@ public:
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
 
+	//! Close a client — implementations may cache it for reuse
+	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
+
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
@@ -261,6 +274,8 @@ public:
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
 	static HTTPStatusCode ToStatusCode(int32_t status_code);
 	static string GetStatusMessage(HTTPStatusCode status);
+	static bool IsHTTPProtocol(const string &url);
+	static void BumpToSecureProtocol(string &url);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

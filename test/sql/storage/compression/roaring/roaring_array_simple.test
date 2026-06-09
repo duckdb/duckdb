@@ -11,7 +11,7 @@ PRAGMA force_compression='roaring'
 statement ok
 CREATE TABLE test (a BIGINT);
 
-# 82 values stored in the Array Container
+# 82 values stored in the Array Container (a container is limited to 2048 values, we have to store 2048/25~=82 bit positions in the array container)
 statement ok
 INSERT INTO test SELECT case when i%25=0 then 1337 else null end FROM range(0,10000) tbl(i);
 

@@ -1,0 +1,17 @@
+# name: benchmark/micro/window/selfjoin_filtered.benchmark
+# description: Measure performance of the window self-join optimisation with filtering
+# group: [window]
+
+name Window Self-Join, Filtered
+group micro
+subgroup window
+
+require httpfs
+
+load
+CREATE TABLE services AS 
+	FROM 'http://blobs.duckdb.org/data/train-services-window-self-join-benchmark.parquet';
+
+run
+FROM services 
+QUALIFY count(*) OVER(PARTITION BY "Service:Date", "Service:Train number") = 1

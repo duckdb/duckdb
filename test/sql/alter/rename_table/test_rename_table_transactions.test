@@ -26,6 +26,7 @@ SELECT * FROM tbl2
 statement error con1
 SELECT * FROM tbl
 ----
+Catalog Error: Table with name tbl does not exist
 
 query I con2
 SELECT * FROM tbl
@@ -36,6 +37,7 @@ SELECT * FROM tbl
 statement error con2
 SELECT * FROM tbl2
 ----
+Catalog Error: Table with name tbl2 does not exist
 
 statement ok con1
 COMMIT
@@ -46,10 +48,12 @@ COMMIT
 statement error con1
 SELECT * FROM tbl
 ----
+Catalog Error: Table with name tbl does not exist
 
 statement error con2
 SELECT * FROM tbl
 ----
+Catalog Error: Table with name tbl does not exist
 
 query I con1
 SELECT * FROM tbl2
@@ -71,6 +75,7 @@ CREATE TABLE tbl(i INTEGER);
 statement error con1
 CREATE TABLE tbl2(i INTEGER);
 ----
+Catalog Error: Table with name "tbl2" already exists
 
 # we can drop and re-create the table
 statement ok con1
@@ -83,3 +88,4 @@ CREATE TABLE tbl2(i INTEGER);
 statement error con1
 ALTER TABLE tbl RENAME TO tbl2
 ----
+Catalog Error: Could not rename "tbl" to "tbl2"

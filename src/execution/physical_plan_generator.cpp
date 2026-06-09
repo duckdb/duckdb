@@ -30,18 +30,18 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Resolve the types of each operator.
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES);
+	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES);
 	op->ResolveOperatorTypes();
 	profiler.EndPhase();
 
 	// Resolve the column references.
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);
+	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING);
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
 	profiler.EndPhase();
 
 	// Create the main physical plan.
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
+	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_CREATE_PLAN);
 	physical_plan = PlanInternal(*op);
 	profiler.EndPhase();
 
@@ -57,7 +57,7 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	physical_plan->SetRoot(CreatePlan(op));
 	physical_plan->Root().estimated_cardinality = op.estimated_cardinality;
 
-	auto debug_verify_vector = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
+	auto debug_verify_vector = Settings::Get<DebugVerifyVectorSetting>(context);
 	if (debug_verify_vector != DebugVectorVerification::NONE) {
 		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
 		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
@@ -183,6 +183,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	}
 	}
 	throw InternalException("Physical plan generator - no plan generated");
+}
+
+ArenaAllocator &PhysicalPlanGenerator::ArenaRef() {
+	if (!physical_plan) {
+		physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(context));
+	}
+	return physical_plan->ArenaRef();
 }
 
 } // namespace duckdb

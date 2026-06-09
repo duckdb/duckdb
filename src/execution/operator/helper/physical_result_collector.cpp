@@ -10,41 +10,44 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 PhysicalResultCollector::PhysicalResultCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
-      statement_type(data.statement_type), properties(data.properties), plan(data.physical_plan->Root()),
-      names(data.names) {
+      statement_type(data.statement_type), properties(data.properties), memory_type(data.memory_type),
+      plan(data.physical_plan->Root()), names(data.names) {
 	types = data.types;
 }
 
-PhysicalOperator &PhysicalResultCollector::GetResultCollector(ClientContext &context, PreparedStatementData &data) {
+unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientContext &context,
+                                                                         PreparedStatementData &data) {
 	auto &physical_plan = *data.physical_plan;
 	auto &root = physical_plan.Root();
 
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
 		// Not an order-preserving plan: use the parallel materialized collector.
-		if (data.is_streaming) {
-			return physical_plan.Make<PhysicalBufferedCollector>(data, true);
+		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
+			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, true);
 		}
-		return physical_plan.Make<PhysicalMaterializedCollector>(data, true);
+		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, true);
 	}
 
 	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
 		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
-		if (data.is_streaming) {
-			return physical_plan.Make<PhysicalBufferedCollector>(data, false);
+		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
+			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, false);
 		}
-		return physical_plan.Make<PhysicalMaterializedCollector>(data, false);
+		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, false);
 	}
 
 	// Order-preserving plan, and we can use the batch index: use a batch collector.
-	if (data.is_streaming) {
-		return physical_plan.Make<PhysicalBufferedBatchCollector>(data);
+	if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
+		return make_uniq<PhysicalBufferedBatchCollector>(physical_plan, data);
 	}
-	return physical_plan.Make<PhysicalBatchCollector>(data);
+	return make_uniq<PhysicalBatchCollector>(physical_plan, data);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {
@@ -64,6 +67,20 @@ void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &me
 	// we create a new pipeline starting from the child
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	child_meta_pipeline.Build(plan);
+}
+
+unique_ptr<ColumnDataCollection> PhysicalResultCollector::CreateCollection(ClientContext &context) const {
+	switch (memory_type) {
+	case QueryResultMemoryType::IN_MEMORY:
+		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	case QueryResultMemoryType::BUFFER_MANAGED:
+		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
+		return make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types,
+		                                       ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
+	default:
+		throw NotImplementedException("PhysicalResultCollector::CreateCollection for %s",
+		                              EnumUtil::ToString(memory_type));
+	}
 }
 
 } // namespace duckdb

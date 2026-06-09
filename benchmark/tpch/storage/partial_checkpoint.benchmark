@@ -1,0 +1,23 @@
+# name: benchmark/tpch/storage/partial_checkpoint.benchmark
+# description: Run a partial checkpoint over a subset of a column
+# group: [storage]
+
+require tpch
+
+argument sf 1
+
+load
+CALL dbgen(sf=${sf});
+SET checkpoint_threshold='1TB'; -- ensure we are timing
+ATTACH IF NOT EXISTS '${BENCHMARK_DIR}/partial_checkpoint.db';
+CREATE OR REPLACE TABLE partial_checkpoint.lineitem AS FROM lineitem;
+CHECKPOINT partial_checkpoint;
+UPDATE lineitem SET l_orderkey=l_orderkey+1 WHERE l_orderkey BETWEEN 100_000 AND 110_000;
+
+run
+CHECKPOINT partial_checkpoint;
+
+cleanup
+CREATE OR REPLACE TABLE partial_checkpoint.lineitem AS FROM lineitem;
+CHECKPOINT partial_checkpoint;
+UPDATE lineitem SET l_orderkey=l_orderkey+1 WHERE l_orderkey BETWEEN 100_000 AND 110_000;

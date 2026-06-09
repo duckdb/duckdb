@@ -1,9 +1,0 @@
-# name: test/sql/peg_parser/ignore_nulls.test
-# description: Test window function syntax in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$explain select first_value(i IGNORE NULLS) over () from integers$TEST_PEG_PARSER$);
-

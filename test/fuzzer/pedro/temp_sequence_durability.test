@@ -18,3 +18,4 @@ restart
 statement error
 SELECT nextval('s0');
 ----
+Catalog Error: Sequence with name s0 does not exist

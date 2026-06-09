@@ -5,7 +5,6 @@ namespace duckdb {
 IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), sql(info.sql), options(info.options),
       index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
-
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;

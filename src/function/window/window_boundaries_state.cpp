@@ -132,7 +132,7 @@ struct WindowColumnIterator {
 		return coll->GetCell<T>(0, pos + m);
 	}
 
-	friend inline iterator &operator+(const iterator &a, difference_type n) {
+	friend inline iterator operator+(const iterator &a, difference_type n) {
 		return iterator(a.coll, a.pos + n);
 	}
 
@@ -620,7 +620,6 @@ void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const
 
 void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
                                       const ValidityMask &partition_mask, const ValidityMask &order_mask) {
-
 	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
 
 	//	OVER()

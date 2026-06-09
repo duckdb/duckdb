@@ -70,3 +70,4 @@ restart
 statement error
 select test(4, 2)
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

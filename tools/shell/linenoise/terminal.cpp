@@ -1,24 +1,37 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#else
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <sys/time.h>
 
 namespace duckdb {
 
-static int mlmode = 1;              /* Multi line mode. Default is multi line. */
+static int mlmode = 1; /* Multi line mode. Default is multi line. */
+#if defined(_WIN32) || defined(WIN32)
+static HANDLE console_in = nullptr;
+static DWORD old_mode;
+#else
 static struct termios orig_termios; /* In order to restore at exit.*/
-static int atexit_registered = 0;   /* Register atexit just 1 time. */
-static int rawmode = 0;             /* For atexit() function to check if restore is needed*/
+#endif
+static int atexit_registered = 0; /* Register atexit just 1 time. */
+static int rawmode = 0;           /* For atexit() function to check if restore is needed*/
+static bool mouse_tracking = false;
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 
 /* At exit we'll try to fix the terminal to the initial conditions. */
@@ -27,9 +40,17 @@ static void linenoiseAtExit(void) {
 	History::Free();
 }
 
+#if defined(_WIN32) || defined(WIN32)
+HANDLE Terminal::GetConsoleInput() {
+	return console_in;
+}
+#endif
+
 /* Return true if the terminal name is in the list of terminals we know are
  * not able to understand basic escape sequences. */
 int Terminal::IsUnsupportedTerm() {
+#if defined(_WIN32) || defined(WIN32)
+#else
 	char *term = getenv("TERM");
 	int j;
 
@@ -41,21 +62,12 @@ int Terminal::IsUnsupportedTerm() {
 			return 1;
 		}
 	}
+#endif
 	return 0;
 }
 
-/* Raw mode: 1960 magic shit. */
-int Terminal::EnableRawMode() {
-	int fd = STDIN_FILENO;
-
-	if (!isatty(STDIN_FILENO)) {
-		errno = ENOTTY;
-		return -1;
-	}
-	if (!atexit_registered) {
-		atexit(linenoiseAtExit);
-		atexit_registered = 1;
-	}
+#if !defined(_WIN32) && !defined(WIN32)
+int EnableRawModeInternal(int fd) {
 	if (tcgetattr(fd, &orig_termios) == -1) {
 		errno = ENOTTY;
 		return -1;
@@ -89,12 +101,77 @@ int Terminal::EnableRawMode() {
 	return 0;
 }
 
-void Terminal::DisableRawMode() {
-	int fd = STDIN_FILENO;
+void DisableRawModeInternal(int fd) {
 	/* Don't even check the return value as it's too late. */
 	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
 		rawmode = 0;
 	}
+}
+
+#endif
+
+/* Raw mode: 1960 magic shit. */
+int Terminal::EnableRawMode() {
+#if defined(_WIN32) || defined(WIN32)
+	if (console_in) {
+		// already in raw mode
+		return 0;
+	}
+	console_in = GetStdHandle(STD_INPUT_HANDLE);
+
+	GetConsoleMode(console_in, &old_mode);
+	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+	SetConsoleMode(console_in, new_mode);
+#else
+	int fd = STDIN_FILENO;
+
+	if (!isatty(fd)) {
+		errno = ENOTTY;
+		return -1;
+	}
+	if (!atexit_registered) {
+		atexit(linenoiseAtExit);
+		atexit_registered = 1;
+	}
+	return EnableRawModeInternal(fd);
+#endif
+	return 0;
+}
+
+void Terminal::DisableRawMode() {
+	Terminal::DisableMouseTracking();
+#if defined(_WIN32) || defined(WIN32)
+	if (console_in) {
+		// restore old mode
+		SetConsoleMode(console_in, old_mode);
+		console_in = nullptr;
+	}
+#else
+	int fd = STDIN_FILENO;
+	DisableRawModeInternal(fd);
+#endif
+}
+
+void Terminal::EnableMouseTracking() {
+#if !defined(_WIN32) && !defined(WIN32)
+	if (!rawmode) {
+		return;
+	}
+	// Enable XTerm mouse tracking (normal tracking)
+	printf("\x1b[?1000h");
+	fflush(stdout);
+	mouse_tracking = true;
+#endif
+}
+void Terminal::DisableMouseTracking() {
+#if !defined(_WIN32) && !defined(WIN32)
+	if (!mouse_tracking) {
+		return;
+	}
+	printf("\x1b[?1000l");
+	fflush(stdout);
+	mouse_tracking = false;
+#endif
 }
 
 bool Terminal::IsMultiline() {
@@ -164,16 +241,19 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 }
 
 // returns true if there is more data available to read in a particular stream
-int Terminal::HasMoreData(int fd) {
+int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
+#if defined(_WIN32) || defined(WIN32)
+	return false;
+#else
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 
-	// no timeout: return immediately
 	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	return select(1, &rfds, NULL, NULL, &tv);
+	tv.tv_sec = static_cast<time_t>(timeout_micros / 1000000);
+	tv.tv_usec = static_cast<int>(timeout_micros % 1000000);
+	return select(fd + 1, &rfds, NULL, NULL, &tv);
+#endif
 }
 
 /* ======================= Low level terminal handling ====================== */
@@ -284,11 +364,157 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 	return result;
 }
 
+bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
+	/* Parse it. */
+	// expected format is: \x1b]11;rgb:1e1e/1e1e/1e1e
+	static const char rgb_format[] = "\x1b]11;rgb:";
+	idx_t rgb_length = sizeof(rgb_format) - 1;
+	idx_t offset;
+	for (offset = 0; offset + rgb_length < buflen; offset++) {
+		if (memcmp(buf + offset, rgb_format, rgb_length) == 0) {
+			break;
+		}
+		// not part of the rgb code - buffer the keypress
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[offset]);
+	}
+	// now parse the actual r/g/b values
+	offset += rgb_length;
+	if (offset >= buflen) {
+		return false;
+	}
+	uint8_t values[3];
+	memset(values, 0, sizeof(values));
+
+	for (idx_t k = 0; k < 3; k++) {
+		if (k > 0) {
+			// expected a "/"
+			if (offset >= buflen || buf[offset] != '/') {
+				return false;
+			}
+			offset++;
+		}
+		// parse the hexadecimal value
+		// note that these values are from 0...65535, not from 0...255
+		uint32_t value = 0;
+		idx_t end_pos = offset + 4;
+		for (; offset < end_pos; offset++) {
+			if (offset >= buflen) {
+				return false;
+			}
+			auto c = buf[offset];
+			if (c == '/') {
+				// found a slash early - done
+				break;
+			}
+			uint32_t current_value;
+			if (c >= 'A' && c <= 'F') {
+				current_value = 10 + (c - 'A');
+			} else if (c >= 'a' && c <= 'f') {
+				current_value = 10 + (c - 'a');
+			} else if (c >= '0' && c <= '9') {
+				current_value = c - '0';
+			} else {
+				// unsupported hex value
+				return false;
+			}
+			value = value * 16 + current_value;
+		}
+		// normalize from
+		values[k] = static_cast<uint8_t>(value >> 8);
+	}
+	// found the r/g/b
+	color.r = values[0];
+	color.g = values[1];
+	color.b = values[2];
+	return true;
+}
+
+void Terminal::BufferAvailableInput() {
+	// consume available input and add it to the buffer
+	int ifd = STDIN_FILENO;
+	if (!isatty(ifd)) {
+		return;
+	}
+	while (HasMoreData(ifd)) {
+		char buf[1];
+		if (read(ifd, buf, 1) != 1) {
+			break;
+		}
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[0]);
+	}
+}
+
+bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
+	int ifd = STDIN_FILENO;
+	int ofd = STDOUT_FILENO;
+	if (!isatty(ifd)) {
+		// if stdin is not the terminal - we need to open stdin manually
+		ifd = open("/dev/tty", O_RDWR);
+		if (ifd < 0) {
+			// failed to open stdin
+			return false;
+		}
+		ofd = ifd;
+	}
+
+	if (EnableRawModeInternal(ifd) == -1) {
+		if (ifd != STDIN_FILENO) {
+			close(ifd);
+		}
+		return false;
+	}
+
+	bool success = false;
+	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
+		// Read the response: until \a or until we fill up our buffer
+		string buf;
+		char read_buf[1];
+		while (true) {
+			// check if we have data to read
+			if (read(ifd, read_buf, 1) != 1) {
+				break;
+			}
+			char c = read_buf[0];
+			if (c == '\a') {
+				break;
+			}
+			if (!buf.empty() && buf.back() == '\x1b' && c == '\\') {
+				buf.pop_back();
+				break;
+			}
+			buf += c;
+		}
+
+		success = ParseTerminalColor(color, buf.c_str(), buf.size());
+	}
+	DisableRawModeInternal(ifd);
+	if (ifd != STDIN_FILENO) {
+		close(ifd);
+	}
+	return success;
+#endif
+}
+
 /* Try to get the number of columns in the current terminal, or assume 80
  * if it fails. */
 TerminalSize Terminal::GetTerminalSize() {
 	TerminalSize result;
 
+#if defined(_WIN32) || defined(WIN32)
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int rows;
+
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	result.ws_col = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	result.ws_row = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+#else
 	// try ioctl first
 	{
 		struct winsize ws;
@@ -321,6 +547,7 @@ TerminalSize Terminal::GetTerminalSize() {
 	if (!result.ws_row) {
 		result.ws_row = 24;
 	}
+#endif
 	return result;
 }
 
@@ -338,7 +565,7 @@ void Terminal::Beep() {
 	fflush(stderr);
 }
 
-EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
+EscapeSequence Terminal::ReadEscapeSequence(int ifd, KeyPress &key_press) {
 	char seq[5];
 	idx_t length = ReadEscapeSequence(ifd, seq);
 	if (length == 0) {
@@ -356,8 +583,20 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		switch (seq[0]) {
 		case BACKSPACE:
 			return EscapeSequence::ALT_BACKSPACE;
-		case ESC:
-			return EscapeSequence::ESCAPE;
+		case ESC: {
+			// Double ESC - this might be ALT + arrow key
+			// Read the next escape sequence
+			auto next_escape = ReadEscapeSequence(ifd, key_press);
+			switch (next_escape) {
+			case EscapeSequence::LEFT:
+				return EscapeSequence::ALT_LEFT_ARROW;
+			case EscapeSequence::RIGHT:
+				return EscapeSequence::ALT_RIGHT_ARROW;
+			default:
+				// Not an arrow key, just return ESCAPE
+				return EscapeSequence::ESCAPE;
+			}
+		}
 		case '<':
 			return EscapeSequence::ALT_LEFT_ARROW;
 		case '>':
@@ -422,7 +661,7 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 			case '1':
 				return EscapeSequence::HOME;
 			case '3': /* Delete key. */
-				return EscapeSequence::DELETE;
+				return EscapeSequence::DELETE_KEY;
 			case '4':
 			case '8':
 				return EscapeSequence::END;
@@ -439,12 +678,42 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		}
 		break;
 	case 5:
-		if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
+		if (memcmp(seq, "[1;5A", 5) == 0) {
+			// [1;5A: ctrl-up
+			return EscapeSequence::CTRL_UP;
+		} else if (memcmp(seq, "[1;5B", 5) == 0) {
+			// [1;5B: ctrl-down
+			return EscapeSequence::CTRL_DOWN;
+		} else if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
 			// [1;5C: move word right
 			return EscapeSequence::CTRL_MOVE_FORWARDS;
 		} else if (memcmp(seq, "[1;5D", 5) == 0 || memcmp(seq, "[1;3D", 5) == 0) {
 			// [1;5D: move word left
 			return EscapeSequence::CTRL_MOVE_BACKWARDS;
+		} else if (memcmp(seq, "[M", 2) == 0) {
+			// mouse event - consume it
+			EscapeSequence result_sequence = EscapeSequence::UNKNOWN;
+			if (seq[2] == ' ') {
+				// left mouse click
+				result_sequence = EscapeSequence::MOUSE_CLICK;
+				// get the co-ordinates, these are X + 32, Y + 32
+				key_press.position.ws_col = static_cast<uint8_t>(seq[3]);
+				key_press.position.ws_row = static_cast<uint8_t>(seq[4]);
+				if (key_press.position.ws_col <= 32 || key_press.position.ws_row < 32) {
+					// out of bounds of the terminal
+					result_sequence = EscapeSequence::UNKNOWN;
+				} else {
+					key_press.position.ws_col -= 33;
+					key_press.position.ws_row -= 32;
+				}
+			}
+			// get the cursor position and subtract it from the key press location
+			auto cursor_position = Terminal::GetCursorPosition();
+			key_press.position.ws_col -= cursor_position.ws_col;
+			key_press.position.ws_row -= cursor_position.ws_row;
+			// disable mouse tracking again - we only consume one mouse event at a time
+			Terminal::DisableMouseTracking();
+			return result_sequence;
 		} else {
 			Linenoise::Log("unrecognized escape sequence (;) %d\n", seq[1]);
 		}
@@ -474,6 +743,13 @@ idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
 
 	if (seq[0] != '[') {
 		return 2;
+	}
+	if (seq[1] == 'M') {
+		// mouse event - read 3 more bytes
+		if (read(ifd, seq + 2, 3) == -1) {
+			return 0;
+		}
+		return 5;
 	}
 	if (seq[1] < '0' || seq[1] > '9') {
 		return 2;

@@ -1,0 +1,110 @@
+# name: test/sql/index/art/insert_update_delete/test_art_non_unique_delete_checkpoint.test_slow
+# description: Test non-unique ART deletes while checkpointing exercises the TryDelete path
+# group: [insert_update_delete]
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+SET debug_checkpoint_sleep_ms=1
+
+statement ok
+ATTACH '__TEST_DIR__/test_art_non_unique_delete_checkpoint.db' AS art_delete_checkpoint
+
+statement ok
+CREATE OR REPLACE TABLE art_delete_checkpoint.t (
+	id BIGINT,
+	f BOOLEAN
+)
+
+statement ok
+INSERT INTO art_delete_checkpoint.t
+SELECT
+	i,
+	i % 2 = 0
+FROM range(0, 200000) tbl(i)
+
+statement ok
+CREATE INDEX i_f ON art_delete_checkpoint.t USING art(f)
+
+statement ok
+CHECKPOINT art_delete_checkpoint
+
+concurrentloop threadid 0 3
+
+loop run 0 40
+
+onlyif threadid<2
+statement maybe
+DROP TABLE IF EXISTS art_delete_checkpoint._stage_${threadid}
+----
+
+onlyif threadid<2
+statement maybe
+CREATE TABLE art_delete_checkpoint._stage_${threadid} AS
+SELECT * FROM art_delete_checkpoint.t WHERE 1=0
+----
+
+onlyif threadid<2
+statement maybe
+INSERT INTO art_delete_checkpoint._stage_${threadid}
+WITH ids(id) AS (
+	SELECT 200000 - 8000 + (((${run} * 997 + x + ${threadid} * 251) % 8000)) AS id
+	FROM range(0, 1000) tbl(x)
+	UNION ALL
+	SELECT (${threadid} + 1) * 100000000 + ${run} * 2000 + x AS id
+	FROM range(0, 1000) tbl(x)
+)
+SELECT
+	id,
+	id % 2 = 0
+FROM ids
+ORDER BY hash(id + ${run} + ${threadid})
+----
+
+onlyif threadid<2
+statement maybe
+BEGIN
+----
+
+onlyif threadid<2
+statement maybe
+DELETE FROM art_delete_checkpoint.t
+WHERE id IN (SELECT id FROM art_delete_checkpoint._stage_${threadid})
+----
+
+onlyif threadid<2
+statement maybe
+INSERT INTO art_delete_checkpoint.t
+SELECT * FROM art_delete_checkpoint._stage_${threadid}
+----
+
+onlyif threadid<2
+statement maybe
+COMMIT
+----
+
+onlyif threadid<2
+statement maybe
+ROLLBACK
+----
+
+onlyif threadid=2
+statement maybe
+FORCE CHECKPOINT art_delete_checkpoint
+----
+
+endloop
+
+endloop
+
+query I
+SELECT COUNT(*) >= 200000 FROM art_delete_checkpoint.t
+----
+true
+
+statement ok
+DETACH art_delete_checkpoint

@@ -1,7 +1,7 @@
-if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
-    duckdb_extension_load(unity_catalog
+if(NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+  duckdb_extension_load(unity_catalog
             GIT_URL https://github.com/duckdb/unity_catalog
-            GIT_TAG 8a65e9c446cfaa8e3e9502007ecac10190bbe91d
+            GIT_TAG ad54a347dba6a1da2167c716b2c67fdfb69cd499
             LOAD_TESTS
-            )
+  )
 endif()

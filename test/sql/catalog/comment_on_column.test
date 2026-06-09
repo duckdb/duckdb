@@ -78,3 +78,20 @@ statement error
 COMMENT ON COLUMN test_table.test_view_column IS NULL
 ----
 Table "test_table" does not have a column with name "test_view_column"
+
+# test that COMMENT ON COLUMN preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_comment_test(x INTEGER)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_comment_test'
+----
+temp_comment_test	temp	true
+
+statement ok
+COMMENT ON COLUMN temp_comment_test.x IS 'test comment'
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_comment_test'
+----
+temp_comment_test	temp	true

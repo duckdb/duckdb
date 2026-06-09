@@ -15,7 +15,7 @@ namespace duckdb {
 
 class TimeStampComparison : public Rule {
 public:
-	explicit TimeStampComparison(ClientContext &context, ExpressionRewriter &rewriter);
+	explicit TimeStampComparison(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;

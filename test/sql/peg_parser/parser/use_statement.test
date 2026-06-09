@@ -1,0 +1,12 @@
+# name: test/sql/peg_parser/parser/use_statement.test
+# description: Test use statement in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$use my_datalake.default;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from my_datalake.default.empty_table;$TEST_PEG_PARSER$);
+

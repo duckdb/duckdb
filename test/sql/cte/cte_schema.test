@@ -1,0 +1,18 @@
+# name: test/sql/cte/cte_schema.test
+# description: Test conflict between CTE and table in different schema
+# group: [cte]
+
+statement ok
+create schema s1;
+
+statement ok
+create table s1.tbl(a varchar);
+
+statement ok
+insert into s1.tbl values ('hello');
+
+query II
+with tbl as (select 'world' b)
+select * from s1.tbl, tbl;
+----
+hello	world
