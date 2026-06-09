@@ -71,6 +71,30 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
+PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child) {
+	if (op.column_index_map.empty()) {
+		throw InternalException("No defaults to push");
+	}
+	// columns specified by the user, push a projection
+	vector<LogicalType> types;
+	vector<unique_ptr<Expression>> select_list;
+	for (auto &col : op.table.GetColumns().Physical()) {
+		auto storage_idx = col.StorageOid();
+		auto mapped_index = op.column_index_map[col.Physical()];
+		if (mapped_index == DConstants::INVALID_INDEX) {
+			// push default value
+			select_list.push_back(std::move(op.bound_defaults[storage_idx]));
+		} else {
+			// push reference
+			select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+		}
+		types.push_back(col.Type());
+	}
+	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(select_list), child.estimated_cardinality);
+	proj.children.push_back(child);
+	return proj;
+}
+
 PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
                                           optional_ptr<PhysicalOperator> plan) {
 	D_ASSERT(plan);
@@ -90,6 +114,10 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		// When we potentially need to perform updates, we have to check that row is not updated twice
 		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
 		parallel_streaming_insert = false;
+	}
+	if (!op.column_index_map.empty()) {
+		//! Deprecated: The column_index_map is only populated by older versions.
+		plan = planner.ResolveDefaultsProjection(op, *plan);
 	}
 	if (use_batch_index && !parallel_streaming_insert) {
 		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table.Cast<DuckTableEntry>(),

@@ -111,8 +111,9 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 		vector<LogicalIndex> named_column_map;
 		vector<LogicalType> expected_types;
+		physical_index_vector_t<idx_t> column_index_map;
 		BindInsertColumnList(table, action.insert_columns, action.default_values, named_column_map, expected_types,
-		                     result->column_index_map);
+		                     column_index_map);
 
 		vector<ColumnBinding> insert_bindings;
 		vector<LogicalType> insert_types;
@@ -140,8 +141,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 
 		for (auto &col : table.GetColumns().Physical()) {
 			auto storage_idx = col.StorageOid();
-			auto mapped_index =
-			    result->column_index_map.empty() ? storage_idx : result->column_index_map[col.Physical()];
+			auto mapped_index = column_index_map.empty() ? storage_idx : column_index_map[col.Physical()];
 			if (mapped_index == DConstants::INVALID_INDEX) {
 				result->expressions.push_back(merge_into.bound_defaults[storage_idx]->Copy());
 			} else {
