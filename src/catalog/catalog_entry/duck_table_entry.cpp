@@ -45,6 +45,19 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 
 static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
 	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < StorageVersion::V2_0_0) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("Aggregate state columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+			return false;
+		}
 		switch (type.id()) {
 		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");

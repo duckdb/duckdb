@@ -1,9 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_struct.test
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_struct.test
 # description: Test the state export functionality, for opted-in aggregate functions with struct-based AGGREGATE_STATE
-# group: [aggregates]
-
-# We know that forward compatibility won't be preserved
-require noforcestorage
+# group: [aggregate_state_export]
 
 statement ok
 SET storage_compatibility_version = 'latest';
@@ -659,23 +656,60 @@ group_0	This is a very long string that exceeds the 12 byte inlining threshold f
 group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
 group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
 
-# parquet round-trip: write AGGREGATE_STATE directly
-# count() has state STRUCT(count BIGINT) which parquet preserves exactly
+# parquet round-trip: we can write AGGREGATE_STATE to parquet directly
 require parquet
 
 statement ok
 COPY (SELECT g, count(d) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '{TEST_DIR}/count_state.parquet' (FORMAT PARQUET);
 
-query II
+# however, the aggregate state info is lost in the round-trip - the column is read back as a plain STRUCT
+# combining with a plain STRUCT is not allowed - both arguments must be aggregate states
+statement error
 SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, count(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '{TEST_DIR}/count_state.parquet' USING(g) ORDER BY g;
 ----
-0	20
-1	20
-2	20
-3	20
-4	20
-5	20
-6	20
-7	20
-8	20
-9	20
+Cannot COMBINE aggregate states from different functions
+
+# we can use to_aggregate_state to convert the struct back into an aggregate state
+statement ok
+COPY (SELECT g, avg(d::DOUBLE) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '{TEST_DIR}/avg_state.parquet' (FORMAT PARQUET);
+
+query II
+SELECT g, FINALIZE(COMBINE(s2, to_aggregate_state(s1, 'avg', ['DOUBLE']))) FROM (SELECT g, avg(d::DOUBLE) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '{TEST_DIR}/avg_state.parquet' USING(g) ORDER BY g;
+----
+0	45.0
+1	46.0
+2	47.0
+3	48.0
+4	49.0
+5	50.0
+6	51.0
+7	52.0
+8	53.0
+9	54.0
+
+# the signature can also be passed as a list of TYPE values
+query II
+SELECT g, FINALIZE(to_aggregate_state(s1, 'avg', [make_type('DOUBLE')])) FROM '{TEST_DIR}/avg_state.parquet' ORDER BY g;
+----
+0	45.0
+1	46.0
+2	47.0
+3	48.0
+4	49.0
+5	50.0
+6	51.0
+7	52.0
+8	53.0
+9	54.0
+
+# the input type must be convertable to the state layout
+statement error
+SELECT to_aggregate_state(42, 'avg', ['DOUBLE']);
+----
+Unimplemented type for cast
+
+# the aggregate name must be constant
+statement error
+SELECT to_aggregate_state(s1, g::VARCHAR, ['DOUBLE']) FROM '{TEST_DIR}/avg_state.parquet';
+----
+must be constant

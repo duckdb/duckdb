@@ -1010,7 +1010,6 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	} else {
 		select_node = BindUnpivot(*star_binder, ref, std::move(all_columns), where_clause);
 	}
-	// bind the generated select node
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->BindNode(*select_node);
 	auto root_index = result.plan->GetRootIndex();

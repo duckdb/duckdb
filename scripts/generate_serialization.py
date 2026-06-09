@@ -760,6 +760,8 @@ def generate_class_code(class_entry: SerializableClass):
         for entry_idx, entry in enumerate(class_entry.members):
             if entry_idx > last_constructor_index:
                 last_constructor_index = entry_idx
+            if entry.status == MemberVariableStatus.DELETED:
+                continue
             constructor_entries.add(entry.name)
             type_name = replace_pointer(entry.type)
             entry.deserialize_property = entry.deserialize_property.replace('.', '_')

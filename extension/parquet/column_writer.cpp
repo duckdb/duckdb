@@ -354,8 +354,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                                      std::move(child_writers));
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	    type.id() == LogicalTypeId::AGGREGATE_STATE) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {

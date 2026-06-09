@@ -8,49 +8,13 @@
     {
       "reason": "Vector type changes due to fetch row",
       "paths": [
-        "test/sql/storage/compression/rle/rle_constant.test",
-        "test/sql/show_select/test_describe_all.test",
-        "test/sql/catalog/function/attached_macro.test",
-        "test/sql/pragma/test_show_tables_temp_views.test",
-        "test/sql/attach/attach_table_info.test",
-        "test/sql/attach/attach_defaults.test",
-        "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/attach_default_table.test",
-        "test/sql/attach/attach_show_all_tables.test",
-        "test/sql/attach/attach_issue7711.test",
-        "test/sql/attach/attach_issue_7660.test",
-        "test/sql/attach/attach_views.test",
-        "test/sql/copy_database/copy_table_with_sequence.test",
-        "test/sql/pg_catalog/sqlalchemy.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/compression/rle/rle_constant.test"
       ]
     },
     {
       "reason": "No stats",
       "paths": [
         "test/sql/types/geo/geometry_shred_types.test_slow"
-      ]
-    },
-    {
-      "reason": "Expects db with name 'memory'",
-      "paths": [
-        "test/sql/attach/show_databases.test",
-        "test/sql/attach/show_schemas.test"
-      ]
-    },
-    {
-      "reason": "Requires latest storage version.",
-      "paths": [
-        "test/geoparquet/mixed.test",
-        "test/parquet/variant/variant_comparison.test",
-        "test/parquet/variant/variant_json_copy.test",
-        "test/parquet/variant/variant_small_decimal.test",
-        "test/sql/storage/types/variant/index_fetch.test",
-        "test/sql/storage/types/variant/update.test",
-        "test/sql/types/geo/geometry_crs.test",
-        "test/sql/types/geo/geometry_stats.test",
-        "test/sql/sample/can_sample_from_ingested_files.test"
       ]
     }
   ]

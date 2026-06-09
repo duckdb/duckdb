@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_opaque.test
-# description: Test the state export functionality, in the legacy opaque AGGREGATE_STATE format (orginally taken from https://github.com/duckdb/duckdb/blob/02ec08120314f0bf6e2f4d0eaa36512c5c275b2d/test/sql/aggregate/aggregates/test_state_export.test
-# group: [aggregates]
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test
+# description: Test the state export functionality for skewness (orginally taken from https://github.com/duckdb/duckdb/blob/02ec08120314f0bf6e2f4d0eaa36512c5c275b2d/test/sql/aggregate/aggregates/test_state_export.test
+# group: [aggregate_state_export]
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
@@ -112,7 +112,6 @@ select skewness(42) EXPORT_STATE over ();
 
 
 # tests with ze persistence
-# The storage version will be latest, so both opted-in to new AGGREGATE_STATE as struct an non-opted in will work
 load {TEST_DIR}/test_state_export.db readwrite latest
 
 statement ok
@@ -139,14 +138,16 @@ query II nosort res10
 SELECT g, finalize(skewness_state) FROM state_view ORDER BY g;
 ----
 
-# BLOB casting back and forth
-statement ok
+# the state is a struct - we cannot cast it to a BLOB
+statement error
 SELECT (skewness(42) EXPORT_STATE)::BLOB;
-
-query I
-SELECT FINALIZE(COMBINE(skewness(42) EXPORT_STATE, (skewness(20) EXPORT_STATE)::BLOB));
 ----
-NULL
+
+# but we can cast it to the matching struct type
+query I
+SELECT (skewness(42) EXPORT_STATE)::STRUCT(n UBIGINT, sum DOUBLE, sum_sqr DOUBLE, sum_cub DOUBLE);
+----
+{'n': 1, 'sum': 42.0, 'sum_sqr': 1764.0, 'sum_cub': 74088.0}
 
 statement error
 SELECT (skewness(42) EXPORT_STATE)::INTEGER;
@@ -158,8 +159,4 @@ SELECT COMBINE(skewness(42) EXPORT_STATE, 42);
 
 statement error
 SELECT COMBINE(skewness(42) EXPORT_STATE, 'ASDF'::BLOB);
-----
-
-statement error
-SELECT COMBINE((skewness(42) EXPORT_STATE)::BLOB, skewness(42) EXPORT_STATE);
 ----
