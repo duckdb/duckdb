@@ -1,7 +1,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "json_common.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
@@ -10,17 +10,6 @@
 #include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
-
-static inline string RenameCaseInsensitiveDuplicate(string name, case_insensitive_map_t<idx_t> &name_collision_count) {
-	auto entry = name_collision_count.find(name);
-	while (entry != name_collision_count.end()) {
-		entry->second += 1;
-		name = StringUtil::Format("%s_%d", name, entry->second);
-		entry = name_collision_count.find(name);
-	}
-	name_collision_count.emplace(name, 0);
-	return name;
-}
 
 static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type,
                                                     type_map_t<vector<string>> &struct_json_key_names) {
@@ -32,7 +21,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type,
 		vector<string> original_key_names;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
 			original_key_names.push_back(child_type.first);
-			auto renamed_name = RenameCaseInsensitiveDuplicate(child_type.first, name_collision_count);
+			auto renamed_name = JSONCommon::RenameCaseInsensitiveDuplicate(child_type.first, name_collision_count);
 			child_types.emplace_back(renamed_name, RemoveDuplicateStructKeys(child_type.second, struct_json_key_names));
 		}
 		auto result = LogicalType::STRUCT(child_types);
