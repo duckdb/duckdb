@@ -589,14 +589,6 @@
         "struct": "EnableFSSTVectorsSetting"
     },
     {
-        "name": "enable_http_logging",
-        "description": "(deprecated) Enables HTTP logging",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "EnableHTTPLoggingSetting",
-        "custom_implementation": true
-    },
-    {
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
@@ -807,14 +799,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "http_logging_output",
-        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "struct": "HTTPLoggingOutputSetting",
-        "custom_implementation": true
     },
     {
         "name": "http_proxy",
