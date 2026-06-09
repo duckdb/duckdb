@@ -27,6 +27,7 @@ private:
 
 private:
 	Binder &binder;
+	bool cte_deliminator_enabled;
 	vector<TableIndex> generated_dedup_cte_indexes;
 };
 
