@@ -155,8 +155,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
-		throw BinderException("array_to_json() argument type must be LIST");
+	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::ARRAY && arg_id != LogicalTypeId::SQLNULL) {
+		throw BinderException("array_to_json() argument type must be LIST or ARRAY");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
