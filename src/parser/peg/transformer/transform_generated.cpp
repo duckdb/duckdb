@@ -925,7 +925,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitTypeInternal
 			expression.push_back(std::move(expression_value_1));
 		}
 	}
-	auto result = TransformBitType(transformer, expression);
+	auto result = TransformBitType(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
