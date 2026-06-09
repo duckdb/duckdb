@@ -84,9 +84,6 @@ NULL
 
 require json
 
-# A failing element conversion must fail the whole conversion, consistently for
-# fixed-size arrays and lists (issue #23151)
-
 query I
 select try_cast(json('["1","x"]')::VARIANT as INTEGER[]);
 ----
