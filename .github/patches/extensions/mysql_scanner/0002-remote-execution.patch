@@ -738,7 +738,7 @@ index fea00b5..cd56adb 100644
  	if (bind_data.use_predicate_analyzer && input.filters && input.filters->HasFilters()) {
 -		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache());
 +		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache(), mysql_catalog.GetVersion());
- 		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name, bind_data.table.name);
+ 		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name.GetIdentifierName(), bind_data.table.name.GetIdentifierName());
  		ConfigurePredicateAnalyzer(context, analyzer);
  
 @@ -676,9 +661,29 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
