@@ -589,15 +589,16 @@ public:
 			auto result_idx = result_sel.get_index(i);
 			auto lindex = lsel->get_index(i);
 			auto rindex = rsel->get_index(i);
-			if ((NO_NULL || (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex))) &&
-			    OP::Operation(ldata[lindex], rdata[rindex])) {
-				if (HAS_TRUE_SEL) {
-					true_sel->set_index(true_count++, result_idx);
-				}
-			} else {
-				if (HAS_FALSE_SEL) {
-					false_sel->set_index(false_count++, result_idx);
-				}
+			const bool comparison_result =
+			    (NO_NULL || (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex))) &&
+			    OP::Operation(ldata[lindex], rdata[rindex]);
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
 			}
 		}
 		if (HAS_TRUE_SEL) {
