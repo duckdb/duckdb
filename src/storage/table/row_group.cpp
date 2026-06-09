@@ -1410,8 +1410,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		}
 	}
 
-	if (!reused_columns.empty()) {
-		D_ASSERT(partial_reuse);
+	if (partial_reuse) {
 		// carry forward the extras for reused columns onto the new row group, so RowGroup::Checkpoint
 		// can look them up via this->per_column_metadata_blocks
 		auto extras = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);
