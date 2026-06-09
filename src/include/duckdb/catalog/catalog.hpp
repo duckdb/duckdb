@@ -364,6 +364,9 @@ public:
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
+	virtual bool SupportsPushdown(const ParsedExpression &expression);
+	virtual bool SupportsPushdown(const TableRef &ref);
+	virtual bool SupportsPushdown(const QueryNode &node);
 	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
 	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
 	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.

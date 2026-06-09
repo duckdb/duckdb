@@ -66,7 +66,14 @@
         "test/sql/trigger/create_trigger_parse.test",
         "test/sql/trigger/create_trigger_wal.test",
         "test/sql/trigger/drop_trigger.test",
-        "test/sql/trigger/drop_trigger_wal.test"
+        "test/sql/trigger/drop_trigger_wal.test",
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test",
+        "test/sql/aggregate/aggregate_state_export/test_stddev_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/test_combine_aggr.test",
+        "test/sql/aggregate/aggregate_state_export/test_aggregate_state_type.test",
+        "test/sql/aggregate/aggregate_state_export/test_corr_state_export.test",
+        "test/sql/aggregate/aggregate_state_export/test_state_export_struct.test"
       ]
     },
     {

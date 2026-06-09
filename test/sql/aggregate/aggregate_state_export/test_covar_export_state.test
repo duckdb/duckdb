@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_covar_export_state.test
+# name: test/sql/aggregate/aggregate_state_export/test_covar_export_state.test
 # description: Test COVAR EXPORT_STATE
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 statement ok
 CREATE TABLE integers(x INTEGER, y INTEGER);

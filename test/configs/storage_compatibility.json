@@ -7,6 +7,7 @@
       "value": "v1.0.0"
     }
   ],
+  "skip_error_messages": ["Aggregate state columns are not supported in storage versions prior to v2.0.0"],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -156,7 +157,9 @@
         "test/sql/aggregate/aggregates/test_corr_state_export.test",
         "test/sql/aggregate/aggregates/test_stddev_export_state.test",
         "test/sql/aggregate/aggregates/test_covar_export_state.test",
-        "test/sql/aggregate/aggregates/test_combine_aggr.test"
+        "test/sql/aggregate/aggregates/test_combine_aggr.test",
+        "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test"
       ]
     },
     {

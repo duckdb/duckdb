@@ -78,7 +78,6 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
@@ -648,7 +647,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
-	case LogicalTypeId::AGGREGATE_STATE:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }

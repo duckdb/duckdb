@@ -118,21 +118,70 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 	Reference(other);
 }
 
+void CheckTypeIsReinterpretable(const LogicalType &a, const LogicalType &b) {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
+	bool left_is_nested = a.IsNested();
+	bool right_is_nested = b.IsNested();
+	if (left_is_nested != right_is_nested) {
+		throw InternalException("Vector::Reinterpret (%s -> %s) - nested mismatch in reinterpret - either both need to "
+		                        "be nested or neither should be nested",
+		                        a, b);
+	}
+	auto left_internal = a.InternalType();
+	auto right_internal = b.InternalType();
+	if (!left_is_nested) {
+		// non-nested types - type size should be identical
+		if (GetTypeIdSize(left_internal) != GetTypeIdSize(right_internal)) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between types with different type sizes", a,
+			    b);
+		}
+		return;
+	}
+	if (left_internal != right_internal) {
+		throw InternalException(
+		    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between different nested types", a, b);
+	}
+	// recurse into children
+	switch (left_internal) {
+	case PhysicalType::STRUCT: {
+		auto &left_child_types = StructType::GetChildTypes(a);
+		auto &right_child_types = StructType::GetChildTypes(b);
+		if (left_child_types.size() != right_child_types.size()) {
+			throw InternalException(
+			    "Vector::Reinterpret (%s -> %s) - attempting to reinterpret between struct types of different sizes", a,
+			    b);
+		}
+		for (idx_t child_idx = 0; child_idx < left_child_types.size(); ++child_idx) {
+			CheckTypeIsReinterpretable(left_child_types[child_idx].second, right_child_types[child_idx].second);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		auto &left_child_type = ListType::GetChildType(a);
+		auto &right_child_type = ListType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		auto &left_child_type = ArrayType::GetChildType(a);
+		auto &right_child_type = ArrayType::GetChildType(b);
+		CheckTypeIsReinterpretable(left_child_type, right_child_type);
+		break;
+	}
+	default:
+		throw InternalException("Unsupported nested type in CheckTypeIsReinterpretable");
+	}
+}
+
 void Vector::Reinterpret(const Vector &other) {
 	auto &this_type = GetType();
 	auto &other_type = other.GetType();
-#ifdef DEBUG
-	auto type_is_same = other_type == this_type;
-	bool this_is_nested = this_type.IsNested();
-	bool other_is_nested = other_type.IsNested();
-
-	bool not_nested = this_is_nested == false && other_is_nested == false;
-	bool type_size_equal = GetTypeIdSize(this_type.InternalType()) == GetTypeIdSize(other_type.InternalType());
-	//! Either the types are completely identical, or they are not nested and their physical type size is the same
-	//! The reason nested types are not allowed is because copying the auxiliary buffer does not happen recursively
-	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
-	D_ASSERT((not_nested && type_size_equal) || type_is_same);
-#endif
+	if (DBConfigOptions::global_verification_mode == DebugVerificationMode::VERIFY_VECTORS) {
+		CheckTypeIsReinterpretable(this_type, other_type);
+	}
 	ConstReference(other);
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && other_type != this_type) {
 		Vector new_vector(this_type, nullptr);
