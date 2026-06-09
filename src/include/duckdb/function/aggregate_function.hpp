@@ -576,6 +576,10 @@ public:
 			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(); });
 		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
 			result.SetStructStateExport([](const BoundAggregateFunction &) { return PrimitiveToLogicalType<STATE>(); });
+		} else if constexpr (HasOptionalPrimitiveType<STATE>::value) {
+			// Export as the inner type; nullopt ↔ SQL NULL is handled by the serialization layer
+			result.SetStructStateExport(
+			    [](const BoundAggregateFunction &) { return PrimitiveToLogicalType<typename STATE::value_type>(); });
 		}
 	}
 

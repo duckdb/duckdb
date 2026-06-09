@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -114,10 +115,15 @@ struct AggregateStateLayout {
 		is_struct = type.InternalType() == PhysicalType::STRUCT;
 		if (is_struct) {
 			child_types = &StructType::GetChildTypes(owned_type);
+		} else {
+			// optional<T> states are larger than the physical primitive T due to the has_value byte + alignment.
+			// Detect this by comparing the actual state_size against what a bare T would occupy.
+			is_optional = state_size > GetTypeIdSize(type.InternalType());
 		}
 	}
 
-	bool is_struct;
+	bool is_struct = false;
+	bool is_optional = false;
 	idx_t state_size;
 	idx_t aligned_state_size;
 	LogicalType owned_type;
@@ -278,6 +284,96 @@ struct StorePrimitiveForSelectedRowsOp {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
 			dst[row] = *reinterpret_cast<const T *>(base_ptr + i * aligned_state_size);
+		}
+	}
+};
+
+// Serialize optional<T> state buffers into a flat result vector, setting NULL for disengaged optionals
+struct StorePrimitiveOptionalOp {
+	template <class T>
+	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses) {
+		auto dst = FlatVector::GetDataMutable<T>(result);
+		for (idx_t i = 0; i < count; i++) {
+			const auto &opt = *reinterpret_cast<const optional<T> *>(addresses[i]);
+			if (opt.has_value()) {
+				dst[i] = *opt;
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+	}
+};
+
+// Deserialize a nullable flat input vector into optional<T> state buffer slots
+struct LoadPrimitiveOptionalOp {
+	template <class T>
+	static void Operation(const Vector &input, const UnifiedVectorFormat &input_data, idx_t count,
+	                      data_ptr_t base_ptr, idx_t aligned_state_size) {
+		auto src = FlatVector::GetData<T>(input);
+		for (idx_t i = 0; i < count; i++) {
+			auto src_idx = input_data.sel->get_index(i);
+			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
+			if (input_data.validity.RowIsValid(src_idx)) {
+				opt = src[src_idx];
+			} else {
+				opt = nullopt;
+			}
+		}
+	}
+};
+
+// Copy a nullable primitive value from selected rows of input to the same rows of result
+struct CopyPrimitiveOptionalOp {
+	template <class T>
+	static void Operation(const Vector &input, Vector &result, const SelectionVector &sel, idx_t count,
+	                      const UnifiedVectorFormat &input_data) {
+		auto src = FlatVector::GetData<T>(input);
+		auto dst = FlatVector::GetDataMutable<T>(result);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t row = sel.get_index(i);
+			idx_t src_idx = input_data.sel->get_index(row);
+			if (input_data.validity.RowIsValid(src_idx)) {
+				dst[row] = src[src_idx];
+			} else {
+				FlatVector::SetNull(result, row, true);
+			}
+		}
+	}
+};
+
+// Deserialize selected rows of a nullable flat input vector into sequential optional<T> state buffer slots
+struct LoadPrimitiveOptionalForSelectedRowsOp {
+	template <class T>
+	static void Operation(const Vector &input, const SelectionVector &sel, idx_t count,
+	                      const UnifiedVectorFormat &input_data, data_ptr_t base_ptr, idx_t aligned_state_size) {
+		auto src = FlatVector::GetData<T>(input);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t row = sel.get_index(i);
+			idx_t src_idx = input_data.sel->get_index(row);
+			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
+			if (input_data.validity.RowIsValid(src_idx)) {
+				opt = src[src_idx];
+			} else {
+				opt = nullopt;
+			}
+		}
+	}
+};
+
+// Serialize sequential optional<T> state buffer slots into selected rows of a flat result vector
+struct StorePrimitiveOptionalForSelectedRowsOp {
+	template <class T>
+	static void Operation(Vector &result, const SelectionVector &sel, idx_t count, data_ptr_t base_ptr,
+	                      idx_t aligned_state_size) {
+		auto dst = FlatVector::GetDataMutable<T>(result);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t row = sel.get_index(i);
+			const auto &opt = *reinterpret_cast<const optional<T> *>(base_ptr + i * aligned_state_size);
+			if (opt.has_value()) {
+				dst[row] = *opt;
+			} else {
+				FlatVector::SetNull(result, row, true);
+			}
 		}
 	}
 };
@@ -475,6 +571,10 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	if (layout.is_struct) {
 		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(),
 		                        local_state.state_buffer.get());
+	} else if (layout.is_optional) {
+		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.owned_type.InternalType(), input.data[0], state_data,
+		                                           input.size(), local_state.state_buffer.get(),
+		                                           layout.aligned_state_size);
 	} else {
 		TemplateDispatch<LoadPrimitiveOp>(layout.owned_type.InternalType(), input.data[0], state_data, input.size(),
 		                                  local_state.state_buffer.get(), layout.aligned_state_size);
@@ -571,6 +671,9 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				                                       copy_from_0_count, state0_data);
 				offset_in_state += field_size;
 			}
+		} else if (layout.is_optional) {
+			TemplateDispatch<CopyPrimitiveOptionalOp>(layout.owned_type.InternalType(), input.data[0], result,
+			                                           copy_from_0_sel, copy_from_0_count, state0_data);
 		} else {
 			TemplateDispatch<CopyPrimitiveOp>(layout.owned_type.InternalType(), input.data[0], result, copy_from_0_sel,
 			                                  copy_from_0_count, state0_data);
@@ -590,6 +693,9 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				                                       copy_from_1_count, state1_data);
 				offset_in_state += field_size;
 			}
+		} else if (layout.is_optional) {
+			TemplateDispatch<CopyPrimitiveOptionalOp>(layout.owned_type.InternalType(), input.data[1], result,
+			                                           copy_from_1_sel, copy_from_1_count, state1_data);
 		} else {
 			TemplateDispatch<CopyPrimitiveOp>(layout.owned_type.InternalType(), input.data[1], result, copy_from_1_sel,
 			                                  copy_from_1_count, state1_data);
@@ -625,6 +731,13 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				                                             local_state.state_buffer1.get(), offset_in_state);
 				offset_in_state += field_size;
 			}
+		} else if (layout.is_optional) {
+			TemplateDispatch<LoadPrimitiveOptionalForSelectedRowsOp>(
+			    layout.owned_type.InternalType(), input.data[0], both_valid_sel, both_valid_count, state0_data,
+			    local_state.state_buffer0.get(), layout.aligned_state_size);
+			TemplateDispatch<LoadPrimitiveOptionalForSelectedRowsOp>(
+			    layout.owned_type.InternalType(), input.data[1], both_valid_sel, both_valid_count, state1_data,
+			    local_state.state_buffer1.get(), layout.aligned_state_size);
 		} else {
 			TemplateDispatch<LoadPrimitiveForSelectedRowsOp>(
 			    layout.owned_type.InternalType(), input.data[0], both_valid_sel, both_valid_count, state0_data,
@@ -655,6 +768,10 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				                                              offset_in_state);
 				offset_in_state += field_size;
 			}
+		} else if (layout.is_optional) {
+			TemplateDispatch<StorePrimitiveOptionalForSelectedRowsOp>(
+			    layout.owned_type.InternalType(), result, both_valid_sel, both_valid_count,
+			    local_state.state_buffer1.get(), layout.aligned_state_size);
 		} else {
 			TemplateDispatch<StorePrimitiveForSelectedRowsOp>(layout.owned_type.InternalType(), result, both_valid_sel,
 			                                                  both_valid_count, local_state.state_buffer1.get(),
@@ -775,6 +892,8 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	result.Flatten();
 	if (layout.is_struct) {
 		SerializeStructFields(layout, result, count, addresses_ptrs);
+	} else if (layout.is_optional) {
+		TemplateDispatch<StorePrimitiveOptionalOp>(layout.owned_type.InternalType(), result, count, addresses_ptrs);
 	} else {
 		TemplateDispatch<StorePrimitiveOp>(layout.owned_type.InternalType(), result, count, addresses_ptrs);
 	}
@@ -837,6 +956,9 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	if (layout.is_struct) {
 		DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());
+	} else if (layout.is_optional) {
+		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.owned_type.InternalType(), inputs[0], input_data, count,
+		                                           temp_state_buf.get(), layout.aligned_state_size);
 	} else {
 		TemplateDispatch<LoadPrimitiveOp>(layout.owned_type.InternalType(), inputs[0], input_data, count,
 		                                  temp_state_buf.get(), layout.aligned_state_size);
@@ -869,6 +991,8 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	result.Flatten();
 	if (layout.is_struct) {
 		SerializeStructFields(layout, result, count, addresses_ptrs);
+	} else if (layout.is_optional) {
+		TemplateDispatch<StorePrimitiveOptionalOp>(layout.owned_type.InternalType(), result, count, addresses_ptrs);
 	} else {
 		TemplateDispatch<StorePrimitiveOp>(layout.owned_type.InternalType(), result, count, addresses_ptrs);
 	}

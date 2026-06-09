@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/common/type_util.hpp"
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,14 @@ template <>
 struct HasPrimitiveLogicalType<timestamp_tz_ns_t> : std::true_type {};
 template <>
 struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
+
+//! Detection trait: true when STATE is optional<T> where T itself has HasPrimitiveLogicalType.
+//! These states export as PrimitiveToLogicalType<T>(), with nullopt ↔ SQL NULL.
+template <class T>
+struct HasOptionalPrimitiveType : std::false_type {};
+
+template <class T>
+struct HasOptionalPrimitiveType<optional<T>> : HasPrimitiveLogicalType<T> {};
 
 //! Maps a single C++ field type to a LogicalType.
 //! If T itself defines STATE_TYPE, returns its nested struct type; otherwise calls PrimitiveToLogicalType<T>().

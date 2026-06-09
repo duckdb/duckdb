@@ -1,0 +1,91 @@
+# name: test/sql/aggregate/aggregate_state_export/bool_and_export_state.test
+# description: Test bool_and aggregate state export
+# group: [aggregate_state_export]
+
+# All-true group: state exports as true
+query I
+SELECT bool_and(v) EXPORT_STATE FROM (VALUES (true), (true), (true)) t(v)
+----
+1
+
+# Mixed group: state exports as false
+query I
+SELECT bool_and(v) EXPORT_STATE FROM (VALUES (true), (false), (true)) t(v)
+----
+0
+
+# All-null group: state exports as NULL (no non-null inputs seen)
+query I
+SELECT bool_and(v) EXPORT_STATE FROM (VALUES (NULL::bool)) t(v)
+----
+NULL
+
+# finalize round-trips the state back to a plain boolean
+query I
+SELECT finalize(bool_and(v) EXPORT_STATE) FROM (VALUES (true), (true)) t(v)
+----
+1
+
+query I
+SELECT finalize(bool_and(v) EXPORT_STATE) FROM (VALUES (true), (false)) t(v)
+----
+0
+
+query I
+SELECT finalize(bool_and(v) EXPORT_STATE) FROM (VALUES (NULL::bool)) t(v)
+----
+NULL
+
+# combine_aggr merges two exported states
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true), (true)) t(v)
+    UNION ALL
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true)) t(v)
+)
+----
+1
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true), (true)) t(v)
+    UNION ALL
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (false)) t(v)
+)
+----
+0
+
+# combining a NULL state (no inputs) with a real state yields the real state
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (NULL::bool)) t(v)
+    UNION ALL
+    SELECT bool_and(v) EXPORT_STATE AS s FROM (VALUES (true)) t(v)
+)
+----
+1
+
+# bool_or mirrors bool_and
+query I
+SELECT bool_or(v) EXPORT_STATE FROM (VALUES (false), (false)) t(v)
+----
+0
+
+query I
+SELECT bool_or(v) EXPORT_STATE FROM (VALUES (false), (true)) t(v)
+----
+1
+
+query I
+SELECT bool_or(v) EXPORT_STATE FROM (VALUES (NULL::bool)) t(v)
+----
+NULL
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT bool_or(v) EXPORT_STATE AS s FROM (VALUES (false)) t(v)
+    UNION ALL
+    SELECT bool_or(v) EXPORT_STATE AS s FROM (VALUES (true)) t(v)
+)
+----
+1
