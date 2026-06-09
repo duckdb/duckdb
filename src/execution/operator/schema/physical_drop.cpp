@@ -89,7 +89,13 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 			auto feat_entry = feature_set.GetEntry(transaction, info->name);
 			if (feat_entry) {
 				auto &feature = feat_entry->Cast<FeatureCatalogEntry>();
-				for (int64_t v = feature.current_version; v >= 1; v--) {
+				// Only versions within [current_version - retain_versions + 1, current_version]
+				// can still exist; earlier ones were already GC'd during refresh.
+				int64_t min_live_version = feature.current_version - feature.retain_versions + 1;
+				if (min_live_version < 1) {
+					min_live_version = 1;
+				}
+				for (int64_t v = feature.current_version; v >= min_live_version; v--) {
 					auto version_table_name = info->name + "__v" + to_string(v);
 					DropInfo table_drop;
 					table_drop.type = CatalogType::TABLE_ENTRY;

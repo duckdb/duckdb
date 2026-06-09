@@ -1,0 +1,101 @@
+# name: test/sql/feature/test_feature_drop_gc_check.test
+# description: Verify DROP FEATURE removes all version tables and GC drops versions beyond RETAIN
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE events (
+    customer VARCHAR,
+    value INTEGER,
+    event_time TIMESTAMP
+);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('x', 20, '2024-01-02 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+# ============================================================
+# RETAIN 2: GC should keep only the latest 2 version tables
+# ============================================================
+statement ok
+CREATE FEATURE f ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH FULL
+    RETAIN 2
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# After create: only v1 backing table
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+----
+1
+
+# refresh -> v2 ; both v1 and v2 present
+statement ok
+REFRESH FEATURE f;
+
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+----
+2
+
+# refresh -> v3 ; GC drops v1, keep v2 and v3
+statement ok
+REFRESH FEATURE f;
+
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+----
+2
+
+query I
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\' ORDER BY table_name;
+----
+f__v2
+f__v3
+
+# refresh -> v4 ; GC drops v2, keep v3 and v4
+statement ok
+REFRESH FEATURE f;
+
+query I
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\' ORDER BY table_name;
+----
+f__v3
+f__v4
+
+# ============================================================
+# DROP FEATURE: every remaining version table must be gone (no leak)
+# even though current_version=4 but only v3,v4 still exist
+# ============================================================
+statement ok
+DROP FEATURE f;
+
+# No version tables left at all
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+----
+0
+
+# The feature itself is gone
+query I
+SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'f';
+----
+0
+
+# The view is gone too
+query I
+SELECT COUNT(*) FROM duckdb_views WHERE view_name = 'f';
+----
+0
+
+statement ok
+DROP TABLE events;
