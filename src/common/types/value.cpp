@@ -44,7 +44,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Extra Value Info
 //===--------------------------------------------------------------------===//
-enum class ExtraValueInfoType : uint8_t { INVALID_TYPE_INFO = 0, STRING_VALUE_INFO = 1, NESTED_VALUE_INFO = 2 };
+enum class ExtraValueInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	STRING_VALUE_INFO = 1,
+	NESTED_VALUE_INFO = 2,
+	TYPE_VALUE_INFO = 3
+};
 
 struct ExtraValueInfo {
 	explicit ExtraValueInfo(ExtraValueInfoType type) : type(type) {
@@ -126,6 +131,33 @@ protected:
 
 	vector<Value> values;
 };
+
+//===--------------------------------------------------------------------===//
+// Type Value Info
+//===--------------------------------------------------------------------===//
+struct TypeValueInfo : public ExtraValueInfo {
+	static constexpr const ExtraValueInfoType TYPE = ExtraValueInfoType::TYPE_VALUE_INFO;
+
+public:
+	TypeValueInfo() : ExtraValueInfo(ExtraValueInfoType::TYPE_VALUE_INFO) {
+	}
+
+	explicit TypeValueInfo(LogicalType type_p)
+	    : ExtraValueInfo(ExtraValueInfoType::TYPE_VALUE_INFO), type(std::move(type_p)) {
+	}
+
+	const LogicalType &GetType() {
+		return type;
+	}
+
+protected:
+	bool EqualsInternal(ExtraValueInfo *other_p) const override {
+		return other_p->Get<TypeValueInfo>().type == type;
+	}
+
+	LogicalType type;
+};
+
 //===--------------------------------------------------------------------===//
 // Value
 //===--------------------------------------------------------------------===//
@@ -971,23 +1003,20 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 }
 
 Value Value::TYPE(const LogicalType &type) {
-	MemoryStream stream;
-	SerializationOptions options;
-	options.storage_compatibility = StorageCompatibility::Latest();
-	BinarySerializer::Serialize(type, stream, options);
-	auto data_ptr = const_char_ptr_cast(stream.GetData());
-	auto data_len = stream.GetPosition();
-
 	Value result(LogicalType::TYPE());
 	result.is_null = false;
-	result.value_info_ = make_shared_ptr<StringValueInfo>(string(data_ptr, data_len));
+	result.value_info_ = make_shared_ptr<TypeValueInfo>(type);
 	return result;
 }
 
 Value Value::TYPE(const string_t &serialized_type) {
+	MemoryStream stream(data_ptr_cast(serialized_type.GetDataWriteable()), serialized_type.GetSize());
+	BinaryDeserializer deserializer(stream);
+	auto type = LogicalType::Deserialize(deserializer);
+
 	Value result(LogicalType::TYPE());
 	result.is_null = false;
-	result.value_info_ = make_shared_ptr<StringValueInfo>(serialized_type.GetString());
+	result.value_info_ = make_shared_ptr<TypeValueInfo>(std::move(type));
 	return result;
 }
 
@@ -1901,11 +1930,7 @@ LogicalType TypeValue::GetType(const Value &value) {
 	}
 	D_ASSERT(value.type().id() == LogicalTypeId::TYPE);
 	D_ASSERT(value.value_info_);
-	auto &type_str = value.value_info_->Get<StringValueInfo>().GetString();
-	auto str = string_t(type_str);
-	MemoryStream stream(data_ptr_cast(str.GetDataWriteable()), str.GetSize());
-	BinaryDeserializer deserializer(stream);
-	return LogicalType::Deserialize(deserializer);
+	return value.value_info_->Get<TypeValueInfo>().GetType();
 }
 
 date_t DateValue::Get(const Value &value) {
