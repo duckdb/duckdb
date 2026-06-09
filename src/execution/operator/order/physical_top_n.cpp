@@ -281,7 +281,7 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 			col.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
-	boundary_values.SetCardinality(sort_chunk.size());
+	boundary_values.SetChildCardinality(sort_chunk.size());
 
 	// we have boundary values
 	// from these boundary values, determine which values we should insert (if any)

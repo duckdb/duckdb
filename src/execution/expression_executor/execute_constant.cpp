@@ -13,8 +13,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConst
 
 void ExpressionExecutor::Execute(const BoundConstantExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
-	D_ASSERT(expr.value.type() == expr.GetReturnType());
-	result.Reference(expr.value, count_t(count));
+	D_ASSERT(expr.GetValue().type() == expr.GetReturnType());
+	result.Reference(expr.GetValue(), count_t(count));
 }
 
 } // namespace duckdb

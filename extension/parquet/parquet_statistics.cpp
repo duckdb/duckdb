@@ -252,7 +252,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InvalidInputException("Incorrect stats size for type TIME");
+			throw InvalidInputException("Incorrect stats size for type TIME_NS");
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
@@ -679,7 +679,7 @@ static bool HasFilterConstants(const Expression &expr) {
 			return false;
 		}
 		auto &constant = right.Cast<BoundConstantExpression>();
-		return !constant.value.IsNull();
+		return !constant.GetValue().IsNull();
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -749,8 +749,8 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 			return false;
 		}
 		auto &constant = right.Cast<BoundConstantExpression>();
-		D_ASSERT(!constant.value.IsNull());
-		auto hash = ValueXXH64(constant.value);
+		D_ASSERT(!constant.GetValue().IsNull());
+		auto hash = ValueXXH64(constant.GetValue());
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {

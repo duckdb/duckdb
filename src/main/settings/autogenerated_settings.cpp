@@ -106,6 +106,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Default Io Mode
+//===----------------------------------------------------------------------===//
+void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

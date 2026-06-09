@@ -502,8 +502,6 @@ OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContex
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);
 		state.cached_chunk.reset();
-	} else {
-		chunk.SetCardinality(0);
 	}
 	return OperatorFinalizeResultType::FINISHED;
 }

@@ -47,9 +47,10 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
-                                      bool is_percentage, bool is_offset) {
+                                      LimitValueType value_type, bool is_offset) {
 	auto new_binder = Binder::CreateBinder(context, this);
 	ExpressionBinder expr_binder(*new_binder, context);
+	bool is_percentage = value_type == LimitValueType::PERCENTAGE;
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
 	expr_binder.target_type = target_type;
 	auto original_limit = limit_val->Copy();
@@ -108,21 +109,10 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 duckdb::unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
 	auto result = make_uniq<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), false, false);
+		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), limit_mod.limit_type, false);
 	}
 	if (limit_mod.offset) {
-		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
-	}
-	return std::move(result);
-}
-
-unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod) {
-	auto result = make_uniq<BoundLimitModifier>();
-	if (limit_mod.limit) {
-		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), true, false);
-	}
-	if (limit_mod.offset) {
-		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
+		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), LimitValueType::ROW_COUNT, true);
 	}
 	return std::move(result);
 }
@@ -241,9 +231,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit(order_binder, mod->Cast<LimitModifier>());
 			break;
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
-			break;
 		default:
 			throw InternalException("Unsupported result modifier");
 		}
@@ -272,10 +259,10 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
-	switch (constant.value.type().id()) {
+	switch (constant.GetValue().type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
-		auto index = UBigIntValue::Get(constant.value);
+		auto index = UBigIntValue::Get(constant.GetValue());
 		return CreateOrderExpression(std::move(expr), names, sql_types, table_index, bind_state.GetFinalIndex(index));
 	}
 	case LogicalTypeId::VARCHAR: {
@@ -284,7 +271,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
-		auto &struct_values = StructValue::GetChildren(constant.value);
+		auto &struct_values = StructValue::GetChildren(constant.GetValue());
 		if (struct_values.size() > 2) {
 			throw InternalException("Expected one or two children: index and optional collation");
 		}
@@ -319,7 +306,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.binding.column_index]);
+	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
@@ -510,8 +497,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// the statement has a GROUP BY clause, bind it
 		GroupBinder group_binder(*this, context, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
-		auto prev_can_contain_nulls = this->can_contain_nulls;
-		this->can_contain_nulls = true;
+		auto prev_can_contain_nulls = CanContainNulls();
+		SetCanContainNulls(true);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
@@ -542,7 +529,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 		}
-		this->can_contain_nulls = prev_can_contain_nulls;
+		SetCanContainNulls(prev_can_contain_nulls);
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 
@@ -597,7 +584,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
-			auto &struct_expressions = expanded.expanded_expressions;
+			auto &struct_expressions = expanded.GetChildrenMutable();
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {

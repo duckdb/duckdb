@@ -23,13 +23,6 @@ struct StddevState {
 // Streaming approximate standard deviation using Welford's
 // method, DOI: 10.2307/1266577
 struct STDDevBaseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.mean = 0;
-		state.dsquared = 0;
-	}
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, const INPUT_TYPE &input) {
 		// update running mean and d^2

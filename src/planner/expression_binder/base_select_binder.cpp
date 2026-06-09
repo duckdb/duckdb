@@ -130,7 +130,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		when_expr->children.push_back(std::move(collated_group_expression));
+		when_expr->GetChildrenMutable().push_back(std::move(collated_group_expression));
 		auto then_expr = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto else_expr = std::move(uncollated_first_expression);
 		auto case_expr =

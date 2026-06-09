@@ -8,11 +8,6 @@ namespace duckdb {
 
 namespace {
 struct BaseCountFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state = 0;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target += source;
@@ -271,9 +266,9 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
                                                AggregateStatisticsInput &input) {
 	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
 		// count on a column without null values: use count star
-		expr.function.ReplaceImplementation(CountStarFun::GetFunction());
-		expr.function.SetName("count_star");
-		expr.children.clear();
+		expr.FunctionMutable().ReplaceImplementation(CountStarFun::GetFunction());
+		expr.FunctionMutable().SetName("count_star");
+		expr.GetChildrenMutable().clear();
 	}
 	return nullptr;
 }

@@ -50,12 +50,12 @@ vector<reference<const ParsedExpression>> LambdaExpression::ExtractColumnRefExpr
 			return column_refs;
 		}
 
-		for (auto &child : func_expr.GetChildren()) {
-			if (child->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		for (auto &child : func_expr.GetArguments()) {
+			if (child.GetExpression().GetExpressionClass() != ExpressionClass::COLUMN_REF) {
 				error_message = InvalidParametersErrorMessage();
 				return column_refs;
 			}
-			column_refs.emplace_back(*child);
+			column_refs.emplace_back(child.GetExpression());
 		}
 	}
 

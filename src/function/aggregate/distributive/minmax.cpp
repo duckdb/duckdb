@@ -63,11 +63,6 @@ static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
 }
 
 struct MinMaxBase {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -232,11 +227,6 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.isset = false;
-	}
-
-	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.Destroy();
 	}
@@ -321,11 +311,14 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+	auto input_type = arguments[0]->GetReturnType();
 
-	// We should also push collations for non-VARCHAR here, but we aren't ready for it yet (see internal #8704)
-	const auto collation = arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR &&
-	                       (!StringType::GetCollation(arguments[0]->GetReturnType()).empty() ||
-	                        !Settings::Get<DefaultCollationSetting>(context).empty());
+	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT uses an explicit
+	// binary-comparable key so min/max follows the same logical order as comparisons and ORDER BY.
+	const auto varchar_collation =
+	    input_type.id() == LogicalTypeId::VARCHAR &&
+	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
+	const auto collation = input_type.id() == LogicalTypeId::BIT || varchar_collation;
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
@@ -360,7 +353,6 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		return make_uniq<ArgMinMaxFunctionData>();
 	}
 
-	auto input_type = arguments[0]->GetReturnType();
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -375,10 +367,10 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
-	arguments = std::move(expr->children);
+	arguments = std::move(expr->GetChildrenMutable());
 
-	function = std::move(expr->function);
-	return std::move(expr->bind_info);
+	function = std::move(expr->FunctionMutable());
+	return std::move(expr->BindInfoMutable());
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>

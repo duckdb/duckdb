@@ -5,7 +5,8 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(SubqueryRef &ref) {
 	auto binder = Binder::CreateBinder(context, this);
-	binder->can_contain_nulls = true;
+	binder->SetCanContainNulls(true);
+	binder->SetInsideSubquery();
 	auto subquery = binder->BindNode(*ref.subquery->node);
 	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto bind_index = subquery.plan->GetRootIndex();

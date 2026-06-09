@@ -76,12 +76,6 @@ AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 }
 
 struct BitwiseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		//  If there are no matching rows, returns a null value.
-		state.is_set = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		if (!state.is_set) {

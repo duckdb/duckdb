@@ -73,8 +73,11 @@ idx_t Printer::TerminalWidth() {
 	rows = csbi.srWindow.Right - csbi.srWindow.Left + 1;
 	return rows;
 #else
-	struct winsize w;
+	struct winsize w = {};
 	ioctl(0, TIOCGWINSZ, &w);
+	if (w.ws_col == 0) {
+		return 120;
+	}
 	return w.ws_col;
 #endif
 #else

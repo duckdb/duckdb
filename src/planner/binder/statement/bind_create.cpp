@@ -194,7 +194,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 			dependencies->AddDependency(entry);
 		});
 	}
-	view_binder->can_contain_nulls = true;
+	view_binder->SetCanContainNulls(true);
 
 	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
@@ -447,7 +447,7 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 	// Shortcut for constant expressions
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		auto &const_expr = expr->Cast<BoundConstantExpression>();
-		return TypeValue::GetType(const_expr.value);
+		return TypeValue::GetType(const_expr.GetValue());
 	}
 
 	// Else, evaluate the type expression
@@ -542,14 +542,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (!create_trigger_info.referencing_new_table.empty() &&
 	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
 		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
-	}
-	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
-			auto &t = entry.Cast<TriggerCatalogEntry>();
-			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
-				throw NotImplementedException("Multiple triggers per table event are not yet supported");
-			}
-		});
 	}
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).

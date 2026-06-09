@@ -14,7 +14,7 @@ namespace duckdb {
 static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef DEBUG
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariableReturnBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariableReturnBindData>();
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
@@ -86,6 +86,10 @@ static ScalarFunction GetStructPackFunction() {
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// struct_pack/row derive their (struct field) names from argument aliases, so the binder must capture argument
+	// expression aliases as named-argument names. This also preserves the legacy behavior of allowing positional
+	// arguments after named ones (the positional arguments simply take their expression's name as the field name).
+	fun.SetCaptureArgumentAliases(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

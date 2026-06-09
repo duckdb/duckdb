@@ -321,6 +321,8 @@ supported_member_entries = [
     # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
     'accessor_mut',
     'accessor',
+    # nullable annotation (used by generate_util.py)
+    'nullable',
 ]
 
 
@@ -386,6 +388,7 @@ class MemberVariable:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}"
                 )
+                exit(1)
 
 
 supported_serialize_entries = [
@@ -405,6 +408,7 @@ supported_serialize_entries = [
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
     'functions',
+    'use_legacy_serialization',
 ]
 
 
@@ -444,7 +448,10 @@ class SerializableClass:
         self.return_type = self.name
         self.return_class = self.name
         self.finalize_deserialization = None
+        self.use_legacy_serialization = None
         self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
+        if 'use_legacy_serialization' in entry:
+            self.use_legacy_serialization = entry['use_legacy_serialization']
         if 'ignore_clang_tidy_rules' in entry:
             self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
         if 'finalize_deserialization' in entry:
@@ -492,6 +499,7 @@ class SerializableClass:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}"
                 )
+                exit(1)
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -745,6 +753,8 @@ def generate_class_code(class_entry: SerializableClass):
         for entry_idx, entry in enumerate(class_entry.members):
             if entry_idx > last_constructor_index:
                 last_constructor_index = entry_idx
+            if entry.status == MemberVariableStatus.DELETED:
+                continue
             constructor_entries.add(entry.name)
             type_name = replace_pointer(entry.type)
             entry.deserialize_property = entry.deserialize_property.replace('.', '_')
@@ -815,8 +825,18 @@ def generate_class_code(class_entry: SerializableClass):
     if is_templated:
         templated_type = TEMPLATED_BASE_FORMAT.format(template_name=is_templated.group()[1:-1])
 
+    legacy_serialize_preamble = ''
+    if class_entry.use_legacy_serialization is not None:
+        storage_version_enum = version_string_to_storage_version_enum(class_entry.use_legacy_serialization)
+        legacy_serialize_preamble = (
+            f'\tif (!serializer.ShouldSerialize({storage_version_enum}) && UseLegacySerialization()) {{\n'
+            f'\t\tLegacySerialize(serializer);\n'
+            f'\t\treturn;\n'
+            f'\t}}\n'
+        )
+
     class_generation += templated_type + SERIALIZE_BASE_FORMAT.format(
-        class_name=class_entry.name, members=class_serialize
+        class_name=class_entry.name, members=legacy_serialize_preamble + class_serialize
     )
 
     class_generation += templated_type + DESERIALIZE_BASE_FORMAT.format(

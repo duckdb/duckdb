@@ -449,7 +449,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
@@ -511,13 +510,15 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
+		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			continue;
+		}
 
 		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
 		token_type.Append(Value(TokenTypeToString(entry.type)));
 		word.Append(Value(entry.text));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
@@ -535,8 +536,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
+	tokenizer.TokenizeInput();
+	if (!tokenizer.CanAutocomplete()) {
 		return nullptr;
 	}
 
@@ -551,7 +552,9 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->Root().Match(state);
-	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
+	// consuming it.
+	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
 			if (!token_list.empty()) {
@@ -640,7 +643,7 @@ static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
 }
 
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
+	auto &info = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<FormatSQLBindData>();
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		return heap.AddString(FormatSQL(input.GetString(), info.config));

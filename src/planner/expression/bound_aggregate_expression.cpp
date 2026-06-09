@@ -5,6 +5,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/function_serialization.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 
 namespace duckdb {
 
@@ -14,13 +15,48 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
-      aggr_type(aggr_type), filter(std::move(filter)) {
+      aggr_type(aggr_type), state_export_mode(AggregateStateExportMode::NONE), filter(std::move(filter)) {
 	D_ASSERT(!this->function.GetName().empty());
 }
 
 string BoundAggregateExpression::ToString() const {
-	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
-	    *this, string(), string(), function.GetName(), false, IsDistinct(), filter.get(), order_bys.get());
+	auto distinct = IsDistinct();
+	auto &function_name = function.GetName();
+
+	string result;
+	result += SQLIdentifier(function_name);
+	result += "(";
+	if (distinct) {
+		result += "DISTINCT ";
+	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [&](const unique_ptr<Expression> &child) { return child->ToString(); });
+
+	// ordered aggregate
+	if (order_bys && !order_bys->orders.empty()) {
+		if (children.empty()) {
+			result += ") WITHIN GROUP (";
+		}
+		result += " ORDER BY ";
+		for (idx_t i = 0; i < order_bys->orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += order_bys->orders[i].ToString();
+		}
+	}
+	result += ")";
+
+	if (state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
+		result += " EXPORT_STATE";
+	}
+
+	// filtered aggregate
+	if (filter) {
+		result += " FILTER (WHERE " + filter->ToString() + ")";
+	}
+
+	return result;
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -52,7 +88,10 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 			return false;
 		}
 	}
-	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
+	if (state_export_mode != other.state_export_mode) {
+		return false;
+	}
+	if (!FunctionData::Equals(bind_info.get(), other.BindInfo().get())) {
 		return false;
 	}
 	if (!BoundOrderModifier::Equals(order_bys, other.order_bys)) {
@@ -78,6 +117,7 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() const {
 	auto copy = make_uniq<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
 	                                                std::move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
+	copy->state_export_mode = state_export_mode;
 	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
 	return std::move(copy);
 }
@@ -90,6 +130,7 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(203, "aggregate_type", aggr_type);
 	serializer.WritePropertyWithDefault(204, "filter", filter, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(205, "order_bys", order_bys, unique_ptr<BoundOrderModifier>());
+	serializer.WritePropertyWithDefault(206, "state_export", state_export_mode, AggregateStateExportMode::NONE);
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
@@ -102,12 +143,19 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(204, "filter", unique_ptr<Expression>());
 	auto result = make_uniq<BoundAggregateExpression>(std::move(entry.first), std::move(children), std::move(filter),
 	                                                  std::move(entry.second), aggregate_type);
-	if (result->return_type != return_type) {
+	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
+	deserializer.ReadPropertyWithExplicitDefault(206, "state_export", result->state_export_mode,
+	                                             AggregateStateExportMode::NONE);
+	if (result->state_export_mode == AggregateStateExportMode::STATE_EXPORT) {
+		if (!return_type.IsAggregateState()) {
+			throw SerializationException("Aggregate State export should return an aggregate state type");
+		}
+		ExportAggregateFunction::SetStateExport(*result, std::move(return_type));
+	} else if (result->return_type != return_type) {
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
 	}
-	deserializer.ReadPropertyWithExplicitDefault(205, "order_bys", result->order_bys, unique_ptr<BoundOrderModifier>());
 	return std::move(result);
 }
 

@@ -37,7 +37,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto &input = args.data[0];
 	const idx_t count = args.size();
 
-	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();
+	auto &data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<StructKeysBindData>();
 	auto &keys_vector = data.keys_vector;
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
@@ -60,7 +60,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 static unique_ptr<FunctionData> StructKeysBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto return_type = arguments[0]->GetReturnType();
-	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
+	if (return_type.id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
 

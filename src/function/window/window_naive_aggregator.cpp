@@ -13,7 +13,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
 	}
 }
@@ -133,7 +133,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 
 		//	The sort expressions have already been computed, so we just need to reference them
 		vector<BoundOrderByNode> orders;
-		for (const auto &order_by : aggregator.wexpr.arg_orders) {
+		for (const auto &order_by : aggregator.wexpr.ArgOrders()) {
 			auto order = order_by.Copy();
 			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
@@ -164,7 +164,7 @@ void WindowNaiveLocalState::FlushStates(const WindowAggregatorGlobalState &gsink
 	leaves.Slice(scanned, update_sel, flush_count);
 
 	const auto &aggr = gsink.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep,
 	                                       flush_count);
 
@@ -351,7 +351,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	FlushStates(gsink);
 
 	//	Finalise the result aggregates and write to the result
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
@@ -373,7 +373,7 @@ void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk 
 }
 
 bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction() || !wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 	return true;

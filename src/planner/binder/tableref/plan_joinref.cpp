@@ -341,7 +341,7 @@ static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              if (colref.depth > 0) {
+		                                                              if (colref.Depth() > 0) {
 			                                                              has_correlated_columns = true;
 		                                                              }
 	                                                              });
@@ -415,7 +415,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
-
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
