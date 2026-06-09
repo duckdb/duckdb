@@ -118,7 +118,8 @@ template <class OP>
 struct SimpleBitwiseOperation : public NumericBitwiseOperation<SimpleBitwiseOperation<OP>> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value = OP::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
+		state.value =
+		    OP::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
 	}
 };
 
@@ -130,7 +131,8 @@ struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value = BitXor::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
+		state.value =
+		    BitXor::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
 	}
 
 	template <class INPUT_TYPE, class STATE>

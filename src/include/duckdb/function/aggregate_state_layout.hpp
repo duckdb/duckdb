@@ -87,9 +87,8 @@ template <>
 struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
 
 //! Maps a single C++ field type to a LogicalType.
-//! OptionalStateType<T> → PrimitiveToLogicalType<T>() (the optional encoding is captured in AggregateStateField::is_optional)
-//! T with STATE_TYPE → nested struct type
-//! otherwise → PrimitiveToLogicalType<T>()
+//! OptionalStateType<T> → PrimitiveToLogicalType<T>() (the optional encoding is captured in
+//! AggregateStateField::is_optional) T with STATE_TYPE → nested struct type otherwise → PrimitiveToLogicalType<T>()
 template <class T>
 LogicalType FieldToLogicalType() {
 	if constexpr (IsOptionalStateType<T>::value) {
@@ -103,8 +102,9 @@ LogicalType FieldToLogicalType() {
 
 //! Per-field layout information within an aggregate state.
 //! field_offset: byte offset of this field relative to the parent struct's base.
-//! is_optional: true when this field is an OptionalStateType<T> — physically T value + bool is_set at field_offset+sizeof(T).
-//! children: non-empty only when the field is itself a STRUCT; each child's offset is relative to this field's base.
+//! is_optional: true when this field is an OptionalStateType<T> — physically T value + bool is_set at
+//! field_offset+sizeof(T). children: non-empty only when the field is itself a STRUCT; each child's offset is relative
+//! to this field's base.
 struct AggregateStateField {
 	idx_t field_offset = 0;
 	bool is_optional = false;
