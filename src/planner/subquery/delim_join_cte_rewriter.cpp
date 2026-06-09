@@ -50,6 +50,20 @@ static vector<string> GenerateCTEColumnNames(idx_t column_count, const string &p
 	return result;
 }
 
+static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, unique_ptr<LogicalOperator> child) {
+	child->ResolveOperatorTypes();
+	auto bindings = child->GetColumnBindings();
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(bindings.size());
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[i], bindings[i]));
+	}
+	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+	projection->children.push_back(std::move(child));
+	projection->ResolveOperatorTypes();
+	return projection;
+}
+
 static idx_t RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIndex delim_scan_index) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op->children.empty()) {
@@ -1783,11 +1797,13 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	dedup->children.push_back(std::move(dedup_child));
 
 	auto dedup_cte_name = "__duckdb_delim_dedup_" + to_string(dedup_cte_index.index);
+	auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan));
 	auto dedup_cte =
 	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
-	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	                                      std::move(dedup_cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto cte_child = CreateIdentityProjection(binder, std::move(dedup_cte));
 	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
-	                                             std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	                                             std::move(cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	plan = std::move(cte);
 }
 
