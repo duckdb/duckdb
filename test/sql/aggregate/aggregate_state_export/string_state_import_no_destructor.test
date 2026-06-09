@@ -1,0 +1,85 @@
+# name: test/sql/aggregate/aggregate_state_export/string_state_import_no_destructor.test
+# description: Importing aggregate states whose state owns heap memory (custom destructor) must be rejected
+# group: [aggregate_state_export]
+
+# Aggregates whose state owns a heap string free it with delete[] in a custom destructor.
+# Importing such a state via to_aggregate_state would deserialize an arena-owned string_t into the state buffer.
+# combine would then free arena-owned memory -> heap corruption.
+# The binder must reject these, mirroring the EXPORT_STATE custom-destructor restriction.
+
+# --- min/max over VARCHAR (MinMaxStringState, custom destructor) ---
+
+statement error
+SELECT to_aggregate_state({'value':'abc','isset':true}, 'min', ['VARCHAR']);
+----
+custom destructor
+
+statement error
+SELECT to_aggregate_state({'value':'abc','isset':true}, 'max', ['VARCHAR']);
+----
+custom destructor
+
+# the original crashing min roundtrip must error rather than abort
+statement error
+SELECT finalize(combine(
+  to_aggregate_state({'value':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','isset':true}, 'min', ['VARCHAR']),
+  to_aggregate_state({'value':'zzzzzzzzzzzzz','isset':true}, 'min', ['VARCHAR'])
+));
+----
+custom destructor
+
+# --- last over VARCHAR (FirstFunctionStringBase, custom destructor) ---
+
+statement error
+SELECT to_aggregate_state({'value':'abc','is_set':true,'is_null':false}, 'last', ['VARCHAR']);
+----
+custom destructor
+
+statement error
+SELECT finalize(combine(
+  to_aggregate_state({'value':'aaaaaaaaaaaaaaaaaaaaaaaa','is_set':true,'is_null':false}, 'last', ['VARCHAR']),
+  to_aggregate_state({'value':'bbbbbbbbbbbbbbbbbbbbbbbb','is_set':true,'is_null':false}, 'last', ['VARCHAR'])
+));
+----
+custom destructor
+
+# --- guard must NOT be over-broad ---
+
+# first/any_value over VARCHAR have no custom destructor (combine copies the string_t) and must keep working
+query I
+SELECT finalize(to_aggregate_state({'value':'hello','is_set':true,'is_null':false}, 'first', ['VARCHAR']));
+----
+hello
+
+query I
+SELECT finalize(to_aggregate_state({'value':'world','is_set':true,'is_null':false}, 'any_value', ['VARCHAR']));
+----
+world
+
+query I
+SELECT finalize(combine(
+  to_aggregate_state({'value':'aaaaaaaaaaaaaaaaaaaaaaaa','is_set':true,'is_null':false}, 'first', ['VARCHAR']),
+  to_aggregate_state({'value':'bbbbbbbbbbbbbbbbbbbbbbbb','is_set':true,'is_null':false}, 'first', ['VARCHAR'])
+));
+----
+bbbbbbbbbbbbbbbbbbbbbbbb
+
+# numeric min/max states have no custom destructor and must still roundtrip
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (5), (3)) t(i);
+
+query I
+SELECT finalize(min(i) EXPORT_STATE) FROM integers;
+----
+1
+
+query I
+SELECT finalize(max(i) EXPORT_STATE) FROM integers;
+----
+5
+
+# combining two numeric min states still works
+query I
+SELECT finalize(combine(min(i) EXPORT_STATE, min(i + 10) EXPORT_STATE)) FROM integers;
+----
+1

@@ -364,8 +364,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	// mirror the EXPORT_STATE restriction: a custom destructor implies self-owning state, which cannot be safely
 	// imported from a serialized buffer (combine would free memory not owned by the aggregate -> heap corruption)
 	if (bound_aggr.HasStateDestructorCallback()) {
-		throw BinderException(
-		    "Cannot import/finalize/combine aggregate state for function %s with a custom destructor", function_name);
+		throw BinderException("Cannot import/finalize/combine aggregate state for function %s with a custom destructor",
+		                      function_name);
 	}
 
 	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
