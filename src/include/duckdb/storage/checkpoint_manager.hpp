@@ -37,6 +37,7 @@ class TableMacroCatalogEntry;
 class TableCatalogEntry;
 class TriggerCatalogEntry;
 class ViewCatalogEntry;
+class FeatureCatalogEntry;
 class TableDataWriter;
 class TypeCatalogEntry;
 struct BoundCreateTableInfo;
@@ -91,6 +92,7 @@ protected:
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
 	virtual void WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer);
+	virtual void WriteFeature(FeatureCatalogEntry &feature, Serializer &serializer);
 };
 
 class CheckpointReader {
@@ -115,6 +117,7 @@ protected:
 	virtual void ReadIndex(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadType(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadFeature(CatalogTransaction transaction, Deserializer &deserializer);
 
 	virtual void ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
 	                           BoundCreateTableInfo &bound_info);

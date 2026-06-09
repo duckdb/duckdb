@@ -11,6 +11,8 @@
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
@@ -149,6 +151,15 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 		for (auto &view : views) {
 			entries.push_back(view.get());
 		}
+
+		// Features must be written after their backing view so that, on read, the view
+		// already exists when the feature -> view ownership is restored.
+		schema.Scan(CatalogType::FEATURE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
 
 		// Scan triggers from each table directly (triggers are nested under their table)
 		for (auto &table_entry : tables) {
@@ -461,6 +472,11 @@ void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
 		WriteTrigger(trigger, serializer);
 		break;
 	}
+	case CatalogType::FEATURE_ENTRY: {
+		auto &feature = entry.Cast<FeatureCatalogEntry>();
+		WriteFeature(feature, serializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -514,6 +530,10 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 		ReadTrigger(transaction, deserializer);
 		break;
 	}
+	case CatalogType::FEATURE_ENTRY: {
+		ReadFeature(transaction, deserializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -560,6 +580,20 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	}
 	auto &duck_table = table_entry->Cast<DuckTableEntry>();
 	duck_table.CreateTrigger(transaction, trigger_info);
+}
+
+//===--------------------------------------------------------------------===//
+// Features
+//===--------------------------------------------------------------------===//
+void CheckpointWriter::WriteFeature(FeatureCatalogEntry &feature, Serializer &serializer) {
+	serializer.WriteProperty(100, "feature", &feature);
+}
+
+void CheckpointReader::ReadFeature(CatalogTransaction transaction, Deserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "feature");
+	auto &feature_info = info->Cast<CreateFeatureInfo>();
+	feature_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	catalog.CreateFeature(transaction, feature_info);
 }
 
 //===--------------------------------------------------------------------===//
