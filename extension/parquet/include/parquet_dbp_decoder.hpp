@@ -102,14 +102,28 @@ private:
 			const idx_t next = MinValue(batch_size - target_values_offset,
 			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - unpacked_data_offset);
 			if (next != 0) {
-				for (idx_t i = 0; i < next; i++) {
-					const auto &unpacked_value = unpacked_data[unpacked_data_offset + i];
-					auto current_value = static_cast<T>(static_cast<uint64_t>(previous_value) +
-					                                    static_cast<uint64_t>(min_delta) + unpacked_value);
-					if (!SKIP_READ) {
-						target_values[target_values_offset + i] = current_value;
+				if (list_of_bitwidths_of_miniblocks[miniblock_index] == 0) {
+					const auto base = static_cast<uint64_t>(previous_value);
+					const auto md = static_cast<uint64_t>(min_delta);
+					if (SKIP_READ) {
+						previous_value = static_cast<int64_t>(static_cast<T>(base + md * static_cast<uint64_t>(next)));
+					} else {
+						for (idx_t i = 0; i < next; i++) {
+							target_values[target_values_offset + i] =
+							    static_cast<T>(base + md * static_cast<uint64_t>(i + 1));
+						}
+						previous_value = static_cast<int64_t>(target_values[target_values_offset + next - 1]);
 					}
-					previous_value = static_cast<int64_t>(current_value);
+				} else {
+					for (idx_t i = 0; i < next; i++) {
+						const auto &unpacked_value = unpacked_data[unpacked_data_offset + i];
+						auto current_value = static_cast<T>(static_cast<uint64_t>(previous_value) +
+						                                    static_cast<uint64_t>(min_delta) + unpacked_value);
+						if (!SKIP_READ) {
+							target_values[target_values_offset + i] = current_value;
+						}
+						previous_value = static_cast<int64_t>(current_value);
+					}
 				}
 				target_values_offset += next;
 				unpacked_data_offset += next;
