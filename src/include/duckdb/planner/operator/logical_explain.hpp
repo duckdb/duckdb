@@ -21,7 +21,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPLAIN;
 
 public:
-	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, ExplainFormat explain_format);
+	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type, const ExplainFormat &explain_format);
 
 	ExplainType explain_type;
 	ExplainFormat explain_format;

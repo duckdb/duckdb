@@ -4,7 +4,7 @@
 namespace duckdb {
 
 ExplainStatement::ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type,
-                                   ExplainFormat explain_format)
+                                   const ExplainFormat &explain_format)
     : SQLStatement(StatementType::EXPLAIN_STATEMENT), stmt(std::move(stmt)), explain_type(explain_type),
       explain_format(explain_format) {
 }
@@ -24,13 +24,13 @@ string ExplainStatement::OptionsToString() const {
 		options += "(";
 		options += "ANALYZE";
 	}
-	if (explain_format != ExplainFormat::DEFAULT) {
+	if (explain_format != ExplainFormat::DEFAULT()) {
 		if (options.empty()) {
 			options += "(";
 		} else {
 			options += ", ";
 		}
-		options += StringUtil::Format("FORMAT %s", EnumUtil::ToString(explain_format));
+		options += StringUtil::Format("FORMAT %s", StringUtil::Upper(explain_format.ToString()));
 	}
 	if (!options.empty()) {
 		options += ")";

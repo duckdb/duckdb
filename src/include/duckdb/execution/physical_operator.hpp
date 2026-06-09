@@ -74,7 +74,7 @@ public:
 		return InsertionOrderPreservingMap<string>();
 	}
 	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(const ExplainFormat &format = ExplainFormat::DEFAULT()) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 

@@ -39,6 +39,8 @@ public:
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+
+	string RenderProfilerDisabled() override;
 };
 
 } // namespace duckdb

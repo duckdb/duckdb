@@ -21,11 +21,11 @@ public:
 
 public:
 	explicit ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type = ExplainType::EXPLAIN_STANDARD,
-	                          ExplainFormat explain_format = ExplainFormat::DEFAULT);
+	                          const ExplainFormat &explain_format = ExplainFormat::DEFAULT());
 
 	unique_ptr<SQLStatement> stmt;
 	ExplainType explain_type;
-	ExplainFormat explain_format = ExplainFormat::DEFAULT;
+	ExplainFormat explain_format = ExplainFormat::DEFAULT();
 
 protected:
 	ExplainStatement(const ExplainStatement &other);

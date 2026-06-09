@@ -34,7 +34,6 @@
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -1890,29 +1889,6 @@ const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
 template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 	return static_cast<ExceptionType>(StringUtil::StringToEnum(GetExceptionTypeValues(), 43, "ExceptionType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetExplainFormatValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ExplainFormat::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(ExplainFormat::TEXT), "TEXT" },
-		{ static_cast<uint32_t>(ExplainFormat::JSON), "JSON" },
-		{ static_cast<uint32_t>(ExplainFormat::HTML), "HTML" },
-		{ static_cast<uint32_t>(ExplainFormat::GRAPHVIZ), "GRAPHVIZ" },
-		{ static_cast<uint32_t>(ExplainFormat::YAML), "YAML" },
-		{ static_cast<uint32_t>(ExplainFormat::MERMAID), "MERMAID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
-	return StringUtil::EnumToString(GetExplainFormatValues(), 7, "ExplainFormat", static_cast<uint32_t>(value));
-}
-
-template<>
-ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
-	return static_cast<ExplainFormat>(StringUtil::StringToEnum(GetExplainFormatValues(), 7, "ExplainFormat", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExplainOutputTypeValues() {

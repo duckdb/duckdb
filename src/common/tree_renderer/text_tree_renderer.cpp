@@ -1,6 +1,7 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -526,6 +527,11 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 
 string TextTreeRenderer::ExtraInfoSeparator() {
 	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
+}
+
+string TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+	// the text profiler output is the framed query tree (header, total time, phase timings, operator tree)
+	return profiler.QueryTreeToString();
 }
 
 } // namespace duckdb

@@ -28,7 +28,7 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString(ExplainFormat format) const {
+string PhysicalOperator::ToString(const ExplainFormat &format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
 	stringstream ss;
 	auto tree = RenderTree::CreateRenderTree(*this);

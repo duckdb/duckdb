@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -32,7 +33,7 @@ class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
-class ProfilerPrinter;
+class TreeRenderer;
 class SQLStatement;
 struct MetricsTimer;
 class OperatorProfiler;
@@ -84,11 +85,11 @@ public:
 public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
-	//! Create a ProfilerPrinter for the given profiler format name (e.g. "json", "query_tree"). Throws if the format
-	//! name is not recognized.
-	DUCKDB_API unique_ptr<ProfilerPrinter> CreateProfiler(const string &name) const;
-	//! Returns the printer to use for the given ExplainFormat, taking the configured default format into account.
-	DUCKDB_API unique_ptr<ProfilerPrinter> GetPrinter(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	//! Create the TreeRenderer for the given profiler format name (e.g. "json", "query_tree"). Returns nullptr for the
+	//! "no_output" format, and throws if the format name is not recognized.
+	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const string &name) const;
+	//! Returns the renderer to use for the given ExplainFormat, taking the configured default format into account.
+	DUCKDB_API unique_ptr<TreeRenderer> GetPrinter(const ExplainFormat &format = ExplainFormat::DEFAULT()) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -139,12 +140,13 @@ public:
 
 	//! Render the profiler output as a string, formatted based on the given ExplainFormat (or the configured default
 	//! profiler format when ExplainFormat::DEFAULT is passed).
-	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
-	//! Render the profiler output using the given printer (handling the profiling-disabled case).
-	DUCKDB_API string ToString(const ProfilerPrinter &printer) const;
-	//! Render the operator tree using a TreeRenderer for the given ExplainFormat. Returns an empty string when there
-	//! is no query tree to render.
-	DUCKDB_API string RenderTree(ExplainFormat format) const;
+	DUCKDB_API string ToString(const ExplainFormat &format = ExplainFormat::DEFAULT()) const;
+	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
+	//! profiling-disabled and no-output cases.
+	DUCKDB_API string ToString(const string &profiler_format_name) const;
+	//! Render the profiling node tree using the given renderer. Returns an empty string when there is no tree to
+	//! render. Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
+	DUCKDB_API string RenderProfilingNodeTree(TreeRenderer &renderer) const;
 
 	// Sanitize a Value::MAP
 	static Value JSONSanitize(const Value &input);
@@ -164,6 +166,8 @@ public:
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
+	//! Render the profiler output via the given renderer (nullptr renders nothing), handling the disabled case.
+	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
 private:
 	ClientContext &context;

@@ -39,6 +39,10 @@ public:
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+
+	//! Profiler JSON output: the full query profile result tree (with query-level metrics)
+	string RenderProfiler(const QueryProfiler &profiler) override;
+	string RenderProfilerDisabled() override;
 };
 
 } // namespace duckdb

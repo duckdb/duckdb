@@ -24,8 +24,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/profiler_printer.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -864,11 +864,12 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 
 	auto &config = ClientConfig::GetConfig(context);
 
-	// Validate the format name (throws on an unrecognized format) and determine whether it emits output.
-	auto printer = QueryProfiler::Get(context).CreateProfiler(parameter);
+	// Validate the format name (throws on an unrecognized format). CreateProfiler returns nullptr for "no_output",
+	// which is the only format that does not emit output.
+	auto renderer = QueryProfiler::Get(context).CreateProfiler(parameter);
 
 	config.enable_profiler = true;
-	config.emit_profiler_output = printer->EmitsOutput();
+	config.emit_profiler_output = renderer != nullptr;
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
 		auto &file_system = FileSystem::GetFileSystem(context);

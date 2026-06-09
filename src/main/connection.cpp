@@ -6,7 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/profiler_printer.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
@@ -48,9 +47,7 @@ Connection::~Connection() {
 }
 
 string Connection::GetProfilingInformation(const string &format) {
-	auto &profiler = QueryProfiler::Get(*context);
-	auto printer = profiler.CreateProfiler(format);
-	return profiler.ToString(*printer);
+	return QueryProfiler::Get(*context).ToString(format);
 }
 
 void Connection::Interrupt() {

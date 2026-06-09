@@ -9,7 +9,6 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-#include "duckdb/main/profiler_printer.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -86,48 +85,38 @@ bool QueryProfiler::IsDetailedEnabled() const {
 	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
 }
 
-unique_ptr<ProfilerPrinter> QueryProfiler::CreateProfiler(const string &name) const {
+unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
 	auto format = StringUtil::Lower(name);
-	// "text" is the EXPLAIN name for the text query tree; "query_tree" is the profiler name for the same output
-	if (format == "query_tree" || format == "text") {
-		return make_uniq<QueryTreeProfilerPrinter>(*this);
-	}
-	if (format == "query_tree_optimizer") {
-		return make_uniq<QueryTreeOptimizerProfilerPrinter>(*this);
-	}
-	if (format == "json") {
-		return make_uniq<JSONProfilerPrinter>(*this);
-	}
+	// "no_output" produces no profiler output and so has no renderer
 	if (format == "no_output") {
-		return make_uniq<NoOutputProfilerPrinter>(*this);
+		return nullptr;
 	}
-	if (format == "html") {
-		return make_uniq<HTMLProfilerPrinter>(*this);
+	// the profiler's "query_tree"/"query_tree_optimizer" formats render as the text query tree ("text")
+	if (format == "query_tree" || format == "query_tree_optimizer" || format == "text") {
+		return TreeRenderer::CreateRenderer("text");
 	}
-	if (format == "graphviz") {
-		return make_uniq<GraphVizProfilerPrinter>(*this);
-	}
-	if (format == "mermaid") {
-		return make_uniq<MermaidProfilerPrinter>(*this);
+	if (format == "json" || format == "html" || format == "graphviz" || format == "mermaid") {
+		return TreeRenderer::CreateRenderer(format);
 	}
 	throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, "
 	                      "no_output, html, graphviz, mermaid]",
 	                      name);
 }
 
-unique_ptr<ProfilerPrinter> QueryProfiler::GetPrinter(ExplainFormat format) const {
-	if (format == ExplainFormat::DEFAULT) {
+unique_ptr<TreeRenderer> QueryProfiler::GetPrinter(const ExplainFormat &format) const {
+	if (format == ExplainFormat::DEFAULT()) {
 		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
 		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
 		auto name = ClientConfig::GetConfig(context).profiler_print_format;
 		return CreateProfiler(name == "no_output" ? "query_tree" : name);
 	}
-	// resolve the explain format name through the shared registry, then create the matching profiler printer
-	return CreateProfiler(ExplainFormatToString(format));
+	// resolve the explain format name (text/json/html/...) and create the matching renderer
+	return CreateProfiler(format.ToString());
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	if (GetPrinter()->PrintOptimizerOutput() || IsDetailedEnabled()) {
+	// the "query_tree_optimizer" profiler format additionally profiles the optimizer
+	if (ClientConfig::GetConfig(context).profiler_print_format == "query_tree_optimizer" || IsDetailedEnabled()) {
 		return true;
 	}
 	if (metrics) {
@@ -324,27 +313,36 @@ MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
 	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
-string QueryProfiler::ToString(ExplainFormat explain_format) const {
-	return ToString(*GetPrinter(explain_format));
+string QueryProfiler::ToString(const ExplainFormat &explain_format) const {
+	auto renderer = GetPrinter(explain_format);
+	return RenderProfilerOutput(renderer.get());
 }
 
-string QueryProfiler::ToString(const ProfilerPrinter &printer) const {
-	if (!IsEnabled()) {
-		return printer.RenderDisabledMessage();
+string QueryProfiler::ToString(const string &profiler_format_name) const {
+	auto renderer = CreateProfiler(profiler_format_name);
+	return RenderProfilerOutput(renderer.get());
+}
+
+string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
+		return "";
 	}
-	return printer.ToString();
+	if (!IsEnabled()) {
+		return renderer->RenderProfilerDisabled();
+	}
+	return renderer->RenderProfiler(*this);
 }
 
-string QueryProfiler::RenderTree(ExplainFormat format) const {
+string QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer) const {
 	lock_guard<std::mutex> guard(lock);
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query_metrics.query_sql.empty() || !root) {
 		return "";
 	}
-	auto renderer = TreeRenderer::CreateRenderer(format);
 	stringstream str;
-	renderer->Render(*root, str);
+	renderer.Render(*root, str);
 	return str.str();
 }
 

@@ -93,6 +93,9 @@ public:
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
 
+	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
+	string RenderProfiler(const QueryProfiler &profiler) override;
+
 	void EnableDetailed() {
 		config.EnableDetailed();
 	}

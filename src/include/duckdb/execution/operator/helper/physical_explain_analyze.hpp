@@ -20,7 +20,8 @@ public:
 
 public:
 	PhysicalExplainAnalyze(PhysicalPlan &physical_plan, vector<LogicalType> types, ExplainFormat format)
-	    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1), format(format) {
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1),
+	      format(std::move(format)) {
 	}
 
 public:
