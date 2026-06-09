@@ -4703,6 +4703,65 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeListInterna
 	return make_uniq<TypedTransformResult<vector<LogicalType>>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSelectSetOpChainInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto intersect_chain = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> select_set_op_chain_tail {};
+	auto &select_set_op_chain_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (select_set_op_chain_tail_opt.HasResult()) {
+		auto &select_set_op_chain_tail_repeat_1 = select_set_op_chain_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &select_set_op_chain_tail_item_1 : select_set_op_chain_tail_repeat_1.GetChildren()) {
+			auto select_set_op_chain_tail_value_1 =
+			    transformer.Transform<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>(
+			        select_set_op_chain_tail_item_1.get());
+			select_set_op_chain_tail.push_back(std::move(select_set_op_chain_tail_value_1));
+		}
+	}
+	auto result =
+	    TransformSelectSetOpChain(transformer, std::move(intersect_chain), std::move(select_set_op_chain_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSelectSetOpChainTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto setop_clause = transformer.Transform<unique_ptr<SetOperationNode>>(list_pr.GetChild(0));
+	auto intersect_chain = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(1));
+	auto result = TransformSelectSetOpChainTail(transformer, std::move(setop_clause), std::move(intersect_chain));
+	return make_uniq<TypedTransformResult<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>>(
+	    std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntersectChainInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_atom = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> intersect_chain_tail {};
+	auto &intersect_chain_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (intersect_chain_tail_opt.HasResult()) {
+		auto &intersect_chain_tail_repeat_1 = intersect_chain_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &intersect_chain_tail_item_1 : intersect_chain_tail_repeat_1.GetChildren()) {
+			auto intersect_chain_tail_value_1 =
+			    transformer.Transform<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>(
+			        intersect_chain_tail_item_1.get());
+			intersect_chain_tail.push_back(std::move(intersect_chain_tail_value_1));
+		}
+	}
+	auto result = TransformIntersectChain(transformer, std::move(select_atom), std::move(intersect_chain_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntersectChainTailInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto set_intersect_clause = transformer.Transform<unique_ptr<SetOperationNode>>(list_pr.GetChild(0));
+	auto select_atom = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(1));
+	auto result = TransformIntersectChainTail(transformer, std::move(set_intersect_clause), std::move(select_atom));
+	return make_uniq<TypedTransformResult<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>>(
+	    std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSelectAtomInternal(PEGTransformer &transformer,
                                                                                     ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -5043,6 +5102,40 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformJoinOrPivotInte
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTablePivotClauseInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto table_pivot_clause_body =
+	    transformer.Transform<unique_ptr<TableRef>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	TableAlias table_alias {};
+	auto &table_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (table_alias_opt.HasResult()) {
+		table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
+	}
+	auto result = TransformTablePivotClause(transformer, std::move(table_pivot_clause_body), table_alias);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformTablePivotClauseBodyInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(0));
+	vector<PivotColumn> pivot_value_list;
+	auto &pivot_value_list_repeat = list_pr.GetChild(2).Cast<RepeatParseResult>();
+	for (auto &pivot_value_list_item : pivot_value_list_repeat.GetChildren()) {
+		auto pivot_value_list_value = transformer.Transform<PivotColumn>(pivot_value_list_item.get());
+		pivot_value_list.push_back(std::move(pivot_value_list_value));
+	}
+	vector<string> pivot_group_by_list {};
+	auto &pivot_group_by_list_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (pivot_group_by_list_opt.HasResult()) {
+		pivot_group_by_list = transformer.Transform<vector<string>>(pivot_group_by_list_opt.GetResult());
+	}
+	auto result = TransformTablePivotClauseBody(transformer, std::move(target_list), std::move(pivot_value_list),
+	                                            pivot_group_by_list);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotGroupByListInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -5056,12 +5149,63 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotGroupByLis
 	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTableUnpivotClauseInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool include_or_exclude_nulls {};
+	auto &include_or_exclude_nulls_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (include_or_exclude_nulls_opt.HasResult()) {
+		include_or_exclude_nulls = transformer.Transform<bool>(include_or_exclude_nulls_opt.GetResult());
+	}
+	auto table_unpivot_clause_body =
+	    transformer.Transform<unique_ptr<TableRef>>(ExtractResultFromParens(list_pr.GetChild(2)));
+	TableAlias table_alias {};
+	auto &table_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (table_alias_opt.HasResult()) {
+		table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
+	}
+	auto result = TransformTableUnpivotClause(transformer, include_or_exclude_nulls,
+	                                          std::move(table_unpivot_clause_body), table_alias);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformTableUnpivotClauseBodyInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto unpivot_header = transformer.Transform<vector<string>>(list_pr.GetChild(0));
+	vector<PivotColumn> unpivot_value_list;
+	auto &unpivot_value_list_repeat = list_pr.GetChild(2).Cast<RepeatParseResult>();
+	for (auto &unpivot_value_list_item : unpivot_value_list_repeat.GetChildren()) {
+		auto unpivot_value_list_value = transformer.Transform<PivotColumn>(unpivot_value_list_item.get());
+		unpivot_value_list.push_back(std::move(unpivot_value_list_value));
+	}
+	auto result = TransformTableUnpivotClauseBody(transformer, unpivot_header, std::move(unpivot_value_list));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotHeaderInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto base_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto result = TransformPivotHeader(transformer, std::move(base_expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotValueListInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto pivot_header = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto pivot_value_target = transformer.Transform<PivotColumn>(list_pr.GetChild(2));
+	auto result = TransformPivotValueList(transformer, std::move(pivot_header), std::move(pivot_value_target));
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotValueTargetInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = TransformPivotValueTarget(transformer, choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnpivotValueListInternal(PEGTransformer &transformer,
@@ -6681,6 +6825,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PragmaParameters", &PEGTransformerFactory::TransformPragmaParametersInternal},
 	    {"PrepareStatement", &PEGTransformerFactory::TransformPrepareStatementInternal},
 	    {"TypeList", &PEGTransformerFactory::TransformTypeListInternal},
+	    {"SelectSetOpChain", &PEGTransformerFactory::TransformSelectSetOpChainInternal},
+	    {"SelectSetOpChainTail", &PEGTransformerFactory::TransformSelectSetOpChainTailInternal},
+	    {"IntersectChain", &PEGTransformerFactory::TransformIntersectChainInternal},
+	    {"IntersectChainTail", &PEGTransformerFactory::TransformIntersectChainTailInternal},
 	    {"SelectAtom", &PEGTransformerFactory::TransformSelectAtomInternal},
 	    {"SelectParens", &PEGTransformerFactory::TransformSelectParensInternal},
 	    {"SetopType", &PEGTransformerFactory::TransformSetopTypeInternal},
@@ -6710,8 +6858,14 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ValuesRef", &PEGTransformerFactory::TransformValuesRefInternal},
 	    {"ParensTableRef", &PEGTransformerFactory::TransformParensTableRefInternal},
 	    {"JoinOrPivot", &PEGTransformerFactory::TransformJoinOrPivotInternal},
+	    {"TablePivotClause", &PEGTransformerFactory::TransformTablePivotClauseInternal},
+	    {"TablePivotClauseBody", &PEGTransformerFactory::TransformTablePivotClauseBodyInternal},
 	    {"PivotGroupByList", &PEGTransformerFactory::TransformPivotGroupByListInternal},
+	    {"TableUnpivotClause", &PEGTransformerFactory::TransformTableUnpivotClauseInternal},
+	    {"TableUnpivotClauseBody", &PEGTransformerFactory::TransformTableUnpivotClauseBodyInternal},
 	    {"PivotHeader", &PEGTransformerFactory::TransformPivotHeaderInternal},
+	    {"PivotValueList", &PEGTransformerFactory::TransformPivotValueListInternal},
+	    {"PivotValueTarget", &PEGTransformerFactory::TransformPivotValueTargetInternal},
 	    {"UnpivotValueList", &PEGTransformerFactory::TransformUnpivotValueListInternal},
 	    {"PivotTargetList", &PEGTransformerFactory::TransformPivotTargetListInternal},
 	    {"UnpivotTargetList", &PEGTransformerFactory::TransformUnpivotTargetListInternal},

@@ -372,8 +372,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSelectStatement);
 	REGISTER_TRANSFORM(TransformSelectStatementInternal);
 	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformSelectSetOpChain);
-	REGISTER_TRANSFORM(TransformIntersectChain);
 	REGISTER_TRANSFORM(TransformSetopClause);
 	REGISTER_TRANSFORM(TransformSetIntersectClause);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
@@ -383,9 +381,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
 	REGISTER_TRANSFORM(TransformNamedParameter);
-	REGISTER_TRANSFORM(TransformTableUnpivotClause);
-	REGISTER_TRANSFORM(TransformTablePivotClause);
-	REGISTER_TRANSFORM(TransformPivotValueList);
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWithStatement);
 	REGISTER_TRANSFORM(TransformCTEBody);

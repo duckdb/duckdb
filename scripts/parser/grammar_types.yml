@@ -509,7 +509,9 @@ TableRef:
     - RegularJoinClause
     - JoinWithoutOnClause
     - TableUnpivotClause
+    - TableUnpivotClauseBody
     - TablePivotClause
+    - TablePivotClauseBody
     - InnerTableRef
     - TableFunction
     - TableFunctionLateralOpt
@@ -778,6 +780,7 @@ PivotColumn:
     - PivotColumnSubquery
     - PivotColumnExpression
     - PivotValueList
+    - PivotValueTarget
     - UnpivotValueList
 
 UnpivotNameValues:
@@ -1388,6 +1391,12 @@ overrides:
   SetopType: "SetOperationType"
   SetopUnion: "SetOperationType"
   SetopExcept: "SetOperationType"
+  SelectSetOpChainTail:
+    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+    by_value: true
+  IntersectChainTail:
+    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+    by_value: true
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType:
     type: "JoinType"
