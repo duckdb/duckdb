@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -23,6 +24,8 @@
 #include <algorithm>
 
 namespace duckdb {
+
+static constexpr const char *CTE_DELIMINATOR_PROFILER_KEY = "optimizer.deliminator";
 
 static void VerifyNoDelim(LogicalOperator &op) {
 	// Verify that there are no delim joins or delim scans in the plan, as these should have been rewritten to CTEs at
@@ -1669,6 +1672,8 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
 	if (cte_deliminator_enabled) {
+		auto cte_deliminator_timer =
+		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root);
 		dedup_ref_count = eliminator.Remove();
 		TrySwitchSingleToLeft(join);
@@ -1809,6 +1814,8 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	} while (filters_pushed);
 	RewriteDelimJoinsToCTEs(plan, *plan);
 	if (cte_deliminator_enabled) {
+		auto cte_deliminator_timer =
+		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDomainJoinEliminator generated_domain_join_eliminator(plan, generated_dedup_cte_indexes);
 		generated_domain_join_eliminator.Rewrite();
 	}
