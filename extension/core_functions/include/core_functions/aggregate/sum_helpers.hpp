@@ -29,6 +29,9 @@ struct SumState {
 	bool isset;
 	T value;
 
+	static constexpr const char *STATE_NAMES[] = {"isset", "value"};
+	using STATE_TYPE = StructStateType<STATE_NAMES, bool, T>;
+
 	void Combine(const SumState<T> &other) {
 		this->isset = other.isset || this->isset;
 		this->value += other.value;

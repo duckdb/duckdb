@@ -502,9 +502,7 @@ public:
 
 	template <class STATE_TYPE>
 	AggregateFunction &SetStructStateExport() {
-		return SetStructStateExport([](const BoundAggregateFunction &) {
-			return STATE_TYPE::GetLogicalType();
-		});
+		return SetStructStateExport([](const BoundAggregateFunction &) { return STATE_TYPE::GetLogicalType(); });
 	}
 
 	AggregateFunction &SetClusterCallback(aggregate_cluster_update_t cluster_update) {
@@ -574,9 +572,8 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
-			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return STATE::STATE_TYPE::GetLogicalType();
-			});
+			result.SetStructStateExport(
+			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(); });
 		}
 	}
 

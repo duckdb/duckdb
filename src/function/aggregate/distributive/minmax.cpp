@@ -24,6 +24,9 @@ template <class T>
 struct MinMaxState {
 	T value;
 	bool isset;
+
+	static constexpr const char *STATE_NAMES[] = {"value", "isset"};
+	using STATE_TYPE = StructStateType<STATE_NAMES, T, bool>;
 };
 
 template <class OP>
@@ -361,7 +364,9 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto state_export_type = function.GetStateTypeCallback();
 	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 
-	minmax_func.SetStructStateExport(state_export_type);
+	if (state_export_type) {
+		minmax_func.SetStructStateExport(state_export_type);
+	}
 	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
@@ -541,14 +546,14 @@ LogicalType GetExportStateType(const BoundAggregateFunction &function) {
 //---------------------------------------------------s
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
-	min.AddFunction(MinFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	min.AddFunction(MinFunction::GetFunction());
 	min.AddFunction(GetMinMaxNFunction<LessThan>().SetStructStateExport(GetExportStateType));
 	return min;
 }
 
 AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
-	max.AddFunction(MaxFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	max.AddFunction(MaxFunction::GetFunction());
 	max.AddFunction(GetMinMaxNFunction<GreaterThan>().SetStructStateExport(GetExportStateType));
 	return max;
 }
