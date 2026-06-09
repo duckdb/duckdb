@@ -1,0 +1,150 @@
+# name: test/sql/feature/test_feature_persistence.test
+# description: Test that features survive a database restart (WAL replay + checkpoint)
+# group: [feature]
+
+# Persist to disk so we can reload it
+load {TEST_DIR}/feature_persistence.db
+
+# ============================================================
+# Setup
+# ============================================================
+statement ok
+CREATE TABLE events (
+    customer VARCHAR,
+    value INTEGER,
+    event_time TIMESTAMP
+);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('x', 20, '2024-01-02 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00'),
+    ('y', 15, '2024-01-02 16:00:00'),
+    ('z',  5, '2024-01-01 06:00:00');
+
+statement ok
+CREATE FEATURE persisted ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH FULL
+    RETAIN 3
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# Refresh twice so current_version advances to 3
+query I
+REFRESH FEATURE persisted;
+----
+5
+
+query I
+REFRESH FEATURE persisted;
+----
+5
+
+# Sanity check before restart
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+persisted	3
+
+query I
+SELECT COUNT(*) FROM persisted;
+----
+5
+
+# ============================================================
+# Restart 1 — replay the WAL (no checkpoint yet)
+# ============================================================
+restart
+
+# Feature catalog entry survives, including current_version
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+persisted	3
+
+# Other metadata survives
+query IIIII
+SELECT source_table, entity_column, granularity, window_size, retain_versions
+FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+events	customer	DAY	7	3
+
+# The view still resolves to the current version
+query I
+SELECT COUNT(*) FROM persisted;
+----
+5
+
+query II rowsort
+SELECT customer, total_value FROM persisted WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+x	10
+y	30
+z	5
+
+# Version tables within the retain window survive
+query I
+SELECT COUNT(*) FROM persisted__v3;
+----
+5
+
+query I
+SELECT COUNT(*) FROM persisted__v2;
+----
+5
+
+# ============================================================
+# Force a checkpoint, then restart again to exercise the
+# checkpoint read path (not just WAL replay)
+# ============================================================
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+persisted	3
+
+query I
+SELECT COUNT(*) FROM persisted;
+----
+5
+
+# Refresh still works after reload — version advances from the persisted value
+query I
+REFRESH FEATURE persisted;
+----
+5
+
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+persisted	4
+
+query I
+SELECT COUNT(*) FROM persisted__v4;
+----
+5
+
+# ============================================================
+# DROP FEATURE cascade still works after reload
+# ============================================================
+statement ok
+DROP FEATURE persisted;
+
+query I
+SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'persisted';
+----
+0
+
+# The backing view was dropped via ownership cascade
+statement error
+SELECT * FROM persisted;
+----
+<REGEX>:.*does not exist.*
