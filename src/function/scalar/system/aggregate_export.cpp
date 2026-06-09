@@ -137,15 +137,17 @@ struct StoreOp {
 	}
 };
 
-// Serialize aggregate_optional<T> state buffers into a result vector, setting NULL when is_set=false.
+// Serialize an OptionalStateType<T> state buffer (flat: T value at +0, bool is_set at +sizeof(T))
+// into a result vector, setting NULL when is_set=false.
 struct StorePrimitiveOptionalOp {
 	template <class T>
 	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses, idx_t base_offset) {
 		auto dst = FlatVector::Writer<T>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			const auto opt = Load<aggregate_optional<T>>(addresses[i] + base_offset);
-			if (opt.is_set) {
-				dst.WriteValue(opt.value);
+			const auto value = Load<T>(addresses[i] + base_offset);
+			const bool is_set = Load<bool>(addresses[i] + base_offset + sizeof(T));
+			if (is_set) {
+				dst.WriteValue(value);
 			} else {
 				dst.WriteNull();
 			}
@@ -153,19 +155,21 @@ struct StorePrimitiveOptionalOp {
 	}
 };
 
-// Deserialize a nullable input vector into aggregate_optional<T> state buffer slots.
+// Deserialize a nullable input vector into OptionalStateType<T> state buffer slots
+// (flat: T value at +0, bool is_set at +sizeof(T)).
 struct LoadPrimitiveOptionalOp {
 	template <class T>
 	static void Operation(const Vector &input, idx_t count, data_ptr_t base_ptr, idx_t aligned_state_size) {
 		auto values = input.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
 			const auto entry = values[i];
-			auto &opt = *reinterpret_cast<aggregate_optional<T> *>(base_ptr + i * aligned_state_size);
+			auto *value_ptr = reinterpret_cast<T *>(base_ptr + i * aligned_state_size);
+			auto *is_set_ptr = reinterpret_cast<bool *>(base_ptr + i * aligned_state_size + sizeof(T));
 			if (entry.IsValid()) {
-				opt.value = entry.GetValue();
-				opt.is_set = true;
+				*value_ptr = entry.GetValue();
+				*is_set_ptr = true;
 			} else {
-				opt.is_set = false;
+				*is_set_ptr = false;
 			}
 		}
 	}

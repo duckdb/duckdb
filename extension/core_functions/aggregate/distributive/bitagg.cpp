@@ -11,7 +11,12 @@ namespace duckdb {
 namespace {
 
 template <class T>
-using BitState = aggregate_optional<T>;
+struct BitState {
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
+	T value;
+	bool is_set;
+};
 
 template <class OP>
 AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {

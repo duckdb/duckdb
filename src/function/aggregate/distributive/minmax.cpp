@@ -22,7 +22,12 @@ namespace duckdb {
 namespace {
 
 template <class T>
-using MinMaxState = aggregate_optional<T>;
+struct MinMaxState {
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
+	T value;
+	bool is_set;
+};
 
 template <class OP>
 static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
@@ -136,7 +141,9 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 using MinOperation = NumericMinMaxBase<Min>;
 using MaxOperation = NumericMinMaxBase<Max>;
 
-struct MinMaxStringState : aggregate_optional<string_t> {
+struct MinMaxStringState {
+	string_t value;
+	bool is_set;
 	void Destroy() {
 		if (is_set && !value.IsInlined()) {
 			delete[] value.GetData();

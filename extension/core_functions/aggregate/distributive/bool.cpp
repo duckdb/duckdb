@@ -5,7 +5,11 @@ namespace duckdb {
 
 namespace {
 
-using BoolState = aggregate_optional<bool>;
+struct BoolState {
+	using STATE_TYPE = OptionalStateType<bool>;
+	bool value;
+	bool is_set;
+};
 
 template <class REDUCE_OP, bool INIT_VALUE>
 struct BoolAggregate {

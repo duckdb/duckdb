@@ -25,7 +25,12 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 }
 
 template <class T>
-using SumState = aggregate_optional<T>;
+struct SumState {
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
+	T value;
+	bool is_set;
+};
 
 struct KahanSumState {
 	static constexpr const char *STATE_NAMES[] = {"is_set", "value", "err"};
