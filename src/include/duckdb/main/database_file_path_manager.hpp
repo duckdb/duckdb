@@ -23,7 +23,7 @@ class DatabaseManager;
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
 struct DatabasePathInfo {
-	DatabasePathInfo(DatabaseManager &manager, Identifier name_p, AccessMode access_mode);
+	DatabasePathInfo(DatabaseManager &manager, const Identifier &name_p, AccessMode access_mode);
 
 	string name;
 	AccessMode access_mode;

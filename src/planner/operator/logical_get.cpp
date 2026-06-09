@@ -431,7 +431,7 @@ vector<TableIndex> LogicalGet::GetTableIndex() const {
 string LogicalGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index.index);
+		return StringUtil::Upper(function.name.GetIdentifierName()) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return StringUtil::Upper(function.name.GetIdentifierName());

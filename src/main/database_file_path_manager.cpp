@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-DatabasePathInfo::DatabasePathInfo(DatabaseManager &manager, Identifier name_p, AccessMode access_mode)
-    : name(std::move(name_p)), access_mode(access_mode) {
+DatabasePathInfo::DatabasePathInfo(DatabaseManager &manager, const Identifier &name_p, AccessMode access_mode)
+    : name(name_p.GetIdentifierName()), access_mode(access_mode) {
 	attached_databases.insert(manager);
 }
 

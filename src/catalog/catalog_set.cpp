@@ -634,7 +634,7 @@ CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transact
 				return EntryLookup {nullptr, EntryLookup::FailureReason::DELETED};
 			}
 		}
-		D_ASSERT(StringUtil::CIEquals(name, current.name));
+		D_ASSERT(current.name == name);
 		return EntryLookup {&current, EntryLookup::FailureReason::SUCCESS};
 	}
 	auto default_entry = CreateDefaultEntry(transaction, name, read_lock);
@@ -668,7 +668,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 	auto &to_be_removed_node = entry.Parent();
 	to_be_removed_node.Rollback(entry);
 
-	D_ASSERT(StringUtil::CIEquals(entry.name, to_be_removed_node.name));
+	D_ASSERT(entry.name == to_be_removed_node.name);
 	if (!to_be_removed_node.HasParent()) {
 		to_be_removed_node.Child().SetAsRoot();
 	}

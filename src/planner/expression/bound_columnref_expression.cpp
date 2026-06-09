@@ -38,7 +38,7 @@ bool BoundColumnRefExpression::Equals(const BaseExpression &other_p) const {
 Identifier BoundColumnRefExpression::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Format("%s (%s)", binding.ToString(), return_type.ToString());
+		return Identifier(StringUtil::Format("%s (%s)", binding.ToString(), return_type.ToString()));
 	}
 #endif
 	return Expression::GetName();

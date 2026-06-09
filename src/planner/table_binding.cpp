@@ -230,7 +230,7 @@ const vector<ColumnIndex> &TableBinding::GetBoundColumnIds() const {
 		// assert that all entries in the bound_column_ids are unique
 		D_ASSERT(result.second);
 		auto it = std::find_if(name_map.begin(), name_map.end(),
-		                       [&](const std::pair<const string, idx_t> &it) { return it.second == id; });
+		                       [&](const std::pair<const Identifier, idx_t> &it) { return it.second == id; });
 		// assert that every id appears in the name_map
 		D_ASSERT(it != name_map.end());
 		// the order that they appear in is not guaranteed to be sequential

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string_util.hpp"
 
