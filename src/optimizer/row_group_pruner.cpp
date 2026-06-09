@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -88,18 +89,39 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 bool RowGroupPruner::TrySetBareScanOrderHint(const LogicalOrder &logical_order, optional_ptr<LogicalGet> logical_get,
                                              optional_idx row_limit, optional_idx row_offset) const {
 	// FindLogicalGet bails when the scan lacks `filter_pushdown` (an
-	// unrelated capability). Walk single-child to the get directly.
+	// unrelated capability). Walk single-child to the get directly, and
+	// follow the order col-ref's binding through any intermediate projections.
+	// If a projection slot holds a derived expression (e.g. `2 * score`), the
+	// scan can't honor it as a sort key, so bail.
+	ColumnBinding binding = logical_order.orders[0].expression->Cast<BoundColumnRefExpression>().binding;
 	if (!logical_get) {
 		reference<LogicalOperator> cur = *logical_order.children[0];
 		while (cur.get().type != LogicalOperatorType::LOGICAL_GET) {
 			if (cur.get().children.size() != 1) {
 				return false;
 			}
+			if (cur.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				auto &proj = cur.get().Cast<LogicalProjection>();
+				if (proj.table_index == binding.table_index) {
+					const auto idx = binding.column_index.GetIndex();
+					if (idx >= proj.expressions.size()) {
+						return false;
+					}
+					auto &slot = *proj.expressions[idx];
+					if (slot.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+						return false;
+					}
+					binding = slot.Cast<BoundColumnRefExpression>().binding;
+				}
+			}
 			cur = *cur.get().children[0];
 		}
 		logical_get = cur.get().Cast<LogicalGet>();
 	}
 	if (!logical_get->function.set_scan_order) {
+		return false;
+	}
+	if (binding.table_index != logical_get->table_index) {
 		return false;
 	}
 	if (logical_order.orders.size() != 1 || logical_get->table_filters.HasFilters()) {
