@@ -533,11 +533,12 @@ AggregateFunction GetMinMaxNFunction() {
 	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-LogicalType GetExportStateType(const BoundAggregateFunction &function) {
-	auto struct_children_types = child_list_t<LogicalType> {};
+AggregateStateLayout GetExportStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> struct_children_types;
 	struct_children_types.emplace_back("value", function.GetReturnType());
 	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
-	return LogicalType::STRUCT(std::move(struct_children_types));
+	return AggregateStateLayout(LogicalType::STRUCT(std::move(struct_children_types)),
+	                            AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 } // namespace
