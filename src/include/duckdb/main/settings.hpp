@@ -1168,6 +1168,17 @@ struct ForceMbedtlsUnsafeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ForceParallelUnionAllSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_parallel_union_all";
+	static constexpr const char *Description =
+	    "Force UNION ALL branches to execute in parallel. Can substantially increase memory usage.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ForceVariantShredding {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "force_variant_shredding";

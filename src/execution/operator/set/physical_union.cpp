@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
-
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -34,6 +34,7 @@ static bool ContainsSink(PhysicalOperator &op) {
 void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
+	const bool force_parallel_union_all = Settings::Get<ForceParallelUnionAllSetting>(current.GetClientContext());
 
 	// order matters if any of the downstream operators are order dependent,
 	// or if the sink preserves order, but does not support batch indices to do so
@@ -50,7 +51,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			order_matters = true;
 		}
 		auto partition_info = sink->RequiredPartitionInfo();
-		if (partition_info.batch_index) {
+		if (partition_info.batch_index && !force_parallel_union_all) {
 			order_matters = true;
 		}
 		if (!sink->ParallelSink()) {
@@ -66,6 +67,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 	// continue with the current pipeline
 	children[0].get().BuildPipelines(current, meta_pipeline);
+
 	bool can_saturate_threads =
 	    ContainsSink(children[0].get()) && children[0].get().CanSaturateThreads(current.GetClientContext());
 	for (idx_t i = 1; i < children.size(); i++) {
@@ -98,7 +100,6 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		}
 	}
 }
-
 vector<const_reference<PhysicalOperator>> PhysicalUnion::GetSources() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
