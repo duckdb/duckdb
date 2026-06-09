@@ -1432,6 +1432,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		auto flags = FileFlags::FILE_FLAGS_READ;
 		if (ShouldAndCanPrefetch(context, *file_handle)) {
 			state.prefetch_mode = true;
+			flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 			if (file_handle->IsRemoteFile()) {
 				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 			}
