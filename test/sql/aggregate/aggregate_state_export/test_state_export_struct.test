@@ -346,15 +346,15 @@ query III nosort res8b
 SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+query I
+SELECT (bit_and(42) export_state)::UINTEGER;
 ----
-{'is_set': true, 'value': 42}
+42
 
-query T
-SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+query I
+SELECT (bit_xor(100) export_state)::UBIGINT;
 ----
-{'is_set': true, 'value': 100}
+100
 
 # kurtosis and kurtosis_pop
 
