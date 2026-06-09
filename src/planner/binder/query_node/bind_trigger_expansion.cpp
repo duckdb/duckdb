@@ -18,10 +18,19 @@
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace duckdb {
+
+// Defined in binder.cpp — rejects 'excluded'-qualified columns in RETURNING, matching the no-trigger path.
+void VerifyNotExcluded(const ParsedExpression &root_expr);
 
 unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
                                                      TriggerEventType event_type) {
@@ -149,93 +158,69 @@ static string GetTableAlias(const QueryNode &node, const string &fallback) {
 	}
 }
 
-// Alias the base CTE to the target table name so table-qualified RETURNING refs resolve.
-static unique_ptr<SelectNode> BuildTriggerOuterSelect(const QueryNode &node, const TableCatalogEntry &table,
-                                                      const string &base_cte_name,
-                                                      vector<unique_ptr<ParsedExpression>> returning_list) {
-	auto outer = make_uniq<SelectNode>();
-	if (returning_list.empty()) {
-		outer->select_list.push_back(
-		    make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
-	} else {
-		outer->select_list = std::move(returning_list);
-	}
-	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->table_name = base_cte_name;
-	from_ref->alias = GetTableAlias(node, table.name);
-	outer->from_table = std::move(from_ref);
-	return outer;
-}
-
-// Returns the canonical virtual-column name `colref` refers to on the target table
-// (e.g. "rowid"), or empty if it is not a virtual-column ref. Mirrors no-trigger
-// binding: when an alias is in effect only the alias qualifies.
-static string MatchVirtualColumn(const ColumnRefExpression &colref, const virtual_column_map_t &virtual_cols,
-                                 const string &target_alias) {
-	auto &cn = colref.ColumnNames();
-	if (cn.empty()) {
+// The raw RETURNING alias as the no-trigger DML paths pass it to BindReturning: the
+// table_ref alias if present, else empty (BindReturning then derives catalog.schema.table
+// from the table entry, so schema-qualified RETURNING columns resolve identically).
+static string GetReturningAlias(const QueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::INSERT_QUERY_NODE:
+		return node.Cast<InsertQueryNode>().table_ref ? node.Cast<InsertQueryNode>().table_ref->alias : string();
+	case QueryNodeType::UPDATE_QUERY_NODE:
+		return node.Cast<UpdateQueryNode>().table ? node.Cast<UpdateQueryNode>().table->alias : string();
+	case QueryNodeType::DELETE_QUERY_NODE:
+		return node.Cast<DeleteQueryNode>().table ? node.Cast<DeleteQueryNode>().table->alias : string();
+	default:
 		return string();
 	}
-	for (auto &vc : virtual_cols) {
-		if (StringUtil::CIEquals(cn.back(), vc.second.name) &&
-		    (cn.size() == 1 || StringUtil::CIEquals(cn[cn.size() - 2], target_alias))) {
-			return vc.second.name;
-		}
-	}
-	return string();
 }
 
-// Project virtual columns (rowid, etc.) referenced in the user's RETURNING list into the inner
-// DML's RETURNING so the base CTE materialises them by name.  Returns the projected names so
-// transition-table alias stars can exclude them.  rowid is only supported on DELETE (consistent
-// with the no-trigger path).
-static case_insensitive_set_t InjectVirtualColumns(SelectNode &outer,
-                                                   vector<unique_ptr<ParsedExpression>> &base_returning,
-                                                   const TableCatalogEntry &table, const QueryNode &node) {
-	auto virtual_cols = table.GetVirtualColumns();
-	auto target_alias = GetTableAlias(node, table.name);
+// Virtual columns (rowid, …) exposed to RETURNING for this DML — mirrors the no-trigger path,
+// where only DELETE passes virtual columns to BindReturning (INSERT/UPDATE error on rowid).
+static virtual_column_map_t ReturningVirtualColumns(const QueryNode &node, const TableCatalogEntry &table) {
+	if (node.type == QueryNodeType::DELETE_QUERY_NODE) {
+		return table.GetVirtualColumns();
+	}
+	return virtual_column_map_t();
+}
 
-	// Rewrite each virtual-column ref to its bare name (dropping catalog/schema/table
-	// qualifiers) so it binds against the base-CTE column we project below.
-	case_insensitive_set_t injected_names;
-	for (auto &expr : outer.select_list) {
-		ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(*expr, [&](ColumnRefExpression &colref) {
-			auto vcn = MatchVirtualColumn(colref, virtual_cols, target_alias);
-			if (!vcn.empty()) {
-				injected_names.insert(vcn);
-				colref.ColumnNamesMutable() = {vcn};
+// Collect the virtual columns the user's RETURNING list references, so the base CTE can
+// materialise them by name (the base DML's RETURNING * does not include rowid).  Matched
+// permissively on the trailing identifier — the only table in RETURNING scope is the target,
+// so any `rowid`-named ref means the target's rowid; over-matching is harmless (the column is
+// merely materialised, and ReturningBinder still rejects a genuinely bad qualifier).  Returns
+// (virtual-column id, name) pairs in a stable order, deduplicated.
+static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                               const virtual_column_map_t &virtual_cols,
+                                                               const TableCatalogEntry &table) {
+	vector<pair<column_t, string>> result;
+	if (virtual_cols.empty()) {
+		return result;
+	}
+	// A virtual column shadowed by a real column of the same name is NOT virtual here — RETURNING *
+	// already materialises the real column and ReturningBinder binds the ref to it.  Injecting would
+	// duplicate the name and the transition-alias EXCLUDE would drop the real column.
+	case_insensitive_set_t real_names;
+	for (auto &col : table.GetColumns().Logical()) {
+		real_names.insert(col.Name());
+	}
+	unordered_set<column_t> seen;
+	for (auto &expr : returning_list) {
+		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(*expr, [&](const ColumnRefExpression &cr) {
+			auto &cn = cr.ColumnNames();
+			if (cn.empty()) {
+				return;
+			}
+			for (auto &vc : virtual_cols) {
+				if (real_names.find(vc.second.name) != real_names.end()) {
+					continue;
+				}
+				if (StringUtil::CIEquals(cn.back(), vc.second.name) && seen.insert(vc.first).second) {
+					result.emplace_back(vc.first, vc.second.name);
+				}
 			}
 		});
 	}
-
-	// Project each referenced virtual column into the inner DML's RETURNING, and
-	// exclude it from any RETURNING * so it is not emitted twice.
-	for (auto &vcn : injected_names) {
-		base_returning.push_back(make_uniq<ColumnRefExpression>(vcn));
-		for (auto &expr : outer.select_list) {
-			ParsedExpressionIterator::VisitExpressionMutable<StarExpression>(
-			    *expr, [&](StarExpression &star) { star.ExcludeListMutable().insert(QualifiedColumnName(vcn)); });
-		}
-	}
-	return injected_names;
-}
-
-static unique_ptr<CommonTableExpressionInfo> BuildBaseCTE(const QueryNode &node, SelectNode &outer,
-                                                          const TableCatalogEntry &table, bool has_returning,
-                                                          case_insensitive_set_t &injected_names_out) {
-	auto base_cte_node = node.Copy();
-	auto &base_returning = GetDMLReturningList(*base_cte_node);
-	base_returning.push_back(make_uniq<StarExpression>());
-
-	if (has_returning) {
-		injected_names_out = InjectVirtualColumns(outer, base_returning, table, node);
-	}
-
-	auto cte = make_uniq<CommonTableExpressionInfo>();
-	cte->query_node = std::move(base_cte_node);
-	cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
-	cte->is_trigger_generated = true;
-	return cte;
+	return result;
 }
 
 static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
@@ -263,86 +248,28 @@ static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<
 	}
 }
 
-// Rare path: a compound RETURNING expression containing a virtual-column ref (e.g. rowid + 1)
-// would otherwise bind rowid as a plain CTE column in the outer SELECT, folding the implicit
-// cast and diverging from the no-trigger column name.  For each such expression, bind a copy
-// against the real DML table in a child binder to discover the canonical name, then pin it as
-// an explicit alias.  The child binder shares global_binder_state, so trigger re-expansion for
-// the same table is suppressed.  Errors are ignored here — the subsequent Bind(*outer) hits and
-// reports the same one.
-static void PinVirtualColumnExpressionNames(Binder &binder, ClientContext &context, const QueryNode &node,
-                                            const TableCatalogEntry &table,
-                                            vector<unique_ptr<ParsedExpression>> &returning_list) {
-	auto virtual_cols = table.GetVirtualColumns();
-	if (virtual_cols.empty()) {
-		return;
-	}
-	auto target_alias = GetTableAlias(node, table.name);
-
-	auto contains_vc_ref = [&](const ParsedExpression &expr) {
-		bool found = false;
-		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &cr) {
-			if (!MatchVirtualColumn(cr, virtual_cols, target_alias).empty()) {
-				found = true;
-			}
-		});
-		return found;
-	};
-
-	vector<idx_t> fix_indices;
-	for (idx_t i = 0; i < returning_list.size(); i++) {
-		auto &expr = returning_list[i];
-		auto ec = expr->GetExpressionClass();
-		// Plain colrefs and stars keep their canonical name without help; aliased exprs are pinned already.
-		if (expr->HasAlias() || ec == ExpressionClass::COLUMN_REF || ec == ExpressionClass::STAR) {
-			continue;
-		}
-		if (contains_vc_ref(*expr)) {
-			fix_indices.push_back(i);
-		}
-	}
-	if (fix_indices.empty()) {
-		return;
-	}
-
-	auto temp_node = node.Copy();
-	auto &temp_returning = GetDMLReturningList(*temp_node);
-	for (auto idx : fix_indices) {
-		temp_returning.push_back(returning_list[idx]->Copy());
-	}
-	try {
-		auto name_binder = Binder::CreateBinder(context, optional_ptr<Binder>(&binder));
-		auto bound_stmt = name_binder->Bind(*temp_node);
-		D_ASSERT(bound_stmt.names.size() == fix_indices.size());
-		for (idx_t j = 0; j < fix_indices.size(); j++) {
-			returning_list[fix_indices[j]]->SetAlias(bound_stmt.names[j]);
-		}
-	} catch (const Exception &) {
-		// Name-discovery is best-effort; Bind(*outer) will surface any real error.
-	}
-}
-
-BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
-                                      const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
-                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers) {
-	D_ASSERT(!before_triggers.empty() || !after_triggers.empty());
-	D_ASSERT(node.type == QueryNodeType::INSERT_QUERY_NODE || node.type == QueryNodeType::UPDATE_QUERY_NODE ||
-	         node.type == QueryNodeType::DELETE_QUERY_NODE);
-
-	// Drain before copying so the copy's returning_list starts empty.
-	auto user_returning_list = std::move(GetDMLReturningList(node));
-	bool has_returning = !user_returning_list.empty();
-
+// Build the trigger CTE chain as a SelectNode: BEFORE bodies → base DML (RETURNING *, plus any
+// referenced virtual columns) → AFTER bodies.  The outer projection drives execution; for the
+// RETURNING case it is a plain `SELECT *` whose output we rebind through ReturningBinder below.
+static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const TableCatalogEntry &table,
+                                                const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+                                                const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
+                                                const string &uuid_suffix, const string &base_cte_name,
+                                                bool has_returning,
+                                                const vector<pair<column_t, string>> &injected_virtuals) {
+	auto outer = make_uniq<SelectNode>();
 	if (has_returning) {
-		PinVirtualColumnExpressionNames(*this, context, node, table, user_returning_list);
+		outer->select_list.push_back(make_uniq<StarExpression>());
+	} else {
+		outer->select_list.push_back(
+		    make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	}
+	auto from_ref = make_uniq<BaseTableRef>();
+	from_ref->table_name = base_cte_name;
+	from_ref->alias = GetTableAlias(node, table.name);
+	outer->from_table = std::move(from_ref);
 
-	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
-	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
-
-	auto outer = BuildTriggerOuterSelect(node, table, base_cte_name, std::move(user_returning_list));
-
-	// CTE order: BEFORE bodies → base DML → AFTER bodies.
+	// BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE time).
 	for (idx_t i = 0; i < before_triggers.size(); i++) {
 		auto body_cte_name = string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
@@ -352,16 +279,136 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
 
+	// Base CTE: the DML with RETURNING * (full rows for transition tables) plus referenced
+	// virtual columns appended so they are materialised for the final RETURNING projection.
+	auto base_node = node.Copy();
+	auto &base_returning = GetDMLReturningList(*base_node);
+	base_returning.push_back(make_uniq<StarExpression>());
 	case_insensitive_set_t injected_names;
-	outer->cte_map.map[base_cte_name] = BuildBaseCTE(node, *outer, table, has_returning, injected_names);
+	for (auto &vc : injected_virtuals) {
+		base_returning.push_back(make_uniq<ColumnRefExpression>(vc.second));
+		injected_names.insert(vc.second);
+	}
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = std::move(base_node);
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
+	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
+	// AFTER bodies — transition aliases exclude injected virtual columns so trigger bodies that
+	// SELECT * over the transition table do not see implementation-level columns.
 	AddAfterTriggerCTEs(*outer, after_triggers, base_cte_name, uuid_suffix, injected_names);
+	return outer;
+}
 
-	auto bound = Bind(*outer);
+BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
+                                      const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+                                      const vector<const_reference<TriggerCatalogEntry>> &after_triggers) {
+	D_ASSERT(!before_triggers.empty() || !after_triggers.empty());
+	D_ASSERT(node.type == QueryNodeType::INSERT_QUERY_NODE || node.type == QueryNodeType::UPDATE_QUERY_NODE ||
+	         node.type == QueryNodeType::DELETE_QUERY_NODE);
+
+	// Drain before copying so the base CTE copy's returning_list starts empty.
+	auto user_returning_list = std::move(GetDMLReturningList(node));
+	bool has_returning = !user_returning_list.empty();
+
+	auto virtual_columns = ReturningVirtualColumns(node, table);
+	auto injected_virtuals = has_returning ? ReferencedVirtualColumns(user_returning_list, virtual_columns, table)
+	                                       : vector<pair<column_t, string>>();
+
+	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
+	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
+
+	auto outer = BuildTriggerChain(node, table, before_triggers, after_triggers, uuid_suffix, base_cte_name,
+	                               has_returning, injected_virtuals);
+	auto chain = Bind(*outer);
+
+	if (!has_returning) {
+		auto &properties = GetStatementProperties();
+		properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
+		return chain;
+	}
+
+	// Re-project the materialised chain output under a stable index.  The base CTE's RETURNING *
+	// produces every logical column in order, then the injected virtual columns — so we register an
+	// identity base-table binding (logical column i → child position i) below.
+	auto base_index = GenerateTableIndex();
+	auto child_bindings = chain.plan->GetColumnBindings();
+	D_ASSERT(child_bindings.size() == chain.types.size());
+	vector<unique_ptr<Expression>> passthrough;
+	for (idx_t i = 0; i < child_bindings.size(); i++) {
+		passthrough.push_back(make_uniq<BoundColumnRefExpression>(chain.names[i], chain.types[i], child_bindings[i]));
+	}
+	auto base_proj = make_uniq<LogicalProjection>(base_index, std::move(passthrough));
+	base_proj->AddChild(std::move(chain.plan));
+
+	// Bind the user's RETURNING list as the no-trigger path does — ReturningBinder over a base-table
+	// binding of the real table.  This rejects aggregates/subqueries/windows, resolves schema/catalog-
+	// qualified columns, and decides virtual-vs-real rowid by the actual binding.  Unlike the no-trigger
+	// BindReturning, the bound column ids are the identity over all logical columns (generated included),
+	// because our child materialises every logical column in order rather than the DML's compacted shape.
+	auto returning_binder_owner = Binder::CreateBinder(context);
+	vector<string> col_names;
+	vector<LogicalType> col_types;
+	vector<ColumnIndex> bound_columns;
+	idx_t logical_count = 0;
+	for (auto &col : table.GetColumns().Logical()) {
+		col_names.push_back(col.Name());
+		col_types.push_back(col.Type());
+		bound_columns.emplace_back(logical_count);
+		logical_count++;
+	}
+	returning_binder_owner->bind_context.AddBaseTable(base_index, GetReturningAlias(node), col_names, col_types,
+	                                                  bound_columns, table, std::move(virtual_columns));
+	ReturningBinder returning_binder(*returning_binder_owner, context);
+
+	vector<unique_ptr<ParsedExpression>> expanded_returning;
+	returning_binder_owner->ExpandStarExpressions(user_returning_list, expanded_returning);
+	if (expanded_returning.empty()) {
+		throw BinderException("RETURNING list is empty!");
+	}
+	BoundStatement result;
+	vector<unique_ptr<Expression>> proj_exprs;
+	for (auto &returning_expr : expanded_returning) {
+		VerifyNotExcluded(*returning_expr);
+		LogicalType result_type;
+		auto bound_expr = returning_binder.Bind(returning_expr, &result_type);
+		result.names.push_back(bound_expr->GetName());
+		result.types.push_back(result_type);
+		proj_exprs.push_back(std::move(bound_expr));
+	}
+
+	// Virtual columns bind to a sentinel column id (e.g. rowid → ROW_ID), but the chain materialised
+	// them as ordinary trailing columns at logical_count + k.  Remap those bindings to the real positions.
+	if (!injected_virtuals.empty()) {
+		unordered_map<column_t, idx_t> remap;
+		for (idx_t k = 0; k < injected_virtuals.size(); k++) {
+			remap[injected_virtuals[k].first] = logical_count + k;
+		}
+		for (auto &expr : proj_exprs) {
+			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+			    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+				    auto &binding = colref.BindingMutable();
+				    if (binding.table_index != base_index) {
+					    return;
+				    }
+				    auto it = remap.find(binding.column_index.GetIndexUnsafe());
+				    if (it != remap.end()) {
+					    binding.column_index = ProjectionIndex(it->second);
+				    }
+			    });
+		}
+	}
+
+	auto returning_projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(proj_exprs));
+	returning_projection->AddChild(std::move(base_proj));
+	result.plan = std::move(returning_projection);
+
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	properties.return_type = has_returning ? StatementReturnType::QUERY_RESULT : StatementReturnType::CHANGED_ROWS;
-	return bound;
+	properties.return_type = StatementReturnType::QUERY_RESULT;
+	return result;
 }
 
 } // namespace duckdb
