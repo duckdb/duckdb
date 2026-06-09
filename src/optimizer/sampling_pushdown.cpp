@@ -11,8 +11,9 @@ unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperato
 		auto &sample_op = op->Cast<LogicalSample>();
 		auto &get = op->children[0]->Cast<LogicalGet>();
 		const auto &sample_options = *sample_op.sample_options;
+		const bool has_filters = get.table_filters.HasFilters() || get.dynamic_filters;
 		const bool can_push_system_sample =
-		    get.function.sampling_pushdown && sample_options.method == SampleMethod::SYSTEM_SAMPLE;
+		    get.function.sampling_pushdown && sample_options.method == SampleMethod::SYSTEM_SAMPLE && !has_filters;
 
 		if (can_push_system_sample) {
 			const bool is_row_count_sampling = !sample_options.is_percentage;
