@@ -265,7 +265,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 			}
 			if (!correlated_columns.empty()) {
 				return_types.emplace_back(LogicalType::BIGINT);
-				return_names.emplace_back(Identifier(ordinality_column_name));
+				return_names.emplace_back(ordinality_column_name);
 				D_ASSERT(return_names.size() == return_types.size());
 				ordinality_column_id = return_types.size() - 1;
 			}
