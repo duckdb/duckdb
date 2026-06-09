@@ -186,6 +186,61 @@ static bool FilterReferencesDelimInput(LogicalComparisonJoin &delim_join, Expres
 	return ChildContainsBindings(*delim_join.children[0], filter_bindings);
 }
 
+static bool ExpressionReferencesChild(Expression &expr, LogicalOperator &child) {
+	column_binding_set_t expr_bindings;
+	if (!GetExpressionColumnBindings(expr, expr_bindings)) {
+		return false;
+	}
+	if (expr_bindings.empty()) {
+		return false;
+	}
+	column_binding_set_t child_bindings;
+	for (auto &binding : child.GetColumnBindings()) {
+		child_bindings.insert(binding);
+	}
+	for (auto &binding : expr_bindings) {
+		if (child_bindings.find(binding) != child_bindings.end()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ExpressionNullPropagatesForChild(Expression &expr, LogicalOperator &child) {
+	return ExpressionReferencesChild(expr, child) && expr.PropagatesNullValues();
+}
+
+static bool ExpressionNullRejectsDelimJoinRHS(Expression &expr, LogicalComparisonJoin &delim_join) {
+	auto &rhs = *delim_join.children[1];
+	if (!ExpressionReferencesChild(expr, rhs)) {
+		return false;
+	}
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		return expr.PropagatesNullValues();
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+	    expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		bool null_propagating_child = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			null_propagating_child = null_propagating_child || ExpressionNullPropagatesForChild(child, rhs);
+		});
+		return null_propagating_child;
+	}
+	return false;
+}
+
+static bool FilterNullRejectsDelimJoinRHS(LogicalFilter &filter, LogicalComparisonJoin &delim_join) {
+	if (filter.HasProjectionMap() || delim_join.join_type != JoinType::SINGLE) {
+		return false;
+	}
+	for (auto &expr : filter.expressions) {
+		if (ExpressionNullRejectsDelimJoinRHS(*expr, delim_join)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
 	auto &filter = plan->Cast<LogicalFilter>();
 	if (filter.HasProjectionMap()) {
@@ -1610,57 +1665,57 @@ bool GeneratedDomainJoinEliminator::Rewrite() {
 	return changed;
 }
 
-static void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
-	if (delim_join.join_type != JoinType::SINGLE) {
-		return;
+static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
+	if (join.join_type != JoinType::SINGLE) {
+		return false;
 	}
 
 	vector<ColumnBinding> join_bindings;
-	for (const auto &cond : delim_join.conditions) {
+	for (const auto &cond : join.conditions) {
 		if (!IsEqualityJoinCondition(cond)) {
-			return;
+			return false;
 		}
 		if (!cond.IsComparison() || cond.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			return;
+			return false;
 		}
 		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
 		join_bindings.emplace_back(colref.Binding());
 	}
 
-	reference<LogicalOperator> current_op = *delim_join.children[1];
+	reference<LogicalOperator> current_op = *join.children[1];
 	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		if (current_op.get().children.size() != 1) {
-			return;
+			return false;
 		}
 
 		switch (current_op.get().type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 			if (!FindAndReplaceBindings(join_bindings, current_op.get().expressions,
 			                            current_op.get().GetColumnBindings())) {
-				return;
+				return false;
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_FILTER:
 			break;
 		default:
-			return;
+			return false;
 		}
 		current_op = *current_op.get().children[0];
 	}
 
 	auto &aggr = current_op.get().Cast<LogicalAggregate>();
 	if (!aggr.grouping_functions.empty()) {
-		return;
+		return false;
 	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		if (std::find(join_bindings.begin(), join_bindings.end(),
 		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
-			return;
+			return false;
 		}
 	}
 
-	delim_join.join_type = JoinType::LEFT;
+	return true;
 }
 
 DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
@@ -1670,7 +1725,8 @@ DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	    config.options.disabled_optimizers.find(OptimizerType::DELIMINATOR) == config.options.disabled_optimizers.end();
 }
 
-void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root) {
+void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+                                                     bool null_rejecting_filter_above) {
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (join.delim_flipped) {
 		throw InternalException("Flatten dependent joins - flipped delim join CTE rewrite not supported");
@@ -1690,7 +1746,9 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root);
 		dedup_ref_count = eliminator.Remove();
-		TrySwitchSingleToLeft(join);
+		if (SingleJoinRHSIsDeduplicated(join)) {
+			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
+		}
 	}
 	if (dedup_ref_count == 0) {
 		join.duplicate_eliminated_columns.clear();
@@ -1807,14 +1865,22 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	plan = std::move(cte);
 }
 
-void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root) {
+void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+                                                   bool null_rejecting_filter_above) {
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
-		RewriteDelimJoinsToCTEs(child, rewrite_root);
+		bool child_null_rejecting_filter_above = false;
+		if (plan->type == LogicalOperatorType::LOGICAL_FILTER &&
+		    child->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+			auto &filter = plan->Cast<LogicalFilter>();
+			auto &delim_join = child->Cast<LogicalComparisonJoin>();
+			child_null_rejecting_filter_above = FilterNullRejectsDelimJoinRHS(filter, delim_join);
+		}
+		RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above);
 		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		MaterializeDelimJoinAsCTE(plan, rewrite_root);
+		MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above);
 	}
 }
 
