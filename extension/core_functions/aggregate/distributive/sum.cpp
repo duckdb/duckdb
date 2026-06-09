@@ -26,10 +26,7 @@ struct SumSetOperation {
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
-		if (!state.is_set) {
-			state.value = typename STATE::value_type {};
-			state.is_set = true;
-		}
+		state.is_set = true;
 	}
 	template <class STATE>
 	static typename STATE::value_type &GetRef(STATE &state) {
@@ -56,6 +53,9 @@ template <class BASE>
 struct ClusteredSumStateCopy : public BASE, public ClusteredStateCopy {
 	template <class STATE>
 	static void FlushClusteredLocal(STATE &state, STATE &local, bool saw_value) {
+		if (saw_value) {
+			local.is_set = true;
+		}
 		state = local;
 	}
 };
@@ -64,19 +64,11 @@ template <class ADD_OP>
 struct ClusteredAddOp {
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		if (!local.is_set) {
-			local.value = typename STATE::value_type {};
-			local.is_set = true;
-		}
 		ADD_OP::AddNumber(local.value, input);
 	}
 
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		if (!local.is_set) {
-			local.value = typename STATE::value_type {};
-			local.is_set = true;
-		}
 		ADD_OP::AddConstant(local.value, input, count);
 	}
 };
@@ -115,10 +107,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 			if (run_count == 0) {
 				continue;
 			}
-			if (!state.is_set) {
-				state.value = hugeint_t(0);
-				state.is_set = true;
-			}
+			state.is_set = true;
 			int64_t local64 = 0;
 			auto add_row = [&](idx_t idx) {
 				const int64_t v = static_cast<int64_t>(vals[idx]);
@@ -175,16 +164,12 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				}
 			}
 			if (local64 != 0) {
-				if (!state.is_set) {
-					state.value = hugeint_t(0);
-					state.is_set = true;
-				}
+				state.is_set = true;
 				state.value = Hugeint::Add(state.value, local64);
 			} else if (!state.is_set) { // rare: we added 0 -- were all values NULL?
 				for (idx_t k = 0; k < run_count; k++) {
 					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
 					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
-						state.value = hugeint_t(0);
 						state.is_set = true;
 						break;
 					}

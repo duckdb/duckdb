@@ -10,29 +10,32 @@ namespace duckdb {
 
 namespace {
 
+template <class T>
+using BitState = aggregate_optional<T>;
+
 template <class OP>
 AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint8_t>, int8_t, int8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::SMALLINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint16_t>, int16_t, int16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, int16_t, int16_t, OP>(type, type);
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint32_t>, int32_t, int32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, int32_t, int32_t, OP>(type, type);
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint64_t>, int64_t, int64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case LogicalTypeId::UTINYINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
 	case LogicalTypeId::USMALLINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
 	case LogicalTypeId::UINTEGER:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case LogicalTypeId::UHUGEINT:
-		return AggregateFunction::UnaryAggregate<aggregate_optional<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	default:
 		throw InternalException("Unimplemented bitfield type for unary aggregate");
 	}
@@ -144,7 +147,7 @@ struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 	}
 };
 
-using BitStringState = aggregate_optional<string_t>;
+using BitStringState = BitState<string_t>;
 
 struct BitStringBitwiseOperation : public BitwiseOperation {
 	template <class STATE>
