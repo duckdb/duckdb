@@ -55,7 +55,10 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			update_expressions.push_back(bound_defaults[column.StorageOid()]->Copy());
+			auto bound_default = bound_defaults[column.StorageOid()]->Copy();
+			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_default));
+			update_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(proj_index, expr_index)));
 		} else {
 			UpdateBinder binder(*expr_binder_ptr, context);
 			binder.target_type = table.GetExpectedTypeForInsert(column);

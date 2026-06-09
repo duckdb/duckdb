@@ -656,6 +656,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		root = CastLogicalOperatorToTypes(source_types, target_types, std::move(root_select.plan));
 	} else {
 		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
+		if (node.default_values) {
+			root = ResolveInputProjection(*insert, column_index_map, std::move(root), {});
+		}
 	}
 
 	insert->AddChild(std::move(root));
