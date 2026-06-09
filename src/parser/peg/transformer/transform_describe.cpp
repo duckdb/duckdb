@@ -1,0 +1,151 @@
+#include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+
+namespace duckdb {
+
+unique_ptr<SelectStatement> PEGTransformerFactory::TransformDescribeStatement(PEGTransformer &transformer,
+                                                                              unique_ptr<QueryNode> child) {
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(child);
+	return select_statement;
+}
+
+unique_ptr<QueryNode>
+PEGTransformerFactory::TransformShowSelect(PEGTransformer &transformer, const ShowType &show_or_describe_or_summarize,
+                                           unique_ptr<SelectStatement> select_statement_internal) {
+	auto result = make_uniq<ShowRef>();
+	result->show_type = show_or_describe_or_summarize;
+	result->query = std::move(select_statement_internal->node);
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(result);
+	return std::move(select_node);
+}
+
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer &transformer,
+                                                                 const ShowType &show_or_describe,
+                                                                 const QualifiedName &qualified_name) {
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = ShowType::SHOW_FROM;
+	if (!IsInvalidCatalog(qualified_name.catalog)) {
+		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
+		                      "\"SHOW TABLES FROM database.schema\"");
+	}
+	if (IsInvalidSchema(qualified_name.schema)) {
+		showref->schema_name = qualified_name.name;
+	} else {
+		showref->catalog_name = qualified_name.schema;
+		showref->schema_name = qualified_name.name;
+	}
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(showref);
+	return std::move(select_node);
+}
+
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
+                                                                    const ShowType &show_or_describe) {
+	auto result = make_uniq<ShowRef>();
+	// Legacy reasons, see bind_showref.cpp
+	result->table_name = "__show_tables_expanded";
+	result->show_type = ShowType::SHOW_UNQUALIFIED;
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(result);
+	return std::move(select_node);
+}
+
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
+                                                                        const ShowType &show_or_describe_or_summarize,
+                                                                        DescribeTarget describe_target) {
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = show_or_describe_or_summarize;
+
+	if (describe_target.is_table_name || describe_target.table_ref) {
+		if (describe_target.is_table_name) {
+			// Case: SHOW 'something' or DESCRIBE 'something'
+			showref->table_name = describe_target.table_name;
+		} else {
+			// Case: A relation/table reference
+			auto &base_table = *describe_target.table_ref;
+
+			if (showref->show_type == ShowType::SHOW_FROM) {
+				// Logic for SHOW TABLES FROM [database].[schema]
+				if (IsInvalidSchema(base_table.schema_name)) {
+					showref->schema_name = base_table.table_name;
+				} else {
+					showref->catalog_name = base_table.schema_name;
+					showref->schema_name = base_table.table_name;
+				}
+			} else if (IsInvalidSchema(base_table.schema_name)) {
+				// Logic for unqualified relations (databases, tables, variables)
+				auto table_name = StringUtil::Lower(base_table.table_name);
+				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
+				    table_name == "variables") {
+					showref->table_name = "\"" + table_name + "\"";
+					showref->show_type = ShowType::SHOW_UNQUALIFIED;
+				}
+			}
+		}
+		if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
+			auto show_select_node = make_uniq<SelectNode>();
+			show_select_node->select_list.push_back(make_uniq<StarExpression>());
+			if (describe_target.is_table_name) {
+				// Case: SHOW 'something' or DESCRIBE 'something'
+				auto table_ref = make_uniq<BaseTableRef>();
+				table_ref->table_name = describe_target.table_name;
+				show_select_node->from_table = std::move(table_ref);
+			} else {
+				// Case: A relation/table reference
+				show_select_node->from_table = std::move(describe_target.table_ref);
+			}
+			showref->query = std::move(show_select_node);
+		}
+	} else {
+		// Case: No relation specified (e.g., just "SHOW TABLES")
+		if (showref->show_type == ShowType::SUMMARY) {
+			throw ParserException("Expected table name with SUMMARIZE");
+		}
+		showref->table_name = "__show_tables_expanded";
+		showref->show_type = ShowType::SHOW_UNQUALIFIED;
+	}
+
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(showref);
+
+	return std::move(select_node);
+}
+
+DescribeTarget PEGTransformerFactory::TransformDescribeBaseTableName(PEGTransformer &transformer,
+                                                                     unique_ptr<BaseTableRef> base_table_name) {
+	DescribeTarget result;
+	result.table_ref = std::move(base_table_name);
+	return result;
+}
+
+DescribeTarget PEGTransformerFactory::TransformDescribeStringLiteral(PEGTransformer &transformer,
+                                                                     const string &string_literal) {
+	DescribeTarget result;
+	result.is_table_name = true;
+	result.table_name = string_literal;
+	return result;
+}
+
+ShowType PEGTransformerFactory::TransformSummarizeRule(PEGTransformer &transformer) {
+	return ShowType::SUMMARY;
+}
+
+ShowType PEGTransformerFactory::TransformShowRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
+ShowType PEGTransformerFactory::TransformDescribeLongRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
+ShowType PEGTransformerFactory::TransformDescRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
+} // namespace duckdb

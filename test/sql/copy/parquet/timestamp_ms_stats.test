@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select timestamp from '{DATA_DIR}/parquet-testing/issue_5533_timestamp_ms_stats.parquet' order by 1;
 ----

@@ -533,7 +533,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 				return false;
 			}
 			auto &child_vec = varchar_vectors[child_idx];
-			auto string_data = FlatVector::GetData<string_t>(child_vec);
+			auto string_data = FlatVector::GetDataMutable<string_t>(child_vec);
 			auto &child_mask = child_masks[child_idx].get();
 
 			if (!start_pos.IsValid()) {
@@ -576,7 +576,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 				return false;
 			}
 			auto &child_vec = varchar_vectors[child_idx];
-			auto string_data = FlatVector::GetData<string_t>(child_vec);
+			auto string_data = FlatVector::GetDataMutable<string_t>(child_vec);
 			auto &child_mask = child_masks[child_idx].get();
 
 			if (!start_pos.IsValid()) {

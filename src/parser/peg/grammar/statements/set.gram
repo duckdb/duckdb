@@ -1,0 +1,30 @@
+SetStatement <- 'SET' SetAssignmentOrTimeZone
+SetAssignmentOrTimeZone <- StandardAssignment / SetTimeZone
+
+ResetStatement <- 'RESET' SetVariableOrSetting
+StandardAssignment <- SetVariableOrSetting SetAssignment
+SetVariableOrSetting <- SetVariable / SetSetting
+SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+
+ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / ZoneLocal / ZoneDefault / ZoneStringLiteral / ZoneIdentifier / NumberLiteral
+ZoneLocal <- 'LOCAL'
+ZoneDefault <- 'DEFAULT'
+ZoneStringLiteral <- StringLiteral
+ZoneIdentifier <- Identifier
+ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
+ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
+
+SetSetting <- SettingScope? SettingName
+SetVariable <- VariableScope Identifier
+VariableScope <- 'VARIABLE'
+
+SettingScope <- LocalScope / SessionScope / GlobalScope
+LocalScope <- 'LOCAL'
+SessionScope <- 'SESSION'
+GlobalScope <- 'GLOBAL'
+
+SetAssignment <- VariableAssign VariableList
+
+VariableAssign <- '=' / 'TO'
+VariableList <- List(Expression)
+

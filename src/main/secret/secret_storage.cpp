@@ -1,6 +1,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
@@ -88,11 +90,14 @@ vector<SecretEntry> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTran
 void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
 	auto entry = secrets->GetEntry(GetTransactionOrDefault(transaction), name);
-	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		string persist_string = persistent ? "persistent" : "temporary";
-		string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
-		throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
-		                            storage_string);
+	if (!entry) {
+		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			string persist_string = persistent ? "persistent" : "temporary";
+			string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
+			throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
+			                            storage_string);
+		}
+		return;
 	}
 
 	secrets->DropEntry(GetTransactionOrDefault(transaction), name, true, true);
@@ -137,16 +142,24 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	persistent = true;
 
 	// Check existence of persistent secret dir
-	LocalFileSystem fs;
-	if (fs.DirectoryExists(secret_path)) {
-		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
-			string full_path = fs.JoinPath(secret_path, fname);
+	try {
+		auto &fs = FileSystem::GetLocal(db);
+		if (fs.DirectoryExists(secret_path)) {
+			fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
+				string full_path = fs.JoinPath(secret_path, fname);
 
-			if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
-				string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
-				persistent_secrets.insert(secret_name);
-			}
-		});
+				if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
+					string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
+					persistent_secrets.insert(secret_name);
+				}
+			});
+		}
+	} catch (PermissionException &ex) {
+		// If LocalFileSystem is specifically disabled (not all external access), skip loading persistent secrets
+		auto &vfs = static_cast<VirtualFileSystem &>(*DBConfig::GetConfig(db).file_system);
+		if (!vfs.SubSystemIsDisabled("LocalFileSystem")) {
+			throw;
+		}
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(db);
@@ -186,7 +199,7 @@ static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const Base
 }
 
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetLocal(db);
 
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
@@ -217,7 +230,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 }
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetLocal(db);
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
 	try {

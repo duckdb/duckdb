@@ -58,14 +58,14 @@ void ArrayStats::SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics>
 	}
 }
 
-void ArrayStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
+void ArrayStats::Merge(BaseStatistics &stats, const BaseStatistics &other, StatsMergeType merge_type) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
 
 	auto &child_stats = ArrayStats::GetChildStats(stats);
 	auto &other_child_stats = ArrayStats::GetChildStats(other);
-	child_stats.Merge(other_child_stats);
+	child_stats.Merge(other_child_stats, merge_type);
 }
 
 void ArrayStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -91,13 +91,13 @@ child_list_t<Value> ArrayStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void ArrayStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void ArrayStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ArrayStats::GetChildStats(stats);
-	auto &child_entry = ArrayVector::GetEntry(vector);
+	const auto &child_entry = ArrayVector::GetChild(vector);
 	auto array_size = ArrayType::GetSize(vector.GetType());
 
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	vector.ToUnifiedFormat(vdata);
 
 	// Basically,
 	// 1. Count the number of valid arrays

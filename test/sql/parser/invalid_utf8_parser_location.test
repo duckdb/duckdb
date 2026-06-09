@@ -1,0 +1,27 @@
+# name: test/sql/parser/invalid_utf8_parser_location.test
+# description: Reject invalid UTF-8 in parser with source location
+# group: [parser]
+
+statement error
+SELECT
+  42
+FRùOM t;
+----
+Invalid UTF-8 in query
+
+statement error
+SELECT
+  42
+FRùOM t;
+----
+LINE 3:
+
+statement ok
+SET errors_as_json=true;
+
+statement error
+SELECT
+  42
+FRùOM t;
+----
+"position":"14"

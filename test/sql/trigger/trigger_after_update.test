@@ -1,0 +1,293 @@
+# name: test/sql/trigger/trigger_after_update.test
+# description: Test AFTER UPDATE trigger firing via DML CTE expansion
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: FOR EACH STATEMENT trigger fires once after UPDATE
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic AFTER UPDATE ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('updated');
+
+statement ok
+UPDATE target SET val = 99 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+# Second UPDATE fires the trigger again
+statement ok
+UPDATE target SET val = 100 WHERE id = 2;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Multi-row UPDATE fires FOR EACH STATEMENT once
+statement ok
+UPDATE target SET val = 0;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+3
+
+# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
+statement error
+CREATE TRIGGER trg_row AFTER UPDATE ON target FOR EACH ROW
+    INSERT INTO audit VALUES ('row');
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
+
+# Trigger body failure rolls back the entire statement
+statement ok
+CREATE TABLE strict_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO strict_target VALUES (1, 0);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail AFTER UPDATE ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+UPDATE strict_target SET val = 1;
+----
+Constraint Error:
+
+query I
+SELECT val FROM strict_target;
+----
+0
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple triggers on the same event are supported
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a AFTER UPDATE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement ok
+CREATE TRIGGER trg_multi_b AFTER UPDATE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+UPDATE t_multi SET id = 2;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
+----
+2
+
+# Trigger body can be a DELETE statement
+statement ok
+CREATE TABLE t_upd_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_upd_target VALUES (1, 0);
+
+statement ok
+CREATE TABLE t_scratch (id INTEGER);
+
+statement ok
+INSERT INTO t_scratch VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_del_body AFTER UPDATE ON t_upd_target FOR EACH STATEMENT
+    DELETE FROM t_scratch;
+
+statement ok
+UPDATE t_upd_target SET val = 1;
+
+query I
+SELECT COUNT(*) FROM t_scratch;
+----
+0
+
+# Trigger body can be an UPDATE statement
+statement ok
+CREATE TABLE t_upd2_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_upd2_target VALUES (1, 0);
+
+statement ok
+CREATE TABLE t_counter (n INTEGER);
+
+statement ok
+INSERT INTO t_counter VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_upd_body AFTER UPDATE ON t_upd2_target FOR EACH STATEMENT
+    UPDATE t_counter SET n = n + 1;
+
+statement ok
+UPDATE t_upd2_target SET val = 1;
+
+query I
+SELECT n FROM t_counter;
+----
+1
+
+statement ok
+UPDATE t_upd2_target SET val = 2;
+
+query I
+SELECT n FROM t_counter;
+----
+2
+
+# UPDATE OF columns: trigger only fires when listed columns are updated
+statement ok
+CREATE TABLE t_col (id INTEGER, val INTEGER, other INTEGER);
+
+statement ok
+INSERT INTO t_col VALUES (1, 10, 100);
+
+statement ok
+CREATE TABLE t_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_col AFTER UPDATE OF val ON t_col FOR EACH STATEMENT
+    INSERT INTO t_col_audit VALUES ('val_changed');
+
+# Updating 'val' fires the trigger
+statement ok
+UPDATE t_col SET val = 20 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating 'other' (NOT in the OF list) does NOT fire the trigger
+statement ok
+UPDATE t_col SET other = 200 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating both columns -> fires (overlap with OF list)
+statement ok
+UPDATE t_col SET val = 30, other = 300 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+2
+
+# Multi-column OF: fires when ANY listed column is touched
+statement ok
+CREATE TABLE t_multi_col (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_multi_col VALUES (1, 2, 3);
+
+statement ok
+CREATE TABLE t_multi_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_col AFTER UPDATE OF a, b ON t_multi_col FOR EACH STATEMENT
+    INSERT INTO t_multi_col_audit VALUES ('ab_changed');
+
+statement ok
+UPDATE t_multi_col SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+1
+
+statement ok
+UPDATE t_multi_col SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# 'c' alone -> does NOT fire
+statement ok
+UPDATE t_multi_col SET c = 30;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Mix (a + c) -> fires
+statement ok
+UPDATE t_multi_col SET a = 100, c = 300;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+3
+
+# Mixed BEFORE OF + AFTER OF on the same event
+statement ok
+CREATE TABLE t_mix (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t_mix VALUES (1, 2);
+
+statement ok
+CREATE TABLE t_mix_audit (phase VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix_before BEFORE UPDATE OF a ON t_mix FOR EACH STATEMENT
+    INSERT INTO t_mix_audit VALUES ('before');
+
+statement ok
+CREATE TRIGGER trg_mix_after AFTER UPDATE OF a ON t_mix FOR EACH STATEMENT
+    INSERT INTO t_mix_audit VALUES ('after');
+
+# Updating 'a' fires both
+statement ok
+UPDATE t_mix SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_mix_audit;
+----
+2
+
+# Updating 'b' fires neither (both filters disjoint)
+statement ok
+UPDATE t_mix SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_mix_audit;
+----
+2

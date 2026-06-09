@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test AS (SELECT range i, 0 as j FROM range(70000));
 
 query I

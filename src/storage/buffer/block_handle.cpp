@@ -34,8 +34,9 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
 	SetSwizzling(nullptr);
 	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
-	if (GetBuffer() && GetBufferType() != FileBufferType::TINY_BUFFER) {
-		// Kill the latest version in the eviction queue.
+	if (GetEvictionSequenceNumber() > 0 && GetBufferType() != FileBufferType::TINY_BUFFER) {
+		// eviction_seq_num > 0 means there is a live queue entry for this block (it's reset
+		// to 0 on unload/evict). That entry is now dead — account for it.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 
@@ -177,7 +178,11 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
-	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
+	// A buffer that doesn't own its memory (e.g. it adopted a pointer into a memory-mapped
+	// region) cannot be reused for a different block: rewriting its bytes would clobber the
+	// original block on disk through the mapping.
+	if (reusable_buffer && reusable_buffer->OwnsInternalBuffer() &&
+	    reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
 		// Reusable buffer: reuse it.
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// Reuse the entire buffer.

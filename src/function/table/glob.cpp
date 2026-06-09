@@ -43,15 +43,16 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	state.file_list_scan.scan_type = MultiFileListScanType::ALWAYS_FETCH;
 	idx_t count = 0;
+	auto &file_column = output.data[0];
 	while (count < STANDARD_VECTOR_SIZE) {
 		OpenFileInfo file;
 		if (!bind_data.file_list->Scan(state.file_list_scan, file)) {
 			break;
 		}
-		output.data[0].SetValue(count++, file.path);
+		file_column.Append(Value(file.path));
+		count++;
 		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
-	output.SetCardinality(count);
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {

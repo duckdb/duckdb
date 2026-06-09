@@ -41,12 +41,13 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 		return;
 	}
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
-	output.SetCardinality(next - data.offset);
-	for (idx_t i = data.offset; i < next; i++) {
-		auto index = i - data.offset;
-		output.SetValue(0, index, Value(data.entries[i]));
-	}
 
+	// collname, VARCHAR
+	auto &collname = output.data[0];
+
+	for (idx_t i = data.offset; i < next; i++) {
+		collname.Append(Value(data.entries[i]));
+	}
 	data.offset = next;
 }
 

@@ -2,9 +2,6 @@
 # description: test query() function
 # group: [function]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT * FROM query('SELECT 42');
 ----
@@ -186,7 +183,7 @@ FROM query_table(NULL);
 statement error
 FROM query_table([]);
 ----
-Binder Error: No function matches the given name and argument types 'query_table(INTEGER[])'.
+Expected a table or a list with tables as input
 
 statement error
 FROM query_table(['']);

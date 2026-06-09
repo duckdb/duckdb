@@ -1,5 +1,5 @@
 {
-  "description": "Run with the latest storage on persistent databases.",
+  "description": "Run with the latest storage format on persistent databases.",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__latest_storage.db",
   "on_load": "skip",
   "settings": [
@@ -37,12 +37,6 @@
       "reason": "Attached databases have a main schema, which is not implicit.",
       "paths": [
         "test/fuzzer/sqlsmith/current_schemas_null.test"
-      ]
-    },
-    {
-      "reason": "Make explicit use of the memory catalog.",
-      "paths": [
-        "test/sql/types/geo/geometry_compatability.test"
       ]
     }
   ]

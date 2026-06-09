@@ -36,6 +36,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_normalize.cpp
     json_functions/json_deep_merge.cpp
     json_functions/json_merge_patch_diff.cpp
+    json_functions/json_strip_nulls.cpp
     json_functions/read_json.cpp
     json_functions/read_json_objects.cpp)
 

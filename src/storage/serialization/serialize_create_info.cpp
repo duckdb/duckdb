@@ -27,7 +27,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags, InsertionOrderPreservingMap<string>());
-	if (serializer.ShouldSerialize(2)) {
+	if (serializer.ShouldSerialize(StorageVersion::V0_10_3)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
@@ -155,6 +155,9 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int64_t>(204, "max_value", max_value);
 	serializer.WritePropertyWithDefault<int64_t>(205, "start_value", start_value);
 	serializer.WritePropertyWithDefault<bool>(206, "cycle", cycle);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
+	}
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
@@ -166,6 +169,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<int64_t>(204, "max_value", result->max_value);
 	deserializer.ReadPropertyWithDefault<int64_t>(205, "start_value", result->start_value);
 	deserializer.ReadPropertyWithDefault<bool>(206, "cycle", result->cycle);
+	deserializer.ReadPropertyWithDefault<optional<int64_t>>(207, "last_value", result->last_value);
 	return std::move(result);
 }
 
@@ -201,6 +205,8 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
 	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
+	serializer.WritePropertyWithDefault<string>(209, "referencing_new_table", referencing_new_table);
+	serializer.WritePropertyWithDefault<string>(210, "referencing_old_table", referencing_old_table);
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
@@ -213,6 +219,8 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
 	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
+	deserializer.ReadPropertyWithDefault<string>(209, "referencing_new_table", result->referencing_new_table);
+	deserializer.ReadPropertyWithDefault<string>(210, "referencing_old_table", result->referencing_old_table);
 	return std::move(result);
 }
 
@@ -236,10 +244,10 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
 	}
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unordered_map<string, Value>>(206, "column_comments_map", column_comments_map, unordered_map<string, Value>());
 	}
 }

@@ -2,10 +2,8 @@
 # description: Test CREATE TRIGGER stores in catalog and duckdb_triggers()
 # group: [trigger]
 
-require autocomplete
+require noforcestorage
 
-statement ok
-call enable_peg_parser();
 
 # Create table for trigger
 statement ok
@@ -39,46 +37,69 @@ SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't1';
 statement ok
 CREATE TRIGGER upd_trigger AFTER UPDATE ON t1 INSERT INTO log_table VALUES (3);
 
-# AFTER UPDATE OF specific columns - need col in t1
+# AFTER UPDATE OF specific columns
 statement ok
-CREATE TRIGGER upd_col_trigger AFTER UPDATE OF id ON t1 INSERT INTO log_table VALUES (4);
+CREATE TABLE t_upd_of (id INTEGER, data VARCHAR);
 
-# Verify UPDATE OF columns
+statement ok
+CREATE TRIGGER upd_col_trigger AFTER UPDATE OF id ON t_upd_of INSERT INTO log_table VALUES (4);
+
 query TT
 SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'upd_col_trigger';
 ----
 upd_col_trigger	[id]
 
-# IF NOT EXISTS - should not error
+# IF NOT EXISTS - should not error when trigger already exists
 statement ok
-CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
+CREATE TABLE t_ifne (id INTEGER);
+
+statement ok
+CREATE TRIGGER ifne_trigger AFTER INSERT ON t_ifne INSERT INTO log_table VALUES (1);
+
+statement ok
+CREATE TRIGGER IF NOT EXISTS ifne_trigger AFTER INSERT ON t_ifne INSERT INTO log_table VALUES (1);
+
+# Verify no duplicate was created
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'ifne_trigger';
+----
+1
 
 # --- Trigger with UPDATE body ---
 statement ok
-CREATE TRIGGER update_body_trigger AFTER INSERT ON t1 UPDATE log_table SET id = 99 WHERE log_table.id = 1;
+CREATE TABLE t_upd_body (id INTEGER);
+
+statement ok
+CREATE TRIGGER update_body_trigger AFTER INSERT ON t_upd_body UPDATE log_table SET id = 99 WHERE log_table.id = 1;
 
 query TT
 SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'update_body_trigger';
 ----
-update_body_trigger	CREATE TRIGGER update_body_trigger AFTER INSERT ON t1 FOR EACH STATEMENT UPDATE log_table SET id = 99 WHERE (log_table.id = 1);
+update_body_trigger	CREATE TRIGGER update_body_trigger AFTER INSERT ON t_upd_body FOR EACH STATEMENT UPDATE log_table SET id = 99 WHERE (log_table.id = 1);
 
 # --- Trigger with DELETE body ---
 statement ok
-CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t1 DELETE FROM log_table WHERE log_table.id = 1;
+CREATE TABLE t_del_body (id INTEGER);
+
+statement ok
+CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t_del_body DELETE FROM log_table WHERE log_table.id = 1;
 
 query TT
 SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'delete_body_trigger';
 ----
-delete_body_trigger	CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t1 FOR EACH STATEMENT DELETE FROM log_table WHERE (log_table.id = 1);
+delete_body_trigger	CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t_del_body FOR EACH STATEMENT DELETE FROM log_table WHERE (log_table.id = 1);
 
 # --- Trigger with INSERT ... SELECT body ---
 statement ok
-CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t1 INSERT INTO log_table SELECT id FROM t1;
+CREATE TABLE t_ins_sel (id INTEGER);
+
+statement ok
+CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t_ins_sel INSERT INTO log_table SELECT id FROM t_ins_sel;
 
 query TT
 SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'insert_select_trigger';
 ----
-insert_select_trigger	CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t1 FOR EACH STATEMENT INSERT INTO log_table SELECT id FROM t1;
+insert_select_trigger	CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t_ins_sel FOR EACH STATEMENT INSERT INTO log_table SELECT id FROM t_ins_sel;
 
 # Cleanup - CASCADE to drop dependent triggers
 statement ok

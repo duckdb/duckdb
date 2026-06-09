@@ -167,6 +167,26 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 		if (has_ties) {
 			// if there are ties we don't auto-complete immediately
 			// instead we display the list of suggestions
+			// but first, complete up to the longest common prefix (like shell behavior)
+			auto &first = completions[0].completion;
+			idx_t common_len = first.size();
+			for (idx_t i = 1; i < completions.size(); i++) {
+				auto &other = completions[i].completion;
+				idx_t min_len = MinValue<idx_t>(common_len, other.size());
+				idx_t j;
+				for (j = 0; j < min_len; j++) {
+					if (first[j] != other[j]) {
+						break;
+					}
+				}
+				common_len = j;
+			}
+			if (common_len > (idx_t)len) {
+				// there is a common prefix longer than the current input - apply it
+				int nwritten = snprintf(buf, buflen, "%.*s", (int)common_len, first.c_str());
+				pos = nwritten;
+				len = nwritten;
+			}
 			completion_idx = optional_idx();
 			render_completion_suggestion = true;
 		} else {

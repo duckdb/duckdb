@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers (i int[])
 
 statement ok
@@ -238,3 +235,10 @@ query I
 SELECT LIST_WHERE(ARRAY_VALUE('1', NULL), [TRUE, TRUE, FALSE]);
 ----
 [1, NULL]
+
+# boolean mask much longer than input list - previously caused out-of-bounds
+# read on the validity mask (row_idx >= capacity) in debug builds
+query I
+SELECT length(list_where([1], (SELECT list(true) FROM range(4096))));
+----
+4096

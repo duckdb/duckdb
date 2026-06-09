@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0002.test
+# description: PEG should reject (currently accepts): Not implemented Error: Verbose vacuum option
+# group: [fuzzer]
+
+statement error
+ANALYZE VERBOSE
+----
+Not implemented Error: ANALYZE VERBOSE is not implemented yet

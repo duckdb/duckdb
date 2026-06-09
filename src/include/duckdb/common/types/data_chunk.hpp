@@ -22,6 +22,7 @@ class ExecutionContext;
 class VectorCache;
 class Serializer;
 class Deserializer;
+enum class DebugVerificationMode : uint8_t;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -51,32 +52,51 @@ public:
 	vector<Vector> data;
 
 public:
-	inline idx_t size() const { // NOLINT
-		return count;
+	inline idx_t size() const {
+		if (count.IsValid()) {
+			return count.GetIndex();
+		}
+		for (const auto &v : data) {
+			if (v.GetBufferRef()) {
+				return v.size();
+			}
+		}
+		if (data.empty()) {
+			// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
+			return 0;
+		}
+		throw InternalException(
+		    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	inline void SetCardinality(idx_t count_p) {
-		D_ASSERT(count_p <= capacity);
+	//! Verify all child vectors have the expected cardinality
+	void CheckCardinality(idx_t count_p);
+	//! Sets the cardinality of all child vectors of this chunk
+	void SetChildCardinality(idx_t count_p);
+	//! Deprecated: use SetChildCardinality instead.
+	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
+	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
+	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(idx_t count_p) {
 		this->count = count_p;
 	}
-	inline void SetCardinality(const DataChunk &other) {
-		SetCardinality(other.size());
-	}
-	inline idx_t GetCapacity() const {
-		return capacity;
-	}
-	inline void SetCapacity(idx_t capacity_p) {
-		this->capacity = capacity_p;
-	}
-	inline void SetCapacity(const DataChunk &other) {
-		SetCapacity(other.capacity);
+	//! Deprecated: use SetChildCardinality instead
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(const DataChunk &chunk) {
+		this->count = chunk.size();
 	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
-	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
+	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "
+	             "semantics)")]] DUCKDB_API void
+	SetValue(idx_t col_idx, idx_t index, const Value &val);
 
+	//! Returns the uncompressed size of the data elements stored in this data chunk
+	idx_t GetDataSize() const;
+	//! Returns the size of the allocated data by this data chunk
 	idx_t GetAllocationSize() const;
 
 	//! Returns true if all vectors in the DataChunk are constant
@@ -104,8 +124,9 @@ public:
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk and resize is not allowed.
-	DUCKDB_API void Append(const DataChunk &other, bool resize = false, SelectionVector *sel = nullptr,
-	                       idx_t count = 0);
+	DUCKDB_API void Append(const DataChunk &other, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t sel_count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
@@ -135,6 +156,8 @@ public:
 	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
 	//! Turning all Vectors into Dictionary Vectors, using 'sel'
 	DUCKDB_API void Slice(const DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
+	//! Slice all vectors from other.data from "offset..end"
+	DUCKDB_API void Slice(const DataChunk &other, idx_t offset, idx_t end);
 
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
@@ -163,16 +186,20 @@ public:
 
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(optional_ptr<DatabaseInstance> database_instance = nullptr);
+	DUCKDB_API void Verify(DatabaseInstance &db);
+	DUCKDB_API void Verify(shared_ptr<DatabaseInstance> &db);
+	DUCKDB_API void Verify(ClientContext &context);
+	DUCKDB_API void Verify(optional_ptr<ClientContext> context);
+	DUCKDB_API void Verify();
 
 private:
-	//! The amount of tuples stored in the data chunk
-	idx_t count;
-	//! The amount of tuples that can be stored in the data chunk
-	idx_t capacity;
-	//! The initial capacity of this chunk set during ::Initialize, used when resetting
-	idx_t initial_capacity;
+	optional_idx count;
+
+private:
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
+
+private:
+	void VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db);
 };
 } // namespace duckdb

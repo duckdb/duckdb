@@ -369,7 +369,7 @@ double DuckDBReader::GetProgressInFile(ClientContext &context) {
 }
 
 void DuckDBReader::AddVirtualColumn(column_t virtual_column_id) {
-	if (virtual_column_id != COLUMN_IDENTIFIER_ROW_ID) {
+	if (virtual_column_id != COLUMN_IDENTIFIER_ROW_ID && virtual_column_id != COLUMN_IDENTIFIER_ROW_NUMBER) {
 		throw InternalException("Unsupported virtual column id %d for duckdb reader", virtual_column_id);
 	}
 }
@@ -504,6 +504,7 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 
 void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::BIGINT)));
+	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::BIGINT)));
 }
 
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
@@ -526,7 +527,7 @@ static bool DuckDBScanPushdownExpression(ClientContext &context, const LogicalGe
 
 TableFunction ReadDuckDBTableFunction::GetFunction() {
 	MultiFileFunction<DuckDBMultiFileInfo> read_duckdb("read_duckdb");
-	read_duckdb.statistics = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStats;
+	read_duckdb.statistics_extended = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStatsExtended;
 	read_duckdb.get_row_id_columns = DuckDBGetRowIdColumns;
 	read_duckdb.pushdown_expression = DuckDBScanPushdownExpression;
 	read_duckdb.filter_pushdown = true;

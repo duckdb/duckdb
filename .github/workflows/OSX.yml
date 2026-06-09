@@ -27,14 +27,16 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/OSX.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!test/configs/**'
+      - '!tools/**'
+      - 'tools/shell/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/OSX.yml'
 
 
 concurrency:
@@ -52,8 +54,9 @@ jobs:
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
-      CMAKE_CXX_FLAGS: '-DDEBUG'
+      FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v6
@@ -68,14 +71,12 @@ jobs:
     - uses: ./.github/actions/ccache-action
 
     - name: Install ninja
-      shell: bash
       run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/cleanup_runner
 
     - name: Build
-      shell: bash
-      run: python3 scripts/ci/retry.py -- bash -lc 'GEN=ninja make release'
+      run: python3 scripts/ci/retry.py -- make
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -86,24 +87,12 @@ jobs:
 
     - name: Test
       if: ${{ !inputs.skip_tests }}
-      shell: bash
       run: make unittest_release
-
-    - name: Amalgamation
-      if: ${{ !inputs.skip_tests }}
-      shell: bash
-      run: |
-        python scripts/amalgamation.py --extended
-        cd src/amalgamation
-        clang++ -std=c++17 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DNDEBUG -O0 -std=c++17 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DDEBUG -O0 -std=c++17 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-latest
-    needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -131,12 +120,15 @@ jobs:
           python3 scripts/ci/retry.py -- python -m pip install pytest
 
       - name: Build
-        shell: bash
         run: python3 scripts/ci/retry.py -- make
 
-      - name: Print platform
-        shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+      - name: CLI check
+        run: |
+          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            # Fail on non-zero major version.
+            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          fi
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
@@ -174,8 +166,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          python scripts/amalgamation.py
-          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/include/duckdb.h
 
           mkdir build/release_arm64 build/release_amd64
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb

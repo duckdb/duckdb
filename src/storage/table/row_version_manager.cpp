@@ -12,20 +12,23 @@ RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
                 MemoryTag::BASE_TABLE) {
 }
 
-idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
+idx_t RowVersionManager::GetRowCount(ScanOptions options, idx_t count) {
 	lock_guard<mutex> l(version_lock);
-	idx_t deleted_count = 0;
+	idx_t total_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (i >= vector_info.size() || !vector_info[i]) {
-			continue;
-		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
-		if (max_count == 0) {
+		idx_t segment_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (segment_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(max_count);
+		if (i >= vector_info.size() || !vector_info[i]) {
+			// no version info - this means all rows are visible
+			total_count += segment_count;
+			continue;
+		}
+		idx_t row_count = vector_info[i]->GetRowCount(options, segment_count);
+		total_count += row_count;
 	}
-	return deleted_count;
+	return total_count;
 }
 
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
@@ -45,14 +48,40 @@ idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, Sel
 	return chunk_info->GetSelVector(options, sel_vector, max_count);
 }
 
-bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
-	lock_guard<mutex> lock(version_lock);
-	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
-	auto info = GetChunkInfo(vector_index);
-	if (!info) {
-		return true;
+idx_t RowVersionManager::GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count,
+                                        SelectionVector &visible_sel) {
+	if (count == 0) {
+		return 0;
 	}
-	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
+	const lock_guard<mutex> lock(version_lock);
+	idx_t visible_count = 0;
+	idx_t idx = 0;
+	while (idx < count) {
+		const idx_t vector_idx = offsets[idx] / STANDARD_VECTOR_SIZE;
+		const idx_t base = vector_idx * STANDARD_VECTOR_SIZE;
+		const idx_t vector_end = base + STANDARD_VECTOR_SIZE;
+		// The first position after the current same-version-vector run.
+		idx_t next_idx = idx + 1;
+		// Extend the run while offsets remain within the same version-info vector.
+		while (next_idx < count && offsets[next_idx] >= base && offsets[next_idx] < vector_end) {
+			next_idx++;
+		}
+		auto info = GetChunkInfo(vector_idx);
+		if (!info) {
+			// no version info, which means entire chunk is visible
+			for (idx_t k = idx; k < next_idx; k++) {
+				visible_sel.set_index(visible_count++, k);
+			}
+		} else {
+			for (idx_t k = idx; k < next_idx; k++) {
+				if (info->Fetch(transaction, NumericCast<row_t>(offsets[k] - base))) {
+					visible_sel.set_index(visible_count++, k);
+				}
+			}
+		}
+		idx = next_idx;
+	}
+	return visible_count;
 }
 
 void RowVersionManager::FillVectorInfo(idx_t vector_idx) {

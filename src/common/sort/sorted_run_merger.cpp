@@ -708,14 +708,16 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 
 	// Grab pointers to sort keys
 	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
-	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < count; i++) {
-		sort_keys[i] = &merged_partition_keys[i];
+	{
+		auto writer = FlatVector::Writer<SORT_KEY *>(sort_key_pointers, count);
+		for (idx_t i = 0; i < count; i++) {
+			writer.WriteValue(&merged_partition_keys[i]);
+		}
 	}
 	merged_partition_index += count;
 
 	// Scan
-	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, count, chunk);
+	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, chunk);
 }
 
 void SortedRunMergerLocalState::MaterializePartition(SortedRunMergerGlobalState &gstate) {
@@ -767,12 +769,12 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
 
 	TupleDataChunkState key_data_input;
-	const auto key_locations = FlatVector::GetData<data_ptr_t>(key_data_input.row_locations);
-	const auto key_heap_locations = FlatVector::GetData<data_ptr_t>(key_data_input.heap_locations);
-	const auto key_heap_sizes = FlatVector::GetData<idx_t>(key_data_input.heap_sizes);
+	const auto key_locations = FlatVector::GetDataMutable<data_ptr_t>(key_data_input.row_locations);
+	const auto key_heap_locations = FlatVector::GetDataMutable<data_ptr_t>(key_data_input.heap_locations);
+	const auto key_heap_sizes = FlatVector::GetDataMutable<idx_t>(key_data_input.heap_sizes);
 
 	TupleDataChunkState payload_data_input;
-	const auto payload_locations = FlatVector::GetData<data_ptr_t>(payload_data_input.row_locations);
+	const auto payload_locations = FlatVector::GetDataMutable<data_ptr_t>(payload_data_input.row_locations);
 
 	auto sorted_run = gstate.merger.sorted_runs[0]->CreateRunForMaterialization();
 
@@ -830,9 +832,9 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
-    : scheduler(TaskScheduler::GetScheduler(*sort_p.context.db)), sort(sort_p), sorted_runs(std::move(sorted_runs_p)),
-      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
-      is_index_sort(is_index_sort_p) {
+    : scheduler(TaskScheduler::GetScheduler(*sort_p.client_context.db)), sort(sort_p),
+      sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
+      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
 }
 
 SortedRunMerger::~SortedRunMerger() {

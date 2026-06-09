@@ -22,15 +22,14 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '.github/workflows/Android.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
-      - '!.github/patches/duckdb-wasm/**'
+    paths:
+      - '.github/workflows/Android.yml'
+      - '.github/patches/duckdb-wasm/**'
 
 
 concurrency:

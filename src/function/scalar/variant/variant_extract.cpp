@@ -9,9 +9,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -30,28 +28,7 @@ unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
 
 bool VariantExtractBindData::Equals(const FunctionData &other) const {
 	auto &bind_data = other.Cast<VariantExtractBindData>();
-	if (bind_data.component.lookup_mode != component.lookup_mode) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_INDEX &&
-	    bind_data.component.index != component.index) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_KEY && bind_data.component.key != component.key) {
-		return false;
-	}
-	return true;
-}
-
-static bool GetConstantArgument(ClientContext &context, Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
+	return component == bind_data.component;
 }
 
 static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -76,19 +53,21 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	return VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
 }
 
-static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
-	auto &path = *arguments[1];
-	if (path.return_type.id() != LogicalTypeId::VARCHAR && path.return_type.id() != LogicalTypeId::UINTEGER) {
+	const auto &path = *arguments[1];
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.return_type.ToString());
+		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
-	if (!GetConstantArgument(context, path, constant_arg)) {
+	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
 		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
 	}
 
@@ -101,8 +80,8 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 }
 
-static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
-                                        idx_t count, idx_t path_index = 0) {
+static bool TryShreddedExtractRecursive(const Vector &input, const vector<VariantPathComponent> &components,
+                                        Vector &result, idx_t count, idx_t path_index = 0) {
 	if (path_index >= components.size()) {
 		// reached the end of the path - shred
 		if (input.GetType().IsNested()) {
@@ -116,15 +95,14 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(unshredded_entry, true);
+			ConstantVector::SetNull(unshredded_entry, count_t(count));
 		}
-		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(unshredded_child, true);
+		ConstantVector::SetNull(unshredded_child, count_t(count));
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
-		result.Shred(shredded_vector);
+		FlatVector::SetSize(shredded_vector, count_t(count));
+		result.Shred(shredded_vector, count);
 		return true;
 	}
 	auto &component = components[path_index];
@@ -150,8 +128,8 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 	return false;
 }
 
-static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                   idx_t count) {
+static bool TryFromShreddedExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                   Vector &result, idx_t count) {
 	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
 		// input vector is not shredded
 		return false;
@@ -164,15 +142,14 @@ static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPath
 	return TryShreddedExtractRecursive(shredded_vec, components, result, count);
 }
 
-void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                  idx_t count) {
+void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                  Vector &result, idx_t count) {
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
-	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 
 	UnifiedVariantVectorData variant(source_format);
 
@@ -187,8 +164,8 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 		value_index_sel[i] = 0;
 	}
 
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
 
 	//! Perform the extract
 	ValidityMask validity(count);
@@ -234,30 +211,29 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto values_list_size = ListVector::GetListSize(raw_values);
 
 	//! Create a new Variant that references the existing data of the input Variant
-	result.Initialize(false, count);
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant_vec));
 	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
 	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
 	//! Copy the existing 'values' list entry data
 	auto &result_values = VariantVector::GetValues(result);
-	result_values.Initialize(false, count);
+	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_values_data = FlatVector::GetData<list_entry_t>(result_values);
-	auto &result_values_validity = FlatVector::Validity(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_values_validity.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
-		result_values_data[i] = values_data[values.sel->get_index(i)];
+		result_data.WriteValue(values_data[values.sel->get_index(i)]);
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
 
 	//! Prepare the selection vector to remap index 0 of each row
-	SelectionVector new_sel(0, values_list_size);
+	auto new_sel = SelectionVector::Incremental(values_list_size);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -269,9 +245,8 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
 	auto &result_byte_offset = VariantVector::GetValuesByteOffset(result);
 
-	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant_vec), values_list_size, new_sel, values_list_size);
-	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
-	                              values_list_size);
+	result_type_id.Slice(VariantVector::GetValuesTypeId(variant_vec), new_sel, values_list_size);
+	result_byte_offset.Slice(VariantVector::GetValuesByteOffset(variant_vec), new_sel, values_list_size);
 
 	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
@@ -286,6 +261,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
@@ -294,15 +270,15 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
-	auto &path = input.data[1];
+	const auto &path = input.data[1];
 	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	(void)path;
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantExtractBindData>();
 	VariantUtils::VariantExtract(variant_vec, {info.component}, result, count);
 }
 
@@ -311,12 +287,13 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 
 	ScalarFunctionSet fun_set;
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
-	                               nullptr, VariantExtractPropagateStats);
+	                               VariantExtractPropagateStats);
 
-	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetSignature().AddParameter(variant_type);
+	variant_extract.GetSignature().AddParameter(LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.arguments = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

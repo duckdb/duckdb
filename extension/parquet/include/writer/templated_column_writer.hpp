@@ -10,8 +10,10 @@
 
 #include "writer/primitive_column_writer.hpp"
 #include "writer/parquet_write_operators.hpp"
+#include "parquet_bss_encoder.hpp"
 #include "parquet_dbp_encoder.hpp"
 #include "parquet_dlba_encoder.hpp"
+#include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
 

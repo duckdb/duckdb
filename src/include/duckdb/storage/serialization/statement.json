@@ -67,5 +67,55 @@
         "type": "ParsedExpression*"
       }
     ]
+  },
+  {
+    "class": "MergeIntoAction",
+    "includes": [
+      "duckdb/parser/statement/merge_into_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "action_type",
+        "type": "MergeActionType"
+      },
+      {
+        "id": 101,
+        "name": "condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 102,
+        "name": "update_info",
+        "type": "UpdateSetInfo*"
+      },
+      {
+        "id": 103,
+        "name": "insert_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 104,
+        "name": "expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 105,
+        "name": "column_order",
+        "type": "InsertColumnOrder",
+        "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      },
+      {
+        "id": 106,
+        "name": "default_values",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 107,
+        "name": "exclude_columns",
+        "type": "unordered_set<string>"
+      }
+    ]
   }
 ]

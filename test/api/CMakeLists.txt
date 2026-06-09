@@ -7,7 +7,6 @@ if(${DISABLE_THREADS})
 endif()
 
 add_subdirectory(capi)
-add_subdirectory(udf_function)
 
 set(TEST_API_OBJECTS
     test_api.cpp
@@ -23,6 +22,7 @@ set(TEST_API_OBJECTS
     test_table_info.cpp
     test_appender_api.cpp
     test_lifecycle_hooks.cpp
+    test_extension_schema_api.cpp
     test_pending_query.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
@@ -38,10 +38,9 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
+    test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
-    test_update_query_node.cpp
-    test_delete_query_node.cpp
-    test_insert_query_node.cpp)
+    test_block_allocator_tls.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)
@@ -56,6 +55,6 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
 endif()
 
 add_library(test_api OBJECT ${TEST_API_OBJECTS})
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
     PARENT_SCOPE)

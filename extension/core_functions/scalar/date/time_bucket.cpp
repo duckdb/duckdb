@@ -206,10 +206,9 @@ struct TimeBucket {
 
 	struct OriginTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
-		static inline TR Operation(TA bucket_width, TB ts, TC origin, ValidityMask &mask, idx_t idx) {
+		static inline optional<TR> Operation(TA bucket_width, TB ts, TC origin) {
 			if (!Value::IsFinite(origin)) {
-				mask.SetInvalid(idx);
-				return TR();
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
@@ -230,37 +229,35 @@ template <typename T>
 void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 
-	auto &bucket_width_arg = args.data[0];
-	auto &ts_arg = args.data[1];
+	const auto &bucket_width_arg = args.data[0];
+	const auto &ts_arg = args.data[1];
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-		} else {
-			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
-			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
-				BinaryExecutor::Execute<interval_t, T, T>(
-				    bucket_width_arg, ts_arg, result, args.size(),
-				    TimeBucket::WidthConvertibleToMicrosBinaryOperator::Operation<interval_t, T, T>);
-				break;
-			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
-				BinaryExecutor::Execute<interval_t, T, T>(
-				    bucket_width_arg, ts_arg, result, args.size(),
-				    TimeBucket::WidthConvertibleToMonthsBinaryOperator::Operation<interval_t, T, T>);
-				break;
-			case TimeBucket::BucketWidthType::UNCLASSIFIED:
-				BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result, args.size(),
-				                                          TimeBucket::BinaryOperator::Operation<interval_t, T, T>);
-				break;
-			default:
-				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
-			}
+			throw InternalException("DateSub called with constant NULL part");
+		}
+		interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
+		TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
+		switch (bucket_width_type) {
+		case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
+			BinaryExecutor::Execute<interval_t, T, T>(
+			    bucket_width_arg, ts_arg, result,
+			    TimeBucket::WidthConvertibleToMicrosBinaryOperator::Operation<interval_t, T, T>);
+			break;
+		case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
+			BinaryExecutor::Execute<interval_t, T, T>(
+			    bucket_width_arg, ts_arg, result,
+			    TimeBucket::WidthConvertibleToMonthsBinaryOperator::Operation<interval_t, T, T>);
+			break;
+		case TimeBucket::BucketWidthType::UNCLASSIFIED:
+			BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result,
+			                                          TimeBucket::BinaryOperator::Operation<interval_t, T, T>);
+			break;
+		default:
+			throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 		}
 	} else {
-		BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result, args.size(),
+		BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result,
 		                                          TimeBucket::BinaryOperator::Operation<interval_t, T, T>);
 	}
 }
@@ -269,40 +266,38 @@ template <typename T>
 void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 
-	auto &bucket_width_arg = args.data[0];
-	auto &ts_arg = args.data[1];
-	auto &offset_arg = args.data[2];
+	const auto &bucket_width_arg = args.data[0];
+	const auto &ts_arg = args.data[1];
+	const auto &offset_arg = args.data[2];
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-		} else {
-			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
-			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
-				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-				    TimeBucket::OffsetWidthConvertibleToMicrosTernaryOperator::Operation<interval_t, T, interval_t, T>);
-				break;
-			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
-				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-				    TimeBucket::OffsetWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
-				break;
-			case TimeBucket::BucketWidthType::UNCLASSIFIED:
-				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-				    TimeBucket::OffsetTernaryOperator::Operation<interval_t, T, interval_t, T>);
-				break;
-			default:
-				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
-			}
+			throw InternalException("TimeBucketOffset called with constant NULL bucket width");
+		}
+		interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
+		TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
+		switch (bucket_width_type) {
+		case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
+			TernaryExecutor::Execute<interval_t, T, interval_t, T>(
+			    bucket_width_arg, ts_arg, offset_arg, result,
+			    TimeBucket::OffsetWidthConvertibleToMicrosTernaryOperator::Operation<interval_t, T, interval_t, T>);
+			break;
+		case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
+			TernaryExecutor::Execute<interval_t, T, interval_t, T>(
+			    bucket_width_arg, ts_arg, offset_arg, result,
+			    TimeBucket::OffsetWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
+			break;
+		case TimeBucket::BucketWidthType::UNCLASSIFIED:
+			TernaryExecutor::Execute<interval_t, T, interval_t, T>(
+			    bucket_width_arg, ts_arg, offset_arg, result,
+			    TimeBucket::OffsetTernaryOperator::Operation<interval_t, T, interval_t, T>);
+			break;
+		default:
+			throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 		}
 	} else {
 		TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-		    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
+		    bucket_width_arg, ts_arg, offset_arg, result,
 		    TimeBucket::OffsetTernaryOperator::Operation<interval_t, T, interval_t, T>);
 	}
 }
@@ -311,33 +306,32 @@ template <typename T>
 void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 
-	auto &bucket_width_arg = args.data[0];
-	auto &ts_arg = args.data[1];
-	auto &origin_arg = args.data[2];
+	const auto &bucket_width_arg = args.data[0];
+	const auto &ts_arg = args.data[1];
+	const auto &origin_arg = args.data[2];
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 		    !Value::IsFinite(*ConstantVector::GetData<T>(origin_arg))) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
 			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
-				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
+				    bucket_width_arg, ts_arg, origin_arg, result,
 				    TimeBucket::OriginWidthConvertibleToMicrosTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
 			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
-				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
+				    bucket_width_arg, ts_arg, origin_arg, result,
 				    TimeBucket::OriginWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
 			case TimeBucket::BucketWidthType::UNCLASSIFIED:
-				TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
-				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
+				TernaryExecutor::Execute<interval_t, T, T, T>(
+				    bucket_width_arg, ts_arg, origin_arg, result,
 				    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
 			default:
@@ -345,8 +339,8 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 			}
 		}
 	} else {
-		TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
-		    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
+		TernaryExecutor::Execute<interval_t, T, T, T>(
+		    bucket_width_arg, ts_arg, origin_arg, result,
 		    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 	}
 }
@@ -369,6 +363,7 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
 	for (auto &func : time_bucket.functions) {
 		func.SetFallible();
+		func.SetArgProperties(1, ArgProperties().NonDecreasing());
 	}
 	return time_bucket;
 }

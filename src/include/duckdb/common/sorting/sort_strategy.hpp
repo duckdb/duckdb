@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class ParallelHyperLogLogLocalState;
+
 class SortStrategy {
 public:
 	using Types = vector<LogicalType>;
@@ -51,7 +53,7 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
-	virtual void SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize);
+	virtual void SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const;
 
 	virtual SourceResultType MaterializeColumnData(ExecutionContext &context, idx_t hash_bin,
 	                                               OperatorSourceInput &source) const = 0;
@@ -69,12 +71,14 @@ public:
 	using ChunkRows = vector<ChunkRow>;
 	virtual const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const = 0;
 
+	virtual void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const;
+
 public:
 	//! The inserted data schema
 	Types payload_types;
 	//! Input columns in the sorted output
 	vector<column_t> scan_ids;
-	// Key columns in the sorted output. Needed for prefix computations.
+	//! Key columns in the sorted output. Needed for prefix computations.
 	vector<column_t> sort_ids;
 };
 

@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
@@ -79,6 +80,7 @@ void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
 	D_ASSERT(filters.HasFilters());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
+	adaptive_filter->SetLogger(context.logger);
 	filter_list.reserve(filters.FilterCount());
 	for (auto &entry : filters) {
 		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
@@ -197,6 +199,13 @@ TableScanOptions &CollectionScanState::GetOptions() {
 
 ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
+}
+
+void ParallelCollectionScanState::AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group) {
+	current_row_group = row_group;
+	while (current_row_group && !ShouldScanPartition(*current_row_group)) {
+		current_row_group = GetNextRowGroup(*row_groups, *current_row_group).get();
+	}
 }
 
 optional_ptr<SegmentNode<RowGroup>> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {

@@ -9,8 +9,8 @@ namespace {
 
 struct SHA1Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto hash = StringVector::EmptyString(result, duckdb_mbedtls::MbedTlsWrapper::SHA1_HASH_LENGTH_TEXT);
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
+		auto hash = heap.EmptyString(duckdb_mbedtls::MbedTlsWrapper::SHA1_HASH_LENGTH_TEXT);
 
 		duckdb_mbedtls::MbedTlsWrapper::SHA1State state;
 		state.AddString(input.GetString());
@@ -22,9 +22,9 @@ struct SHA1Operator {
 };
 
 void SHA1Function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 
-	UnaryExecutor::ExecuteString<string_t, string_t, SHA1Operator>(input, result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, SHA1Operator>(input, result);
 }
 
 } // namespace

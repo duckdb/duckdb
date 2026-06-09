@@ -7,12 +7,14 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/cifuzz.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!tools/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/cifuzz.yml'
 
 
 concurrency:

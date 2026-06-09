@@ -11,17 +11,14 @@ namespace duckdb {
 
 namespace {
 struct RegrSState {
+	static constexpr const char *STATE_NAMES[] = {"count", "var_pop"};
+	using STATE_TYPE = StructStateType<uint64_t, StddevState>;
+
 	uint64_t count;
 	StddevState var_pop;
 };
 
 struct RegrBaseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<uint64_t>(state.count);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		RegrCountFunction::Combine<uint64_t, OP>(source.count, target.count, aggr_input_data);
@@ -60,25 +57,16 @@ struct RegrSYYOperation : RegrBaseOperation {
 	}
 };
 
-LogicalType GetRegrSStateType(const AggregateFunction &) {
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrSXXFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 AggregateFunction RegrSYYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

@@ -244,94 +244,21 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
 }
 
 //===--------------------------------------------------------------------===//
-// Legacy Aggregate State Type Info
-//===--------------------------------------------------------------------===//
-LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo()
-    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
-}
-
-LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
-}
-
-shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::Copy() const {
-	return make_shared_ptr<LegacyAggregateStateTypeInfo>(*this);
-}
-
-bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<LegacyAggregateStateTypeInfo>();
-	return state_type.function_name == other.state_type.function_name &&
-	       state_type.return_type == other.state_type.return_type &&
-	       state_type.bound_argument_types == other.state_type.bound_argument_types;
-}
-
-//===--------------------------------------------------------------------===//
-// Aggregate State Type Info
-//===--------------------------------------------------------------------===//
-/*
- * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
- * instead of StructTypeInfo. This is intentional because of a bug in the generation script logic:
- * the generation script produces invalid C++ when handling
- *    multi-level inheritance for these types (specifically, trying to access
- *    non-static members in static Deserialize methods). Flattening the JSON
- *    ensures the dispatch logic remains in ExtraTypeInfo::Deserialize where
- *    the 'type' property is readily available.
- */
-
-AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
-}
-
-AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
-    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
-      state_type(std::move(state_type_p)) {
-}
-
-bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<AggregateStateTypeInfo>();
-	return state_type.function_name == other.state_type.function_name &&
-	       state_type.return_type == other.state_type.return_type &&
-	       state_type.bound_argument_types == other.state_type.bound_argument_types && child_types == other.child_types;
-}
-
-shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
-	result->alias = alias;
-	return std::move(result);
-}
-
-shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
-	child_list_t<LogicalType> copied_child_types;
-	for (const auto &child_type : child_types) {
-		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
-	}
-
-	vector<LogicalType> copied_bound_arguments;
-	for (const auto &arg : state_type.bound_argument_types) {
-		copied_bound_arguments.push_back(arg.DeepCopy());
-	}
-	aggregate_state_t copied_state_type(state_type.function_name, state_type.return_type.DeepCopy(),
-	                                    std::move(copied_bound_arguments));
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(copied_state_type, copied_child_types);
-	result->alias = alias;
-	return std::move(result);
-}
-
-//===--------------------------------------------------------------------===//
 // User Type Info
 //===--------------------------------------------------------------------===//
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 		return;
 	}
 
 	// Try to write this as an old "USER" type, if possible
-	if (expr->type != ExpressionType::TYPE) {
+	if (expr->GetExpressionType() != ExpressionType::TYPE) {
 		throw SerializationException(
 		    "Cannot serialize non-type type expression when targeting database storage version '%s'",
-		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		    serializer.GetOptions().storage_compatibility.duckdb_version);
 	}
 
 	auto &type_expr = expr->Cast<TypeExpression>();
@@ -342,14 +269,14 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	// Try to write the user type mods too
 	vector<Value> user_type_mods;
 	for (auto &param : type_expr.GetChildren()) {
-		if (param->type != ExpressionType::VALUE_CONSTANT) {
+		if (param->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw SerializationException(
 			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
-			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			    serializer.GetOptions().storage_compatibility.duckdb_version);
 		}
 
 		auto &const_expr = param->Cast<ConstantExpression>();
-		user_type_mods.push_back(const_expr.value);
+		user_type_mods.push_back(const_expr.GetValue());
 	}
 
 	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
@@ -382,6 +309,22 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 }
 
 //===--------------------------------------------------------------------===//
+// Legacy Aggregate State Type Info
+//===--------------------------------------------------------------------===//
+LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo()
+    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
+	throw InternalException("LegacyAggregateStateTypeInfo should no longer be getting constructed");
+}
+
+bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	throw InternalException("LegacyAggregateStateTypeInfo should no longer be getting constructed");
+}
+
+shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::LegacyDeserialize() {
+	return make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+}
+
+//===--------------------------------------------------------------------===//
 // Enum Type Info
 //===--------------------------------------------------------------------===//
 PhysicalType EnumTypeInfo::DictType(idx_t size) {
@@ -396,7 +339,7 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 	}
 }
 
-EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
+EnumTypeInfo::EnumTypeInfo(const Vector &values_insert_order_p, idx_t dict_size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
 }
@@ -413,7 +356,7 @@ const idx_t &EnumTypeInfo::GetDictSize() const {
 	return dict_size;
 }
 
-LogicalType EnumTypeInfo::CreateType(Vector &ordered_data, idx_t size) {
+LogicalType EnumTypeInfo::CreateType(const Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
@@ -511,8 +454,7 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
-	Vector values_insert_order_copy(LogicalType::VARCHAR, false, false, 0);
-	values_insert_order_copy.Reference(values_insert_order);
+	Vector values_insert_order_copy(Vector::Ref(values_insert_order));
 	return make_shared_ptr<EnumTypeInfo>(values_insert_order_copy, dict_size);
 }
 

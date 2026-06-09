@@ -93,16 +93,6 @@ struct UnifiedVariantVector {
 	DUCKDB_API static const UnifiedVectorFormat &GetData(const RecursiveUnifiedVectorFormat &vec);
 };
 
-//! This is a helper data structure. It contains all fields necessary to resize a vector.
-struct ResizeInfo {
-	ResizeInfo(Vector &vec, optional_ptr<VectorBuffer> buffer, const idx_t multiplier);
-
-	Vector &vec;
-	data_ptr_t data;
-	optional_ptr<VectorBuffer> buffer;
-	idx_t multiplier;
-};
-
 struct ConsecutiveChildListInfo {
 	ConsecutiveChildListInfo() : is_constant(true), needs_slicing(false), child_list_info(list_entry_t(0, 0)) {
 	}

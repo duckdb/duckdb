@@ -30,7 +30,7 @@ public:
 		INVALID
 	};
 
-	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
+	/* The double {{}} in the initializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
 	template <class T, class MATCHER>
 	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<reference<T>> &entries,
 	                           vector<reference<T>> &bindings, unordered_set<idx_t> excluded_entries, idx_t m_idx = 0) {

@@ -1,0 +1,20 @@
+[
+    {
+        "name": "row_number",
+        "parameters": "",
+        "description": "The row number in a window partition",
+        "example": "ROW_NUMBER() OVER (PARTITION BY client ORDER BY date)",
+        "categories": "",
+
+        "type": "window_function"
+    },
+    {
+        "name": "ntile",
+        "parameters": "num_buckets",
+        "description": "The row bucket in a window partition for a given bucket count",
+        "example": "NTILE(12) OVER (PARTITION BY client ORDER BY month)",
+        "categories": "",
+
+        "type": "window_function"
+    }
+]

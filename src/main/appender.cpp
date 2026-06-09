@@ -24,6 +24,7 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
@@ -79,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetCardinality(chunk.size() + 1);
+	chunk.SetChildCardinality(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -87,7 +88,7 @@ void BaseAppender::EndRow() {
 
 template <class SRC, class DST>
 void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
-	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetDataMutable<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 template <class SRC, class DST>
@@ -99,7 +100,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		CastParameters parameters;
-		auto &result = FlatVector::GetData<DST>(col)[chunk.size()];
+		auto &result = FlatVector::GetDataMutable<DST>(col)[chunk.size()];
 		TryCastToDecimal::Operation<SRC, DST>(input, result, parameters, width, scale);
 		return;
 	}
@@ -196,7 +197,8 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetDataMutable<string_t>(col)[chunk.size()] =
+		    StringCast::Operation<T>(input, StringVector::GetStringHeap(col));
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
@@ -316,17 +318,13 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (col >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	if (row >= target.GetCapacity()) {
-		throw InvalidInputException("Too many rows for chunk!");
-	}
-
 	if (value.type() == target.GetTypes()[col]) {
-		target.SetValue(col, row, value);
+		target.data[col].SetValue(row, value);
 	} else {
 		Value new_value;
 		string error_msg;
 		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.SetValue(col, row, new_value);
+			target.data[col].SetValue(row, new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -344,7 +342,7 @@ void BaseAppender::Append(std::nullptr_t value) {
 }
 
 void BaseAppender::AppendValue(const Value &value) {
-	chunk.SetValue(column, chunk.size(), value);
+	chunk.data[column].SetValue(chunk.size(), value);
 	column++;
 }
 
@@ -371,7 +369,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
 	cast_chunk.Initialize(allocator, appender_types);
-	cast_chunk.SetCardinality(size);
+	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
 		if (chunk_p.data[i].GetType() == appender_types[i]) {
@@ -415,7 +413,14 @@ void BaseAppender::Flush() {
 		return;
 	}
 
-	FlushInternal(*collection);
+	try {
+		FlushInternal(*collection);
+	} catch (...) {
+		// Reset so the destructor does not re-attempt flushing the same data,
+		// which would hit assertions in the storage layer if it is inconsistent.
+		collection->Reset();
+		throw;
+	}
 	collection->Reset();
 	column = 0;
 }
@@ -454,7 +459,7 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	case StatementType::UPDATE_STATEMENT:
 		return statement.Cast<UpdateStatement>().node->cte_map;
 	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
+		return statement.Cast<MergeIntoStatement>().node->cte_map;
 	default:
 		throw InvalidInputException(
 		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
@@ -483,7 +488,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 
 	// Create the CTE info.
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(cte_select->node);
 	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 
 	// Add the appender data as a CTE to the CTE map of the statement.
@@ -741,7 +746,7 @@ InternalAppender::~InternalAppender() {
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
-	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
+	table.GetStorage().LocalAppend(table.Cast<DuckTableEntry>(), context, collection, bound_constraints, nullptr);
 }
 
 void BaseAppender::Close() {

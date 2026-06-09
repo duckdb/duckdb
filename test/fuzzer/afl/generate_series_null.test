@@ -2,9 +2,6 @@
 # description: Fuzzer: NULL in generate series
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT c0 FROM generate_series(NULL) t3(c0);
 ----

@@ -2,9 +2,6 @@
 # description: Referencing the same column multiple twice in constraint definition.
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 CREATE TABLE t0 (c0 INT, UNIQUE (c0, c0));
 ----

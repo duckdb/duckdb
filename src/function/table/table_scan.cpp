@@ -16,22 +16,26 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -42,8 +46,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
 
-	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
+	idx_t row_groups_scanned = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -68,11 +72,15 @@ public:
 		D_ASSERT(bind_data_p);
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		max_threads = duck_table.GetStorage().MaxThreads(context);
+		auto &storage = duck_table.GetStorage();
+		max_threads = storage.MaxThreads(context);
+		total_row_groups_to_scan = storage.GetRowGroupCountWithLocalStorage(context);
 	}
 
 	//! The maximum number of threads for this table scan.
 	idx_t max_threads;
+	//! The total number of row groups available to this table scan.
+	idx_t total_row_groups_to_scan;
 	//! The projected columns of this table scan.
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
@@ -86,6 +94,7 @@ public:
 	virtual OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                        TableFunctionGetPartitionInput &input) = 0;
 	virtual idx_t TableScanRowsScanned(LocalTableFunctionState &state) = 0;
+	virtual idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) = 0;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -118,6 +127,9 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
+	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
+	//! ART indexes are rebuilt during vacuuming with this setting).
+	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -126,7 +138,7 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
-		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 
 		// Initialize the local storage scan.
 		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
@@ -189,7 +201,7 @@ public:
 			case ExecutionPhase::STORAGE: {
 				// Scan (in parallel) storage
 				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
-				Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
+				Vector local_vector(LogicalType::ROW_TYPE, row_id_data, scan_count);
 
 				if (CanRemoveFilterColumns()) {
 					l_state.all_columns.Reset();
@@ -251,6 +263,10 @@ public:
 		auto &l_state = state.Cast<IndexScanLocalState>();
 		return l_state.rows_scanned;
 	}
+
+	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &) override {
+		return 0;
+	}
 };
 
 class DuckTableScanState : public TableScanGlobalState {
@@ -282,25 +298,30 @@ public:
 		}
 
 		if (bind_data.order_options) {
-			l_state->scan_state.table_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+			l_state->scan_state.table_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
+			l_state->scan_state.local_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options,
 		                               total_rows);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
+		if (l_state->rows_in_current_row_group > 0) {
+			l_state->row_groups_scanned++;
+		}
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
 
-		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 		return std::move(l_state);
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
+		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 		do {
 			if (bind_data.is_create_index) {
@@ -316,9 +337,10 @@ public:
 				return;
 			}
 
-			// We have fully processed a row group. Add to scanned_rows
-			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (l_state.rows_in_current_row_group > 0) {
+				l_state.row_groups_scanned++;
+			}
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
@@ -369,8 +391,13 @@ public:
 	}
 
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
+		const auto &l_state = state.Cast<TableScanLocalState>();
+		return l_state.scan_state.table_state.rows_scanned + l_state.scan_state.local_state.rows_scanned;
+	}
+
+	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) override {
 		auto &l_state = state.Cast<TableScanLocalState>();
-		return l_state.rows_scanned;
+		return l_state.row_groups_scanned;
 	}
 };
 
@@ -384,10 +411,21 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
 	if (bind_data.order_options) {
-		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+		auto transaction = TransactionData(DuckTransaction::Get(context, storage.GetAttached()));
+		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
+		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
+	}
+	if (bind_data.partitions_to_scan) {
+		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
 	}
 
+	// Check if row_number column is requested and initialize row_number_base
+	for (idx_t i = 0; i < input.column_ids.size(); i++) {
+		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			g_state->state.scan_state.row_number_base = 0;
+			break;
+		}
+	}
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
@@ -397,7 +435,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsRowIdColumn() || col_idx.IsRowNumberColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 		} else if (col_idx.HasType()) {
 			g_state->scanned_types.push_back(col_idx.GetScanType());
@@ -409,8 +447,10 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 }
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
-                                                             const TableScanBindData &bind_data, set<row_t> &row_ids) {
+                                                             const TableScanBindData &bind_data, set<row_t> &row_ids,
+                                                             unique_ptr<StorageLockKey> vacuum_lock) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
+	g_state->vacuum_lock = std::move(vacuum_lock);
 	g_state->finished_first_phase = row_ids.empty() ? true : false;
 	g_state->started_last_phase = false;
 
@@ -450,104 +490,161 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
-bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_reference<ConstantFilter>> &comparisons,
-                                    vector<const_reference<InFilter>> &in_filters) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &comparison = filter.Cast<ConstantFilter>();
-		comparisons.push_back(comparison);
-		return true;
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<OptionalFilter>();
-		if (!optional_filter.child_filter) {
-			return true; // No child filters, always OK
+struct ComparisonCondition {
+	ExpressionType type;
+	Value constant;
+};
+
+static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, value_set_t &in_values,
+                                                      vector<ComparisonCondition> &comparisons) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+	    expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetChildren().empty() || op.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+			return false;
 		}
-		return ExtractComparisonsAndInFilters(*optional_filter.child_filter, comparisons, in_filters);
-	}
-	case TableFilterType::IN_FILTER: {
-		in_filters.push_back(filter.Cast<InFilter>());
+		for (idx_t i = 1; i < op.GetChildren().size(); i++) {
+			if (op.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+				return false;
+			}
+			auto &value = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
+			if (!value.IsNull()) {
+				in_values.insert(value);
+			}
+		}
 		return true;
 	}
-	case TableFilterType::BLOOM_FILTER:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		Value val;
+		auto &left = BoundComparisonExpression::Left(comp);
+		auto &right = BoundComparisonExpression::Right(comp);
+		bool left_is_ref = left.GetExpressionClass() == ExpressionClass::BOUND_REF;
+		bool right_is_ref = right.GetExpressionClass() == ExpressionClass::BOUND_REF;
+		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
+			val = right.Cast<BoundConstantExpression>().GetValue();
+		} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
+			val = left.Cast<BoundConstantExpression>().GetValue();
+		} else {
+			return false;
+		}
+		if (val.IsNull()) {
+			return false;
+		}
+		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+			in_values.insert(val);
+		}
+		comparisons.push_back({comp.GetExpressionType(), std::move(val)});
+		return true;
 	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		for (idx_t i = 0; i < conjunction_and.child_filters.size(); i++) {
-			if (!ExtractComparisonsAndInFilters(*conjunction_and.child_filters[i], comparisons, in_filters)) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : conj.GetChildren()) {
+			if (!CollectValuesAndComparisonsFromExpression(*child, in_values, comparisons)) {
 				return false;
 			}
 		}
 		return true;
 	}
-	default:
-		return false;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
+				return true;
+			}
+			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
+			return !data.child_filter_expr ||
+			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		}
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
+				return true;
+			}
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+			return !data.child_filter_expr ||
+			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		}
+		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
+			return true;
+		}
 	}
+	return false;
 }
 
-value_set_t GetUniqueValues(const vector<const_reference<ConstantFilter>> &comparisons,
-                            const vector<const_reference<InFilter>> &in_filters) {
-	// Get the combined unique values of the IN filters.
-	value_set_t unique_values;
-	for (idx_t filter_idx = 0; filter_idx < in_filters.size(); filter_idx++) {
-		auto &in_filter = in_filters[filter_idx].get();
-		for (idx_t value_idx = 0; value_idx < in_filter.values.size(); value_idx++) {
-			auto &value = in_filter.values[value_idx];
-			if (unique_values.find(value) != unique_values.end()) {
-				continue;
-			}
-			unique_values.insert(value);
+//! Check if a value qualifies against all extracted comparison conditions.
+static bool ValueQualifies(const Value &value, const vector<ComparisonCondition> &comparisons) {
+	for (auto &comp : comparisons) {
+		bool passes;
+		switch (comp.type) {
+		case ExpressionType::COMPARE_EQUAL:
+			passes = ValueOperations::Equals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+			passes = ValueOperations::NotEquals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_GREATERTHAN:
+			passes = ValueOperations::GreaterThan(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			passes = ValueOperations::GreaterThanEquals(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+			passes = ValueOperations::LessThan(value, comp.constant);
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			passes = ValueOperations::LessThanEquals(value, comp.constant);
+			break;
+		default:
+			return true;
+		}
+		if (!passes) {
+			return false;
 		}
 	}
+	return true;
+}
 
-	// Extract all qualifying values.
-	for (auto value_it = unique_values.begin(); value_it != unique_values.end();) {
-		bool qualifies = true;
-		for (idx_t comp_idx = 0; comp_idx < comparisons.size(); comp_idx++) {
-			if (!comparisons[comp_idx].get().Compare(*value_it)) {
-				qualifies = false;
-				value_it = unique_values.erase(value_it);
-				break;
-			}
-		}
-		if (qualifies) {
-			value_it++;
+static bool ExtractValuesFromExpression(const Expression &expr, value_set_t &values) {
+	value_set_t in_values;
+	vector<ComparisonCondition> comparisons;
+	if (!CollectValuesAndComparisonsFromExpression(expr, in_values, comparisons) || in_values.empty()) {
+		return false;
+	}
+	for (auto &value : in_values) {
+		if (ValueQualifies(value, comparisons)) {
+			values.insert(value);
 		}
 	}
-
-	return unique_values;
+	return !values.empty();
 }
 
 void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnRefExpression &bound_ref,
                                   vector<unique_ptr<Expression>> &expressions) {
 	for (const auto &value : unique_values) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(value);
-		auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
-		                                                        std::move(bound_constant));
+		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                                     std::move(bound_constant));
 		expressions.push_back(std::move(filter_expr));
 	}
 }
 
 vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExtractFilterExpressions");
 	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
-	// Extract all comparisons and IN filters from nested filters
+	// Extract all exact values we can derive from the filter tree.
 	vector<unique_ptr<Expression>> expressions;
-	vector<const_reference<ConstantFilter>> comparisons;
-	vector<const_reference<InFilter>> in_filters;
-	if (ExtractComparisonsAndInFilters(filter, comparisons, in_filters)) {
-		// Deduplicate/deal with conflicting filters, then convert to expressions
-		ExtractExpressionsFromValues(GetUniqueValues(comparisons, in_filters), *bound_ref, expressions);
+	value_set_t values;
+	if (ExtractValuesFromExpression(*expr_filter.expr, values)) {
+		ExtractExpressionsFromValues(values, *bound_ref, expressions);
 	}
 
 	// Attempt matching the top-level filter to the index expression.
 	if (expressions.empty()) {
-		auto filter_expr = filter.ToExpression(*bound_ref);
+		auto filter_expr = expr_filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));
 	}
 
@@ -593,8 +690,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
+			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
+				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
 			}
 		});
 	}
@@ -669,6 +766,12 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!input.filters) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
+
+	// Only scan specific partitions
+	if (bind_data.partitions_to_scan) {
+		return DuckTableScanInitGlobal(context, input, storage, bind_data);
+	}
+
 	auto &filter_set = *input.filters;
 
 	// FIXME: We currently only support scanning one ART with one filter.
@@ -698,6 +801,17 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
+	// If vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
+	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
+	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
+	// <ART index, SegmentTree<RowGroup> pairing.
+	unique_ptr<StorageLockKey> vacuum_lock;
+	const auto &attached = storage.GetAttached();
+	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
+		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
+		vacuum_lock = transaction_manager.SharedVacuumLock();
+	}
+
 	info->BindIndexes(context, ART::TYPE_NAME);
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
@@ -716,7 +830,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
-	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids);
+	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids, std::move(vacuum_lock));
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
@@ -730,7 +844,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, Ta
 		return nullptr;
 	}
 
-	if (column_id.IsRowIdColumn()) {
+	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn()) {
 		return nullptr;
 	}
 	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
@@ -789,9 +903,12 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
-idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
-	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
-	return gstate.TableScanRowsScanned(local_state);
+void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	auto &gstate = input.global_state->Cast<TableScanGlobalState>();
+	auto &local_state = *input.local_state;
+	input.operator_metrics.rows_scanned = gstate.TableScanRowsScanned(local_state);
+	input.operator_metrics.row_groups_scanned = gstate.TableScanRowGroupsScanned(local_state);
+	input.operator_metrics.total_row_groups_to_scan = gstate.total_row_groups_to_scan;
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
@@ -863,6 +980,11 @@ void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<F
 	bind_data.order_options = std::move(order_options);
 }
 
+void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -870,7 +992,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.statistics_extended = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
-	scan_function.rows_scanned = TableScanRowsScanned;
+	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
@@ -888,6 +1010,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	scan_function.set_scan_order = SetScanOrder;
+	scan_function.set_partitions_to_scan = SetPartitionsToScan;
 	scan_function.supports_pushdown_extract = TableSupportsPushdownExtract;
 	return scan_function;
 }

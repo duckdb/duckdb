@@ -1,0 +1,20 @@
+{
+  "description": "Run on persistent databases with default_io_mode=MMAP so the storage layer goes through the memory-mapped block path.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__force_storage_mmap.db",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json",
+  "settings": [
+    {
+      "name": "default_io_mode",
+      "value": "MMAP"
+    }
+  ],
+  "skip_tests": [
+    {
+      "reason": "Asserts the default value of default_io_mode, which this config overrides.",
+      "paths": [
+        "test/sql/storage/attach_mmap.test"
+      ]
+    }
+  ]
+}

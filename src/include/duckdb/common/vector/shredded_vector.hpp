@@ -12,6 +12,34 @@
 
 namespace duckdb {
 
+class ShreddedVectorBuffer : public VectorBuffer {
+public:
+	explicit ShreddedVectorBuffer(Vector &shredded_data, count_t count);
+	~ShreddedVectorBuffer() override;
+
+public:
+	Vector &GetChild() {
+		return *shredded_data;
+	}
+
+public:
+	idx_t Capacity() const override {
+		return Size();
+	}
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	string ToString(const LogicalType &type, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+private:
+	unique_ptr<Vector> shredded_data;
+};
+
 struct ShreddedVector {
 	static void VerifyShreddedVector(const Vector &vector) {
 #ifdef DUCKDB_DEBUG_NO_SAFETY
@@ -36,7 +64,7 @@ struct ShreddedVector {
 	DUCKDB_API static void Unshred(const Vector &vec, const SelectionVector &sel, idx_t count);
 
 	//! Returns whether or not the vector is fully shredded
-	DUCKDB_API static bool IsFullyShredded(Vector &vec);
+	DUCKDB_API static bool IsFullyShredded(const Vector &vec);
 };
 
 } // namespace duckdb

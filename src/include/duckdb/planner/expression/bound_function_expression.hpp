@@ -20,20 +20,35 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_FUNCTION;
 
 public:
-	BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
-	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,
-	                        bool is_operator = false);
-
-	//! The bound function expression
-	ScalarFunction function;
-	//! List of child-expressions of the function
-	vector<unique_ptr<Expression>> children;
-	//! The bound function data (if any)
-	unique_ptr<FunctionData> bind_info;
-	//! Whether or not the function is an operator, only used for rendering
-	bool is_operator;
+	BoundFunctionExpression(BoundScalarFunction bound_function, vector<unique_ptr<Expression>> arguments,
+	                        unique_ptr<FunctionData> bind_info, bool is_operator = false);
 
 public:
+	const BoundScalarFunction &Function() const {
+		return function;
+	}
+	BoundScalarFunction &FunctionMutable() {
+		return function;
+	}
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
+	const unique_ptr<FunctionData> &BindInfo() const {
+		return bind_info;
+	}
+	unique_ptr<FunctionData> &BindInfoMutable() {
+		return bind_info;
+	}
+	bool IsOperator() const {
+		return is_operator;
+	}
+	bool &IsOperatorMutable() {
+		return is_operator;
+	}
+
 	bool IsVolatile() const override;
 	bool IsConsistent() const override;
 	bool IsFoldable() const override;
@@ -48,6 +63,21 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	static ExpressionType GetFunctionExpressionType(const BoundScalarFunction &bound_function,
+	                                                const vector<unique_ptr<Expression>> &arguments,
+	                                                optional_ptr<FunctionData> bind_info);
+
+private:
+	//! The bound function expression
+	BoundScalarFunction function;
+	//! List of child-expressions of the function
+	vector<unique_ptr<Expression>> children;
+	//! The bound function data (if any)
+	unique_ptr<FunctionData> bind_info;
+	//! Whether or not the function is an operator, only used for rendering
+	bool is_operator;
 };
 
 } // namespace duckdb

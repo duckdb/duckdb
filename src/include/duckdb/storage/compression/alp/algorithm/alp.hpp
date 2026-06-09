@@ -345,7 +345,7 @@ struct AlpCompression {
 			compression_data.encoded_integers[null_value_pos] = a_non_exception_value;
 		}
 
-		// Analyze FFOR
+		// Analyze FFOR // typos:ignore
 		auto min_value = NumericLimits<int64_t>::Maximum();
 		auto max_value = NumericLimits<int64_t>::Minimum();
 		for (idx_t i = 0; i < n_values; i++) {

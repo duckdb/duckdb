@@ -15,10 +15,9 @@ void WindowAggregateStates::Initialize(idx_t count) {
 	auto state_ptr = states.data();
 
 	statef = make_uniq<Vector>(LogicalType::POINTER, count);
-	auto state_f_data = FlatVector::GetData<data_ptr_t>(*statef);
-
+	auto state_f_data = FlatVector::Writer<data_ptr_t>(*statef, count);
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
-		state_f_data[i] = state_ptr;
+		state_f_data.WriteValue(state_ptr);
 		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
 	}
 
@@ -27,12 +26,12 @@ void WindowAggregateStates::Initialize(idx_t count) {
 }
 
 void WindowAggregateStates::Combine(WindowAggregateStates &target) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	AggregateInputData aggr_input_data(aggr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 	aggr.function.GetStateCombineCallback()(*statef, *target.statef, aggr_input_data, GetCount());
 }
 
 void WindowAggregateStates::Finalize(Vector &result) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(*statef, aggr_input_data, result, GetCount(), 0);
 }
 
@@ -41,7 +40,7 @@ void WindowAggregateStates::Destroy() {
 		return;
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	if (aggr.function.HasStateDestructorCallback()) {
 		aggr.function.GetStateDestructorCallback()(*statef, aggr_input_data, GetCount());
 	}

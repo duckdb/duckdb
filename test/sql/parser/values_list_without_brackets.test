@@ -2,9 +2,6 @@
 # description: Test values list without brackets
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT * FROM values (42) t;
 ----

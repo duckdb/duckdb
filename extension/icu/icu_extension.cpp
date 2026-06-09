@@ -83,14 +83,14 @@ struct IcuBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function) {
+	                      const BoundScalarFunction &function) {
 		auto &bind_data = bind_data_p->Cast<IcuBindData>();
 		serializer.WriteProperty(100, "language", bind_data.language);
 		serializer.WriteProperty(101, "country", bind_data.country);
 		serializer.WritePropertyWithDefault<string>(102, "tag", bind_data.tag);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		string language;
 		string country;
 		string tag;
@@ -131,12 +131,12 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<IcuBindData>();
+	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
 	duckdb::unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		// create a sort key from the string
 		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
 		// convert the sort key to hexadecimal
@@ -153,14 +153,15 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	});
 }
 
-static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+
 	//! Return a tagged collator
-	if (!bound_function.extra_info.empty()) {
-		return make_uniq<IcuBindData>(bound_function.extra_info);
+	if (!bound_function.GetExtraInfo().empty()) {
+		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 
-	const auto collation = IcuBindData::DecodeFunctionName(bound_function.name);
+	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName());
 	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");
@@ -171,8 +172,11 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, S
 	}
 }
 
-static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
@@ -181,8 +185,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
 	}
 	//! Verify tagged collation
-	if (!bound_function.extra_info.empty()) {
-		return make_uniq<IcuBindData>(bound_function.extra_info);
+	if (!bound_function.GetExtraInfo().empty()) {
+		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 	auto splits = StringUtil::Split(StringValue::Get(val), "_");
 	if (splits.size() == 1) {
@@ -215,9 +219,10 @@ unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
 	return nullptr;
 }
 
-static string NormalizeTimeZone(const string &tz_str) {
-	if (GetKnownTimeZone(tz_str)) {
-		return tz_str;
+unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	duckdb::unique_ptr<icu::TimeZone> tz;
+	if (tz = GetKnownTimeZone(tz_str)) {
+		return tz;
 	}
 
 	//	Map UTC±NN00 to Etc/UTC±N
@@ -243,39 +248,61 @@ static string NormalizeTimeZone(const string &tz_str) {
 			break;
 		}
 
-		string mapped = "Etc/GMT";
-		mapped += sign;
-		const auto base_len = mapped.size();
+		// Collect remaining characters (digits and colons)
+		string remainder;
 		for (; pos < tz_str.size(); ++pos) {
-			const auto digit = tz_str[pos];
-			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
-			if (digit == '0' || digit == ':') {
-				continue;
-			}
-			if (!StringUtil::CharacterIsDigit(digit)) {
+			const auto ch = tz_str[pos];
+			if (ch != ':' && !StringUtil::CharacterIsDigit(ch)) {
 				break;
 			}
-			mapped += digit;
+			remainder += ch;
 		}
 		if (pos < tz_str.size()) {
 			break;
 		}
-		// If we didn't add anything, then make it +0
-		if (mapped.size() == base_len) {
-			mapped.back() = '+';
-			mapped += '0';
+
+		// Step 1: Strip leading zeros
+		idx_t start = 0;
+		while (start < remainder.size() && remainder[start] == '0') {
+			++start;
+		}
+		remainder = remainder.substr(start);
+
+		// Step 2: Parse hours based on whether colon is present
+		string hours_str;
+		auto colon_idx = remainder.find(':');
+		if (colon_idx != string::npos) {
+			// Has colon: split by colon, part before colon is hours
+			hours_str = remainder.substr(0, colon_idx);
+		} else if (remainder.size() <= 2) {
+			// 1-2 digits: entire string is hours
+			hours_str = remainder;
+		} else {
+			// No colon, 3+ digits: HHMM format, last 2 are minutes, rest are hours
+			hours_str = remainder.substr(0, remainder.size() - 2);
+		}
+
+		// Build the mapped timezone string
+		string mapped = "Etc/GMT";
+		if (hours_str.empty()) {
+			// Zero offset
+			mapped += "+0";
+		} else {
+			mapped += sign;
+			mapped += hours_str;
 		}
 		// Final sanity check
-		if (GetKnownTimeZone(mapped)) {
-			return mapped;
+		if (tz = GetKnownTimeZone(mapped)) {
+			tz_str = mapped;
+			return tz;
 		}
 	} while (false);
 
-	return tz_str;
+	return nullptr;
 }
 
 unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
-	auto tz = GetKnownTimeZone(tz_str);
+	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
 	}
@@ -332,7 +359,6 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	auto tz_str = StringValue::Get(parameter);
-	tz_str = NormalizeTimeZone(tz_str);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
 }
@@ -363,6 +389,10 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
 			break;
@@ -377,11 +407,10 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 		//	The calendar name is all we have
 		std::string utf8;
 		calendar->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
+		name_col.Append(Value(utf8));
 
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
@@ -470,8 +499,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
 	// If the environment TZ is invalid, look for some alternatives
-	tz_string = NormalizeTimeZone(tz_string);
-	if (!GetKnownTimeZone(tz_string)) {
+	tz = GetNormalizedTimeZone(tz_string);
+	if (!tz) {
 		tz_string = "UTC";
 	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),

@@ -168,18 +168,19 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports roaring
 	const auto storage_version = col_data.GetStorageManager().GetStorageVersion();
-	if (storage_version < 4 || (type == PhysicalType::BOOL && storage_version < 7)) {
+	// before: serialization version 4 and ser version 7
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version) ||
+	    (type == PhysicalType::BOOL && StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version))) {
 		// compatibility mode with old versions - disable roaring
 		return nullptr;
 	}
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<RoaringAnalyzeState>(info);
+	auto state = make_uniq<RoaringAnalyzeState>(col_data.GetBlockManager());
 	return std::move(state);
 }
 template <PhysicalType TYPE>
-bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool RoaringAnalyze(AnalyzeState &state, const Vector &input) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
-	analyze_state.Analyze<TYPE>(input, count);
+	analyze_state.Analyze<TYPE>(input);
 	return true;
 }
 
@@ -198,9 +199,9 @@ unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &ch
 }
 
 template <PhysicalType TYPE>
-void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void RoaringCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<RoaringCompressState>();
-	state.Compress<TYPE>(scan_vector, count);
+	state.Compress<TYPE>(scan_vector);
 }
 
 void RoaringFinalizeCompress(CompressionState &state_p) {
@@ -216,11 +217,8 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t scan_count) {
-	// Get src's validity mask
-	auto &validity = FlatVector::Validity(src);
-
-	auto write_ptr = FlatVector::GetData<uint8_t>(dst) + offset;
+void ExtractValidityMaskToData(const ValidityMask &validity, Vector &dst, idx_t offset, idx_t scan_count) {
+	auto write_ptr = FlatVector::GetDataMutable<uint8_t>(dst) + offset;
 	if (validity.CannotHaveNull()) {
 		memset(write_ptr, 1, scan_count); // 1 is for valid
 	} else if (scan_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {
@@ -235,32 +233,35 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 		memcpy(write_ptr, tmp_data.get(), scan_count);
 	}
 }
+
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
-
-	scan_state.ScanPartial(start, result, result_offset, scan_count);
+	auto &result_mask = FlatVector::ValidityMutable(result);
+	scan_state.ScanPartial(start, result_mask, result_offset, scan_count);
 }
 void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
 
-	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
-	scan_state.ScanPartial(start, dummy, 0, scan_count);
-	ExtractValidityMaskToData(dummy, result, result_offset, scan_count);
+	ValidityMask mask(scan_count);
+	scan_state.ScanPartial(start, mask, 0, scan_count);
+	ExtractValidityMaskToData(mask, result, result_offset, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	result.Flatten();
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
 void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// Dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
-	// scanned data in the vector's validity mask
-	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
-	RoaringScan(segment, state, scan_count, dummy);
-	ExtractValidityMaskToData(dummy, result, 0, scan_count);
+	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
+	auto start = state.GetPositionInSegment();
+
+	ValidityMask mask(scan_count);
+	scan_state.ScanPartial(start, mask, 0, scan_count);
+	ExtractValidityMaskToData(mask, result, 0, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -273,7 +274,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
-	scan_state.ScanInternal(container_state, 1, result, result_idx);
+	scan_state.ScanInternal(container_state, 1, FlatVector::ValidityMutable(result), result_idx);
 }
 void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                             idx_t result_idx) {
@@ -283,9 +284,9 @@ void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row
 	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
-	Vector dummy(LogicalType::UBIGINT, false, false, 1);
-	scan_state.ScanInternal(container_state, 1, dummy, 0);
-	ExtractValidityMaskToData(dummy, result, result_idx, 1);
+	ValidityMask validity(1);
+	scan_state.ScanInternal(container_state, 1, validity, 0);
+	ExtractValidityMaskToData(validity, result, result_idx, 1);
 }
 
 void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {

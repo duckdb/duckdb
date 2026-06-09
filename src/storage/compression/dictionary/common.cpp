@@ -22,7 +22,8 @@ idx_t DictionaryCompression::RequiredSpace(idx_t current_count, idx_t index_coun
 }
 
 StringDictionaryContainer DictionaryCompression::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr =
+	    reinterpret_cast<dictionary_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
 	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));
@@ -31,57 +32,10 @@ StringDictionaryContainer DictionaryCompression::GetDictionary(ColumnSegment &se
 
 void DictionaryCompression::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
                                           StringDictionaryContainer container) {
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr =
+	    reinterpret_cast<dictionary_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
-}
-
-DictionaryCompressionState::DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {
-}
-DictionaryCompressionState::~DictionaryCompressionState() {
-}
-
-bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
-	Verify();
-
-	for (auto entry : scan_vector.Values<string_t>(count)) {
-		idx_t string_size = 0;
-		bool new_string = false;
-		auto row_is_valid = entry.is_valid;
-
-		if (row_is_valid) {
-			auto &str = entry.value;
-			string_size = str.GetSize();
-			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
-				// Big strings not implemented for dictionary compression
-				return false;
-			}
-			new_string = !LookupString(str);
-		}
-
-		bool fits = CalculateSpaceRequirements(new_string, string_size);
-		if (!fits) {
-			Flush();
-			new_string = true;
-
-			fits = CalculateSpaceRequirements(new_string, string_size);
-			if (!fits) {
-				throw InternalException("Dictionary compression could not write to new segment");
-			}
-		}
-
-		if (!row_is_valid) {
-			AddNull();
-		} else if (new_string) {
-			AddNewString(entry.value);
-		} else {
-			AddLastLookup();
-		}
-
-		Verify();
-	}
-
-	return true;
 }
 
 } // namespace duckdb

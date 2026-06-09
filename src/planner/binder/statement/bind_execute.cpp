@@ -43,15 +43,15 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		if (is_literal) {
 			auto &constant = bound_expr->Cast<BoundConstantExpression>();
 			LogicalType return_type;
-			if (constant.return_type == LogicalTypeId::VARCHAR &&
-			    StringType::GetCollation(constant.return_type).empty()) {
+			if (constant.GetReturnType() == LogicalTypeId::VARCHAR &&
+			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
-			} else if (constant.return_type.IsIntegral()) {
-				return_type = LogicalType::INTEGER_LITERAL(constant.value);
+			} else if (constant.GetReturnType().IsIntegral()) {
+				return_type = LogicalType::INTEGER_LITERAL(constant.GetValueMutable());
 			} else {
-				return_type = constant.value.type();
+				return_type = constant.GetValueMutable().type();
 			}
-			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
+			parameter_data = BoundParameterData(std::move(constant.GetValueMutable()), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 			auto value_type = value.type();

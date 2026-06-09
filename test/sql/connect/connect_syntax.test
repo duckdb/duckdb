@@ -1,0 +1,50 @@
+# name: test/sql/connect/connect_syntax.test
+# description: Current expected behavior for all 4 CONNECT + 1 DISCONNECT grammar forms.
+# group: [connect]
+
+# ========================= CONNECT =========================
+
+# CONNECT; — bare form, not yet implemented.
+statement error
+CONNECT;
+----
+Not implemented Error: CONNECT with no target is not yet implemented
+
+# CONNECT LOCAL; — keyword form, not yet implemented.
+statement error
+CONNECT LOCAL;
+----
+Not implemented Error: CONNECT LOCAL is not yet implemented
+
+# CONNECT <name>; — identifier form, IMPLEMENTED. Errors now come from the dispatch logic, not
+# the placeholder.
+statement error
+CONNECT my_database;
+----
+<REGEX>:Invalid Input Error:.*Database "my_database" is not attached.*
+
+# Attached but unsupported backend → HasConnectFunction() gate fires.
+statement ok
+ATTACH ':memory:' AS plain_duckdb;
+
+statement error
+CONNECT plain_duckdb;
+----
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
+
+statement ok
+DETACH plain_duckdb;
+
+# CONNECT '<connection_string>'; — string-literal form, not yet implemented.
+statement error
+CONNECT 'connection_string_form';
+----
+Not implemented Error: CONNECT '<connection_string>' is not yet implemented
+
+# ========================= DISCONNECT =========================
+
+# DISCONNECT; — bare form, IMPLEMENTED. Errors when there is no active connection.
+statement error
+DISCONNECT;
+----
+<REGEX>:Invalid Input Error:.*no active CONNECT.*

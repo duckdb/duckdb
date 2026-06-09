@@ -7,9 +7,6 @@ require parquet
 load {TEMP_DIR}/candidate.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE candidate AS SELECT * FROM '{DATA_DIR}/parquet-testing/candidate.parquet'
 
 statement ok

@@ -1,0 +1,28 @@
+# name: test/sql/catalog/function/test_macro_correlated_cte.test
+# description: Correlated macro CTE decorrelation
+# group: [function]
+
+statement ok
+CREATE OR REPLACE MACRO test_21890_macro(q) AS TABLE
+WITH sel AS (
+	SELECT unnest(string_split(q, ',')) AS tag,
+	       row_number() OVER () AS node_id
+)
+SELECT s.tag, s.node_id
+FROM sel s
+WHERE s.tag = 'a'
+  AND NOT EXISTS (
+	  SELECT 1
+	  FROM sel args
+	  WHERE args.tag = 'b'
+	    AND s.node_id > args.node_id
+  );
+
+query TTI
+WITH inputs(q) AS (VALUES ('b'), ('a,a'))
+SELECT i.q, m.*
+FROM inputs i, test_21890_macro(i.q) m
+ORDER BY i.q, m.tag, m.node_id;
+----
+a,a	a	1
+a,a	a	1

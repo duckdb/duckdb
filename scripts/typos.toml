@@ -1,0 +1,54 @@
+[files]
+extend-exclude = [
+  "/benchmark/",
+  "/data/",
+  "/extension/icu/",
+  "/extension/jemalloc/",
+  "/extension/tpcds/dsdgen/",
+  "/extension/tpch/dbgen/",
+  "/scripts/generate_extensions_function.py",
+  "/src/common/crypto/md5.cpp",
+  "/src/include/duckdb/main/extension_entries.hpp",
+  "/test/",
+  "/tools/juliapkg/",
+  "/tools/shell/tests/test_*.py",
+  "/tools/swift/duckdb-swift/",
+  "third_party",
+]
+
+[default]
+extend-ignore-re = [
+  # Ignore short, intentionally random SQL literals (e.g. 'ABC')
+  "'[A-Z]{2,4}'",
+  # Explicitly capitalized words, ending with an optional 's'.
+  "\\b[A-Z]{2,}s?\\b",
+  # Ignore lines that end with `# typos:ignore`
+  "(?Rm)^.*(#|//)\\s*typos:ignore$",
+  # Ignore the line after `# typos:ignore-next-line`
+  "(#|//)\\s*typos:ignore-next-line\\n.*",
+  # Ignore blocks between `# typos:off` and `# typos:on`
+  "(?s)(#|//)\\s*typos:off.*?\\n\\s*(#|//)\\s*typos:on",
+]
+
+[default.extend-words]
+# Legal language
+stichting = "stichting"
+
+# Project-specific acronyms
+nd = "nd"
+eit = "eit"
+ser = "ser"
+siz = "siz"
+cpy = "cpy"
+Cpy = "Cpy"
+acount = "acount"
+
+# API identifiers (to avoid breaking code)
+writeable = "writeable"
+Writeable = "Writeable"
+millenium = "millenium"
+Millenium = "Millenium"
+seeked = "seeked"
+larg = "larg"
+rarg = "rarg"
+deliminated = "deliminated"

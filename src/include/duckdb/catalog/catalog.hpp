@@ -79,6 +79,22 @@ class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
+class QueryNode;
+
+//! Per-capability opt-in for remote catalogs. Each value gates a specific dispatch path or
+//! engine-wide accommodation:
+//!  - IS_REMOTE: this catalog represents data hosted on a remote server. Drives generic
+//!    accommodations (e.g. CheckAmbiguousCatalogOrSchema skips schema lookups, database_manager
+//!    counts attached remote catalogs).
+//!  - EXECUTE_QUERY_NODE: `RemoteExecute(QueryNode)` is implemented; the RemotePushdownOptimizer
+//!    may push down structured queries to this catalog.
+//!  - CONNECT: `RemoteExecute(string)` is implemented; the CONNECT chokepoint may route raw SQL
+//!    to this catalog.
+enum class RemoteCapability : uint8_t {
+	IS_REMOTE,
+	EXECUTE_QUERY_NODE,
+	CONNECT,
+};
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -332,6 +348,9 @@ public:
 	virtual bool SupportsTimeTravel() const {
 		return false;
 	}
+	virtual bool SupportsMultipleDMLCTEs() const {
+		return false;
+	}
 	virtual bool IsEncrypted() const {
 		return false;
 	}
@@ -339,6 +358,19 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+
+	virtual bool Supports(RemoteCapability capability) const {
+		return false;
+	}
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
+	virtual bool SupportsPushdown(const ParsedExpression &expression);
+	virtual bool SupportsPushdown(const TableRef &ref);
+	virtual bool SupportsPushdown(const QueryNode &node);
+	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
+	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
+	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
+	DUCKDB_API virtual string GetConnectDisplay();
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
@@ -355,7 +387,7 @@ public:
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
 
-	//! Returns the dependency manager of this catalog - if the catalog has anye
+	//! Returns the dependency manager of this catalog - if the catalog has any
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
 
 	//! Whether attaching a catalog with the given path and attach options would be considered a conflict

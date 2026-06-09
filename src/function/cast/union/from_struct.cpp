@@ -58,13 +58,13 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	for (idx_t i = 0; i < source_children.size(); i++) {
 		auto &result_child_vector = target_children[i];
 		auto &source_child_vector = source_children[i];
-		CastParameters child_parameters(parameters, cast_data.child_cast_info[i].cast_data, lstate.local_states[i]);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info[i].GetCastData(), lstate.local_states[i]);
 		auto converted =
-		    cast_data.child_cast_info[i].function(source_child_vector, result_child_vector, count, child_parameters);
+		    cast_data.child_cast_info[i].Cast(source_child_vector, result_child_vector, count, child_parameters);
 		(void)converted;
 		D_ASSERT(converted);
 		// we flatten the child because we use FlatVector::SetNull below and we may get non-flat from source/cast
-		result_child_vector.Flatten(count);
+		result_child_vector.Flatten();
 	}
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -77,8 +77,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	} else {
 		// if the tag is NULL, the union should be NULL
 		auto &tag_vec = target_children[0];
-		auto source_validity = source.Validity(count);
-		auto tag_validity = tag_vec.Validity(count);
+		auto source_validity = source.Validity();
+		auto tag_validity = tag_vec.Validity();
 
 		for (idx_t i = 0; i < count; i++) {
 			if (!source_validity.IsValid(i) || !tag_validity.IsValid(i)) {
@@ -104,7 +104,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		throw InternalException("Struct to union cast failed for unknown reason");
 	}
 
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 	return true;
 }
 

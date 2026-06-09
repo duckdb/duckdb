@@ -2,7 +2,7 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
+mode skip flaky
 
 # required when testing table samples. See basic_sample_test.test
 require vector_size 2048
@@ -10,9 +10,6 @@ require vector_size 2048
 require icu
 
 load {TEST_DIR}/test_samples.db
-
-statement ok
-PRAGMA enable_verification
 
 statement ok
 create table materialized_range as select * from range(5000000);

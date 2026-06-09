@@ -1,6 +1,18 @@
 #include "reader/decimal_column_reader.hpp"
 
+#include <memory>
+#include <cmath>
+
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "parquet_types.h"
+
 namespace duckdb {
+class ParquetReader;
+struct hugeint_t;
 
 template <bool FIXED>
 static unique_ptr<ColumnReader> CreateDecimalReaderInternal(const ParquetReader &reader,

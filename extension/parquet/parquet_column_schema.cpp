@@ -1,5 +1,14 @@
 #include "parquet_column_schema.hpp"
+
+#include <utility>
+
 #include "parquet_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "parquet_statistics.hpp"
 
 namespace duckdb {
 
@@ -86,24 +95,49 @@ ParquetColumnSchema ParquetColumnSchema::FileRowNumber() {
 	return res;
 }
 
+ParquetColumnSchema ParquetColumnSchema::FileRowGroupNumber() {
+	ParquetColumnSchema res;
+	res.name = "file_row_group_number";
+	res.max_define = 0;
+	res.max_repeat = 0;
+	res.schema_index = 0;
+	res.column_index = 0;
+	res.schema_type = ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER;
+	res.type = LogicalType::UBIGINT;
+	res.repetition_type = duckdb_parquet::FieldRepetitionType::type::OPTIONAL;
+	return res;
+}
+
 unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_meta_data,
                                                       const ParquetOptions &parquet_options, idx_t row_group_idx_p,
                                                       const vector<ColumnChunk> &columns) const {
 	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
 		return nullptr;
 	}
-	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+	if (schema_type == ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER) {
+		// the row group number is constant within a row group - set min and max to the row group index
 		auto stats = NumericStats::CreateUnknown(type);
+		NumericStats::SetMin(stats, Value::UBIGINT(UnsafeNumericCast<uint64_t>(row_group_idx_p)));
+		NumericStats::SetMax(stats, Value::UBIGINT(UnsafeNumericCast<uint64_t>(row_group_idx_p)));
+		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		return stats.ToUnique();
+	}
+	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 		auto &row_groups = file_meta_data.row_groups;
 		D_ASSERT(row_group_idx_p < row_groups.size());
+		if (row_groups[row_group_idx_p].num_rows == 0) {
+			return NumericStats::CreateEmpty(type).ToUnique();
+		}
+
 		idx_t row_group_offset_min = 0;
 		for (idx_t i = 0; i < row_group_idx_p; i++) {
 			row_group_offset_min += row_groups[i].num_rows;
 		}
 
+		auto stats = NumericStats::CreateUnknown(type);
 		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
-		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min +
-		                                                                     row_groups[row_group_idx_p].num_rows)));
+		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(
+		                                row_group_offset_min + row_groups[row_group_idx_p].num_rows - 1)));
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}

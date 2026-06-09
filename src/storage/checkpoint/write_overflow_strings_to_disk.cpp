@@ -75,7 +75,7 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 	result_offset = UnsafeNumericCast<int32_t>(offset);
 
 	// write the length field
-	auto data_ptr = handle.Ptr();
+	auto data_ptr = handle.GetDataMutable();
 	auto string_length = string.GetSize();
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(string_length), data_ptr + offset);
 	offset += sizeof(uint32_t);
@@ -105,7 +105,7 @@ void WriteOverflowStringsToDisk::Flush() {
 	if (block_id != INVALID_BLOCK && offset > 0) {
 		// zero-initialize the empty part of the overflow string buffer (if any)
 		if (offset < GetStringSpace()) {
-			memset(handle.Ptr() + offset, 0, GetStringSpace() - offset);
+			memset(handle.GetDataMutable() + offset, 0, GetStringSpace() - offset);
 		}
 		// write to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
@@ -119,7 +119,7 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(UncompressedStringSegmentState
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
 		// write the new block id at the end of the previous block
-		Store<block_id_t>(new_block_id, handle.Ptr() + GetStringSpace());
+		Store<block_id_t>(new_block_id, handle.GetDataMutable() + GetStringSpace());
 		Flush();
 	}
 	offset = 0;

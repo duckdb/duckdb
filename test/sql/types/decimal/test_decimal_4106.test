@@ -2,9 +2,6 @@
 # description: Test #4106: INTEGER values mixed with DECIMAL do not grow the DECIMAL width/scale properly
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # From values list
 statement ok
 CREATE TABLE from_values AS VALUES (1000000), (10.0000000005);

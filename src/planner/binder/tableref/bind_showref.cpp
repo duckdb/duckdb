@@ -52,7 +52,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
+			return FindBaseTableColumn(*projection.children[0], bound_colref.Binding());
 		}
 		break;
 	}
@@ -109,30 +109,30 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 		auto &alias = plan.names[column_idx];
 		if (result.table) {
 			// we can! emit the information from the base table directly
-			PragmaTableInfo::GetColumnInfo(*result.table, *result.column, output, row_index);
+			PragmaTableInfo::GetColumnInfo(*result.table, *result.column, output);
 			// Override the base column name with the alias if one is specified.
 			if (alias != result.column->Name()) {
-				output.SetValue(0, row_index, Value(alias));
+				output.data[0].SetValue(row_index, Value(alias));
 			}
 		} else {
 			// we cannot - read the type/name from the plan instead
 			auto type = plan.types[column_idx];
 
-			// "name", TypeId::VARCHAR
-			output.SetValue(0, row_index, Value(alias));
-			// "type", TypeId::VARCHAR
-			output.SetValue(1, row_index, Value(type.ToString()));
-			// "null", TypeId::VARCHAR
-			output.SetValue(2, row_index, Value("YES"));
-			// "pk", TypeId::BOOL
-			output.SetValue(3, row_index, Value());
-			// "dflt_value", TypeId::VARCHAR
-			output.SetValue(4, row_index, Value());
-			// "extra", TypeId::VARCHAR
-			output.SetValue(5, row_index, Value());
+			// "name", VARCHAR
+			output.data[0].Append(Value(alias));
+			// "type", VARCHAR
+			output.data[1].Append(Value(type.ToString()));
+			// "null", VARCHAR
+			output.data[2].Append(Value("YES"));
+			// "pk", VARCHAR
+			output.data[3].Append(Value());
+			// "dflt_value", VARCHAR
+			output.data[4].Append(Value());
+			// "extra", VARCHAR
+			output.data[5].Append(Value());
 		}
 
-		output.SetCardinality(output.size() + 1);
+		// both branches above append exactly one row to the child vectors, growing output.size() accordingly
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(append_state, output);
 			output.Reset();

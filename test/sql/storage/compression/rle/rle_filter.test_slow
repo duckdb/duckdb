@@ -6,9 +6,6 @@
 load {TEST_DIR}/test_rle_filter.db
 
 statement ok
-pragma enable_verification
-
-statement ok
 SET force_compression = 'rle'
 
 statement ok

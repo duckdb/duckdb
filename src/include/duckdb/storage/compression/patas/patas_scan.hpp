@@ -88,12 +88,12 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	explicit PatasScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 
-		handle = buffer_manager.Pin(segment.block);
+		handle = buffer_manager.Pin(segment.GetBlockHandle());
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
-		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 	}
@@ -212,7 +212,7 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
-	auto current_result_ptr = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
+	auto current_result_ptr = FlatVector::GetDataMutableUnsafe<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	current_result_ptr += result_offset;
 

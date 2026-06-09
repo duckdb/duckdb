@@ -65,7 +65,7 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitiv
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
+			    if (child_colref.ColumnNames()[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
 			        macro_binding->HasMatchingBinding(child_colref.GetName())) {
 				    throw ParameterNotResolvedException();
 			    }
@@ -89,7 +89,7 @@ struct ReplacePivotAggregateOperator {
 
 	static void HandleAggregate(unique_ptr<ParsedExpression> &expr, FunctionExpression &aggr_function,
 	                            TYPE &replacement_expr) {
-		if (replacement_expr->type != ExpressionType::COLUMN_REF) {
+		if (replacement_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw BinderException(*expr, "Pivot expression can only have one aggregate");
 		}
 		auto aggr = std::move(expr);
@@ -105,8 +105,8 @@ void TemplatedHandlePivotAggregate(ClientContext &context, unique_ptr<ParsedExpr
 		auto &aggr_function = expr->Cast<FunctionExpression>();
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
-		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.function_name, *expr);
-		auto &entry = Catalog::GetEntry(context, aggr_function.catalog, aggr_function.schema, lookup_info);
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.FunctionName(), *expr);
+		auto &entry = Catalog::GetEntry(context, aggr_function.Catalog(), aggr_function.Schema(), lookup_info);
 		if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			// aggregate
 			OP::HandleAggregate(expr, aggr_function, aggregates);
@@ -194,7 +194,7 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 			D_ASSERT(aggregates.size() == 1);
 
 			auto &aggr = aggregates[0].get().Cast<FunctionExpression>();
-			aggr.filter = filter->Copy();
+			aggr.FilterMutable() = filter->Copy();
 			auto &aggr_name = aggregate->GetAlias();
 			auto name = pivot_value.name;
 			if (ref.aggregates.size() > 1 || !aggr_name.empty()) {
@@ -335,7 +335,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 
 void ReplacePivotColumnRef(ParsedExpression &root_expr, const string &name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
-	    root_expr, [&](ColumnRefExpression &colref) { colref.column_names[0] = name; });
+	    root_expr, [&](ColumnRefExpression &colref) { colref.ColumnNamesMutable()[0] = name; });
 }
 
 static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, PivotRef &ref,
@@ -375,7 +375,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 			auto &pivot_aggr_name = aggregate_names[aggr_name_idx++];
 			// replace column ref with name
 			ReplacePivotColumnRef(*aggr, pivot_aggr_name);
-			aggr->alias = pivot_aggr_name;
+			aggr->SetAlias(pivot_aggr_name);
 
 			final_pivot_operator->select_list.push_back(std::move(aggr));
 		}
@@ -424,6 +424,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result.bind_index = GenerateTableIndex();
 	result.child_binder = Binder::CreateBinder(context, this);
 	result.child = result.child_binder->Bind(*ref.source);
+	if (!result.child_binder->correlated_columns.empty()) {
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	}
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
@@ -491,7 +494,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(std::move(name));
-			types.push_back(aggr->return_type);
+			types.push_back(aggr->GetReturnType());
 		}
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
@@ -508,6 +511,51 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	return result_statement;
 }
 
+static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
+	Value val;
+	ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
+	auto bound_expr = const_binder.Bind(expr);
+	if (!bound_expr->IsFoldable()) {
+		throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
+	}
+	auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
+	values.push_back(folded_value);
+}
+
+static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column_names) {
+	auto initial_size = column_names.size();
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr.Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			return false;
+		}
+		column_names.push_back(colref.GetColumnName());
+		return true;
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		column_names.push_back(constant.GetValue().ToString());
+		return true;
+	}
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.FunctionName() != "row") {
+			return false;
+		}
+		for (auto &child : function.GetArgumentsMutable()) {
+			if (!TryExtractUnpivotList(*child.GetExpressionMutable(), column_names)) {
+				column_names.resize(initial_size);
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -519,22 +567,16 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 	} break;
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
-		}
-		for (auto &child : function.children) {
-			BindPivotInList(child, values, binder);
+		if (function.FunctionName() == "row") {
+			for (auto &child : function.GetArgumentsMutable()) {
+				BindPivotInList(child.GetExpressionMutable(), values, binder);
+			}
+		} else {
+			BindPivotConstantInList(expr, values, binder);
 		}
 	} break;
 	default: {
-		Value val;
-		ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
-		auto bound_expr = const_binder.Bind(expr);
-		if (!bound_expr->IsFoldable()) {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
-		}
-		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
-		values.push_back(folded_value);
+		BindPivotConstantInList(expr, values, binder);
 	} break;
 	}
 }
@@ -699,17 +741,6 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
-	// Try to bind the entry expression as values
-	try {
-		auto expr_copy = entry.expr->Copy();
-		BindPivotInList(expr_copy, entry.values, child_binder);
-		// successfully bound as values - clear the expression
-		entry.expr = nullptr;
-	} catch (...) {
-		// ignore binder exceptions here - we fall back to expression mode
-		entry.values.clear();
-	}
-
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
@@ -724,6 +755,21 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		unpivot_entries.push_back(std::move(unpivot_entry));
 		return;
 	}
+
+	vector<string> column_names;
+	if (TryExtractUnpivotList(*entry.expr, column_names)) {
+		UnpivotEntry unpivot_entry;
+		unpivot_entry.alias = entry.alias;
+		for (auto &column_name : column_names) {
+			if (column_name.empty()) {
+				throw BinderException("UNPIVOT - empty column name not supported");
+			}
+			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(column_name));
+		}
+		unpivot_entries.push_back(std::move(unpivot_entry));
+		return;
+	}
+
 	D_ASSERT(entry.values.empty());
 	// expand star expressions (if any)
 	vector<unique_ptr<ParsedExpression>> star_columns;
@@ -873,7 +919,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
 	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
-	unpivot_name_expr->alias = select_names[column_count];
+	unpivot_name_expr->SetAlias(select_names[column_count]);
 	select_node->select_list.push_back(std::move(unpivot_name_expr));
 
 	// construct the unpivot lists for the set of unpivoted columns
@@ -883,7 +929,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		auto list_expr = make_uniq<FunctionExpression>("unpivot_list", std::move(unpivot_expressions[i]));
-		list_expr->alias = select_names[column_count + 1 + i];
+		list_expr->SetAlias(select_names[column_count + 1 + i]);
 		select_node->select_list.push_back(std::move(list_expr));
 	}
 
@@ -963,7 +1009,6 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	} else {
 		select_node = BindUnpivot(*star_binder, ref, std::move(all_columns), where_clause);
 	}
-	// bind the generated select node
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto result = child_binder->BindNode(*select_node);
 	auto root_index = result.plan->GetRootIndex();

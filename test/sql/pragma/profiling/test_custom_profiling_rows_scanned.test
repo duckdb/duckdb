@@ -5,16 +5,13 @@
 require json
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}';
+SET tracked_metrics = ['operator.intermediate_rows', 'operator.rows_scanned', 'query.total_intermediate_rows', 'query.total_rows_scanned'];
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -32,15 +29,15 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
+SELECT query.total_intermediate_rows, query.total_rows_scanned FROM metrics_output;
 
 query I
 SELECT
-	CASE WHEN cumulative_rows_scanned = 8 THEN 'true'
-	ELSE 'false' END
+	CASE WHEN query.total_rows_scanned = 8 THEN NULL
+	ELSE metrics_output END
 FROM metrics_output;
 ----
-true
+NULL
 
 # Only output the cumulative metric.
 
@@ -51,7 +48,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+SET tracked_metrics = ['query.total_intermediate_rows', 'query.total_rows_scanned', 'system.blocked_thread_time'];
 
 statement ok
 SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;
@@ -64,7 +61,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 query I
 SELECT
-	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	CASE WHEN query.total_rows_scanned > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----

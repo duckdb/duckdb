@@ -43,6 +43,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PERFECT_HASH_GROUP_BY";
 	case PhysicalOperatorType::PARTITIONED_AGGREGATE:
 		return "PARTITIONED_AGGREGATE";
+	case PhysicalOperatorType::LIMITED_DISTINCT:
+		return "LIMITED_DISTINCT";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
 	case PhysicalOperatorType::PROJECTION:
@@ -169,6 +171,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "VERIFY_VECTOR";
 	case PhysicalOperatorType::UPDATE_EXTENSIONS:
 		return "UPDATE_EXTENSIONS";
+	case PhysicalOperatorType::CONNECT:
+		return "CONNECT";
+	case PhysicalOperatorType::DISCONNECT:
+		return "DISCONNECT";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

@@ -32,11 +32,4 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	return *this;
 }
 
-ResizeInfo::ResizeInfo(Vector &vec, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
-    : vec(vec), data(nullptr), buffer(buffer), multiplier(multiplier) {
-	if (buffer) {
-		data = buffer->GetData();
-	}
-}
-
 } // namespace duckdb

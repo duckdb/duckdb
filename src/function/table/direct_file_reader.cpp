@@ -76,7 +76,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
 		if (FileSystem::IsRemoteFile(file.path) && !fs.FileExists(file.path)) {
-			output.SetCardinality(0);
 			done = true;
 			return SourceResultType::FINISHED;
 		}
@@ -93,7 +92,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			case ReadFileBindData::FILE_NAME_COLUMN: {
 				auto &file_name_vector = output.data[col_idx];
 				auto file_name_string = StringVector::AddString(file_name_vector, file.path);
-				FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
+				FlatVector::GetDataMutable<string_t>(file_name_vector)[out_idx] = file_name_string;
 			} break;
 			case ReadFileBindData::FILE_CONTENT_COLUMN: {
 				const auto file_size = file_handle->GetFileSize();
@@ -132,7 +131,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				}
 
 				auto &file_content_vector = output.data[col_idx];
-				auto &content_string = FlatVector::GetData<string_t>(file_content_vector)[out_idx];
+				auto &content_string = FlatVector::GetDataMutable<string_t>(file_content_vector)[out_idx];
 				content_string = string_t(char_ptr_cast(state.stream->GetData()),
 				                          NumericCast<uint32_t>(state.stream->GetPosition()));
 
@@ -142,7 +141,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			} break;
 			case ReadFileBindData::FILE_SIZE_COLUMN: {
 				auto &file_size_vector = output.data[col_idx];
-				FlatVector::GetData<int64_t>(file_size_vector)[out_idx] =
+				FlatVector::GetDataMutable<int64_t>(file_size_vector)[out_idx] =
 				    NumericCast<int64_t>(file_handle->GetFileSize());
 			} break;
 			case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
@@ -151,7 +150,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				// correctly)
 				try {
 					const auto timestamp_seconds = fs.GetLastModifiedTime(*file_handle);
-					FlatVector::GetData<timestamp_tz_t>(last_modified_vector)[out_idx] =
+					FlatVector::GetDataMutable<timestamp_tz_t>(last_modified_vector)[out_idx] =
 					    timestamp_tz_t(timestamp_seconds);
 				} catch (std::exception &ex) {
 					ErrorData error(ex);
@@ -177,7 +176,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			}
 		}
 	}
-	output.SetCardinality(1);
+	output.SetChildCardinality(1);
 	done = true;
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 }

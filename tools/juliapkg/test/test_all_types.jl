@@ -223,4 +223,7 @@
         df.list_of_fixed_int_array,
         [[[missing, 2, 3], [4, 5, 6], [missing, 2, 3]], [[4, 5, 6], [missing, 2, 3], [4, 5, 6]], missing]
     )
+    @test df.geometry[1] isa Base.CodeUnits{UInt8, String}
+    @test df.geometry[2] isa Base.CodeUnits{UInt8, String}
+    @test ismissing(df.geometry[3])
 end

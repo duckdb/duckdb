@@ -1,7 +1,7 @@
 # name: test/parquet/variant/variant_legacy_encoding.test
 # group: [variant]
 
-load __TEST_DIR__/variant_legacy_encoding.db readwrite v1.5.0
+load {TEST_DIR}/variant_legacy_encoding.db readwrite v1.5.0
 
 require parquet
 
@@ -27,9 +27,9 @@ statement ok
 insert into tbl select 42;
 
 statement ok
-copy (select * from tbl) to '__TEST_DIR__/variant_parquet_simple.parquet'
+copy (select * from tbl) to '{TEST_DIR}/variant_parquet_simple.parquet'
 
 query I
-select * from '__TEST_DIR__/variant_parquet_simple.parquet';
+select * from '{TEST_DIR}/variant_parquet_simple.parquet';
 ----
 42

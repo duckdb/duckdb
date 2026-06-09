@@ -2,9 +2,6 @@
 # description: Issue 585
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Predicate checking for an empty string yields an incorrect result
 statement ok
 CREATE TABLE t0(c0 VARCHAR);

@@ -130,8 +130,13 @@ string Bit::ToString(bitstring_t str) {
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
+	if (len == 0) {
+		str_len = ComputeBitstringLen(1);
+		return true;
+	}
+
+	auto data = const_data_ptr_cast(str.GetData());
 	idx_t bit_count = 0;
 
 	if (data[0] == 'x') {
@@ -152,11 +157,15 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 
 bool Bit::ToBit(string_t str, bitstring_t &output_str, string *error_message) {
 	auto data = str.GetData();
+	auto len = str.GetSize();
+	if (len == 0) {
+		Bit::SetEmptyBitString(output_str, 1);
+		return true;
+	}
 	if (data[0] == 'x') {
 		return HexToBit(str, output_str, error_message);
 	}
 
-	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 
 	char byte = 0;
@@ -410,7 +419,7 @@ void Bit::SetBitInternal(bitstring_t &bit_string, idx_t n, idx_t new_value) {
 	D_ASSERT(idx < bit_string.GetSize());
 	auto shift_byte = UnsafeNumericCast<uint8_t>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
-		shift_byte = ~shift_byte;
+		shift_byte = static_cast<uint8_t>(~shift_byte);
 		buf[idx] &= shift_byte;
 	} else {
 		buf[idx] |= shift_byte;
@@ -506,7 +515,7 @@ void Bit::BitwiseNot(const bitstring_t &input, bitstring_t &result) {
 
 	result_buf[0] = buf[0];
 	for (idx_t i = 1; i < input.GetSize(); i++) {
-		result_buf[i] = ~buf[i];
+		result_buf[i] = static_cast<uint8_t>(~buf[i]);
 	}
 	Bit::Finalize(result);
 }

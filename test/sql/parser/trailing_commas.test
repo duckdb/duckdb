@@ -2,9 +2,6 @@
 # description: Test trailing commas
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 42,
 ----

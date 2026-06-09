@@ -68,9 +68,6 @@ public:
 	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	operator bool() const { // NOLINT: missing explicit
-		return pointer != nullptr;
-	}
 	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}

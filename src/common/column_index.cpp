@@ -56,6 +56,12 @@ bool ColumnIndex::IsRowIdColumn() const {
 	}
 	return index == COLUMN_IDENTIFIER_ROW_ID;
 }
+bool ColumnIndex::IsRowNumberColumn() const {
+	if (!has_index) {
+		return false;
+	}
+	return index == COLUMN_IDENTIFIER_ROW_NUMBER;
+}
 bool ColumnIndex::IsEmptyColumn() const {
 	if (!has_index) {
 		return false;

@@ -385,7 +385,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
+		return meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -759,7 +759,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
                                   idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 
-	auto &child_vector = ListVector::GetEntry(source);
+	auto &child_vector = ListVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
@@ -789,15 +789,15 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
 
 		auto sliced_child_vector = Vector(child_vector, sel, info.child_list_info.length);
-		sliced_child_vector.Flatten(info.child_list_info.length);
+		sliced_child_vector.Flatten();
 		info.child_list_info.offset = 0;
 
-		sliced_child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		sliced_child_vector.ToUnifiedFormat(child_vector_data);
 		child_function.function(child_meta_data, child_vector_data, sliced_child_vector, info.child_list_info.offset,
 		                        info.child_list_info.length);
 
 	} else {
-		child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		child_vector.ToUnifiedFormat(child_vector_data);
 		child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
 		                        info.child_list_info.length);
 	}
@@ -828,7 +828,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 		UnifiedVectorFormat child_data;
-		child_vectors[child_idx].ToUnifiedFormat(copy_count, child_data);
+		child_vectors[child_idx].ToUnifiedFormat(child_data);
 
 		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
 	}
@@ -841,7 +841,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// copy the NULL values for the main array vector (the same as for a struct vector)
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
-	auto &child_vector = ArrayVector::GetEntry(source);
+	auto &child_vector = ArrayVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
 	auto array_size = ArrayType::GetSize(source.GetType());
 
@@ -861,7 +861,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
+	child_vector.ToUnifiedFormat(child_vector_data);
 
 	// Broadcast and sync the validity of the array vector to the child vector
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
@@ -987,9 +987,9 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 	auto &segment = *segments.back();
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
 		if (IsComplexType(input.data[vector_idx].GetType())) {
-			input.data[vector_idx].Flatten(input.size());
+			input.data[vector_idx].Flatten();
 		}
-		input.data[vector_idx].ToUnifiedFormat(input.size(), state.vector_data[vector_idx]);
+		input.data[vector_idx].ToUnifiedFormat(state.vector_data[vector_idx]);
 	}
 
 	idx_t remaining = input.size();
@@ -1154,7 +1154,7 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 	lstate.current_chunk_state.properties = state.scan_state.properties;
 	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
 	lstate.current_row_index = row_index;
-	result.Verify();
+	result.Verify(state.scan_state.db);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
@@ -1175,7 +1175,7 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	auto &segment = *segments[segment_index];
 	state.current_chunk_state.properties = state.properties;
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
-	result.Verify();
+	result.Verify(state.db);
 	return true;
 }
 
@@ -1207,7 +1207,7 @@ bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, Data
 	auto &segment = *segments[segment_index];
 	state.current_chunk_state.properties = state.properties;
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
-	result.Verify();
+	result.Verify(state.db);
 	return true;
 }
 
@@ -1232,6 +1232,19 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	}
 	other.Reset();
 	Verify();
+}
+
+void ColumnDataCollection::Swap(ColumnDataCollection &other) {
+	if (types != other.types) {
+		throw InternalException("Attempting to swap ColumnDataCollections with mismatching types");
+	}
+	std::swap(allocator, other.allocator);
+	std::swap(types, other.types);
+	std::swap(count, other.count);
+	std::swap(segments, other.segments);
+	std::swap(copy_functions, other.copy_functions);
+	std::swap(finished_append, other.finished_append);
+	std::swap(partition_index, other.partition_index);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1307,6 +1320,24 @@ void ColumnDataCollection::Reset() {
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
 	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
+}
+
+void ColumnDataCollection::ResetForReuse() {
+	count = 0;
+	finished_append = false;
+	if (segments.empty()) {
+		allocator->Reset();
+		return;
+	}
+
+	for (auto &segment : segments) {
+		segment->Reset();
+	}
+
+	if (segments.size() > 1) {
+		segments.resize(1);
+	}
+	allocator->ResetPreserveLastBlock();
 }
 
 struct ValueResultEquals {
@@ -1424,9 +1455,9 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer 
 
 	for (idx_t r = 0; r < values[0].size(); r++) {
 		for (idx_t c = 0; c < types.size(); c++) {
-			chunk.SetValue(c, chunk.size(), values[c][r]);
+			chunk.data[c].Append(values[c][r]);
 		}
-		chunk.SetCardinality(chunk.size() + 1);
+		// the appends above already grow the child vectors, so chunk.size() reflects the new cardinality
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(chunk);
 			chunk.Reset();

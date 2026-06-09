@@ -157,7 +157,7 @@ SinkFinalizeType PhysicalPartitionedAggregate::Finalize(Pipeline &pipeline, Even
 		// reference the partitions
 		auto &partitions = StructValue::GetChildren(entry.first);
 		for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
-			chunk.data[partition_idx].Reference(partitions[partition_idx]);
+			chunk.data[partition_idx].Reference(partitions[partition_idx], count_t(1));
 		}
 		// finalize the aggregates
 		entry.second->Finalize(chunk, partitions.size());
@@ -217,8 +217,8 @@ InsertionOrderPreservingMap<string> PhysicalPartitionedAggregate::ParamsToString
 			aggregate_info += "\n";
 		}
 		aggregate_info += aggregates[i]->GetName();
-		if (aggregate.filter) {
-			aggregate_info += " Filter: " + aggregate.filter->GetName();
+		if (aggregate.GetFilter()) {
+			aggregate_info += " Filter: " + aggregate.GetFilter()->GetName();
 		}
 	}
 	result["Aggregates"] = aggregate_info;

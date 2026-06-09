@@ -20,7 +20,12 @@ namespace duckdb {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
 	auto &buffer = block.GetMemory().GetBuffer(lock);
-	memset(buffer->buffer, 0xa5, buffer->size); // 0xa5 is default memory in debug mode
+	if (!buffer->OwnsInternalBuffer()) {
+		// don't write garbage into mmap buffers
+		// this would directly be written back into the file
+		return;
+	}
+	memset(buffer->GetDataMutable(), 0xa5, buffer->Size()); // 0xa5 is default memory in debug mode
 }
 
 static void WriteGarbageIntoBuffer(BlockHandle &block) {
@@ -43,12 +48,12 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (type == FileBufferType::BLOCK) {
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
-	if (source) {
+	if (source && source->OwnsInternalBuffer()) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
 		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
-		// non re-usable buffer: allocate a new buffer
+		// non re-usable buffer (or mmap-backed, which we cannot rewrite): allocate a new buffer
 		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
@@ -388,7 +393,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 		replacement_buffer =
 		    make_uniq<FileBuffer>(block_allocator, buffer->GetBufferType(), alloc_size, block_header_size);
 	}
-	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
+	memcpy(replacement_buffer->GetDataMutable(), buffer->GetData(), buffer->Size());
 	WriteGarbageIntoBuffer(lock, *handle);
 	buffer = std::move(replacement_buffer);
 #endif
@@ -493,10 +498,11 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) * 2 + header_size);
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	idx_t block_header_size = buffer.GetHeaderSize();
-	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
+	auto user_size = buffer.Size();
+	handle->Write(QueryContext(), &user_size, sizeof(idx_t), 0);
 	handle->Write(QueryContext(), &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
@@ -523,11 +529,12 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 
-		auto buffer =
-		    temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
+		idx_t eviction_size = 0;
+		auto buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(
+		    context, id, std::move(reusable_buffer), &eviction_size);
 
 		// Decrement evicted size.
-		evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
+		evicted_data_per_tag[uint8_t(tag)] -= eviction_size;
 
 		return buffer;
 	}
@@ -564,10 +571,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	handle.reset();
 
 	// Delete the file and return the buffer.
+	// DeleteTemporaryFile already decrements evicted_data_per_tag for the .block path; do not
+	// decrement again here or the counter underflows on every read-back.
 	DeleteTemporaryFile(block.GetMemory());
-
-	// Decrement evicted size.
-	evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
 
 	return buffer;
 }

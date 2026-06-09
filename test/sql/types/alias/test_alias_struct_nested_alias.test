@@ -2,9 +2,6 @@
 # description: Test creates alias for struct type
 # group: [alias]
 
-statement ok
-PRAGMA enable_verification
-
 # Create a USER type
 statement ok
 CREATE TYPE foobar AS ENUM(

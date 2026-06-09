@@ -25,14 +25,14 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
-	D_ASSERT(root.children.size() == 2);
+	D_ASSERT(root.GetChildren().size() == 2);
 	auto &prefix_expr = bindings[2].get();
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!prefix_expr.IsFoldable()) {
 		return nullptr;
 	}
-	D_ASSERT(root.return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(root.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), prefix_expr);
 
@@ -40,7 +40,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	D_ASSERT(prefix_value.type() == prefix_expr.return_type);
+	D_ASSERT(prefix_value.type() == prefix_expr.GetReturnType());
 	if (prefix_value.type().InternalType() != PhysicalType::VARCHAR) {
 		return nullptr;
 	}
@@ -50,7 +50,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	// PREFIX(NULL, '') is NULL
 	// so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 	if (needle_string.empty()) {
-		return ExpressionRewriter::ConstantOrNull(std::move(root.children[0]), Value::BOOLEAN(true));
+		return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[0]), Value::BOOLEAN(true));
 	}
 	return nullptr;
 }

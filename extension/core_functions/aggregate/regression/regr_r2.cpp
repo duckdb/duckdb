@@ -13,19 +13,15 @@ namespace duckdb {
 
 namespace {
 struct RegrR2State {
+	static constexpr const char *STATE_NAMES[] = {"corr", "var_pop_x", "var_pop_y"};
+	using STATE_TYPE = StructStateType<CorrState, StddevState, StddevState>;
+
 	CorrState corr;
 	StddevState var_pop_x;
 	StddevState var_pop_y;
 };
 
 struct RegrR2Operation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CorrOperation::Initialize<CorrState>(state.corr);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_x);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_y);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, y, x, idata);
@@ -61,20 +57,11 @@ struct RegrR2Operation {
 	}
 };
 
-LogicalType GetRegrR2StateType(const AggregateFunction &) {
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("corr", CorrFun::GetFunction().GetStateType());
-	state_children.emplace_back("var_pop_x", VarPopFun::GetFunction().GetStateType());
-	state_children.emplace_back("var_pop_y", VarPopFun::GetFunction().GetStateType());
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrR2Fun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrR2StateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

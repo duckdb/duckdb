@@ -2,14 +2,8 @@
 # description: Test that the skip option works for csv files
 # group: [csv]
 
-mode skip
-
-statement ok
-PRAGMA enable_verification
-
 statement ok
 copy (from range(10000)) to '{TEST_DIR}/skip.csv' (HEADER 0);
-
 
 foreach auto_detect true false
 
@@ -191,7 +185,7 @@ from read_csv('{TEST_DIR}/skip_2.csv',skip=10000, buffer_size = {buffer_size})
 endloop
 
 # Skipping to make it not fail OSX Release
-mode skip
+mode skip instable
 
 # Multifile Testing
 

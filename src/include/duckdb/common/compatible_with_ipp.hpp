@@ -21,7 +21,7 @@ template <class _Up, std::size_t _Np, class T>
 struct __bounded_convertible_to_unbounded<_Up[_Np], T> : std::is_same<std::remove_cv<T>, _Up[]> {};
 
 template <class U, class T>
-struct compatible_with_t : std::_Or<std::is_convertible<U *, T *>, __bounded_convertible_to_unbounded<U, T>> {};
+struct compatible_with_t : std::disjunction<std::is_convertible<U *, T *>, __bounded_convertible_to_unbounded<U, T>> {};
 #else
 template <class U, class T>
 struct compatible_with_t : std::is_convertible<U *, T *> {}; // NOLINT: invalid case style

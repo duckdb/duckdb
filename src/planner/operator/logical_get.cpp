@@ -10,8 +10,30 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
+
+static void ConvertLegacyTableFilters(LogicalGet &get) {
+	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> converted_filters;
+	for (auto &entry : get.table_filters) {
+		auto filter_idx = entry.GetIndex();
+		auto &filter = entry.Filter();
+		if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+			continue;
+		}
+		if (filter_idx.GetIndex() >= get.GetColumnIds().size()) {
+			throw SerializationException("LogicalGet::Deserialize - filter index %llu is out of bounds for column ids",
+			                             filter_idx.GetIndex());
+		}
+		auto &column_index = get.GetColumnIds()[filter_idx.GetIndex()];
+		auto &column_type = get.GetColumnType(column_index);
+		converted_filters.emplace_back(filter_idx, ExpressionFilter::FromTableFilter(filter, column_type));
+	}
+	for (auto &entry : converted_filters) {
+		get.table_filters.SetFilterByColumnIndex(entry.first, std::move(entry.second));
+	}
+}
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
@@ -38,7 +60,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	bool first_item = true;
 	for (auto &kv : table_filters) {
 		auto filter_idx = kv.GetIndex();
-		auto &filter = kv.Filter();
+		auto &filter = kv.Filter().Cast<ExpressionFilter>();
 		auto &col_id_entry = column_ids[filter_idx];
 		const auto col_id = col_id_entry.GetPrimaryIndex();
 		if (col_id_entry.IsVirtualColumn()) {
@@ -274,6 +296,14 @@ void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
 	function.set_scan_order(std::move(options), bind_data.get());
 }
 
+void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
+	if (!function.set_partitions_to_scan) {
+		throw InternalException("LogicalGet::SetPartitionsToScan called but function is not defined");
+	}
+	scan_partition_indices = partition_indices;
+	function.set_partitions_to_scan(std::move(partition_indices), bind_data.get());
+}
+
 void LogicalGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
@@ -297,6 +327,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
+	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -329,6 +360,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
 	auto row_group_order_options =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
+	auto scan_partition_indices =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -385,8 +418,12 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
+	ConvertLegacyTableFilters(*result);
 	if (row_group_order_options) {
 		result->SetScanOrder(std::move(row_group_order_options));
+	}
+	if (!scan_partition_indices.empty()) {
+		result->SetPartitionsToScan(std::move(scan_partition_indices));
 	}
 	return std::move(result);
 }

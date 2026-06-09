@@ -337,11 +337,8 @@ static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterState &writer_loca
                                   DataChunk &input, ExpressionExecutor &executor) {
 	// first cast the columns of the chunk to varchar
 	cast_chunk.Reset();
-	cast_chunk.SetCardinality(input);
 
 	executor.Execute(input, cast_chunk);
-
-	cast_chunk.Flatten();
 
 	writer.WriteChunk(cast_chunk, writer_local_state);
 }

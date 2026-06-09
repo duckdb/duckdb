@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-DictionaryAnalyzeState::DictionaryAnalyzeState(const CompressionInfo &info)
-    : DictionaryCompressionState(info), segment_count(0), current_tuple_count(0), current_unique_count(0),
+DictionaryAnalyzeState::DictionaryAnalyzeState(BlockManager &block_manager)
+    : AnalyzeState(block_manager), segment_count(0), current_tuple_count(0), current_unique_count(0),
       current_dict_size(0), current_width(0), next_width(0) {
 }
 
@@ -15,11 +15,7 @@ void DictionaryAnalyzeState::AddNewString(string_t str) {
 	current_tuple_count++;
 	current_unique_count++;
 	current_dict_size += str.GetSize();
-	if (str.IsInlined()) {
-		current_set.insert(str);
-	} else {
-		current_set.insert(heap.AddBlob(str));
-	}
+	current_set.insert(heap.AddBlob(str));
 	current_width = next_width;
 }
 

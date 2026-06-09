@@ -44,7 +44,7 @@ void ColumnStatistics::SetDistinct(unique_ptr<DistinctStatistics> distinct) {
 	this->distinct_stats = std::move(distinct);
 }
 
-void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count, Vector &hashes) {
+void ColumnStatistics::UpdateDistinctStatistics(const Vector &v, idx_t count, Vector &hashes) {
 	if (!distinct_stats) {
 		return;
 	}

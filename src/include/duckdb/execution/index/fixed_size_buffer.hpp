@@ -61,7 +61,7 @@ private:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_handle.Ptr();
+		return buffer_handle.GetDataMutable();
 	}
 
 	//! Returns true, if the buffer is in-memory

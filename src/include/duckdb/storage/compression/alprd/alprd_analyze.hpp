@@ -26,7 +26,7 @@ struct AlpRDAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpRDAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), compression_data() {
+	explicit AlpRDAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), compression_data() {
 	}
 
 	idx_t vectors_count = 0;
@@ -38,15 +38,14 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<AlpRDAnalyzeState<T>>(info);
+	return make_uniq<AlpRDAnalyzeState<T>>(col_data.GetBlockManager());
 }
 
 /*
  * ALPRD Analyze step only pushes the needed samples to estimate the compression size in the finalize step
  */
 template <class T>
-bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool AlpRDAnalyze(AnalyzeState &state, const Vector &input) {
 	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
 		return false;
 	}
@@ -54,6 +53,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &analyze_state = state.Cast<AlpRDAnalyzeState<T>>();
 
+	const auto count = input.size();
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
@@ -63,7 +63,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);

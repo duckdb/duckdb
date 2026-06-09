@@ -30,20 +30,23 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Resolve the types of each operator.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES);
-	op->ResolveOperatorTypes();
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerResolveTypes>();
+		op->ResolveOperatorTypes();
+	}
 
 	// Resolve the column references.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING);
-	ColumnBindingResolver resolver;
-	resolver.VisitOperator(*op);
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerColumnBinding>();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*op);
+	}
 
 	// Create the main physical plan.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_CREATE_PLAN);
-	physical_plan = PlanInternal(*op);
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerCreatePlan>();
+		physical_plan = PlanInternal(*op);
+	}
 
 	// Return a reference to the root of this plan.
 	return physical_plan->Root();
@@ -154,6 +157,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_LOAD:
 	case LogicalOperatorType::LOGICAL_ATTACH:
 	case LogicalOperatorType::LOGICAL_DETACH:
+	case LogicalOperatorType::LOGICAL_CONNECT:
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return CreatePlan(op.Cast<LogicalSimple>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());

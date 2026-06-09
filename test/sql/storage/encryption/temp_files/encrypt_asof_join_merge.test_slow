@@ -5,14 +5,6 @@
 # We need httpfs to do encrypted writes
 require httpfs
 
-foreach cipher GCM CTR
-
-statement ok
-ATTACH '{TEST_DIR}/encrypted_temp_files_{cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
-
-statement ok
-SET temp_file_encryption=true;
-
 statement ok
 PRAGMA memory_limit='400M'
 
@@ -22,9 +14,17 @@ PRAGMA threads=4
 statement ok
 SET temp_directory='{TEST_DIR}/temp.tmp'
 
+statement ok
+SET temp_file_encryption=true;
+
 # Force PhysicalAsOfJoin
 statement ok
 PRAGMA asof_loop_join_threshold = 0;
+
+foreach cipher GCM CTR
+
+statement ok
+ATTACH '{TEST_DIR}/encrypted_temp_files_{cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
 
 query II
 WITH build AS (

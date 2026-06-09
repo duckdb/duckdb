@@ -6,9 +6,6 @@
 load {TEST_DIR}/commit_abort.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
 
 statement ok
@@ -61,9 +58,6 @@ SELECT * FROM test ORDER BY a, b, c
 
 restart
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT * FROM test ORDER BY a, b, c
 ----
@@ -80,9 +74,6 @@ SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test
 6	6	4	75	75	17
 
 restart
-
-statement ok
-PRAGMA enable_verification
 
 query IIIIII
 SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test

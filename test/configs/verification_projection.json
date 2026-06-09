@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verification_projection enabled",
+  "on_init": "SET debug_verification_projection=true;",
+  "skip_compiled": "true"
+}

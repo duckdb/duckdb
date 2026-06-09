@@ -1,0 +1,18 @@
+# name: test/sql/aggregate/aggregate_state_export/state_export_parquet.test
+# description: Test state export to Parquet
+# group: [aggregate_state_export]
+
+require parquet
+
+statement ok
+COPY (SELECT SUM(42) EXPORT_STATE AS state) TO '{TEST_DIR}/exported_state.parquet';
+
+query I
+SELECT to_aggregate_state(state, 'sum', ['INTEGER']) FROM '{TEST_DIR}/exported_state.parquet'
+----
+{'isset': true, 'value': 42}
+
+query I
+SELECT finalize(to_aggregate_state(state, 'sum', ['INTEGER'])) FROM '{TEST_DIR}/exported_state.parquet'
+----
+42

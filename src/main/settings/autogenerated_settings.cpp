@@ -78,27 +78,17 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Force External
-//===----------------------------------------------------------------------===//
-void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_external = input.GetValue<bool>();
-}
-
-void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
-}
-
-Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_external);
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Physical Table Scan Execution Strategy
 //===----------------------------------------------------------------------===//
 void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Verify Statement
+//===----------------------------------------------------------------------===//
+void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -113,6 +103,20 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Default Io Mode
+//===----------------------------------------------------------------------===//
+void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Default Transaction Invalidation Policy
+//===----------------------------------------------------------------------===//
+void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -157,6 +161,14 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// H T T P Proxy
+//===----------------------------------------------------------------------===//
+Value HTTPProxySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.http_proxy);
 }
 
 //===----------------------------------------------------------------------===//

@@ -5,6 +5,10 @@ inputs:
     description: 'Override the ccache key prefix; defaults to github.job'
     required: false
     default: ${{ github.job }}
+  save:
+    description: 'Whether to save cache after the job'
+    required: false
+    default: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) || github.event_name == 'merge_group' }}
 runs:
   using: "composite"
   steps:
@@ -13,7 +17,7 @@ runs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ inputs.key }}
-         save: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
+         save: ${{ inputs.save }}
          # Dump verbose ccache statistics report at end of CI job.
          verbose: 1
          # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.

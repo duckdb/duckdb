@@ -23,8 +23,8 @@ namespace duckdb {
 struct PrimitiveTypeState {
 	UnifiedVectorFormat main_data;
 
-	void PrepareVector(Vector &input, idx_t count) {
-		input.ToUnifiedFormat(count, main_data);
+	void PrepareVector(const Vector &input) {
+		input.ToUnifiedFormat(main_data);
 	}
 };
 
@@ -47,7 +47,7 @@ struct PrimitiveType {
 	}
 
 	static void AssignResult(Vector &result, idx_t i, PrimitiveType<INPUT_TYPE> value) {
-		auto result_data = FlatVector::GetData<INPUT_TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<INPUT_TYPE>(result);
 		result_data[i] = value.val;
 	}
 };
@@ -57,13 +57,13 @@ struct StructTypeState {
 	UnifiedVectorFormat main_data;
 	UnifiedVectorFormat child_data[CHILD_COUNT];
 
-	void PrepareVector(Vector &input, idx_t count) {
-		auto &entries = StructVector::GetEntries(input);
+	void PrepareVector(const Vector &input) {
+		const auto &entries = StructVector::GetEntries(input);
 
-		input.ToUnifiedFormat(count, main_data);
+		input.ToUnifiedFormat(main_data);
 
 		for (idx_t i = 0; i < CHILD_COUNT; i++) {
-			entries[i].ToUnifiedFormat(count, child_data[i]);
+			entries[i].ToUnifiedFormat(child_data[i]);
 		}
 	}
 };
@@ -88,7 +88,7 @@ struct StructTypeUnary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeUnary<A_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
+		auto a_data = FlatVector::GetDataMutable<A_TYPE>(entries[0]);
 		a_data[i] = value.a_val;
 	}
 };
@@ -119,8 +119,8 @@ struct StructTypeBinary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeBinary<A_TYPE, B_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
+		auto a_data = FlatVector::GetDataMutable<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetDataMutable<B_TYPE>(entries[1]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 	}
@@ -158,9 +158,9 @@ struct StructTypeTernary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeTernary<A_TYPE, B_TYPE, C_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(entries[2]);
+		auto a_data = FlatVector::GetDataMutable<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetDataMutable<B_TYPE>(entries[1]);
+		auto c_data = FlatVector::GetDataMutable<C_TYPE>(entries[2]);
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
 		c_data[i] = value.c_val;
@@ -205,10 +205,10 @@ struct StructTypeQuaternary {
 	static void AssignResult(Vector &result, idx_t i, StructTypeQuaternary<A_TYPE, B_TYPE, C_TYPE, D_TYPE> value) {
 		auto &entries = StructVector::GetEntries(result);
 
-		auto a_data = FlatVector::GetData<A_TYPE>(entries[0]);
-		auto b_data = FlatVector::GetData<B_TYPE>(entries[1]);
-		auto c_data = FlatVector::GetData<C_TYPE>(entries[2]);
-		auto d_data = FlatVector::GetData<D_TYPE>(entries[3]);
+		auto a_data = FlatVector::GetDataMutable<A_TYPE>(entries[0]);
+		auto b_data = FlatVector::GetDataMutable<B_TYPE>(entries[1]);
+		auto c_data = FlatVector::GetDataMutable<C_TYPE>(entries[2]);
+		auto d_data = FlatVector::GetDataMutable<D_TYPE>(entries[3]);
 
 		a_data[i] = value.a_val;
 		b_data[i] = value.b_val;
@@ -228,14 +228,14 @@ struct GenericListType {
 	}
 
 	static void AssignResult(Vector &result, idx_t i, GenericListType<CHILD_TYPE> value) {
-		auto &child = ListVector::GetEntry(result);
+		auto &child = ListVector::GetChildMutable(result);
 		auto current_size = ListVector::GetListSize(result);
 
 		// reserve space in the child element
 		auto list_size = value.values.size();
 		ListVector::Reserve(result, current_size + list_size);
 
-		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 		list_entries[i].offset = current_size;
 		list_entries[i].length = list_size;
 
@@ -250,11 +250,11 @@ struct GenericListType {
 struct GenericExecutor {
 private:
 	template <class A_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteUnaryInternal(Vector &input, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteUnaryInternal(const Vector &input, Vector &result, idx_t count, FUNC &fun) {
 		auto constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE state;
-		state.PrepareVector(input, count);
+		state.PrepareVector(input);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto idx = state.main_data.sel->get_index(i);
@@ -275,14 +275,14 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteBinaryInternal(Vector &a, Vector &b, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteBinaryInternal(const Vector &a, const Vector &b, Vector &result, idx_t count, FUNC &fun) {
 		auto constant =
 		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE a_state;
 		typename B_TYPE::STRUCT_STATE b_state;
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -305,7 +305,8 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteTernaryInternal(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteTernaryInternal(const Vector &a, const Vector &b, const Vector &c, Vector &result, idx_t count,
+	                                   FUNC &fun) {
 		auto constant = a.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		                b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		                c.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -314,9 +315,9 @@ private:
 		typename B_TYPE::STRUCT_STATE b_state;
 		typename C_TYPE::STRUCT_STATE c_state;
 
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
-		c_state.PrepareVector(c, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
+		c_state.PrepareVector(c);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -343,8 +344,8 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteQuaternaryInternal(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count,
-	                                      FUNC &fun) {
+	static void ExecuteQuaternaryInternal(const Vector &a, const Vector &b, const Vector &c, const Vector &d,
+	                                      Vector &result, idx_t count, FUNC &fun) {
 		auto constant =
 		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR && d.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -354,10 +355,10 @@ private:
 		typename C_TYPE::STRUCT_STATE c_state;
 		typename D_TYPE::STRUCT_STATE d_state;
 
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
-		c_state.PrepareVector(c, count);
-		d_state.PrepareVector(d, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
+		c_state.PrepareVector(c);
+		d_state.PrepareVector(d);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -385,24 +386,59 @@ private:
 		}
 	}
 
+	static idx_t CheckExecuteCount(std::initializer_list<const Vector *> inputs) {
+		idx_t count = (*inputs.begin())->size();
+		for (auto *v : inputs) {
+			if (v->size() != count) {
+				throw InternalException("Mismatch in input vector sizes for GenericExecutor - "
+				                        "expected %d rows but got %d",
+				                        count, v->size());
+			}
+		}
+		return count;
+	}
+
 public:
 	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteUnary(Vector &input, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteUnary(const Vector &input, Vector &result, idx_t count, FUNC fun) {
 		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, FUNC>(input, result, count, fun);
 	}
+	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteUnary(const Vector &input, Vector &result, FUNC fun) {
+		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, FUNC>(input, result, input.size(), fun);
+	}
 	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteBinary(Vector &a, Vector &b, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteBinary(const Vector &a, const Vector &b, Vector &result, idx_t count, FUNC fun) {
 		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteBinary(const Vector &a, const Vector &b, Vector &result, FUNC fun) {
+		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, CheckExecuteCount({&a, &b}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteTernary(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, idx_t count,
+	                           FUNC fun) {
 		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, FUNC fun) {
+		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result,
+		                                                                  CheckExecuteCount({&a, &b, &c}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteQuaternary(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
+	                              idx_t count, FUNC fun) {
 		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(a, b, c, d, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
+	                              FUNC fun) {
+		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(
+		    a, b, c, d, result, CheckExecuteCount({&a, &b, &c, &d}), fun);
 	}
 };
 

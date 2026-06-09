@@ -691,24 +691,21 @@ SourceResultType PhysicalBatchCopyToFile::GetDataInternal(ExecutionContext &cont
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		chunk.SetCardinality(1);
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		vector<Value> file_list;
 		if (g.global_state) {
 			file_list.emplace_back(std::move(fp));
 		}
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_list)));
-		chunk.SetCardinality(1);
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		chunk.data[1].Append(Value::LIST(LogicalType::VARCHAR, std::move(file_list)));
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
 		if (g.written_file_info) {
 			g.written_file_info->file_path = std::move(fp);
-			PhysicalCopyToFile::ReturnStatistics(chunk, 0, *g.written_file_info);
-			chunk.SetCardinality(1);
+			PhysicalCopyToFile::ReturnStatistics(chunk, *g.written_file_info);
 		}
 		break;
 	}

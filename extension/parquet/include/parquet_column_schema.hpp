@@ -7,8 +7,18 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -21,7 +31,7 @@ using duckdb_parquet::SchemaElement;
 using duckdb_parquet::FileMetaData;
 struct ParquetOptions;
 
-enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY };
+enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, EXPRESSION, VARIANT, GEOMETRY, FILE_ROW_GROUP_NUMBER };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
@@ -62,6 +72,7 @@ public:
 	                                            vector<ParquetColumnSchema> &&children,
 	                                            ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	static ParquetColumnSchema FileRowNumber();
+	static ParquetColumnSchema FileRowGroupNumber();
 
 public:
 	unique_ptr<BaseStatistics> Stats(const FileMetaData &file_meta_data, const ParquetOptions &parquet_options,

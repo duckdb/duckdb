@@ -23,10 +23,12 @@ class RowVersionManager {
 public:
 	explicit RowVersionManager(BufferManager &buffer_manager) noexcept;
 
-	idx_t GetCommittedDeletedCount(idx_t count);
+	//! Returns the number of non-deleted rows in this segment
+	idx_t GetRowCount(ScanOptions options, idx_t count);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	bool Fetch(TransactionData transaction, idx_t row);
+	//! Bulk visibility check. Returns the number of visible rows.
+	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);

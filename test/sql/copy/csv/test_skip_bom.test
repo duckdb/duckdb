@@ -2,9 +2,6 @@
 # description: Test read CSV function
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # read csv with UTF-8 BOM
 statement ok
 CREATE TABLE people AS SELECT * FROM read_csv('{DATA_DIR}/csv/people.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR'), sep=',', auto_detect='false');

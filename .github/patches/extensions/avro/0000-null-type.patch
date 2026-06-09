@@ -1,0 +1,66 @@
+diff --git a/test/sql/avro.test b/test/sql/avro.test
+index d6b9aad..bf48e30 100644
+--- a/test/sql/avro.test
++++ b/test/sql/avro.test
+@@ -146,7 +146,7 @@ NULL
+ query II
+ select column_name, column_type from (DESCRIBE FROM read_avro('test/primitive_types.avro'));
+ ----
+-null	INTEGER
++null	"NULL"
+ boolean	BOOLEAN
+ int	INTEGER
+ long	BIGINT
+@@ -312,7 +312,7 @@ Recursive Avro types not supported: LongList
+ query II
+ select column_name, column_type from (DESCRIBE FROM read_avro('test/broken_record.avro'));
+ ----
+-n	INTEGER
++n	"NULL"
+ 
+ query I
+ FROM read_avro('test/broken_record.avro')
+@@ -387,7 +387,7 @@ select column_name, column_type from (DESCRIBE FROM read_avro('test/4551fe85-feb
+ ----
+ status	INTEGER
+ snapshot_id	BIGINT
+-data_file	STRUCT(file_path VARCHAR, file_format VARCHAR, "partition" INTEGER, record_count BIGINT, file_size_in_bytes BIGINT, block_size_in_bytes BIGINT, file_ordinal INTEGER, sort_columns INTEGER[], column_sizes MAP(INTEGER, BIGINT), value_counts MAP(INTEGER, BIGINT), null_value_counts MAP(INTEGER, BIGINT), lower_bounds MAP(INTEGER, BLOB), upper_bounds MAP(INTEGER, BLOB), key_metadata BLOB, split_offsets BIGINT[])
++data_file	STRUCT(file_path VARCHAR, file_format VARCHAR, "partition" "NULL", record_count BIGINT, file_size_in_bytes BIGINT, block_size_in_bytes BIGINT, file_ordinal INTEGER, sort_columns INTEGER[], column_sizes MAP(INTEGER, BIGINT), value_counts MAP(INTEGER, BIGINT), null_value_counts MAP(INTEGER, BIGINT), lower_bounds MAP(INTEGER, BLOB), upper_bounds MAP(INTEGER, BLOB), key_metadata BLOB, split_offsets BIGINT[])
+ 
+ # usual suspect, the userdata1 file, this time with a wildcard
+ query II
+diff --git a/test/sql/copy/nullable.test b/test/sql/copy/nullable.test
+index 16f5292..e50bbdc 100644
+--- a/test/sql/copy/nullable.test
++++ b/test/sql/copy/nullable.test
+@@ -28,7 +28,7 @@ COPY (
+ # insert null into non-nullable field
+ statement error
+ COPY (
+-	select NULL field1
++	select NULL::INTEGER field1
+ ) TO '{TEST_DIR}/field_ids_error.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': false},
+@@ -143,7 +143,7 @@ COPY (select
+       	'content': 1,
+       } data_file_not_nullable,
+       {
+-      	'content': NULL,
++      	'content': NULL::INTEGER,
+       } data_file_nullable
+ ) TO '{TEST_DIR}/field_ids_5.avro' (
+ 	FIELD_IDS {
+diff --git a/test/sql/iceberg.test b/test/sql/iceberg.test
+index c94d702..2e9125f 100644
+--- a/test/sql/iceberg.test
++++ b/test/sql/iceberg.test
+@@ -10,7 +10,7 @@ select column_name, column_type from (DESCRIBE FROM read_avro('test/iceberg/10ea
+ status	INTEGER
+ snapshot_id	BIGINT
+ sequence_number	BIGINT
+-data_file	STRUCT("content" INTEGER, file_path VARCHAR, file_format VARCHAR, "partition" INTEGER, record_count BIGINT, file_size_in_bytes BIGINT, column_sizes MAP(INTEGER, BIGINT), value_counts MAP(INTEGER, BIGINT), null_value_counts MAP(INTEGER, BIGINT), nan_value_counts MAP(INTEGER, BIGINT), lower_bounds MAP(INTEGER, BLOB), upper_bounds MAP(INTEGER, BLOB), key_metadata BLOB, split_offsets BIGINT[], equality_ids INTEGER[], sort_order_id INTEGER)
++data_file	STRUCT("content" INTEGER, file_path VARCHAR, file_format VARCHAR, "partition" "NULL", record_count BIGINT, file_size_in_bytes BIGINT, column_sizes MAP(INTEGER, BIGINT), value_counts MAP(INTEGER, BIGINT), null_value_counts MAP(INTEGER, BIGINT), nan_value_counts MAP(INTEGER, BIGINT), lower_bounds MAP(INTEGER, BLOB), upper_bounds MAP(INTEGER, BLOB), key_metadata BLOB, split_offsets BIGINT[], equality_ids INTEGER[], sort_order_id INTEGER)
+ 
+ query IIIIIIIII
+ FROM (FROM read_avro('test/iceberg/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro') SELECT status, snapshot_id, sequence_number, data_file.*) SELECT status, snapshot_id, sequence_number, content, file_path, file_format, partition, record_count, file_size_in_bytes

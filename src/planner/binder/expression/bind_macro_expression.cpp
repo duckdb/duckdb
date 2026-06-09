@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -11,22 +12,22 @@ namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.children) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			ReplaceMacroParameters(child, lambda_params);
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+			ReplaceMacroParameters(child.GetExpressionMutable(), lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not replace them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, replace both LHS and RHS.
-			ReplaceMacroParameters(lambda_expr.lhs, lambda_params);
-			ReplaceMacroParameters(lambda_expr.expr, lambda_params);
+			ReplaceMacroParameters(lambda_expr.LeftMutable(), lambda_params);
+			ReplaceMacroParameters(lambda_expr.RightMutable(), lambda_params);
 			continue;
 		}
 
@@ -38,7 +39,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		}
 
 		// Only replace in the RHS of the expression.
-		ReplaceMacroParameters(lambda_expr.expr, lambda_params);
+		ReplaceMacroParameters(lambda_expr.RightMutable(), lambda_params);
 
 		lambda_params.pop_back();
 	}
@@ -78,7 +79,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
-		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
+		auto &sq = (expr->Cast<SubqueryExpression>()).Subquery();
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 		break;
@@ -119,13 +120,32 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		auto &macro_expr = macro_copy->Cast<FunctionExpression>();
 		// Transfer the macro function attributes
 		auto &window_expr = expr->Cast<WindowExpression>();
-		window_expr.catalog = macro_expr.catalog;
-		window_expr.schema = macro_expr.schema;
-		window_expr.function_name = macro_expr.function_name;
-		window_expr.children = std::move(macro_expr.children);
-		window_expr.distinct = macro_expr.distinct;
-		window_expr.filter_expr = std::move(macro_expr.filter);
-		// TODO: transfer order_bys when window functions support them
+		window_expr.CatalogMutable() = macro_expr.Catalog();
+		window_expr.SchemaMutable() = macro_expr.Schema();
+		window_expr.FunctionNameMutable() = macro_expr.FunctionName();
+
+		window_expr.GetArgumentsMutable().clear();
+		for (auto &arg : macro_expr.GetArgumentsMutable()) {
+			window_expr.GetArgumentsMutable().push_back(std::move(arg));
+		}
+
+		if (!window_expr.Distinct()) {
+			window_expr.DistinctMutable() = macro_expr.Distinct();
+		}
+		if (window_expr.Filter() && macro_expr.Filter()) {
+			// Two FILTER clauses: combine
+			window_expr.FilterMutable() = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+			                                                               std::move(window_expr.FilterMutable()),
+			                                                               std::move(macro_expr.FilterMutable()));
+		} else if (macro_expr.Filter()) {
+			//	One FILTER from the MACRO
+			window_expr.FilterMutable() = std::move(macro_expr.FilterMutable());
+		}
+		// Transfer argument ORDER BYs
+		if (macro_expr.OrderBy()) {
+			auto clone = macro_expr.OrderBy()->Copy();
+			window_expr.ArgOrdersMutable() = std::move(clone->Cast<OrderModifier>().orders);
+		}
 	} else {
 		expr = macro_def.expression->Copy();
 	}

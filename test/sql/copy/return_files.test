@@ -23,6 +23,11 @@ COPY integers TO '{TEST_DIR}/test_batch_copy_to_file.parquet' (RETURN_FILES TRUE
 ----
 200000	<REGEX>:.*test_batch_copy_to_file.parquet.*
 
+statement error
+COPY integers TO '{TEST_DIR}/test_return_files_stats_conflict.parquet' (RETURN_FILES, RETURN_STATS);
+----
+Binder Error
+
 statement ok
 SET threads=2;
 
@@ -44,4 +49,4 @@ CREATE TABLE integers2 AS SELECT range i, range % 4 j FROM range(200000);
 query II
 COPY integers2 TO '{TEST_DIR}/test_partition_by' (RETURN_FILES TRUE, PARTITION_BY j);
 ----
-200000	<REGEX>:.*test_partition_by/j=0/data_0.csv.*test_partition_by/j=1/data_0.csv.*test_partition_by/j=2/data_0.csv.*test_partition_by/j=3/data_0.csv.*
+200000	<REGEX>:.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*

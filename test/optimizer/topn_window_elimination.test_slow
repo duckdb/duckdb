@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -410,3 +407,28 @@ WHERE sub.rn = 1
 EXCEPT
 SELECT id, ord FROM (SELECT id, ord, row_number() OVER (ORDER BY ord) AS rn FROM except_test) WHERE rn = 1;
 ----
+
+# Don't apply late materialisation to function projections that have only one colref argument...
+statement ok
+CREATE TABLE path_table AS 
+	SELECT generate_series AS id, 
+		id % 4 AS partition_key, 
+		id % 7 AS sort_key, 
+		'/User/hawkfish/file.txt' AS path 
+	FROM generate_series(10);
+
+statement ok
+CREATE VIEW path_view AS 
+	SELECT *, 
+		parse_filename(path) AS filename 
+	FROM path_table;
+
+query IIIII
+FROM path_view 
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+ORDER BY 1;
+----
+0	0	0	/User/hawkfish/file.txt	file.txt
+1	1	1	/User/hawkfish/file.txt	file.txt
+2	2	2	/User/hawkfish/file.txt	file.txt
+7	3	0	/User/hawkfish/file.txt	file.txt

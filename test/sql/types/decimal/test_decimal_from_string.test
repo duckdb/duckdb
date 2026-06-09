@@ -1,9 +1,6 @@
 # name: test/sql/types/decimal/test_decimal_from_string.test
 # group: [decimal]
 
-#statement ok
-#pragma enable_verification
-
 query I
 select '+1e-1'::DECIMAL(38,3)
 ----
@@ -51,5 +48,10 @@ endloop
 
 statement error
 select cast('9.99' as decimal(1,0));
+----
+Conversion Error: Could not convert string
+
+statement error
+select map { 1: decimal 'b' };
 ----
 Conversion Error: Could not convert string

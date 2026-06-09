@@ -51,6 +51,7 @@ public:
 
 public:
 	UpdateStatement();
+	~UpdateStatement() override;
 
 	unique_ptr<UpdateQueryNode> node;
 

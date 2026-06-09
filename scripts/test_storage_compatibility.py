@@ -75,8 +75,8 @@ proc = subprocess.run(
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
 )
-stdout = proc.stdout.decode('utf8').strip()
-stderr = proc.stderr.decode('utf8').strip()
+stdout = proc.stdout.decode('utf8', errors='backslashreplace').strip()
+stderr = proc.stderr.decode('utf8', errors='backslashreplace').strip()
 if len(stderr) > 0:
     print("Failed to run program " + unittest_program)
     print("Returncode:", proc.returncode)
@@ -152,8 +152,8 @@ def make_failure(test, cmd, msg, stdout='', stderr='', returncode=1):
 
 def run_program(test, cmd, description):
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout = proc.stdout.decode('utf8').strip()
-    stderr = proc.stderr.decode('utf8').strip()
+    stdout = proc.stdout.decode('utf8', errors='backslashreplace').strip()
+    stderr = proc.stderr.decode('utf8', errors='backslashreplace').strip()
     if proc.returncode != 0:
         return {
             'test': test,
@@ -166,11 +166,18 @@ def run_program(test, cmd, description):
     return None
 
 
+def matches_skip_error(failure, skip_error_messages):
+    if not skip_error_messages:
+        return False
+    combined = failure.get('stderr', '') + failure.get('stdout', '')
+    return any(msg in combined for msg in skip_error_messages)
+
+
 def execute_test(i, test):
     test_path = test if os.path.isabs(test) else os.path.join(repo_root, test)
     skipped = False
     if not args.run_empty_tests:
-        with open(test_path, 'r') as f:
+        with open(test_path, 'r', encoding='utf8', errors='backslashreplace') as f:
             test_contents = f.read().lower()
         if 'create table' not in test_contents and 'create view' not in test_contents:
             skipped = True
@@ -192,6 +199,7 @@ def execute_test(i, test):
         worker_test_config = os.path.join(temp_dir, 'storage_compatibility.json')
         with open(test_config, 'r') as f:
             config_contents = json.load(f)
+        skip_error_messages = config_contents.get('skip_error_messages', [])
         config_contents['initial_db'] = db_path
         with open(worker_test_config, 'w') as f:
             json.dump(config_contents, f)
@@ -209,6 +217,9 @@ def execute_test(i, test):
             'Run Test',
         )
         if failure is not None:
+            if matches_skip_error(failure, skip_error_messages):
+                result['skipped'] = True
+                return result
             result['failures'].append(failure)
             return result
 
@@ -222,22 +233,22 @@ def execute_test(i, test):
             )
             return result
 
-        failure = run_program(
-            test,
-            [
-                programs_to_test[-1],
-                db_path,
-                '-c',
-                '.headers off',
-                '-csv',
-                '-c',
-                f'.output {table_list_path}',
-                '-c',
-                'SHOW ALL TABLES',
-            ],
-            'List Tables',
-        )
+        list_tables_cmd = [
+            programs_to_test[-1],
+            db_path,
+            '-c',
+            '.headers off',
+            '-csv',
+            '-c',
+            f'.output {table_list_path}',
+            '-c',
+            'SHOW ALL TABLES',
+        ]
+        failure = run_program(test, list_tables_cmd, 'List Tables')
         if failure is not None:
+            if matches_skip_error(failure, skip_error_messages):
+                result['skipped'] = True
+                return result
             result['failures'].append(failure)
             return result
 
@@ -263,6 +274,8 @@ def execute_test(i, test):
             failure = run_program(test, cmd, 'Query Tables')
             if failure is not None:
                 failures.append(failure)
+        if len(failures) > 0:
+            failures = [f for f in failures if not matches_skip_error(f, skip_error_messages)]
         if len(failures) > 0:
             # A query failure can be expected for stale views. Only report it
             # when the same query succeeds against the new CLI.

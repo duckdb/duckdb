@@ -59,14 +59,14 @@ void ListStats::SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> 
 	}
 }
 
-void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
+void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other, StatsMergeType merge_type) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
 
 	auto &child_stats = ListStats::GetChildStats(stats);
 	auto &other_child_stats = ListStats::GetChildStats(other);
-	child_stats.Merge(other_child_stats);
+	child_stats.Merge(other_child_stats, merge_type);
 }
 
 void ListStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -92,17 +92,17 @@ child_list_t<Value> ListStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void ListStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	auto &child_entry = ListVector::GetEntry(vector);
-	auto entries = vector.Values<list_entry_t>(count);
+	const auto &child_entry = ListVector::GetChild(vector);
+	auto entries = vector.Values<list_entry_t>();
 
 	idx_t total_list_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto entry = entries[idx];
 		if (entry.IsValid()) {
-			total_list_count += entry.value.length;
+			total_list_count += entry.GetValue().length;
 		}
 	}
 	SelectionVector list_sel(total_list_count);
@@ -111,7 +111,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 		auto idx = sel.get_index(i);
 		auto entry = entries[idx];
 		if (entry.IsValid()) {
-			auto list = entry.value;
+			auto list = entry.GetValue();
 			for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 				list_sel.set_index(list_count++, list.offset + list_idx);
 			}

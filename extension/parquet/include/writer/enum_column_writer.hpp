@@ -8,19 +8,30 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "writer/primitive_column_writer.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "parquet_types.h"
+#include "writer/parquet_write_stats.hpp"
 
 namespace duckdb {
 class EnumWriterPageState;
+class ParquetWriter;
+class Vector;
+class WriteStream;
+struct ParquetColumnSchema;
 
 class EnumColumnWriter : public PrimitiveColumnWriter {
 public:
 	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
 	~EnumColumnWriter() override = default;
 
-	uint32_t bit_width;
-
-public:
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override;
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
@@ -44,6 +55,10 @@ private:
 	template <class T>
 	void WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
 	                       EnumWriterPageState &page_state);
+
+	uint32_t bit_width;
+	//! Tracks which enum values have actually been written.
+	vector<bool> seen_enum;
 };
 
 } // namespace duckdb

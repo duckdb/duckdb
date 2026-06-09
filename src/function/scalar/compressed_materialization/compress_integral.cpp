@@ -44,7 +44,7 @@ void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    args.data[0], result, args.size(),
+	    args.data[0], result,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },
@@ -134,7 +134,7 @@ void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(args.data[1].GetType() == result.GetType());
 	const auto min_val = ConstantVector::GetData<RESULT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    args.data[0], result, args.size(),
+	    args.data[0], result,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },
@@ -188,16 +188,16 @@ scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalType &in
 }
 
 void CMIntegralSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                         const ScalarFunction &function) {
-	serializer.WriteProperty(100, "arguments", function.arguments);
+                         const BoundScalarFunction &function) {
+	serializer.WriteProperty(100, "arguments", function.GetArguments());
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
 template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
-unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
+unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
+	function.GetArguments() = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
-	function.SetFunctionCallback(GET_FUNCTION(function.arguments[0], return_type));
+	function.SetFunctionCallback(GET_FUNCTION(function.GetArguments()[0], return_type));
 	return nullptr;
 }
 

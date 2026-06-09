@@ -105,6 +105,16 @@ def lookup_serialization_version(version: str):
     return versions[version]
 
 
+def version_string_to_storage_version_enum(version: str) -> str:
+    """Convert a version string like 'v0.10.3' to 'StorageVersion::V0_10_3'."""
+    versions = version_map['serialization']['values']
+    if version not in versions:
+        return 'StorageVersion::LATEST'
+    # "v0.10.3" -> "V0_10_3"
+    enum_name = 'V' + version[1:].replace('.', '_')
+    return f'StorageVersion::{enum_name}'
+
+
 INCLUDE_FORMAT = '#include "{filename}"\n'
 
 HEADER = '''//===----------------------------------------------------------------------===//
@@ -305,6 +315,14 @@ supported_member_entries = [
     'default',
     'status',
     'version',
+    # equality/hash generation annotations (used by generate_util.py)
+    'equals_skip',
+    'hash_skip',
+    # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
+    'accessor_mut',
+    'accessor',
+    # nullable annotation (used by generate_util.py)
+    'nullable',
 ]
 
 
@@ -324,11 +342,20 @@ def has_default_by_default(type):
     return False
 
 
+def normalize_json_type(type_str):
+    """Map JSON-only type names to their C++ equivalents for serialization."""
+    if type_str == 'Identifier':
+        return 'string'
+    if type_str == 'vector<Identifier>':
+        return 'vector<string>'
+    return type_str
+
+
 class MemberVariable:
     def __init__(self, entry):
         self.id = entry['id']
         self.name = entry['name']
-        self.type = entry['type']
+        self.type = normalize_json_type(entry['type'])
         self.base = None
         self.has_default = False
         self.default = None
@@ -361,6 +388,7 @@ class MemberVariable:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}"
                 )
+                exit(1)
 
 
 supported_serialize_entries = [
@@ -379,6 +407,8 @@ supported_serialize_entries = [
     'includes',
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
+    'functions',
+    'use_legacy_serialization',
 ]
 
 
@@ -418,7 +448,10 @@ class SerializableClass:
         self.return_type = self.name
         self.return_class = self.name
         self.finalize_deserialization = None
+        self.use_legacy_serialization = None
         self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
+        if 'use_legacy_serialization' in entry:
+            self.use_legacy_serialization = entry['use_legacy_serialization']
         if 'ignore_clang_tidy_rules' in entry:
             self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
         if 'finalize_deserialization' in entry:
@@ -440,11 +473,6 @@ class SerializableClass:
                 exit(1)
         if 'constructor_method' in entry:
             self.constructor_method = entry['constructor_method']
-            if self.constructor is not None:
-                print(
-                    "Not allowed to mix 'constructor_method' and 'constructor', 'constructor_method' will implicitly receive all parameters"
-                )
-                exit(1)
         if 'custom_implementation' in entry and entry['custom_implementation']:
             self.custom_implementation = True
         if 'custom_switch_code' in entry:
@@ -471,6 +499,7 @@ class SerializableClass:
                 print(
                     f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}"
                 )
+                exit(1)
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -514,6 +543,7 @@ class SerializableClass:
         default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
         storage_version = lookup_serialization_version(entry.version)
         conditional_serialization = storage_version != 1
+        storage_version_enum = version_string_to_storage_version_enum(entry.version)
         template = SERIALIZE_ELEMENT_FORMAT
         if entry.status != MemberVariableStatus.EXISTING and not conditional_serialization:
             template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
@@ -532,10 +562,10 @@ class SerializableClass:
             code = []
             if entry.status != MemberVariableStatus.EXISTING:
                 # conditional delete
-                code.append(f'\tif (!serializer.ShouldSerialize({storage_version})) {{')
+                code.append(f'\tif (!serializer.ShouldSerialize({storage_version_enum})) {{')
             else:
                 # conditional serialization
-                code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+                code.append(f'\tif (serializer.ShouldSerialize({storage_version_enum})) {{')
             code.append('\t' + serialization_code)
 
             result = '\n'.join(code) + '\t}\n'
@@ -723,6 +753,8 @@ def generate_class_code(class_entry: SerializableClass):
         for entry_idx, entry in enumerate(class_entry.members):
             if entry_idx > last_constructor_index:
                 last_constructor_index = entry_idx
+            if entry.status == MemberVariableStatus.DELETED:
+                continue
             constructor_entries.add(entry.name)
             type_name = replace_pointer(entry.type)
             entry.deserialize_property = entry.deserialize_property.replace('.', '_')
@@ -793,8 +825,18 @@ def generate_class_code(class_entry: SerializableClass):
     if is_templated:
         templated_type = TEMPLATED_BASE_FORMAT.format(template_name=is_templated.group()[1:-1])
 
+    legacy_serialize_preamble = ''
+    if class_entry.use_legacy_serialization is not None:
+        storage_version_enum = version_string_to_storage_version_enum(class_entry.use_legacy_serialization)
+        legacy_serialize_preamble = (
+            f'\tif (!serializer.ShouldSerialize({storage_version_enum}) && UseLegacySerialization()) {{\n'
+            f'\t\tLegacySerialize(serializer);\n'
+            f'\t\treturn;\n'
+            f'\t}}\n'
+        )
+
     class_generation += templated_type + SERIALIZE_BASE_FORMAT.format(
-        class_name=class_entry.name, members=class_serialize
+        class_name=class_entry.name, members=legacy_serialize_preamble + class_serialize
     )
 
     class_generation += templated_type + DESERIALIZE_BASE_FORMAT.format(

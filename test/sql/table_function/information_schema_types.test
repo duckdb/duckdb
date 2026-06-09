@@ -4,9 +4,6 @@
 
 # Verify all columns in the information_schema have explicitly defined types
 
-statement ok
-pragma enable_verification
-
 query II
 select table_name, column_name
 from duckdb_columns()

@@ -50,6 +50,44 @@ void PrintStream::PrintDashes(idx_t N) {
 	Print(string(N, '-'));
 }
 
+void PrintStream::PrintSQL(const string &sql) {
+	if (!SupportsHighlight()) {
+		// the output stream does not support highlighting (e.g. width measuring / redirected output)
+		Print(sql);
+		return;
+	}
+	string highlighted = sql;
+	// HighlightSQL is a no-op when highlighting is disabled or output is not a console
+	state.HighlightSQL(highlighted);
+	Print(highlighted);
+}
+
+// A PrintStream that captures all output into a string instead of writing it out.
+// Used to build a complete SQL statement so it can be highlighted as a whole before printing.
+struct StringPrintStream : public PrintStream {
+	explicit StringPrintStream(ShellState &state) : PrintStream(state) {
+	}
+
+	void Print(const string &str) override {
+		result += str;
+	}
+	void Print(duckdb::string_t str) override {
+		result.append(str.GetData(), str.GetSize());
+	}
+	void Print(const char *str) override {
+		result += str;
+	}
+	void SetBinaryMode() override {
+	}
+	void SetTextMode() override {
+	}
+	bool SupportsHighlight() override {
+		return false;
+	}
+
+	string result;
+};
+
 void PrintStream::OutputQuotedIdentifier(const string &str) {
 	Print(StringUtil::Format("%s", SQLIdentifier(str)));
 }
@@ -305,7 +343,7 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
 	}
-	varchar_chunk->SetCardinality(chunk.size());
+	varchar_chunk->SetChildCardinality(chunk.size());
 	varchar_chunk->Flatten();
 	return varchar_chunk;
 }
@@ -323,7 +361,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;
@@ -1207,6 +1245,10 @@ public:
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		// Booleans are cast to VARCHAR ("true"/"false") in ConvertChunk; emit them as JSON booleans, not strings.
+		if (type.id() == duckdb::LogicalTypeId::BOOLEAN) {
+			return false;
+		}
 		if (!type.IsNumeric()) {
 			return true;
 		}
@@ -1317,7 +1359,7 @@ public:
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
 		}
-		json_chunk.SetCardinality(chunk.size());
+		json_chunk.SetChildCardinality(chunk.size());
 		json_chunk.Flatten();
 		// now convert the JSON chunk to VARCHAR
 		return ShellRenderer::ConvertChunk(json_chunk);
@@ -1354,31 +1396,34 @@ public:
 		auto &col_names = result.column_names;
 		auto &is_null = row.is_null;
 
-		out.Print("INSERT INTO ");
-		out.Print(state.zDestTable);
+		// build the full INSERT statement into a buffer so it can be highlighted as a whole
+		StringPrintStream buffer(state);
+		buffer.Print("INSERT INTO ");
+		buffer.Print(state.zDestTable);
 		if (show_header) {
-			out.Print("(");
+			buffer.Print("(");
 			for (idx_t i = 0; i < col_names.size(); i++) {
 				if (i > 0) {
-					out.Print(",");
+					buffer.Print(",");
 				}
-				out.OutputQuotedIdentifier(col_names[i]);
+				buffer.OutputQuotedIdentifier(col_names[i]);
 			}
-			out.Print(")");
+			buffer.Print(")");
 		}
 		for (idx_t i = 0; i < data.size(); i++) {
-			out.Print(i > 0 ? "," : " VALUES(");
+			buffer.Print(i > 0 ? "," : " VALUES(");
 			if (is_null[i]) {
-				out.Print("NULL");
+				buffer.Print("NULL");
 			} else if (types[i].IsNumeric()) {
-				out.Print(data[i]);
+				buffer.Print(data[i]);
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
-				out.OutputQuotedString(data[i].GetString());
+				buffer.OutputQuotedString(data[i].GetString());
 			} else {
-				out.Print(EscapeNewlines(data[i].GetString()));
+				buffer.Print(EscapeNewlines(data[i].GetString()));
 			}
 		}
-		out.Print(");\n");
+		buffer.Print(");\n");
+		out.PrintSQL(buffer.result);
 	}
 
 	string EscapeNewlines(const string &str) {
@@ -1444,116 +1489,7 @@ public:
 
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		out.Print(state.GetSchemaLine(row.data[0].GetString(), "\n"));
-	}
-};
-
-class ModePrettyRenderer : public RowRenderer {
-public:
-	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {
-	}
-
-	static bool IsSpace(char c) {
-		return duckdb::StringUtil::CharacterIsSpace(c);
-	}
-
-	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
-		auto &data = row.data;
-		/* .schema and .fullschema with --indent */
-		if (data.size() != 1) {
-			throw std::runtime_error("row must have exactly one value for pretty rendering");
-		}
-		int j;
-		int nParen = 0;
-		char cEnd = 0;
-		char c;
-		int nLine = 0;
-		if (duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE VIEW") ||
-		    duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE TRIG")) {
-			out.Print(data[0]);
-			out.Print(";\n");
-			return;
-		}
-		auto zStr = unique_ptr<char[]>(new char[data[0].GetSize() + 1]);
-		memcpy(zStr.get(), data[0].GetData(), data[0].GetSize());
-		zStr[data[0].GetSize()] = '\0';
-		auto z = zStr.get();
-		j = 0;
-		idx_t i;
-		for (i = 0; IsSpace(z[i]); i++) {
-		}
-		for (; (c = z[i]) != 0; i++) {
-			if (IsSpace(c)) {
-				if (z[j - 1] == '\r') {
-					z[j - 1] = '\n';
-				}
-				if (IsSpace(z[j - 1]) || z[j - 1] == '(') {
-					continue;
-				}
-			} else if ((c == '(' || c == ')') && j > 0 && IsSpace(z[j - 1])) {
-				j--;
-			}
-			z[j++] = c;
-		}
-		while (j > 0 && IsSpace(z[j - 1])) {
-			j--;
-		}
-		z[j] = 0;
-		if (state.StringLength(z) >= 79) {
-			for (i = j = 0; (c = z[i]) != 0; i++) { /* Copy from z[i] back to z[j] */
-				if (c == cEnd) {
-					cEnd = 0;
-				} else if (c == '"' || c == '\'' || c == '`') {
-					cEnd = c;
-				} else if (c == '[') {
-					cEnd = ']';
-				} else if (c == '-' && z[i + 1] == '-') {
-					cEnd = '\n';
-				} else if (c == '(') {
-					nParen++;
-				} else if (c == ')') {
-					nParen--;
-					if (nLine > 0 && nParen == 0 && j > 0) {
-						out.Print(state.GetSchemaLineN(z, j, "\n"));
-						j = 0;
-					}
-				}
-				z[j++] = c;
-				if (nParen == 1 && cEnd == 0 && (c == '(' || c == '\n' || (c == ',' && !wsToEol(z + i + 1)))) {
-					if (c == '\n')
-						j--;
-					out.Print(state.GetSchemaLineN(z, j, "\n  "));
-					j = 0;
-					nLine++;
-					while (IsSpace(z[i + 1])) {
-						i++;
-					}
-				}
-			}
-			z[j] = 0;
-		}
-		out.Print(state.GetSchemaLine(z, ";\n"));
-	}
-
-	/*
-	** Return true if string z[] has nothing but whitespace and comments to the
-	** end of the first line.
-	*/
-	static bool wsToEol(const char *z) {
-		int i;
-		for (i = 0; z[i]; i++) {
-			if (z[i] == '\n') {
-				return true;
-			}
-			if (IsSpace(z[i])) {
-				continue;
-			}
-			if (z[i] == '-' && z[i + 1] == '-') {
-				return true;
-			}
-			return false;
-		}
-		return true;
+		out.PrintSQL(state.GetSchemaLine(row.data[0].GetString(), "\n"));
 	}
 };
 
@@ -1629,6 +1565,7 @@ public:
 
 private:
 	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
 	unique_ptr<duckdb::ColumnDataCollectionWrapper> wrapper;
 	string error_str;
@@ -1667,7 +1604,9 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-	config.hidden_rows_hint = "use .last to show entire result";
+	if (state.pager_mode != PagerMode::PAGER_OFF) {
+		config.hidden_rows_hint = "use .last to show entire result";
+	}
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
@@ -1682,7 +1621,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &con = *state.conn;
 	try {
 		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, *wrapper);
+		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
+		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();
@@ -1823,8 +1763,6 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 		return make_uniq<ModeInsertRenderer>(*this);
 	case RenderMode::SEMI:
 		return make_uniq<ModeSemiRenderer>(*this);
-	case RenderMode::PRETTY:
-		return make_uniq<ModePrettyRenderer>(*this);
 	case RenderMode::COLUMN:
 		return make_uniq<ModeColumnRenderer>(*this);
 	case RenderMode::TABLE:

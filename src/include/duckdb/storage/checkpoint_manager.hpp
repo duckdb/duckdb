@@ -52,7 +52,7 @@ public:
 
 	~ActiveCheckpointWrapper();
 
-	//! Begin the transaction withint the newly created connection.
+	//! Begin the transaction within the newly created connection.
 	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 	bool HasCheckpointContext() const;

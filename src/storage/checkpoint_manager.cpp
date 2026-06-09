@@ -333,12 +333,12 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			unique_ptr<lock_guard<mutex>> owned_wal_lock;
-			optional_ptr<lock_guard<mutex>> wal_lock;
+			unique_lock<mutex> owned_wal_lock;
+			optional_ptr<unique_lock<mutex>> wal_lock;
 			if (!options.wal_lock) {
 				// not holding the WAL lock yet - grab it
 				owned_wal_lock = storage_manager.GetWALLock();
-				wal_lock = *owned_wal_lock;
+				wal_lock = owned_wal_lock;
 			} else {
 				// we already have the WAL lock - just refer to it
 				wal_lock = options.wal_lock;
@@ -566,7 +566,8 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 // Sequences
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
-	serializer.WriteProperty(100, "sequence", &seq);
+	auto info = seq.GetInfo();
+	serializer.WriteProperty(100, "sequence", info.get());
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
@@ -726,6 +727,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	// Cover reading new storage files.
 	auto index_storage_infos =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
+	// Read next_row_id as total_rows for backwards compatibility. Older storage versions do not allow for gaps in
+	// row_id numbering, in which case next_row_id = total_rows.
+	auto next_row_id = deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "next_row_id", total_rows);
+	D_ASSERT(next_row_id >= total_rows);
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = std::move(index_storage_infos);
@@ -750,6 +755,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
+	bound_info.data->next_row_id = next_row_id;
 	bound_info.data->read_metadata_pointers = read_pointers;
 }
 

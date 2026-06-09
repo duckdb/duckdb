@@ -45,7 +45,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
                                   optional_ptr<const Expression> cast_source, optional_idx error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
-		column = " when casting from source column " + cast_source->alias;
+		column = " when casting from source column " + cast_source->GetAlias();
 	}
 	if (!error_message_ptr) {
 		throw ConversionException(error_location, error_message + column);
@@ -58,12 +58,11 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
-	if (VectorOperations::HasNotNull(source, count)) {
+	if (VectorOperations::HasNotNull(source)) {
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return success;
 }
 
@@ -72,53 +71,13 @@ bool DefaultCasts::ReinterpretCast(Vector &source, Vector &result, idx_t count, 
 	return true;
 }
 
-static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (result.GetType().id() != LogicalTypeId::BLOB) {
-		throw TypeMismatchException(source.GetType(), result.GetType(),
-		                            "Cannot cast LEGACY_AGGREGATE_STATE to anything but BLOB");
-	}
-	result.Reinterpret(source);
-	return true;
-}
-
-static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	// Both `AGGREGATE_STATE` and `STRUCT` are `PhysicalType::STRUCT`
-	// However, we can't use Reinterpret because it's blocked by D_ASSERT for nested types
-	// Instead, we manually reference the entries
-	auto &source_entries = StructVector::GetEntries(source);
-	auto &result_entries = StructVector::GetEntries(result);
-
-	D_ASSERT(source_entries.size() == result_entries.size());
-
-	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i].Reference(source_entries[i]);
-	}
-
-	source.Flatten(count);
-	FlatVector::Validity(result) = FlatVector::Validity(source);
-	result.Verify(count);
-	return true;
-}
-
-static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	D_ASSERT(source.IsAggregateStateStructType());
-
-	LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
-	auto cast_info = input.GetCastFunction(dummy_struct, target);
-	if (cast_info.function == DefaultCasts::NopCast) {
-		// 1. `NopCast` cannot be used since it expects the types to be the same.
-		// 2. `ReinterpretCast` cannot be used since it's blocked for nested types.
-		// 3. We don't want to use `StructToStructCast` in this case as it introduces more complexity while we know
-		// that we don't have casting to perform
-		cast_info.function = AggregateStateToStructReinterpret;
-	}
-	return cast_info;
+bool BoundCastInfo::IsNopCast() const {
+	return function == DefaultCasts::NopCast;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return true;
 }
 
@@ -170,6 +129,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TimestampCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TimestampTzCastSwitch(input, source, target);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return TimestampTzNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return TimestampNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -206,10 +167,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TypeCastSwitch(input, source, target);
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
-	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateCast(input, source, target);
 	default:
 		return nullptr;
 	}

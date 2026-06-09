@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/node.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -494,10 +495,10 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 
 namespace {
 // Tree-style branch characters
-const string NODE_BRANCH_MID = "├── ";
-const string NODE_BRANCH_END = "└── ";
-const string NODE_VERTICAL = "│   ";
-const string NODE_SPACE = "    ";
+constexpr const char *const NODE_BRANCH_MID = "├── ";
+constexpr const char *const NODE_BRANCH_END = "└── ";
+constexpr const char *const NODE_VERTICAL = "│   ";
+constexpr const char *const NODE_SPACE = "    ";
 
 // ASCII printable character range
 constexpr uint8_t NODE_ASCII_PRINTABLE_MIN = 32;
@@ -520,11 +521,11 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 	string str;
 
 	if (IsLeafNode()) {
-		str += options.tree_prefix + NODE_BRANCH_END + "Leaf |";
+		str += StringUtil::Format("%s%sLeaf |", options.tree_prefix, NODE_BRANCH_END);
 		uint8_t byte = 0;
 		auto has_byte = GetNextByte(art, byte);
 		while (has_byte) {
-			str += format_byte(byte) + "|";
+			str += StringUtil::Format("%s|", format_byte(byte));
 			if (byte == NumericLimits<uint8_t>::Maximum()) {
 				break;
 			}
@@ -564,10 +565,11 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 			// (since we're hiding off-path siblings, the branch should end here)
 			auto effective_last = is_last || (options.structure_only && has_expected_byte && on_path);
 			auto branch = effective_last ? NODE_BRANCH_END : NODE_BRANCH_MID;
-			auto child_prefix = options.tree_prefix + (effective_last ? NODE_SPACE : NODE_VERTICAL);
+			auto child_prefix =
+			    StringUtil::Format("%s%s", options.tree_prefix, effective_last ? NODE_SPACE : NODE_VERTICAL);
 
 			if (on_path) {
-				str += options.tree_prefix + branch + format_byte(child_byte) + "\n";
+				str += StringUtil::Format("%s%s%s\n", options.tree_prefix, branch, format_byte(child_byte));
 
 				auto child_options = options;
 				child_options.inside_gate = propagate_gate;
@@ -579,8 +581,9 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 				auto is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
 				                    child_type == NType::NODE_48 || child_type == NType::NODE_256);
 				if (is_internal) {
-					str += child_prefix + NODE_BRANCH_END + "Node" + to_string(GetCapacity(child_type)) + "\n";
-					child_options.tree_prefix = child_prefix + NODE_SPACE;
+					str += StringUtil::Format("%s%sNode%s\n", child_prefix, NODE_BRANCH_END,
+					                          to_string(GetCapacity(child_type)));
+					child_options.tree_prefix = StringUtil::Format("%s%s", child_prefix, NODE_SPACE);
 					str += child_ptr->ToStringChildren(art, child_options);
 				} else {
 					child_options.tree_prefix = child_prefix;
@@ -588,7 +591,7 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 				}
 			} else {
 				if (!options.structure_only) {
-					str += options.tree_prefix + branch + format_byte(child_byte) + " ...\n";
+					str += StringUtil::Format("%s%s%s ...\n", options.tree_prefix, branch, format_byte(child_byte));
 				}
 			}
 		}

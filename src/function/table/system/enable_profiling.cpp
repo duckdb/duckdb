@@ -52,7 +52,11 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
+		Value metrics_value = bind_data.metrics;
+		if (metrics_value.type().id() == LogicalTypeId::VARCHAR) {
+			metrics_value = Value::LIST(LogicalType::VARCHAR, {metrics_value});
+		}
+		TrackedMetricsSetting::SetLocal(context, metrics_value);
 	}
 }
 
@@ -83,9 +87,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			break;
 		case ProfilingParameterNames::METRICS: {
 			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-			    named_param.second.type().id() != LogicalTypeId::STRUCT &&
 			    named_param.second.type() != LogicalType::VARCHAR) {
-				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 			}
 
 			bind_data->metrics = named_param.second;
@@ -100,8 +103,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			throw InvalidInputException("EnableProfiling: cannot specify both metrics and positional parameters");
 		}
 		if (input.inputs[0].type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-		    input.inputs[0].type().id() != LogicalTypeId::STRUCT && input.inputs[0].type() != LogicalType::VARCHAR) {
-			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+		    input.inputs[0].type() != LogicalType::VARCHAR) {
+			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 		}
 
 		bind_data->metrics = input.inputs[0];
@@ -136,7 +139,7 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("mode", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("metrics", LogicalType::ANY);
 
-	enable_fun.varargs = LogicalType::LIST(LogicalType::VARCHAR);
+	enable_fun.SetVarArgs(LogicalType::LIST(LogicalType::VARCHAR));
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_profiling", {}, DisableProfiling, BindDisableProfiling, nullptr, nullptr);

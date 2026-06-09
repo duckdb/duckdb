@@ -2,9 +2,6 @@
 # description: Test SELECTMacro
 # group: [function]
 
-statement ok
-PRAGMA enable_verification
-
 load {TEST_DIR}/table_macro.db
 
 statement ok

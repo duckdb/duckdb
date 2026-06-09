@@ -1,12 +1,5 @@
 include_directories(include)
 
-if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
-  include_directories(../../extension/autocomplete/include)
-  set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
-                       ../../extension/autocomplete/autocomplete_extension.cpp)
-  add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
-endif()
-
 add_subdirectory(linenoise)
 add_definitions(-DHAVE_LINENOISE=1)
 include_directories(../../third_party/utf8proc/include)
@@ -85,5 +78,7 @@ endif()
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${PROJECT_BINARY_DIR})
+
+duckdb_codesign_for_debugging(shell)
 
 install(TARGETS shell RUNTIME DESTINATION "${INSTALL_BIN_DIR}")

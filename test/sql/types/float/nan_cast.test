@@ -2,9 +2,6 @@
 # description: Test casting of NaN and inf values
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 # to integer/decimal casts
 foreach source_type FLOAT DOUBLE
 

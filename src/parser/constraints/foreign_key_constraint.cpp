@@ -21,7 +21,7 @@ string ForeignKeyConstraint::ToString() const {
 			if (i > 0) {
 				base += ", ";
 			}
-			base += KeywordHelper::WriteOptionallyQuoted(fk_columns[i]);
+			base += SQLIdentifier(fk_columns[i]);
 		}
 		base += ") REFERENCES ";
 		if (!info.schema.empty() && info.schema != DEFAULT_SCHEMA) {
@@ -36,7 +36,7 @@ string ForeignKeyConstraint::ToString() const {
 				if (i > 0) {
 					base += ", ";
 				}
-				base += KeywordHelper::WriteOptionallyQuoted(pk_columns[i]);
+				base += SQLIdentifier(pk_columns[i]);
 			}
 			base += ")";
 		}

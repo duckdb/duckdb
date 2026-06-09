@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class Binder;
+class SQLStatement;
 
 class Optimizer {
 public:
@@ -29,6 +30,9 @@ public:
 	//! Whether the specific optimizer is disabled
 	bool OptimizerDisabled(OptimizerType type);
 	static bool OptimizerDisabled(ClientContext &context, OptimizerType type);
+
+	//! Pre-binder statement-level optimization pass
+	void OptimizeStatement(unique_ptr<SQLStatement> &statement);
 
 public:
 	ClientContext &context;
@@ -44,6 +48,8 @@ public:
 	// helper functions
 	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1);
 	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2);
+	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2,
+	                                          unique_ptr<Expression> c3);
 
 private:
 	unique_ptr<LogicalOperator> plan;

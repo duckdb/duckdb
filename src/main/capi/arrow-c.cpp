@@ -106,7 +106,7 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, duckdb::NumericCast<idx_t>(arrow_array->length));
 
 	auto &arrow_types = arrow_table->GetColumns();
-	dchunk->SetCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
+	dchunk->SetChildCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
 		auto &array = parent_array.children[i];

@@ -8,14 +8,14 @@ void ArrowBoolData::Initialize(ArrowAppendData &result, const LogicalType &type,
 	result.GetMainBuffer().reserve(byte_count);
 }
 
-void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowBoolData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	idx_t size = to - from;
 	auto &main_buffer = append_data.GetMainBuffer();
 	auto &validity_buffer = append_data.GetValidityBuffer();
 	// we initialize both the validity and the bit set to 1's
 	ArrowAppendData::ResizeValidity(validity_buffer, append_data.row_count + size);
 	ArrowAppendData::ResizeValidity(main_buffer, append_data.row_count + size);
-	auto data = input.Values<bool>(input_size);
+	auto data = input.Values<bool>();
 
 	auto result_data = main_buffer.GetData<uint8_t>();
 	auto validity_data = validity_buffer.GetData<uint8_t>();
@@ -25,9 +25,9 @@ void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t fr
 	for (idx_t i = from; i < to; i++) {
 		auto entry = data[i];
 		// append the validity mask
-		if (!entry.is_valid) {
+		if (!entry.IsValid()) {
 			append_data.SetNull(validity_data, current_byte, current_bit);
-		} else if (!entry.value) {
+		} else if (!entry.GetValue()) {
 			ArrowAppendData::UnsetBit(result_data, current_byte, current_bit);
 		}
 		ArrowAppendData::NextBit(current_byte, current_bit);

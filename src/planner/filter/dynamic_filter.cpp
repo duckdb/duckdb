@@ -1,54 +1,27 @@
 #include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
-DynamicFilter::DynamicFilter() : TableFilter(TableFilterType::DYNAMIC_FILTER) {
+LegacyDynamicFilter::LegacyDynamicFilter() : TableFilter(TableFilterType::LEGACY_DYNAMIC_FILTER) {
 }
 
-DynamicFilter::DynamicFilter(shared_ptr<DynamicFilterData> filter_data_p)
-    : TableFilter(TableFilterType::DYNAMIC_FILTER), filter_data(std::move(filter_data_p)) {
+LegacyDynamicFilter::LegacyDynamicFilter(shared_ptr<DynamicFilterData> filter_data_p)
+    : TableFilter(TableFilterType::LEGACY_DYNAMIC_FILTER), filter_data(std::move(filter_data_p)) {
 }
 
-FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!filter_data) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	lock_guard<mutex> l(filter_data->lock);
-	if (!filter_data->initialized) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return filter_data->filter->CheckStatistics(stats);
-}
-
-string DynamicFilter::ToString(const string &column_name) const {
-	if (filter_data) {
-		return "Dynamic Filter (" + column_name + ")";
-	} else {
-		return "Empty Dynamic Filter (" + column_name + ")";
-	}
-}
-
-unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) const {
+unique_ptr<Expression> LegacyDynamicFilter::ToExpression(const Expression &column) const {
 	if (!filter_data || !filter_data->initialized) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
 		return std::move(bound_constant);
 	}
 	lock_guard<mutex> l(filter_data->lock);
-	return filter_data->filter->ToExpression(column);
-}
-
-bool DynamicFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<DynamicFilter>();
-	return other.filter_data.get() == filter_data.get();
-}
-
-unique_ptr<TableFilter> DynamicFilter::Copy() const {
-	return make_uniq<DynamicFilter>(filter_data);
+	return filter_data->ToExpression(column);
 }
 
 void DynamicFilterData::SetValue(Value val) {
@@ -56,7 +29,7 @@ void DynamicFilterData::SetValue(Value val) {
 		return;
 	}
 	lock_guard<mutex> l(lock);
-	filter->Cast<ConstantFilter>().constant = std::move(val);
+	constant = std::move(val);
 	initialized = true;
 }
 

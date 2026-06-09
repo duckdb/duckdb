@@ -12,13 +12,13 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 
 namespace duckdb {
 class ExpressionListRef;
 class UpdateSetInfo;
 class Serializer;
 class Deserializer;
-class InsertQueryNode;
 
 enum class OnConflictAction : uint8_t {
 	THROW,

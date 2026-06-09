@@ -65,9 +65,9 @@ int mk_w_income_band(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, INCOME_BAND);
 	append_row_start(info);
-	append_integer(info, r->ib_income_band_id);
-	append_integer(info, r->ib_lower_bound);
-	append_integer(info, r->ib_upper_bound);
+	append_integer(info, r->ib_income_band_id, IB_INCOME_BAND_ID);
+	append_integer(info, r->ib_lower_bound, IB_LOWER_BOUND);
+	append_integer(info, r->ib_upper_bound, IB_UPPER_BOUND);
 	append_row_end(info);
 
 	return 0;

@@ -7,6 +7,7 @@
       "value": "v1.0.0"
     }
   ],
+  "skip_error_messages": ["Aggregate state columns are not supported in storage versions prior to v2.0.0"],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -26,10 +27,12 @@
         "test/sql/attach/attach_issue7711.test",
         "test/sql/attach/attach_issue_7660.test",
         "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test",
         "test/sql/attach/attach_views.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/types/geo/geometry_compatability.test"
       ]
     },
     {
@@ -117,7 +120,11 @@
         "test/sql/types/variant/variant_distinct.test",
         "test/parquet/variant/variant_comparison.test",
         "test/parquet/variant/variant_json_copy.test",
+        "test/parquet/variant/variant_shredding_reanalysis_bug.test",
+        "test/parquet/variant/variant_small_decimal.test",
         "test/sql/function/variant/variant_typeof.test",
+        "test/sql/function/variant/variant_keys.test",
+        "test/sql/function/variant/variant_exists.test",
         "test/sql/storage/types/variant/append_shredded.test",
         "test/sql/storage/types/variant/big_table.test_slow",
         "test/sql/storage/types/variant/extension_types.test",
@@ -150,7 +157,9 @@
         "test/sql/aggregate/aggregates/test_corr_state_export.test",
         "test/sql/aggregate/aggregates/test_stddev_export_state.test",
         "test/sql/aggregate/aggregates/test_covar_export_state.test",
-        "test/sql/aggregate/aggregates/test_combine_aggr.test"
+        "test/sql/aggregate/aggregates/test_combine_aggr.test",
+        "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test"
       ]
     },
     {
@@ -190,7 +199,9 @@
       "paths": [
         "test/sql/trigger/create_trigger_catalog.test",
         "test/sql/trigger/create_trigger_parse.test",
-        "test/sql/trigger/create_trigger_wal.test"
+        "test/sql/trigger/create_trigger_wal.test",
+        "test/sql/trigger/drop_trigger.test",
+        "test/sql/trigger/drop_trigger_wal.test"
       ]
     }
   ]

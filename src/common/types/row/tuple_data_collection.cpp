@@ -45,6 +45,10 @@ TupleDataCollection::~TupleDataCollection() {
 
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
+	if (TuplesPerBlock() == 0) {
+		throw NotImplementedException("Too many columns: tuple width exceeds block size of %llu",
+		                              allocator->GetBufferManager().GetBlockSize());
+	}
 	this->count = 0;
 	this->data_size = 0;
 	if (layout.IsSortKeyLayout()) {
@@ -130,13 +134,13 @@ vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const
 	return chunk_ranges;
 }
 
-vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
+vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	D_ASSERT(segments.size() == 1);
-	const auto &segment = *segments[0];
+	auto &segment = *segments[0];
 	vector<data_ptr_t> result;
 	result.reserve(segment.pinned_row_handles.size());
-	for (const auto &pinned_row_handle : segment.pinned_row_handles) {
-		result.emplace_back(pinned_row_handle.Ptr());
+	for (auto &pinned_row_handle : segment.pinned_row_handles) {
+		result.emplace_back(pinned_row_handle.GetDataMutable());
 	}
 	return result;
 }
@@ -317,11 +321,12 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 	}
 
 	Build(pin_state, chunk_state, 0, actual_append_count);
+	FlatVector::SetSize(chunk_state.row_locations, actual_append_count);
 	Scatter(chunk_state, new_chunk, append_sel, actual_append_count);
 }
 
-static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
-	vector.ToUnifiedFormat(count, format.unified);
+static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, const Vector &vector) {
+	vector.ToUnifiedFormat(format.unified);
 	format.original_sel = format.unified.sel;
 	format.original_owned_sel.Initialize(format.unified.owned_sel);
 	switch (vector.GetType().InternalType()) {
@@ -329,13 +334,13 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		auto &entries = StructVector::GetEntries(vector);
 		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.children[struct_col_idx], entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(format.children[struct_col_idx], entries[struct_col_idx]);
 		}
 		break;
 	}
 	case PhysicalType::LIST:
 		D_ASSERT(format.children.size() == 1);
-		ToUnifiedFormatInternal(format.children[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ListVector::GetChild(vector));
 		break;
 	case PhysicalType::ARRAY: {
 		D_ASSERT(format.children.size() == 1);
@@ -358,7 +363,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), child_array_total_size);
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetChild(vector));
 		break;
 	}
 	default:
@@ -369,7 +374,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk) {
 	D_ASSERT(chunk_state.vector_data.size() >= chunk_state.column_ids.size()); // Needs InitializeAppend
 	for (const auto &col_idx : chunk_state.column_ids) {
-		ToUnifiedFormatInternal(chunk_state.vector_data[col_idx], new_chunk.data[col_idx], new_chunk.size());
+		ToUnifiedFormatInternal(chunk_state.vector_data[col_idx], new_chunk.data[col_idx]);
 	}
 }
 
@@ -471,7 +476,7 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 
 	auto &not_found = chunk_state.utility;
 	idx_t not_found_count = 0;
@@ -518,10 +523,38 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 void TupleDataCollection::Reset() {
 	count = 0;
 	data_size = 0;
-	segments.clear();
+	// Find the first non-null segment.
+	// Segments may be null if they were moved out by a prior Combine() call.
+	idx_t live_idx = segments.size(); // sentinel: no live segment
+	for (idx_t i = 0; i < segments.size(); i++) {
+		if (segments[i]) {
+			live_idx = i;
+			break;
+		}
+	}
 
-	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared_ptr<TupleDataAllocator>(*allocator);
+	if (live_idx < segments.size()) {
+		// At least one live segment found. Keep exactly one live segment and make the collection-level allocator
+		// match that segment allocator before resetting to preserve segment/allocator consistency.
+		if (live_idx > 0) {
+			segments[0] = std::move(segments[live_idx]);
+		}
+		segments.resize(1);
+		allocator = segments[0]->allocator;
+		segments[0]->Reset();
+		allocator->Reset();
+		D_ASSERT(segments[0]->allocator.get() == allocator.get());
+		D_ASSERT(segments[0]->count == 0);
+		D_ASSERT(segments[0]->chunks.empty());
+		D_ASSERT(segments[0]->chunk_parts.empty());
+	} else {
+		// All segments were null (moved out by Combine).  The old allocator is still shared by
+		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
+		segments.clear();
+
+		// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
+		allocator = make_shared_ptr<TupleDataAllocator>(*allocator);
+	}
 }
 
 void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
@@ -563,8 +596,7 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, TupleDataPin
 
 void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
                                          TupleDataPinProperties properties) const {
-	state.pin_state.row_handles.clear();
-	state.pin_state.heap_handles.clear();
+	state.Reset();
 	state.pin_state.properties = properties;
 	state.segment_index = 0;
 	state.chunk_index = 0;
@@ -619,7 +651,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 		if (!segments.empty()) {
 			FinalizePinState(state.pin_state, *segments[segment_index_before]);
 		}
-		result.SetCardinality(0);
+		result.SetChildCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -639,7 +671,7 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 			if (!segments.empty()) {
 				FinalizePinState(lstate.pin_state, *segments[segment_index_before]);
 			}
-			result.SetCardinality(0);
+			result.SetChildCardinality(0);
 			return false;
 		}
 	}
@@ -734,7 +766,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	ResetCachedCastVectors(chunk_state, column_ids);
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
 	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
-	result.SetCardinality(chunk.count);
+	result.SetChildCardinality(chunk.count);
 }
 
 void TupleDataCollection::ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids) {

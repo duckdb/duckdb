@@ -120,6 +120,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
+	// duckdb_timestamp (nanoseconds)
+	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_bignum
@@ -132,6 +134,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// GEOMETRY type, WKB blob
+	DUCKDB_TYPE_GEOMETRY = 40,
+	// VARIANT type
+	DUCKDB_TYPE_VARIANT = 41,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.

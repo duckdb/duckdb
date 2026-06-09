@@ -13,13 +13,14 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
-ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -34,8 +35,8 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 	functions.push_back(std::move(fun));
 }
 
-AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                               const vector<LogicalType> &arguments) {
+const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                      const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
@@ -44,12 +45,13 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
 		for (auto &func : functions) {
-			if (arguments.size() >= func.arguments.size()) {
+			auto &sig = func.GetSignature();
+			if (arguments.size() >= sig.GetParameters().size()) {
 				continue;
 			}
 			bool is_prefix = true;
 			for (idx_t k = 0; k < arguments.size(); k++) {
-				if (arguments[k].id() != func.arguments[k].id()) {
+				if (arguments[k].id() != sig.GetParameter(k).GetType().id()) {
 					is_prefix = false;
 					break;
 				}
@@ -58,8 +60,8 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 				return func;
 			}
 		}
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }
@@ -74,6 +76,18 @@ WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
+const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                const vector<LogicalType> &arguments) {
+	ErrorData error;
+	FunctionBinder binder(context);
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
+	}
+	return GetFunctionByOffset(index.GetIndex());
+}
+
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
@@ -81,13 +95,14 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fu
 	functions.push_back(std::move(fun));
 }
 
-TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                              const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
 	if (!index.IsValid()) {
-		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error.Message());
+		throw BinderException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                      error.RawMessage());
 	}
 	return GetFunctionByOffset(index.GetIndex());
 }

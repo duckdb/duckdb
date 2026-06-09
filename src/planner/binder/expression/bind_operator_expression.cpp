@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/expression_binder/try_operator_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -66,7 +65,7 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
-		if (!children[0]->return_type.IsValid()) {
+		if (!children[0]->GetReturnType().IsValid()) {
 			throw ParameterNotResolvedException();
 		}
 		return LogicalType::BOOLEAN;
@@ -79,7 +78,7 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 		return ResolveCoalesceType(op, children);
 	}
 	case ExpressionType::OPERATOR_TRY: {
-		return children[0]->return_type;
+		return children[0]->GetReturnType();
 	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
@@ -102,18 +101,13 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
 	if (operator_type == ExpressionType::OPERATOR_TRY) {
-		D_ASSERT(op.children.size() == 1);
-		//! This binder is used to throw when the child expression is of a type that is not allowed.
-		TryOperatorBinder try_operator_binder(binder, context);
-		try_operator_binder.BindChild(op.children[0], depth, error);
-		// Propagate bound columns from TryOperatorBinder back to parent binder
-		// This ensures that column references inside TRY() are properly tracked for GROUP BY validation
-		for (const auto &bound_col : try_operator_binder.GetBoundColumns()) {
-			bound_columns.push_back(bound_col);
-		}
+		D_ASSERT(op.GetChildrenMutable().size() == 1);
+		inside_try = true;
+		BindChild(op.GetChildrenMutable()[0], depth, error);
+		inside_try = false;
 	} else {
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			BindChild(op.children[i], depth, error);
+		for (idx_t i = 0; i < op.GetChildrenMutable().size(); i++) {
+			BindChild(op.GetChildrenMutable()[i], depth, error);
 		}
 	}
 
@@ -127,37 +121,39 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::OPERATOR_UNPACK:
 		return BindResult("UNPACK not allowed here, should have been resolved earlier");
 	case ExpressionType::ARRAY_EXTRACT: {
-		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
-		const auto &b_exp_type = b_exp->return_type;
+		D_ASSERT(op.GetChildrenMutable()[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		auto &b_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[0]);
+		const auto &b_exp_type = b_exp->GetReturnType();
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
 			function_name = "map_extract_value";
-		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
+		} else if (b_exp_type.IsJSONType() && op.GetChildrenMutable().size() == 2) {
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
-			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			auto &i_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
+			    !i_exp->Cast<BoundConstantExpression>().GetValue().IsNull()) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+				if (const_exp.GetValueMutable().TryCastAs(context, LogicalType::UINTEGER)) {
 					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
-					auto index = UIntegerValue::Get(const_exp.value);
-					const_exp.value = StringUtil::Format("$[%lld]", index);
-					const_exp.return_type = LogicalType::VARCHAR;
-				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
+					auto index = UIntegerValue::Get(const_exp.GetValueMutable());
+					const_exp.GetValueMutable() = StringUtil::Format("$[%lld]", index);
+					const_exp.SetReturnType(LogicalType::VARCHAR);
+				} else if (const_exp.GetReturnType().id() == LogicalType::VARCHAR) {
 					// Field extraction
-					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
-					const_exp.return_type = LogicalType::VARCHAR;
+					const_exp.GetValueMutable() =
+					    StringUtil::Format("$.\"%s\"", const_exp.GetValueMutable().ToString());
+					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
-		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && op.children.size() == 2) {
+		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && op.GetChildrenMutable().size() == 2) {
 			function_name = "variant_extract";
-			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			auto &i_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull() && const_exp.return_type.IsNumeric()) {
-					const_exp.value = const_exp.value.DefaultCastAs(LogicalType::UINTEGER, true);
-					const_exp.return_type = LogicalType::UINTEGER;
+				if (!const_exp.GetValueMutable().IsNull() && const_exp.GetReturnType().IsNumeric()) {
+					const_exp.GetValueMutable() =
+					    const_exp.GetValueMutable().DefaultCastAs(LogicalType::UINTEGER, true);
+					const_exp.SetReturnType(LogicalType::UINTEGER);
 				}
 			}
 		} else {
@@ -169,19 +165,18 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		function_name = "array_slice";
 		break;
 	case ExpressionType::STRUCT_EXTRACT: {
-		D_ASSERT(op.children.size() == 2);
-		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		D_ASSERT(op.children[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
-		if (extract_exp->HasParameter() || extract_exp->return_type.id() == LogicalTypeId::UNKNOWN) {
+		D_ASSERT(op.GetChildrenMutable().size() == 2);
+		D_ASSERT(op.GetChildrenMutable()[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.GetChildrenMutable()[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		auto &extract_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[0]);
+		if (extract_exp->HasParameter() || extract_exp->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
-		const auto &extract_expr_type = extract_exp->return_type;
+		auto &name_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[1]);
+		const auto &extract_expr_type = extract_exp->GetReturnType();
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
-		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT &&
-		    !extract_expr_type.IsAggregateStateStructType()) {
+		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
@@ -192,12 +187,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "map_extract_value";
 		} else if (extract_expr_type.id() == LogicalTypeId::VARIANT) {
 			function_name = "variant_extract";
-			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			auto &i_exp = BoundExpression::GetExpression(*op.GetChildrenMutable()[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("%s", const_exp.value.ToString());
-					const_exp.return_type = LogicalType::VARCHAR;
+				if (!const_exp.GetValueMutable().IsNull()) {
+					const_exp.GetValueMutable() = StringUtil::Format("%s", const_exp.GetValueMutable().ToString());
+					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
 		} else if (extract_expr_type.IsJSONType()) {
@@ -205,9 +200,10 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			// Make sure we only extract fields, not array elements, by adding $. syntax
 			if (name_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = name_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
-					const_exp.return_type = LogicalType::VARCHAR;
+				if (!const_exp.GetValueMutable().IsNull()) {
+					const_exp.GetValueMutable() =
+					    StringUtil::Format("$.\"%s\"", const_exp.GetValueMutable().ToString());
+					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
 		} else {
@@ -222,7 +218,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		function_name = "json_extract";
 		break;
 	case ExpressionType::OPERATOR_TRY: {
-		auto &expr = BoundExpression::GetExpression(*op.children[0]);
+		auto &expr = BoundExpression::GetExpression(*op.GetChildrenMutable()[0]);
 		if (expr->HasSubquery()) {
 			throw BinderException("TRY can not be used in combination with a scalar subquery");
 		}
@@ -235,14 +231,15 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.children));
+		auto function =
+		    make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.GetChildrenMutable()));
 		return BindExpression(function, depth, false);
 	}
 
 	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < op.children.size(); i++) {
-		D_ASSERT(op.children[i]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
+	for (idx_t i = 0; i < op.GetChildrenMutable().size(); i++) {
+		D_ASSERT(op.GetChildrenMutable()[i]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		children.push_back(std::move(BoundExpression::GetExpression(*op.GetChildrenMutable()[i])));
 	}
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
@@ -257,7 +254,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 
 	auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), result_type);
 	for (auto &child : children) {
-		result->children.push_back(std::move(child));
+		result->GetChildrenMutable().push_back(std::move(child));
 	}
 	return BindResult(std::move(result));
 }

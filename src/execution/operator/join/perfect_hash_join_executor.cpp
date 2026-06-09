@@ -9,6 +9,10 @@ PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p,
     : join(join_p), ht(ht_p) {
 }
 
+const LogicalType &PerfectHashJoinExecutor::GetKeyType() const {
+	return ht.equality_types[0];
+}
+
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -74,7 +78,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	}
 
 	// We only do this optimization for inner joins with one integer equality condition
-	const auto key_type = op.conditions[0].GetLHS().return_type;
+	const auto key_type = op.conditions[0].GetLHS().GetReturnType();
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
 	    op.conditions[0].GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
 	    !TypeIsInteger(key_type.InternalType())) {
@@ -129,7 +133,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 //===--------------------------------------------------------------------===//
 // Build
 //===--------------------------------------------------------------------===//
-bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::BuildPerfectHashTable() {
 	// First, allocate memory for each build column
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
@@ -141,15 +145,15 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	bitmap_build_idx.SetAllInvalid(build_size);
 
 	// Now fill columns with build data
-	return FullScanHashTable(key_type);
+	return FullScanHashTable();
 }
 
-bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::FullScanHashTable() {
 	auto &data_collection = ht.GetDataCollection();
 
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-	Vector build_vector(key_type, ht.Count());
+	Vector build_vector(GetKeyType(), ht.Count());
 	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
 
 	// Now fill the selection vector using the build keys and create a sequential vector
@@ -175,7 +179,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		auto &col_mask = FlatVector::Validity(vector);
+		auto &col_mask = FlatVector::ValidityMutable(vector);
 		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
@@ -185,7 +189,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 	return true;
 }
 
-bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(const Vector &source, SelectionVector &sel_vec,
                                                              SelectionVector &seq_sel_vec, idx_t count) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT8:
@@ -214,14 +218,14 @@ bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 }
 
 template <typename T>
-bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(const Vector &source, SelectionVector &sel_vec,
                                                                 SelectionVector &seq_sel_vec, idx_t count) {
 	if (perfect_join_statistics.build_min.IsNull() || perfect_join_statistics.build_max.IsNull()) {
 		return false;
 	}
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
-	auto entries = source.Values<T>(count);
+	auto entries = source.Values<T>();
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto input_value = entries.GetValueUnsafe(i);
@@ -279,7 +283,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 	// select the keys that are in the min-max range
-	auto &keys_vec = state.join_keys.data[0];
+	const auto &keys_vec = state.join_keys.data[0];
 	auto keys_count = state.join_keys.size();
 	// todo: add check for fast pass when probe is part of build domain
 	FillSelectionVectorSwitchProbe(keys_vec, keys_count, state.probe_sel_vec, probe_sel_count, &state.build_sel_vec);
@@ -295,12 +299,12 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
-		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec);
+		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec, probe_sel_count);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count,
                                                              SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                              optional_ptr<SelectionVector> build_sel_vec) const {
 	if (build_sel_vec) {
@@ -311,7 +315,7 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, con
 }
 
 template <bool BUILD_SEL_VEC>
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count,
                                                              SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                              SelectionVector *build_sel_vec) const {
 	D_ASSERT(BUILD_SEL_VEC == static_cast<bool>(build_sel_vec));
@@ -362,21 +366,21 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, con
 }
 
 template <typename T, bool BUILD_SEL_VEC>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(const Vector &source, const idx_t &count,
                                                                 SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                                 SelectionVector *build_sel_vec) const {
 	D_ASSERT(probe_sel_count == 0);
 	const auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	const auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
-	auto entries = source.Values<T>(count);
+	auto entries = source.Values<T>();
 	// build selection vector for non-dense build
 	for (idx_t i = 0; i < count; ++i) {
 		auto entry = entries[i];
 		if (!entry.IsValid()) {
 			continue;
 		}
-		const auto &input_value = entry.value;
+		const auto &input_value = entry.GetValue();
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			// subtract min value to get the idx
