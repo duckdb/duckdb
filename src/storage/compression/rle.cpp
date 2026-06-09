@@ -268,15 +268,15 @@ struct RLEScanState : public SegmentScanState {
 	                    static_cast<idx_t>(sizeof(rle_count_t))) {
 		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
 			//! This would make the index_pointer point into a region reserved for the header data
-			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
 			//! This would make the index_pointer start outside of the segment
-			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
-			throw InternalException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
 	}
 
@@ -302,7 +302,7 @@ struct RLEScanState : public SegmentScanState {
 		// move to the next entry
 		entry_pos++;
 		if (entry_pos > max_entry_pos) {
-			throw InternalException(
+			throw IOException(
 			    "Corrupted RLE segment: index_pointer[entry_pos] would reach outside of the blocks memory");
 		}
 		position_in_entry = 0;

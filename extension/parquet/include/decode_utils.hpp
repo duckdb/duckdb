@@ -89,9 +89,9 @@ public:
 	static void BitUnpackAlignedInternal(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
 		D_ASSERT(count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 		if (width > sizeof(T) * BITPACK_DLEN) {
-			throw InternalException("The width (%d) of the bitpacked data exceeds the maximum width (%d) for "
-			                        "the target type, the file might be corrupted.",
-			                        width, sizeof(T) * BITPACK_DLEN);
+			throw IOException("The width (%d) of the bitpacked data exceeds the maximum width (%d) for "
+			                  "the target type, the file might be corrupted.",
+			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 
 		if (cast_pointer_to_uint64(src.ptr) % sizeof(T) == 0) {

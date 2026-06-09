@@ -68,11 +68,11 @@ public:
 		value_buffer[0] = (EXACT_TYPE)0;
 		for (idx_t i = 0; i < count; i++) {
 			if (unpacked_data[i].index_diff > i) {
-				throw InternalException("Corrupted Patas segment: invalid backward reference");
+				throw IOException("Corrupted Patas segment: invalid backward reference");
 			}
 			if (unpacked_data[i].significant_bytes > sizeof(EXACT_TYPE) ||
 			    unpacked_data[i].trailing_zeros >= sizeof(EXACT_TYPE) * 8) {
-				throw InternalException("Corrupted Patas segment: invalid packed value metadata");
+				throw IOException("Corrupted Patas segment: invalid packed value metadata");
 			}
 
 			value_buffer[i] = patas::PatasDecompression<EXACT_TYPE>::DecompressValue(
@@ -104,7 +104,7 @@ public:
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		if (segment.GetBlockOffset() + metadata_offset > segment.GetBlockSize()) {
-			throw InternalException("Corrupted Patas segment: metadata_offset reaches outside of the blocks memory");
+			throw IOException("Corrupted Patas segment: metadata_offset reaches outside of the blocks memory");
 		}
 		metadata_ptr = segment_data + metadata_offset;
 	}
@@ -166,8 +166,7 @@ public:
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
 		if (segment.GetBlockOffset() + data_byte_offset >= segment.GetBlockSize()) {
-			throw InternalException(
-			    "Corrupted Patas segment: data_byte_offset would reach outside of the blocks memory");
+			throw IOException("Corrupted Patas segment: data_byte_offset would reach outside of the blocks memory");
 		}
 
 		// Initialize the byte_reader with the data values for the group

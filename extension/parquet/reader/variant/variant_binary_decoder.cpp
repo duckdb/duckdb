@@ -46,8 +46,8 @@ static idx_t ReadVariableLengthLittleEndian(idx_t length_in_bytes, const_data_pt
 		throw NotImplementedException("Can't read little-endian value of %d bytes", length_in_bytes);
 	}
 	if (offset + length_in_bytes > capacity) {
-		throw InternalException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity",
-		                        length_in_bytes);
+		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity",
+		                  length_in_bytes);
 	}
 	idx_t result = 0;
 	memcpy(reinterpret_cast<uint8_t *>(&result), ptr + offset, length_in_bytes);
@@ -75,7 +75,7 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	auto metadata_data = reinterpret_cast<const_data_ptr_t>(metadata.GetData());
 	const auto metadata_buffer_capacity = metadata.GetSize();
 	if (!metadata_data || metadata.GetSize() < 1) {
-		throw InternalException("Corrupted VARIANT 'metadata' buffer, empty or nullptr");
+		throw IOException("Corrupted VARIANT 'metadata' buffer, empty or nullptr");
 	}
 
 	idx_t metadata_offset = 0;
@@ -93,7 +93,7 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 		                                                  metadata_buffer_capacity);
 		const idx_t string_size = next_offset - last_offset;
 		if (data_start + last_offset + string_size > metadata_buffer_capacity) {
-			throw InternalException("Corrupted VARIANT 'metadata' buffer");
+			throw IOException("Corrupted VARIANT 'metadata' buffer");
 		}
 		strings.emplace_back(reinterpret_cast<const char *>(metadata_data + data_start + last_offset), string_size);
 		last_offset = next_offset;
@@ -125,7 +125,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 		break;
 	}
 	default:
-		throw InternalException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
+		throw IOException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
 	}
 	return result;
 }
@@ -133,7 +133,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 template <class T>
 static T DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_size, uint8_t &scale, uint8_t &width) {
 	if (data_offset + sizeof(uint8_t) + sizeof(T) > data_size) {
-		throw InternalException("Corrupted VARIANT 'value' buffer");
+		throw IOException("Corrupted VARIANT 'value' buffer");
 	}
 	scale = Load<uint8_t>(data + data_offset);
 	data_offset += sizeof(uint8_t);
@@ -151,7 +151,7 @@ static T DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_size
 template <>
 hugeint_t DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_size, uint8_t &scale, uint8_t &width) {
 	if (data_offset + sizeof(uint8_t) + sizeof(uint64_t) + sizeof(int64_t) > data_size) {
-		throw InternalException("Corrupted VARIANT 'value' buffer");
+		throw IOException("Corrupted VARIANT 'value' buffer");
 	}
 	scale = Load<uint8_t>(data + data_offset);
 	data_offset += sizeof(uint8_t);
@@ -180,42 +180,42 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	}
 	case VariantPrimitiveType::INT8: {
 		if (data_offset + sizeof(int8_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto value = Load<int8_t>(data + data_offset);
 		return VariantValue(Value::TINYINT(value));
 	}
 	case VariantPrimitiveType::INT16: {
 		if (data_offset + sizeof(int16_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto value = Load<int16_t>(data + data_offset);
 		return VariantValue(Value::SMALLINT(value));
 	}
 	case VariantPrimitiveType::INT32: {
 		if (data_offset + sizeof(int32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto value = Load<int32_t>(data + data_offset);
 		return VariantValue(Value::INTEGER(value));
 	}
 	case VariantPrimitiveType::INT64: {
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto value = Load<int64_t>(data + data_offset);
 		return VariantValue(Value::BIGINT(value));
 	}
 	case VariantPrimitiveType::DOUBLE: {
 		if (data_offset + sizeof(double) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		double value = Load<double>(data + data_offset);
 		return VariantValue(Value::DOUBLE(value));
 	}
 	case VariantPrimitiveType::FLOAT: {
 		if (data_offset + sizeof(float) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		float value = Load<float>(data + data_offset);
 		return VariantValue(Value::FLOAT(value));
@@ -244,7 +244,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	case VariantPrimitiveType::DATE: {
 		date_t value;
 		if (data_offset + sizeof(int32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		value.days = Load<int32_t>(data + data_offset);
 		return VariantValue(Value::DATE(value));
@@ -252,7 +252,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
 		timestamp_tz_t micros_ts_tz;
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		micros_ts_tz.value = Load<int64_t>(data + data_offset);
 		return VariantValue(Value::TIMESTAMPTZ(micros_ts_tz));
@@ -260,7 +260,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
 		timestamp_t micros_ts;
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		micros_ts.value = Load<int64_t>(data + data_offset);
 
@@ -271,38 +271,38 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		//! Follow the JSON serialization guide by converting BINARY to Base64:
 		//! For example: `"dmFyaWFudAo="`
 		if (data_offset + sizeof(uint32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto size = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 
 		auto string_data = reinterpret_cast<const char *>(data + data_offset);
 		if (data_offset + size > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto base64_string = Blob::ToBase64(string_t(string_data, size));
 		return VariantValue(Value(base64_string));
 	}
 	case VariantPrimitiveType::STRING: {
 		if (data_offset + sizeof(uint32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto size = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 
 		auto string_data = reinterpret_cast<const char *>(data + data_offset);
 		if (data_offset + size > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		if (!Utf8Proc::IsValid(string_data, size)) {
-			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+			throw IOException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
 		return VariantValue(Value(string(string_data, size)));
 	}
 	case VariantPrimitiveType::TIME_NTZ_MICROS: {
 		dtime_t micros_time;
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		micros_time.micros = Load<int64_t>(data + data_offset);
 		return VariantValue(Value::TIME(micros_time));
@@ -310,7 +310,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		timestamp_ns_t nanos_ts;
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		nanos_ts.value = Load<int64_t>(data + data_offset);
 
@@ -321,7 +321,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		timestamp_ns_t nanos_ts;
 		if (data_offset + sizeof(int64_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		nanos_ts.value = Load<int64_t>(data + data_offset);
 
@@ -330,7 +330,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	}
 	case VariantPrimitiveType::UUID: {
 		if (data_offset + sizeof(hugeint_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data + data_offset);
 		return VariantValue(Value::UUID(uuid_value));
@@ -344,14 +344,14 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data,
                                                      idx_t data_offset, idx_t data_size) {
 	if (value_metadata.string_size >= 64) {
-		throw InternalException("Corrupted VARIANT 'metadata' buffer");
+		throw IOException("Corrupted VARIANT 'metadata' buffer");
 	}
 	auto string_data = reinterpret_cast<const char *>(data + data_offset);
 	if (data_offset + value_metadata.string_size > data_size) {
-		throw InternalException("Corrupted VARIANT 'value' buffer");
+		throw IOException("Corrupted VARIANT 'value' buffer");
 	}
 	if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
-		throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
+		throw IOException("Can't decode Variant short-string, string isn't valid UTF8");
 	}
 	return VariantValue(Value(string(string_data, value_metadata.string_size)));
 }
@@ -368,13 +368,13 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 	idx_t num_elements;
 	if (is_large) {
 		if (data_offset + sizeof(uint32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		num_elements = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 	} else {
 		if (data_offset + sizeof(uint8_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		num_elements = Load<uint8_t>(data + data_offset);
 		data_offset += sizeof(uint8_t);
@@ -391,7 +391,7 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 
 		auto value = Decode(metadata, data, values_offset + last_offset, data_size);
 		if (field_id >= metadata.strings.size()) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto &key = metadata.strings[field_id];
 
@@ -412,13 +412,13 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 	uint32_t num_elements;
 	if (is_large) {
 		if (data_offset + sizeof(uint32_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		num_elements = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 	} else {
 		if (data_offset + sizeof(uint8_t) > data_size) {
-			throw InternalException("Corrupted VARIANT 'value' buffer");
+			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		num_elements = Load<uint8_t>(data + data_offset);
 		data_offset += sizeof(uint8_t);
@@ -440,7 +440,7 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadata, const_data_ptr_t data,
                                           idx_t data_offset, idx_t data_size) {
 	if (data_offset + 1 > data_size) {
-		throw InternalException("Corrupted VARIANT 'value' buffer");
+		throw IOException("Corrupted VARIANT 'value' buffer");
 	}
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[data_offset]);
 	data_offset += sizeof(uint8_t);
@@ -459,7 +459,7 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 		return ArrayDecode(variant_metadata, value_metadata, data, data_offset, data_size);
 	}
 	default:
-		throw InternalException("Unexpected value for VariantBasicType");
+		throw IOException("Unexpected value for VariantBasicType");
 	}
 }
 
