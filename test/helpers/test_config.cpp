@@ -70,6 +70,7 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -223,7 +224,7 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert_or_assign(string(test_config.name), parameter);
+	options[test_config.name] = parameter;
 	return true;
 }
 
@@ -393,9 +394,6 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		}
 
 		for (auto &entry : json_values) {
-			if (StringUtil::CIEquals(entry.first, "extends")) {
-				continue;
-			}
 			ParseOption(entry.first, Value(entry.second));
 		}
 		auto inherit_entry = options.find("inherit_skip_tests");
