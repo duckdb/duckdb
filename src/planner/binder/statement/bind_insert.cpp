@@ -112,8 +112,12 @@ unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert
 		}
 		auto &original_type = source_types[mapped_index];
 		auto source_binding = source_bindings[mapped_index];
-		select_list.push_back(table.GetDefaultExpressionForColumn(context, original_type, col.Type(), source_binding,
-		                                                          *insert.bound_defaults[storage_idx]));
+		auto expression = table.GetDefaultExpressionForColumn(context, original_type, col.Type(), source_binding,
+		                                                      *insert.bound_defaults[storage_idx]);
+		if (!expression->HasQueryLocation() && root->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			expression->SetQueryLocation(root->expressions[mapped_index]->GetQueryLocation());
+		}
+		select_list.push_back(std::move(expression));
 	}
 
 	bool can_inline_projection = root->type == LogicalOperatorType::LOGICAL_PROJECTION;
