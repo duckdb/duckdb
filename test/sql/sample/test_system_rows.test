@@ -136,15 +136,15 @@ SELECT COUNT(*) FROM (
 ----
 50
 
-# Direct table sampling happens before the WHERE filter. The subquery case below
-# keeps the sample above the filtered scan, so it samples after the filter.
+# Filtered scans keep the sample above the scan, so SYSTEM rows sampling happens
+# after filters rather than being pushed into the scan before filters apply.
 require exact_vector_size 2048
 
-# System sampling on a base table happens before the filter
+# System sampling with filtering pushed down to the scan; sample remains after filter
 query I
 SELECT COUNT(*) FROM test_table WHERE i < 5000 USING SAMPLE 100 ROWS (system);
 ----
-63
+100
 
 # System sampling over a filtered subquery remains a STREAMING_SAMPLE after filter;
 # 5000 rows pass the filter, rate = 0.02, systematic sampling gives exactly 100
