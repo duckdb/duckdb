@@ -81,19 +81,20 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 	auto table = QuoteIdent(feat.source_table);
 	auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 
-	string pit_sql = StringUtil::Format("SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
-	                                    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) AS bucket FROM %s%s) AS spine "
-	                                    "JOIN %s ON %s.%s = spine.%s "
-	                                    "AND DATE_TRUNC('%s', %s.%s) <= spine.bucket "
-	                                    "AND DATE_TRUNC('%s', %s.%s) > spine.bucket - INTERVAL '%s' "
-	                                    "GROUP BY spine.%s, spine.bucket "
-	                                    "ORDER BY spine.%s, spine.bucket",
-	                                    entity, agg_exprs,                     // outer SELECT
-	                                    entity, gran, ts, table, spine_filter, // spine subquery
-	                                    table, table, entity, entity,          // JOIN
-	                                    gran, table, ts,                       // AND <=
-	                                    gran, table, ts, window_interval,      // AND >
-	                                    entity, entity);                       // GROUP BY, ORDER BY
+	string pit_sql = StringUtil::Format(
+	    "SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
+	    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s%s) AS spine "
+	    "JOIN %s ON %s.%s = spine.%s "
+	    "AND %s.%s < spine.bucket "
+	    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
+	    "GROUP BY spine.%s, spine.bucket "
+	    "ORDER BY spine.%s, spine.bucket",
+	    entity, agg_exprs,                           // outer SELECT
+	    entity, gran, ts, gran, table, spine_filter, // spine subquery
+	    table, table, entity, entity,                // JOIN
+	    table, ts,                                   // AND <
+	    table, ts, window_interval,                  // AND >=
+	    entity, entity);                             // GROUP BY, ORDER BY
 
 	return pit_sql;
 }
@@ -165,7 +166,6 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	auto new_table_id = QuoteIdent(new_table_name);
 	auto cur_table_name = feature_name + "__v" + duckdb::to_string(feat.current_version);
 	auto cur_table_id = QuoteIdent(cur_table_name);
-	bool did_work = false;
 
 	// Wrap all operations in a single transaction for atomicity
 	con.BeginTransaction();
@@ -185,15 +185,16 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			if (!count_result->HasError() && count_result->RowCount() > 0) {
 				state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 			}
-			did_work = true;
 
 		} else {
-			// INCREMENTAL refresh using watermark + window expansion.
+			// INCREMENTAL refresh: always recompute from the last floor bucket onward,
+			// copying forward all earlier (unaffected) rows. This catches both new data
+			// and late arrivals to the most recent floor bucket without tracking row
+			// counts, and always produces a new version.
 			auto gran = GranularityToSQL(feat.granularity);
 			auto ts_col = QuoteIdent(feat.timestamp_column);
-			auto src_table = QuoteIdent(feat.source_table);
 
-			// Step 1: Get watermark (last materialized bucket in current version table)
+			// Watermark = last materialized ceiling bucket in the current version table.
 			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
 			string watermark;
 			if (!max_result->HasError() && max_result->RowCount() > 0) {
@@ -204,7 +205,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 			if (watermark.empty()) {
-				// No existing data — do a full materialization into new version table
+				// No existing data — do a full materialization into the new version table.
 				auto pit_sql = BuildPITQuery(feat, "");
 				auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
 				auto create_result = con.Query(create_sql);
@@ -216,82 +217,49 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				if (!count_result->HasError() && count_result->RowCount() > 0) {
 					state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 				}
-				did_work = true;
 			} else {
-				// Step 2: Find the range of new source data (buckets > watermark)
-				auto range_sql = "SELECT MIN(DATE_TRUNC('" + gran + "', " + ts_col +
-				                 ")), "
-				                 "MAX(DATE_TRUNC('" +
-				                 gran + "', " + ts_col +
-				                 ")) "
-				                 "FROM " +
-				                 src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") > '" + watermark +
-				                 "'::TIMESTAMP";
-				auto range_result = con.Query(range_sql);
+				// Last floor bucket = watermark - 1 gran (watermark is a ceiling boundary).
+				// Recompute everything from this floor onward; copy forward all rows whose
+				// ceiling bucket is strictly below the watermark (unaffected by recompute).
+				string recompute_from = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
 
-				string earliest_new, latest_new;
-				if (!range_result->HasError() && range_result->RowCount() > 0) {
-					auto min_val = range_result->GetValue(0, 0);
-					auto max_val = range_result->GetValue(1, 0);
-					if (!min_val.IsNull()) {
-						earliest_new = min_val.ToString();
-					}
-					if (!max_val.IsNull()) {
-						latest_new = max_val.ToString();
-					}
+				// Create the new version table with the unaffected rows (feature_timestamp < watermark)
+				// copied forward from the current version table.
+				auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
+				                  " WHERE feature_timestamp < '" + watermark + "'::TIMESTAMP";
+				auto create_result = con.Query(create_sql);
+				if (create_result->HasError()) {
+					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
+					                        create_result->GetError());
 				}
 
-				if (earliest_new.empty()) {
-					// No new source data — nothing to do (version stays the same)
-					state.rows_affected = 0;
-				} else {
-					// Step 3: Compute affected bucket range
-					auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
-					string upper_bound = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
-
-					// Step 4: Create new version table with unaffected rows from current version
-					auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
-					                  " WHERE NOT (feature_timestamp >= '" + earliest_new +
-					                  "'::TIMESTAMP AND feature_timestamp < " + upper_bound + ")";
-					auto create_result = con.Query(create_sql);
-					if (create_result->HasError()) {
-						throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
-						                        create_result->GetError());
-					}
-
-					// Step 5: Recompute affected range and insert into new version table
-					string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + earliest_new +
-					                "'::TIMESTAMP"
-					                " AND DATE_TRUNC('" +
-					                gran + "', " + ts_col + ") < " + upper_bound;
-					auto pit_sql = BuildPITQuery(feat, filter);
-					auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
-					auto ins_result = con.Query(insert_sql);
-					if (ins_result->HasError()) {
-						throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
-						                        ins_result->GetError());
-					}
-					if (ins_result->RowCount() > 0) {
-						state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
-					}
-					did_work = true;
+				// Recompute the last floor bucket onward and insert into the new version table. The spine
+				// is restricted to floors >= recompute_from while the join still looks back the full window
+				// for correct aggregation.
+				string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= " + recompute_from;
+				auto pit_sql = BuildPITQuery(feat, filter);
+				auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
+				auto ins_result = con.Query(insert_sql);
+				if (ins_result->HasError()) {
+					throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
+					                        ins_result->GetError());
+				}
+				if (ins_result->RowCount() > 0) {
+					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 			}
 		}
 
-		// Garbage-collect old version tables beyond retain limit (only if we created a new version)
-		if (did_work) {
-			// Garbage-collect old version tables beyond retain limit
-			int64_t min_retain_version = new_version - feat.retain_versions + 1;
-			if (min_retain_version > 1) {
-				for (int64_t v = min_retain_version - 1; v >= 1; v--) {
-					auto old_table_name = feature_name + "__v" + duckdb::to_string(v);
-					auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
-					auto drop_result = con.Query(drop_sql);
-					if (drop_result->HasError()) {
-						throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
-						                        drop_result->GetError());
-					}
+		// Garbage-collect old version tables beyond the retain limit.
+		int64_t min_retain_version = new_version - feat.retain_versions + 1;
+		if (min_retain_version > 1) {
+			for (int64_t v = min_retain_version - 1; v >= 1; v--) {
+				auto old_table_name = feature_name + "__v" + duckdb::to_string(v);
+				auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
+				auto drop_result = con.Query(drop_sql);
+				if (drop_result->HasError()) {
+					throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
+					                        drop_result->GetError());
 				}
 			}
 		}
@@ -302,11 +270,9 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 		throw;
 	}
 
-	// Update catalog entry version only if work was done
-	if (did_work) {
-		feat.current_version = new_version;
-		feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
-	}
+	// A refresh always creates a new version.
+	feat.current_version = new_version;
+	feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
 
 	output.SetCardinality(1);
 	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(state.rows_affected)));

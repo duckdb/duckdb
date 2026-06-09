@@ -536,6 +536,7 @@ UnreservedKeyword <- 'ABORT' /
 'SEQUENCE' /
 'SEQUENCES' /
 'SERIALIZABLE' /
+'SERVE' /
 'SERVER' /
 'SESSION' /
 'SET' /
@@ -829,7 +830,12 @@ ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
 ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
 
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral 'GRANULARITY' FeatureGranularity 'WINDOW' NumberLiteral 'REFRESH' FeatureRefreshMode 'RETAIN' NumberLiteral 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+
+FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
+FeatureWindowClause <- 'WINDOW' NumberLiteral
+FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
+FeatureRetainClause <- 'RETAIN' NumberLiteral
 
 FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
 FeatureGranularityDay <- 'DAY'

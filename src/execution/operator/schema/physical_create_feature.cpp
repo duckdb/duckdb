@@ -96,11 +96,6 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkFinalizeType PhysicalCreateFeature::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                 OperatorSinkFinalizeInput &input) const {
-	return SinkFinalizeType::READY;
-}
-
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//

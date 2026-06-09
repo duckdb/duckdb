@@ -20,7 +20,9 @@ statement ok
 INSERT INTO events VALUES
     ('x', 10, '2024-01-01 08:00:00'),
     ('x', 20, '2024-01-02 08:00:00'),
-    ('y', 30, '2024-01-01 12:00:00');
+    ('y', 30, '2024-01-01 12:00:00'),
+    ('y', 15, '2024-01-02 16:00:00'),
+    ('z',  5, '2024-01-01 06:00:00');
 
 # ============================================================
 # FULL refresh with RETAIN 3: version increments each refresh
@@ -35,64 +37,78 @@ CREATE FEATURE versioned_full ON events
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Initial materialization creates version table __v1
+# Initial materialization creates version table __v1 with 5 rows.
+# x@01-02=10, x@01-03=30, y@01-02=30, y@01-03=45, z@01-02=5
+query I
+SELECT COUNT(*) FROM versioned_full;
+----
+5
+
 query I
 SELECT COUNT(*) FROM versioned_full__v1;
 ----
-3
+5
 
-# The view resolves to current version (v1)
+# Verify initial bucket values per entity (view resolves to current version v1)
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10
 y	30
+z	5
+
+query II rowsort
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+x	30
+y	45
 
 # First refresh -> version 2
 query I
 REFRESH FEATURE versioned_full;
 ----
-3
+5
 
 # Both v1 and v2 tables exist
 query I
 SELECT COUNT(*) FROM versioned_full__v1;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_full__v2;
 ----
-3
+5
 
 # View shows current (v2) data
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10
 y	30
+z	5
 
 # Second refresh -> version 3 (now we have 3 versions, at RETAIN limit)
 query I
 REFRESH FEATURE versioned_full;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_full__v3;
 ----
-3
+5
 
 # Third refresh -> version 4, GC removes version 1 (retain 3 means keep 2,3,4)
 query I
 REFRESH FEATURE versioned_full;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_full__v4;
 ----
-3
+5
 
 # Version 1 table is gone (GC'd)
 statement error
@@ -104,14 +120,21 @@ SELECT COUNT(*) FROM versioned_full__v1;
 query I
 SELECT COUNT(*) FROM versioned_full__v2;
 ----
-3
+5
 
 # Latest version has correct data
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10
 y	30
+z	5
+
+query II rowsort
+SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+x	30
+y	45
 
 statement ok
 DROP FEATURE versioned_full;
@@ -129,28 +152,40 @@ CREATE FEATURE versioned_retain1 ON events
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Version 1 table exists initially
+# Version 1 table exists initially — 5 rows
 query I
 SELECT COUNT(*) FROM versioned_retain1__v1;
 ----
-3
+5
+
+query I
+SELECT COUNT(*) FROM versioned_retain1;
+----
+5
 
 # Refresh -> version 2, GC removes version 1
 query I
 REFRESH FEATURE versioned_retain1;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_retain1__v2;
 ----
-3
+5
 
 # Version 1 is gone
 statement error
 SELECT COUNT(*) FROM versioned_retain1__v1;
 ----
 <REGEX>:.*does not exist.*
+
+# Data is correct in version 2
+query II rowsort
+SELECT customer, total_value FROM versioned_retain1 WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+x	30
+y	45
 
 statement ok
 DROP FEATURE versioned_retain1;
@@ -168,57 +203,70 @@ CREATE FEATURE versioned_incr ON events
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value);
 
-# Initial: version 1 with 3 rows
+# Initial: version 1 — 5 rows
 query I
 SELECT COUNT(*) FROM versioned_incr__v1;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_incr;
 ----
-3
+5
 
 # Add new data beyond watermark
 statement ok
 INSERT INTO events VALUES
     ('x', 40, '2024-01-03 09:00:00'),
-    ('y', 50, '2024-01-03 10:00:00');
+    ('y', 50, '2024-01-03 10:00:00'),
+    ('z', 20, '2024-01-03 11:00:00');
 
 # Incremental refresh -> version 2
-# Unaffected rows are copied forward, new buckets computed
+# Recompute runs from the last floor bucket onward (watermark - 1 day); the 01-02
+# rows are copied forward and 01-03/01-04 are recomputed.
 query I
 REFRESH FEATURE versioned_incr;
 ----
-2
+5
 
 # Both v1 and v2 exist (RETAIN 2)
 query I
 SELECT COUNT(*) FROM versioned_incr__v1;
 ----
-3
+5
 
 query I
 SELECT COUNT(*) FROM versioned_incr__v2;
 ----
-5
+8
 
-# View shows current version (v2) which has the new bucket
+# Version 2 has the new bucket (01-04) plus copied-forward old rows.
+# The view resolves to the current version (v2).
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-04'::TIMESTAMP;
 ----
 x	70
-y	80
+y	95
+z	25
+
+# Old buckets correctly copied into version 2
+query II rowsort
+SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+x	10
+y	30
+z	5
 
 # Add more data and refresh again -> version 3, GC removes version 1
 statement ok
 INSERT INTO events VALUES
-    ('x', 100, '2024-01-05 12:00:00');
+    ('x', 100, '2024-01-05 12:00:00'),
+    ('z',  50, '2024-01-05 14:00:00');
 
 query I
 REFRESH FEATURE versioned_incr;
 ----
-1
+5
 
 # Version 1 is gone (GC'd, only retain 2)
 statement error
@@ -230,19 +278,26 @@ SELECT COUNT(*) FROM versioned_incr__v1;
 query I
 SELECT COUNT(*) FROM versioned_incr__v2;
 ----
-5
+8
 
 # Version 3 exists with new data
 query I
 SELECT COUNT(*) FROM versioned_incr__v3;
 ----
-6
+10
+
+# Version 3 has 01-06 buckets for x and z
+query II rowsort
+SELECT customer, total_value FROM versioned_incr__v3 WHERE feature_timestamp = '2024-01-06'::TIMESTAMP;
+----
+x	170
+z	75
 
 statement ok
 DROP FEATURE versioned_incr;
 
 # ============================================================
-# No-op refresh: version does NOT increment
+# Refresh always increments the version (even with no source changes)
 # ============================================================
 statement ok
 CREATE TABLE stable_src (
@@ -252,7 +307,10 @@ CREATE TABLE stable_src (
 );
 
 statement ok
-INSERT INTO stable_src VALUES ('a', 10, '2024-01-01 08:00:00');
+INSERT INTO stable_src VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('b', 20, '2024-01-01 09:00:00'),
+    ('c', 30, '2024-01-02 10:00:00');
 
 statement ok
 CREATE FEATURE stable_feat ON stable_src
@@ -264,51 +322,72 @@ CREATE FEATURE stable_feat ON stable_src
     RETAIN 3
     AS (SELECT eid, SUM(val) AS total);
 
-# Version 1 after creation
+# Version 1 after creation — 3 rows: a@01-02, b@01-02, c@01-03
 query I
 SELECT COUNT(*) FROM stable_feat__v1;
 ----
-1
+3
 
-# No new data -> no-op refresh, version stays at 1
+query I
+SELECT COUNT(*) FROM stable_feat;
+----
+3
+
+# No new data, but refresh still recomputes from the last floor bucket (watermark
+# 01-03 - 1 day = 01-02) and bumps the version. Only c@01-03 is recomputed.
 query I
 REFRESH FEATURE stable_feat;
 ----
-0
-
-# Still only v1 (no v2 created)
-query I
-SELECT COUNT(*) FROM stable_feat__v1;
-----
 1
 
-statement error
+# Version 2 table now exists alongside version 1
+query I
 SELECT COUNT(*) FROM stable_feat__v2;
 ----
-<REGEX>:.*does not exist.*
+3
 
-# Add data, refresh -> version 2
+# Data is identical across the version bump (view resolves to current version v2)
+query II rowsort
+SELECT eid, total FROM stable_feat;
+----
+a	10
+b	20
+c	30
+
+# Add data, refresh -> version 3 (a@01-04 appears)
 statement ok
-INSERT INTO stable_src VALUES ('a', 20, '2024-01-02 08:00:00');
+INSERT INTO stable_src VALUES ('a', 20, '2024-01-03 08:00:00');
 
 query I
 REFRESH FEATURE stable_feat;
-----
-1
-
-query I
-SELECT COUNT(*) FROM stable_feat__v2;
 ----
 2
 
-# No-op again -> still at version 2, no v3
+query I
+SELECT COUNT(*) FROM stable_feat__v3;
+----
+4
+
+# New bucket correct: a@01-04 = 10+20=30
+query II
+SELECT eid, total FROM stable_feat__v3 WHERE feature_timestamp = '2024-01-04'::TIMESTAMP;
+----
+a	30
+
+# Refresh again with no new data -> version 4, version 1 GC'd (RETAIN 3)
 query I
 REFRESH FEATURE stable_feat;
 ----
-0
+1
 
+query I
+SELECT COUNT(*) FROM stable_feat__v2;
+----
+3
+
+# Version 1 has been garbage-collected (RETAIN 3 keeps v2, v3, v4)
 statement error
-SELECT COUNT(*) FROM stable_feat__v3;
+SELECT COUNT(*) FROM stable_feat__v1;
 ----
 <REGEX>:.*does not exist.*
 
