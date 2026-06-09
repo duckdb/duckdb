@@ -68,7 +68,8 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
 			auto source_binding = ColumnBinding(proj_index, expr_index);
 
-			update_expressions.push_back(table.GetDefaultExpressionForColumn(context, bound_type, column.Type(), source_binding, *bound_defaults[column.StorageOid()]));
+			update_expressions.push_back(table.GetDefaultExpressionForColumn(
+			    context, bound_type, column.Type(), source_binding, *bound_defaults[column.StorageOid()]));
 		}
 	}
 }
@@ -76,7 +77,8 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 // This creates a LogicalProjection and moves 'root' into it as a child
 // unless there are no expressions to project, in which case it just returns 'root'
 unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
-                                                  UpdateSetInfo &set_info, TableCatalogEntry &table, const vector<unique_ptr<Expression>> &bound_defaults,
+                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
+                                                  const vector<unique_ptr<Expression>> &bound_defaults,
                                                   vector<PhysicalIndex> &columns, bool prioritize_table_when_binding) {
 	auto proj_index = GenerateTableIndex();
 
@@ -188,8 +190,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	D_ASSERT(node.set_info);
 	D_ASSERT(node.set_info->columns.size() == node.set_info->expressions.size());
 
-	auto proj_tmp = BindUpdateSet(*update, std::move(root), *node.set_info, table, update->bound_defaults, update->columns,
-	                              node.prioritize_table_when_binding);
+	auto proj_tmp = BindUpdateSet(*update, std::move(root), *node.set_info, table, update->bound_defaults,
+	                              update->columns, node.prioritize_table_when_binding);
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 

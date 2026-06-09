@@ -295,7 +295,8 @@ public:
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
-	                                          UpdateSetInfo &set_info, TableCatalogEntry &table, const vector<unique_ptr<Expression>> &bound_defaults,
+	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
+	                                          const vector<unique_ptr<Expression>> &bound_defaults,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
