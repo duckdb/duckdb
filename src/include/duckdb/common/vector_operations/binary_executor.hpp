@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -18,6 +19,27 @@
 #include <functional>
 
 namespace duckdb {
+
+//! Complement-fold trait for comparison selection. On the NO_NULL path a comparison op's selection
+//! is the exact complement of its complement op's selection (no NULL third bucket).
+//! Note LessThanEquals is not handled since that's done upstream in the general case (see
+//! VectorOperations::LessThan[Equals])
+template <class OP>
+struct ComparisonSelectComplement {
+	static constexpr bool FOLD = false;
+};
+template <>
+struct ComparisonSelectComplement<NotEquals> {
+	static constexpr bool FOLD = true;
+	using COMPLEMENT = Equals;
+	static constexpr bool SWAP_OPERANDS = false;
+};
+template <>
+struct ComparisonSelectComplement<GreaterThanEquals> {
+	static constexpr bool FOLD = true;
+	using COMPLEMENT = GreaterThan;
+	static constexpr bool SWAP_OPERANDS = true; // GreaterThanEquals(a,b) == !GreaterThan(b,a)
+};
 
 struct DefaultNullCheckOperator {
 	template <class LEFT_TYPE, class RIGHT_TYPE>
@@ -340,6 +362,8 @@ public:
 		}
 	}
 
+// NOTE: the flat path is intentionally NOT covered by the ComparisonSelectComplement fold (unlike
+// the generic and constant paths above). It is null-unified — there is no NO_NULL template split;
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
@@ -498,6 +522,15 @@ public:
 	                                   const SelectionVector &generic_sel, const ValidityMask &mask,
 	                                   const SelectionVector &result_sel, idx_t count, SelectionVector *true_sel,
 	                                   SelectionVector *false_sel) {
+		// NO_NULL complement fold: NotEquals/GreaterThanEquals are exactly the complement of
+		// Equals/GreaterThan when there are no NULLs
+		if constexpr (!CAN_HAVE_NULL && ComparisonSelectComplement<OP>::FOLD) {
+			using FOLDED = ComparisonSelectComplement<OP>;
+			constexpr bool FOLDED_RIGHT_CONSTANT = FOLDED::SWAP_OPERANDS ? !RIGHT_CONSTANT : RIGHT_CONSTANT;
+			return count - SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, typename FOLDED::COMPLEMENT,
+			                                     FOLDED_RIGHT_CONSTANT, CAN_HAVE_NULL>(
+			                   constant, data, generic_sel, mask, result_sel, count, false_sel, true_sel);
+		}
 		if (true_sel && false_sel) {
 			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, CAN_HAVE_NULL, true, true>(
 			    constant, data, generic_sel, mask, result_sel, count, true_sel, false_sel);
@@ -615,6 +648,20 @@ public:
 	                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                           const SelectionVector &result_sel, idx_t count, const ValidityMask &lvalidity,
 	                           const ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+		// NO_NULL complement fold: NotEquals/GreaterThanEquals are exactly the complement of
+		// Equals/GreaterThan when there are no NULLs
+		if constexpr (NO_NULL && ComparisonSelectComplement<OP>::FOLD) {
+			using FOLDED = ComparisonSelectComplement<OP>;
+			if constexpr (FOLDED::SWAP_OPERANDS) {
+				return count -
+				       SelectGenericLoopSelSwitch<RIGHT_TYPE, LEFT_TYPE, typename FOLDED::COMPLEMENT, NO_NULL>(
+				           rdata, ldata, rsel, lsel, result_sel, count, rvalidity, lvalidity, false_sel, true_sel);
+			} else {
+				return count -
+				       SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, typename FOLDED::COMPLEMENT, NO_NULL>(
+				           ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, false_sel, true_sel);
+			}
+		}
 		if (true_sel && false_sel) {
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
