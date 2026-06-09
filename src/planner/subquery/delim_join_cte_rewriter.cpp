@@ -1012,7 +1012,7 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 		          return lhs.depth > rhs.depth;
 	          });
 
-	if (!joins.empty() && HasSelection(delim_join)) {
+	if (!joins.empty() && HasSelection(*delim_join.children[0])) {
 		joins.erase(joins.begin());
 	}
 
