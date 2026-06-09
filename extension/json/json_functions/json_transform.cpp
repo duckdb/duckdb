@@ -520,12 +520,24 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_count);
 	child_vectors.reserve(child_count);
 
+	optional_ptr<const vector<string>> struct_json_key_names;
+	if (options.struct_json_key_names) {
+		auto it = options.struct_json_key_names->find(result.GetType());
+		if (it != options.struct_json_key_names->end()) {
+			struct_json_key_names = it->second;
+		}
+	}
+
 	unordered_set<idx_t> projected_indices;
 	for (idx_t child_i = 0; child_i < child_count; child_i++) {
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		if (struct_json_key_names) {
+			child_names.push_back(struct_json_key_names->at(actual_i));
+		} else {
+			child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		}
 		child_vectors.push_back(child_vs[actual_i].get());
 	}
 

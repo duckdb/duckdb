@@ -34,6 +34,8 @@ public:
 
 	//! The set of keys to extract (case sensitive)
 	vector<string> key_names;
+	//! Original JSON keys for auto-detected struct types with case-insensitive duplicate field names
+	type_map_t<vector<string>> struct_json_key_names;
 
 	//! The date format map
 	unique_ptr<DateFormatMap> date_format_map;

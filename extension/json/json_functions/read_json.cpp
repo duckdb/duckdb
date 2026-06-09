@@ -1,5 +1,7 @@
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
@@ -9,30 +11,39 @@
 
 namespace duckdb {
 
-static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, const bool ignore_errors) {
+static inline string RenameCaseInsensitiveDuplicate(string name, case_insensitive_map_t<idx_t> &name_collision_count) {
+	auto entry = name_collision_count.find(name);
+	while (entry != name_collision_count.end()) {
+		entry->second += 1;
+		name = StringUtil::Format("%s_%d", name, entry->second);
+		entry = name_collision_count.find(name);
+	}
+	name_collision_count.emplace(name, 0);
+	return name;
+}
+
+static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type,
+                                                    type_map_t<vector<string>> &struct_json_key_names) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {
-		case_insensitive_set_t child_names;
+		// Maps from original key name to the number of times it has been renamed
+		case_insensitive_map_t<idx_t> name_collision_count;
 		child_list_t<LogicalType> child_types;
+		vector<string> original_key_names;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
-			auto insert_success = child_names.insert(child_type.first).second;
-			if (!insert_success) {
-				if (ignore_errors) {
-					continue;
-				}
-				throw NotImplementedException(
-				    "Duplicate name \"%s\" in struct auto-detected in JSON, try ignore_errors=true", child_type.first);
-			} else {
-				child_types.emplace_back(child_type.first, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
-			}
+			original_key_names.push_back(child_type.first);
+			auto renamed_name = RenameCaseInsensitiveDuplicate(child_type.first, name_collision_count);
+			child_types.emplace_back(renamed_name, RemoveDuplicateStructKeys(child_type.second, struct_json_key_names));
 		}
-		return LogicalType::STRUCT(child_types);
+		auto result = LogicalType::STRUCT(child_types);
+		struct_json_key_names[result] = std::move(original_key_names);
+		return result;
 	}
 	case LogicalTypeId::MAP:
-		return LogicalType::MAP(RemoveDuplicateStructKeys(MapType::KeyType(type), ignore_errors),
-		                        RemoveDuplicateStructKeys(MapType::ValueType(type), ignore_errors));
+		return LogicalType::MAP(RemoveDuplicateStructKeys(MapType::KeyType(type), struct_json_key_names),
+		                        RemoveDuplicateStructKeys(MapType::ValueType(type), struct_json_key_names));
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(RemoveDuplicateStructKeys(ListType::GetChildType(type), ignore_errors));
+		return LogicalType::LIST(RemoveDuplicateStructKeys(ListType::GetChildType(type), struct_json_key_names));
 	default:
 		return type;
 	}
@@ -217,7 +228,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 			return_types.reserve(child_types.size());
 			names.reserve(child_types.size());
 			for (auto &child_type : child_types) {
-				return_types.emplace_back(RemoveDuplicateStructKeys(child_type.second, options.ignore_errors));
+				return_types.emplace_back(
+				    RemoveDuplicateStructKeys(child_type.second, json_data.struct_json_key_names));
 				names.emplace_back(child_type.first);
 			}
 		} else {
@@ -226,7 +238,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		}
 	} else {
 		D_ASSERT(json_data.options.record_type == JSONRecordType::VALUES);
-		return_types.emplace_back(RemoveDuplicateStructKeys(type, options.ignore_errors));
+		return_types.emplace_back(RemoveDuplicateStructKeys(type, json_data.struct_json_key_names));
 		names.emplace_back("json");
 	}
 }

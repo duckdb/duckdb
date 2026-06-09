@@ -1,0 +1,23 @@
+# name: test/sql/json/issues/issue23143.test
+# description: Test issue 23143 - case-insensitive duplicate JSON keys in nested structs
+# group: [issues]
+
+require json
+
+# top-level case-insensitive duplicate keys are renamed
+query II
+SELECT * FROM read_json('{DATA_DIR}/json/23143/test1.json');
+----
+1	2
+
+# nested struct case-insensitive duplicate keys should also be renamed
+query I
+SELECT "outer" FROM read_json('{DATA_DIR}/json/23143/test2.json');
+----
+{'x': 1, 'X_1': 2}
+
+# deeply nested struct case-insensitive duplicate keys should also be renamed
+query I
+SELECT "outer".inner FROM read_json('{DATA_DIR}/json/23143/test3.json');
+----
+{'x': 1, 'X_1': 2}
