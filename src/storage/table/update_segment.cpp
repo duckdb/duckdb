@@ -1014,10 +1014,9 @@ static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo
                             idx_t row_group_start) {
 	auto base_table_data = FlatVector::GetDataMutable<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
-	const ValidityMask *base_table_validity =
-	    std::is_same<T, string_t>::value ? &FlatVector::Validity(base_data) : nullptr;
+	auto &base_validity = FlatVector::Validity(base_data);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
-	                              sel, row_group_start, base_table_validity);
+	                              sel, row_group_start, &base_validity);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
