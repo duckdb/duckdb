@@ -11,7 +11,7 @@ namespace {
 
 struct SkewState {
 	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, idx_t, double, double, double>;
+	using STATE_TYPE = StructStateType<idx_t, double, double, double>;
 
 	idx_t n;
 	double sum;

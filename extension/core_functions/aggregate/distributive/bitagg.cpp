@@ -14,12 +14,12 @@ namespace {
 
 template <class T>
 struct BitState {
+	static constexpr const char *STATE_NAMES[] = {"is_set", "value"};
+	using STATE_TYPE = StructStateType<bool, T>;
+
 	using TYPE = T;
 	bool is_set;
 	T value;
-
-	static constexpr const char *STATE_NAMES[] = {"is_set", "value"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, bool, T>;
 };
 
 template <class OP>

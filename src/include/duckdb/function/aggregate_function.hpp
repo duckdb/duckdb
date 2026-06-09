@@ -568,7 +568,7 @@ public:
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
 			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return AggregateStateLayout(STATE::STATE_TYPE::GetLogicalType(), AlignValue<idx_t>(sizeof(STATE)));
+				return AggregateStateLayout(STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES), AlignValue<idx_t>(sizeof(STATE)));
 			});
 		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
 			result.SetStructStateExport([](const BoundAggregateFunction &) {

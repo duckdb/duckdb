@@ -8,13 +8,13 @@ namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
+	static constexpr const char *STATE_NAMES[] = {"count", "sum_x", "sum_y", "slope"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double, RegrSlopeState>;
+
 	uint64_t count;
 	double sum_x;
 	double sum_y;
 	RegrSlopeState slope;
-
-	static constexpr const char *STATE_NAMES[] = {"count", "sum_x", "sum_y", "slope"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, uint64_t, double, double, RegrSlopeState>;
 };
 
 struct RegrInterceptOperation {

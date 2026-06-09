@@ -11,11 +11,11 @@ namespace duckdb {
 namespace {
 
 struct ProductState {
+	static constexpr const char *STATE_NAMES[] = {"empty", "val"};
+	using STATE_TYPE = StructStateType<bool, double>;
+
 	bool empty;
 	double val;
-
-	static constexpr const char *STATE_NAMES[] = {"empty", "val"};
-	using STATE_TYPE = StructStateType<STATE_NAMES, bool, double>;
 };
 
 struct ProductReduce {

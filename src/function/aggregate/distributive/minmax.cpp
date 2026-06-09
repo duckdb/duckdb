@@ -20,14 +20,13 @@ namespace duckdb {
 
 namespace {
 
-static constexpr const char *MinMaxStateNames[] = {"value", "isset"};
-
 template <class T>
 struct MinMaxState {
+	static constexpr const char *STATE_NAMES[] = {"value", "isset"};
+	using STATE_TYPE = StructStateType<T, bool>;
+
 	T value;
 	bool isset;
-
-	using STATE_TYPE = StructStateType<MinMaxStateNames, T, bool>;
 };
 
 template <class OP>
