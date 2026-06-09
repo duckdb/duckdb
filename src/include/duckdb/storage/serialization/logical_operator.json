@@ -664,7 +664,8 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()"
       },
       {
         "id": 203,
@@ -924,7 +925,8 @@
       {
         "id": 204,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()"
       },
       {
         "id": 205,
