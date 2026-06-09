@@ -462,7 +462,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
-	peg_matcher->Root().Match(state);
+	peg_matcher->ProgramMatcher().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
 }
@@ -551,7 +551,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
-	auto match_result = peg_matcher->Root().Match(state);
+	auto match_result = peg_matcher->ProgramMatcher().Match(state);
 	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
 	// consuming it.
 	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
