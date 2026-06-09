@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-static void WriteArrayLengths(Vector &array_lengths, VariantNestedData *nested_data, const ValidityMask &array_validity,
+static void WriteArrayLengths(Vector &array_lengths, const array_ptr<VariantNestedData>& nested_data, const ValidityMask &array_validity,
                               const idx_t count) {
 	auto writer = FlatVector::Writer<uint64_t>(array_lengths, count);
 	const auto &array_lengths_validity = FlatVector::Validity(array_lengths);
@@ -30,9 +30,8 @@ static Vector CollectVariantArrayLengths(const UnifiedVariantVectorData &variant
 	Vector array_lengths(LogicalType::UBIGINT, count);
 	VariantPathSelection path_selection(count);
 
-	auto &allocator = Allocator::DefaultAllocator();
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr nested_data(owned_nested_data.get(), count);
 
 	auto &path_validity = FlatVector::ValidityMutable(array_lengths);
 	VariantUtils::TraversePath(variant, components, count, nested_data, path_validity, path_selection);
