@@ -123,17 +123,17 @@ SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
 ----
 {'count': 1, 'value': 42.0}
 
-# Casting count state to struct should work
+# Casting count state to underlying type should work
 query T
-SELECT (count(42) export_state)::struct(count bigint);
+SELECT (count(42) export_state)::bigint;
 ----
-{'count': 1}
+1
 
-# Casting count(*) state to struct should also work
+# Casting count(*) state to underlying type should also work
 query T
-SELECT (count(*) export_state)::struct(count bigint);
+SELECT (count(*) export_state)::bigint;
 ----
-{'count': 1}
+1
 
 # first() now has the new get_state_type callback
 query T
@@ -291,9 +291,9 @@ SELECT finalize(combine(state, state)) FROM t_regr_count;
 
 # Casting regression state to struct should work
 query T
-SELECT (regr_count(1.0, 2.0) export_state)::struct(count ubigint);
+SELECT (regr_count(1.0, 2.0) export_state)::ubigint;
 ----
-{'count': 1}
+1
 
 query T
 SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);

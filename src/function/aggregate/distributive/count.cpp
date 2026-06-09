@@ -257,9 +257,7 @@ struct CountFunction : public BaseCountFunction {
 };
 
 LogicalType GetCountStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("count", LogicalType::BIGINT);
-	return LogicalType::STRUCT(std::move(children));
+	return LogicalType::BIGINT;
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -294,7 +292,6 @@ AggregateFunction CountStarFun::GetFunction() {
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
-	fun.SetStructStateExport(GetCountStateType);
 	return fun;
 }
 

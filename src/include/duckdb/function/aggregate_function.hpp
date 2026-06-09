@@ -574,6 +574,8 @@ public:
 		if constexpr (HasStructStateType<STATE>::value) {
 			result.SetStructStateExport(
 			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(); });
+		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
+			result.SetStructStateExport([](const BoundAggregateFunction &) { return PrimitiveToLogicalType<STATE>(); });
 		}
 	}
 
@@ -699,10 +701,7 @@ public:
 
 	LogicalType GetStateType() const {
 		D_ASSERT(callbacks.get_state_type);
-		const auto result = callbacks.get_state_type(*this);
-		// The underlying type of the AggregateState should be a struct
-		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
-		return result;
+		return callbacks.get_state_type(*this);
 	}
 };
 

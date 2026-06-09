@@ -18,6 +18,59 @@ struct HasStructStateType : std::false_type {};
 template <class STATE>
 struct HasStructStateType<STATE, std::void_t<typename STATE::STATE_TYPE>> : std::true_type {};
 
+//! Detection trait: true when STATE is itself a C++ primitive type mappable to a LogicalType via PrimitiveToLogicalType
+template <class T>
+struct HasPrimitiveLogicalType : std::false_type {};
+
+template <>
+struct HasPrimitiveLogicalType<bool> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<int8_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<int16_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<int32_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<int64_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<uint8_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<uint16_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<uint32_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<uint64_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<hugeint_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<uhugeint_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<float> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<double> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<date_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<dtime_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<dtime_tz_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<dtime_ns_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_sec_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_ms_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_ns_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_tz_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<timestamp_tz_ns_t> : std::true_type {};
+template <>
+struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
+
 //! Maps a single C++ field type to a LogicalType.
 //! If T itself defines STATE_TYPE, returns its nested struct type; otherwise calls PrimitiveToLogicalType<T>().
 template <class T>

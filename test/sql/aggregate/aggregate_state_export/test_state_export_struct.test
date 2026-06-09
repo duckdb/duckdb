@@ -205,9 +205,9 @@ SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY 
 
 # Regression: struct shape for state export
 query T
-SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
+SELECT (regr_count(1, 2) export_state)::ubigint
 ----
-{'count': 1}
+1
 
 query T
 SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
@@ -454,16 +454,16 @@ statement error
 SELECT finalize(finalize(avg(d) EXPORT_STATE)) from dummy;
 ----
 
-# Casting to struct should work
+# Casting to type should work
 query T
-SELECT (count(42) export_state)::struct(count bigint);
+SELECT (count(42) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
-SELECT (count(*) export_state)::struct(count bigint);
+SELECT (count(*) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
 SELECT (sum(42) export_state)::struct(isset boolean, "value" bigint);
