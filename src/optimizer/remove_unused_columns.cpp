@@ -451,8 +451,35 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	default:
 		break;
 	}
-	LogicalOperatorVisitor::VisitOperatorExpressions(op);
-	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	//! MARK comparison joins: parent filters can reference LHS payload columns only above the join. Projection
+	//! pushdown on the probe LogicalGet must not prune them, or LOGICAL and PHYSICAL LHS layouts disagree and InClause
+	//! MARK bindings bind to the wrong column (issue #22274 / PR #22382).
+	//! LOGICAL_DELIM_JOIN + MARK is excluded: correlated / delim plans rely on the standard projection-map child
+	//! visitation path; forcing LHS preserve breaks binding (see
+	//! test/optimizer/joins/delim_join_with_in_has_correct_results.test).
+	//! If either join projection map is non-empty, we must use VisitOperatorWithProjectionMapChildren so maps stay
+	//! consistent with pruned children (see test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test).
+	//! Only apply the asymmetric LHS-preserve visit for InClauseRewriter MARK joins (RHS is a chunk scan of IN
+	//! constants). Subquery IN uses a normal RHS plan; forcing LHS preserve breaks binding (same test as above).
+	bool mark_join_children_visited = false;
+	if (!everything_referenced && op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &mark_join = op.Cast<LogicalComparisonJoin>();
+		if (mark_join.join_type == JoinType::MARK && mark_join.left_projection_map.empty() &&
+		    mark_join.right_projection_map.empty() &&
+		    mark_join.children[1]->type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
+			LogicalOperatorVisitor::VisitOperatorExpressions(mark_join);
+			RemoveUnusedColumns lhs_preserve(*this, true);
+			lhs_preserve.VisitOperator(mark_join.children[0]);
+			RemoveUnusedColumns rhs_prune(*this, false);
+			rhs_prune.VisitOperator(mark_join.children[1]);
+			mark_join_children_visited = true;
+		}
+	}
+	if (!mark_join_children_visited) {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
+	}
 
 	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
 	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {

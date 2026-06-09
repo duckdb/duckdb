@@ -17,6 +17,58 @@
 
 namespace duckdb {
 
+//! Peek through FILTER/PROJECTION/ORDER unary chains to detect the IN (...) MARK join InClauseRewriter produces.
+//! (Broad DFS is unsafe — deeper MARK joins unrelated to this FILTER must keep projection maps intact.)
+static const LogicalComparisonJoin *PeelUnaryChainToMarkJoin(const LogicalOperator *op) {
+	while (op && op->children.size() == 1) {
+		switch (op->type) {
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_ORDER_BY:
+			op = op->children[0].get();
+			continue;
+		default:
+			op = nullptr;
+			break;
+		}
+	}
+	if (!op || op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return nullptr;
+	}
+	auto &comp_join = op->Cast<LogicalComparisonJoin>();
+	return comp_join.join_type == JoinType::MARK ? &comp_join : nullptr;
+}
+
+static void GenerateProjectionMapByBindings(const vector<ColumnBinding> &current_bindings,
+                                            const vector<ColumnBinding> &desired_output_bindings,
+                                            vector<ProjectionIndex> &projection_map) {
+	projection_map.clear();
+	if (desired_output_bindings.empty()) {
+		return;
+	}
+	projection_map.reserve(desired_output_bindings.size());
+	for (const auto &desired_binding : desired_output_bindings) {
+		bool found = false;
+		for (idx_t i = 0; i < current_bindings.size(); i++) {
+			if (current_bindings[i] != desired_binding) {
+				continue;
+			}
+			projection_map.emplace_back(i);
+			found = true;
+			break;
+		}
+		if (!found) {
+			// Child rewrites can remove or replace bindings. Fallback to identity map if we cannot express this
+			// mapping.
+			projection_map.clear();
+			return;
+		}
+	}
+	if (projection_map.size() == current_bindings.size()) {
+		projection_map.clear();
+	}
+}
+
 void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const vector<ColumnBinding> &bindings,
                                                          column_binding_set_t &unused_bindings) {
 	for (idx_t i = 0; i < bindings.size(); i++) {
@@ -88,19 +140,51 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			return;
 		}
 
+		VisitOperatorExpressions(comp_join);
+
+		// Pruning LHS via Join::left_projection_map for MARK joins can desynchronize PhysicalHashJoin
+		// (lhs_output_in_probe vs probe chunk layouts) relative to LOGICAL_FILTERS/InClauseRewriter above/below —
+		// especially with arrow scans and layered predicates (#22274, PR22382). Child operators may still prune
+		// their own subgraph; MARK join forwards the full visited LHS/RHS layouts.
+		if (comp_join.join_type == JoinType::MARK) {
+			StandardVisitOperator(op);
+			comp_join.left_projection_map.clear();
+			comp_join.right_projection_map.clear();
+			return;
+		}
+
 		column_binding_set_t lhs_unused;
 		column_binding_set_t rhs_unused;
-		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), lhs_unused);
-		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), rhs_unused);
+		const auto lhs_bindings_before_visit = op.children[0]->GetColumnBindings();
+		const auto rhs_bindings_before_visit = op.children[1]->GetColumnBindings();
+		ExtractUnusedColumnBindings(lhs_bindings_before_visit, lhs_unused);
+		ExtractUnusedColumnBindings(rhs_bindings_before_visit, rhs_unused);
+
+		vector<ColumnBinding> desired_lhs_bindings;
+		desired_lhs_bindings.reserve(lhs_bindings_before_visit.size());
+		for (const auto &binding : lhs_bindings_before_visit) {
+			if (lhs_unused.find(binding) == lhs_unused.end()) {
+				desired_lhs_bindings.push_back(binding);
+			}
+		}
+		vector<ColumnBinding> desired_rhs_bindings;
+		desired_rhs_bindings.reserve(rhs_bindings_before_visit.size());
+		for (const auto &binding : rhs_bindings_before_visit) {
+			if (rhs_unused.find(binding) == rhs_unused.end()) {
+				desired_rhs_bindings.push_back(binding);
+			}
+		}
 
 		StandardVisitOperator(op);
 
-		// then generate the projection map
+		// Remap projection maps against post-visit child bindings — child visitation can rewrite bindings,
+		// so pairing pre-visit "unused" sets with post-visit column positions is insufficient (issue #22274).
 		if (op.type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			// FIXME: left_projection_map in ASOF join
-			GenerateProjectionMap(op.children[0]->GetColumnBindings(), lhs_unused, comp_join.left_projection_map);
+			GenerateProjectionMapByBindings(op.children[0]->GetColumnBindings(), desired_lhs_bindings,
+			                                comp_join.left_projection_map);
 		}
-		GenerateProjectionMap(op.children[1]->GetColumnBindings(), rhs_unused, comp_join.right_projection_map);
+		GenerateProjectionMapByBindings(op.children[1]->GetColumnBindings(), desired_rhs_bindings,
+		                                comp_join.right_projection_map);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -178,15 +262,52 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 
-		// filter, figure out which columns are not needed after the filter
-		column_binding_set_t unused_bindings;
-		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
+		// FILTER has two liveness roles (#22274): (1) output columns — only bindings referenced by operators *above*
+		// this filter; (2) predicate columns — needed in the child's chunk to evaluate the filter but not necessarily
+		// emitted. Snapshot (1) before visiting predicates so predicate-only columns (e.g. flag in flag < 1) do not
+		// leak into the filter's projection_map.
+		const column_binding_set_t refs_above_filter = column_references;
 
-		StandardVisitOperator(op);
+		// InClauseRewriter (large constant IN lists) uses MARK + LOGICAL_CHUNK_GET and may layer a FILTER that must
+		// strip mark_index from propagated bindings — e.g. conjunct-splitting places ONLY "flag < 1" above an inner
+		// filter that owns IN (...). Subquery IN uses MARK with a normal RHS plan; stripping mark here breaks filters
+		// or projections that still reference the mark (predicate pushdown into CTEs — see
+		// test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test).
+		bool handled_in_clause_filter = false;
+		if (const auto *peeked_mark = PeelUnaryChainToMarkJoin(op.children[0].get());
+		    peeked_mark && peeked_mark->children.size() >= 2 &&
+		    peeked_mark->children[1]->type == LogicalOperatorType::LOGICAL_CHUNK_GET) {
+			VisitOperatorExpressions(op);
+			const auto mark_tbl = peeked_mark->mark_index;
+			VisitOperatorChildren(op);
 
-		// then generate the projection map
-		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);
+			filter.projection_map.clear();
+			const auto child_bindings_after = op.children[0]->GetColumnBindings();
+			for (idx_t i = 0; i < child_bindings_after.size(); i++) {
+				if (child_bindings_after[i].table_index != mark_tbl) {
+					filter.projection_map.emplace_back(i);
+				}
+			}
+			if (filter.projection_map.size() == child_bindings_after.size()) {
+				filter.projection_map.clear();
+			}
+			handled_in_clause_filter = true;
+		}
+		if (!handled_in_clause_filter) {
+			const auto child_bindings_before = op.children[0]->GetColumnBindings();
+			vector<ColumnBinding> desired_output_bindings;
+			desired_output_bindings.reserve(child_bindings_before.size());
+			for (const auto &binding : child_bindings_before) {
+				if (refs_above_filter.find(binding) != refs_above_filter.end()) {
+					desired_output_bindings.push_back(binding);
+				}
+			}
 
+			VisitOperatorExpressions(op);
+			VisitOperatorChildren(op);
+			GenerateProjectionMapByBindings(op.children[0]->GetColumnBindings(), desired_output_bindings,
+			                                filter.projection_map);
+		}
 		return;
 	}
 	default:
