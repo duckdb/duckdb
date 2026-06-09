@@ -256,11 +256,13 @@ SELECT COUNT(*) FROM t_case_audit;
 ----
 1
 
-# RETURNING is rejected
-statement error
+# RETURNING works on tables with triggers
+query I
 UPDATE target SET val = 1 RETURNING id;
 ----
-RETURNING is not yet supported on tables with triggers
+1
+2
+3
 
 # DROP TRIGGER works
 statement ok
@@ -269,8 +271,8 @@ DROP TRIGGER trg_basic ON target;
 statement ok
 UPDATE target SET val = 7 WHERE id = 1;
 
-# Audit count unchanged
+# Audit count reflects the RETURNING UPDATE that fired the trigger
 query I
 SELECT COUNT(*) FROM audit;
 ----
-2
+3

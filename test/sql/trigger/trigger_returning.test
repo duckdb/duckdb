@@ -1,0 +1,587 @@
+# name: test/sql/trigger/trigger_returning.test
+# description: Test RETURNING on tables with triggers — parity with no-trigger path
+# group: [trigger]
+
+require noforcestorage
+
+# ─── Setup ────────────────────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE t (a INTEGER, b INTEGER GENERATED ALWAYS AS (a + 1));
+
+statement ok
+CREATE TABLE log (msg VARCHAR);
+
+# Helper used by several blocks
+statement ok
+CREATE TABLE other (x INTEGER);
+
+statement ok
+INSERT INTO other VALUES (42);
+
+# ─── Generated column in the middle of the schema ────────────────────────────
+
+statement ok
+CREATE TABLE g (a INTEGER, gen INTEGER GENERATED ALWAYS AS (a * 2), b INTEGER);
+
+statement ok
+CREATE TABLE glog (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_g AFTER INSERT ON g FOR EACH STATEMENT
+    INSERT INTO glog VALUES ('g');
+
+# All three columns correct even though the generated col sits between a and b
+query III
+INSERT INTO g(a, b) VALUES (5, 7) RETURNING a, gen, b;
+----
+5	10	7
+
+# RETURNING * should also be correct
+query III
+INSERT INTO g(a, b) VALUES (3, 4) RETURNING *;
+----
+3	6	4
+
+query I
+SELECT COUNT(*) FROM glog;
+----
+2
+
+# ─── AFTER INSERT trigger ─────────────────────────────────────────────────────
+
+statement ok
+CREATE TRIGGER tr_after_ins AFTER INSERT ON t FOR EACH STATEMENT
+    INSERT INTO log VALUES ('after_ins');
+
+# RETURNING * — includes generated column b
+query II
+INSERT INTO t VALUES (10) RETURNING *;
+----
+10	11
+
+# RETURNING expr AS alias
+query I
+INSERT INTO t VALUES (20) RETURNING a * 2 AS double_a;
+----
+40
+
+# RETURNING unaliased expression — column name is derived from expression
+query I
+INSERT INTO t VALUES (30) RETURNING a + 0;
+----
+30
+
+# RETURNING t.col (table-qualified)
+query I
+INSERT INTO t VALUES (40) RETURNING t.a;
+----
+40
+
+# RETURNING generated column
+query I
+INSERT INTO t VALUES (50) RETURNING b;
+----
+51
+
+# RETURNING * EXCLUDE (b)
+query I
+INSERT INTO t VALUES (70) RETURNING * EXCLUDE (b);
+----
+70
+
+# RETURNING * REPLACE (a * 10 AS a)
+query II
+INSERT INTO t VALUES (80) RETURNING * REPLACE (a * 10 AS a);
+----
+800	81
+
+# Trigger fired for all inserts above
+query I
+SELECT COUNT(*) FROM log WHERE msg = 'after_ins';
+----
+7
+
+# ─── BEFORE INSERT trigger ────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE t2 (a INTEGER);
+
+statement ok
+CREATE TABLE log2 (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_before_ins BEFORE INSERT ON t2 FOR EACH STATEMENT
+    INSERT INTO log2 VALUES ('before_ins');
+
+query I
+INSERT INTO t2 VALUES (5) RETURNING a;
+----
+5
+
+query I
+SELECT COUNT(*) FROM log2;
+----
+1
+
+# ─── BEFORE+AFTER INSERT trigger ─────────────────────────────────────────────
+
+statement ok
+CREATE TABLE t3 (a INTEGER);
+
+statement ok
+CREATE TABLE log3 (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr3_before BEFORE INSERT ON t3 FOR EACH STATEMENT
+    INSERT INTO log3 VALUES ('before');
+
+statement ok
+CREATE TRIGGER tr3_after AFTER INSERT ON t3 FOR EACH STATEMENT
+    INSERT INTO log3 VALUES ('after');
+
+query I
+INSERT INTO t3 VALUES (7) RETURNING a;
+----
+7
+
+query II
+SELECT msg, COUNT(*) FROM log3 GROUP BY msg ORDER BY msg;
+----
+after	1
+before	1
+
+# ─── UPDATE RETURNING ────────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE upd (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO upd VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE ulog (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_upd AFTER UPDATE ON upd FOR EACH STATEMENT
+    INSERT INTO ulog VALUES ('updated');
+
+query II
+UPDATE upd SET val = val + 1 RETURNING id, val;
+----
+1	11
+2	21
+
+query I
+SELECT COUNT(*) FROM ulog;
+----
+1
+
+# UPDATE with alias RETURNING
+query I
+UPDATE upd AS u SET val = 0 RETURNING u.id;
+----
+1
+2
+
+# ─── DELETE RETURNING ────────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE del (id INTEGER);
+
+statement ok
+INSERT INTO del VALUES (10), (20), (30);
+
+statement ok
+CREATE TABLE dlog (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_del AFTER DELETE ON del FOR EACH STATEMENT
+    INSERT INTO dlog VALUES ('deleted');
+
+query I
+DELETE FROM del RETURNING id;
+----
+10
+20
+30
+
+query I
+SELECT COUNT(*) FROM dlog;
+----
+1
+
+# ─── AFTER with REFERENCING NEW TABLE ────────────────────────────────────────
+
+statement ok
+CREATE TABLE ref_t (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO ref_t VALUES (1, 100);
+
+statement ok
+CREATE TABLE ref_log (captured INTEGER);
+
+statement ok
+CREATE TRIGGER tr_ref AFTER INSERT ON ref_t
+    REFERENCING NEW TABLE AS new_rows
+    FOR EACH STATEMENT
+    INSERT INTO ref_log SELECT id FROM new_rows;
+
+# RETURNING narrow column, trigger still sees full rows
+query I
+INSERT INTO ref_t VALUES (2, 200) RETURNING id;
+----
+2
+
+query I
+SELECT captured FROM ref_log ORDER BY captured;
+----
+2
+
+# ─── 0-row DML ────────────────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE zero (id INTEGER);
+
+statement ok
+CREATE TABLE zerolog (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_zero AFTER INSERT ON zero FOR EACH STATEMENT
+    INSERT INTO zerolog VALUES ('fired');
+
+query I
+INSERT INTO zero SELECT id FROM zero RETURNING id;
+----
+
+query I
+SELECT COUNT(*) FROM zerolog;
+----
+1
+
+# ─── UPDATE OF col non-firing + RETURNING ────────────────────────────────────
+
+statement ok
+CREATE TABLE of_t (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO of_t VALUES (1, 2);
+
+statement ok
+CREATE TABLE of_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_of BEFORE UPDATE OF b ON of_t FOR EACH STATEMENT
+    INSERT INTO of_log VALUES ('fired');
+
+# UPDATE only touches 'a', trigger should NOT fire
+query I
+UPDATE of_t SET a = 99 RETURNING a;
+----
+99
+
+query I
+SELECT COUNT(*) FROM of_log;
+----
+0
+
+# ─── ON CONFLICT DO NOTHING + RETURNING ──────────────────────────────────────
+
+statement ok
+CREATE TABLE oc (id INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO oc VALUES (1, 10);
+
+statement ok
+CREATE TRIGGER tr_oc AFTER INSERT ON oc FOR EACH STATEMENT
+    INSERT INTO log VALUES ('oc');
+
+# Only actually inserted row should be returned
+query II
+INSERT INTO oc VALUES (1, 99), (2, 20) ON CONFLICT DO NOTHING RETURNING id, v;
+----
+2	20
+
+# ─── WITH CTE wrapping ────────────────────────────────────────────────────────
+
+statement ok
+CREATE TABLE wcte (id INTEGER);
+
+statement ok
+CREATE TRIGGER tr_wcte AFTER INSERT ON wcte FOR EACH STATEMENT
+    INSERT INTO log VALUES ('wcte');
+
+query I
+WITH ins AS (INSERT INTO wcte VALUES (5) RETURNING id) SELECT id FROM ins;
+----
+5
+
+# ─── DELETE RETURNING rowid on triggered table ───────────────────────────────
+
+statement ok
+CREATE TABLE rowid_del (id INTEGER);
+
+statement ok
+INSERT INTO rowid_del VALUES (10), (20);
+
+statement ok
+CREATE TABLE rowid_dlog (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_del AFTER DELETE ON rowid_del FOR EACH STATEMENT
+    INSERT INTO rowid_dlog VALUES ('deleted');
+
+# rowid is an int64 physical row position — verify it is returned as a non-NULL int64,
+# not the literal value (which depends on storage internals).
+query I
+WITH d AS (DELETE FROM rowid_del WHERE id = 10 RETURNING rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+# Regression: virtual-column injection must not leak into REFERENCING OLD/NEW
+# TABLE aliases.  Trigger bodies that scan the transition table with SELECT *
+# previously broke when the user added RETURNING rowid — the synthetic rowid
+# column widened the shared base CTE.
+
+statement ok
+CREATE TABLE leak_d (id INTEGER);
+
+statement ok
+INSERT INTO leak_d VALUES (10), (20);
+
+statement ok
+CREATE TABLE leak_cap (c INTEGER);
+
+statement ok
+CREATE TRIGGER tr_leak_old AFTER DELETE ON leak_d REFERENCING OLD TABLE AS oldr
+    FOR EACH STATEMENT INSERT INTO leak_cap SELECT * FROM oldr;
+
+# Without the fix this errors: "table leak_cap has 1 columns but 2 values were supplied"
+query I
+WITH d AS (DELETE FROM leak_d WHERE id = 10 RETURNING rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+query I rowsort
+SELECT c FROM leak_cap;
+----
+10
+
+# Same shape with NEW TABLE — UPDATE with REFERENCING NEW captures all rows;
+# RETURNING * on UPDATE still works (no virtual-column injection here),
+# but we pin the SELECT * over the transition table independently.
+statement ok
+CREATE TABLE leak_u (id INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO leak_u VALUES (1, 100);
+
+statement ok
+CREATE TABLE leak_ucap (id INTEGER, v INTEGER);
+
+statement ok
+CREATE TRIGGER tr_leak_new AFTER UPDATE ON leak_u REFERENCING NEW TABLE AS newr
+    FOR EACH STATEMENT INSERT INTO leak_ucap SELECT * FROM newr;
+
+query II
+UPDATE leak_u SET v = v + 1 WHERE id = 1 RETURNING id, v;
+----
+1	101
+
+query II rowsort
+SELECT id, v FROM leak_ucap;
+----
+1	101
+
+# Regression: RETURNING *, rowid must not duplicate the rowid column.
+# The injected virtual column is materialised under a synthetic name and
+# excluded from the user's StarExpression so * does not re-expand it.
+
+statement ok
+CREATE TABLE dupe_d (id INTEGER);
+
+statement ok
+INSERT INTO dupe_d VALUES (10), (20);
+
+statement ok
+CREATE TABLE dupe_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_dupe AFTER DELETE ON dupe_d FOR EACH STATEMENT
+    INSERT INTO dupe_log VALUES ('d');
+
+# Two columns: id and rowid (NOT three).
+query II
+WITH d AS (DELETE FROM dupe_d WHERE id = 10 RETURNING *, rowid)
+SELECT id, typeof(rowid) FROM d;
+----
+10	BIGINT
+
+# Combined: REFERENCING OLD TABLE + RETURNING *, rowid — transition-table SELECT *
+# still sees only the original schema, RETURNING returns 2 columns.
+statement ok
+CREATE TABLE dupe_d2 (id INTEGER);
+
+statement ok
+INSERT INTO dupe_d2 VALUES (10);
+
+statement ok
+CREATE TABLE dupe_cap (c INTEGER);
+
+statement ok
+CREATE TRIGGER tr_dupe2 AFTER DELETE ON dupe_d2 REFERENCING OLD TABLE AS oldr
+    FOR EACH STATEMENT INSERT INTO dupe_cap SELECT * FROM oldr;
+
+query II
+WITH d AS (DELETE FROM dupe_d2 WHERE id = 10 RETURNING *, rowid)
+SELECT id, typeof(rowid) FROM d;
+----
+10	BIGINT
+
+query I rowsort
+SELECT c FROM dupe_cap;
+----
+10
+
+# Aliased rowid: output column name is the user's alias.
+statement ok
+CREATE TABLE dupe_d3 (id INTEGER);
+
+statement ok
+INSERT INTO dupe_d3 VALUES (1);
+
+statement ok
+CREATE TRIGGER tr_dupe3 AFTER DELETE ON dupe_d3 FOR EACH STATEMENT
+    INSERT INTO dupe_log VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM dupe_d3 RETURNING rowid AS my_rid)
+SELECT typeof(my_rid) FROM d;
+----
+BIGINT
+
+# Same-statement multiple references to rowid must not double-project.
+statement ok
+CREATE TABLE dupe_d4 (id INTEGER);
+
+statement ok
+INSERT INTO dupe_d4 VALUES (1);
+
+statement ok
+CREATE TRIGGER tr_dupe4 AFTER DELETE ON dupe_d4 FOR EACH STATEMENT
+    INSERT INTO dupe_log VALUES ('d');
+
+query II
+WITH d AS (DELETE FROM dupe_d4 RETURNING rowid, rowid + 1 AS rid_plus_one)
+SELECT typeof(rowid), typeof(rid_plus_one) FROM d;
+----
+BIGINT	BIGINT
+
+# qualified reference: del.rowid
+statement ok
+CREATE TABLE rowid_del2 (id INTEGER);
+
+statement ok
+INSERT INTO rowid_del2 VALUES (99);
+
+statement ok
+CREATE TABLE rowid_dlog2 (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_rowid_del2 AFTER DELETE ON rowid_del2 FOR EACH STATEMENT
+    INSERT INTO rowid_dlog2 VALUES ('d');
+
+query I
+WITH d AS (DELETE FROM rowid_del2 RETURNING rowid_del2.rowid)
+SELECT typeof(rowid) FROM d;
+----
+BIGINT
+
+# INSERT/UPDATE RETURNING rowid still errors on triggered tables (same as no-trigger path)
+statement ok
+CREATE TABLE rowid_ins (id INTEGER);
+
+statement ok
+CREATE TRIGGER tr_rowid_ins AFTER INSERT ON rowid_ins FOR EACH STATEMENT
+    INSERT INTO rowid_dlog VALUES ('ins');
+
+statement error
+INSERT INTO rowid_ins VALUES (1) RETURNING rowid;
+----
+Binder Error:
+
+statement ok
+CREATE TABLE rowid_upd (id INTEGER);
+
+statement ok
+INSERT INTO rowid_upd VALUES (1);
+
+statement ok
+CREATE TRIGGER tr_rowid_upd AFTER UPDATE ON rowid_upd FOR EACH STATEMENT
+    INSERT INTO rowid_dlog VALUES ('upd');
+
+statement error
+UPDATE rowid_upd SET id = 2 RETURNING rowid;
+----
+Binder Error:
+
+# ─── Negative parity: same errors on triggered tables as on non-triggered ─────
+
+statement ok
+CREATE TABLE neg (id INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO neg VALUES (1, 10);
+
+statement ok
+CREATE TRIGGER tr_neg AFTER INSERT ON neg FOR EACH STATEMENT
+    INSERT INTO log VALUES ('neg');
+
+# EXCLUDED.col still errors on triggered table (same as no-trigger)
+statement error
+INSERT INTO neg VALUES (1, 99) ON CONFLICT DO UPDATE SET v = EXCLUDED.v
+    RETURNING id, v, EXCLUDED.v;
+----
+Referenced table "EXCLUDED" not found!
+
+# UPDATE … FROM <alias> RETURNING <alias>.col still errors on triggered table
+statement ok
+CREATE TABLE neg_src (x INTEGER);
+
+statement ok
+INSERT INTO neg_src VALUES (99);
+
+statement ok
+CREATE TRIGGER tr_neg_upd AFTER UPDATE ON neg FOR EACH STATEMENT
+    INSERT INTO log VALUES ('neg_upd');
+
+statement error
+UPDATE neg SET v = neg_src.x FROM neg_src RETURNING neg_src.x;
+----
+Referenced table "neg_src" not found!
+
+# DELETE … USING <alias> RETURNING <alias>.col still errors on triggered table
+statement ok
+CREATE TABLE neg_del (id INTEGER);
+
+statement ok
+INSERT INTO neg_del VALUES (1);
+
+statement ok
+CREATE TABLE neg_using (x INTEGER);
+
+statement ok
+INSERT INTO neg_using VALUES (1);
+
+statement ok
+CREATE TRIGGER tr_neg_del AFTER DELETE ON neg_del FOR EACH STATEMENT
+    INSERT INTO log VALUES ('neg_del');
+
+statement error
+DELETE FROM neg_del USING neg_using WHERE neg_del.id = neg_using.x RETURNING neg_using.x;
+----
+Referenced table "neg_using" not found!
