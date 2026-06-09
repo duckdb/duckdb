@@ -1,6 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/optional.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -137,15 +137,15 @@ struct StoreOp {
 	}
 };
 
-// Serialize optional<T> state buffers into a result vector, setting NULL for disengaged optionals.
+// Serialize aggregate_optional<T> state buffers into a result vector, setting NULL when is_set=false.
 struct StorePrimitiveOptionalOp {
 	template <class T>
 	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses, idx_t base_offset) {
 		auto dst = FlatVector::Writer<T>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			const auto opt = Load<optional<T>>(addresses[i] + base_offset);
-			if (opt.has_value()) {
-				dst.WriteValue(*opt);
+			const auto opt = Load<aggregate_optional<T>>(addresses[i] + base_offset);
+			if (opt.is_set) {
+				dst.WriteValue(opt.value);
 			} else {
 				dst.WriteNull();
 			}
@@ -153,18 +153,19 @@ struct StorePrimitiveOptionalOp {
 	}
 };
 
-// Deserialize a nullable input vector into optional<T> state buffer slots.
+// Deserialize a nullable input vector into aggregate_optional<T> state buffer slots.
 struct LoadPrimitiveOptionalOp {
 	template <class T>
 	static void Operation(const Vector &input, idx_t count, data_ptr_t base_ptr, idx_t aligned_state_size) {
 		auto values = input.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
 			const auto entry = values[i];
-			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
+			auto &opt = *reinterpret_cast<aggregate_optional<T> *>(base_ptr + i * aligned_state_size);
 			if (entry.IsValid()) {
-				opt = entry.GetValue();
+				opt.value = entry.GetValue();
+				opt.is_set = true;
 			} else {
-				opt = nullopt;
+				opt.is_set = false;
 			}
 		}
 	}

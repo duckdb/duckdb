@@ -8,10 +8,20 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/optional.hpp"
 #include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
+
+//! Aggregate-state optional: wraps T with an explicit bool flag.
+//! Memory layout: T value at offset 0, bool is_set immediately after T.
+//! memset(0) initializes to a disengaged state (is_set = false).
+template <class T>
+struct aggregate_optional {
+	using value_type = T;
+
+	T value;
+	bool is_set;
+};
 
 //! Detection trait: true when STATE defines a nested STATE_TYPE (i.e. StructStateType<...>)
 template <class STATE, class = void>
@@ -73,13 +83,13 @@ struct HasPrimitiveLogicalType<timestamp_tz_ns_t> : std::true_type {};
 template <>
 struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
 
-//! Detection trait: true when STATE is optional<T> where T itself has HasPrimitiveLogicalType.
-//! These states export as PrimitiveToLogicalType<T>(), with nullopt ↔ SQL NULL.
+//! Detection trait: true when STATE is aggregate_optional<T> where T itself has HasPrimitiveLogicalType.
+//! These states export as PrimitiveToLogicalType<T>(), with is_set=false ↔ SQL NULL.
 template <class T>
 struct HasOptionalPrimitiveType : std::false_type {};
 
 template <class T>
-struct HasOptionalPrimitiveType<optional<T>> : HasPrimitiveLogicalType<T> {};
+struct HasOptionalPrimitiveType<aggregate_optional<T>> : HasPrimitiveLogicalType<T> {};
 
 //! Maps a single C++ field type to a LogicalType.
 //! If T itself defines STATE_TYPE, returns its nested struct type; otherwise calls PrimitiveToLogicalType<T>().

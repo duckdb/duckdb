@@ -14,7 +14,6 @@
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -26,18 +25,18 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 }
 
 template <class T>
-using SumState = optional<T>;
+using SumState = aggregate_optional<T>;
 
 struct KahanSumState {
-	static constexpr const char *STATE_NAMES[] = {"isset", "value", "err"};
+	static constexpr const char *STATE_NAMES[] = {"is_set", "value", "err"};
 	using STATE_TYPE = StructStateType<bool, double, double>;
 
-	bool isset;
+	bool is_set;
 	double value;
 	double err;
 
 	void Combine(const KahanSumState &other) {
-		this->isset = other.isset || this->isset;
+		this->is_set = other.is_set || this->is_set;
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}

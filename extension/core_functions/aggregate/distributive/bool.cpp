@@ -5,7 +5,7 @@ namespace duckdb {
 
 namespace {
 
-using BoolState = optional<bool>;
+using BoolState = aggregate_optional<bool>;
 
 template <class REDUCE_OP, bool INIT_VALUE>
 struct BoolAggregate {
@@ -13,7 +13,8 @@ struct BoolAggregate {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
-		state = REDUCE_OP::template Operation<bool>(state.value_or(INIT_VALUE), bool(input));
+		state.value = REDUCE_OP::template Operation<bool>(state.is_set ? state.value : INIT_VALUE, bool(input));
+		state.is_set = true;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -26,19 +27,20 @@ struct BoolAggregate {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (!source.has_value()) {
+		if (!source.is_set) {
 			return;
 		}
-		target = REDUCE_OP::template Operation<bool>(target.value_or(INIT_VALUE), *source);
+		target.value = REDUCE_OP::template Operation<bool>(target.is_set ? target.value : INIT_VALUE, source.value);
+		target.is_set = true;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.has_value()) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 			return;
 		}
-		target = *state;
+		target = state.value;
 	}
 
 	static bool IgnoreNull() {
