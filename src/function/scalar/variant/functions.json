@@ -27,7 +27,7 @@
 					}
 				],
 				"description": "Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.",
-				"example": "variant_array_length({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"example": "variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')",
 				"categories": [
 					"variant"
 				]
