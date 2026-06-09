@@ -10,34 +10,10 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/peg/special_string_utils.hpp"
+#include "duckdb/parser/peg/token_type.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
-
-enum class TokenType {
-	INVALID,
-	KEYWORD,
-	STRING_LITERAL,
-	NUMBER_LITERAL,
-	OPERATOR,
-	IDENTIFIER,
-	COMMENT,
-	TERMINATOR,
-	CATALOG_NAME,
-	SCHEMA_NAME,
-	TABLE_NAME,
-	TYPE_NAME,
-	COLUMN_NAME,
-	SCALAR_FUNCTION,
-	TABLE_FUNCTION,
-	PRAGMA_FUNCTION,
-	SETTING_NAME,
-	ERROR,
-	//! Sentinel for real end of input — consumed by EndOfInputMatcher.
-	END_OF_INPUT,
-	//! Sentinel for cursor position in autocomplete mode — List/Repeat fire suggestion walk.
-	END_OF_INPUT_AUTOCOMPLETE
-};
 
 inline string TokenTypeToString(TokenType type) {
 	switch (type) {
@@ -55,7 +31,7 @@ inline string TokenTypeToString(TokenType type) {
 		return "COMMENT";
 	case TokenType::TERMINATOR:
 		return "TERMINATOR";
-	case TokenType::ERROR:
+	case TokenType::TOKEN_ERROR:
 		return "ERROR";
 	case TokenType::CATALOG_NAME:
 		return "CATALOG_NAME";

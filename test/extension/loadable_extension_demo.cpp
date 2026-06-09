@@ -362,39 +362,34 @@ public:
 		parser_override = QuackParser;
 	}
 
-	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
-		auto lcase = StringUtil::Lower(query);
-		if (!StringUtil::Contains(lcase, "quack")) {
-			// quack not found!?
-			if (StringUtil::Contains(lcase, "quac")) {
-				// use our error
-				return ParserExtensionParseResult("Did you mean... QUACK!?");
-			}
-			// use original error
+	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const vector<SimpleToken> &tokens) {
+		// Claim a maximal run of consecutive "quack" identifier tokens (case-insensitive) at the
+		// start of the view. PEG happily parses one or two identifiers (as `SELECT x AS y`), but
+		// three or more in a row without separators is the syntactic hole that invokes this
+		// parse_function; we then greedily consume every leading "quack".
+		idx_t quacks = 0;
+		while (quacks < tokens.size() && StringUtil::CIEquals(tokens[quacks].text, "quack")) {
+			quacks++;
+		}
+		if (quacks == 0) {
+			// Not our input — let the next extension or the original PEG error surface.
 			return ParserExtensionParseResult();
 		}
-
-		idx_t count = 0;
-		size_t pos = 0;
-		size_t last_end = 0;
-		while ((pos = lcase.find("quack", last_end)) != string::npos) {
-			string between = lcase.substr(last_end, pos - last_end);
-			StringUtil::Trim(between);
-			if (!between.empty() && !StringUtil::CIEquals(between, ";")) {
-				return ParserExtensionParseResult("This is not a quack: " + between);
-			}
-			count++;
-			last_end = pos + 5;
+		// To be a proper TopLevelStatement (`Statement? (';'+ / EndOfInput)`), the quack run must
+		// be followed by ';' or end-of-input. The tokenizer always appends an END_OF_INPUT
+		// sentinel, so tokens[quacks] is valid here. If a real token (e.g. SELECT) follows without
+		// a separator, decline so the original PEG syntax error surfaces.
+		const auto next_type = tokens[quacks].type;
+		if (next_type != TokenType::TERMINATOR && next_type != TokenType::END_OF_INPUT &&
+		    next_type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return ParserExtensionParseResult();
 		}
-
-		string after = lcase.substr(last_end);
-		StringUtil::Trim(after);
-		if (!after.empty() && !StringUtil::CIEquals(after, ";")) {
-			return ParserExtensionParseResult("This is not a quack: " + after);
-		}
-
-		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(count));
+		// The QUACK row count is the number of quack words.
+		auto result = ParserExtensionParseResult(make_uniq<QuackExtensionData>(quacks));
+		// Consume the terminator token too — whether it's ';' or the end-of-input sentinel — so the
+		// QUACK statement owns its terminator, just like a real TopLevelStatement.
+		result.consumed_tokens = NumericCast<int64_t>(quacks + 1);
+		return result;
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,

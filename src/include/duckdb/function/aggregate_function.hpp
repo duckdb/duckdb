@@ -126,7 +126,7 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
 
-typedef LogicalType (*aggregate_get_state_type_t)(const BoundAggregateFunction &function);
+typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function);
 
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
@@ -500,11 +500,6 @@ public:
 		return *this;
 	}
 
-	template <class STATE_TYPE>
-	AggregateFunction &SetStructStateExport() {
-		return SetStructStateExport([](const BoundAggregateFunction &) { return STATE_TYPE::GetLogicalType(); });
-	}
-
 	AggregateFunction &SetClusterCallback(aggregate_cluster_update_t cluster_update) {
 		callbacks.cluster_update = cluster_update;
 		return *this;
@@ -572,8 +567,19 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
-			result.SetStructStateExport(
-			    [](const BoundAggregateFunction &) { return STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES); });
+			result.SetStructStateExport([](const BoundAggregateFunction &) {
+				return AggregateStateLayout(STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES),
+				                            AlignValue<idx_t>(sizeof(STATE)));
+			});
+		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
+			result.SetStructStateExport([](const BoundAggregateFunction &) {
+				return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
+			});
+		} else if constexpr (HasOptionalPrimitiveType<STATE>::value) {
+			result.SetStructStateExport([](const BoundAggregateFunction &) {
+				return AggregateStateLayout(PrimitiveToLogicalType<typename STATE::value_type>(),
+				                            AlignValue<idx_t>(sizeof(STATE)), true);
+			});
 		}
 	}
 
@@ -697,12 +703,9 @@ public:
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
-	LogicalType GetStateType() const {
+	AggregateStateLayout GetStateType() const {
 		D_ASSERT(callbacks.get_state_type);
-		const auto result = callbacks.get_state_type(*this);
-		// The underlying type of the AggregateState should be a struct
-		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
-		return result;
+		return callbacks.get_state_type(*this);
 	}
 };
 

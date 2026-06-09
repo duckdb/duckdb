@@ -186,12 +186,15 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			annotated_lock_guard<annotated_mutex> guard(g_state.lock);
-			if (g_state.CanBlock()) {
-				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
-				return SourceResultType::BLOCKED;
+			{
+				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+				if (g_state.CanBlock()) {
+					data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+					return SourceResultType::BLOCKED;
+				}
 			}
-			return SourceResultType::FINISHED;
+			data.async_result.ExecuteTasksSynchronously();
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 		case AsyncResultType::IMPLICIT:
 			if (chunk.size() > 0) {
