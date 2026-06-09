@@ -473,6 +473,7 @@ class ExtractionPlan:
     cpp_type: str = ""
     var_name: str = ""
     by_value: bool = False
+    default_initializer: str = ""
     child: "ExtractionPlan | None" = None
     child_index: int = 0
     identifier: bool = False
@@ -493,6 +494,7 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
                 cpp_type=rule_types[node.name].cpp_type,
                 var_name=to_snake_case(node.name),
                 by_value=_is_by_value(node.name, rule_types),
+                default_initializer=rule_types[node.name].default_initializer,
             )
         if node.name in excluded_rules:
             return ExtractionPlan(kind=ExtractionKind.SKIP)
@@ -552,7 +554,12 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
 
 def _plan_value_args(plan):
     """Copy the semantic properties preserved by transparent wrapper nodes."""
-    return {"cpp_type": plan.cpp_type, "var_name": plan.var_name, "by_value": plan.by_value}
+    return {
+        "cpp_type": plan.cpp_type,
+        "var_name": plan.var_name,
+        "by_value": plan.by_value,
+        "default_initializer": plan.default_initializer,
+    }
 
 
 def _wrap_extraction(kind, child):
@@ -568,15 +575,13 @@ def _temp_name(target_name, suffix, depth):
     return f"{target_name}_{suffix}{depth_suffix}"
 
 
-def _default_initializer(cpp_type):
-    """Return the semantic default initializer for optional generated values."""
-    if cpp_type == "JoinType":
-        return "= JoinType::INNER"
-    if cpp_type == "OrderType":
-        return "= OrderType::ORDER_DEFAULT"
-    if cpp_type == "OrderByNullType":
-        return "= OrderByNullType::ORDER_DEFAULT"
-    return "{}"
+def _format_default_initializer(cpp_type, initializer):
+    """Format a rule default from grammar_types.yml as a C++ variable initializer."""
+    if not initializer:
+        return "{}"
+    if initializer.startswith("=") or initializer.startswith("{"):
+        return initializer
+    return f"= {cpp_type}::{initializer}"
 
 
 def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=True, depth=0):
@@ -607,7 +612,8 @@ def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=T
         opt_name = _temp_name(target_name, "opt", depth)
         lines = []
         if declare:
-            lines.append(f"{indent}{plan.cpp_type} {target_name} {_default_initializer(plan.cpp_type)};")
+            initializer = _format_default_initializer(plan.cpp_type, plan.default_initializer)
+            lines.append(f"{indent}{plan.cpp_type} {target_name} {initializer};")
         lines.extend(
             [
                 f"{indent}auto &{opt_name} = {source_expr}.Cast<OptionalParseResult>();",

@@ -37,6 +37,7 @@ class GrammarTypeInfo:
 
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
+    default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
 
 
 def load_grammar_types_yaml(types_file):
@@ -94,7 +95,7 @@ def validate_grammar_types(types_file, data, rule_types, excluded_rules):
 def load_grammar_types(types_file):
     """
     Loads grammar_types.yml and returns (rule_types, excluded_rules) where
-    rule_types maps rule name -> GrammarTypeInfo (cpp_type + by_value), and excluded_rules is
+    rule_types maps rule name -> GrammarTypeInfo (cpp_type + by_value + default_initializer), and excluded_rules is
     the set of rules that should be skipped during stub generation.
     Override rules default to by_value=False; a startswith('unique_ptr<') fallback covers
     any override types that are move-only.
@@ -105,26 +106,33 @@ def load_grammar_types(types_file):
     rule_to_source = {}  # tracks where each rule was first seen for error messages
     duplicates = []
 
-    def register(name, cpp_type, by_value, source):
+    def register(name, cpp_type, by_value, default_initializer, source):
         name = str(name)
         if name in rule_types:
             duplicates.append(f"  '{name}' in '{source}' (already listed in '{rule_to_source[name]}')")
         else:
-            rule_types[name] = GrammarTypeInfo(cpp_type=str(cpp_type), by_value=by_value)
+            rule_types[name] = GrammarTypeInfo(
+                cpp_type=str(cpp_type),
+                by_value=by_value,
+                default_initializer=str(default_initializer or ""),
+            )
             rule_to_source[name] = source
 
-    # Top-level overrides: RuleName -> "type" string OR {type, by_value} dict
+    # Top-level overrides: RuleName -> "type" string OR {type, by_value, default_initializer} dict.
+    # default_initializer usually names an enum member (e.g. "INNER"), but full C++ initializers
+    # that start with "=" or "{" are also accepted by gen_transformer_v2.py.
     overrides = data.get("overrides", {})
     if isinstance(overrides, dict):
         for name, value in overrides.items():
             if isinstance(value, str):
-                register(name, value, False, "overrides")
+                register(name, value, False, "", "overrides")
             elif isinstance(value, dict):
                 cpp_type = value.get("type", "")
                 by_value = bool(value.get("by_value", False))
-                register(name, cpp_type, by_value, "overrides")
+                default_initializer = value.get("default_initializer", "")
+                register(name, cpp_type, by_value, default_initializer, "overrides")
 
-    # Category entries: CategoryName -> {type: "...", by_value: bool, rules: [...]}
+    # Category entries: CategoryName -> {type: "...", by_value: bool, default_initializer: "...", rules: [...]}
     for key, value in data.items():
         if key in ("overrides", "excluded_rules", "matcher_rule_overrides"):
             continue
@@ -135,8 +143,9 @@ def load_grammar_types(types_file):
         if not cpp_type or not isinstance(rules, list):
             continue
         by_value = bool(value.get("by_value", False))
+        default_initializer = value.get("default_initializer", "")
         for name in rules:
-            register(name, cpp_type, by_value, key)
+            register(name, cpp_type, by_value, default_initializer, key)
 
     if duplicates:
         print(f"Error: {types_file} contains duplicate rule listings:", file=sys.stderr)

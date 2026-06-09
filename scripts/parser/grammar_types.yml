@@ -1386,13 +1386,33 @@ overrides:
   RenameEntry: "pair<QualifiedColumnName, string>"
   # select.gram
   SetopType: "SetOperationType"
+  SetopUnion: "SetOperationType"
+  SetopExcept: "SetOperationType"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
-  JoinType: "JoinType"
+  JoinType:
+    type: "JoinType"
+    default_initializer: "INNER"
+  FullJoin: "JoinType"
+  LeftJoin: "JoinType"
+  RightJoin: "JoinType"
+  SemiJoin: "JoinType"
+  AntiJoin: "JoinType"
+  InnerJoin: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
   SampleFunction: "SampleMethod"
+  SamplePercentage: "bool"
+  SampleRows: "bool"
   # select.gram (ordering)
-  DescOrAsc: "OrderType"
-  NullsFirstOrLast: "OrderByNullType"
+  DescOrAsc:
+    type: "OrderType"
+    default_initializer: "ORDER_DEFAULT"
+  DescendingOrder: "OrderType"
+  AscendingOrder: "OrderType"
+  NullsFirstOrLast:
+    type: "OrderByNullType"
+    default_initializer: "ORDER_DEFAULT"
+  NullsFirst: "OrderByNullType"
+  NullsLast: "OrderByNullType"
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
 
@@ -1518,6 +1538,20 @@ excluded_rules:
   - Unique
   - RowOrStruct
   - SetData
+  - SetopUnion
+  - SetopExcept
+  - FullJoin
+  - LeftJoin
+  - RightJoin
+  - SemiJoin
+  - AntiJoin
+  - InnerJoin
+  - DescendingOrder
+  - AscendingOrder
+  - NullsFirst
+  - NullsLast
+  - SamplePercentage
+  - SampleRows
   - SelectStatement
   - SelectStatementInternal
   - SimpleSelect

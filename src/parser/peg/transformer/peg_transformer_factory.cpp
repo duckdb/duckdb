@@ -376,11 +376,9 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformIntersectChain);
 	REGISTER_TRANSFORM(TransformSetopClause);
 	REGISTER_TRANSFORM(TransformSetIntersectClause);
-	REGISTER_TRANSFORM(TransformSetopType);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
-	REGISTER_TRANSFORM(TransformDescOrAsc);
-	REGISTER_TRANSFORM(TransformNullsFirstOrLast);
-	REGISTER_TRANSFORM(TransformJoinType);
+	REGISTER_TRANSFORM(TransformSetopUnion);
+	REGISTER_TRANSFORM(TransformSetopExcept);
 	REGISTER_TRANSFORM(TransformTableRef);
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
@@ -399,13 +397,24 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformWindowDefinition);
 	REGISTER_TRANSFORM(TransformSampleEntryCount);
 	REGISTER_TRANSFORM(TransformSampleEntryFunction);
-	REGISTER_TRANSFORM(TransformSampleUnit);
+	REGISTER_TRANSFORM(TransformSamplePercentage);
+	REGISTER_TRANSFORM(TransformSampleRows);
 	REGISTER_TRANSFORM(TransformGroupByList);
 	REGISTER_TRANSFORM(TransformGroupByExpression);
 	REGISTER_TRANSFORM(TransformEmptyGroupingItem);
 	REGISTER_TRANSFORM(TransformCubeOrRollupClause);
 	REGISTER_TRANSFORM(TransformGroupingSetsClause);
 	REGISTER_TRANSFORM(TransformLimitExpression);
+	REGISTER_TRANSFORM(TransformFullJoin);
+	REGISTER_TRANSFORM(TransformLeftJoin);
+	REGISTER_TRANSFORM(TransformRightJoin);
+	REGISTER_TRANSFORM(TransformSemiJoin);
+	REGISTER_TRANSFORM(TransformAntiJoin);
+	REGISTER_TRANSFORM(TransformInnerJoin);
+	REGISTER_TRANSFORM(TransformDescendingOrder);
+	REGISTER_TRANSFORM(TransformAscendingOrder);
+	REGISTER_TRANSFORM(TransformNullsFirst);
+	REGISTER_TRANSFORM(TransformNullsLast);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
@@ -430,27 +439,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
 
-	RegisterEnum<OrderType>("DescendingOrder", OrderType::DESCENDING);
-	RegisterEnum<OrderType>("AscendingOrder", OrderType::ASCENDING);
-	RegisterEnum<OrderByNullType>("NullsFirst", OrderByNullType::NULLS_FIRST);
-	RegisterEnum<OrderByNullType>("NullsLast", OrderByNullType::NULLS_LAST);
-
-	RegisterEnum<JoinType>("FullJoin", JoinType::OUTER);
-	RegisterEnum<JoinType>("LeftJoin", JoinType::LEFT);
-	RegisterEnum<JoinType>("RightJoin", JoinType::RIGHT);
-	RegisterEnum<JoinType>("SemiJoin", JoinType::SEMI);
-	RegisterEnum<JoinType>("AntiJoin", JoinType::ANTI);
-	RegisterEnum<JoinType>("InnerJoin", JoinType::INNER);
-
 	RegisterEnum<ExpressionType>("OperatorEqual", ExpressionType::COMPARE_EQUAL);
 	RegisterEnum<ExpressionType>("OperatorNotEqual", ExpressionType::COMPARE_NOTEQUAL);
 	RegisterEnum<ExpressionType>("OperatorLessThan", ExpressionType::COMPARE_LESSTHAN);
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-
-	RegisterEnum<SetOperationType>("SetopUnion", SetOperationType::UNION);
-	RegisterEnum<SetOperationType>("SetopExcept", SetOperationType::EXCEPT);
 
 	RegisterEnum<string>("TrimBoth", "trim");
 	RegisterEnum<string>("TrimLeading", "ltrim");
@@ -468,9 +462,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
-
-	RegisterEnum<bool>("SamplePercentage", true);
-	RegisterEnum<bool>("SampleRows", false);
 
 	RegisterEnum<bool>("SubqueryAny", true);
 	RegisterEnum<bool>("SubqueryAll", false);
