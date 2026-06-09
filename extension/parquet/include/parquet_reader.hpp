@@ -222,10 +222,11 @@ public:
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
 
-	//! (optional) counters (owned by the scan's global state) for row groups whose data was read / skipped,
-	//! incremented as row groups are processed and surfaced as profiling metrics
-	optional_ptr<atomic<idx_t>> row_groups_read;
-	optional_ptr<atomic<idx_t>> row_groups_skipped;
+	//! Per-thread counters for row groups whose data was read / skipped, incremented as row groups are processed.
+	//! Read in ParquetScanGetMetrics and surfaced as the standard row_groups_scanned / total_row_groups_to_scan
+	//! profiling metrics (the profiler sums them across threads).
+	idx_t row_groups_read = 0;
+	idx_t row_groups_skipped = 0;
 
 	//! Prefetch cost model
 	PrefetchCostModelState cost_model_state;

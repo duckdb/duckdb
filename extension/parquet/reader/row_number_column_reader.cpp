@@ -79,12 +79,9 @@ void RowGroupColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Co
 idx_t RowGroupColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &num_values = input.num_values;
 
-	// the row group number is constant for all rows within a row group
-	auto value = UnsafeNumericCast<int64_t>(row_group_idx);
-	auto data_ptr = FlatVector::Writer<int64_t>(result, num_values);
-	for (idx_t i = 0; i < num_values; i++) {
-		data_ptr.WriteValue(value);
-	}
+	// the row group number is constant for all rows within a row group - emit a constant vector
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::GetData<uint64_t>(result)[0] = UnsafeNumericCast<uint64_t>(row_group_idx);
 	return num_values;
 }
 

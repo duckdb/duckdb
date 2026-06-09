@@ -103,7 +103,8 @@ ParquetColumnSchema ParquetColumnSchema::FileRowGroupNumber() {
 	res.schema_index = 0;
 	res.column_index = 0;
 	res.schema_type = ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER;
-	res.type = LogicalType::BIGINT, res.repetition_type = duckdb_parquet::FieldRepetitionType::type::OPTIONAL;
+	res.type = LogicalType::UBIGINT;
+	res.repetition_type = duckdb_parquet::FieldRepetitionType::type::OPTIONAL;
 	return res;
 }
 
@@ -116,8 +117,8 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER) {
 		// the row group number is constant within a row group - set min and max to the row group index
 		auto stats = NumericStats::CreateUnknown(type);
-		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx_p)));
-		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx_p)));
+		NumericStats::SetMin(stats, Value::UBIGINT(UnsafeNumericCast<uint64_t>(row_group_idx_p)));
+		NumericStats::SetMax(stats, Value::UBIGINT(UnsafeNumericCast<uint64_t>(row_group_idx_p)));
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}

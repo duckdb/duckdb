@@ -1743,11 +1743,9 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	auto &group = GetGroup(state);
 	const bool row_group_skipped = state.offset_in_group == (idx_t)group.num_rows;
 	if (row_group_skipped) {
-		if (state.row_groups_skipped) {
-			++(*state.row_groups_skipped);
-		}
-	} else if (state.row_groups_read) {
-		++(*state.row_groups_read);
+		++state.row_groups_skipped;
+	} else {
+		++state.row_groups_read;
 	}
 	if (state.op) {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
