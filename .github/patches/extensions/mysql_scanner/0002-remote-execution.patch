@@ -39,10 +39,10 @@ index 79b9e01..e689e9d 100644
  	unique_ptr<FunctionData> Copy() const override {
 diff --git a/src/include/mysql_sql_writer.hpp b/src/include/mysql_sql_writer.hpp
 new file mode 100644
-index 0000000..4ccc58e
+index 0000000..d4a085a
 --- /dev/null
 +++ b/src/include/mysql_sql_writer.hpp
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +//===----------------------------------------------------------------------===//
 +//                         DuckDB
 +//
@@ -122,6 +122,7 @@ index 0000000..4ccc58e
 +	string WriteConstant(const Value &value);
 +	string WriteCastType(const LogicalType &type);
 +	string WriteIdentifier(const string &identifier);
++	string WriteIdentifier(const Identifier &identifier);
 +
 +private:
 +	ClientContext &context;
@@ -679,7 +680,7 @@ index 9e3123b..0497674 100644
  
  	HandleTruncatedData();
 diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
-index fea00b5..cd56adb 100644
+index 5772b79..933b3a9 100644
 --- a/src/mysql_scanner.cpp
 +++ b/src/mysql_scanner.cpp
 @@ -7,6 +7,7 @@
@@ -803,10 +804,10 @@ index fea00b5..cd56adb 100644
  }
 diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
 new file mode 100644
-index 0000000..03e1525
+index 0000000..977b0fc
 --- /dev/null
 +++ b/src/mysql_sql_writer.cpp
-@@ -0,0 +1,821 @@
+@@ -0,0 +1,825 @@
 +#include "mysql_sql_writer.hpp"
 +
 +#include "duckdb/common/string_util.hpp"
@@ -851,6 +852,10 @@ index 0000000..03e1525
 +//===--------------------------------------------------------------------===//
 +string MySQLSQLWriter::WriteIdentifier(const string &identifier) {
 +	return MySQLUtils::WriteIdentifier(identifier);
++}
++
++string MySQLSQLWriter::WriteIdentifier(const Identifier &identifier) {
++	return MySQLUtils::WriteIdentifier(identifier.GetIdentifierName());
 +}
 +
 +string MySQLSQLWriter::WriteConstant(const Value &value) {
@@ -1071,7 +1076,7 @@ index 0000000..03e1525
 +
 +string MySQLSQLWriter::WriteFunction(const FunctionExpression &func) {
 +	auto &children = func.GetArguments();
-+	auto name = StringUtil::Lower(func.FunctionName());
++	auto name = StringUtil::Lower(func.FunctionName().GetIdentifierName());
 +	if (name == "~~" || name == "!~~") {
 +		// [NOT] LIKE - DuckDB's LIKE has no default escape character, while MySQL's default
 +		// escape character is backslash; disable it with an empty ESCAPE clause
@@ -1099,7 +1104,7 @@ index 0000000..03e1525
 +		                        "SupportsPushdown",
 +		                        name);
 +	}
-+	return WriteFunctionCall(func.FunctionName(), children, func.Distinct());
++	return WriteFunctionCall(func.FunctionName().GetIdentifierName(), children, func.Distinct());
 +}
 +
 +static string MySQLWriteWindowBoundary(WindowBoundary boundary, const string &boundary_expr) {
@@ -1122,7 +1127,7 @@ index 0000000..03e1525
 +}
 +
 +string MySQLSQLWriter::WriteWindow(const WindowExpression &window) {
-+	string result = WriteFunctionCall(window.FunctionName(), window.GetArguments(), window.Distinct());
++	string result = WriteFunctionCall(window.FunctionName().GetIdentifierName(), window.GetArguments(), window.Distinct());
 +	result += " OVER (";
 +	string sep;
 +	if (!window.Partitions().empty()) {
@@ -1376,7 +1381,7 @@ index 0000000..03e1525
 +	case TableReferenceType::SUBQUERY: {
 +		auto &subquery = ref.Cast<SubqueryRef>();
 +		// MySQL requires an alias for every derived table - generate one if there is none
-+		string alias = subquery.alias;
++		string alias = subquery.alias.GetIdentifierName();
 +		if (alias.empty()) {
 +			alias = "mysql_unnamed_subquery" + to_string(++unnamed_subquery_index);
 +		}
@@ -1670,7 +1675,7 @@ index ef3d3d6..1f39ce9 100644
  	string result;
  	for (auto c : text) {
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..0dbb60f 100644
+index eba682f..c576341 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
 @@ -5,11 +5,39 @@
@@ -1798,7 +1803,7 @@ index af9ffd7..0dbb60f 100644
 +}
 +
 +bool MySQLSupportsFunction(const FunctionExpression &func) {
-+	auto &function_name = func.FunctionName();
++	auto &function_name = func.FunctionName().GetIdentifierName();
 +
 +	// Whitelist of functions that can be pushed into MySQL 8.0+ - either because the name and
 +	// semantics are identical, or because MySQLSQLWriter rewrites them during serialization:
@@ -1951,13 +1956,13 @@ index af9ffd7..0dbb60f 100644
 +	case TableReferenceType::BASE_TABLE: {
 +		auto &base = ref.Cast<BaseTableRef>();
 +		const auto &name = base.alias.empty() ? base.table_name : base.alias;
-+		if (!names.insert(name).second) {
++		if (!names.insert(name.GetIdentifierName()).second) {
 +			duplicate = true;
 +		}
 +		break;
 +	}
 +	case TableReferenceType::SUBQUERY: {
-+		if (!ref.alias.empty() && !names.insert(ref.alias).second) {
++		if (!ref.alias.empty() && !names.insert(ref.alias.GetIdentifierName()).second) {
 +			duplicate = true;
 +		}
 +		break;
@@ -1975,7 +1980,7 @@ index af9ffd7..0dbb60f 100644
 +	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 +		auto &colref = expr.Cast<ColumnRefExpression>();
 +		if (!colref.IsQualified()) {
-+			names.insert(colref.GetColumnName());
++			names.insert(colref.GetColumnName().GetIdentifierName());
 +		}
 +	}
 +	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
@@ -2085,8 +2090,8 @@ index af9ffd7..0dbb60f 100644
 +	case_insensitive_map_t<idx_t> alias_definitions;
 +	for (idx_t i = 0; i < select.select_list.size(); i++) {
 +		auto &alias = select.select_list[i]->GetAlias();
-+		if (!alias.empty() && alias_definitions.find(alias) == alias_definitions.end()) {
-+			alias_definitions[alias] = i;
++		if (!alias.empty() && alias_definitions.find(alias.GetIdentifierName()) == alias_definitions.end()) {
++			alias_definitions[alias.GetIdentifierName()] = i;
 +		}
 +	}
 +	if (alias_definitions.empty()) {
@@ -2385,7 +2390,7 @@ index af9ffd7..0dbb60f 100644
 +	    "lag",        "first_value", "last_value", "nth_value",    "count",       "count_star", "sum",
 +	    "avg",        "min",         "max",        "stddev_pop",   "stddev_samp", "var_pop",    "var_samp",
 +	};
-+	return MYSQL_WINDOW_FUNCTIONS.count(window.FunctionName()) > 0;
++	return MYSQL_WINDOW_FUNCTIONS.count(window.FunctionName().GetIdentifierName()) > 0;
 +}
 +
 +bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
@@ -2460,7 +2465,7 @@ index af9ffd7..0dbb60f 100644
 +			// (avg is excluded: it is serialized as avg(CAST(x AS DOUBLE)), which would deduplicate
 +			// the DOUBLE-cast values instead of the original ones)
 +			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min", "max"};
-+			if (MYSQL_DISTINCT_AGGREGATES.count(func.FunctionName()) == 0) {
++			if (MYSQL_DISTINCT_AGGREGATES.count(func.FunctionName().GetIdentifierName()) == 0) {
 +				return false;
 +			}
 +		}
@@ -2473,24 +2478,24 @@ index af9ffd7..0dbb60f 100644
 +			}
 +		}
 +		if (children.size() > 1 &&
-+		    (StringUtil::CIEquals(func.FunctionName(), "trim") || StringUtil::CIEquals(func.FunctionName(), "ltrim") ||
-+		     StringUtil::CIEquals(func.FunctionName(), "rtrim"))) {
++		    (StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "trim") || StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "ltrim") ||
++		     StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "rtrim"))) {
 +			// the two-argument variants of trim/ltrim/rtrim are not supported in MySQL
 +			return false;
 +		}
 +		static const case_insensitive_set_t MYSQL_SINGLE_ARGUMENT_REWRITES = {"week",   "dayofweek",   "weekday",
 +		                                                                      "isodow", "microsecond", "trunc"};
-+		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(func.FunctionName()) > 0 && children.size() != 1) {
++		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(func.FunctionName().GetIdentifierName()) > 0 && children.size() != 1) {
 +			return false;
 +		}
-+		if (StringUtil::CIEquals(func.FunctionName(), "greatest") ||
-+		    StringUtil::CIEquals(func.FunctionName(), "least")) {
++		if (StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "greatest") ||
++		    StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "least")) {
 +			// rewritten into a COALESCE rotation, which grows quadratically - bound the argument count
 +			if (children.size() < 2 || children.size() > 8) {
 +				return false;
 +			}
 +		}
-+		if (StringUtil::CIEquals(func.FunctionName(), "lpad") || StringUtil::CIEquals(func.FunctionName(), "rpad")) {
++		if (StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "lpad") || StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "rpad")) {
 +			// MySQL returns NULL for negative lengths where DuckDB returns an empty string, and
 +			// returns NULL when the result exceeds @@max_allowed_packet - only push down calls
 +			// with a literal length that is non-negative and small enough for any server setting
@@ -2499,8 +2504,8 @@ index af9ffd7..0dbb60f 100644
 +				return false;
 +			}
 +		}
-+		if (StringUtil::CIEquals(func.FunctionName(), "substring") ||
-+		    StringUtil::CIEquals(func.FunctionName(), "substr")) {
++		if (StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "substring") ||
++		    StringUtil::CIEquals(func.FunctionName().GetIdentifierName(), "substr")) {
 +			// MySQL handles zero and negative offsets differently - only push down calls with
 +			// literal positive offsets (and a literal non-negative length)
 +			if (children.size() < 2 || children.size() > 3) {

@@ -492,7 +492,7 @@ index d935a578..e57ebf14 100644
  	auto &table_metadata = table_info.table_metadata;
  	auto table_entry = make_uniq<IcebergTableEntry>(table_info, catalog, schema, info, 0);
 diff --git a/src/catalog/rest/storage/authorization/oauth2.cpp b/src/catalog/rest/storage/authorization/oauth2.cpp
-index d21bd9f5..e23bc019 100644
+index d21bd9f5..e6cb7bbd 100644
 --- a/src/catalog/rest/storage/authorization/oauth2.cpp
 +++ b/src/catalog/rest/storage/authorization/oauth2.cpp
 @@ -388,12 +388,12 @@ unique_ptr<BaseSecret> OAuth2Authorization::CreateCatalogSecretFunction(ClientCo
@@ -520,6 +520,17 @@ index d21bd9f5..e23bc019 100644
  			throw InvalidInputException("Missing required parameter '%s' for authorization_type 'oauth2'", param);
  		}
  	}
+@@ -544,7 +544,9 @@ unique_ptr<HTTPResponse> OAuth2Authorization::Request(RequestType request_type,
+ 
+ void OAuth2Authorization::SetCatalogSecretParameters(CreateSecretFunction &function) {
+ 	auto &options = IcebergSecretOptions();
+-	function.named_parameters.insert(options.begin(), options.end());
++	for (auto &option : options) {
++		function.named_parameters[Identifier(option.first)] = option.second;
++	}
+ }
+ 
+ void OAuth2Authorization::UpdateTokenState(const string &new_token, int32_t expires_in_seconds,
 diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
 index 4047986d..a6a54518 100644
 --- a/src/catalog/rest/transaction/iceberg_transaction.cpp
