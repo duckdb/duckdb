@@ -47,16 +47,11 @@ AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 }
 
 struct BitwiseOperation {
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
-		state.value = typename STATE::value_type(input);
-		state.is_set = true;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		if (!state.is_set) {
 			OP::template Assign<INPUT_TYPE>(state, input);
+			state.is_set = true;
 		} else {
 			OP::template Execute<INPUT_TYPE>(state, input);
 		}
@@ -71,13 +66,21 @@ struct BitwiseOperation {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {
+			// source is NULL, nothing to do.
 			return;
 		}
 		if (!target.is_set) {
+			// target is NULL, use source value directly.
 			OP::template Assign<typename STATE::value_type>(target, source.value);
+			target.is_set = true;
 		} else {
 			OP::template Execute<typename STATE::value_type>(target, source.value);
 		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		state.value = typename STATE::value_type(input);
 	}
 
 	template <class T, class STATE>
@@ -99,7 +102,7 @@ struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateC
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
 		if (!local.is_set) {
-			local.value = typename STATE::value_type(input);
+			Assign(local, input);
 			local.is_set = true;
 		} else {
 			OP::template Execute<INPUT_TYPE>(local, input);
@@ -164,18 +167,17 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 		}
 	}
 
-	// Deep-copy Assign: allocates new backing storage for non-inlined strings.
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input) {
+		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
 			state.value = input;
-			state.is_set = true;
-		} else {
+		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
+
 			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
-			state.is_set = true;
 		}
 	}
 

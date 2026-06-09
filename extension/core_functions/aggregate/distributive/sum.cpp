@@ -28,10 +28,6 @@ struct SumSetOperation {
 	static void AddValues(STATE &state, idx_t count) {
 		state.is_set = true;
 	}
-	template <class STATE>
-	static typename STATE::value_type &GetRef(STATE &state) {
-		return state.value;
-	}
 };
 
 struct KahanSumSetOperation {
@@ -42,10 +38,6 @@ struct KahanSumSetOperation {
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
 		state.is_set = true;
-	}
-	template <class STATE>
-	static STATE &GetRef(STATE &state) {
-		return state;
 	}
 };
 
@@ -64,12 +56,12 @@ template <class ADD_OP>
 struct ClusteredAddOp {
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		ADD_OP::AddNumber(local.value, input);
+		ADD_OP::template AddNumber<STATE, INPUT_TYPE>(local, input);
 	}
 
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		ADD_OP::AddConstant(local.value, input, count);
+		ADD_OP::template AddConstant<STATE, INPUT_TYPE>(local, input, count);
 	}
 };
 
