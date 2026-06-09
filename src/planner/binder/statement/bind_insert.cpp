@@ -116,6 +116,32 @@ unique_ptr<LogicalOperator> Binder::ResolveInputProjection(LogicalInsert &insert
 		                                                          *insert.bound_defaults[storage_idx]));
 	}
 
+	bool can_inline_projection = root->type == LogicalOperatorType::LOGICAL_PROJECTION;
+	if (can_inline_projection) {
+		for (auto &expression : root->expressions) {
+			if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				can_inline_projection = false;
+				break;
+			}
+		}
+	}
+	if (can_inline_projection) {
+		auto &child_projection = root->Cast<LogicalProjection>();
+		for (auto &expression : select_list) {
+			ExpressionIterator::EnumerateExpression(expression, [&](unique_ptr<Expression> &child) {
+				if (child->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+					return;
+				}
+				auto &column_ref = child->Cast<BoundColumnRefExpression>();
+				if (column_ref.Binding().table_index != child_projection.table_index) {
+					return;
+				}
+				child = child_projection.expressions[column_ref.Binding().column_index]->Copy();
+			});
+		}
+		root = std::move(child_projection.children[0]);
+	}
+
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
 	projection->AddChild(std::move(root));
 	return std::move(projection);
