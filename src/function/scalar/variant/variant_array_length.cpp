@@ -1,12 +1,12 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_path_function.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
-static void WriteArrayLengths(Vector &array_lengths, const array_ptr<VariantNestedData>& nested_data, const ValidityMask &array_validity,
-                              const idx_t count) {
+static void WriteArrayLengths(Vector &array_lengths, const array_ptr<VariantNestedData> &nested_data,
+                              const ValidityMask &array_validity, const idx_t count) {
 	auto writer = FlatVector::Writer<uint64_t>(array_lengths, count);
 	const auto &array_lengths_validity = FlatVector::Validity(array_lengths);
 
@@ -54,80 +54,23 @@ static Vector CollectVariantArrayLengths(const UnifiedVariantVectorData &variant
 	return array_lengths;
 }
 
-static void UnaryVariantArrayLength(const Vector &variant_vec, const vector<VariantPathComponent> &components,
-                                    Vector &result, const idx_t count) {
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	const auto array_lengths = CollectVariantArrayLengths(variant, components, count);
+static void WriteArrayLengthsResult(const UnifiedVariantVectorData &, VectorWriter<uint64_t> &lengths_writer,
+                                    const Vector &array_lengths, const idx_t row_idx) {
 	const auto &array_lengths_validity = FlatVector::Validity(array_lengths);
 	const auto array_lengths_data = FlatVector::GetData<const uint64_t>(array_lengths);
 
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto row_writer = FlatVector::Writer<uint64_t>(result, count);
-
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!variant.RowIsValid(row_idx)) {
-			row_writer.WriteNull();
-			continue;
-		}
-
-		if (!array_lengths_validity.RowIsValid(row_idx)) {
-			row_writer.WriteNull();
-			continue;
-		}
-
-		const auto array_length = array_lengths_data[row_idx];
-		row_writer.WriteValue(array_length);
-	}
-}
-
-static void ManyVariantArrayLength(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
-                                   Vector &result, const idx_t count) {
-	vector<Vector> lengths_by_path;
-	lengths_by_path.reserve(paths.size());
-
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	for (const auto &path : paths) {
-		lengths_by_path.push_back(CollectVariantArrayLengths(variant, path, count));
+	if (!array_lengths_validity.RowIsValid(row_idx)) {
+		lengths_writer.WriteNull();
+		return;
 	}
 
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto result_writer = FlatVector::Writer<VectorListType<uint64_t>>(result, count);
-
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!variant.RowIsValid(row_idx)) {
-			result_writer.WriteNull();
-			continue;
-		}
-
-		auto row_writer = result_writer.WriteList(paths.size());
-
-		idx_t path_idx = 0;
-		for (auto &path_lengths_writer : row_writer) {
-			const auto &array_lengths = lengths_by_path[path_idx];
-			const auto &array_lengths_validity = FlatVector::Validity(array_lengths);
-			const auto array_lengths_data = FlatVector::GetData<const uint64_t>(array_lengths);
-
-			if (!array_lengths_validity.RowIsValid(row_idx)) {
-				path_lengths_writer.WriteNull();
-				continue;
-			}
-
-			const auto array_length = array_lengths_data[row_idx];
-			path_lengths_writer.WriteValue(array_length);
-
-			path_idx++;
-		}
-	}
+	const auto array_length = array_lengths_data[row_idx];
+	lengths_writer.WriteValue(array_length);
 }
 
 static void VariantArrayLengthFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	VariantUtils::ExecutePathFunction(input, state, result, UnaryVariantArrayLength, ManyVariantArrayLength);
+	VariantPathFunction::Execute<Vector, uint64_t>(input, state, result, CollectVariantArrayLengths,
+	                                               WriteArrayLengthsResult);
 }
 
 ScalarFunctionSet VariantArrayLengthFun::GetFunctions() {
