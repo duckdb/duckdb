@@ -328,6 +328,23 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 	return result;
 }
 
+static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	// emit the shared multi-file metrics (files read, filenames, rows scanned)
+	MultiFileFunction<ParquetMultiFileInfo>::MultiFileGetMetrics(input);
+	// report row groups read vs. considered as the standard per-thread row-group metrics: the profiler sums
+	// row_groups_scanned / total_row_groups_to_scan across threads, and "skipped" = total - scanned
+	if (!input.local_state) {
+		return;
+	}
+	auto &local = input.local_state->Cast<MultiFileLocalState>();
+	if (!local.local_state) {
+		return;
+	}
+	auto &scan_state = local.local_state->Cast<ParquetReadLocalState>().scan_state;
+	input.operator_metrics.row_groups_scanned = scan_state.row_groups_read;
+	input.operator_metrics.total_row_groups_to_scan = scan_state.row_groups_read + scan_state.row_groups_skipped;
+}
+
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
                                                      ParquetCacheValidity validity_p, bool has_deletes_p)
     : metadata(std::move(metadata_p)), validity(validity_p), has_deletes(has_deletes_p) {
@@ -424,6 +441,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -682,6 +700,8 @@ double ParquetReader::GetProgressInFile(ClientContext &context) {
 void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
 	                        TableColumn("file_row_number", LogicalType::BIGINT)));
+	result.insert(make_pair(ParquetReader::COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER,
+	                        TableColumn("file_row_group_number", LogicalType::UBIGINT)));
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,

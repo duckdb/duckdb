@@ -20,6 +20,7 @@
 namespace duckdb {
 
 struct ParserCache;
+struct MatcherToken;
 class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
@@ -46,6 +47,15 @@ public:
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
 	void ParseQuery(const string &query);
+
+	//! Parse a single TopLevelStatement from an already-tokenized stream starting at
+	//! `token_cursor`. On success advances `token_cursor` past the consumed tokens and returns
+	//! the SQLStatement. Returns nullptr at end-of-input or when the matched TLS was a
+	//! separator-only run (no statement). Throws ParserException on syntax error.
+	//!
+	//! Does NOT populate `stmt->query` — the caller owns the source string and can slice it
+	//! using `stmt->stmt_location` / `stmt->stmt_length` if needed.
+	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor);
 
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(const string &query);
