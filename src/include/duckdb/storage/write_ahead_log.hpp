@@ -28,6 +28,7 @@ class SequenceCatalogEntry;
 class ScalarMacroCatalogEntry;
 class ViewCatalogEntry;
 class TriggerCatalogEntry;
+class FeatureCatalogEntry;
 class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
@@ -98,6 +99,9 @@ public:
 
 	void WriteCreateTrigger(const TriggerCatalogEntry &entry);
 	void WriteDropTrigger(const TriggerCatalogEntry &entry);
+
+	void WriteCreateFeature(const FeatureCatalogEntry &entry);
+	void WriteDropFeature(const FeatureCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(const string &schema, const string &table);
 

@@ -6089,6 +6089,8 @@ const StringUtil::EnumStringLiteral *GetWALTypeValues() {
 		{ static_cast<uint32_t>(WALType::ROW_GROUP_DATA), "ROW_GROUP_DATA" },
 		{ static_cast<uint32_t>(WALType::CREATE_TRIGGER), "CREATE_TRIGGER" },
 		{ static_cast<uint32_t>(WALType::DROP_TRIGGER), "DROP_TRIGGER" },
+		{ static_cast<uint32_t>(WALType::CREATE_FEATURE), "CREATE_FEATURE" },
+		{ static_cast<uint32_t>(WALType::DROP_FEATURE), "DROP_FEATURE" },
 		{ static_cast<uint32_t>(WALType::WAL_VERSION), "WAL_VERSION" },
 		{ static_cast<uint32_t>(WALType::CHECKPOINT), "CHECKPOINT" },
 		{ static_cast<uint32_t>(WALType::WAL_FLUSH), "WAL_FLUSH" }
@@ -6098,12 +6100,12 @@ const StringUtil::EnumStringLiteral *GetWALTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<WALType>(WALType value) {
-	return StringUtil::EnumToString(GetWALTypeValues(), 29, "WALType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetWALTypeValues(), 31, "WALType", static_cast<uint32_t>(value));
 }
 
 template<>
 WALType EnumUtil::FromString<WALType>(const char *value) {
-	return static_cast<WALType>(StringUtil::StringToEnum(GetWALTypeValues(), 29, "WALType", value));
+	return static_cast<WALType>(StringUtil::StringToEnum(GetWALTypeValues(), 31, "WALType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetWindowAggregationModeValues() {
