@@ -215,8 +215,6 @@ public:
 	bool filter_done = false;
 	//! Surviving row count
 	idx_t filter_count = 0;
-	//! Filter columns kept across the payload BLOCKED
-	DataChunk filter_stash;
 
 	ParquetPrefetchMetrics prefetch_metrics;
 

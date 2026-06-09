@@ -23,7 +23,6 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -1426,6 +1425,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.current_group = -1;
 	state.finished = false;
 	state.offset_in_group = 0;
+	// filter_done gates the chunk reset at Scan entry - it must never carry over into a fresh scan
+	state.filter_done = false;
+	state.filter_count = 0;
 	state.group_idx_list = std::move(groups_to_read);
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
@@ -1684,7 +1686,11 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 }
 
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	result.Reset();
+	if (!state.filter_done) {
+		// unless we are resuming a scan that blocked on the payload I/O - in which case the chunk holds the decoded
+		// filter columns - we start from a clean chunk
+		result.Reset();
+	}
 	if (state.finished) {
 		return SourceResultType::FINISHED;
 	}
@@ -1899,18 +1905,6 @@ void ParquetReader::DecodeRemainingColumns(ParquetReaderScanState &state, DataCh
 	}
 }
 
-// When doing ParquetPrefetchStrategy::PREFETCH_FILTERS, we gotta block mid processing to get the other columns.
-// on the re-entry the chunk is reset in the multifilescan which borkes our datachunk, hence we need to copy for
-// ownership.
-// FIXME: maybe we can change this to be able to move? or not have the multifile reset? bigger refactor though.
-static void CopyFilterColumns(const vector<ParquetScanFilter> &scan_filters, DataChunk &src, DataChunk &dst,
-                              idx_t count) {
-	for (auto &scan_filter : scan_filters) {
-		auto idx = MultiFileLocalIndex(scan_filter.filter_idx).GetIndex();
-		VectorOperations::Copy(src.data[idx], dst.data[idx], count, 0, 0);
-	}
-}
-
 vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetReaderScanState &state, DataChunk &result,
                                                                       idx_t scan_count) {
 	if (state.filter_count == 0 || state.filter_head_count == 0) {
@@ -1924,13 +1918,6 @@ vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetRea
 		// no payload to do
 		return {};
 	}
-	// stash the decoded filter columns and empty the chunk for the BLOCKED return
-	if (state.filter_stash.data.empty()) {
-		state.filter_stash.Initialize(allocator, result.GetTypes());
-	}
-	state.filter_stash.Reset();
-	CopyFilterColumns(state.scan_filters, result, state.filter_stash, scan_count);
-	result.Reset();
 	state.filter_done = true;
 	return io_tasks;
 }
@@ -1938,9 +1925,8 @@ vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetRea
 AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
                                           uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
 	if (state.filter_done) {
-		// the filters already ran, we restore the stashed columns
+		// the filters already ran before we blocked on the payload I/O
 		state.filter_done = false;
-		CopyFilterColumns(state.scan_filters, state.filter_stash, result, scan_count);
 	} else {
 		// we need to evaluate the filters, then async-fetch the payload and resume into the decode
 		state.filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
@@ -1958,7 +1944,9 @@ AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChu
 
 AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
-	result.SetChildCardinality(scan_count);
+	if (!state.filter_done) {
+		result.SetChildCardinality(scan_count);
+	}
 
 	if (scan_count == 0) {
 		state.finished = true;
