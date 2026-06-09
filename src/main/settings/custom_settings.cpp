@@ -25,6 +25,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/profiler_printer.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -862,8 +863,12 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+
+	// Validate the format name (throws on an unrecognized format) and determine whether it emits output.
+	auto printer = QueryProfiler::Get(context).CreateProfiler(parameter);
+
 	config.enable_profiler = true;
-	config.emit_profiler_output = true;
+	config.emit_profiler_output = printer->EmitsOutput();
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -876,24 +881,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		}
 	}
 
-	if (parameter == "json") {
-		config.profiler_print_format = ProfilerPrintFormat::JSON;
-	} else if (parameter == "query_tree") {
-		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
-	} else if (parameter == "query_tree_optimizer") {
-		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-	} else if (parameter == "no_output") {
-		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
-		config.emit_profiler_output = false;
-	} else if (parameter == "html") {
-		config.profiler_print_format = ProfilerPrintFormat::HTML;
-	} else if (parameter == "graphviz") {
-		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
-	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, "
-		                      "query_tree_optimizer, no_output, html, graphviz]",
-		                      parameter);
-	}
+	config.profiler_print_format = parameter;
 }
 
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
@@ -908,22 +896,7 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 	if (!config.enable_profiler) {
 		return Value();
 	}
-	switch (config.profiler_print_format) {
-	case ProfilerPrintFormat::JSON:
-		return Value("json");
-	case ProfilerPrintFormat::QUERY_TREE:
-		return Value("query_tree");
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return Value("query_tree_optimizer");
-	case ProfilerPrintFormat::NO_OUTPUT:
-		return Value("no_output");
-	case ProfilerPrintFormat::HTML:
-		return Value("html");
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return Value("graphviz");
-	default:
-		throw InternalException("Unsupported profiler print format");
-	}
+	return Value(config.profiler_print_format);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1279,18 +1252,18 @@ void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
 
-	if (!parameter.empty() && config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
+	if (!parameter.empty() && config.profiler_print_format != "no_output") {
 		auto &file_system = FileSystem::GetFileSystem(context);
 		const auto file_type = file_system.ExtractExtension(parameter);
 		if (file_type != "txt") {
 			try {
-				EnumUtil::FromString<ProfilerPrintFormat>(file_type);
+				QueryProfiler::Get(context).CreateProfiler(file_type);
 			} catch (std::exception &e) {
 				throw ParserException("Invalid output file type: %s", file_type);
 			}
 		}
 
-		const auto printer_format = StringUtil::Lower(EnumUtil::ToString(config.profiler_print_format));
+		const auto printer_format = config.profiler_print_format;
 		if (file_type != printer_format && file_type != "txt") {
 			throw ParserException("Profiler file type (%s) must either have the same file extension as the profiling "
 			                      "output type (%s), or be a '.txt' file. Set \"enable_profiling = \'%s\'\" first.",

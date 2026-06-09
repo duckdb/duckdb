@@ -25,6 +25,10 @@ public:
 public:
 	void ToStream(RenderTree &root, std::ostream &ss);
 	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
+	//! Create a TreeRenderer for the given format name (e.g. "json", "text"). Throws if the name is not recognized.
+	//! This is the primary, name-based factory; new render formats are added here.
+	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
+	//! Create a TreeRenderer for the given ExplainFormat (thin wrapper over the name-based factory).
 	static unique_ptr<TreeRenderer> CreateRenderer(ExplainFormat format);
 
 	virtual bool UsesRawKeyNames() {

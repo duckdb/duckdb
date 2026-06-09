@@ -9,22 +9,8 @@ ExplainFormat ParseExplainFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	auto format_val = val.GetValue<string>();
-	case_insensitive_map_t<ExplainFormat> format_mapping {
-	    {"default", ExplainFormat::DEFAULT}, {"text", ExplainFormat::TEXT},         {"json", ExplainFormat::JSON},
-	    {"html", ExplainFormat::HTML},       {"graphviz", ExplainFormat::GRAPHVIZ}, {"yaml", ExplainFormat::YAML},
-	    {"mermaid", ExplainFormat::MERMAID}};
-	auto it = format_mapping.find(format_val);
-	if (it != format_mapping.end()) {
-		return it->second;
-	}
-	vector<string> options_list;
-	for (auto &format : format_mapping) {
-		options_list.push_back(format.first);
-	}
-	auto allowed_options = StringUtil::Join(options_list, ", ");
-	throw InvalidInputException("\"%s\" is not a valid FORMAT argument, valid options are: %s", format_val,
-	                            allowed_options);
+	// resolve the format name through the shared explain format registry (see common/enums/explain_format.hpp)
+	return ExplainFormatFromString(val.GetValue<string>());
 }
 
 unique_ptr<SQLStatement>

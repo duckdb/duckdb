@@ -12,7 +12,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -34,7 +33,8 @@ struct ClientConfig {
 	//! If detailed query profiling is enabled
 	bool enable_detailed_profiling = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
-	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
+	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
+	string profiler_print_format = "query_tree";
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;

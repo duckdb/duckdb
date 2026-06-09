@@ -59,4 +59,4 @@ Parser Error: Invalid output file type: db
 statement error
 PRAGMA enable_profiling = 'db';
 ----
-Parser Error: Unrecognized print format db, supported formats: [json, query_tree, query_tree_optimizer, no_output, html, graphviz]
+Parser Error: Unrecognized print format db, supported formats: [json, query_tree, query_tree_optimizer, no_output, html, graphviz, mermaid]

@@ -49,6 +49,7 @@ add_library_unity(
   prepared_statement_data.cpp
   metrics_manager.cpp
   gathered_metrics.cpp
+  profiler_printer.cpp
   profiling_utils.cpp
   relation.cpp
   query_profiler.cpp
