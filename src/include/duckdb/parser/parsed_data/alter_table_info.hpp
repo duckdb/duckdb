@@ -13,6 +13,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 enum class AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };

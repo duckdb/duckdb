@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/tableref.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class Serializer;
 class Deserializer;

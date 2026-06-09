@@ -15,6 +15,8 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <iosfwd>
+
 namespace duckdb {
 
 //! An Identifier represents a SQL identifier (e.g. a column name, table name, alias, ...).
@@ -107,6 +109,9 @@ inline bool operator!=(const char *a, const Identifier &b) {
 
 //! Ordering (case-insensitive)
 DUCKDB_API bool operator<(const Identifier &a, const Identifier &b);
+
+//! Streaming an identifier writes its raw name (without quotes) - this mirrors writing the underlying string
+DUCKDB_API std::ostream &operator<<(std::ostream &os, const Identifier &id);
 
 //! String concatenation (std::operator+ is a template and cannot use the implicit conversion, so we provide our own)
 inline string operator+(const Identifier &a, const string &b) {

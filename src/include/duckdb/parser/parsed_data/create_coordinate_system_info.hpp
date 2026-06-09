@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateCoordinateSystemInfo : public CreateInfo {

@@ -11,8 +11,8 @@ namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
                                            unique_ptr<ColumnDataCollection> &&collection_p, vector<Identifier> names,
-                                           Identifier alias_p)
-    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
+                                           const Identifier &alias_p)
+    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(alias_p.GetIdentifierName()),
       collection(std::move(collection_p)) {
 	// create constant expressions for the values
 	auto types = collection->Types();

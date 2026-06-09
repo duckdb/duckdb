@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 enum class AlterDatabaseType : uint8_t { RENAME_DATABASE = 0 };

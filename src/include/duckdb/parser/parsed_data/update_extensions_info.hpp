@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct UpdateExtensionsInfo : public ParseInfo {

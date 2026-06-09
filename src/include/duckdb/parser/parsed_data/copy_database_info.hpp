@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CopyDatabaseInfo : public ParseInfo {

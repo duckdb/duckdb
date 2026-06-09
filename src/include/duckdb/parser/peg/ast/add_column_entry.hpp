@@ -4,6 +4,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct AddColumnEntry {

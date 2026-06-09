@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/optional.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 enum class SequenceInfo : uint8_t {

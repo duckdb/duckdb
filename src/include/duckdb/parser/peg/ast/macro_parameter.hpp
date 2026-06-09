@@ -1,6 +1,7 @@
 #pragma once
 #include "duckdb/parser/parsed_expression.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 struct MacroParameter {
 	unique_ptr<ParsedExpression> expression;

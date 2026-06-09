@@ -4,6 +4,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct OnConflictExpressionTarget {

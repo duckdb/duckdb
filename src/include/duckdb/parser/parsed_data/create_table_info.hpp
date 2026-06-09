@@ -13,6 +13,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/column_list.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class SchemaCatalogEntry;
 

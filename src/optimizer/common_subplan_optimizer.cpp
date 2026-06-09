@@ -793,7 +793,7 @@ public:
 			const auto &types = primary_subplan.op.get()->types;
 			vector<Identifier> col_names;
 			for (idx_t i = 0; i < types.size(); i++) {
-				col_names.emplace_back(Identifier(StringUtil::Format("%s_col_%llu", cte_name, i + 1)));
+				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
 			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
 			column_binding_map_t<idx_t> primary_binding_index;

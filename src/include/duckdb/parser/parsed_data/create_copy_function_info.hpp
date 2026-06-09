@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateCopyFunctionInfo : public CreateInfo {

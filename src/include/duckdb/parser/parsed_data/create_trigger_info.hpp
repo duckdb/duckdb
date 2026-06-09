@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateTriggerInfo : public CreateInfo {

@@ -2,6 +2,8 @@
 
 #include "duckdb/common/string_util.hpp"
 
+#include <ostream>
+
 namespace duckdb {
 
 hash_t Identifier::Hash() const {
@@ -26,6 +28,10 @@ bool operator==(const char *a, const Identifier &b) {
 
 bool operator<(const Identifier &a, const Identifier &b) {
 	return StringUtil::CILessThan(a.GetIdentifierName(), b.GetIdentifierName());
+}
+
+std::ostream &operator<<(std::ostream &os, const Identifier &id) {
+	return os << id.GetIdentifierName();
 }
 
 } // namespace duckdb

@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateSecretInfo : public CreateInfo { // NOLINT: work-around bug in clang-tidy

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
