@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -113,32 +112,32 @@ static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr) {
 }
 
 // Load rows from input_vec into the packed binary state buffer.
-// Checks validity via input_data and skips null rows.
-// Used for struct fields (input_data=outer state format, field_offset=child offset)
-// and primitive states (root_stride=aligned_state_size, field_offset=0).
+// sel selects which input rows to read (pass *FlatVector::IncrementalSelectionVector() for sequential).
+// Skips null rows.
 struct LoadOp {
 	template <class T>
-	static void Operation(idx_t root_stride, const Vector &input_vec, const UnifiedVectorFormat &input_data,
-	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
+	static void Operation(idx_t root_stride, const Vector &input_vec, const SelectionVector &sel, idx_t count,
+	                      data_ptr_t base_ptr, idx_t field_offset) {
 		auto values = input_vec.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
-			auto src_idx = input_data.sel->get_index(i);
-			if (!input_data.validity.RowIsValid(src_idx)) {
-				continue;
+			idx_t row = sel.get_index(i);
+			const auto entry = values[row];
+			if (entry.IsValid()) {
+				Store(entry.GetValue(), base_ptr + i * root_stride + field_offset);
 			}
-			Store(values.GetValueUnsafe(i), base_ptr + i * root_stride + field_offset);
 		}
 	}
 };
 
 // Store rows from the packed binary state buffer into a result vector.
-// Used for struct fields (field_offset=child offset) and primitive states (field_offset=0).
+// sel selects which result rows to write (pass *FlatVector::IncrementalSelectionVector() for sequential).
 struct StoreOp {
 	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *sources, idx_t field_offset) {
-		auto result_data = FlatVector::Writer<T>(result, count);
+	static void Operation(Vector &result, const SelectionVector &sel, idx_t count, const data_ptr_t *sources,
+	                      idx_t field_offset) {
+		auto dst = FlatVector::ScatterWriter<T>(result);
 		for (idx_t i = 0; i < count; i++) {
-			result_data.WriteValue(Load<T>(sources[i] + field_offset));
+			dst[sel.get_index(i)] = Load<T>(sources[i] + field_offset);
 		}
 	}
 };
@@ -157,61 +156,36 @@ struct CopyOp {
 	}
 };
 
-// Load selected rows from input_vec into sequential packed binary state buffer slots.
-// Used for struct fields (field_offset=child offset) and primitive states (field_offset=0).
-struct LoadForSelectedRowsOp {
-	template <class T>
-	static void Operation(idx_t total_state_size, const Vector &input_vec, const SelectionVector &sel, idx_t count,
-	                      data_ptr_t base_ptr, idx_t field_offset) {
-		auto values = input_vec.Values<T>();
-		for (idx_t i = 0; i < count; i++) {
-			idx_t row = sel.get_index(i);
-			Store(values.GetValueUnsafe(row), base_ptr + i * total_state_size + field_offset);
-		}
-	}
-};
-
-// Store sequential packed binary state buffer slots into selected rows of a result vector.
-// Used for struct fields (field_offset=child offset) and primitive states (field_offset=0).
-struct StoreForSelectedRowsOp {
-	template <class T>
-	static void Operation(idx_t total_state_size, Vector &result, const SelectionVector &sel, idx_t count,
-	                      data_ptr_t base_ptr, idx_t field_offset) {
-		auto dst = FlatVector::ScatterWriter<T>(result);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t row = sel.get_index(i);
-			dst[row] = Load<T>(base_ptr + i * total_state_size + field_offset);
-		}
-	}
-};
-
-// Serialize optional<T> state buffers into a flat result vector, setting NULL for disengaged optionals
+// Serialize optional<T> state buffers into a result vector, setting NULL for disengaged optionals.
+// sel selects which result rows to write (pass *FlatVector::IncrementalSelectionVector() for sequential).
 struct StorePrimitiveOptionalOp {
 	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses) {
-		auto dst = FlatVector::Writer<T>(result, count);
+	static void Operation(Vector &result, const SelectionVector &sel, idx_t count, const data_ptr_t *addresses) {
+		auto dst = FlatVector::ScatterWriter<T>(result);
 		for (idx_t i = 0; i < count; i++) {
 			const auto opt = Load<optional<T>>(addresses[i]);
 			if (opt.has_value()) {
-				dst.WriteValue(*opt);
+				dst[sel.get_index(i)] = *opt;
 			} else {
-				dst.WriteNull();
+				dst.SetInvalid(sel.get_index(i));
 			}
 		}
 	}
 };
 
-// Deserialize a nullable flat input vector into optional<T> state buffer slots
+// Deserialize a nullable input vector into optional<T> state buffer slots.
+// sel selects which input rows to read (pass *FlatVector::IncrementalSelectionVector() for sequential).
 struct LoadPrimitiveOptionalOp {
 	template <class T>
-	static void Operation(const Vector &input, const UnifiedVectorFormat &input_data, idx_t count, data_ptr_t base_ptr,
+	static void Operation(const Vector &input, const SelectionVector &sel, idx_t count, data_ptr_t base_ptr,
 	                      idx_t aligned_state_size) {
 		auto values = input.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
-			auto src_idx = input_data.sel->get_index(i);
+			idx_t row = sel.get_index(i);
+			const auto entry = values[row];
 			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
-			if (input_data.validity.RowIsValid(src_idx)) {
-				opt = values.GetValueUnsafe(i);
+			if (entry.IsValid()) {
+				opt = entry.GetValue();
 			} else {
 				opt = nullopt;
 			}
@@ -222,52 +196,14 @@ struct LoadPrimitiveOptionalOp {
 // Copy a nullable primitive value from selected rows of input to the same rows of result
 struct CopyPrimitiveOptionalOp {
 	template <class T>
-	static void Operation(const Vector &input, Vector &result, const SelectionVector &sel, idx_t count,
-	                      const UnifiedVectorFormat &input_data) {
+	static void Operation(const Vector &input, Vector &result, const SelectionVector &sel, idx_t count) {
 		auto input_values = input.Values<T>();
 		auto dst = FlatVector::ScatterWriter<T>(result);
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);
-			idx_t src_idx = input_data.sel->get_index(row);
-			if (input_data.validity.RowIsValid(src_idx)) {
-				dst[row] = input_values.GetValueUnsafe(row);
-			} else {
-				dst.SetInvalid(row);
-			}
-		}
-	}
-};
-
-// Deserialize selected rows of a nullable flat input vector into sequential optional<T> state buffer slots
-struct LoadPrimitiveOptionalForSelectedRowsOp {
-	template <class T>
-	static void Operation(const Vector &input, const SelectionVector &sel, idx_t count,
-	                      const UnifiedVectorFormat &input_data, data_ptr_t base_ptr, idx_t aligned_state_size) {
-		auto values = input.Values<T>();
-		for (idx_t i = 0; i < count; i++) {
-			idx_t row = sel.get_index(i);
-			idx_t src_idx = input_data.sel->get_index(row);
-			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
-			if (input_data.validity.RowIsValid(src_idx)) {
-				opt = values.GetValueUnsafe(row);
-			} else {
-				opt = nullopt;
-			}
-		}
-	}
-};
-
-// Serialize sequential optional<T> state buffer slots into selected rows of a flat result vector
-struct StorePrimitiveOptionalForSelectedRowsOp {
-	template <class T>
-	static void Operation(Vector &result, const SelectionVector &sel, idx_t count, data_ptr_t base_ptr,
-	                      idx_t aligned_state_size) {
-		auto dst = FlatVector::ScatterWriter<T>(result);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t row = sel.get_index(i);
-			const auto opt = Load<optional<T>>(base_ptr + i * aligned_state_size);
-			if (opt.has_value()) {
-				dst[row] = *opt;
+			const auto entry = input_values[row];
+			if (entry.IsValid()) {
+				dst[row] = entry.GetValue();
 			} else {
 				dst.SetInvalid(row);
 			}
@@ -277,9 +213,9 @@ struct StorePrimitiveOptionalForSelectedRowsOp {
 
 // Deserialize struct fields from a flattened struct vector into a state buffer.
 // root_stride is the aligned size of the top-level state, used to stride between rows in the buffer.
-// Child field offsets are pre-computed in AggregateStateField.field_offset (relative to dest_buffer).
+// sel selects which input rows to read (pass *FlatVector::IncrementalSelectionVector() for sequential).
 void DeserializeStructFields(const LogicalType &type, const AggregateStateField &field, idx_t root_stride,
-                             const Vector &struct_vec, const UnifiedVectorFormat &state_data, idx_t count,
+                             const Vector &struct_vec, const SelectionVector &sel, idx_t count,
                              data_ptr_t dest_buffer) {
 	const auto &child_types = StructType::GetChildTypes(type);
 	const auto &struct_entries = StructVector::GetEntries(struct_vec);
@@ -290,19 +226,18 @@ void DeserializeStructFields(const LogicalType &type, const AggregateStateField 
 		const auto &child_vec = struct_entries[field_idx];
 
 		if (!child.children.empty()) {
-			DeserializeStructFields(child_type, child, root_stride, child_vec, state_data, count,
+			DeserializeStructFields(child_type, child, root_stride, child_vec, sel, count,
 			                        dest_buffer + child.field_offset);
 		} else {
-			TemplateDispatch<LoadOp>(physical, root_stride, child_vec, state_data, count, dest_buffer,
-			                        child.field_offset);
+			TemplateDispatch<LoadOp>(physical, root_stride, child_vec, sel, count, dest_buffer, child.field_offset);
 		}
 	}
 }
 
 // Serialize packed binary states into a struct result vector.
-// Child field offsets are pre-computed in AggregateStateField.field_offset (relative to addresses_ptrs[row]).
-void SerializeStructFields(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
-                           const data_ptr_t *addresses_ptrs) {
+// sel selects which result rows to write (pass *FlatVector::IncrementalSelectionVector() for sequential).
+void SerializeStructFields(const LogicalType &type, const AggregateStateField &field, Vector &result,
+                           const SelectionVector &sel, idx_t count, const data_ptr_t *addresses_ptrs) {
 	const auto &child_types = StructType::GetChildTypes(type);
 	auto &struct_entries = StructVector::GetEntries(result);
 	for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
@@ -319,39 +254,41 @@ void SerializeStructFields(const LogicalType &type, const AggregateStateField &f
 				child_writer.WriteValue(addresses_ptrs[row] + child.field_offset);
 			}
 			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
-			SerializeStructFields(child_type, child, child_vec, count, child_ptrs);
+			SerializeStructFields(child_type, child, child_vec, sel, count, child_ptrs);
 		} else {
-			TemplateDispatch<StoreOp>(physical, child_vec, count, addresses_ptrs, child.field_offset);
+			TemplateDispatch<StoreOp>(physical, child_vec, sel, count, addresses_ptrs, child.field_offset);
 		}
 	}
 }
 
-void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec,
-                      const UnifiedVectorFormat &input_data, idx_t count, data_ptr_t dest_buffer) {
+// sel selects which input rows to read (pass *FlatVector::IncrementalSelectionVector() for sequential).
+void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, const SelectionVector &sel,
+                      idx_t count, data_ptr_t dest_buffer) {
 	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		DeserializeStructFields(layout.type, layout.field, layout.total_state_size, input_vec, input_data, count,
-		                        dest_buffer);
+		DeserializeStructFields(layout.type, layout.field, layout.total_state_size, input_vec, sel, count, dest_buffer);
 	} else if (layout.field.is_optional) {
-		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.type.InternalType(), input_vec, input_data, count, dest_buffer,
+		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.type.InternalType(), input_vec, sel, count, dest_buffer,
 		                                          layout.total_state_size);
 	} else {
-		TemplateDispatch<LoadOp>(layout.type.InternalType(), layout.total_state_size, input_vec, input_data, count,
-		                         dest_buffer, 0);
+		TemplateDispatch<LoadOp>(layout.type.InternalType(), layout.total_state_size, input_vec, sel, count, dest_buffer,
+		                         0);
 	}
 }
 
-void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses) {
+// sel selects which result rows to write (pass *FlatVector::IncrementalSelectionVector() for sequential).
+void SerializeState(const AggregateStateLayout &layout, Vector &result, const SelectionVector &sel, idx_t count,
+                    const data_ptr_t *addresses) {
 	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		SerializeStructFields(layout.type, layout.field, result, count, addresses);
+		SerializeStructFields(layout.type, layout.field, result, sel, count, addresses);
 	} else if (layout.field.is_optional) {
-		TemplateDispatch<StorePrimitiveOptionalOp>(layout.type.InternalType(), result, count, addresses);
+		TemplateDispatch<StorePrimitiveOptionalOp>(layout.type.InternalType(), result, sel, count, addresses);
 	} else {
-		TemplateDispatch<StoreOp>(layout.type.InternalType(), result, count, addresses, 0);
+		TemplateDispatch<StoreOp>(layout.type.InternalType(), result, sel, count, addresses, 0);
 	}
 }
 
 void CopyState(const AggregateStateLayout &layout, const Vector &input, Vector &result, const SelectionVector &sel,
-               idx_t count, const UnifiedVectorFormat &input_data) {
+               idx_t count) {
 	if (layout.type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(layout.type);
 		const auto &input_entries = StructVector::GetEntries(input);
@@ -361,49 +298,9 @@ void CopyState(const AggregateStateLayout &layout, const Vector &input, Vector &
 			TemplateDispatch<CopyOp>(physical, input_entries[field_idx], result_entries[field_idx], sel, count);
 		}
 	} else if (layout.field.is_optional) {
-		TemplateDispatch<CopyPrimitiveOptionalOp>(layout.type.InternalType(), input, result, sel, count, input_data);
+		TemplateDispatch<CopyPrimitiveOptionalOp>(layout.type.InternalType(), input, result, sel, count);
 	} else {
 		TemplateDispatch<CopyOp>(layout.type.InternalType(), input, result, sel, count);
-	}
-}
-
-void DeserializeStateForSelected(const AggregateStateLayout &layout, const Vector &input, const SelectionVector &sel,
-                                 idx_t count, const UnifiedVectorFormat &input_data, data_ptr_t dest_buffer) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		const auto &input_entries = StructVector::GetEntries(input);
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			auto physical = child_types[field_idx].second.InternalType();
-			TemplateDispatch<LoadForSelectedRowsOp>(physical, layout.total_state_size, input_entries[field_idx], sel,
-			                                        count, dest_buffer, child.field_offset);
-		}
-	} else if (layout.field.is_optional) {
-		TemplateDispatch<LoadPrimitiveOptionalForSelectedRowsOp>(layout.type.InternalType(), input, sel, count,
-		                                                         input_data, dest_buffer, layout.total_state_size);
-	} else {
-		TemplateDispatch<LoadForSelectedRowsOp>(layout.type.InternalType(), layout.total_state_size, input, sel, count,
-		                                        dest_buffer, 0);
-	}
-}
-
-void SerializeStateForSelected(const AggregateStateLayout &layout, Vector &result, const SelectionVector &sel,
-                               idx_t count, data_ptr_t base_ptr) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		auto &result_entries = StructVector::GetEntries(result);
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			auto physical = child_types[field_idx].second.InternalType();
-			TemplateDispatch<StoreForSelectedRowsOp>(physical, layout.total_state_size, result_entries[field_idx], sel,
-			                                         count, base_ptr, child.field_offset);
-		}
-	} else if (layout.field.is_optional) {
-		TemplateDispatch<StorePrimitiveOptionalForSelectedRowsOp>(layout.type.InternalType(), result, sel, count,
-		                                                          base_ptr, layout.total_state_size);
-	} else {
-		TemplateDispatch<StoreForSelectedRowsOp>(layout.type.InternalType(), layout.total_state_size, result, sel,
-		                                         count, base_ptr, 0);
 	}
 }
 
@@ -463,21 +360,19 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	input.data[0].Flatten();
 
-	UnifiedVectorFormat state_data;
-	input.data[0].ToUnifiedFormat(state_data);
-
 	for (idx_t i = 0; i < input.size(); i++) {
 		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
 	}
 
-	DeserializeState(layout, input.data[0], state_data, input.size(), local_state.state_buffer.get());
+	DeserializeState(layout, input.data[0], *FlatVector::IncrementalSelectionVector(), input.size(),
+	                 local_state.state_buffer.get());
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
+	auto &validity = FlatVector::Validity(input.data[0]);
 	for (idx_t i = 0; i < input.size(); i++) {
-		auto state_idx = state_data.sel->get_index(i);
-		if (!state_data.validity.RowIsValid(state_idx)) {
+		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 		}
 	}
@@ -504,9 +399,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	input.data[1].Flatten();
 	result.Flatten();
 
-	UnifiedVectorFormat state0_data, state1_data;
-	input.data[0].ToUnifiedFormat(state0_data);
-	input.data[1].ToUnifiedFormat(state1_data);
+	auto &validity0 = FlatVector::Validity(input.data[0]);
+	auto &validity1 = FlatVector::Validity(input.data[1]);
 
 	// Partition rows by NULL using SelectionVector
 	SelectionVector both_null_sel(STANDARD_VECTOR_SIZE);
@@ -519,8 +413,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	idx_t both_null_count = 0, copy_from_0_count = 0, copy_from_1_count = 0, both_valid_count = 0;
 
 	for (idx_t i = 0; i < input.size(); i++) {
-		const bool is_null0 = !state0_data.validity.RowIsValid(state0_data.sel->get_index(i));
-		const bool is_null1 = !state1_data.validity.RowIsValid(state1_data.sel->get_index(i));
+		const bool is_null0 = !validity0.RowIsValid(i);
+		const bool is_null1 = !validity1.RowIsValid(i);
 
 		if (is_null0 && is_null1) {
 			both_null_sel.set_index(both_null_count++, i);
@@ -542,10 +436,10 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 	// Handle one-null rows - copy non-null input directly to result
 	if (copy_from_0_count > 0) {
-		CopyState(layout, input.data[0], result, copy_from_0_sel, copy_from_0_count, state0_data);
+		CopyState(layout, input.data[0], result, copy_from_0_sel, copy_from_0_count);
 	}
 	if (copy_from_1_count > 0) {
-		CopyState(layout, input.data[1], result, copy_from_1_sel, copy_from_1_count, state1_data);
+		CopyState(layout, input.data[1], result, copy_from_1_sel, copy_from_1_count);
 	}
 
 	// Handle both-valid rows - batched load, combine, store
@@ -559,10 +453,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 			state1_writer.WriteValue(local_state.state_buffer1.get() + i * layout.total_state_size);
 		}
 
-		DeserializeStateForSelected(layout, input.data[0], both_valid_sel, both_valid_count, state0_data,
-		                            local_state.state_buffer0.get());
-		DeserializeStateForSelected(layout, input.data[1], both_valid_sel, both_valid_count, state1_data,
-		                            local_state.state_buffer1.get());
+		DeserializeState(layout, input.data[0], both_valid_sel, both_valid_count, local_state.state_buffer0.get());
+		DeserializeState(layout, input.data[1], both_valid_sel, both_valid_count, local_state.state_buffer1.get());
 
 		// Single batched combine call
 		AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
@@ -570,7 +462,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
 		                                         both_valid_count);
 
-		SerializeStateForSelected(layout, result, both_valid_sel, both_valid_count, local_state.state_buffer1.get());
+		SerializeState(layout, result, both_valid_sel, both_valid_count,
+		               FlatVector::GetData<data_ptr_t>(local_state.addresses1));
 	}
 }
 
@@ -682,7 +575,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto layout = GetLayout(aggr_input_data.function);
 
 	result.Flatten();
-	SerializeState(layout, result, count, addresses_ptrs);
+	SerializeState(layout, result, *FlatVector::IncrementalSelectionVector(), count, addresses_ptrs);
 }
 
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
@@ -717,9 +610,6 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	inputs[0].Flatten();
 
-	UnifiedVectorFormat input_data;
-	inputs[0].ToUnifiedFormat(input_data);
-
 	auto aligned_size = layout.total_state_size;
 	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
 
@@ -739,7 +629,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_ptrs[sdata.sel->get_index(i)]);
 	}
 
-	DeserializeState(layout, inputs[0], input_data, count, temp_state_buf.get());
+	DeserializeState(layout, inputs[0], *FlatVector::IncrementalSelectionVector(), count, temp_state_buf.get());
 
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), allocator,
@@ -765,7 +655,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	auto layout = GetLayout(underlying_aggr);
 
 	result.Flatten();
-	SerializeState(layout, result, count, addresses_ptrs);
+	SerializeState(layout, result, *FlatVector::IncrementalSelectionVector(), count, addresses_ptrs);
 }
 
 // constructs the AGGREGATE_STATE type for the given bound aggregate function
