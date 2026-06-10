@@ -81,7 +81,12 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::FEATURE_ENTRY: {
 		// First, explicitly drop all version tables owned by this feature
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		auto schema_ptr = catalog.GetSchema(context.client, info->schema, OnEntryNotFound::RETURN_NULL);
+		// info->schema may be empty for DROP FEATURE IF EXISTS on a feature that does not exist
+		// (the binder never resolved it). Skip the version-table cleanup in that case and let
+		// DropEntry handle the (no-op) drop, which respects IF EXISTS.
+		auto schema_ptr = info->schema.empty()
+		                      ? optional_ptr<SchemaCatalogEntry>()
+		                      : catalog.GetSchema(context.client, info->schema, OnEntryNotFound::RETURN_NULL);
 		if (schema_ptr) {
 			auto transaction = catalog.GetCatalogTransaction(context.client);
 			auto &duck_schema = schema_ptr->Cast<DuckSchemaEntry>();
