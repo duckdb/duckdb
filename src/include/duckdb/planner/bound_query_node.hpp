@@ -23,7 +23,7 @@ public:
 	vector<unique_ptr<BoundResultModifier>> modifiers;
 
 	//! The names returned by this QueryNode.
-	vector<string> names;
+	vector<Identifier> names;
 	//! The types returned by this QueryNode.
 	vector<LogicalType> types;
 

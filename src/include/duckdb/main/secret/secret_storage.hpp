@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/common.hpp"
@@ -54,7 +55,7 @@ public:
 	//! Get all secrets
 	virtual vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Drop secret by name
-	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	virtual void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get best match
 	virtual SecretMatch LookupSecret(const string &path, const string &type,
@@ -111,7 +112,7 @@ public:
 	unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
 	                                    optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
 	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	SecretMatch LookupSecret(const string &path, const string &type,
 	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
@@ -154,7 +155,7 @@ protected:
 	void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
-	case_insensitive_set_t persistent_secrets;
+	identifier_set_t persistent_secrets;
 	//! Path that is searched for secrets;
 	string secret_path;
 };

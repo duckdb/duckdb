@@ -152,6 +152,9 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 	value_.double_ = val;
 }
 
+Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
+}
+
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
@@ -849,8 +852,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 		struct_types.reserve(2);
 		new_children.reserve(2);
 
-		struct_types.push_back(make_pair("key", key_type));
-		struct_types.push_back(make_pair("value", value_type));
+		struct_types.emplace_back(make_pair("key", key_type));
+		struct_types.emplace_back(make_pair("value", value_type));
 
 		auto key = keys[i].DefaultCastAs(key_type);
 		MapKeyCheck(unique_keys, key);

@@ -22,7 +22,7 @@ PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
 
 // SetSetting <- SettingScope? SettingName
 SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer, const SetScope &setting_scope,
-                                                       const string &setting_name) {
+                                                       const Identifier &setting_name) {
 	SettingInfo result;
 	result.name = setting_name;
 	result.scope = setting_scope;
@@ -54,7 +54,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneStringLiteral(P
 
 // ZoneIdentifier <- Identifier
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIdentifier(PEGTransformer &transformer,
-                                                                            const string &identifier) {
+                                                                            const Identifier &identifier) {
 	return make_uniq<ConstantExpression>(Value(identifier));
 }
 
@@ -69,7 +69,7 @@ unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransfor
 
 // SetVariable <- VariableScope Identifier
 SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer, const SetScope &variable_scope,
-                                                        const string &identifier) {
+                                                        const Identifier &identifier) {
 	SettingInfo result;
 	result.name = identifier;
 	result.scope = variable_scope;

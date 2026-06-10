@@ -1128,11 +1128,11 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Add alias POINT type
 	string alias_name = "POINT";
 	child_list_t<LogicalType> child_types;
-	child_types.push_back(make_pair("x", LogicalType::INTEGER));
-	child_types.push_back(make_pair("y", LogicalType::INTEGER));
+	child_types.emplace_back(make_pair("x", LogicalType::INTEGER));
+	child_types.emplace_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
-	alias_info->name = alias_name;
+	alias_info->name = Identifier(alias_name);
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
@@ -1170,7 +1170,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Table with tagged columns
 	{
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
-		tagged_table_info->schema = DEFAULT_SCHEMA;
+		tagged_table_info->schema = Identifier::DefaultSchema();
 		tagged_table_info->table = "tagged_table";
 		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
@@ -1191,7 +1191,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		tagged_table_info->columns.AddColumn(std::move(col_b));
 
 		con.BeginTransaction();
-		auto &default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
+		auto default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
 		auto &default_catalog = Catalog::GetCatalog(client_context, default_db_name);
 		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
 		default_catalog.CreateTable(client_context, std::move(tagged_table_info));

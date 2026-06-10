@@ -101,7 +101,7 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
-                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (options.file_row_number) {
 		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
@@ -113,7 +113,7 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 	}
 }
 
-static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
                        MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.GetParquetOptions();
@@ -125,7 +125,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	}
 	auto &reader_bind = bind_data.reader_bind;
 
-	vector<string> schema_col_names;
+	vector<Identifier> schema_col_names;
 	vector<LogicalType> schema_col_types;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
@@ -143,7 +143,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 
 	for (idx_t i = 0; i < options.schema.size(); i++) {
 		const auto &column = options.schema[i];
-		schema_col_names.push_back(column.name);
+		schema_col_names.push_back(Identifier(column.name));
 		schema_col_types.push_back(column.type);
 
 		auto res = MultiFileColumnDefinition(column.name, column.type);
@@ -163,7 +163,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	if (options.file_row_number) {
 		MultiFileColumnDefinition res("file_row_number", LogicalType::BIGINT);
 		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
-		schema_col_names.push_back(res.name);
+		schema_col_names.push_back(Identifier(res.name));
 		schema_col_types.push_back(res.type);
 		reader_bind.schema.emplace_back(res);
 	}
@@ -187,8 +187,8 @@ unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::CreateInterface(Clien
 	return make_uniq<ParquetMultiFileInfo>();
 }
 
-void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                                      MultiFileBindData &bind_data) {
+void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types,
+                                      vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.GetParquetOptions();
 	if (!options.schema.empty()) {
@@ -248,21 +248,21 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 		throw InvalidInputException(
 		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
 	}
-	if (!StringUtil::CIEquals(children[0].first, "name")) {
+	if (children[0].first != "name") {
 		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
 	}
 	if (children[0].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[0].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[1].first, "type")) {
+	if (children[1].first != "type") {
 		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
 	}
 	if (children[1].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[1].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[2].first, "default_value")) {
+	if (children[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 	}
 	//! NOTE: default_value can be any type
@@ -688,7 +688,7 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return ReadStatistics(name);
 }
 
@@ -730,7 +730,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	result->names.reserve(columns.size());
 	result->types.reserve(columns.size());
 	for (auto &column : columns) {
-		result->names.push_back(column.name);
+		result->names.push_back(column.name.GetIdentifierName());
 		result->types.push_back(column.type);
 	}
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -52,6 +53,11 @@ struct AutoCompleteCandidate {
 	AutoCompleteCandidate(const char *candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
 	    : AutoCompleteCandidate(string(candidate_p), suggestion_type, score_bonus, candidate_type) {
+	}
+	// NOLINTNEXTLINE: allow implicit conversion from Identifier
+	AutoCompleteCandidate(const Identifier &candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
+	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
+	    : AutoCompleteCandidate(candidate_p.GetIdentifierName(), suggestion_type, score_bonus, candidate_type) {
 	}
 
 	string candidate;

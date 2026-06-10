@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -37,7 +38,7 @@ public:
 	//! Join condition type
 	JoinRefType ref_type;
 	//! The set of USING columns (if any)
-	vector<string> using_columns;
+	vector<Identifier> using_columns;
 	//! Duplicate eliminated columns (if any)
 	vector<unique_ptr<ParsedExpression>> duplicate_eliminated_columns;
 	//! If we have duplicate eliminated columns if the delim is flipped

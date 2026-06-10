@@ -535,20 +535,20 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 		for (auto &col : table.GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = col.Name();
+				expected_names[bound_insert.column_index_map[i]] = col.Name().GetIdentifierName();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
 		for (auto &col : table.GetColumns().Physical()) {
-			expected_names.push_back(col.Name());
+			expected_names.emplace_back(col.Name());
 		}
 	}
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 bound_insert.expected_types, expected_names);
+	                                 bound_insert.expected_types, StringsToIdentifiers(expected_names));
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
@@ -680,13 +680,15 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
-	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+	auto entry =
+	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

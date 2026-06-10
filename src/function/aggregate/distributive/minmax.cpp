@@ -330,7 +330,8 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// to make sure the result's correctness.
 		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
 		QueryErrorContext error_context;
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", function_name,
+		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(),
+		                                                             Identifier(function_name),
 		                                                             OnEntryNotFound::RETURN_NULL, error_context);
 		if (!func) {
 			throw NotImplementedException(
@@ -382,8 +383,8 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
-	return AggregateFunction(name, {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	return AggregateFunction(Identifier(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
 } // namespace
