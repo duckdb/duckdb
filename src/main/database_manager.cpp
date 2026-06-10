@@ -135,6 +135,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
+				if (options.vacuum_rebuild_indexes_threshold.IsValid()) {
+					auto previous_setting = existing_db->GetVacuumRebuildIndexThreshold();
+					auto new_setting = options.vacuum_rebuild_indexes_threshold.GetIndex();
+					if (previous_setting != new_setting) {
+						throw BinderException("Cannot re-attach with a different vacuum_rebuild_indexes setting "
+						                      "(previous: %d, new: %d)",
+						                      previous_setting, new_setting);
+					}
+				}
 				// allow custom catalogs to override this behavior
 				if (!existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options)) {
 					return existing_db;

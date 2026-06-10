@@ -137,6 +137,9 @@ void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &ro
 	}
 	row_groups.unflushed_row_groups.clear();
 	row_groups.partial_block_managers.clear();
+	// any new append to the row group collection needs to append a new row group
+	// otherwise we append to an already flushed row group
+	row_groups.collection->SetRowGroupAppendMode(RowGroupAppendMode::REQUIRE_NEW);
 }
 
 void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_collection) {
@@ -168,7 +171,7 @@ void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_co
 	// we cannot append into a row group that has been flushed
 	if (complete_row_groups == collection->GetRowGroupCount()) {
 		// if the last row group has been flushed move any new appends to a new row group
-		collection->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
+		collection->SetRowGroupAppendMode(RowGroupAppendMode::REQUIRE_NEW);
 	}
 }
 

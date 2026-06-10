@@ -8,8 +8,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 namespace duckdb {
@@ -103,6 +101,24 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	return true;
 }
 
+bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		if (!op.children.empty()) {
+			return CanOptimize(*op.children[0]);
+		}
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                       ColumnBindingReplacer &replacer) {
 	if (op->type == LogicalOperatorType::LOGICAL_WINDOW) {
@@ -110,6 +126,10 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
+
+		if (!CanOptimize(*window.children[0])) {
+			return op;
+		}
 
 		auto &w_expr0 = window.expressions[0]->Cast<BoundWindowExpression>();
 		for (auto &expr : window.expressions) {
@@ -128,7 +148,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		LogicalOperatorDeepCopy deep_copy(optimizer.binder, nullptr);
 		try {
 			copy_child = deep_copy.DeepCopy(window.children[0]);
-		} catch (NotImplementedException &ex) {
+		} catch (std::exception &ex) {
 			// failed to copy the LHS - cannot run this optimizer
 			return op;
 		}

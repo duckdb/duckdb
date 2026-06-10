@@ -257,6 +257,8 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 
 	auto &result = result_data.variant;
 	for (idx_t source_index = 0; source_index < count; source_index++) {
+		//! Map the loop index through the incoming selection to the actual source row.
+		const auto scan_index = source_data.GetMappedIndex(source_index);
 		auto result_index = selvec ? selvec->get_index(source_index) : source_index;
 
 		auto &keys_list_entry = result.keys_data[result_index];
@@ -269,7 +271,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 
 		uint32_t keys_count = 0;
 		uint32_t blob_size = 0;
-		if (!source.RowIsValid(source_index)) {
+		if (!source.RowIsValid(scan_index)) {
 			if (!IGNORE_NULLS) {
 				HandleVariantNull<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset,
 				                              values_index_selvec, source_index, is_root);
@@ -287,23 +289,23 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 
 		//! First write all children
 		//! NOTE: this has to happen first because we use 'values_offset', which is increased when we write the values
-		auto source_children_list_entry = source.GetChildrenListEntry(source_index);
+		auto source_children_list_entry = source.GetChildrenListEntry(scan_index);
 		for (idx_t source_children_index = 0; source_children_index < source_children_list_entry.length;
 		     source_children_index++) {
 			//! values_index
 			if (WRITE_DATA) {
 				auto &values_offset = values_offset_data[result_index];
-				auto source_value_index = source.GetValuesIndex(source_index, source_children_index);
+				auto source_value_index = source.GetValuesIndex(scan_index, source_children_index);
 				result.values_index_data[children_list_entry.offset + children_offset + source_children_index] =
 				    values_offset + source_value_index;
 			}
 
 			//! keys_index
-			if (source.KeysIndexIsValid(source_index, source_children_index)) {
+			if (source.KeysIndexIsValid(scan_index, source_children_index)) {
 				if (WRITE_DATA) {
 					//! Look up the existing key from 'source'
-					auto source_key_index = source.GetKeysIndex(source_index, source_children_index);
-					auto &source_key_value = source.GetKey(source_index, source_key_index);
+					auto source_key_index = source.GetKeysIndex(scan_index, source_children_index);
+					auto &source_key_value = source.GetKey(scan_index, source_key_index);
 
 					//! Now write this key to the dictionary of the result
 					auto dict_index = result_data.GetOrCreateIndex(source_key_value);
@@ -320,26 +322,25 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			}
 		}
 
-		auto source_values_list_entry = source.GetValuesListEntry(source_index);
+		auto source_values_list_entry = source.GetValuesListEntry(scan_index);
 
 		if (WRITE_DATA) {
 			WriteState write_state(keys_offset, children_offset, blob_offset, blob_data, blob_size);
 			for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
 			     source_value_index++) {
-				auto source_type_id = source.GetTypeId(source_index, source_value_index);
+				auto source_type_id = source.GetTypeId(scan_index, source_value_index);
 				WriteVariantMetadata<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset + blob_size,
 				                                 nullptr, 0, source_type_id);
 
-				VariantVisitor<VariantToVariantDataWriter>::Visit(source, source_index, source_value_index,
-				                                                  write_state);
+				VariantVisitor<VariantToVariantDataWriter>::Visit(source, scan_index, source_value_index, write_state);
 			}
 		} else {
 			AnalyzeState analyze_state(children_offset);
 			for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
 			     source_value_index++) {
 				values_offset_data[result_index]++;
-				blob_size += VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(source, source_index,
-				                                                                 source_value_index, analyze_state);
+				blob_size += VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(source, scan_index, source_value_index,
+				                                                                 analyze_state);
 			}
 		}
 

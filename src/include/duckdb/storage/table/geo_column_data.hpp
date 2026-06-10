@@ -74,7 +74,7 @@ public:
 private:
 	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
 	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type, idx_t offset);
-	static void InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
+	static void InterpretStats(const BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
 	                           VertexType vert_type);
 };
 

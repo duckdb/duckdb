@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -56,7 +57,7 @@ public:
 	//! Cached files
 	struct CachedFile {
 	public:
-		explicit CachedFile(string path_p);
+		CachedFile(string path_p, idx_t generation_p);
 
 	public:
 		//! Verifies that none of the ranges fully overlap (must hold the lock)
@@ -75,6 +76,7 @@ public:
 
 	public:
 		const string path;
+		const idx_t generation;
 		StorageLock lock;
 
 	private:
@@ -96,23 +98,39 @@ public:
 
 	bool IsEnabled() const;
 	void SetEnabled(bool enable);
+	idx_t GetGeneration() const;
 	vector<CachedFileInformation> GetCachedFileInformation() const;
+	//! Number of files tracked in the ObjectCache, exposed for testing.
+	idx_t GetCachedFileCount() const;
 
 	BufferManager &GetBufferManager() const;
-	//! Gets the cached file, or creates it if is not yet present
-	CachedFile &GetOrCreateCachedFile(const string &path);
+	//! Gets the shared cached file for the given path, creating it if not yet present.
+	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
+	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
+	class ExternalFileCacheObjectCacheEntry;
+
+	//! Registers a cached file path in the tracked set.
+	void InsertCachedFileKey(const string &path);
+	//! Removes a cached file path from the tracked set.
+	void EraseCachedFileKey(const string &path);
+	//! Delete the ObjectCache entries for the given cached file paths.
+	void DeleteObjectCacheEntries(const vector<string> &paths);
+
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
-	//! Mapping from file path to cached file with cached ranges
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
-	//! Lock for accessing the cached files
+	//! Generation counter, incremented whenever cache enablement changes.
+	atomic<idx_t> generation;
+	//! Paths of the cached files tracked in the ObjectCache.
+	//! Entries should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
+	unordered_set<string> cached_file_keys;
+	//! Lock for accessing cached_file_keys.
 	mutable mutex lock;
 };
 

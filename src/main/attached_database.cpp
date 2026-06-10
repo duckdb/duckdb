@@ -12,6 +12,7 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -68,8 +69,10 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		}
 
 		if (entry.first == "type") {
-			// Extract the database type.
-			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			// Extract the database type. Normalize case so that
+			// `TYPE sqlite` and `TYPE 'SQLite'` are equivalent.
+			// `TYPE sqlite` and `TYPE 'sqlite3'` are NOT equivalent, aliasing to be applied on comparison
+			db_type = StringUtil::Lower(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
 			continue;
 		}
 
@@ -82,6 +85,18 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			auto is_hidden = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (is_hidden) {
 				visibility = AttachVisibility::HIDDEN;
+			}
+			continue;
+		}
+
+		if (entry.first == "vacuum_rebuild_indexes") {
+			const auto threshold = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			try {
+				vacuum_rebuild_indexes_threshold = threshold;
+			} catch (InternalException &e) {
+				throw InvalidInputException("Invalid setting for vacuum_rebuild_indexes: %d (valid range is 0 - %d)",
+				                            threshold,
+				                            UBigIntValue::Get(Value::MaximumValue(LogicalType::UBIGINT)) - 1);
 			}
 			continue;
 		}
@@ -121,6 +136,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -142,6 +158,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
@@ -183,6 +200,13 @@ bool AttachedDatabase::IsReadOnly() const {
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
+}
+
+idx_t AttachedDatabase::GetVacuumRebuildIndexThreshold() const {
+	if (vacuum_rebuild_threshold.IsValid()) {
+		return vacuum_rebuild_threshold.GetIndex();
+	}
+	return Settings::Get<VacuumRebuildIndexesSetting>(db);
 }
 
 string AttachedDatabase::StoredPath() const {

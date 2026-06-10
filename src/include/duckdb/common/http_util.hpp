@@ -134,7 +134,7 @@ struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
 
 	RequestType type;
-	const string &url;
+	string url;
 	string path;
 	string proto_host_port;
 	HTTPHeaders headers;

@@ -45,7 +45,7 @@ LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			scale = scale_value.GetValueUnsafe<uint8_t>();
 		} else {
-			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL - 1);
+			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL);
 		}
 	}
 

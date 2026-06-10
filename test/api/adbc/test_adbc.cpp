@@ -2310,18 +2310,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2338,18 +2338,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2478,18 +2478,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2527,18 +2527,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2556,6 +2556,117 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
 			db.Query("Drop table result;");
 		}
+	}
+	// 4-2. Test ADBC_OBJECT_DEPTH_COLUMNS: xdbc_* metadata for diverse column types
+	// Covers: remarks (comment), column default, DECIMAL precision/scale, DATE/TIME/TIMESTAMP
+	// datetime subtypes and column sizes, TIME_NS and TIME WITH TIME ZONE sql type codes,
+	// VARCHAR/BLOB char_octet_length, and array sql type code.
+	{
+		ADBCTestDatabase db("type_meta_test");
+		db.Query(R"(
+			CREATE TABLE type_test (
+				c_bool BOOLEAN,
+				c_bigint BIGINT,
+				c_decimal DECIMAL(10,3),
+				c_varchar VARCHAR,
+				c_blob BLOB,
+				c_date DATE,
+				c_time TIME,
+				c_time_tz TIMETZ,
+				c_time_ns TIME_NS,
+				c_ts TIMESTAMP,
+				c_ts_tz TIMESTAMPTZ,
+				c_arr INTEGER[],
+				c_with_default INTEGER DEFAULT 42
+			)
+		)");
+		db.Query("COMMENT ON COLUMN type_test.c_bool IS 'my comment'");
+
+		AdbcError adbc_error = {};
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "type_meta_test",
+		                                         nullptr, "type_test", nullptr, nullptr, &arrow_stream, &adbc_error)));
+		db.CreateTable("result", arrow_stream);
+
+		// Flatten the nested GetObjects result to one row per column
+		auto res = db.Query(R"(
+			SELECT col.column_name, col.remarks, col.xdbc_type_name, col.xdbc_column_size,
+			       col.xdbc_decimal_digits, col.xdbc_num_prec_radix, col.xdbc_sql_data_type,
+			       col.xdbc_datetime_sub, col.xdbc_char_octet_length, col.xdbc_column_def
+			FROM (
+				SELECT UNNEST(
+					list_filter(
+						list_filter(catalog_db_schemas, lambda s: s.db_schema_name = 'main')[1].db_schema_tables,
+						lambda t: t.table_name = 'type_test'
+					)[1].table_columns
+				) AS col
+				FROM result
+				WHERE catalog_name = 'type_meta_test'
+			) sub
+			ORDER BY col.ordinal_position
+		)");
+
+		// col indices: 0=column_name, 1=remarks, 2=xdbc_type_name, 3=xdbc_column_size,
+		//              4=xdbc_decimal_digits, 5=xdbc_num_prec_radix, 6=xdbc_sql_data_type,
+		//              7=xdbc_datetime_sub, 8=xdbc_char_octet_length, 9=xdbc_column_def
+		// row indices: 0=c_bool,1=c_bigint,2=c_decimal,3=c_varchar,4=c_blob,
+		//              5=c_date,6=c_time,7=c_time_tz,8=c_time_ns,9=c_ts,10=c_ts_tz,11=c_arr,12=c_with_default
+		REQUIRE((res->RowCount() == 13));
+
+		// remarks: only c_bool has a comment
+		REQUIRE((res->GetValue(1, 0).ToString() == "my comment"));
+		REQUIRE((res->GetValue(1, 1).IsNull()));
+
+		// xdbc_column_def: only c_with_default has a default value
+		REQUIRE((res->GetValue(9, 12).ToString() == "42"));
+		REQUIRE((res->GetValue(9, 0).IsNull()));
+
+		// xdbc_sql_data_type covers every branch in the CASE expression
+		REQUIRE((res->GetValue(6, 0).ToString() == "16"));    // BOOLEAN → 16
+		REQUIRE((res->GetValue(6, 1).ToString() == "-5"));    // BIGINT → -5
+		REQUIRE((res->GetValue(6, 2).ToString() == "3"));     // DECIMAL → 3
+		REQUIRE((res->GetValue(6, 3).ToString() == "12"));    // VARCHAR → 12
+		REQUIRE((res->GetValue(6, 4).ToString() == "2004"));  // BLOB → 2004
+		REQUIRE((res->GetValue(6, 5).ToString() == "91"));    // DATE → 91
+		REQUIRE((res->GetValue(6, 6).ToString() == "92"));    // TIME → 92
+		REQUIRE((res->GetValue(6, 7).ToString() == "2013"));  // TIME WITH TIME ZONE → 2013
+		REQUIRE((res->GetValue(6, 8).ToString() == "92"));    // TIME_NS → 92
+		REQUIRE((res->GetValue(6, 9).ToString() == "93"));    // TIMESTAMP → 93
+		REQUIRE((res->GetValue(6, 10).ToString() == "2014")); // TIMESTAMP WITH TIME ZONE → 2014
+		REQUIRE((res->GetValue(6, 11).ToString() == "2003")); // INTEGER[] → 2003
+		REQUIRE((res->GetValue(6, 12).ToString() == "4"));    // INTEGER → 4
+
+		// xdbc_column_size: DATE=10, TIME variants=15, TIMESTAMP variants=26
+		REQUIRE((res->GetValue(3, 0).IsNull()));            // BOOLEAN: no numeric precision
+		REQUIRE((res->GetValue(3, 1).ToString() == "64"));  // BIGINT: 64
+		REQUIRE((res->GetValue(3, 2).ToString() == "10"));  // DECIMAL(10,3): precision
+		REQUIRE((res->GetValue(3, 5).ToString() == "10"));  // DATE: hardcoded 10
+		REQUIRE((res->GetValue(3, 6).ToString() == "15"));  // TIME: hardcoded 15
+		REQUIRE((res->GetValue(3, 7).ToString() == "15"));  // TIME WITH TIME ZONE: 15
+		REQUIRE((res->GetValue(3, 8).ToString() == "15"));  // TIME_NS: 15
+		REQUIRE((res->GetValue(3, 9).ToString() == "26"));  // TIMESTAMP: hardcoded 26
+		REQUIRE((res->GetValue(3, 10).ToString() == "26")); // TIMESTAMP WITH TIME ZONE: 26
+
+		// xdbc_datetime_sub: DATE=1, TIME variants=2, TIMESTAMP variants=3
+		REQUIRE((res->GetValue(7, 5).ToString() == "1"));  // DATE → 1
+		REQUIRE((res->GetValue(7, 6).ToString() == "2"));  // TIME → 2
+		REQUIRE((res->GetValue(7, 7).ToString() == "2"));  // TIME WITH TIME ZONE → 2
+		REQUIRE((res->GetValue(7, 8).ToString() == "2"));  // TIME_NS → 2
+		REQUIRE((res->GetValue(7, 9).ToString() == "3"));  // TIMESTAMP → 3
+		REQUIRE((res->GetValue(7, 10).ToString() == "3")); // TIMESTAMP WITH TIME ZONE → 3
+		REQUIRE((res->GetValue(7, 11).IsNull()));          // INTEGER[]: NULL
+
+		// DECIMAL: scale and radix
+		REQUIRE((res->GetValue(4, 2).ToString() == "3"));  // xdbc_decimal_digits = scale = 3
+		REQUIRE((res->GetValue(5, 2).ToString() == "10")); // xdbc_num_prec_radix = 10
+
+		// xdbc_char_octet_length: NULL for unbounded VARCHAR/BLOB
+		REQUIRE((res->GetValue(8, 3).IsNull())); // VARCHAR (unbounded)
+		REQUIRE((res->GetValue(8, 4).IsNull())); // BLOB (unbounded)
+		REQUIRE((res->GetValue(8, 0).IsNull())); // BOOLEAN: not a char type
+
+		db.Query("Drop table result;");
 	}
 	// 5. Test ADBC_OBJECT_DEPTH_ALL
 	{
@@ -2611,18 +2722,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2632,18 +2743,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2667,18 +2778,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2688,18 +2799,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2844,18 +2955,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2865,18 +2976,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2920,18 +3031,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2941,18 +3052,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -4583,6 +4694,189 @@ TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
 		releaser.join();
 		if (stream.release) {
 			stream.release(&stream);
+		}
+	}
+}
+
+TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+	AdbcStatement stmt;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	SECTION("basic SELECT") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 42 AS answer, 'hello' AS greeting", &db.adbc_error)));
+
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+
+		REQUIRE(schema.n_children == 2);
+		REQUIRE(string(schema.children[0]->name) == "answer");
+		REQUIRE(string(schema.children[1]->name) == "greeting");
+		schema.release(&schema);
+	}
+
+	SECTION("no query set") {
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+		REQUIRE(string(db.adbc_error.message).find("StatementSetSqlQuery") != string::npos);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	SECTION("missing schema pointer") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1", &db.adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, nullptr, &db.adbc_error)));
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Rich Error Metadata API", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	SECTION("Function pointers are wired for 1.1.0") {
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver != nullptr);
+		REQUIRE(driver->ErrorGetDetailCount != nullptr);
+		REQUIRE(driver->ErrorGetDetail != nullptr);
+	}
+
+	SECTION("No details for zero-initialized error") {
+		AdbcError error = {};
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver->ErrorGetDetailCount(&error) == 0);
+		auto detail = driver->ErrorGetDetail(&error, 0);
+		REQUIRE(detail.key == nullptr);
+		REQUIRE(detail.value == nullptr);
+	}
+
+	SECTION("Provides duckdb:error_type detail for ingestion CREATE conflict") {
+		// Create a table first (uses db.adbc_error which is zero-init)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl", input);
+
+		// Try to ingest to the same table in CREATE mode (default) with ADBC_ERROR_INIT
+		// This triggers a Catalog error ("already exists")
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		REQUIRE(error.message != nullptr);
+
+		// With ADBC_ERROR_INIT, structured error details should be available
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		// Out-of-bounds index returns empty detail
+		auto oob = AdbcErrorGetDetail(&error, 999);
+		REQUIRE(oob.key == nullptr);
+		REQUIRE(oob.value == nullptr);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("No duckdb:error_type detail when error is zero-initialized") {
+		// Same scenario but with zero-init error (no ADBC_ERROR_INIT)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl2", input);
+
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = {}; // zero-init: vendor_code = 0, not ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl2", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+
+		// With zero-init error, no structured details
+		REQUIRE(AdbcErrorGetDetailCount(&error) == 0);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("Provides duckdb:error_type detail for APPEND to missing table") {
+		auto &input = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table_rich_append", &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(!SUCCESS(status));
+		REQUIRE(error.message != nullptr);
+
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input.release) {
+			input.release(&input);
 		}
 	}
 }
