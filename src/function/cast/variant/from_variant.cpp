@@ -335,7 +335,9 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		}
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
-		CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index);
+		if (!CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index)) {
+			return false;
+		}
 		total_offset += array_size;
 	}
 	return true;
