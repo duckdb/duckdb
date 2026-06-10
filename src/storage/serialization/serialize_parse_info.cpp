@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -118,6 +119,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case AlterType::SET_COMMENT:
 		result = SetCommentInfo::Deserialize(deserializer);
+		break;
+	case AlterType::ALTER_FEATURE:
+		result = AlterFeatureInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterInfo!");
@@ -347,6 +351,17 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &deserialize
 	deserializer.ReadProperty<CatalogType>(300, "entry_catalog_type", result->entry_catalog_type);
 	deserializer.ReadPropertyWithDefault<string>(301, "owner_schema", result->owner_schema);
 	deserializer.ReadPropertyWithDefault<string>(302, "owner_name", result->owner_name);
+	return std::move(result);
+}
+
+void AlterFeatureInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<int64_t>(300, "new_version", new_version);
+}
+
+unique_ptr<AlterInfo> AlterFeatureInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<AlterFeatureInfo>(new AlterFeatureInfo());
+	deserializer.ReadProperty<int64_t>(300, "new_version", result->new_version);
 	return std::move(result);
 }
 

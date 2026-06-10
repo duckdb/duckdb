@@ -215,6 +215,18 @@ optional_ptr<CatalogEntry> Catalog::CreateFeature(CatalogTransaction transaction
 	auto &schema = GetSchema(transaction, info.schema);
 	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
 	auto &set = duck_schema.GetCatalogSet(CatalogType::FEATURE_ENTRY);
+
+	// Upsert semantics: replaying a sequence of CREATE_FEATURE records (the original CREATE plus one per
+	// REFRESH, each carrying an updated current_version) calls this repeatedly with the same name. If the
+	// feature already exists, just apply the newer current_version in place — mirroring how sequence value
+	// replay updates the live entry. The view/version tables are persisted independently and are untouched.
+	auto existing = set.GetEntry(transaction, info.feature_name);
+	if (existing) {
+		auto &feature = existing->Cast<FeatureCatalogEntry>();
+		feature.current_version = info.current_version;
+		return existing;
+	}
+
 	auto entry = make_uniq<FeatureCatalogEntry>(*this, schema, info);
 
 	auto &dependencies = info.dependencies;

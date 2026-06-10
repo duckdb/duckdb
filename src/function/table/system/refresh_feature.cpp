@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -264,15 +265,21 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
+		// A refresh always creates a new version. Persist the version bump transactionally through the
+		// catalog (rather than mutating feat.current_version in place) so it is recorded in the WAL /
+		// checkpoint and survives a restart. This is done on the internal connection's (read-write)
+		// transaction — the outer table-function transaction is read-only — and is committed atomically
+		// together with the version-table creation/GC above.
+		AlterEntryData alter_data(feat_catalog.GetName(), feat_schema.name, feature_name,
+		                          OnEntryNotFound::THROW_EXCEPTION);
+		AlterFeatureInfo alter_info(std::move(alter_data), new_version);
+		feat_catalog.Alter(*con.context, alter_info);
+
 		con.Commit();
 	} catch (...) {
 		con.Rollback();
 		throw;
 	}
-
-	// A refresh always creates a new version.
-	feat.current_version = new_version;
-	feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
 
 	output.SetCardinality(1);
 	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(state.rows_affected)));

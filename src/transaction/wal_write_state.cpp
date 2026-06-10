@@ -55,7 +55,8 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
 		break;
 	case CatalogType::FEATURE_ENTRY:
-		// Features do not support ALTER — always a CREATE
+		// Features only support a version-bump ALTER, which carries the full new state — so a CREATE
+		// record (with the updated current_version) is written for both CREATE and ALTER.
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
 		log.WriteCreateFeature(parent.Cast<FeatureCatalogEntry>());
 		break;
