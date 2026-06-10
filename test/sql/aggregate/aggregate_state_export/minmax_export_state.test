@@ -1,0 +1,82 @@
+# name: test/sql/aggregate/aggregate_state_export/minmax_export_state.test
+# description: Test min/max EXPORT_STATE for string inputs
+# group: [aggregate_state_export]
+
+# empty input returns NULL
+query T
+SELECT min(v) EXPORT_STATE FROM (SELECT NULL::varchar AS v WHERE false) t;
+----
+NULL
+
+query T
+SELECT max(v) EXPORT_STATE FROM (SELECT NULL::varchar AS v WHERE false) t;
+----
+NULL
+
+# all-null input returns NULL
+query T
+SELECT min(NULL::varchar) EXPORT_STATE;
+----
+NULL
+
+# inlined strings (<=12 chars)
+query T
+SELECT min(v) EXPORT_STATE FROM (VALUES ('banana'), ('apple'), ('cherry')) t(v);
+----
+apple
+
+query T
+SELECT max(v) EXPORT_STATE FROM (VALUES ('banana'), ('apple'), ('cherry')) t(v);
+----
+cherry
+
+# non-inlined strings (>12 chars)
+query T
+SELECT min(v) EXPORT_STATE FROM (VALUES ('long-string-banana'), ('long-string-apple'), ('long-string-cherry')) t(v);
+----
+long-string-apple
+
+query T
+SELECT max(v) EXPORT_STATE FROM (VALUES ('long-string-banana'), ('long-string-apple'), ('long-string-cherry')) t(v);
+----
+long-string-cherry
+
+# combine two states
+query T
+SELECT finalize(combine(min('apple'::varchar) EXPORT_STATE, min('cherry'::varchar) EXPORT_STATE));
+----
+apple
+
+query T
+SELECT finalize(combine(max('apple'::varchar) EXPORT_STATE, max('cherry'::varchar) EXPORT_STATE));
+----
+cherry
+
+# combine_aggr across groups
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('banana'), ('apple')) t(v)
+    UNION ALL
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('cherry'), ('avocado')) t(v)
+) t;
+----
+apple
+
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT max(v) EXPORT_STATE AS s FROM (VALUES ('banana'), ('apple')) t(v)
+    UNION ALL
+    SELECT max(v) EXPORT_STATE AS s FROM (VALUES ('cherry'), ('avocado')) t(v)
+) t;
+----
+cherry
+
+# combine_aggr with NULL states (empty groups)
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('banana')) t(v)
+    UNION ALL
+    SELECT min(v) EXPORT_STATE AS s FROM (SELECT NULL::varchar AS v WHERE false) t
+) t;
+----
+banana
