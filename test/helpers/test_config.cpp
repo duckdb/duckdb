@@ -223,7 +223,7 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	options.insert_or_assign(string(test_config.name), parameter);
 	return true;
 }
 
@@ -378,7 +378,24 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		// parse json
 		auto json = StringUtil::ParseJSONMap(buffer);
 		auto json_values = json->Flatten();
+
+		auto extends_it = json_values.find("extends");
+		if (extends_it != json_values.end()) {
+			auto config_dir = StringUtil::GetFilePath(config_path);
+			auto extends_list = Value(extends_it->second).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
+			for (auto &child : ListValue::GetChildren(extends_list)) {
+				auto path = child.GetValue<string>();
+				if (!config_dir.empty() && !path.empty() && path[0] != '/') {
+					path = config_dir + "/" + path;
+				}
+				LoadConfig(path);
+			}
+		}
+
 		for (auto &entry : json_values) {
+			if (StringUtil::CIEquals(entry.first, "extends")) {
+				continue;
+			}
 			ParseOption(entry.first, Value(entry.second));
 		}
 		auto inherit_entry = options.find("inherit_skip_tests");
