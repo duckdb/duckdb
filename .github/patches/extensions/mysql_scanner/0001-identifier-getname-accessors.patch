@@ -49,10 +49,10 @@ index 55b3355..2a60816 100644
  		throw BinderException("Failed to find attached database \"%s\" referenced in mysql_query", db_name);
  	}
 diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
-index fea00b5..5772b79 100644
+index cd56adb..933b3a9 100644
 --- a/src/mysql_scanner.cpp
 +++ b/src/mysql_scanner.cpp
-@@ -103,7 +103,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
+@@ -104,7 +104,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
  		fed.adaptive_cache_generation = cached.plan_generation;
  		fed.adaptive_estimated_rows = cached.plan.estimated_rows_from_mysql;
  	} else {
@@ -61,7 +61,7 @@ index fea00b5..5772b79 100644
  		auto mysql_costs = stats_collector.FetchMySQLCostConstants();
  		CostModelParameters cost_params;
  		if (mysql_costs.loaded) {
-@@ -140,7 +140,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
+@@ -141,7 +141,7 @@ static void ResolveExecutionPlan(ClientContext &context, FederationState &fed, c
  static void ResolvePartitionPruning(FederationState &fed, const MySQLBindData &bind_data,
                                      MySQLStatisticsCollector &stats_collector, const vector<column_t> &column_ids,
                                      optional_ptr<TableFilterSet> filters) {
@@ -70,7 +70,7 @@ index fea00b5..5772b79 100644
  	const auto &part_info = part_stats.partition_info;
  	if (!part_info.IsRangeOrList() || part_info.partitions.empty()) {
  		return;
-@@ -274,8 +274,8 @@ static void InjectQueryHints(ClientContext &context, string &select, const Feder
+@@ -276,8 +276,8 @@ static void InjectQueryHints(ClientContext &context, string &select, const Feder
  			bool valid = explain_stats.ValidateWithExplain(select, fed.filter_analysis.recommended_index, true);
  			if (!valid) {
  				auto &mysql_catalog = bind_data.table.catalog.Cast<MySQLCatalog>();
@@ -81,7 +81,7 @@ index fea00b5..5772b79 100644
  			}
  		}
  	}
-@@ -366,9 +366,9 @@ static string BuildAggregateQuery(MySQLBindData &bind_data) {
+@@ -351,9 +351,9 @@ static string BuildAggregateQuery(MySQLBindData &bind_data) {
  	auto &aggr_bind_data = bind_data.aggregate_bind_data;
  	string sql = "SELECT " + aggr_bind_data.aggregate_select_list;
  	sql += " FROM ";
@@ -93,7 +93,7 @@ index fea00b5..5772b79 100644
  	if (!aggr_bind_data.aggregate_where_clause.empty()) {
  		sql += " WHERE " + aggr_bind_data.aggregate_where_clause;
  	}
-@@ -424,19 +424,19 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+@@ -409,19 +409,19 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
  		} else {
  			auto &col = bind_data.table.GetColumn(LogicalIndex(input.column_ids[c]));
  			auto col_name = col.GetName();
@@ -111,13 +111,13 @@ index fea00b5..5772b79 100644
  	string filter_string;
  
  	if (bind_data.use_predicate_analyzer && input.filters && input.filters->HasFilters()) {
- 		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache());
+ 		MySQLStatisticsCollector stats_collector(con, mysql_catalog.GetStatsCache(), mysql_catalog.GetVersion());
 -		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name, bind_data.table.name);
 +		PredicateAnalyzer analyzer(stats_collector, bind_data.table.schema.name.GetIdentifierName(), bind_data.table.name.GetIdentifierName());
  		ConfigurePredicateAnalyzer(context, analyzer);
  
  		fed.filter_analysis = analyzer.AnalyzeFilters(input.column_ids, input.filters, bind_data.names);
-@@ -445,7 +445,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+@@ -430,7 +430,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
  		for (idx_t c = 0; c < input.column_ids.size(); c++) {
  			if (input.column_ids[c] != COLUMN_IDENTIFIER_ROW_ID) {
  				auto &col = bind_data.table.GetColumn(LogicalIndex(input.column_ids[c]));
@@ -126,7 +126,7 @@ index fea00b5..5772b79 100644
  			}
  		}
  
-@@ -456,7 +456,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
+@@ -441,7 +441,7 @@ static unique_ptr<GlobalTableFunctionState> MySQLInitGlobalState(ClientContext &
  				filter_cols.push_back(analysis.column_name);
  				sels.push_back(analysis.estimated_selectivity);
  			}
@@ -135,7 +135,7 @@ index fea00b5..5772b79 100644
  			                                filter_cols, sels);
  
  			ResolveExecutionPlan(context, fed, bind_data, stats_collector, mysql_catalog, con, column_names, cache_key);
-@@ -595,7 +595,7 @@ static void MySQLScan(ClientContext &context, TableFunctionInput &data, DataChun
+@@ -580,7 +580,7 @@ static void MySQLScan(ClientContext &context, TableFunctionInput &data, DataChun
  static InsertionOrderPreservingMap<string> MySQLScanToString(TableFunctionToStringInput &input) {
  	InsertionOrderPreservingMap<string> result;
  	auto &bind_data = input.bind_data->Cast<MySQLBindData>();
@@ -144,7 +144,7 @@ index fea00b5..5772b79 100644
  	return result;
  }
  
-@@ -636,7 +636,7 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
+@@ -621,7 +621,7 @@ static unique_ptr<FunctionData> MySQLQueryBind(ClientContext &context, TableFunc
  
  	auto db_name = input.inputs[0].GetValue<string>();
  	auto &db_manager = DatabaseManager::Get(context);
@@ -153,11 +153,128 @@ index fea00b5..5772b79 100644
  	if (!db) {
  		throw BinderException("Failed to find attached database \"%s\" referenced in mysql_query", db_name);
  	}
+diff --git a/src/mysql_sql_writer.cpp b/src/mysql_sql_writer.cpp
+index 03e1525..6f7028c 100644
+--- a/src/mysql_sql_writer.cpp
++++ b/src/mysql_sql_writer.cpp
+@@ -154,7 +154,7 @@ string MySQLSQLWriter::WriteColumnRef(const ColumnRefExpression &column_ref) {
+ 		if (!result.empty()) {
+ 			result += ".";
+ 		}
+-		result += WriteIdentifier(column_name);
++		result += WriteIdentifier(column_name.GetIdentifierName());
+ 	}
+ 	return result;
+ }
+@@ -262,7 +262,7 @@ string MySQLSQLWriter::WriteFunctionCall(const string &function_name, const vect
+ 
+ string MySQLSQLWriter::WriteFunction(const FunctionExpression &func) {
+ 	auto &children = func.GetArguments();
+-	auto name = StringUtil::Lower(func.FunctionName());
++	auto name = StringUtil::Lower(func.FunctionName().GetIdentifierName());
+ 	if (name == "~~" || name == "!~~") {
+ 		// [NOT] LIKE - DuckDB's LIKE has no default escape character, while MySQL's default
+ 		// escape character is backslash; disable it with an empty ESCAPE clause
+@@ -290,7 +290,7 @@ string MySQLSQLWriter::WriteFunction(const FunctionExpression &func) {
+ 		                        "SupportsPushdown",
+ 		                        name);
+ 	}
+-	return WriteFunctionCall(func.FunctionName(), children, func.Distinct());
++	return WriteFunctionCall(func.FunctionName().GetIdentifierName(), children, func.Distinct());
+ }
+ 
+ static string MySQLWriteWindowBoundary(WindowBoundary boundary, const string &boundary_expr) {
+@@ -313,7 +313,7 @@ static string MySQLWriteWindowBoundary(WindowBoundary boundary, const string &bo
+ }
+ 
+ string MySQLSQLWriter::WriteWindow(const WindowExpression &window) {
+-	string result = WriteFunctionCall(window.FunctionName(), window.GetArguments(), window.Distinct());
++	string result = WriteFunctionCall(window.FunctionName().GetIdentifierName(), window.GetArguments(), window.Distinct());
+ 	result += " OVER (";
+ 	string sep;
+ 	if (!window.Partitions().empty()) {
+@@ -447,7 +447,7 @@ string MySQLSQLWriter::WriteExpression(const ParsedExpression &expr) {
+ 		auto &star = expr.Cast<StarExpression>();
+ 		if (!star.RelationName().empty()) {
+ 			// qualified star (e.g. t.*)
+-			return WriteIdentifier(star.RelationName()) + ".*";
++			return WriteIdentifier(star.RelationName().GetIdentifierName()) + ".*";
+ 		}
+ 		return "*";
+ 	}
+@@ -513,11 +513,11 @@ string MySQLSQLWriter::WriteTableRef(const TableRef &ref) {
+ 		auto &base = ref.Cast<BaseTableRef>();
+ 		string result;
+ 		if (!base.schema_name.empty()) {
+-			result += WriteIdentifier(base.schema_name) + ".";
++			result += WriteIdentifier(base.schema_name.GetIdentifierName()) + ".";
+ 		}
+-		result += WriteIdentifier(base.table_name);
++		result += WriteIdentifier(base.table_name.GetIdentifierName());
+ 		if (!base.alias.empty()) {
+-			result += " AS " + WriteIdentifier(base.alias);
++			result += " AS " + WriteIdentifier(base.alias.GetIdentifierName());
+ 		}
+ 		return result;
+ 	}
+@@ -557,7 +557,7 @@ string MySQLSQLWriter::WriteTableRef(const TableRef &ref) {
+ 				if (i > 0) {
+ 					result += ", ";
+ 				}
+-				result += WriteIdentifier(join.using_columns[i]);
++				result += WriteIdentifier(join.using_columns[i].GetIdentifierName());
+ 			}
+ 			result += ")";
+ 		}
+@@ -567,7 +567,7 @@ string MySQLSQLWriter::WriteTableRef(const TableRef &ref) {
+ 	case TableReferenceType::SUBQUERY: {
+ 		auto &subquery = ref.Cast<SubqueryRef>();
+ 		// MySQL requires an alias for every derived table - generate one if there is none
+-		string alias = subquery.alias;
++		string alias = subquery.alias.GetIdentifierName();
+ 		if (alias.empty()) {
+ 			alias = "mysql_unnamed_subquery" + to_string(++unnamed_subquery_index);
+ 		}
+@@ -610,7 +610,7 @@ string MySQLSQLWriter::WriteOrderList(const vector<OrderByNode> &orders,
+ 						// output columns satisfy MySQL's ONLY_FULL_GROUP_BY checks where raw expression
+ 						// copies may not
+ 						null_key =
+-						    target.GetAlias().empty() ? WriteExpression(target) : WriteIdentifier(target.GetAlias());
++						    target.GetAlias().empty() ? WriteExpression(target) : WriteIdentifier(target.GetAlias().GetIdentifierName());
+ 					}
+ 				}
+ 			}
+@@ -689,14 +689,14 @@ string MySQLSQLWriter::WriteCTEMap(const CommonTableExpressionMap &cte_map) {
+ 			result += ", ";
+ 		}
+ 		auto &cte = *kv.second;
+-		result += WriteIdentifier(kv.first);
++		result += WriteIdentifier(kv.first.GetIdentifierName());
+ 		if (!cte.aliases.empty()) {
+ 			result += " (";
+ 			for (idx_t k = 0; k < cte.aliases.size(); k++) {
+ 				if (k > 0) {
+ 					result += ", ";
+ 				}
+-				result += WriteIdentifier(cte.aliases[k]);
++				result += WriteIdentifier(cte.aliases[k].GetIdentifierName());
+ 			}
+ 			result += ")";
+ 		}
+@@ -725,7 +725,7 @@ string MySQLSQLWriter::WriteSelectNode(const SelectNode &node) {
+ 		auto &select_expr = *node.select_list[i];
+ 		result += WriteExpression(select_expr);
+ 		if (!select_expr.GetAlias().empty()) {
+-			result += " AS " + WriteIdentifier(select_expr.GetAlias());
++			result += " AS " + WriteIdentifier(select_expr.GetAlias().GetIdentifierName());
+ 		} else if (select_expr.GetExpressionClass() != ExpressionClass::STAR &&
+ 		           select_expr.GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+ 			// alias the column with DuckDB's name for the expression so that the result column
 diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
-index af9ffd7..eba682f 100644
+index 0dbb60f..75e12fe 100644
 --- a/src/storage/mysql_catalog.cpp
 +++ b/src/storage/mysql_catalog.cpp
-@@ -54,7 +54,7 @@ string AddConnectionOption(const KeyValueSecret &kv_secret, const string &name,
+@@ -83,7 +83,7 @@ string AddConnectionOption(const KeyValueSecret &kv_secret, const string &name,
  		// option already provided in connection string
  		return string();
  	}
@@ -166,6 +283,117 @@ index af9ffd7..eba682f 100644
  	if (input_val.IsNull()) {
  		// not provided
  		return string();
+@@ -603,7 +603,7 @@ static bool MySQLSupportsValue(const Value &value) {
+ }
+ 
+ bool MySQLSupportsFunction(const FunctionExpression &func) {
+-	auto &function_name = func.FunctionName();
++	auto &function_name = func.FunctionName().GetIdentifierName();
+ 
+ 	// Whitelist of functions that can be pushed into MySQL 8.0+ - either because the name and
+ 	// semantics are identical, or because MySQLSQLWriter rewrites them during serialization:
+@@ -756,13 +756,13 @@ static void MySQLCollectJoinTableNames(const TableRef &ref, case_insensitive_set
+ 	case TableReferenceType::BASE_TABLE: {
+ 		auto &base = ref.Cast<BaseTableRef>();
+ 		const auto &name = base.alias.empty() ? base.table_name : base.alias;
+-		if (!names.insert(name).second) {
++		if (!names.insert(name.GetIdentifierName()).second) {
+ 			duplicate = true;
+ 		}
+ 		break;
+ 	}
+ 	case TableReferenceType::SUBQUERY: {
+-		if (!ref.alias.empty() && !names.insert(ref.alias).second) {
++		if (!ref.alias.empty() && !names.insert(ref.alias.GetIdentifierName()).second) {
+ 			duplicate = true;
+ 		}
+ 		break;
+@@ -780,7 +780,7 @@ static void MySQLCollectColumnRefs(const ParsedExpression &expr, case_insensitiv
+ 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+ 		auto &colref = expr.Cast<ColumnRefExpression>();
+ 		if (!colref.IsQualified()) {
+-			names.insert(colref.GetColumnName());
++			names.insert(colref.GetColumnName().GetIdentifierName());
+ 		}
+ 	}
+ 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+@@ -889,7 +889,7 @@ static bool MySQLSupportsSelectAliasUsage(const SelectNode &select) {
+ 	// find the first select-list item that defines each alias
+ 	case_insensitive_map_t<idx_t> alias_definitions;
+ 	for (idx_t i = 0; i < select.select_list.size(); i++) {
+-		auto &alias = select.select_list[i]->GetAlias();
++		auto &alias = select.select_list[i]->GetAlias().GetIdentifierName();
+ 		if (!alias.empty() && alias_definitions.find(alias) == alias_definitions.end()) {
+ 			alias_definitions[alias] = i;
+ 		}
+@@ -1190,7 +1190,7 @@ static bool MySQLSupportsWindow(const WindowExpression &window) {
+ 	    "lag",        "first_value", "last_value", "nth_value",    "count",       "count_star", "sum",
+ 	    "avg",        "min",         "max",        "stddev_pop",   "stddev_samp", "var_pop",    "var_samp",
+ 	};
+-	return MYSQL_WINDOW_FUNCTIONS.count(window.FunctionName()) > 0;
++	return MYSQL_WINDOW_FUNCTIONS.count(window.FunctionName().GetIdentifierName()) > 0;
+ }
+ 
+ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+@@ -1249,6 +1249,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+ 	}
+ 	case ExpressionClass::FUNCTION: {
+ 		auto &func = expr.Cast<FunctionExpression>();
++		auto &function_name = func.FunctionName().GetIdentifierName();
+ 		if (func.Filter()) {
+ 			// FILTER (WHERE ...) on aggregates is not supported in MySQL
+ 			return false;
+@@ -1265,7 +1266,7 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+ 			// (avg is excluded: it is serialized as avg(CAST(x AS DOUBLE)), which would deduplicate
+ 			// the DOUBLE-cast values instead of the original ones)
+ 			static const case_insensitive_set_t MYSQL_DISTINCT_AGGREGATES = {"count", "sum", "min", "max"};
+-			if (MYSQL_DISTINCT_AGGREGATES.count(func.FunctionName()) == 0) {
++			if (MYSQL_DISTINCT_AGGREGATES.count(function_name) == 0) {
+ 				return false;
+ 			}
+ 		}
+@@ -1278,24 +1279,24 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+ 			}
+ 		}
+ 		if (children.size() > 1 &&
+-		    (StringUtil::CIEquals(func.FunctionName(), "trim") || StringUtil::CIEquals(func.FunctionName(), "ltrim") ||
+-		     StringUtil::CIEquals(func.FunctionName(), "rtrim"))) {
++		    (StringUtil::CIEquals(function_name, "trim") || StringUtil::CIEquals(function_name, "ltrim") ||
++		     StringUtil::CIEquals(function_name, "rtrim"))) {
+ 			// the two-argument variants of trim/ltrim/rtrim are not supported in MySQL
+ 			return false;
+ 		}
+ 		static const case_insensitive_set_t MYSQL_SINGLE_ARGUMENT_REWRITES = {"week",   "dayofweek",   "weekday",
+ 		                                                                      "isodow", "microsecond", "trunc"};
+-		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(func.FunctionName()) > 0 && children.size() != 1) {
++		if (MYSQL_SINGLE_ARGUMENT_REWRITES.count(function_name) > 0 && children.size() != 1) {
+ 			return false;
+ 		}
+-		if (StringUtil::CIEquals(func.FunctionName(), "greatest") ||
+-		    StringUtil::CIEquals(func.FunctionName(), "least")) {
++		if (StringUtil::CIEquals(function_name, "greatest") ||
++		    StringUtil::CIEquals(function_name, "least")) {
+ 			// rewritten into a COALESCE rotation, which grows quadratically - bound the argument count
+ 			if (children.size() < 2 || children.size() > 8) {
+ 				return false;
+ 			}
+ 		}
+-		if (StringUtil::CIEquals(func.FunctionName(), "lpad") || StringUtil::CIEquals(func.FunctionName(), "rpad")) {
++		if (StringUtil::CIEquals(function_name, "lpad") || StringUtil::CIEquals(function_name, "rpad")) {
+ 			// MySQL returns NULL for negative lengths where DuckDB returns an empty string, and
+ 			// returns NULL when the result exceeds @@max_allowed_packet - only push down calls
+ 			// with a literal length that is non-negative and small enough for any server setting
+@@ -1304,8 +1305,8 @@ bool MySQLCatalog::SupportsPushdown(const ParsedExpression &expr) {
+ 				return false;
+ 			}
+ 		}
+-		if (StringUtil::CIEquals(func.FunctionName(), "substring") ||
+-		    StringUtil::CIEquals(func.FunctionName(), "substr")) {
++		if (StringUtil::CIEquals(function_name, "substring") ||
++		    StringUtil::CIEquals(function_name, "substr")) {
+ 			// MySQL handles zero and negative offsets differently - only push down calls with
+ 			// literal positive offsets (and a literal non-negative length)
+ 			if (children.size() < 2 || children.size() > 3) {
 diff --git a/src/storage/mysql_catalog_set.cpp b/src/storage/mysql_catalog_set.cpp
 index 8b8dd64..1aaf5d8 100644
 --- a/src/storage/mysql_catalog_set.cpp
@@ -373,7 +601,7 @@ index fdabc68..64d3412 100644
  }
  
 diff --git a/src/storage/mysql_optimizer.cpp b/src/storage/mysql_optimizer.cpp
-index 2fb7b86..0b1c18b 100644
+index 665cd65..cd4e6c4 100644
 --- a/src/storage/mysql_optimizer.cpp
 +++ b/src/storage/mysql_optimizer.cpp
 @@ -45,7 +45,7 @@ static bool ShouldPushAggregate(ClientContext &context, LogicalAggregate &aggr)
@@ -654,3 +882,65 @@ index e2e893e..e6be4a9 100644
  	transaction.Query(sql);
  }
  
+diff --git a/database-connector/src/optimizer/aggregate_optimizer.cpp b/database-connector/src/optimizer/aggregate_optimizer.cpp
+index 057f8c8..6e945b3 100644
+--- a/database-connector/src/optimizer/aggregate_optimizer.cpp
++++ b/database-connector/src/optimizer/aggregate_optimizer.cpp
+@@ -73,7 +73,8 @@ static bool CanPushAggregate(LogicalAggregate &aggr) {
+ 		if (agg_expr.GetOrderBysMutable() && !agg_expr.GetOrderBysMutable()->orders.empty()) {
+ 			return false;
+ 		}
+-		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName()) == PUSHABLE_AGGREGATES.end()) {
++		if (PUSHABLE_AGGREGATES.find(agg_expr.FunctionMutable().GetName().GetIdentifierName()) ==
++		    PUSHABLE_AGGREGATES.end()) {
+ 			return false;
+ 		}
+ 		if (agg_expr.FunctionMutable().GetName() != "count_star") {
+@@ -192,7 +193,8 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 			}
+ 			auto column_name = get.names[table_col_idx];
+ 			auto scan_config = table_scan::FilterPushdown::CreateConfig('`', config.escape_style);
+-			auto new_filter = table_scan::FilterPushdown::TransformFilter(scan_config, column_name, entry.Filter());
++			auto new_filter =
++			    table_scan::FilterPushdown::TransformFilter(scan_config, column_name.GetIdentifierName(), entry.Filter());
+ 			if (new_filter.empty()) {
+ 				return res;
+ 			}
+@@ -207,7 +209,10 @@ static PushedAggregate TryPushAggregateToMySQL(const AggregateOptimizer::Config
+ 	}
+ 
+ 	get.returned_types = new_types;
+-	get.names = new_names;
++	get.names.clear();
++	for (auto &new_name : new_names) {
++		get.names.push_back(Identifier(new_name));
++	}
+ 	vector<ColumnIndex> new_column_ids;
+ 	for (idx_t i = 0; i < new_types.size(); i++) {
+ 		new_column_ids.push_back(ColumnIndex(i));
+diff --git a/database-connector/src/optimizer/optimizer_util.cpp b/database-connector/src/optimizer/optimizer_util.cpp
+index af077d2..19368cf 100644
+--- a/database-connector/src/optimizer/optimizer_util.cpp
++++ b/database-connector/src/optimizer/optimizer_util.cpp
+@@ -68,7 +68,7 @@ TracedBindingColumn OptimizerUtil::TraceBindingToColumn(ColumnBinding binding, L
+ 	if (actual_col_idx >= get.names.size()) {
+ 		return res;
+ 	}
+-	res.col_name = get.names[actual_col_idx];
++	res.col_name = get.names[actual_col_idx].GetIdentifierName();
+ 	res.col_type = get.returned_types[actual_col_idx];
+ 	return res;
+ }
+diff --git a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+index 3f1096a..ee0d925 100644
+--- a/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
++++ b/database-connector/src/optimizer/order_by_and_limit_optimizer.cpp
+@@ -85,7 +85,7 @@ static string TraceColumnToGet(const OrderByAndLimitOptimizer::Config &config, E
+ 		return std::string();
+ 	}
+ 	auto query_config = query::QueryWriter::CreateConfig(config.identifier_quote, config.escape_style);
+-	return query::QueryWriter::WriteQuotedAndEscaped(query_config, get.names[actual_col_idx]);
++	return query::QueryWriter::WriteQuotedAndEscaped(query_config, get.names[actual_col_idx].GetIdentifierName());
+ }
+ 
+ static string TryBuildOrderByClause(const OrderByAndLimitOptimizer::Config &config, vector<BoundOrderByNode> &orders,
