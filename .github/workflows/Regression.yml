@@ -358,7 +358,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    if: false  # disabled on this fork
+    if: ${{ false }}  # disabled on this fork
     needs:
       - linux-base
     runs-on: ubuntu-24.04
