@@ -61,7 +61,7 @@ static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, uniq
 	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
 	projection->children.push_back(std::move(child));
 	projection->ResolveOperatorTypes();
-	return projection;
+	return std::move(projection);
 }
 
 static idx_t RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIndex delim_scan_index) {
