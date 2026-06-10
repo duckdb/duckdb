@@ -78,6 +78,9 @@ TEST_CASE("Arrow schema for GEOMETRY with CRS survives transaction commit (#475)
 	// the way consumers used to before the fix -- reaches the CRS catalog lookup
 	// with no active transaction and throws. This is the #475 failure mode.
 	SECTION("rebuilding the schema post-commit reproduces the failure") {
+#ifndef DUCKDB_CRASH_ON_ASSERT
+		// Skipped under CRASH_ON_ASSERT: the InternalException this provokes aborts
+		// instead of throwing.
 		REQUIRE_THROWS([&]() {
 			ArrowSchema rebuilt;
 			rebuilt.release = nullptr;
@@ -86,6 +89,7 @@ TEST_CASE("Arrow schema for GEOMETRY with CRS survives transaction commit (#475)
 				rebuilt.release(&rebuilt);
 			}
 		}());
+#endif
 	}
 
 	// The fix: the collector cached the schema while the producing transaction
