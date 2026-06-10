@@ -685,7 +685,7 @@ void GeneratedDedupRefEliminator::FindJoinsWithGeneratedDedupRefs(unique_ptr<Log
 	}
 
 	for (auto &child : op->children) {
-		FindJoinsWithGeneratedDedupRefs(child, joins, depth);
+		FindJoinsWithGeneratedDedupRefs(child, joins, depth + 1);
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
