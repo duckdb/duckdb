@@ -31,13 +31,13 @@ constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 class ParquetPagePayloadBuffer : public AsyncWriteBuffer {
 public:
-	ParquetPagePayloadBuffer(const_data_ptr_t data_p, idx_t size_p, unique_ptr<MemoryStream> temp_writer_p,
+	ParquetPagePayloadBuffer(data_ptr_t data_p, idx_t size_p, unique_ptr<MemoryStream> temp_writer_p,
 	                         AllocatedData compressed_buf_p)
 	    : data(data_p), size(size_p), temp_writer(std::move(temp_writer_p)),
 	      compressed_buf(std::move(compressed_buf_p)) {
 	}
 
-	const_data_ptr_t Ptr() const override {
+	data_ptr_t Ptr() override {
 		return data;
 	}
 
@@ -46,7 +46,7 @@ public:
 	}
 
 private:
-	const_data_ptr_t data;
+	data_ptr_t data;
 	idx_t size;
 	unique_ptr<MemoryStream> temp_writer;
 	AllocatedData compressed_buf;

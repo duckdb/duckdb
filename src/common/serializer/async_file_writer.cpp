@@ -6,7 +6,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 #include <cstring>
 
@@ -16,11 +18,11 @@ namespace {
 
 class CopiedAsyncWriteBuffer : public AsyncWriteBuffer {
 public:
-	explicit CopiedAsyncWriteBuffer(idx_t size_p)
-	    : data(make_unsafe_uniq_array_uninitialized<data_t>(size_p)), size(size_p) {
+	CopiedAsyncWriteBuffer(ClientContext &context, idx_t size_p)
+	    : data(BufferAllocator::Get(context).Allocate(size_p)), size(size_p) {
 	}
 
-	const_data_ptr_t Ptr() const override {
+	data_ptr_t Ptr() override {
 		return data.get();
 	}
 
@@ -28,19 +30,31 @@ public:
 		return size;
 	}
 
-	data_ptr_t MutablePtr() {
-		return data.get();
-	}
-
 private:
-	unsafe_unique_array<data_t> data;
+	AllocatedData data;
 	idx_t size;
 };
 
-static idx_t ClampWriterWatermark(idx_t value) {
-	constexpr idx_t MINIMUM_WATERMARK = 64ULL * 1024ULL * 1024ULL;
-	constexpr idx_t MAXIMUM_WATERMARK = 512ULL * 1024ULL * 1024ULL;
-	return MinValue<idx_t>(MaxValue<idx_t>(value, MINIMUM_WATERMARK), MAXIMUM_WATERMARK);
+static ClientContext &RequireClientContext(QueryContext context) {
+	auto client_context = context.GetClientContext();
+	if (!client_context) {
+		throw InvalidInputException("AsyncFileWriter requires a ClientContext");
+	}
+	return *client_context;
+}
+
+static idx_t MultiplyCap(idx_t lhs, idx_t rhs) {
+	if (lhs != 0 && rhs > NumericLimits<idx_t>::Maximum() / lhs) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return lhs * rhs;
+}
+
+static idx_t MemoryStateUpdateGranularity(idx_t max_pending_bytes, idx_t coalesce_threshold) {
+	constexpr idx_t MINIMUM_UPDATE_GRANULARITY = 1024ULL * 1024ULL;
+	auto threshold = max_pending_bytes / 16;
+	threshold = MaxValue(threshold, coalesce_threshold);
+	return MaxValue(threshold, MINIMUM_UPDATE_GRANULARITY);
 }
 
 } // namespace
@@ -61,11 +75,14 @@ private:
 
 AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const string &path_p,
                                  FileOpenFlags open_flags, AsyncFileWriterOptions options)
-    : context(context_p), fs(fs_p), path(path_p) {
+    : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 	ResolveOptions(options);
-	if (context.GetClientContext()) {
-		executor = make_uniq<TaskExecutor>(*context.GetClientContext(), TaskSchedulerType::ASYNC);
+	auto &scheduler = TaskScheduler::GetScheduler(client_context);
+	if (scheduler.NumberOfAsyncThreads() > 0) {
+		executor = make_uniq<TaskExecutor>(client_context, TaskSchedulerType::ASYNC);
+		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
+		memory_state->SetZero();
 	}
 }
 
@@ -75,6 +92,20 @@ AsyncFileWriter::~AsyncFileWriter() {
 			Close();
 		} catch (...) {
 		}
+	}
+}
+
+AsyncFileWriter::BatchGuard::BatchGuard(AsyncFileWriter &writer_p) : writer(writer_p) {
+	writer->BeginBatch();
+}
+
+AsyncFileWriter::BatchGuard::BatchGuard(BatchGuard &&other) noexcept : writer(other.writer) {
+	other.writer = nullptr;
+}
+
+AsyncFileWriter::BatchGuard::~BatchGuard() {
+	if (writer) {
+		writer->EndBatch();
 	}
 }
 
@@ -90,26 +121,12 @@ void AsyncFileWriter::ResolveOptions(AsyncFileWriterOptions options) {
 
 	coalesce_threshold = local_file ? options.local_coalesce_threshold : options.remote_coalesce_threshold;
 	if (coalesce_threshold == 0) {
-		coalesce_threshold = FILE_BUFFER_SIZE;
+		coalesce_threshold = AsyncFileWriterOptions::DEFAULT_LOCAL_COALESCE_THRESHOLD;
 	}
 
-	idx_t resolved_high_watermark;
-	if (options.high_watermark != 0) {
-		resolved_high_watermark = options.high_watermark;
-	} else if (context.GetClientContext()) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*context.GetClientContext());
-		resolved_high_watermark = ClampWriterWatermark(buffer_manager.GetOperatorMemoryLimit() / 16);
-	} else {
-		resolved_high_watermark = 512ULL * 1024ULL * 1024ULL;
-	}
-	high_watermark = MaxValue<idx_t>(resolved_high_watermark, coalesce_threshold * 2);
-	low_watermark = options.low_watermark != 0 ? options.low_watermark : high_watermark / 2;
-	low_watermark = MinValue<idx_t>(low_watermark, high_watermark);
-}
-
-FileHandle &AsyncFileWriter::GetFileHandle() {
-	D_ASSERT(handle);
-	return *handle;
+	auto &scheduler = TaskScheduler::GetScheduler(client_context);
+	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+	max_pending_bytes = MultiplyCap(options.max_pending_bytes_per_thread, regular_threads);
 }
 
 idx_t AsyncFileWriter::GetFileSize() {
@@ -125,8 +142,8 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	if (write_size == 0) {
 		return;
 	}
-	auto owned_buffer = make_uniq<CopiedAsyncWriteBuffer>(write_size);
-	memcpy(owned_buffer->MutablePtr(), buffer, write_size);
+	auto owned_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, write_size);
+	memcpy(owned_buffer->Ptr(), buffer, write_size);
 	RegisterWrite(std::move(owned_buffer));
 }
 
@@ -153,10 +170,39 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer) {
 	bool should_schedule = false;
 	{
 		lock_guard<mutex> guard(lock);
-		pending_writes.push_back({total_written, std::move(buffer)});
-		pending_bytes += pending_writes.back().buffer->Size();
-		total_written += pending_writes.back().buffer->Size();
+		pending_bytes += buffer->Size();
+		total_written += buffer->Size();
+		pending_writes.push_back(std::move(buffer));
 		if (!task_scheduled && batch_depth == 0) {
+			task_scheduled = true;
+			should_schedule = true;
+		}
+	}
+	if (should_schedule) {
+		UpdateMemoryState();
+		ScheduleTask();
+	} else {
+		UpdateMemoryState();
+	}
+}
+
+void AsyncFileWriter::ScheduleTask() {
+	D_ASSERT(executor);
+	executor->ScheduleTask(make_uniq<AsyncFileWriterTask>(*this, *executor));
+}
+
+AsyncFileWriter::BatchGuard AsyncFileWriter::StartBatch() {
+	return BatchGuard(*this);
+}
+
+void AsyncFileWriter::SchedulePendingWrites() {
+	if (!executor) {
+		return;
+	}
+	bool should_schedule = false;
+	{
+		lock_guard<mutex> guard(lock);
+		if (!task_scheduled && !pending_writes.empty()) {
 			task_scheduled = true;
 			should_schedule = true;
 		}
@@ -166,17 +212,50 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer) {
 	}
 }
 
-void AsyncFileWriter::ScheduleTask() {
-	D_ASSERT(executor);
-	executor->ScheduleTask(make_uniq<AsyncFileWriterTask>(*this, *executor));
+void AsyncFileWriter::UpdateMemoryState(bool force) {
+	if (!memory_state) {
+		return;
+	}
+
+	// TMM is shared state; report coarse backlog changes instead of touching it for every registered write.
+	idx_t current_pending_bytes;
+	bool should_update;
+	{
+		lock_guard<mutex> guard(lock);
+		if (batch_depth > 0 && !force) {
+			return;
+		}
+		current_pending_bytes = pending_bytes;
+		auto update_granularity = MemoryStateUpdateGranularity(max_pending_bytes, coalesce_threshold);
+		auto grew_enough = current_pending_bytes > memory_state_pending_bytes &&
+		                   current_pending_bytes - memory_state_pending_bytes >= update_granularity;
+		should_update = force || current_pending_bytes == 0 || memory_state_pending_bytes == 0 || grew_enough ||
+		                current_pending_bytes <= memory_state_pending_bytes / 2;
+		if (!should_update) {
+			return;
+		}
+		memory_state_pending_bytes = current_pending_bytes;
+	}
+	if (current_pending_bytes == 0) {
+		memory_state->SetZero();
+	} else {
+		memory_state->SetRemainingSizeAndUpdateReservation(client_context, current_pending_bytes);
+	}
+}
+
+idx_t AsyncFileWriter::BackpressureBudget() {
+	if (!memory_state) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return MinValue(memory_state->GetReservation(), max_pending_bytes);
 }
 
 void AsyncFileWriter::DrainPendingWrites() {
 	while (true) {
-		vector<PendingWrite> writes;
+		vector<unique_ptr<AsyncWriteBuffer>> writes;
 		{
 			lock_guard<mutex> guard(lock);
-			if (pending_writes.empty()) {
+			if (pending_writes.empty() || batch_depth > 0) {
 				task_scheduled = false;
 				return;
 			}
@@ -187,10 +266,11 @@ void AsyncFileWriter::DrainPendingWrites() {
 		{
 			lock_guard<mutex> guard(lock);
 			for (auto &write : writes) {
-				D_ASSERT(pending_bytes >= write.buffer->Size());
-				pending_bytes -= write.buffer->Size();
+				D_ASSERT(pending_bytes >= write->Size());
+				pending_bytes -= write->Size();
 			}
 		}
+		UpdateMemoryState();
 	}
 }
 
@@ -206,28 +286,29 @@ void AsyncFileWriter::EndBatch() {
 	if (!executor) {
 		return;
 	}
-	bool should_schedule = false;
+	bool batch_done = false;
 	{
 		lock_guard<mutex> guard(lock);
-		D_ASSERT(batch_depth > 0);
-		batch_depth--;
-		if (batch_depth == 0 && !task_scheduled && !pending_writes.empty()) {
-			task_scheduled = true;
-			should_schedule = true;
+		if (batch_depth == 0) {
+			return;
 		}
+		batch_depth--;
+		batch_done = batch_depth == 0;
 	}
-	if (should_schedule) {
-		ScheduleTask();
+	if (batch_done) {
+		UpdateMemoryState(true);
+		SchedulePendingWrites();
 	}
 }
 
-void AsyncFileWriter::WritePendingWrites(vector<PendingWrite> &writes) {
+void AsyncFileWriter::WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes) {
+	// The writer is a sequential stream: keep registration order and write through the handle's current position.
 	idx_t i = 0;
 	while (i < writes.size()) {
-		auto &write = writes[i];
-		auto write_size = write.buffer->Size();
+		auto &write = *writes[i];
+		auto write_size = write.Size();
 		if (write_size >= coalesce_threshold) {
-			WriteBuffer(write.buffer->Ptr(), write_size);
+			WriteBuffer(write.Ptr(), write_size);
 			i++;
 			continue;
 		}
@@ -235,7 +316,7 @@ void AsyncFileWriter::WritePendingWrites(vector<PendingWrite> &writes) {
 		idx_t coalesced_size = 0;
 		idx_t end = i;
 		while (end < writes.size()) {
-			auto next_size = writes[end].buffer->Size();
+			auto next_size = writes[end]->Size();
 			if (next_size >= coalesce_threshold || coalesced_size + next_size > coalesce_threshold) {
 				break;
 			}
@@ -243,25 +324,25 @@ void AsyncFileWriter::WritePendingWrites(vector<PendingWrite> &writes) {
 			end++;
 		}
 		if (end == i + 1) {
-			WriteBuffer(write.buffer->Ptr(), write_size);
+			WriteBuffer(write.Ptr(), write_size);
 			i++;
 			continue;
 		}
 
-		auto coalesced = make_unsafe_uniq_array_uninitialized<data_t>(coalesced_size);
+		auto coalesced = BufferAllocator::Get(client_context).Allocate(coalesced_size);
 		idx_t offset = 0;
 		for (idx_t write_idx = i; write_idx < end; write_idx++) {
-			auto &current = writes[write_idx];
-			memcpy(coalesced.get() + offset, current.buffer->Ptr(), current.buffer->Size());
-			offset += current.buffer->Size();
+			auto &current = *writes[write_idx];
+			memcpy(coalesced.get() + offset, current.Ptr(), current.Size());
+			offset += current.Size();
 		}
 		WriteBuffer(coalesced.get(), coalesced_size);
 		i = end;
 	}
 }
 
-void AsyncFileWriter::WriteBuffer(const_data_ptr_t buffer, idx_t size) {
-	handle->Write(context, const_cast<data_ptr_t>(buffer), size);
+void AsyncFileWriter::WriteBuffer(data_ptr_t buffer, idx_t size) {
+	handle->Write(context, buffer, size);
 }
 
 void AsyncFileWriter::RethrowTaskError() {
@@ -271,7 +352,7 @@ void AsyncFileWriter::RethrowTaskError() {
 }
 
 void AsyncFileWriter::Flush() {
-	RethrowTaskError();
+	WaitAll();
 }
 
 void AsyncFileWriter::ApplyBackpressure() {
@@ -280,25 +361,31 @@ void AsyncFileWriter::ApplyBackpressure() {
 	}
 	RethrowTaskError();
 	while (true) {
+		idx_t current_pending_bytes;
 		{
 			lock_guard<mutex> guard(lock);
-			if (pending_bytes <= high_watermark) {
+			if (batch_depth > 0) {
 				return;
 			}
+			current_pending_bytes = pending_bytes;
 		}
+		if (current_pending_bytes <= BackpressureBudget()) {
+			return;
+		}
+		SchedulePendingWrites();
 		executor->WorkOnTasks();
 		RethrowTaskError();
-		{
-			lock_guard<mutex> guard(lock);
-			if (pending_bytes <= low_watermark) {
-				return;
-			}
-		}
 	}
 }
 
 void AsyncFileWriter::WaitAll() {
 	if (executor) {
+		{
+			lock_guard<mutex> guard(lock);
+			batch_depth = 0;
+		}
+		UpdateMemoryState(true);
+		SchedulePendingWrites();
 		executor->WorkOnTasks();
 	}
 	RethrowTaskError();
