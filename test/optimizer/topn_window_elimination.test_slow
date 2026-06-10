@@ -356,6 +356,286 @@ SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
 x	100.0
 y	200.0
 
+statement ok
+CREATE TABLE rank_ties(p INT, v INT, id INT)
+
+statement ok
+INSERT INTO rank_ties VALUES (1, 10, 1), (1, 9, 2), (1, 9, 3), (1, 8, 4), (2, 5, 5), (2, 5, 6), (2, 4, 7)
+
+query II
+EXPLAIN SELECT *
+FROM (
+	SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+	FROM rank_ties
+) ranked
+WHERE rk <= 2
+ORDER BY ALL
+----
+logical_opt	<REGEX>:.*WINDOW.*AGGREGATE.*
+
+statement ok
+CREATE TABLE rank_ties_with_optimizer AS
+SELECT *
+FROM (
+	SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+	FROM rank_ties
+) ranked
+WHERE rk <= 2
+ORDER BY ALL
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+query IIII
+SELECT * FROM rank_ties_with_optimizer
+EXCEPT
+SELECT *
+FROM (
+	SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+	FROM rank_ties
+) ranked
+WHERE rk <= 2
+ORDER BY ALL
+----
+
+query IIII
+SELECT *
+FROM (
+	SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+	FROM rank_ties
+) ranked
+WHERE rk <= 2
+EXCEPT
+SELECT * FROM rank_ties_with_optimizer
+ORDER BY ALL
+----
+
+statement ok
+SET disabled_optimizers = ''
+
+query IIII
+SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+FROM rank_ties
+QUALIFY rk <= 2
+ORDER BY ALL
+----
+1	9	2	2
+1	9	3	2
+1	10	1	1
+2	5	5	1
+2	5	6	1
+
+query IIIII
+SELECT p, v, id,
+       rank() OVER (PARTITION BY p ORDER BY v DESC) rk,
+       rank() OVER (PARTITION BY p ORDER BY v DESC) rk2
+FROM rank_ties
+QUALIFY rk <= 2
+ORDER BY ALL
+----
+1	9	2	2	2
+1	9	3	2	2
+1	10	1	1	1
+2	5	5	1	1
+2	5	6	1	1
+
+statement ok
+CREATE TABLE rank_late_ties(p INT, v INT, id INT)
+
+statement ok
+INSERT INTO rank_late_ties VALUES (1, 100, 1), (1, 90, 2), (1, 90, 3), (1, 95, 4)
+
+query II
+EXPLAIN SELECT *
+FROM (
+	SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+	FROM rank_late_ties
+) ranked
+WHERE rk <= 3
+ORDER BY ALL
+----
+logical_opt	<REGEX>:.*WINDOW.*AGGREGATE.*
+
+query IIII
+SELECT p, v, id, rank() OVER (PARTITION BY p ORDER BY v DESC) rk
+FROM rank_late_ties
+QUALIFY rk <= 3
+ORDER BY ALL
+----
+1	90	2	3
+1	90	3	3
+1	95	4	2
+1	100	1	1
+
+statement ok
+CREATE TABLE ordered_rollup_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO ordered_rollup_prefix VALUES (NULL, 'a', 10), (NULL, 'b', 5), ('A', 'x', 7), ('B', 'y', 6)
+
+query III
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 3
+----
+NULL	NULL	28
+NULL	NULL	15
+NULL	a	10
+
+statement ok
+CREATE TABLE ordered_rollup_prefix_with_optimizer AS
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 8
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE TABLE ordered_rollup_prefix_without_optimizer AS
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 8
+
+query III
+SELECT * FROM ordered_rollup_prefix_with_optimizer
+EXCEPT ALL
+SELECT * FROM ordered_rollup_prefix_without_optimizer
+----
+
+query III
+SELECT * FROM ordered_rollup_prefix_without_optimizer
+EXCEPT ALL
+SELECT * FROM ordered_rollup_prefix_with_optimizer
+----
+
+query IIII
+SELECT k, c, s, sum(s) OVER (PARTITION BY k) ws
+FROM (
+	SELECT k, c, sum(v) s
+	FROM ordered_rollup_prefix
+	GROUP BY rollup(k, c)
+) rollup_rows
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC, ws DESC
+LIMIT 3
+----
+NULL	NULL	28	58
+NULL	NULL	15	58
+NULL	a	10	58
+
+statement ok
+SET disabled_optimizers = ''
+
+statement ok
+CREATE TABLE rank_rollup_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_rollup_prefix VALUES (NULL, 'a', 10), (NULL, 'b', 5), ('A', 'x', 7), ('B', 'y', 6)
+
+query IIII
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 2
+----
+NULL	NULL	15	2
+NULL	NULL	28	1
+
+statement ok
+CREATE TABLE rank_rollup_prefix_with_optimizer AS
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 5
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE TABLE rank_rollup_prefix_without_optimizer AS
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 5
+
+query IIII
+SELECT * FROM rank_rollup_prefix_with_optimizer
+EXCEPT ALL
+SELECT * FROM rank_rollup_prefix_without_optimizer
+----
+
+query IIII
+SELECT * FROM rank_rollup_prefix_without_optimizer
+EXCEPT ALL
+SELECT * FROM rank_rollup_prefix_with_optimizer
+----
+
+statement ok
+SET disabled_optimizers = ''
+
+statement ok
+CREATE TABLE rank_grouping_sets_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_grouping_sets_prefix VALUES (NULL, 'z', 10), ('A', 'a', 100)
+
+query IIII
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_grouping_sets_prefix
+	GROUP BY GROUPING SETS ((k), (c), ())
+) ranked
+WHERE rk <= 10
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC, rk NULLS FIRST
+LIMIT 3
+----
+NULL	NULL	110	1
+NULL	NULL	10	3
+NULL	a	100	2
+
+statement ok
+CREATE TABLE rank_rollup_prefix_reordered(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_rollup_prefix_reordered VALUES (NULL, 'z', 10), ('A', 'a', 100)
+
+query IIII
+SELECT *
+FROM (
+	SELECT c, k, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix_reordered
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 10
+ORDER BY c NULLS FIRST, k NULLS FIRST, s DESC, rk NULLS FIRST
+LIMIT 3
+----
+NULL	NULL	110	1
+NULL	NULL	10	2
+NULL	A	100	1
+
 # Left projection map corruption issue #21650
 statement ok
 CREATE TABLE s (s1 VARCHAR)

@@ -708,7 +708,7 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 		auto arg_val = STATE::ARG_TYPE::Create(arg_format, arg_idx);
 		auto val_val = STATE::VAL_TYPE::Create(val_format, val_idx);
 
-		state.heap.Insert(aggr_input.allocator, arg_val, val_val);
+		state.heap.Insert(aggr_input.allocator, arg_val, val_val, bind_data.with_ties);
 	}
 }
 

@@ -9,7 +9,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalTopN &op) {
 	auto &plan = CreatePlan(*op.children[0]);
 	auto &top_n =
 	    Make<PhysicalTopN>(op.types, std::move(op.orders), NumericCast<idx_t>(op.limit), NumericCast<idx_t>(op.offset),
-	                       std::move(op.dynamic_filter), op.estimated_cardinality);
+	                       std::move(op.dynamic_filter), std::move(op.secondary_dynamic_filter),
+	                       std::move(op.secondary_dynamic_filter_prefix), op.estimated_cardinality);
 	top_n.children.push_back(plan);
 	return top_n;
 }
