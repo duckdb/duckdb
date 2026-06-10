@@ -237,6 +237,18 @@ duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prep
 	return type;
 }
 
+const char *duckdb_prepared_column_origin_table(duckdb_prepared_statement prepared_statement, idx_t col_idx) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return nullptr;
+	}
+	auto &origin_tables = wrapper->statement->GetColumnOriginTables();
+	if (col_idx >= origin_tables.size()) {
+		return nullptr;
+	}
+	return strdup(origin_tables[col_idx].c_str());
+}
+
 duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val) {
 	auto value = reinterpret_cast<Value *>(val);
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
