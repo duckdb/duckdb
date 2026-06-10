@@ -57,10 +57,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
 	loader.RegisterFunction(copy_fun);
 	copy_fun.extension = "ndjson";
-	copy_fun.name = "ndjson";
+	copy_fun.SetName("ndjson");
 	loader.RegisterFunction(copy_fun);
 	copy_fun.extension = "jsonl";
-	copy_fun.name = "jsonl";
+	copy_fun.SetName("jsonl");
 	loader.RegisterFunction(copy_fun);
 
 	// JSON macro's

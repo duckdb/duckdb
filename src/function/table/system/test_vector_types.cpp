@@ -296,7 +296,8 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 
 	map<LogicalTypeId, TestType> test_type_map;
 	for (auto &test_type : test_types) {
-		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
+		auto type_id = test_type.type.id();
+		test_type_map.insert(make_pair(type_id, std::move(test_type)));
 	}
 
 	TestVectorInfo info(bind_data.types, test_type_map, result->entries);

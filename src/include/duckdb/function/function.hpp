@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -102,11 +103,11 @@ struct FunctionParameters {
 
 class FunctionParameter {
 public:
-	FunctionParameter(string name, LogicalType type)
+	FunctionParameter(Identifier name, LogicalType type)
 	    : name(std::move(name)), type(std::move(type)), default_value(nullptr) {
 	}
 
-	FunctionParameter(string name, LogicalType type, Value value)
+	FunctionParameter(Identifier name, LogicalType type, Value value)
 	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
 	}
 
@@ -115,10 +116,10 @@ public:
 	bool operator==(const FunctionParameter &other) const;
 	bool operator!=(const FunctionParameter &other) const;
 
-	auto GetName() const -> const string & {
+	auto GetName() const -> const Identifier & {
 		return name;
 	}
-	auto SetName(string name_p) -> void {
+	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
 	}
 
@@ -140,7 +141,7 @@ public:
 	}
 
 private:
-	string name;
+	Identifier name;
 	LogicalType type;
 	shared_ptr<Value> default_value;
 };
@@ -197,26 +198,26 @@ public:
 		varargs = std::move(varargs_p);
 	}
 
-	auto AddParameter(string name, LogicalType type, Value default_value) -> FunctionSignature & {
+	auto AddParameter(Identifier name, LogicalType type, Value default_value) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value));
 		return *this;
 	}
 
-	auto AddParameter(string name, LogicalType type) -> FunctionSignature & {
+	auto AddParameter(Identifier name, LogicalType type) -> FunctionSignature & {
 		parameters.emplace_back(std::move(name), std::move(type));
 		return *this;
 	}
 
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
 		auto name = StringUtil::Format("col%d", parameters.size());
-		parameters.emplace_back(name, std::move(type));
+		parameters.emplace_back(Identifier(name), std::move(type));
 		return *this;
 	}
 
-	auto GetParameterIndexByName(const string &name) const -> optional_idx {
+	auto GetParameterIndexByName(const Identifier &name) const -> optional_idx {
 		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
-			if (StringUtil::CIEquals(parameters[i].GetName(), name)) {
+			if (parameters[i].GetName() == name) {
 				return i;
 			}
 		}
@@ -235,7 +236,7 @@ public:
 
 	void Verify() const {
 		// Check for duplicate parameter names
-		case_insensitive_set_t seen_names;
+		identifier_set_t seen_names;
 		for (const auto &param : parameters) {
 			if (seen_names.find(param.GetName()) != seen_names.end()) {
 				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
@@ -268,53 +269,53 @@ private:
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
-	DUCKDB_API explicit Function(string name);
+	DUCKDB_API explicit Function(Identifier name);
 	DUCKDB_API virtual ~Function();
 
 	//! The name of the function
-	string name;
+	Identifier name;
 	//! Additional Information to specify function from it's name
 	string extra_info;
 
 	// Optional catalog name of the function
-	string catalog_name;
+	Identifier catalog_name;
 
 	// Optional schema name of the function
-	string schema_name;
+	Identifier schema_name;
 
 public:
-	auto SetName(string name_p) -> void {
+	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
 	}
-	auto SetSchemaName(string schema_name_p) -> void {
+	auto SetSchemaName(Identifier schema_name_p) -> void {
 		schema_name = std::move(schema_name_p);
 	}
-	auto SetCatalogName(string catalog_name_p) -> void {
+	auto SetCatalogName(Identifier catalog_name_p) -> void {
 		catalog_name = std::move(catalog_name_p);
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
-	const string &GetSchemaName() const {
+	const Identifier &GetSchemaName() const {
 		return schema_name;
 	}
-	const string &GetCatalogName() const {
+	const Identifier &GetCatalogName() const {
 		return catalog_name;
 	}
 
 	//! Returns the formatted string name(arg1, arg2, ...)
-	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
-	                                      const vector<LogicalType> &arguments,
-	                                      const vector<pair<string, LogicalType>> &named_arguments,
+	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
+	                                      const Identifier &name, const vector<LogicalType> &arguments,
+	                                      const vector<pair<Identifier, LogicalType>> &named_arguments,
 	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
-	                                      const vector<LogicalType> &arguments, const LogicalType &varargs,
-	                                      const LogicalType &return_type);
+	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
+	                                      const Identifier &name, const vector<LogicalType> &arguments,
+	                                      const LogicalType &varargs, const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
-	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
-	                                      const vector<LogicalType> &arguments,
+	DUCKDB_API static string CallToString(const Identifier &catalog_name, const Identifier &schema_name,
+	                                      const Identifier &name, const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
 	//! Used in the bind to erase an argument from a function
 	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
@@ -323,8 +324,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	DUCKDB_API SimpleFunction(string name, FunctionSignature signature);
-	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API SimpleFunction(Identifier name, FunctionSignature signature);
+	DUCKDB_API SimpleFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
@@ -364,7 +365,7 @@ public:
 
 class SimpleNamedParameterFunction : public Function {
 public:
-	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleNamedParameterFunction(Identifier name, vector<LogicalType> arguments,
 	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleNamedParameterFunction() override;
 
@@ -477,9 +478,9 @@ public:
 
 class BoundSimpleFunction {
 protected:
-	string name;
-	string schema_name;
-	string catalog_name;
+	Identifier name;
+	Identifier schema_name;
+	Identifier catalog_name;
 	string extra_info;
 
 	//! The set of arguments of the function
@@ -491,17 +492,17 @@ protected:
 	LogicalType return_type;
 
 public:
-	void SetName(string name_p) {
+	void SetName(Identifier name_p) {
 		name = std::move(name_p);
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
-	const string &GetSchemaName() const {
+	const Identifier &GetSchemaName() const {
 		return schema_name;
 	}
-	const string &GetCatalogName() const {
+	const Identifier &GetCatalogName() const {
 		return catalog_name;
 	}
 

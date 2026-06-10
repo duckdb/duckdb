@@ -35,7 +35,7 @@ string ParseInfo::TypeToString(CatalogType type) {
 	}
 }
 
-string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
+string ParseInfo::QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name) {
 	string result;
 	if (!catalog.empty()) {
 		result += SQLIdentifier(catalog) + ".";

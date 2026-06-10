@@ -26,7 +26,7 @@ BuiltinFunctions::~BuiltinFunctions() {
 
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
-	CreateCollationInfo info(std::move(name), std::move(function), combinable, not_required_for_equality);
+	CreateCollationInfo info(Identifier(std::move(name)), std::move(function), combinable, not_required_for_equality);
 	info.internal = true;
 	catalog.CreateCollation(transaction, info);
 }
@@ -50,7 +50,7 @@ void BuiltinFunctions::AddFunction(PragmaFunction function) {
 }
 
 void BuiltinFunctions::AddFunction(const string &name, PragmaFunctionSet functions) {
-	CreatePragmaFunctionInfo info(name, std::move(functions));
+	CreatePragmaFunctionInfo info(Identifier(name), std::move(functions));
 	info.internal = true;
 	catalog.CreatePragmaFunction(transaction, info);
 }
@@ -63,7 +63,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 
 void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) { // NOLINT: false positive
 	for (auto &name : names) {
-		function.name = name;
+		function.name = Identifier(name);
 		AddFunction(function);
 	}
 }
@@ -123,7 +123,7 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.GetName());
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), bound_function.GetName());
 
 	// override the function with the extension function
 	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());

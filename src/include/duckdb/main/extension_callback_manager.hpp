@@ -33,7 +33,7 @@ public:
 	ExtensionCallbackManager();
 	~ExtensionCallbackManager();
 
-	void AddExtensionSchema(const string &schema);
+	void AddExtensionSchema(const Identifier &schema);
 	vector<string> GetExtensionSchemas() const;
 
 	static ExtensionCallbackManager &Get(ClientContext &context);

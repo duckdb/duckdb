@@ -20,7 +20,7 @@ unique_ptr<FunctionData> TableFilterFunctions::Bind(BindScalarFunctionInput &inp
 	throw BinderException("Table filter functions are for internal use only!");
 }
 
-bool TableFilterFunctions::IsTableFilterFunction(const string &name) {
+bool TableFilterFunctions::IsTableFilterFunction(const Identifier &name) {
 	static const char *const TABLE_FILTER_FUNCTIONS[] = {
 	    BloomFilterScalarFun::NAME,     DynamicFilterScalarFun::NAME, OptionalFilterScalarFun::NAME,
 	    PerfectHashJoinScalarFun::NAME, PrefixRangeScalarFun::NAME,   SelectivityOptionalFilterScalarFun::NAME};

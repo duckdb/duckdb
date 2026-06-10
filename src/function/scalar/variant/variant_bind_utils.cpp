@@ -109,7 +109,7 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 		return make_uniq<VariantPathBindData>(constant_arg.GetValue<string>());
 	}
 	if (path_type_id == LogicalTypeId::LIST) {
-		return make_uniq<VariantPathBindData>(CollectPaths(constant_arg, function_name));
+		return make_uniq<VariantPathBindData>(CollectPaths(constant_arg, function_name.GetIdentifierName()));
 	}
 
 	throw BinderException("'%s' received an unexpected type for the second argument", function_name);

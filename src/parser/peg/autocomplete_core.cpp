@@ -213,7 +213,7 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 		// no suggestions found during tokenizing
 		// run the root matcher
 		auto peg_matcher = provider.GetPEGMatcher();
-		peg_matcher->Root().Match(state);
+		peg_matcher->ProgramMatcher().Match(state);
 	}
 	if (state.suggestions.empty()) {
 		return {};

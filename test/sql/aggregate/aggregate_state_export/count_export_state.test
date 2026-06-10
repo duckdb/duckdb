@@ -1,0 +1,21 @@
+# name: test/sql/aggregate/aggregate_state_export/count_export_state.test
+# description: Test count aggregate state
+# group: [aggregate_state_export]
+
+query I
+SELECT COUNT(*) export_state
+----
+1
+
+query I
+SELECT COUNT(*) export_state FROM range(10);
+----
+10
+
+query I
+SELECT finalize(combine_aggr(s)) from (select COUNT(*) export_state AS s FROM range(10) union all select count(*) export_state AS s from range(5));
+----
+15
+
+
+

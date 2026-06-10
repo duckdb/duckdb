@@ -1,8 +1,21 @@
 #include "duckdb/function/aggregate_function.hpp"
+
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
+
+AggregateInputData::AggregateInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
+                                       AggregateCombineType combine_type_p)
+    : AggregateInputData(expr.Function(), expr.BindInfo().get(), allocator_p, combine_type_p) {
+}
+
+AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocator &allocator_p,
+                                       AggregateCombineType combine_type_p)
+    : AggregateInputData(aggr.function, aggr.bind_data_wrapper ? aggr.bind_data_wrapper->function_data.get() : nullptr,
+                         allocator_p, combine_type_p) {
+}
 
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&

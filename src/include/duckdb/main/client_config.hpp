@@ -84,13 +84,6 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
 
-	//! If HTTP logging is enabled or not.
-	bool enable_http_logging = true;
-
-	//! **DEPRECATED** The file to save query HTTP logging information to, instead of printing it to the console
-	//! (empty = output to the DuckDB logger)
-	string http_logging_output;
-
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);

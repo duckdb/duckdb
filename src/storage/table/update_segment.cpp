@@ -765,6 +765,16 @@ string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element
 }
 
 template <class T>
+static T GetUpdateNullPadding() {
+	return T();
+}
+
+template <>
+string_t GetUpdateNullPadding() {
+	return string_t(uint32_t(0));
+}
+
+template <class T>
 static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
                                  UnifiedVectorFormat &update, const SelectionVector &sel) {
 	auto update_data = update.GetData<T>(update);
@@ -782,6 +792,7 @@ static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, Updat
 	for (idx_t i = 0; i < base_info.N; i++) {
 		auto base_idx = base_tuples[i];
 		if (!base_validity.RowIsValid(base_idx)) {
+			base_tuple_data[i] = GetUpdateNullPadding<T>();
 			continue;
 		}
 		base_tuple_data[i] = UpdateSelectElement::Operation<T>(*base_info.segment, base_array_data[base_idx]);
@@ -882,7 +893,8 @@ struct ExtractValidityEntry {
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
                                     const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
-                                    idx_t count, const SelectionVector &sel, idx_t row_group_start) {
+                                    idx_t count, const SelectionVector &sel, idx_t row_group_start,
+                                    const ValidityMask *base_table_validity = nullptr) {
 	auto base_id = row_group_start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
@@ -943,6 +955,8 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 		if (base_info_offset < base_info.N && base_tuples[base_info_offset] == update_id) {
 			// it is! we have to move the tuple from base_info->ids[base_info_offset] to update_info
 			result_values[result_offset] = base_info_data[base_info_offset];
+		} else if (base_table_validity && !base_table_validity->RowIsValid(update_id)) {
+			result_values[result_offset] = GetUpdateNullPadding<T>();
 		} else {
 			// it is not! we have to move base_table_data[update_id] to update_info
 			result_values[result_offset] = UpdateSelectElement::Operation<T>(
@@ -1000,8 +1014,9 @@ static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo
                             idx_t row_group_start) {
 	auto base_table_data = FlatVector::GetDataMutable<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
+	auto &base_validity = FlatVector::Validity(base_data);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
-	                              sel, row_group_start);
+	                              sel, row_group_start, &base_validity);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {

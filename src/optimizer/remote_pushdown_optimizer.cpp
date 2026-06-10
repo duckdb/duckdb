@@ -80,7 +80,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
 	// Deduplicate by catalog name.
-	case_insensitive_set_t seen_remote_catalogs;
+	identifier_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
 		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
 		if (!catalog_entry) {
@@ -184,7 +184,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		    "RemotePushdownOptimizer already has CTEs defined - this means no child was created correctly");
 	}
 	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
+		const Identifier &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
 		CatalogPushdownResult cte_result;
 		if (cte_info.query_node) {
@@ -599,8 +599,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	string catalog_name = func_expr.Catalog();
-	string schema_name = func_expr.Schema();
+	Identifier catalog_name = func_expr.Catalog();
+	Identifier schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// If the function has an explicit catalog prefix, check if it's remote
@@ -621,7 +621,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const string &schema = schema_name.empty() ? local_entry.schema : schema_name;
+		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
@@ -717,7 +717,7 @@ void RemotePushdownOptimizer::TrackLocalTable(const SubqueryRef &ref) {
 	}
 }
 
-bool RemotePushdownOptimizer::RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const {
+bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const {
 	auto entry = cte_results.find(cte_name);
 	if (entry != cte_results.end()) {
 		result = entry->second;
@@ -731,8 +731,8 @@ bool RemotePushdownOptimizer::RefersToCTE(const string &cte_name, CatalogPushdow
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	string catalog_name = ref.catalog_name;
-	string schema_name = ref.schema_name;
+	Identifier catalog_name = ref.catalog_name;
+	Identifier schema_name = ref.schema_name;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
@@ -754,7 +754,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 			// verify the table actually exists in the remote catalog - if it does not, fall back
 			// to the binder so it can report a proper error message
 			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
-			const auto &schema = schema_name.empty() ? string(DEFAULT_SCHEMA) : schema_name;
+			const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
 			auto entry = Catalog::GetEntry(binder.context, catalog->GetName(), schema, table_lookup,
 			                               OnEntryNotFound::RETURN_NULL);
 			if (!entry) {
@@ -795,7 +795,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Not found in any local catalog - push to the single remote catalog in the search path,
 	// but only if the table actually exists there (otherwise fall back to the binder for a proper error)
 	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
-	const auto &schema = schema_name.empty() ? string(DEFAULT_SCHEMA) : schema_name;
+	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
 	auto entry =
 	    Catalog::GetEntry(binder.context, remote_catalog.GetName(), schema, table_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
@@ -829,10 +829,10 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Subque
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const ParsedExpression &expr,
-                                                                         const string &catalog_p,
-                                                                         const string &schema_p) {
-	string catalog_name = catalog_p;
-	string schema_name = schema_p;
+                                                                         const Identifier &catalog_p,
+                                                                         const Identifier &schema_p) {
+	Identifier catalog_name = catalog_p;
+	Identifier schema_name = schema_p;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
@@ -941,7 +941,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 	}
 	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
 	// preserve the name DuckDB would generate for the original expression
-	folded->SetAlias(expr->GetAlias().empty() ? expr->ToString() : expr->GetAlias());
+	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());
 	expr = std::move(folded);
 	return ConstantFoldResult::FOLDED;
@@ -1055,13 +1055,13 @@ unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPus
 	return result.catalog->RemoteExecute(binder.context, std::move(node));
 }
 
-void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &catalog_name) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (StringUtil::CIEquals(base.catalog_name, catalog_name)) {
+		if (base.catalog_name == catalog_name) {
 			base.catalog_name = "";
-		} else if (base.catalog_name.empty() && StringUtil::CIEquals(base.schema_name, catalog_name)) {
+		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
 			base.schema_name = "";
 		}
@@ -1102,7 +1102,7 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references, normalising to exactly table.col (2 parts).
@@ -1110,9 +1110,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// not catalog-qualified — so stripping would be wrong.
 		// For 3-part  catalog.table.col        → table.col   (one level stripped)
 		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
-		if (col_ref.ColumnNames().size() >= 3 && StringUtil::CIEquals(col_ref.ColumnNames()[0], catalog_name)) {
-			string table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
-			string col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
+		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
+			Identifier table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
+			Identifier col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
 			col_ref.ColumnNamesMutable() = {std::move(table_name), std::move(col_name)};
 		}
 		return;
@@ -1130,17 +1130,17 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
-		if (StringUtil::CIEquals(func.Catalog(), catalog_name)) {
+		if (func.Catalog() == catalog_name) {
 			func.CatalogMutable() = "";
-		} else if (func.Catalog().empty() && StringUtil::CIEquals(func.Schema(), catalog_name)) {
+		} else if (func.Catalog().empty() && func.Schema() == catalog_name) {
 			func.SchemaMutable() = "";
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
-		if (StringUtil::CIEquals(win.Catalog(), catalog_name)) {
+		if (win.Catalog() == catalog_name) {
 			win.CatalogMutable() = "";
-		} else if (win.Catalog().empty() && StringUtil::CIEquals(win.Schema(), catalog_name)) {
+		} else if (win.Catalog().empty() && win.Schema() == catalog_name) {
 			win.SchemaMutable() = "";
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
@@ -1159,9 +1159,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
 		// TypeExpression (used as a type argument) may carry catalog/schema qualifiers.
 		auto &type_expr = expr.Cast<TypeExpression>();
-		if (StringUtil::CIEquals(type_expr.GetCatalog(), catalog_name)) {
+		if (type_expr.GetCatalog() == catalog_name) {
 			type_expr.SetCatalog("");
-		} else if (type_expr.GetCatalog().empty() && StringUtil::CIEquals(type_expr.GetSchema(), catalog_name)) {
+		} else if (type_expr.GetCatalog().empty() && type_expr.GetSchema() == catalog_name) {
 			type_expr.SetSchema("");
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside type parameters
@@ -1170,7 +1170,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
-void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier &catalog_name) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
@@ -1244,9 +1244,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
-		if (StringUtil::CIEquals(insert.catalog, catalog_name)) {
+		if (insert.catalog == catalog_name) {
 			insert.catalog = "";
-		} else if (insert.catalog.empty() && StringUtil::CIEquals(insert.schema, catalog_name)) {
+		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
 			insert.schema = "";
 		}
 		if (insert.select_statement) {
@@ -1424,7 +1424,7 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const Identifier &catalog_name) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		StripCatalogName(*statement.Cast<SelectStatement>().node, catalog_name);

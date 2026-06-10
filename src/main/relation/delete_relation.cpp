@@ -8,7 +8,7 @@
 namespace duckdb {
 
 DeleteRelation::DeleteRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition_p,
-                               string catalog_name_p, string schema_name_p, string table_name_p)
+                               Identifier catalog_name_p, Identifier schema_name_p, Identifier table_name_p)
     : Relation(context, RelationType::DELETE_RELATION), condition(std::move(condition_p)),
       catalog_name(std::move(catalog_name_p)), schema_name(std::move(schema_name_p)),
       table_name(std::move(table_name_p)) {

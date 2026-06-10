@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_stddev_export_state.test
+# name: test/sql/aggregate/aggregate_state_export/test_stddev_export_state.test
 # description: STDDEV aggregations state export
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 statement ok
 create table stddev_test(val integer, grp integer)

@@ -10,7 +10,10 @@ namespace duckdb {
 namespace {
 
 struct SkewState {
-	size_t n;
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double>;
+
+	idx_t n;
 	double sum;
 	double sum_sqr;
 	double sum_cub;

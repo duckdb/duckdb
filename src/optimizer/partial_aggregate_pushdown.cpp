@@ -290,7 +290,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto aggregate_copy = unique_ptr_cast<Expression, BoundAggregateExpression>(aggr.expressions[i]->Copy());
 		auto lower_aggregate = ExportAggregateFunction::Bind(std::move(aggregate_copy));
 		auto lower_type = lower_aggregate->GetReturnType();
-		if (lower_type.id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!lower_type.IsAggregateState()) {
 			return false;
 		}
 
@@ -298,7 +298,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
 		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
-		if (upper_aggregate->GetReturnType().id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!upper_aggregate->GetReturnType().IsAggregateState()) {
 			return false;
 		}
 		lower_aggregates.push_back(std::move(lower_aggregate));

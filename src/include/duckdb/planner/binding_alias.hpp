@@ -9,24 +9,25 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 class StandardEntry;
 
 struct BindingAlias {
 	BindingAlias();
-	explicit BindingAlias(string alias);
-	BindingAlias(string schema, string alias);
-	BindingAlias(string catalog, string schema, string alias);
+	explicit BindingAlias(Identifier alias);
+	BindingAlias(Identifier schema, Identifier alias);
+	BindingAlias(Identifier catalog, Identifier schema, Identifier alias);
 	explicit BindingAlias(const StandardEntry &entry);
 
 	bool IsSet() const;
-	const string &GetAlias() const;
+	const Identifier &GetAlias() const;
 
-	const string &GetCatalog() const {
+	const Identifier &GetCatalog() const {
 		return catalog;
 	}
-	const string &GetSchema() const {
+	const Identifier &GetSchema() const {
 		return schema;
 	}
 
@@ -35,9 +36,9 @@ struct BindingAlias {
 	string ToString() const;
 
 private:
-	string catalog;
-	string schema;
-	string alias;
+	Identifier catalog;
+	Identifier schema;
+	Identifier alias;
 };
 
 } // namespace duckdb

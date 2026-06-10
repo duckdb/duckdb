@@ -13,12 +13,12 @@
 			{
 				"id": 101,
 				"name": "schema",
-				"type": "string"
+				"type": "Identifier"
 			},
 			{
 				"id": 102,
 				"name": "name",
-				"type": "string"
+				"type": "Identifier"
 			}
 		],
 		"pointer_type": "none"
@@ -37,7 +37,7 @@
 			{
 				"id": 101,
 				"name": "catalog",
-				"type": "string"
+				"type": "Identifier"
 			}
 		],
 		"pointer_type": "none",
