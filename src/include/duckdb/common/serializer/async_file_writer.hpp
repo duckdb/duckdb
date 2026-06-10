@@ -31,11 +31,12 @@ public:
 };
 
 //! WriteStream implementation that registers writes cheaply and drains them on the async task scheduler.
-//! This is a sequential stream writer: logical offsets are assigned when writes are registered via GetTotalWritten(),
-//! but pending writes are always drained to the file handle in registration order.
+//! This is a logical stream writer: offsets are assigned when writes are registered via GetTotalWritten().
+//! Physical writes may complete out of order when positional writes are supported; WaitAll/Close complete the file.
 //! Calls into this writer must be externally serialized; internal locking only coordinates with async drain tasks.
 class AsyncFileWriter : public WriteStream {
 	friend class AsyncFileWriterTask;
+	friend class AsyncFileWriterDrainTaskGuard;
 
 public:
 	//! RAII handle that batches write registration. Async draining is delayed until the last guard is destroyed.
@@ -56,6 +57,7 @@ public:
 		optional_ptr<AsyncFileWriter> writer;
 	};
 
+	//! Default file-open behavior for creating a write-locked output file.
 	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 	//! Capacity of the staging buffer used for small transient WriteData inputs.
 	static constexpr idx_t DEFAULT_COPIED_BUFFER_CAPACITY = 4096;
@@ -65,6 +67,8 @@ public:
 	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum queued async bytes retained per regular execution thread.
 	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
+	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
@@ -98,37 +102,69 @@ public:
 	DUCKDB_API idx_t GetTotalWritten() const;
 
 private:
-	//! Whether registering a buffer should advance the logical stream position.
-	enum class WriteAccounting : uint8_t { ADD_TO_TOTAL_WRITTEN, ALREADY_COUNTED };
 	//! Whether registering a buffer may schedule an async drain task immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to force a TemporaryMemoryState update or apply coarse update filtering.
 	enum class MemoryUpdateMode : uint8_t { COARSE, FORCE };
+	//! Whether async drain tasks can write independent file ranges concurrently.
+	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
+
+	//! Owned write data with the logical file offset assigned at registration.
+	struct PendingWrite {
+		PendingWrite(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset);
+
+		idx_t Size() const;
+
+		unique_ptr<AsyncWriteBuffer> buffer;
+		idx_t offset;
+	};
 
 	//! Register an owned buffer for writing, using the configured synchronous/asynchronous mode.
-	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer,
-	                   WriteAccounting accounting = WriteAccounting::ADD_TO_TOTAL_WRITTEN,
-	                   ScheduleMode schedule_mode = ScheduleMode::ALLOW);
+	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, ScheduleMode schedule_mode = ScheduleMode::ALLOW);
+	//! Register an owned buffer whose bytes were already counted in total_written.
+	void RegisterStagedWrite(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset,
+	                         ScheduleMode schedule_mode = ScheduleMode::ALLOW);
+	//! Add a buffer with its assigned file offset to the configured sync/async write path.
+	void RegisterWriteInternal(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset, ScheduleMode schedule_mode);
 	//! Move any staged copied bytes into the pending write queue.
 	void SealCopiedBuffer(ScheduleMode schedule_mode = ScheduleMode::ALLOW);
-	//! Schedule an async drain task. The caller must have marked task_scheduled.
+
+	//! Schedule one async drain task. The caller must have reserved an active task slot.
 	void ScheduleTask();
-	//! Schedule draining when pending writes exist and no drain task is already scheduled.
+	//! Seal copied bytes, then schedule as many drain tasks as the pending queue allows.
 	void SchedulePendingWrites();
+	//! Schedule drain tasks from already registered pending writes. Safe to call from async drain tasks.
+	void SchedulePendingWritesInternal();
 	//! Enter a registration batch, delaying async draining until EndBatch.
 	void BeginBatch();
 	//! Leave a registration batch and schedule pending writes when the outermost batch closes.
 	void EndBatch();
+
 	//! Report queued bytes to TemporaryMemoryState, avoiding per-write updates in the common path.
 	void UpdateMemoryState(MemoryUpdateMode mode = MemoryUpdateMode::COARSE);
 	//! Return the current async backlog budget after applying the fixed writer cap.
 	idx_t BackpressureBudget();
-	//! Async task entry point that drains pending buffers to the file handle.
+	//! Effective byte budget for one drain task, never smaller than the coalescing threshold.
+	idx_t DrainTaskByteBudget() const;
+	//! Return queued/in-flight bytes that have not reached the file handle yet. Caller must hold lock.
+	idx_t TotalPendingBytes() const;
+	//! Probe whether the file system supports independent positional writes.
+	bool SupportsPositionalWrites();
+	//! Estimate how many drain tasks are useful for the currently queued writes. Caller must hold lock.
+	idx_t EstimateScheduleCount(idx_t available_slots) const;
+	//! Move one byte-budgeted prefix of pending writes into a drain task.
+	idx_t TakePendingWrites(vector<PendingWrite> &writes);
+	//! Release one scheduled/running drain task slot and its in-flight byte accounting.
+	void FinishDrainTask(idx_t in_flight_task_bytes);
+	//! Release a task slot for a scheduled task that never entered the writer because another task failed.
+	void CancelScheduledDrainTask();
+
+	//! Async task entry point that drains one budgeted batch of pending buffers.
 	void DrainPendingWrites();
 	//! Write pending buffers in registration order, coalescing adjacent small writes.
-	idx_t WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes);
-	//! Write bytes to the underlying file handle at its current stream position.
-	void WriteBuffer(data_ptr_t buffer, idx_t size);
+	idx_t WritePendingWrites(vector<PendingWrite> &writes);
+	//! Write bytes to the underlying file handle at the assigned logical stream offset.
+	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
 	//! Surface an error thrown by an async drain task.
 	void RethrowTaskError();
 	//! Resolve constants that depend on the file system and scheduler state.
@@ -148,6 +184,8 @@ private:
 
 	//! Copy staging buffer for small transient WriteData inputs. Only accessed by the registering thread.
 	unique_ptr<CopiedAsyncWriteBuffer> copied_buffer;
+	//! Logical file offset of the first byte in copied_buffer.
+	idx_t copied_buffer_offset = 0;
 	//! Logical stream position, including copied/staged/pending bytes. Updated by the registering thread.
 	idx_t total_written = 0;
 	//! Set once the handle has been closed or detached.
@@ -157,19 +195,25 @@ private:
 	idx_t coalesce_threshold = 0;
 	//! Hard cap over the TemporaryMemoryState reservation.
 	idx_t max_pending_bytes = 0;
+	//! Whether async tasks may drain independent ranges concurrently using positional writes.
+	DrainMode drain_mode = DrainMode::SEQUENTIAL;
+	//! Maximum number of scheduled/running drain tasks for this writer.
+	idx_t max_active_drain_tasks = 1;
 
 	//! Protects state shared between the registering thread and async drain tasks.
 	mutex lock;
-	//! Pending buffers in registration order. No per-write offset is needed for this sequential stream writer.
-	vector<unique_ptr<AsyncWriteBuffer>> pending_writes;
-	//! Bytes in pending_writes that have not reached the file handle yet.
+	//! Pending buffers in registration order with pre-assigned logical file offsets.
+	vector<PendingWrite> pending_writes;
+	//! Bytes queued in pending_writes that have not been taken by a drain task yet.
 	idx_t pending_bytes = 0;
-	//! Last pending byte count reported to TemporaryMemoryState.
+	//! Bytes owned by drain tasks that have not reached the file handle yet.
+	idx_t in_flight_bytes = 0;
+	//! Last queued/in-flight byte count reported to TemporaryMemoryState.
 	idx_t memory_state_pending_bytes = 0;
 	//! Nested batch depth. While non-zero, async draining and backpressure are delayed.
 	idx_t batch_depth = 0;
-	//! Whether a drain task has already been scheduled for the current pending queue.
-	bool task_scheduled = false;
+	//! Scheduled or running drain tasks for this writer.
+	idx_t active_drain_tasks = 0;
 };
 
 } // namespace duckdb

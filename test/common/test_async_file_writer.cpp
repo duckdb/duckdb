@@ -1,8 +1,13 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
 #include "test_helpers.hpp"
+
+#include <chrono>
+#include <condition_variable>
+#include <thread>
 
 using namespace duckdb;
 
@@ -18,13 +23,127 @@ public:
 		if (fail_writes) {
 			throw IOException("Injected async write failure");
 		}
-		write_sizes.push_back(UnsafeNumericCast<idx_t>(nr_bytes));
+		RecordWrite(nr_bytes, NumericLimits<idx_t>::Maximum());
 		return LocalFileSystem::Write(handle, buffer, nr_bytes);
 	}
 
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		if (nr_bytes == 0) {
+			LocalFileSystem::Write(handle, buffer, nr_bytes, location);
+			return;
+		}
+		if (fail_writes) {
+			throw IOException("Injected async write failure");
+		}
+		RecordWrite(nr_bytes, location);
+		LocalFileSystem::Write(handle, buffer, nr_bytes, location);
+	}
+
+protected:
+	void RecordWrite(int64_t nr_bytes, idx_t location) {
+		lock_guard<mutex> guard(lock);
+		write_sizes.push_back(UnsafeNumericCast<idx_t>(nr_bytes));
+		write_offsets.push_back(location);
+	}
+
 public:
+	mutex lock;
 	vector<idx_t> write_sizes;
+	vector<idx_t> write_offsets;
 	bool fail_writes = false;
+};
+
+class BlockingWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	explicit BlockingWriteFileSystem(bool positional_supported_p) : positional_supported(positional_supported_p) {
+	}
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		if (nr_bytes == 0 && !positional_supported) {
+			positional_probe_count++;
+			throw NotImplementedException("Injected missing positional write support");
+		}
+		if (!positional_supported) {
+			throw NotImplementedException("Injected missing positional write support");
+		}
+		if (nr_bytes == 0) {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			return;
+		}
+
+		EnterWrite();
+		try {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			LeaveWrite();
+		} catch (...) {
+			LeaveWrite();
+			throw;
+		}
+	}
+
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		EnterWrite();
+		try {
+			auto result = TrackingWriteFileSystem::Write(handle, buffer, nr_bytes);
+			LeaveWrite();
+			return result;
+		} catch (...) {
+			LeaveWrite();
+			throw;
+		}
+	}
+
+	bool WaitForBlockedWrites(idx_t count) {
+		unique_lock<mutex> guard(block_lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return blocked_writes >= count; });
+	}
+
+	void ReleaseWrites() {
+		{
+			lock_guard<mutex> guard(block_lock);
+			release_writes = true;
+		}
+		cv.notify_all();
+	}
+
+	idx_t MaxActiveWrites() {
+		lock_guard<mutex> guard(block_lock);
+		return max_active_writes;
+	}
+
+	idx_t PositionalProbeCount() const {
+		return positional_probe_count;
+	}
+
+private:
+	void EnterWrite() {
+		unique_lock<mutex> guard(block_lock);
+		active_writes++;
+		max_active_writes = MaxValue(max_active_writes, active_writes);
+		blocked_writes++;
+		cv.notify_all();
+		cv.wait(guard, [&]() { return release_writes; });
+	}
+
+	void LeaveWrite() {
+		{
+			lock_guard<mutex> guard(block_lock);
+			D_ASSERT(active_writes > 0);
+			active_writes--;
+		}
+		cv.notify_all();
+	}
+
+private:
+	const bool positional_supported;
+	idx_t positional_probe_count = 0;
+
+	mutex block_lock;
+	std::condition_variable cv;
+	idx_t active_writes = 0;
+	idx_t max_active_writes = 0;
+	idx_t blocked_writes = 0;
+	bool release_writes = false;
 };
 
 class StringAsyncWriteBuffer : public AsyncWriteBuffer {
@@ -244,6 +363,83 @@ TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[asyn
 	REQUIRE(fs.write_sizes.size() == 2);
 	REQUIRE(fs.write_sizes[0] == large.size());
 	REQUIRE(fs.write_sizes[1] == small_a.size() + small_b.size());
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(true);
+	auto path = TestCreatePath("async_file_writer_parallel_positional.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	}
+
+	auto saw_two_blocked_writes = fs.WaitForBlockedWrites(2);
+	auto max_active_writes = fs.MaxActiveWrites();
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(saw_two_blocked_writes);
+	REQUIRE(max_active_writes >= 2);
+	REQUIRE(ReadFile(path) == first + second);
+	REQUIRE(fs.write_sizes.size() == 2);
+
+	bool saw_first_offset = false;
+	bool saw_second_offset = false;
+	for (auto offset : fs.write_offsets) {
+		if (offset == 0) {
+			saw_first_offset = true;
+		}
+		if (offset == first.size()) {
+			saw_second_offset = true;
+		}
+	}
+	REQUIRE(saw_first_offset);
+	REQUIRE(saw_second_offset);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter falls back to one drain task without positional writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(false);
+	auto path = TestCreatePath("async_file_writer_sequential_fallback.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	}
+
+	auto saw_first_blocked_write = fs.WaitForBlockedWrites(1);
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto max_active_writes = fs.MaxActiveWrites();
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(saw_first_blocked_write);
+	REQUIRE(max_active_writes == 1);
+	REQUIRE(fs.PositionalProbeCount() == 1);
+	REQUIRE(ReadFile(path) == first + second);
+	REQUIRE(fs.write_sizes.size() == 2);
 	fs.RemoveFile(path);
 }
 
