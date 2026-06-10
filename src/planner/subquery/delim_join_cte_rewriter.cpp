@@ -41,11 +41,11 @@ static void VerifyNoDelim(LogicalOperator &op) {
 	}
 }
 
-static vector<string> GenerateCTEColumnNames(idx_t column_count, const string &prefix) {
-	vector<string> result;
+static vector<Identifier> GenerateCTEColumnNames(idx_t column_count, const string &prefix) {
+	vector<Identifier> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result.push_back(prefix + to_string(i));
+		result.push_back(Identifier(prefix + to_string(i)));
 	}
 	return result;
 }
@@ -1763,7 +1763,7 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 
 	vector<idx_t> dedup_column_indices;
 	vector<LogicalType> dedup_types;
-	vector<string> dedup_names;
+	vector<Identifier> dedup_names;
 	vector<unique_ptr<Expression>> extra_left_expressions;
 	dedup_column_indices.reserve(join.duplicate_eliminated_columns.size());
 	dedup_types.reserve(join.duplicate_eliminated_columns.size());
@@ -1820,7 +1820,7 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	left_types = cte_source->types;
 
 	auto cte_index = binder.GenerateTableIndex();
-	auto cte_name = "__duckdb_delim_" + to_string(cte_index.index);
+	auto cte_name = Identifier("__duckdb_delim_" + to_string(cte_index.index));
 
 	auto left_cte_ref_index = binder.GenerateTableIndex();
 	auto left_cte_ref = make_uniq<LogicalCTERef>(left_cte_ref_index, cte_index, left_types,
@@ -1854,7 +1854,7 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	}
 	dedup->children.push_back(std::move(dedup_child));
 
-	auto dedup_cte_name = "__duckdb_delim_dedup_" + to_string(dedup_cte_index.index);
+	auto dedup_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(dedup_cte_index.index));
 	auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan));
 	auto dedup_cte =
 	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
