@@ -632,9 +632,6 @@ private:
 	static bool TransformMaterialized(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformWindowDefinition(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
-	static unique_ptr<SampleOptions> TransformSampleEntryFunction(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
-	static unique_ptr<SampleOptions> TransformSampleEntryCount(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 
 	//===--------------------------------------------------------------------===//
@@ -2597,6 +2594,17 @@ private:
 	TransformWindowClause(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> window_definition);
 	static unique_ptr<TransformResultValue> TransformSampleEntryInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSampleEntryCountInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<SampleOptions>
+	TransformSampleEntryCount(PEGTransformer &transformer, unique_ptr<SampleOptions> sample_count,
+	                          const optional<pair<SampleMethod, optional_idx>> &sample_properties);
+	static unique_ptr<TransformResultValue> TransformSampleEntryFunctionInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<SampleOptions> TransformSampleEntryFunction(PEGTransformer &transformer,
+	                                                              const optional<SampleMethod> &sample_function,
+	                                                              unique_ptr<SampleOptions> sample_count,
+	                                                              const optional<optional_idx> &repeatable_sample);
 	static unique_ptr<TransformResultValue> TransformSampleFunctionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static SampleMethod TransformSampleFunction(PEGTransformer &transformer, const string &col_id);

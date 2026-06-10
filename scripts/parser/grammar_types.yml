@@ -1578,8 +1578,6 @@ excluded_rules:
   - TableFunctionLateralOpt
   - RegularJoinClause
   - WindowDefinition
-  - SampleEntryCount
-  - SampleEntryFunction
   - GroupByList
   - GroupByExpression
   - EmptyGroupingItem

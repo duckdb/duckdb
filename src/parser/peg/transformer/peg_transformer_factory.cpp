@@ -387,8 +387,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
 	REGISTER_TRANSFORM(TransformRegularJoinClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
-	REGISTER_TRANSFORM(TransformSampleEntryCount);
-	REGISTER_TRANSFORM(TransformSampleEntryFunction);
 	REGISTER_TRANSFORM(TransformGroupByList);
 	REGISTER_TRANSFORM(TransformGroupByExpression);
 	REGISTER_TRANSFORM(TransformEmptyGroupingItem);

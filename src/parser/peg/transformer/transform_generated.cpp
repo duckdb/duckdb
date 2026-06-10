@@ -5839,6 +5839,42 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSampleEntryInte
 	return make_uniq<TypedTransformResult<unique_ptr<SampleOptions>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSampleEntryCountInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(list_pr.GetChild(0));
+	optional<pair<SampleMethod, optional_idx>> sample_properties {};
+	auto &sample_properties_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (sample_properties_opt.HasResult()) {
+		auto sample_properties_value = transformer.Transform<pair<SampleMethod, optional_idx>>(
+		    ExtractResultFromParens(sample_properties_opt.GetResult()));
+		sample_properties = sample_properties_value;
+	}
+	auto result = TransformSampleEntryCount(transformer, std::move(sample_count), sample_properties);
+	return make_uniq<TypedTransformResult<unique_ptr<SampleOptions>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSampleEntryFunctionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<SampleMethod> sample_function {};
+	auto &sample_function_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (sample_function_opt.HasResult()) {
+		auto sample_function_value = transformer.Transform<SampleMethod>(sample_function_opt.GetResult());
+		sample_function = sample_function_value;
+	}
+	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	optional<optional_idx> repeatable_sample {};
+	auto &repeatable_sample_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (repeatable_sample_opt.HasResult()) {
+		auto repeatable_sample_value = transformer.Transform<optional_idx>(repeatable_sample_opt.GetResult());
+		repeatable_sample = repeatable_sample_value;
+	}
+	auto result =
+	    TransformSampleEntryFunction(transformer, sample_function, std::move(sample_count), repeatable_sample);
+	return make_uniq<TypedTransformResult<unique_ptr<SampleOptions>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSampleFunctionInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -7332,6 +7368,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"SampleClause", &PEGTransformerFactory::TransformSampleClauseInternal},
 	    {"WindowClause", &PEGTransformerFactory::TransformWindowClauseInternal},
 	    {"SampleEntry", &PEGTransformerFactory::TransformSampleEntryInternal},
+	    {"SampleEntryCount", &PEGTransformerFactory::TransformSampleEntryCountInternal},
+	    {"SampleEntryFunction", &PEGTransformerFactory::TransformSampleEntryFunctionInternal},
 	    {"SampleFunction", &PEGTransformerFactory::TransformSampleFunctionInternal},
 	    {"SampleProperties", &PEGTransformerFactory::TransformSamplePropertiesInternal},
 	    {"RepeatableSample", &PEGTransformerFactory::TransformRepeatableSampleInternal},

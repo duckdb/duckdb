@@ -945,31 +945,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	return std::move(window_function);
 }
 
-unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(PEGTransformer &transformer,
-                                                                              ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto result = transformer.Transform<unique_ptr<SampleOptions>>(extract_parens);
-	transformer.TransformOptional<SampleMethod>(list_pr, 0, result->method);
-	auto &repeatable_sample_opt = list_pr.Child<OptionalParseResult>(2);
-	if (repeatable_sample_opt.HasResult()) {
-		auto repeatable_seed = transformer.Transform<optional_idx>(repeatable_sample_opt.GetResult());
-		result->seed = repeatable_seed;
-		result->repeatable = true;
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(
+    PEGTransformer &transformer, const optional<SampleMethod> &sample_function, unique_ptr<SampleOptions> sample_count,
+    const optional<optional_idx> &repeatable_sample) {
+	if (sample_function) {
+		sample_count->method = *sample_function;
 	}
-	return result;
+	if (repeatable_sample) {
+		sample_count->seed = *repeatable_sample;
+		sample_count->repeatable = true;
+	}
+	return sample_count;
 }
 
-unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryCount(PEGTransformer &transformer,
-                                                                           ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(list_pr.Child<ListParseResult>(0));
-	auto &optional_properties = list_pr.Child<OptionalParseResult>(1);
-	if (optional_properties.HasResult()) {
-		auto &extract_parens = ExtractResultFromParens(optional_properties.GetResult()).Cast<ListParseResult>();
-		auto properties = transformer.Transform<pair<SampleMethod, optional_idx>>(extract_parens);
-		sample_count->method = properties.first;
-		sample_count->seed = properties.second;
+unique_ptr<SampleOptions>
+PEGTransformerFactory::TransformSampleEntryCount(PEGTransformer &transformer, unique_ptr<SampleOptions> sample_count,
+                                                 const optional<pair<SampleMethod, optional_idx>> &sample_properties) {
+	if (sample_properties) {
+		sample_count->method = sample_properties->first;
+		sample_count->seed = sample_properties->second;
 		if (sample_count->seed.IsValid()) {
 			sample_count->repeatable = true;
 		}
