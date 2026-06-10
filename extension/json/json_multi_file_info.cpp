@@ -270,7 +270,8 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 			} else if (arg == "false") {
 				options.record_type = JSONRecordType::VALUES;
 			} else {
-				throw BinderException("COPY (FORMAT JSON) \"records\" parameter must be one of ['auto', 'true', 'false'].");
+				throw BinderException(
+				    "COPY (FORMAT JSON) \"records\" parameter must be one of ['auto', 'true', 'false'].");
 			}
 		}
 		return true;
