@@ -21,6 +21,7 @@
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
+#include "duckdb/optimizer/materialized_cte_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -187,6 +188,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
+
+	// optimize materialized CTE definitions before inlining them
+	RunOptimizer(OptimizerType::MATERIALIZED_CTE, [&]() {
+		MaterializedCTEOptimizer materialized_cte_optimizer(*this);
+		plan = materialized_cte_optimizer.Optimize(std::move(plan));
+	});
 
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
