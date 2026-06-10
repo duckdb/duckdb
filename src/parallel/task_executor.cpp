@@ -32,7 +32,12 @@ void TaskExecutor::ThrowError() {
 
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	++total_tasks;
-	scheduler.ScheduleTask(*token, std::move(task), type);
+	try {
+		scheduler.ScheduleTask(*token, std::move(task), type);
+	} catch (...) {
+		--total_tasks;
+		throw;
+	}
 }
 void TaskExecutor::FinishTask() {
 	++completed_tasks;

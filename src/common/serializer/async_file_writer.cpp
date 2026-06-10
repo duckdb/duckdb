@@ -273,11 +273,6 @@ void AsyncFileWriter::SealCopiedBuffer(ScheduleMode schedule_mode) {
 	RegisterStagedWrite(std::move(sealed_buffer), sealed_buffer_offset, schedule_mode);
 }
 
-void AsyncFileWriter::ScheduleTask() {
-	D_ASSERT(executor);
-	executor->ScheduleTask(make_uniq<AsyncFileWriterTask>(*this, *executor));
-}
-
 AsyncFileWriter::BatchGuard AsyncFileWriter::StartBatch() {
 	return BatchGuard(*this);
 }
@@ -304,7 +299,20 @@ void AsyncFileWriter::SchedulePendingWritesInternal() {
 		}
 	}
 	for (idx_t task_idx = 0; task_idx < schedule_count; task_idx++) {
-		ScheduleTask();
+		unique_ptr<AsyncFileWriterTask> task;
+		try {
+			task = make_uniq<AsyncFileWriterTask>(*this, *executor);
+		} catch (...) {
+			CancelScheduledDrainTasks(schedule_count - task_idx);
+			throw;
+		}
+		try {
+			executor->ScheduleTask(std::move(task));
+		} catch (...) {
+			// The task destructor releases this task's slot. Release the slots for tasks not yet created.
+			CancelScheduledDrainTasks(schedule_count - task_idx - 1);
+			throw;
+		}
 	}
 }
 
@@ -441,9 +449,16 @@ void AsyncFileWriter::FinishDrainTask(idx_t in_flight_task_bytes) {
 }
 
 void AsyncFileWriter::CancelScheduledDrainTask() {
+	CancelScheduledDrainTasks(1);
+}
+
+void AsyncFileWriter::CancelScheduledDrainTasks(idx_t task_count) {
+	if (task_count == 0) {
+		return;
+	}
 	lock_guard<mutex> guard(lock);
-	D_ASSERT(active_drain_tasks > 0);
-	active_drain_tasks--;
+	D_ASSERT(active_drain_tasks >= task_count);
+	active_drain_tasks -= task_count;
 }
 
 void AsyncFileWriter::DrainPendingWrites() {
@@ -592,16 +607,58 @@ void AsyncFileWriter::ApplyBackpressure() {
 }
 
 void AsyncFileWriter::WaitAll() {
-	SealCopiedBuffer(ScheduleMode::DEFER);
-	if (executor) {
-		{
-			lock_guard<mutex> guard(lock);
-			batch_depth = 0;
-		}
-		UpdateMemoryState(MemoryUpdateMode::FORCE);
-		SchedulePendingWrites();
-		executor->WorkOnTasks();
+	WaitAllInternal(BatchDrainMode::PRESERVE_BATCH);
+}
+
+void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
+	if (!executor) {
+		SealCopiedBuffer(ScheduleMode::DEFER);
+		RethrowTaskError();
+		return;
 	}
+
+	const auto preserve_batch = batch_drain_mode == BatchDrainMode::PRESERVE_BATCH;
+	idx_t previous_batch_depth = 0;
+	bool batch_opened_for_drain = false;
+
+	auto open_batch_for_drain = [&]() {
+		if (batch_opened_for_drain) {
+			return;
+		}
+		lock_guard<mutex> guard(lock);
+		previous_batch_depth = batch_depth;
+		batch_depth = 0;
+		batch_opened_for_drain = true;
+	};
+	auto restore_batch = [&]() {
+		if (!preserve_batch || !batch_opened_for_drain) {
+			return;
+		}
+		lock_guard<mutex> guard(lock);
+		batch_depth = previous_batch_depth;
+	};
+
+	try {
+		if (!executor->HasError()) {
+			SealCopiedBuffer(ScheduleMode::DEFER);
+		}
+		open_batch_for_drain();
+		UpdateMemoryState(MemoryUpdateMode::FORCE);
+		if (!executor->HasError()) {
+			SchedulePendingWritesInternal();
+		}
+		executor->WorkOnTasks();
+	} catch (...) {
+		try {
+			open_batch_for_drain();
+			executor->WorkOnTasks();
+		} catch (...) {
+		}
+		restore_batch();
+		throw;
+	}
+
+	restore_batch();
 	RethrowTaskError();
 }
 
@@ -609,7 +666,7 @@ void AsyncFileWriter::Close() {
 	if (closed) {
 		return;
 	}
-	WaitAll();
+	WaitAllInternal(BatchDrainMode::FORCE_CLOSE_BATCH);
 	handle->Close();
 	handle.reset();
 	closed = true;
@@ -624,6 +681,9 @@ void AsyncFileWriter::Truncate(idx_t size) {
 	WaitAll();
 	handle->Truncate(NumericCast<int64_t>(size));
 	total_written = size;
+	if (executor) {
+		UpdateMemoryState(MemoryUpdateMode::FORCE);
+	}
 	if (handle->CanSeek() && handle->SeekPosition() > size) {
 		handle->Seek(size);
 	}

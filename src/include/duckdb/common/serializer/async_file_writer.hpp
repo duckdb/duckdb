@@ -108,6 +108,8 @@ private:
 	enum class MemoryUpdateMode : uint8_t { COARSE, FORCE };
 	//! Whether async drain tasks can write independent file ranges concurrently.
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
+	//! Whether waiting for scheduled writes should preserve an open registration batch.
+	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
 
 	//! Owned write data with the logical file offset assigned at registration.
 	struct PendingWrite {
@@ -129,8 +131,6 @@ private:
 	//! Move any staged copied bytes into the pending write queue.
 	void SealCopiedBuffer(ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 
-	//! Schedule one async drain task. The caller must have reserved an active task slot.
-	void ScheduleTask();
 	//! Seal copied bytes, then schedule as many drain tasks as the pending queue allows.
 	void SchedulePendingWrites();
 	//! Schedule drain tasks from already registered pending writes. Safe to call from async drain tasks.
@@ -158,6 +158,8 @@ private:
 	void FinishDrainTask(idx_t in_flight_task_bytes);
 	//! Release a task slot for a scheduled task that never entered the writer because another task failed.
 	void CancelScheduledDrainTask();
+	//! Release multiple reserved task slots that were never scheduled.
+	void CancelScheduledDrainTasks(idx_t task_count);
 
 	//! Async task entry point that drains one budgeted batch of pending buffers.
 	void DrainPendingWrites();
@@ -167,6 +169,8 @@ private:
 	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
 	//! Surface an error thrown by an async drain task.
 	void RethrowTaskError();
+	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
+	void WaitAllInternal(BatchDrainMode batch_drain_mode);
 	//! Resolve constants that depend on the file system and scheduler state.
 	void ResolveWriteSettings();
 
@@ -177,8 +181,6 @@ private:
 	string path;
 	unique_ptr<FileHandle> handle;
 
-	//! Async task executor. If absent, writes are performed synchronously on registration.
-	unique_ptr<TaskExecutor> executor;
 	//! Temporary memory reservation state used to limit queued async write data.
 	unique_ptr<TemporaryMemoryState> memory_state;
 
@@ -214,6 +216,10 @@ private:
 	idx_t batch_depth = 0;
 	//! Scheduled or running drain tasks for this writer.
 	idx_t active_drain_tasks = 0;
+
+	//! Async task executor. If absent, writes are performed synchronously on registration.
+	//! Keep this after task-accounting fields so queued task destructors can still release slots.
+	unique_ptr<TaskExecutor> executor;
 };
 
 } // namespace duckdb

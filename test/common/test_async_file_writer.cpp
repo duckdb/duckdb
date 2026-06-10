@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/async_file_writer.hpp"
 #include "test_helpers.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <thread>
@@ -144,6 +145,65 @@ private:
 	idx_t max_active_writes = 0;
 	idx_t blocked_writes = 0;
 	bool release_writes = false;
+};
+
+class FailingBlockedWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	string GetName() const override {
+		return "FailingBlockedWriteFileSystem";
+	}
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		if (nr_bytes == 0) {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			return;
+		}
+
+		idx_t write_id;
+		{
+			unique_lock<mutex> guard(block_lock);
+			write_id = ++entered_writes;
+			cv.notify_all();
+			if (write_id == 1) {
+				cv.wait(guard, [&]() { return fail_first_write; });
+			} else if (write_id == 2) {
+				cv.wait(guard, [&]() { return release_second_write; });
+			}
+		}
+
+		if (write_id == 1) {
+			throw IOException("Injected async write failure");
+		}
+		TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+	}
+
+	bool WaitForEnteredWrites(idx_t count) {
+		unique_lock<mutex> guard(block_lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return entered_writes >= count; });
+	}
+
+	void FailFirstWrite() {
+		{
+			lock_guard<mutex> guard(block_lock);
+			fail_first_write = true;
+		}
+		cv.notify_all();
+	}
+
+	void ReleaseSecondWrite() {
+		{
+			lock_guard<mutex> guard(block_lock);
+			release_second_write = true;
+		}
+		cv.notify_all();
+	}
+
+private:
+	mutex block_lock;
+	std::condition_variable cv;
+	idx_t entered_writes = 0;
+	bool fail_first_write = false;
+	bool release_second_write = false;
 };
 
 class StringAsyncWriteBuffer : public AsyncWriteBuffer {
@@ -337,6 +397,34 @@ TEST_CASE("AsyncFileWriter flush waits for pending writes", "[async_file_writer]
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_flush_preserves_batch.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("ab"));
+
+		writer.Flush();
+		REQUIRE(ReadFile(path) == "ab");
+		REQUIRE(fs.write_sizes.size() == 1);
+
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
+		REQUIRE(fs.write_sizes.size() == 1);
+	}
+
+	writer.Close();
+	REQUIRE(ReadFile(path) == "abcd");
+	REQUIRE(fs.write_sizes.size() == 2);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
@@ -526,6 +614,59 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 	}
 	REQUIRE_THROWS(writer.Close());
+
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
+TEST_CASE("AsyncFileWriter close drains scheduled tasks after async write error", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	FailingBlockedWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_error_close_drains.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	}
+	REQUIRE(fs.WaitForEnteredWrites(2));
+
+	writer.WriteData(const_data_ptr_cast("x"), 1);
+	fs.FailFirstWrite();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	std::atomic<bool> close_started(false);
+	std::atomic<bool> close_finished(false);
+	std::exception_ptr close_error;
+	std::thread close_thread([&]() {
+		close_started.store(true);
+		try {
+			writer.Close();
+		} catch (...) {
+			close_error = std::current_exception();
+		}
+		close_finished.store(true);
+	});
+
+	while (!close_started.load()) {
+		std::this_thread::yield();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(!close_finished.load());
+
+	fs.ReleaseSecondWrite();
+	close_thread.join();
+	REQUIRE(close_finished.load());
+	REQUIRE(close_error != nullptr);
 
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
