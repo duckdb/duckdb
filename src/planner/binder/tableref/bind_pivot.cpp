@@ -700,14 +700,16 @@ struct UnpivotEntry {
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
 	// Try to bind the entry expression as values
-	try {
-		auto expr_copy = entry.expr->Copy();
-		BindPivotInList(expr_copy, entry.values, child_binder);
-		// successfully bound as values - clear the expression
-		entry.expr = nullptr;
-	} catch (...) {
-		// ignore binder exceptions here - we fall back to expression mode
-		entry.values.clear();
+	if (entry.expr) {
+		try {
+			auto expr_copy = entry.expr->Copy();
+			BindPivotInList(expr_copy, entry.values, child_binder);
+			// successfully bound as values - clear the expression
+			entry.expr = nullptr;
+		} catch (...) {
+			// ignore binder exceptions here - we fall back to expression mode
+			entry.values.clear();
+		}
 	}
 
 	if (!entry.expr) {

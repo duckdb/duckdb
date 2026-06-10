@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/issue_22153.test
+# description: Test that escape defaults to quote when auto_detect=false (issue #22153)
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT 'hello "world"' AS a, 42 AS b) TO '__TEST_DIR__/test_escape_default.csv' (HEADER false);
+
+query IT
+SELECT * FROM read_csv('__TEST_DIR__/test_escape_default.csv', auto_detect=false, columns={'a':'VARCHAR','b':'INTEGER'})
+----
+hello "world"	42

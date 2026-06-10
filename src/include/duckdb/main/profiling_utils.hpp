@@ -70,20 +70,21 @@ public:
 		case MetricType::ATTACH_REPLAY_WAL_LATENCY: return 1;
 		case MetricType::CHECKPOINT_LATENCY: return 2;
 		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY: return 3;
-		case MetricType::LATENCY: return 4;
-		case MetricType::WAITING_TO_ATTACH_LATENCY: return 5;
-		case MetricType::WRITE_TO_WAL_LATENCY: return 6;
-		case MetricType::TOTAL_BYTES_READ: return 7;
-		case MetricType::TOTAL_BYTES_WRITTEN: return 8;
-		case MetricType::TOTAL_MEMORY_ALLOCATED: return 9;
-		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 10;
+		case MetricType::CUMULATIVE_VACUUM_TIME: return 4;
+		case MetricType::LATENCY: return 5;
+		case MetricType::WAITING_TO_ATTACH_LATENCY: return 6;
+		case MetricType::WRITE_TO_WAL_LATENCY: return 7;
+		case MetricType::TOTAL_BYTES_READ: return 8;
+		case MetricType::TOTAL_BYTES_WRITTEN: return 9;
+		case MetricType::TOTAL_MEMORY_ALLOCATED: return 10;
+		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 11;
 		default:
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 11;
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 12;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
 };

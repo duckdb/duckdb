@@ -35,3 +35,69 @@ AND
 GROUP BY s.s_name
 ORDER BY numwait DESC, s_name;
 ----
+
+statement ok
+CREATE TYPE supplier_change AS struct(
+  part BIGINT,  -- part for which supplier changed
+  old  BIGINT,  -- old supplier
+  new  BIGINT   -- new supplier
+);
+
+statement ok
+CREATE TYPE savings AS struct(
+  savings          numeric,     -- saved supply cost (in %)
+  supplier_changes supplier_change[] -- supplier changes required to achieve savings
+);
+
+query II
+SELECT *
+FROM (SELECT 0) AS "input"(orderkey),
+(WITH RECURSIVE "@loop" ("$label", "$output", "0", "1", "2", "3", "4") AS (
+  (SELECT CAST('$' AS VARCHAR) AS "$label",
+          CAST(NULL AS savings) AS "$output",
+          CAST(NULL AS DECIMAL(15,2)) AS "0",
+          CAST(NULL AS DECIMAL(15,2)) AS "1",
+          CAST(NULL AS supplier_change[]) AS "2",
+          CAST("input".orderkey AS BIGINT) AS "3",
+          CAST(NULL AS BIGINT) AS "4")
+  UNION  ALL
+  (WITH
+    "0" (orderkey) AS (SELECT "@loop"."3" AS orderkey FROM "@loop" WHERE ("@loop"."$label" IS NOT DISTINCT FROM '$')),
+    "1" (orderkey, found) AS (SELECT "0".orderkey AS orderkey, (SELECT CAST(NULL AS BOOLEAN)) AS found FROM "0" AS "0"(orderkey)),
+    "2" (orderkey, "order") AS (SELECT "1".orderkey AS orderkey, (SELECT NULL) AS "order" FROM "1" AS "1"(orderkey, found)),
+    "3" (orderkey, items) AS (SELECT "2".orderkey AS orderkey, (SELECT CAST(NULL AS BIGINT)) AS items FROM "2" AS "2"(orderkey, "order")),
+    "4" (orderkey, lineitem) AS (SELECT "3".orderkey AS orderkey, (SELECT NULL) AS lineitem FROM "3" AS "3"(orderkey, items)),
+    "5" (orderkey, partsupp) AS (SELECT "4".orderkey AS orderkey, (SELECT NULL) AS partsupp FROM "4" AS "4"(orderkey, lineitem)),
+    "6" (orderkey, min_supplycost) AS (SELECT "5".orderkey AS orderkey, (SELECT CAST(NULL AS DECIMAL(15, 2))) AS min_supplycost FROM "5" AS "5"(orderkey, partsupp)),
+    "7" (orderkey, new_supplier) AS (SELECT "6".orderkey AS orderkey, (SELECT CAST(NULL AS BIGINT)) AS new_supplier FROM "6" AS "6"(orderkey, min_supplycost)),
+    "8" (orderkey, new_suppliers) AS (SELECT "7".orderkey AS orderkey, (SELECT CAST(NULL AS STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[])) AS new_suppliers FROM "7" AS "7"(orderkey, new_supplier)),
+    "9" (orderkey, total_supplycost) AS (SELECT "8".orderkey AS orderkey, (SELECT CAST(NULL AS DECIMAL(15, 2))) AS total_supplycost FROM "8" AS "8"(orderkey, new_suppliers)),
+    "10" (orderkey, new_supplycost) AS (SELECT "9".orderkey AS orderkey, (SELECT CAST(NULL AS DECIMAL(15, 2))) AS new_supplycost FROM "9" AS "9"(orderkey, total_supplycost)),
+    "11" (orderkey, item) AS (SELECT "10".orderkey AS orderkey, (SELECT NULL) AS item FROM "10" AS "10"(orderkey, new_supplycost)),
+    "12" (orderkey, "order") AS (SELECT "11".orderkey AS orderkey, (SELECT * FROM (SELECT o FROM orders AS o WHERE (o.o_orderkey = "11".orderkey)) AS subquery LIMIT 1) AS "order" FROM "11" AS "11"(orderkey, item)),
+    "13" (orderkey, "$cond0") AS (SELECT "12".orderkey AS orderkey, (SELECT ("12"."order" IS NULL)) AS "$cond0" FROM "12" AS "12"(orderkey, "order")),
+    "14" AS (SELECT NULL AS "$output" FROM "13" AS "13"(orderkey, "$cond0") WHERE "13"."$cond0"),
+    "15" (orderkey) AS (SELECT "13".orderkey AS orderkey FROM "13" AS "13"(orderkey, "$cond0") WHERE ("13"."$cond0" IS DISTINCT FROM true)),
+    "16" (return_value) AS (SELECT (SELECT NULL) AS return_value FROM "14" AS "14"),
+    "17" ("$output") AS (SELECT "16".return_value AS "$output" FROM "16" AS "16"(return_value)),
+    "18" (items) AS (SELECT (SELECT CAST((SELECT * FROM (SELECT count_star() FROM lineitem AS l WHERE (l.l_orderkey = "15".orderkey)) AS subquery LIMIT 1) AS BIGINT)) AS items FROM "15" AS "15"(orderkey)),
+    "19" (items, total_supplycost) AS (SELECT "18".items AS items, (SELECT CAST((SELECT 0.0) AS DECIMAL(15, 2))) AS total_supplycost FROM "18" AS "18"(items)),
+    "20" (items, total_supplycost, new_supplycost) AS (SELECT "19".items AS items, "19".total_supplycost AS total_supplycost, (SELECT CAST((SELECT 0.0) AS DECIMAL(15, 2))) AS new_supplycost FROM "19" AS "19"(items, total_supplycost)),
+    "21" (total_supplycost, new_supplycost, items, new_suppliers) AS (SELECT "20".total_supplycost AS total_supplycost, "20".new_supplycost AS new_supplycost, "20".items AS items, (SELECT CAST((SELECT CAST((ARRAY[]) AS "supplier_change"[])) AS STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[])) AS new_suppliers FROM "20" AS "20"(items, total_supplycost, new_supplycost)),
+    "22" (items, new_supplycost, total_supplycost, new_suppliers, item) AS (SELECT "21".items AS items, "21".new_supplycost AS new_supplycost, "21".total_supplycost AS total_supplycost, "21".new_suppliers AS new_suppliers, (SELECT 1) AS item FROM "21" AS "21"(total_supplycost, new_supplycost, items, new_suppliers)),
+    "23" (new_suppliers, item, total_supplycost, new_supplycost, fori_end) AS (SELECT "22".new_suppliers AS new_suppliers, "22".item AS item, "22".total_supplycost AS total_supplycost, "22".new_supplycost AS new_supplycost, (SELECT "22".items) AS fori_end FROM "22" AS "22"(items, new_supplycost, total_supplycost, new_suppliers, item)),
+    "24" (total_supplycost, new_supplycost, fori_end, new_suppliers, item) AS (SELECT "@loop"."0" AS total_supplycost, "@loop"."1" AS new_supplycost, "@loop"."4" AS fori_end, "@loop"."2" AS new_suppliers, "@loop"."3" AS item FROM "@loop" WHERE ("@loop"."$label" IS NOT DISTINCT FROM '$loop1')),
+    "25" (item, new_suppliers, fori_end, new_supplycost, total_supplycost) AS ((SELECT "23".item AS item, "23".new_suppliers AS new_suppliers, "23".fori_end AS fori_end, "23".new_supplycost AS new_supplycost, "23".total_supplycost AS total_supplycost FROM "23" AS "23"(new_suppliers, item, total_supplycost, new_supplycost, fori_end)) UNION ALL (SELECT "24".item AS item, "24".new_suppliers AS new_suppliers, "24".fori_end AS fori_end, "24".new_supplycost AS new_supplycost, "24".total_supplycost AS total_supplycost FROM "24" AS "24"(total_supplycost, new_supplycost, fori_end, new_suppliers, item))),
+    "26" (new_suppliers, total_supplycost, new_supplycost, "$cond2") AS (SELECT "25".new_suppliers AS new_suppliers, "25".total_supplycost AS total_supplycost, "25".new_supplycost AS new_supplycost, (SELECT ("25".item > "25".fori_end)) AS "$cond2" FROM "25" AS "25"(item, new_suppliers, fori_end, new_supplycost, total_supplycost)),
+    "27" (new_supplycost, total_supplycost, new_suppliers) AS (SELECT "26".new_supplycost AS new_supplycost, "26".total_supplycost AS total_supplycost, "26".new_suppliers AS new_suppliers FROM "26" AS "26"(new_suppliers, total_supplycost, new_supplycost, "$cond2") WHERE "26"."$cond2"),
+    "28" (new_supplycost, total_supplycost, new_suppliers) AS (SELECT "26".new_supplycost AS new_supplycost, "26".total_supplycost AS total_supplycost, "26".new_suppliers AS new_suppliers FROM "26" AS "26"(new_suppliers, total_supplycost, new_supplycost, "$cond2") WHERE ("26"."$cond2" IS DISTINCT FROM true)),
+    "29" (new_suppliers, total_supplycost, new_supplycost) AS ((SELECT "27".new_suppliers AS new_suppliers, "27".total_supplycost AS total_supplycost, "27".new_supplycost AS new_supplycost FROM "27" AS "27"(new_supplycost, total_supplycost, new_suppliers)) UNION ALL (SELECT "28".new_suppliers AS new_suppliers, "28".total_supplycost AS total_supplycost, "28".new_supplycost AS new_supplycost FROM "28" AS "28"(new_supplycost, total_supplycost, new_suppliers))),
+    "30" (return_value) AS (SELECT (SELECT CAST(main."row"(((1.0 - ("29".new_supplycost / "29".total_supplycost)) * 100.0), "29".new_suppliers) AS "savings")) AS return_value FROM "29" AS "29"(new_suppliers, total_supplycost, new_supplycost)),
+    "31" ("$output") AS (SELECT "30".return_value AS "$output" FROM "30" AS "30"(return_value))
+    (SELECT CAST(NULL AS VARCHAR) AS "$label", CAST("17"."$output" AS STRUCT(savings DECIMAL(18,3), supplier_changes STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[])) AS "$output", CAST(NULL AS DECIMAL(15,2)) AS "0", CAST(NULL AS DECIMAL(15,2)) AS "1", CAST(NULL AS STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[]) AS "2", CAST(NULL AS BIGINT) AS "3", CAST(NULL AS BIGINT) AS "4" FROM "17" AS "17"("$output"))
+      UNION ALL
+    (SELECT CAST(NULL AS VARCHAR) AS "$label", CAST("31"."$output" AS STRUCT(savings DECIMAL(18,3), supplier_changes STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[])) AS "$output", CAST(NULL AS DECIMAL(15,2)) AS "0", CAST(NULL AS DECIMAL(15,2)) AS "1", CAST(NULL AS STRUCT(part BIGINT, "old" BIGINT, "new" BIGINT)[]) AS "2", CAST(NULL AS BIGINT) AS "3", CAST(NULL AS BIGINT) AS "4" FROM "31" AS "31"("$output"))))
+  SELECT "@loop"."$output" FROM "@loop" AS "@loop"("$label", "$output", "0", "1", "2", "3", "4") WHERE ("@loop"."$label" IS NULL)
+  ) AS output;
+----
+0	NULL

@@ -84,7 +84,11 @@ public:
 		uint8_t actual_dictionary_size =
 		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE +
 		                  AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
-		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+		if (actual_dictionary_size > AlpRDConstants::MAX_DICTIONARY_SIZE) {
+			throw IOException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+		}
+		idx_t actual_dictionary_size_bytes =
+		    static_cast<idx_t>(actual_dictionary_size) * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
 		memcpy(vector_state.left_parts_dict, (void *)(segment_data + AlpRDConstants::HEADER_SIZE),

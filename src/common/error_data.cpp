@@ -142,6 +142,7 @@ void ErrorData::AddErrorLocation(const string &query) {
 		auto entry = extra_info.find("position");
 		if (entry != extra_info.end()) {
 			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+			extra_info.erase(entry);
 		}
 	}
 	{

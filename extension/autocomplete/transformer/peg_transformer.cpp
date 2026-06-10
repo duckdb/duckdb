@@ -113,10 +113,13 @@ unique_ptr<SQLStatement> PEGTransformer::CreatePivotStatement(unique_ptr<SQLStat
 			    "PIVOT ... ON %s IN (val1, val2, ...)",
 			    pivot->column->ToString());
 		}
-		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
+		auto enum_stmt = GenerateCreateEnumStmt(std::move(pivot));
+		enum_stmt->query = enum_stmt->ToString();
+		result->statements.push_back(std::move(enum_stmt));
 	}
 	result->stmt_location = statement->stmt_location;
 	result->stmt_length = statement->stmt_length;
+	statement->query = statement->ToString();
 	result->statements.push_back(std::move(statement));
 	return std::move(result);
 }
@@ -156,6 +159,14 @@ unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &windo
 		throw ParserException("window \"%s\" does not exist", window_name);
 	}
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+}
+
+void PEGTransformer::SetQueryLocation(ParsedExpression &expr, optional_idx query_location) {
+	expr.SetQueryLocation(query_location);
+}
+
+void PEGTransformer::SetQueryLocation(TableRef &ref, optional_idx query_location) {
+	ref.query_location = query_location;
 }
 
 } // namespace duckdb

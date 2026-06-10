@@ -51,7 +51,7 @@ See the [Extension Template](https://github.com/duckdb/extension-template) for g
 
 # Running tests
 There are various tests available for the delta extension:
-1. Delta Acceptence Test (DAT) based tests in `/test/sql/dat`
+1. Delta Acceptance Test (DAT) based tests in `/test/sql/dat`
 2. delta-kernel-rs based tests in `/test/sql/delta_kernel_rs`
 3. Generated data based tests in `tests/sql/generated` (generated using [delta-rs](https://delta-io.github.io/delta-rs/), [PySpark](https://spark.apache.org/docs/latest/api/python/index.html), and DuckDB)
 

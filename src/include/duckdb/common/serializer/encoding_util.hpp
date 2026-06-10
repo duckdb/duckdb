@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/exception.hpp"
 #include <type_traits>
 
 namespace duckdb {
@@ -36,6 +37,7 @@ struct EncodingUtil {
 	// Decode unsigned integer, returns the number of bytes read
 	template <class T>
 	static idx_t DecodeUnsignedLEB128(const_data_ptr_t source, T &result) {
+		constexpr idx_t max_shift = sizeof(T) * 8;
 		static_assert(std::is_integral<T>::value, "Must be integral");
 		static_assert(std::is_unsigned<T>::value, "Must be unsigned");
 		static_assert(sizeof(T) <= sizeof(uint64_t), "Must be uint64_t or smaller");
@@ -46,6 +48,9 @@ struct EncodingUtil {
 		uint8_t byte;
 		do {
 			byte = source[offset++];
+			if (shift >= max_shift) {
+				throw IOException("Failed to decode LEB128 integer: data may be corrupt");
+			}
 			result |= static_cast<T>(byte & 0x7F) << shift;
 			shift += 7;
 		} while (byte & 0x80);
@@ -80,6 +85,7 @@ struct EncodingUtil {
 	// Decode signed integer, returns the number of bytes read
 	template <class T>
 	static idx_t DecodeSignedLEB128(const_data_ptr_t source, T &result) {
+		constexpr idx_t max_shift = sizeof(T) * 8;
 		static_assert(std::is_integral<T>::value, "Must be integral");
 		static_assert(std::is_signed<T>::value, "Must be signed");
 		static_assert(sizeof(T) <= sizeof(int64_t), "Must be int64_t or smaller");
@@ -94,6 +100,9 @@ struct EncodingUtil {
 		uint8_t byte;
 		do {
 			byte = source[offset++];
+			if (shift >= max_shift) {
+				throw IOException("Failed to decode LEB128 integer: data may be corrupt");
+			}
 			result |= static_cast<unsigned_type>(byte & 0x7F) << shift;
 			shift += 7;
 		} while (byte & 0x80);

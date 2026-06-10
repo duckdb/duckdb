@@ -15,8 +15,10 @@
 
 namespace duckdb {
 
+// Oids are started at 20000 to avoid colliding with Postgres builtin types, which end at 16383:
+// https://github.com/postgres/postgres/blob/db93988ab0e78396f2ed9e96c826ff988d12b9f2/src/include/access/transam.h#L156-L197
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : db(db), next_oid(0), current_query_number(1), current_transaction_id(0) {
+    : db(db), next_oid(20000), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
 	auto &config = DBConfig::GetConfig(db);
 	path_manager = config.path_manager;
@@ -133,6 +135,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
+				if (options.vacuum_rebuild_indexes_threshold.IsValid()) {
+					auto previous_setting = existing_db->GetVacuumRebuildIndexThreshold();
+					auto new_setting = options.vacuum_rebuild_indexes_threshold.GetIndex();
+					if (previous_setting != new_setting) {
+						throw BinderException("Cannot re-attach with a different vacuum_rebuild_indexes setting "
+						                      "(previous: %d, new: %d)",
+						                      previous_setting, new_setting);
+					}
+				}
 				// allow custom catalogs to override this behavior
 				if (!existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options)) {
 					return existing_db;
@@ -145,14 +157,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto profiler = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
-
+		auto timer = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
+		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
-			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
-			if (existing_db) {
+			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
 				return existing_db;
 			}
@@ -169,6 +180,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw InterruptException();
 			}
 		}
+		// Returning in the loop above will also end the timer, otherwise, do it explicitly here.
+		timer.EndTimer();
 	}
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
@@ -242,7 +255,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-	if (GetDefaultDatabase(context) == name) {
+	if (StringUtil::CIEquals(GetDefaultDatabase(context), name)) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
@@ -305,7 +318,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		databases[new_name] = attached_db;
 	}
 
-	if (default_database == old_name) {
+	if (StringUtil::CIEquals(default_database, old_name)) {
 		default_database = new_name;
 	}
 }

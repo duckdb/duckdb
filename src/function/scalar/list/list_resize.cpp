@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
@@ -41,7 +42,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
 
 		if (lists_data.validity.RowIsValid(list_idx) && new_sizes_data.validity.RowIsValid(new_size_idx)) {
-			child_vector_size += new_size_entries[new_size_idx];
+			child_vector_size = AddOperatorOverflowCheck::Operation<idx_t, idx_t, idx_t>(
+			    child_vector_size, new_size_entries[new_size_idx]);
 		}
 	}
 	ListVector::Reserve(result, child_vector_size);

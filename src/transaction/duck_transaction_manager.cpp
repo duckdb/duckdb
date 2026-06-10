@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-void DuckCleanupInfo::Cleanup() noexcept {
+void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
 			transaction->Cleanup(lowest_start_time);
@@ -363,7 +363,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// we have not written to the WAL but we have now realized we can't checkpoint after all
 			// in order to commit we need backpeddle and write to the WAL after all
 			D_ASSERT(held_wal_lock);
+			// unlock the transaction lock while we are writing to the WAL
+			t_lock.unlock();
 			error = transaction.WriteToWAL(context, db, commit_state);
+			t_lock.lock();
 			skip_wal_write_due_to_checkpoint = false;
 		}
 	}

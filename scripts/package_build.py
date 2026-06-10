@@ -248,9 +248,37 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
     sys.path = original_path
 
 
-def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths=False):
+def get_extension_linked_define(extension):
+    return f'DUCKDB_EXTENSION_{extension.upper()}_LINKED'
+
+
+def build_package(
+    target_dir,
+    extensions,
+    linenumbers=False,
+    unity_count=32,
+    folder_name='duckdb',
+    short_paths=False,
+    default_linked_extensions=None,
+):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
+
+    extensions = list(extensions)
+    # Keep existing package_build behavior by default: all packaged extensions are linked.
+    # Callers that package a superset can pass default_linked_extensions to emit a loader
+    # that is controlled by DUCKDB_EXTENSION_<NAME>_LINKED compile definitions instead.
+    if default_linked_extensions is None:
+        default_linked_extensions = extensions
+    default_linked_extensions = set(default_linked_extensions)
+    packaged_extensions = set(extensions)
+    unpackaged_linked_extensions = default_linked_extensions - packaged_extensions
+    if unpackaged_linked_extensions:
+        raise ValueError(
+            "default_linked_extensions must be a subset of extensions: {}".format(
+                ', '.join(sorted(unpackaged_linked_extensions))
+            )
+        )
 
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(scripts_dir)
@@ -280,37 +308,46 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     # include the separate extensions
     ext_loader_body = ''
+    ext_loader_defines = ''
     ext_headers = ''
+    ext_name_vector_initializer = ''
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
         include_package(ext, ext_path, include_files, include_list, source_list)
 
-        ext_headers += f'#include "{ext}_extension.hpp"\n'
+        ext_linked_define = get_extension_linked_define(ext)
+        ext_linked_default = 1 if ext in default_linked_extensions else 0
+
+        ext_loader_defines += (
+            f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
+        )
+
+        ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
 
         # handle generated_extension_loader
         # this - beautifully - approximates code in extension/CMakeLists.txt
         ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
 
-        ext_loader_body += """
-    if (extension=="${EXT_NAME}") {
-        db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
-        return ExtensionLoadResult::LOADED_EXTENSION;
-    }
-        """.replace(
-            '${EXT_NAME}', ext
-        ).replace(
-            '${EXT_NAME_CAMELCASE}', ext_name_camelcase
+        ext_loader_body += (
+            f"#if {ext_linked_define}\n"
+            f"    if (extension==\"{ext}\") {{\n"
+            f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
+            "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
+            "    }\n"
+            "#endif\n"
         )
+
+        ext_name_vector_initializer += f"\n#if {ext_linked_define}\n" f"        \"{ext}\",\n" "#endif"
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
         loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
-        .replace('${EXT_NAME_VECTOR_INITIALIZER}', ', '.join([f'"{x}"' for x in extensions]))
+        .replace('${EXT_NAME_VECTOR_INITIALIZER}', ext_name_vector_initializer)
         .replace('${EXT_TEST_PATH_INITIALIZER}', '')
         .replace('CMake', 'package_build.py')
     )
 
-    loader_code = ext_headers + loader_code
+    loader_code = ext_loader_defines + ext_headers + loader_code
 
     loader_name = 'generated_extension_loader_package_build.cpp'
     f = open(loader_name, 'wb')

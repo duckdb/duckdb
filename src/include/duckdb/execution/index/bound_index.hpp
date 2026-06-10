@@ -123,7 +123,9 @@ public:
 
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
+
 	//! Deletes all data from the index
+	// FIXME: we can rename this to ResetStorage().
 	void CommitDrop() override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Returns the amount of rows successfully deleted from the index.

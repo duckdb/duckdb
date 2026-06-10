@@ -405,6 +405,7 @@ struct PersistentCollectionData {
 	void Serialize(Serializer &serializer) const;
 	static PersistentCollectionData Deserialize(Deserializer &deserializer);
 	bool HasUpdates() const;
+	vector<block_id_t> GetBlockIds() const;
 };
 
 } // namespace duckdb

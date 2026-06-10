@@ -269,9 +269,8 @@ public:
 			}
 		}
 		if (statements.empty()) {
-			auto not_implemented_exception =
-			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
-			return ParserOverrideResult(not_implemented_exception);
+			// Return DISPLAY_ORIGINAL_ERROR so postgres parser + parse_function extensions can handle the query.
+			return ParserOverrideResult();
 		}
 		return ParserOverrideResult(std::move(statements));
 	}
@@ -671,6 +670,11 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	PlannerExtension::Register(config, AddColumnExtension());
 	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
 	                          Value::BOOLEAN(false));
+
+	// Global-default extension option used to exercise RESET on GLOBAL-scoped
+	// extension options across multiple connections.
+	config.AddExtensionOption("demo_global_setting", "demo GLOBAL-default extension option", LogicalType::VARCHAR,
+	                          Value("default"), nullptr, SetScope::GLOBAL);
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();

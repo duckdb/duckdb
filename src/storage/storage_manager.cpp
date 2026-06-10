@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/path.hpp"
 
 namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
@@ -231,9 +232,6 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	wal->WriteCheckpoint(meta_block);
 	wal->Flush();
 
-	// We no longer need to hold on to the WAL blocks here. If the checkpoint fails, we throw a fatal exception and
-	// enter an inconsistent state. If it succeeds, then this WAL is no longer relevant.
-	wal->MarkBlocksInUseAsModified();
 	// close the main WAL
 	wal.reset();
 
@@ -288,19 +286,7 @@ unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
-	// we append the ".wal" **before** a question mark in case of GET parameters
-	// but only if we are not in a windows long path (which starts with \\?\)
-	std::size_t question_mark_pos = std::string::npos;
-	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
-		question_mark_pos = path.find('?');
-	}
-	auto result = path;
-	if (question_mark_pos != std::string::npos) {
-		result.insert(question_mark_pos, suffix);
-	} else {
-		result += suffix;
-	}
-	return result;
+	return Path::AddSuffixToPath(path, suffix);
 }
 
 string StorageManager::GetCheckpointWALPath() {
@@ -516,9 +502,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
 
-		// End timing the storage load step.
+		// Reset the timer (also ends it).
 		if (timer) {
-			timer->EndTimer();
 			timer = nullptr;
 		}
 
@@ -532,10 +517,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(context, *this, wal_path);
 
-		// End timing the WAL replay step.
-		if (timer) {
-			timer->EndTimer();
-		}
+		// Timer will go out of scope here, if set.
 	}
 
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
@@ -576,7 +558,6 @@ public:
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
 	bool HasRowGroupData() override;
-	unordered_set<block_id_t> &GetBlockIdsInUse() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -584,7 +565,6 @@ private:
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
-	unordered_set<block_id_t> block_ids_in_use;
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
@@ -628,11 +608,6 @@ void SingleFileStorageCommitState::FlushCommit() {
 		return;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	auto &block_manager = wal.GetStorageManager().GetBlockManager();
-	for (const block_id_t block_id : block_ids_in_use) {
-		block_manager.MarkBlockAsUsed(block_id);
-		wal.AddBlockInUse(block_id);
-	}
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
 }
@@ -671,10 +646,6 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 
 bool SingleFileStorageCommitState::HasRowGroupData() {
 	return !optimistically_written_data.empty();
-}
-
-unordered_set<block_id_t> &SingleFileStorageCommitState::GetBlockIdsInUse() {
-	return block_ids_in_use;
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
@@ -722,14 +693,15 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
-			ActiveTimer profiler;
+			ActiveTimer timer;
 			if (client_context) {
-				profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				timer = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+			timer.EndTimer();
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

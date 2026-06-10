@@ -19,12 +19,19 @@ namespace duckdb_adbc {
 class AppenderWrapper {
 public:
 	AppenderWrapper(duckdb_connection conn, const char *catalog, const char *schema, const char *table)
-	    : appender(nullptr) {
+	    : appender(nullptr), create_error_type(DUCKDB_ERROR_UNKNOWN_TYPE) {
 		// Note: duckdb_appender_create_ext allocates an internal wrapper even on failure.
 		// If creation fails, make sure to destroy it to avoid leaking.
 		auto created = duckdb_appender(nullptr);
 		if (duckdb_appender_create_ext(conn, catalog, schema, table, &created) != DuckDBSuccess) {
 			if (created) {
+				auto error_data = duckdb_appender_error_data(created);
+				auto error_message = duckdb_error_data_message(error_data);
+				if (error_message) {
+					create_error = error_message;
+				}
+				create_error_type = duckdb_error_data_error_type(error_data);
+				duckdb_destroy_error_data(&error_data);
 				duckdb_appender_destroy(&created);
 			}
 			return;
@@ -43,9 +50,17 @@ public:
 	bool Valid() const {
 		return appender != nullptr;
 	}
+	const std::string &CreateError() const {
+		return create_error;
+	}
+	duckdb_error_type CreateErrorType() const {
+		return create_error_type;
+	}
 
 private:
 	duckdb_appender appender;
+	std::string create_error;
+	duckdb_error_type create_error_type;
 };
 
 class DataChunkWrapper {
@@ -181,6 +196,9 @@ AdbcStatusCode StatementSetOptionDouble(struct AdbcStatement *statement, const c
 
 const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status);
 
+int ErrorGetDetailCount(const struct AdbcError *error);
+struct AdbcErrorDetail ErrorGetDetail(const struct AdbcError *error, int index);
+
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error);
 
@@ -203,6 +221,9 @@ AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray 
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *stream,
                                    struct AdbcError *error);
+
+AdbcStatusCode StatementExecuteSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                      struct AdbcError *error);
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error);

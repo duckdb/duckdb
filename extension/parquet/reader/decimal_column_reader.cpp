@@ -3,7 +3,8 @@
 namespace duckdb {
 
 template <bool FIXED>
-static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReaderInternal(const ParquetReader &reader,
+                                                            const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<DecimalColumnReader<int16_t, FIXED>>(reader, schema);
@@ -45,7 +46,8 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
 	return res;
 }
 
-unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(const ParquetReader &reader,
+                                                           const ParquetColumnSchema &schema) {
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
 		return CreateDecimalReaderInternal<true>(reader, schema);
 	} else {

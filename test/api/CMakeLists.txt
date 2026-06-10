@@ -37,7 +37,9 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
-    test_buffer_pool_eviction.cpp)
+    test_partial_executor.cpp
+    test_buffer_pool_eviction.cpp
+    test_block_allocator_tls.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

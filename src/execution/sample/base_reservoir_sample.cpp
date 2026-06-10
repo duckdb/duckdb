@@ -1,4 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
+#include <limits>
 #include <math.h>
 
 namespace duckdb {
@@ -55,7 +56,11 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
 	min_weight_threshold = t_w;
 	min_weighted_entry_index = min_key.second;
-	next_index_to_sample = idx_t(ceil(x_w));
+	if (x_w >= 1.0 && std::isfinite(x_w)) {
+		next_index_to_sample = idx_t(ceil(x_w));
+	} else {
+		next_index_to_sample = 1;
+	}
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
@@ -125,7 +130,9 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	auto weights = GenerateTopKFromUniform(random, num_entries_seen_total, sel_size);
 	std::shuffle(weights.begin(), weights.end(), random);
 	for (idx_t i = 0; i < sel_size; i++) {
-		auto weight = weights[i];
+		// clamp to smallest positive normal to avoid degenerate 0-weight entries
+		// (floating-point underflow in GenerateTopKFromUniform for large k)
+		auto weight = MaxValue(weights[i], std::numeric_limits<double>::min());
 		reservoir_weights.emplace(-weight, i);
 	}
 	D_ASSERT(reservoir_weights.size() <= sel_size);

@@ -91,6 +91,8 @@ public:
 		lock_guard<mutex> lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns the set of distinct index types across all bound indexes.
+	unordered_set<string> DistinctIndexTypes() const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) {
 		D_ASSERT(index_entries.empty());

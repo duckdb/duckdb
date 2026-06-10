@@ -1,5 +1,6 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
+#include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
@@ -454,6 +455,34 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 	input_data.release = nullptr;
 }
 
+TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(db.adbc_error.message);
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "does not exist"));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "missing_table"));
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -478,6 +507,48 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 		auto res_persistent = db.Query("SELECT * FROM memory.main.my_table");
 		REQUIRE(!res_persistent->HasError());
 		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
+	}
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// create a temp table with data1 on adbc_connection
+	auto &input_temp = db.QueryArrowForIngest("SELECT 1 AS idx, 'foo' AS value");
+	db.CreateTable("my_table", input_temp, "", true);
+
+	// create a persistent table with data2 on the SAME adbc_connection (no catalog/schema).
+	// This triggers the bug: the appender resolves "my_table" to the temp table.
+	{
+		auto &input_persistent = db.QueryArrowForIngest("SELECT 2 AS idx, 'bar' AS value");
+		AdbcStatement stmt = {};
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+		// No catalog, no schema, no temporary flag — should go to memory.main
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_persistent, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input_persistent.release) {
+			input_persistent.release(&input_persistent);
+		}
+	}
+
+	// Temp table should still contain only data1 (idx=1)
+	{
+		auto res = db.Query("SELECT idx FROM temp.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "1");
+	}
+	// Persistent table should contain data2 (idx=2)
+	{
+		auto res = db.Query("SELECT idx FROM memory.main.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "2");
 	}
 }
 
@@ -2239,18 +2310,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2267,18 +2338,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2407,18 +2478,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2456,18 +2527,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2485,6 +2556,117 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
 			db.Query("Drop table result;");
 		}
+	}
+	// 4-2. Test ADBC_OBJECT_DEPTH_COLUMNS: xdbc_* metadata for diverse column types
+	// Covers: remarks (comment), column default, DECIMAL precision/scale, DATE/TIME/TIMESTAMP
+	// datetime subtypes and column sizes, TIME_NS and TIME WITH TIME ZONE sql type codes,
+	// VARCHAR/BLOB char_octet_length, and array sql type code.
+	{
+		ADBCTestDatabase db("type_meta_test");
+		db.Query(R"(
+			CREATE TABLE type_test (
+				c_bool BOOLEAN,
+				c_bigint BIGINT,
+				c_decimal DECIMAL(10,3),
+				c_varchar VARCHAR,
+				c_blob BLOB,
+				c_date DATE,
+				c_time TIME,
+				c_time_tz TIMETZ,
+				c_time_ns TIME_NS,
+				c_ts TIMESTAMP,
+				c_ts_tz TIMESTAMPTZ,
+				c_arr INTEGER[],
+				c_with_default INTEGER DEFAULT 42
+			)
+		)");
+		db.Query("COMMENT ON COLUMN type_test.c_bool IS 'my comment'");
+
+		AdbcError adbc_error = {};
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "type_meta_test",
+		                                         nullptr, "type_test", nullptr, nullptr, &arrow_stream, &adbc_error)));
+		db.CreateTable("result", arrow_stream);
+
+		// Flatten the nested GetObjects result to one row per column
+		auto res = db.Query(R"(
+			SELECT col.column_name, col.remarks, col.xdbc_type_name, col.xdbc_column_size,
+			       col.xdbc_decimal_digits, col.xdbc_num_prec_radix, col.xdbc_sql_data_type,
+			       col.xdbc_datetime_sub, col.xdbc_char_octet_length, col.xdbc_column_def
+			FROM (
+				SELECT UNNEST(
+					list_filter(
+						list_filter(catalog_db_schemas, lambda s: s.db_schema_name = 'main')[1].db_schema_tables,
+						lambda t: t.table_name = 'type_test'
+					)[1].table_columns
+				) AS col
+				FROM result
+				WHERE catalog_name = 'type_meta_test'
+			) sub
+			ORDER BY col.ordinal_position
+		)");
+
+		// col indices: 0=column_name, 1=remarks, 2=xdbc_type_name, 3=xdbc_column_size,
+		//              4=xdbc_decimal_digits, 5=xdbc_num_prec_radix, 6=xdbc_sql_data_type,
+		//              7=xdbc_datetime_sub, 8=xdbc_char_octet_length, 9=xdbc_column_def
+		// row indices: 0=c_bool,1=c_bigint,2=c_decimal,3=c_varchar,4=c_blob,
+		//              5=c_date,6=c_time,7=c_time_tz,8=c_time_ns,9=c_ts,10=c_ts_tz,11=c_arr,12=c_with_default
+		REQUIRE((res->RowCount() == 13));
+
+		// remarks: only c_bool has a comment
+		REQUIRE((res->GetValue(1, 0).ToString() == "my comment"));
+		REQUIRE((res->GetValue(1, 1).IsNull()));
+
+		// xdbc_column_def: only c_with_default has a default value
+		REQUIRE((res->GetValue(9, 12).ToString() == "42"));
+		REQUIRE((res->GetValue(9, 0).IsNull()));
+
+		// xdbc_sql_data_type covers every branch in the CASE expression
+		REQUIRE((res->GetValue(6, 0).ToString() == "16"));    // BOOLEAN → 16
+		REQUIRE((res->GetValue(6, 1).ToString() == "-5"));    // BIGINT → -5
+		REQUIRE((res->GetValue(6, 2).ToString() == "3"));     // DECIMAL → 3
+		REQUIRE((res->GetValue(6, 3).ToString() == "12"));    // VARCHAR → 12
+		REQUIRE((res->GetValue(6, 4).ToString() == "2004"));  // BLOB → 2004
+		REQUIRE((res->GetValue(6, 5).ToString() == "91"));    // DATE → 91
+		REQUIRE((res->GetValue(6, 6).ToString() == "92"));    // TIME → 92
+		REQUIRE((res->GetValue(6, 7).ToString() == "2013"));  // TIME WITH TIME ZONE → 2013
+		REQUIRE((res->GetValue(6, 8).ToString() == "92"));    // TIME_NS → 92
+		REQUIRE((res->GetValue(6, 9).ToString() == "93"));    // TIMESTAMP → 93
+		REQUIRE((res->GetValue(6, 10).ToString() == "2014")); // TIMESTAMP WITH TIME ZONE → 2014
+		REQUIRE((res->GetValue(6, 11).ToString() == "2003")); // INTEGER[] → 2003
+		REQUIRE((res->GetValue(6, 12).ToString() == "4"));    // INTEGER → 4
+
+		// xdbc_column_size: DATE=10, TIME variants=15, TIMESTAMP variants=26
+		REQUIRE((res->GetValue(3, 0).IsNull()));            // BOOLEAN: no numeric precision
+		REQUIRE((res->GetValue(3, 1).ToString() == "64"));  // BIGINT: 64
+		REQUIRE((res->GetValue(3, 2).ToString() == "10"));  // DECIMAL(10,3): precision
+		REQUIRE((res->GetValue(3, 5).ToString() == "10"));  // DATE: hardcoded 10
+		REQUIRE((res->GetValue(3, 6).ToString() == "15"));  // TIME: hardcoded 15
+		REQUIRE((res->GetValue(3, 7).ToString() == "15"));  // TIME WITH TIME ZONE: 15
+		REQUIRE((res->GetValue(3, 8).ToString() == "15"));  // TIME_NS: 15
+		REQUIRE((res->GetValue(3, 9).ToString() == "26"));  // TIMESTAMP: hardcoded 26
+		REQUIRE((res->GetValue(3, 10).ToString() == "26")); // TIMESTAMP WITH TIME ZONE: 26
+
+		// xdbc_datetime_sub: DATE=1, TIME variants=2, TIMESTAMP variants=3
+		REQUIRE((res->GetValue(7, 5).ToString() == "1"));  // DATE → 1
+		REQUIRE((res->GetValue(7, 6).ToString() == "2"));  // TIME → 2
+		REQUIRE((res->GetValue(7, 7).ToString() == "2"));  // TIME WITH TIME ZONE → 2
+		REQUIRE((res->GetValue(7, 8).ToString() == "2"));  // TIME_NS → 2
+		REQUIRE((res->GetValue(7, 9).ToString() == "3"));  // TIMESTAMP → 3
+		REQUIRE((res->GetValue(7, 10).ToString() == "3")); // TIMESTAMP WITH TIME ZONE → 3
+		REQUIRE((res->GetValue(7, 11).IsNull()));          // INTEGER[]: NULL
+
+		// DECIMAL: scale and radix
+		REQUIRE((res->GetValue(4, 2).ToString() == "3"));  // xdbc_decimal_digits = scale = 3
+		REQUIRE((res->GetValue(5, 2).ToString() == "10")); // xdbc_num_prec_radix = 10
+
+		// xdbc_char_octet_length: NULL for unbounded VARCHAR/BLOB
+		REQUIRE((res->GetValue(8, 3).IsNull())); // VARCHAR (unbounded)
+		REQUIRE((res->GetValue(8, 4).IsNull())); // BLOB (unbounded)
+		REQUIRE((res->GetValue(8, 0).IsNull())); // BOOLEAN: not a char type
+
+		db.Query("Drop table result;");
 	}
 	// 5. Test ADBC_OBJECT_DEPTH_ALL
 	{
@@ -2540,18 +2722,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2561,18 +2743,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2596,18 +2778,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2617,18 +2799,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2773,18 +2955,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2794,18 +2976,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 0,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': NO,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2849,18 +3031,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -2870,18 +3052,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                             {
                                 'column_name': b,
                                 'ordinal_position': 2,
-                                'remarks': '',
+                                'remarks': NULL,
                                 'xdbc_data_type': NULL,
-                                'xdbc_type_name': NULL,
-                                'xdbc_column_size': NULL,
-                                'xdbc_decimal_digits': NULL,
-                                'xdbc_num_prec_radix': NULL,
-                                'xdbc_nullable': NULL,
+                                'xdbc_type_name': INTEGER,
+                                'xdbc_column_size': 32,
+                                'xdbc_decimal_digits': 0,
+                                'xdbc_num_prec_radix': 2,
+                                'xdbc_nullable': 1,
                                 'xdbc_column_def': NULL,
-                                'xdbc_sql_data_type': NULL,
+                                'xdbc_sql_data_type': 4,
                                 'xdbc_datetime_sub': NULL,
                                 'xdbc_char_octet_length': NULL,
-                                'xdbc_is_nullable': NULL,
+                                'xdbc_is_nullable': YES,
                                 'xdbc_scope_catalog': NULL,
                                 'xdbc_scope_schema': NULL,
                                 'xdbc_scope_table': NULL,
@@ -4072,6 +4254,630 @@ TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]"
 		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
 		                                        &length, &db.adbc_error)));
 		REQUIRE(std::string(buf) == "main");
+	}
+}
+
+TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create two statements on the same connection
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute first query - get stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a, 'hello' AS b", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+
+	// Execute second query on the same connection - this should materialize stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS c, 'world' AS d", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	// Read from stream1 - should work because it was materialized
+	ArrowArray batch1;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	REQUIRE(batch1.n_children == 2);
+	batch1.release(&batch1);
+
+	// Verify end of stream1
+	ArrowArray batch1_end;
+	REQUIRE(stream1.get_next(&stream1, &batch1_end) == 0);
+	REQUIRE(batch1_end.release == nullptr);
+
+	// Read from stream2 - should work as the active streaming result
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	REQUIRE(batch2.n_children == 2);
+	batch2.release(&batch2);
+
+	// Verify end of stream2
+	ArrowArray batch2_end;
+	REQUIRE(stream2.get_next(&stream2, &batch2_end) == 0);
+	REQUIRE(batch2_end.release == nullptr);
+
+	// Clean up
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Concurrent statements with large result", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create a table with enough data to produce multiple batches
+	db.Query("CREATE TABLE test_large AS SELECT i, 'value_' || i::VARCHAR AS v FROM range(5000) t(i)");
+
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute first query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT * FROM test_large ORDER BY i", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+
+	// Read first batch from stream1 before executing second query
+	ArrowArray first_batch;
+	REQUIRE(stream1.get_next(&stream1, &first_batch) == 0);
+	REQUIRE(first_batch.release != nullptr);
+	REQUIRE(first_batch.length > 0);
+	auto first_batch_len = first_batch.length;
+	first_batch.release(&first_batch);
+
+	// Execute second query - materializes remaining data in stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 42 AS answer", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	// Continue reading from stream1 - should get remaining materialized data
+	int64_t total_rows = first_batch_len;
+	while (true) {
+		ArrowArray batch;
+		REQUIRE(stream1.get_next(&stream1, &batch) == 0);
+		if (!batch.release) {
+			break;
+		}
+		total_rows += batch.length;
+		batch.release(&batch);
+	}
+	REQUIRE(total_rows == 5000);
+
+	// Read from stream2
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	// Clean up
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Concurrent statements: release before second query", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute and release first stream before second query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+	stream1.release(&stream1);
+
+	// Second query should work fine (active_streams was cleaned up by release)
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	ArrowArray batch;
+	REQUIRE(stream2.get_next(&stream2, &batch) == 0);
+	REQUIRE(batch.release != nullptr);
+	REQUIRE(batch.length == 1);
+	batch.release(&batch);
+
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Three concurrent statements", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt1, stmt2, stmt3;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt3, &db.adbc_error)));
+
+	// Execute three queries sequentially, keeping all streams open
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows, &db.adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows, &db.adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt3, "SELECT 3 AS c", &db.adbc_error)));
+	ArrowArrayStream stream3;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt3, &stream3, &rows, &db.adbc_error)));
+
+	// Read all three streams — stream1 and stream2 are materialized, stream3 is live
+	ArrowArray batch1, batch2, batch3;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	batch1.release(&batch1);
+
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	REQUIRE(stream3.get_next(&stream3, &batch3) == 0);
+	REQUIRE(batch3.release != nullptr);
+	REQUIRE(batch3.length == 1);
+	batch3.release(&batch3);
+
+	// Verify all streams end
+	ArrowArray end;
+	REQUIRE(stream1.get_next(&stream1, &end) == 0);
+	REQUIRE(end.release == nullptr);
+	REQUIRE(stream2.get_next(&stream2, &end) == 0);
+	REQUIRE(end.release == nullptr);
+	REQUIRE(stream3.get_next(&stream3, &end) == 0);
+	REQUIRE(end.release == nullptr);
+
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	stream3.release(&stream3);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt3, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Connection release while stream is active", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// Set up database manually (not using ADBCTestDatabase since we need to control release order)
+	AdbcDatabase adbc_database;
+	AdbcError adbc_error;
+	std::memset(&adbc_error, 0, sizeof(adbc_error));
+	std::memset(&adbc_database, 0, sizeof(adbc_database));
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	AdbcConnection adbc_connection;
+	std::memset(&adbc_connection, 0, sizeof(adbc_connection));
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement stmt;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &stmt, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1 AS a", &adbc_error)));
+
+	ArrowArrayStream stream;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream, &rows, &adbc_error)));
+
+	// Release connection while stream is still active
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+
+	// Stream should still be usable (materialized data is independent, conn_wrapper is nulled out)
+	ArrowArray batch;
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.release != nullptr);
+	REQUIRE(batch.length == 1);
+	batch.release(&batch);
+
+	// Release stream after connection is gone — should not crash
+	stream.release(&stream);
+
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+}
+
+TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	// Execute first query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream1, &rows, &db.adbc_error)));
+
+	// Re-execute the same statement — should materialize stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream2, &rows, &db.adbc_error)));
+
+	// Both streams should be readable
+	ArrowArray batch1;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	batch1.release(&batch1);
+
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	const auto query = "CREATE MACRO my_macro(x) AS x + 1";
+	auto result = db.Query(query);
+	REQUIRE(!result->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, query, &db.adbc_error)));
+
+	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
+	int64_t rows_affected = -1;
+	auto status = AdbcStatementExecuteQuery(&stmt, &out_stream, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(out_stream.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto &input_data = db.QueryArrow("SELECT 44 as value");
+
+	AdbcStatement adbc_statement;
+	InitializeADBCError(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "nonexistent_schema",
+	                                       &db.adbc_error)));
+
+	const char *ingest_option_mode;
+	SECTION("REPLACE") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_REPLACE;
+	}
+	SECTION("CREATE_APPEND") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_CREATE_APPEND;
+	}
+
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ingest_option_mode, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto r1 = db.Query("CREATE TABLE test_table(x INTEGER UNIQUE)");
+	REQUIRE(!r1->HasError());
+	auto r2 = db.Query("INSERT INTO test_table VALUES (42)");
+	REQUIRE(!r2->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "INSERT INTO test_table VALUES ($1)", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&stmt, &db.adbc_error)));
+
+	// Bind a stream containing the duplicate value — will trigger a UNIQUE violation
+	auto &input_data = db.QueryArrow("SELECT 42 AS x");
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &db.adbc_error)));
+
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&stmt, nullptr, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+
+	// Create a table large enough that streaming requires multiple fetch calls.
+	auto r = db.Query("CREATE TABLE big AS SELECT * FROM range(500000) r(i)");
+	REQUIRE(!r->HasError());
+
+	constexpr int ITERATIONS = 50;
+
+	for (int iter = 0; iter < ITERATIONS; iter++) {
+		AdbcStatement query_stmt;
+		ArrowArrayStream stream;
+		stream.release = nullptr;
+		int64_t rows_affected;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &query_stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&query_stmt, "SELECT * FROM big", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&query_stmt, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&query_stmt, &db.adbc_error)));
+
+		std::thread releaser([&stream]() {
+			if (stream.release) {
+				stream.release(&stream);
+			}
+		});
+
+		{
+			AdbcStatement materialize_stmt;
+			auto status = AdbcStatementNew(&db.adbc_connection, &materialize_stmt, &db.adbc_error);
+			if (status == ADBC_STATUS_OK) {
+				AdbcStatementSetSqlQuery(&materialize_stmt, "SELECT 1", &db.adbc_error);
+				AdbcStatementRelease(&materialize_stmt, &db.adbc_error);
+			}
+		}
+
+		releaser.join();
+		if (stream.release) {
+			stream.release(&stream);
+		}
+	}
+}
+
+TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+	AdbcStatement stmt;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	SECTION("basic SELECT") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 42 AS answer, 'hello' AS greeting", &db.adbc_error)));
+
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+
+		REQUIRE(schema.n_children == 2);
+		REQUIRE(string(schema.children[0]->name) == "answer");
+		REQUIRE(string(schema.children[1]->name) == "greeting");
+		schema.release(&schema);
+	}
+
+	SECTION("no query set") {
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+		REQUIRE(string(db.adbc_error.message).find("StatementSetSqlQuery") != string::npos);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	SECTION("missing schema pointer") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1", &db.adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, nullptr, &db.adbc_error)));
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Rich Error Metadata API", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	SECTION("Function pointers are wired for 1.1.0") {
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver != nullptr);
+		REQUIRE(driver->ErrorGetDetailCount != nullptr);
+		REQUIRE(driver->ErrorGetDetail != nullptr);
+	}
+
+	SECTION("No details for zero-initialized error") {
+		AdbcError error = {};
+		auto *driver = db.adbc_database.private_driver;
+		REQUIRE(driver->ErrorGetDetailCount(&error) == 0);
+		auto detail = driver->ErrorGetDetail(&error, 0);
+		REQUIRE(detail.key == nullptr);
+		REQUIRE(detail.value == nullptr);
+	}
+
+	SECTION("Provides duckdb:error_type detail for ingestion CREATE conflict") {
+		// Create a table first (uses db.adbc_error which is zero-init)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl", input);
+
+		// Try to ingest to the same table in CREATE mode (default) with ADBC_ERROR_INIT
+		// This triggers a Catalog error ("already exists")
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		REQUIRE(error.message != nullptr);
+
+		// With ADBC_ERROR_INIT, structured error details should be available
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		// Out-of-bounds index returns empty detail
+		auto oob = AdbcErrorGetDetail(&error, 999);
+		REQUIRE(oob.key == nullptr);
+		REQUIRE(oob.value == nullptr);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("No duckdb:error_type detail when error is zero-initialized") {
+		// Same scenario but with zero-init error (no ADBC_ERROR_INIT)
+		auto &input = db.QueryArrow("SELECT 1 AS id");
+		db.CreateTable("rich_error_meta_tbl2", input);
+
+		auto &input2 = db.QueryArrow("SELECT 2 AS id");
+		AdbcStatement stmt = {};
+		AdbcError error = {}; // zero-init: vendor_code = 0, not ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &stmt, &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "rich_error_meta_tbl2", &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input2, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+
+		// With zero-init error, no structured details
+		REQUIRE(AdbcErrorGetDetailCount(&error) == 0);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	}
+
+	SECTION("Provides duckdb:error_type detail for APPEND to missing table") {
+		auto &input = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt = {};
+		AdbcError error = ADBC_ERROR_INIT;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table_rich_append", &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input, &error)));
+
+		auto status = AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &error);
+		REQUIRE(!SUCCESS(status));
+		REQUIRE(error.message != nullptr);
+
+		int count = AdbcErrorGetDetailCount(&error);
+		REQUIRE(count > 0);
+
+		bool found_error_type = false;
+		for (int i = 0; i < count; i++) {
+			auto detail = AdbcErrorGetDetail(&error, i);
+			if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+				found_error_type = true;
+				REQUIRE(detail.value != nullptr);
+				REQUIRE(detail.value_length > 0);
+				std::string type_str(reinterpret_cast<const char *>(detail.value), detail.value_length);
+				REQUIRE(type_str == "Catalog");
+			}
+		}
+		REQUIRE(found_error_type);
+
+		if (error.release) {
+			error.release(&error);
+		}
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input.release) {
+			input.release(&input);
+		}
 	}
 }
 

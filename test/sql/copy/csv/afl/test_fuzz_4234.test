@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4234.test
+# description: fuzzer issue #4234
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/afl/4234/test_fuzz_4234.csv', buffer_size=30, delim=';', header=false, null_padding=true, union_by_name=false);
+----
+Maximum line size of 30 bytes exceeded

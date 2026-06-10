@@ -20,7 +20,7 @@ statement ok
 INSERT INTO integers values (1), (2), (3);
 
 statement ok
-set allow_parser_override_extension=strict_when_supported;
+call enable_peg_parser();
 
 query I
 DELETE FROM integers WHERE i%2 AND i<157353;

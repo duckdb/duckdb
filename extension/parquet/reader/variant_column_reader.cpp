@@ -7,7 +7,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
-VariantColumnReader::VariantColumnReader(ClientContext &context, ParquetReader &reader,
+VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
                                          vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
@@ -89,7 +89,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		}
 	}
 	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
 	VariantValue::ToVARIANT(intermediate, result);
 
 	read_count = value_values;

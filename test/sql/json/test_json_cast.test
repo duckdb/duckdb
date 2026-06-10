@@ -1,0 +1,208 @@
+# name: test/sql/json/test_json_cast.test
+# group: [json]
+
+require json
+
+# Types that cannot roundtrip through JSON
+statement error
+SELECT '1010'::BIT(4)::JSON::BIT(4)
+----
+Not implemented Error: Cannot read a value of type BIT from a json file
+
+statement error
+SELECT 1::BIGNUM::JSON::BIGNUM
+----
+Not implemented Error: Cannot read a value of type BIGNUM from a json file
+
+# Regular types
+query I
+SELECT true::BOOLEAN::JSON::BOOLEAN
+----
+true
+
+query I
+SELECT 1::TINYINT::JSON::TINYINT
+----
+1
+
+query I
+SELECT 1::SMALLINT::JSON::SMALLINT
+----
+1
+
+query I
+SELECT 1::INTEGER::JSON::INTEGER
+----
+1
+
+query I
+SELECT 1::BIGINT::JSON::BIGINT
+----
+1
+
+query I
+SELECT date '2024-01-01'::DATE::JSON::DATE
+----
+2024-01-01
+
+query I
+SELECT time '12:34:56'::TIME::JSON::TIME
+----
+12:34:56
+
+query I
+SELECT '2024-06-01 00:00:00'::TIMESTAMP_S::JSON::TIMESTAMP_S
+----
+2024-06-01 00:00:00
+
+query I
+SELECT '2024-06-01 00:00:00'::TIMESTAMP_MS::JSON::TIMESTAMP_MS
+----
+2024-06-01 00:00:00
+
+query I
+SELECT '2024-06-01 00:00:00'::TIMESTAMP::JSON::TIMESTAMP
+----
+2024-06-01 00:00:00
+
+query I
+SELECT '2024-06-01 00:00:00'::TIMESTAMP_NS::JSON::TIMESTAMP_NS
+----
+2024-06-01 00:00:00
+
+query I
+SELECT 1::DECIMAL(10, 2)::JSON::DECIMAL(10, 2)
+----
+1.00
+
+query I
+SELECT 1::FLOAT::JSON::FLOAT
+----
+1.0
+
+query I
+SELECT 1::DOUBLE::JSON::DOUBLE
+----
+1.0
+
+query I
+SELECT '"text"'::CHAR::JSON::CHAR
+----
+"text"
+
+query I
+SELECT '"text"'::VARCHAR::JSON::VARCHAR
+----
+"text"
+
+query I
+SELECT 'blob'::BLOB::JSON::BLOB
+----
+blob
+
+query I
+SELECT INTERVAL '1 day'::INTERVAL::JSON::INTERVAL
+----
+1 day
+
+query I
+SELECT 1::UTINYINT::JSON::UTINYINT
+----
+1
+
+query I
+SELECT 1::USMALLINT::JSON::USMALLINT
+----
+1
+
+query I
+SELECT 1::UINTEGER::JSON::UINTEGER
+----
+1
+
+query I
+SELECT 1::UBIGINT::JSON::UBIGINT
+----
+1
+
+query I
+SELECT '2024-06-01 00:00:00+00'::TIMESTAMPTZ::JSON::TIMESTAMPTZ
+----
+2024-06-01 00:00:00+00
+
+# TimeTZ
+query I
+SELECT '00:00:00+00'::TIMETZ::JSON::TIMETZ
+----
+00:00:00+00
+
+# TimeNS
+query I
+SELECT '00:00:00'::TIME_NS::JSON::TIME_NS
+----
+00:00:00
+
+query I
+SELECT 1::UHUGEINT::JSON::UHUGEINT
+----
+1
+
+query I
+SELECT 1::HUGEINT::JSON::HUGEINT
+----
+1
+
+query I
+SELECT '00000000-0000-0000-0000-000000000001'::UUID::JSON::UUID
+----
+00000000-0000-0000-0000-000000000001
+
+query I
+SELECT 'POINT(0 1)'::GEOMETRY::JSON::GEOMETRY
+----
+POINT (0 1)
+
+query I
+SELECT {'a': 1}::JSON::STRUCT(a INTEGER)
+----
+{'a': 1}
+
+query I
+SELECT [1]::JSON::INTEGER[]
+----
+[1]
+
+query I
+SELECT map(ARRAY[1], ARRAY['one'])::JSON::MAP(INTEGER, VARCHAR)
+----
+{1=one}
+
+
+# Enums need to be converted to valid JSON too
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+SELECT 'sad'::mood::JSON
+----
+"sad"
+
+query I
+SELECT 'sad'::mood::JSON::mood;
+----
+sad
+
+query I
+SELECT 1::UNION(a INTEGER, b VARCHAR)::JSON::UNION(a INTEGER, b VARCHAR)
+----
+1
+
+query I
+SELECT [1]::INT[1]::JSON::INT[1]
+----
+[1]
+
+query I
+SELECT 'foo'::VARIANT::JSON::VARIANT
+----
+foo

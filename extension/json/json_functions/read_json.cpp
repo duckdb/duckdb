@@ -108,13 +108,13 @@ public:
 					JSONStructure::ExtractStructure(val, node, true);
 				}
 			}
+			remaining -= next;
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 				continue;
 			}
 			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers);
 			node.RefineCandidateTypes(scan_state.values, next, string_vector, allocator,
 			                          auto_detect_state.date_format_map);
-			remaining -= next;
 		}
 		auto_detect_state.total_file_size += file_size;
 		auto_detect_state.bytes_scanned += total_read_size;

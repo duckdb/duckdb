@@ -114,8 +114,8 @@ static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 
 BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto enum_physical_type = source.InternalType();
-	switch (target.id()) {
-	case LogicalTypeId::ENUM: {
+
+	if (target.id() == LogicalTypeId::ENUM) {
 		// This means they are both ENUMs, but of different types.
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
@@ -128,7 +128,7 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
-	case LogicalTypeId::VARCHAR:
+	if (target == LogicalType::VARCHAR) {
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
 			return EnumToVarcharCast<uint8_t>;
@@ -139,10 +139,9 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-	default: {
-		return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target), InitEnumCastLocalState);
 	}
-	}
+	// Otherwise, fall back to ANY cast
+	return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target), InitEnumCastLocalState);
 }
 
 } // namespace duckdb

@@ -1,6 +1,6 @@
 duckdb_extension_load(test_utils
   GIT_URL https://github.com/duckdb/bwc-test-utils
-  GIT_TAG df0ca97925bc8b3349ee7b1d0ad7496af077daf8
+  GIT_TAG 5b9c7334949c47cdf69ce11c151139c4c88aa7f8
   # For local dev:
   # SOURCE_DIR "${EXTENSION_CONFIG_BASE_DIR}/../../../../test-utils"
 )

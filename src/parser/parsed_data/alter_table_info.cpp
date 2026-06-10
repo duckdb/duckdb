@@ -220,16 +220,21 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 
 string AddColumnInfo::ToString() const {
 	string result = "";
-	result += "ALTER TABLE ";
+	result += "ALTER TABLE";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += QualifierToString(catalog, schema, name);
+	result += " " + QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
 	}
-	throw NotImplementedException("FIXME: column definition to string");
+	result += " " + this->new_column.GetName();
+	result += " " + this->new_column.GetType().ToString();
+	if (this->new_column.HasDefaultValue()) {
+		result += " DEFAULT ";
+		result += this->new_column.DefaultValue().ToString();
+	}
 	result += ";";
 	return result;
 }

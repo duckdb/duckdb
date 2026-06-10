@@ -318,3 +318,120 @@ SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distanc
 [1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
 [4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
 
+statement ok
+CREATE TABLE t(a INT, b INT, c VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 100, 'x'), (2, 200, 'y');
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+) sub
+GROUP BY c
+ORDER BY ALL
+----
+x	100.0
+y	200.0
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT *, row_number() OVER (PARTITION BY a, c ORDER BY b DESC) AS rn
+    FROM t
+) sub
+WHERE rn = 1
+GROUP BY c
+ORDER BY ALL;
+----
+x	100.0
+y	200.0
+
+query II
+WITH sub AS (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+)
+SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
+----
+x	100.0
+y	200.0
+
+# Left projection map corruption issue #21650
+statement ok
+CREATE TABLE s (s1 VARCHAR)
+
+statement ok
+CREATE TABLE e (e1 VARCHAR, e2 VARCHAR, e3 VARCHAR)
+
+statement ok
+SELECT *
+FROM s b1
+JOIN (
+	SELECT *, row_number() OVER (PARTITION BY b2.s1 ORDER BY e1.e1) rn
+	FROM s b2
+	JOIN e e1 ON b2.s1 = e1.e2
+) e2 ON b1.s1 = e2.s1
+WHERE e2.rn = 1;
+
+# Late Materialization with cast in join issue #21604
+statement ok
+CREATE TABLE t1 (c VARCHAR, c1 VARCHAR, c2 VARCHAR, c3 VARCHAR)
+
+statement ok
+CREATE TABLE t2 (a BIGINT, a1 VARCHAR, a2 VARCHAR)
+
+statement ok
+WITH ct1 AS (
+	SELECT * FROM t1
+)
+SELECT *
+FROM ct1 b
+JOIN (
+	SELECT c, a1, a2, row_number() OVER (PARTITION BY b.c ORDER BY e.a1) rn
+	FROM ct1 b
+	JOIN t2 e ON b.c = e.a
+) e ON b.c = e.c
+WHERE e.rn = 1;
+
+statement ok
+CREATE TABLE except_test (id INT, ord INT, grp INT);
+
+statement ok
+INSERT INTO except_test VALUES (1, 1, 1);
+
+query II
+SELECT sub.id, sub.ord
+FROM (SELECT id, ord, grp, row_number() OVER (ORDER BY ord) AS rn FROM except_test) sub
+JOIN (VALUES (1)) t2(grp) ON t2.grp = sub.grp
+WHERE sub.rn = 1
+EXCEPT
+SELECT id, ord FROM (SELECT id, ord, row_number() OVER (ORDER BY ord) AS rn FROM except_test) WHERE rn = 1;
+----
+
+# Don't apply late materialisation to function projections that have only one colref argument...
+statement ok
+CREATE TABLE path_table AS 
+	SELECT generate_series AS id, 
+		id % 4 AS partition_key, 
+		id % 7 AS sort_key, 
+		'/User/hawkfish/file.txt' AS path 
+	FROM generate_series(10);
+
+statement ok
+CREATE VIEW path_view AS 
+	SELECT *, 
+		parse_filename(path) AS filename 
+	FROM path_table;
+
+query IIIII
+FROM path_view 
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+ORDER BY 1;
+----
+0	0	0	/User/hawkfish/file.txt	file.txt
+1	1	1	/User/hawkfish/file.txt	file.txt
+2	2	2	/User/hawkfish/file.txt	file.txt
+7	3	0	/User/hawkfish/file.txt	file.txt

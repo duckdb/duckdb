@@ -144,7 +144,18 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
-	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	idx_t scan_count;
+	if (!state.storage_index.IsPushdownExtract()) {
+		// if we are scanning the entire struct we need to scan the validity
+		scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			if (!ConstantVector::IsNull(result)) {
+				throw InternalException("StructColumnData::Scan returned a constant but not NULL vector ");
+			}
+			// constant NULL struct - we don't need to scan any children, everything is already NULL
+			return scan_count;
+		}
+	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
@@ -155,15 +166,19 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
-			return child.col.Scan(transaction, vector_index, child.state, child_result, target_count);
+			scan_count = child.col.Scan(transaction, vector_index, child.state, child_result, target_count);
+			return scan_count;
 		});
 	}
 	return scan_count;
 }
 
 idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto scan_count = validity->ScanCount(state.child_states[0], result, count);
-
+	idx_t scan_count;
+	if (!state.storage_index.IsPushdownExtract()) {
+		// if we are scanning the entire struct we need to scan the validity
+		scan_count = validity->ScanCount(state.child_states[0], result, count);
+	}
 	auto struct_children = GetStructChildren(state);
 	for (auto &child : struct_children) {
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
@@ -174,7 +189,8 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
-			return child.col.ScanCount(child.state, child_result, count, result_offset);
+			scan_count = child.col.ScanCount(child.state, child_result, count, result_offset);
+			return scan_count;
 		});
 	}
 	return scan_count;

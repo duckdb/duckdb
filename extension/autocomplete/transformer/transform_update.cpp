@@ -104,8 +104,20 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(P
 pair<string, unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto column_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto column_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	return make_pair(column_name, std::move(expr));
+}
+
+// UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto column_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto &extra_opt = list_pr.Child<OptionalParseResult>(1);
+	if (extra_opt.HasResult()) {
+		throw ParserException("Qualified column names in UPDATE .. SET not supported");
+	}
+	return column_name;
 }
 } // namespace duckdb

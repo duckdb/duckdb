@@ -3,7 +3,32 @@
 
 require parquet
 
-statement error
-COPY (SELECT 1::hugeint::variant) TO '__TEST_DIR__/invalid_parquet_variant.parquet';
+# these types are not supported by the Parquet variant spec - we need to convert them
+foreach unsupported_type ubigint uhugeint hugeint utinyint usmallint uinteger
+
+statement ok
+COPY (SELECT 1::${unsupported_type}::variant v) TO '__TEST_DIR__/invalid_parquet_variant.parquet';
+
+query II
+SELECT v,
+	variant_typeof(v) =
+	CASE
+		WHEN '${unsupported_type}' = 'utinyint' THEN 'INT16'
+		WHEN '${unsupported_type}' = 'usmallint' THEN 'INT32'
+		ELSE 'INT64'
+	END
+FROM '__TEST_DIR__/invalid_parquet_variant.parquet'
 ----
-Can't convert
+1	true
+
+endloop
+
+# these values are converted to INT64 - if the values are too big this conversion fails
+foreach unsupported_type ubigint uhugeint hugeint
+
+statement error
+copy (select '18446744073709551615'::${unsupported_type}::VARIANT) to '__TEST_DIR__/out_of_range_variant.parquet';
+----
+value is out of range
+
+endloop

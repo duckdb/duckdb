@@ -1,0 +1,90 @@
+# name: test/sql/catalog/dependencies/test_set_default_sequence_dependency.test
+# group: [dependencies]
+
+# overriding the default with a sequence should drop the dependencies of the table
+
+statement ok
+CREATE SEQUENCE id_sequence START 1;
+
+statement ok
+CREATE TABLE tbl (id INTEGER DEFAULT nextval('id_sequence'), s VARCHAR);
+
+statement ok
+INSERT INTO tbl(s) VALUES ('default is sequence');
+
+statement ok
+ALTER TABLE tbl ALTER COLUMN id SET DEFAULT NULL;
+
+statement ok
+INSERT INTO tbl(s) VALUES ('default is NULL');
+
+statement ok
+SELECT * FROM tbl;
+
+statement ok
+DROP SEQUENCE id_sequence;
+
+# test: sequence used in multiple defaults, only override one - dependency should remain
+
+statement ok
+CREATE SEQUENCE seq START 1;
+
+statement ok
+CREATE TABLE tbl2 (a INTEGER DEFAULT nextval('seq'), b INTEGER DEFAULT nextval('seq'));
+
+statement ok
+INSERT INTO tbl2 DEFAULT VALUES;
+
+# override only column a - column b still depends on seq
+statement ok
+ALTER TABLE tbl2 ALTER COLUMN a SET DEFAULT NULL;
+
+# dropping the sequence should fail because column b still depends on it
+statement error
+DROP SEQUENCE seq;
+----
+there are entries that depend on it
+
+# override column b as well - now the dependency is fully removed
+statement ok
+ALTER TABLE tbl2 ALTER COLUMN b SET DEFAULT 0;
+
+statement ok
+DROP SEQUENCE seq;
+
+statement ok
+DROP TABLE tbl2;
+
+# test: rolling back an ALTER TABLE that removes a sequence dependency should restore the dependency
+
+statement ok
+CREATE SEQUENCE seq4 START 1;
+
+statement ok
+CREATE TABLE tbl5 (a INTEGER DEFAULT nextval('seq4'), b VARCHAR);
+
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE tbl5 ALTER COLUMN a SET DEFAULT NULL;
+
+# inside the transaction the dependency is removed - drop should succeed
+statement ok
+DROP SEQUENCE seq4;
+
+statement ok
+ROLLBACK;
+
+# after rollback the dependency should be restored - drop should fail
+statement error
+DROP SEQUENCE seq4;
+----
+there are entries that depend on it
+
+statement ok
+DROP TABLE tbl5;
+
+statement ok
+DROP SEQUENCE seq4;
+

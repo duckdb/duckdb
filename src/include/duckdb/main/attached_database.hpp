@@ -77,6 +77,8 @@ struct AttachOptions {
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
+	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
+	optional_idx vacuum_rebuild_indexes_threshold;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -131,6 +133,9 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! vacuum_rebuild_indexes threshold for this attached database.
+	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
+	idx_t GetVacuumRebuildIndexThreshold() const;
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
@@ -156,6 +161,7 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;
+	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 
 private:

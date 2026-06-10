@@ -138,6 +138,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// GEOMETRY type, WKB blob
+	DUCKDB_TYPE_GEOMETRY = 40,
+	// VARIANT type
+	DUCKDB_TYPE_VARIANT = 41,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -498,7 +502,7 @@ typedef struct {
 } duckdb_bit;
 
 //! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
-//! The absolute value of the number is stored in `data` in little endian format.
+//! The absolute value of the number is stored in `data` in big endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
@@ -2512,8 +2516,11 @@ DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 /*!
 Creates a DECIMAL value from a duckdb_decimal
 
+The width must be between 1 and 38, and the scale must not exceed the width.
+
 * @param input The duckdb_decimal value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
+* @return The value, or `nullptr` if the width or scale are out of range. This must be destroyed with
+`duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_decimal(duckdb_decimal input);
 
@@ -3134,9 +3141,9 @@ DUCKDB_C_API duckdb_logical_type duckdb_create_enum_type(const char **member_nam
 Creates a DECIMAL type with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* @param width The width of the decimal type
-* @param scale The scale of the decimal type
-* @return The logical type.
+* @param width The width of the decimal type. Must be between 1 and 38.
+* @param scale The scale of the decimal type. Must not exceed the width.
+* @return The logical type, or `nullptr` if the width or scale are out of range.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
@@ -6253,6 +6260,29 @@ Registers a custom log storage for the logger.
 * @return Whether the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Geometry Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on GEOMETRY types`.
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Gets the CRS (Coordinate Reference System) of a GEOMETRY type.
+Result must be freed with `duckdb_free`.
+
+* @param type The GEOMETRY type.
+* @return The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
+*/
+DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Variant Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on VARIANT types.
+//----------------------------------------------------------------------------------------------------------------------
 
 #endif
 

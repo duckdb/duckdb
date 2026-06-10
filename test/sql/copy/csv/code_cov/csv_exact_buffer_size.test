@@ -21,3 +21,8 @@ query I
 select count(*) from read_csv_auto('{DATA_DIR}/csv/small_file.csv', buffer_size = 7)
 ----
 2
+
+query I
+select count(*) from read_csv('{DATA_DIR}/csv/quoted_comment_buffer_boundary.csv', buffer_size=30, delim=';', header=false, null_padding=true, union_by_name=false, ignore_errors=true)
+----
+4

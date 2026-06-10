@@ -74,6 +74,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+	if (!column_stats) {
+		return false;
+	}
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
@@ -86,6 +89,12 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		D_ASSERT(column_stats->GetStatsType() == StatisticsType::STRING_STATS);
 		if (StringStats::Min(*column_stats) > StringStats::Max(*column_stats)) {
 			// No min/max statistics availabe
+			return false;
+		}
+		// String statistics store at most an 8-byte prefix of the min/max values.
+		// If the actual maximum string length exceeds that prefix, the stored prefix is not the true min/max
+		if (!StringStats::HasMaxStringLength(*column_stats) ||
+		    StringStats::MaxStringLength(*column_stats) > StringStatsData::MAX_STRING_MINMAX_SIZE) {
 			return false;
 		}
 	}

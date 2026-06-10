@@ -4,139 +4,50 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_dummy_scan.hpp"
-#include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 namespace duckdb {
 
-class WindowSelfJoinTableRebinder : public LogicalOperatorVisitor {
-public:
-	static bool CanRebind(const LogicalOperator &op) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_GET:
-		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-		case LogicalOperatorType::LOGICAL_PROJECTION:
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		case LogicalOperatorType::LOGICAL_FILTER:
-			if (!op.children.empty()) {
-				return CanRebind(*op.children[0]);
-			}
-			return true;
-		default:
-			break;
-		}
-		return false;
+static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
+	auto agg_func = *w_expr.aggregate;
+	unique_ptr<FunctionData> bind_info;
+	if (w_expr.bind_info) {
+		bind_info = w_expr.bind_info->Copy();
+	} else {
+		bind_info = nullptr;
 	}
 
-	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
+	vector<unique_ptr<Expression>> children;
+	for (auto &child : w_expr.children) {
+		auto child_copy = child->Copy();
+		children.push_back(std::move(child_copy));
 	}
 
-	unordered_map<idx_t, idx_t> table_map;
-	Optimizer &optimizer;
-
-	void VisitOperator(LogicalOperator &op) override {
-		// Rebind definitions
-		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = op.Cast<LogicalGet>();
-			auto new_idx = optimizer.binder.GenerateTableIndex();
-			table_map[get.table_index] = new_idx;
-			get.table_index = new_idx;
-		}
-		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			auto &proj = op.Cast<LogicalProjection>();
-			auto new_idx = optimizer.binder.GenerateTableIndex();
-			table_map[proj.table_index] = new_idx;
-			proj.table_index = new_idx;
-		}
-		if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-			auto &agg = op.Cast<LogicalAggregate>();
-			auto new_agg_idx = optimizer.binder.GenerateTableIndex();
-			auto new_grp_idx = optimizer.binder.GenerateTableIndex();
-			table_map[agg.aggregate_index] = new_agg_idx;
-			table_map[agg.group_index] = new_grp_idx;
-			agg.aggregate_index = new_agg_idx;
-			agg.group_index = new_grp_idx;
-		}
-		if (op.type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
-			auto &get = op.Cast<LogicalExpressionGet>();
-			auto new_idx = optimizer.binder.GenerateTableIndex();
-			table_map[get.table_index] = new_idx;
-			get.table_index = new_idx;
-		}
-		if (op.type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
-			auto &dummy = op.Cast<LogicalDummyScan>();
-			auto new_idx = optimizer.binder.GenerateTableIndex();
-			table_map[dummy.table_index] = new_idx;
-			dummy.table_index = new_idx;
-		}
-
-		// TODO: Handle other operators defining tables if needed
-		// But Get/Projection/Aggregate are most common in subplans.
-
-		VisitOperatorChildren(op);
-		VisitOperatorExpressions(op);
+	unique_ptr<Expression> filter;
+	if (w_expr.filter_expr) {
+		filter = w_expr.filter_expr->Copy();
 	}
 
-	void VisitExpression(unique_ptr<Expression> *expression) override {
-		auto &expr = *expression;
-		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &bound = expr->Cast<BoundColumnRefExpression>();
-			if (table_map.count(bound.binding.table_index)) {
-				bound.binding.table_index = table_map[bound.binding.table_index];
-			}
+	auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+
+	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
+	                                                  std::move(bind_info), aggr_type);
+
+	if (!w_expr.arg_orders.empty()) {
+		result->order_bys = make_uniq<BoundOrderModifier>();
+		auto &orders = result->order_bys->orders;
+		for (auto &order : w_expr.arg_orders) {
+			auto order_copy = order.Copy();
+			orders.emplace_back(std::move(order_copy));
 		}
-		VisitExpressionChildren(**expression);
 	}
 
-	unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
-		auto agg_func = *w_expr.aggregate;
-		unique_ptr<FunctionData> bind_info;
-		if (w_expr.bind_info) {
-			bind_info = w_expr.bind_info->Copy();
-		} else {
-			bind_info = nullptr;
-		}
-
-		vector<unique_ptr<Expression>> children;
-		for (auto &child : w_expr.children) {
-			auto child_copy = child->Copy();
-			VisitExpression(&child_copy); // Update bindings
-			children.push_back(std::move(child_copy));
-		}
-
-		unique_ptr<Expression> filter;
-		if (w_expr.filter_expr) {
-			filter = w_expr.filter_expr->Copy();
-			VisitExpression(&filter); // Update bindings
-		}
-
-		auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
-
-		auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
-		                                                  std::move(bind_info), aggr_type);
-
-		if (!w_expr.arg_orders.empty()) {
-			result->order_bys = make_uniq<BoundOrderModifier>();
-			auto &orders = result->order_bys->orders;
-			for (auto &order : w_expr.arg_orders) {
-				auto order_copy = order.Copy();
-				VisitExpression(&order_copy.expression); // Update bindings
-				orders.emplace_back(std::move(order_copy));
-			}
-		}
-
-		return std::move(result);
-	}
-};
+	return std::move(result);
+}
 
 WindowSelfJoinOptimizer::WindowSelfJoinOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
@@ -167,7 +78,45 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
+
+	//	Even with no ORDER BY, we can still have a non-degenerate frame if we have ROWS framing.
+	switch (w_expr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
+	switch (w_expr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		break;
+	default:
+		return false;
+	}
+
 	return true;
+}
+
+bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		if (!op.children.empty()) {
+			return CanOptimize(*op.children[0]);
+		}
+		return true;
+	default:
+		break;
+	}
+	return false;
 }
 
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
@@ -178,7 +127,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
 
-		if (!WindowSelfJoinTableRebinder::CanRebind(*window.children[0])) {
+		if (!CanOptimize(*window.children[0])) {
 			return op;
 		}
 
@@ -192,13 +141,31 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		auto &partitions = w_expr0.partitions;
 
 		// --- Transformation ---
+		// try to copy the LHS
+		unique_ptr<LogicalOperator> copy_child;
+		// Reuse the LogicalOperatorDeepCopy from CTE inlining, as the copying requirements are similar (copying an
+		// operator subtree and replacing table indices)
+		LogicalOperatorDeepCopy deep_copy(optimizer.binder, nullptr);
+		try {
+			copy_child = deep_copy.DeepCopy(window.children[0]);
+		} catch (std::exception &ex) {
+			// failed to copy the LHS - cannot run this optimizer
+			return op;
+		}
+
+		// We statically know that the copy child has the same column bindings as the original child,
+		// just with different table indices. So we can prepare a replacer with the correct binding
+		// replacements to avoid having to resolve anything again later on.
+		ColumnBindingReplacer local_replacer;
+		auto old_bindings = window.children[0]->GetColumnBindings();
+		auto new_bindings = copy_child->GetColumnBindings();
+		vector<ReplacementBinding> binding_replacements;
+		for (idx_t i = 0; i < old_bindings.size(); ++i) {
+			binding_replacements.emplace_back(old_bindings[i], new_bindings[i]);
+		}
+		local_replacer.replacement_bindings = std::move(binding_replacements);
 
 		auto original_child = std::move(window.children[0]);
-		auto copy_child = original_child->Copy(optimizer.context);
-
-		// Rebind copy_child to avoid duplicate table indices
-		WindowSelfJoinTableRebinder rebinder(optimizer);
-		rebinder.VisitOperator(*copy_child);
 
 		auto aggregate_index = optimizer.binder.GenerateTableIndex();
 		auto group_index = optimizer.binder.GenerateTableIndex();
@@ -209,13 +176,12 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Create Aggregate Operator
 		for (auto &part : partitions) {
 			auto part_copy = part->Copy();
-			rebinder.VisitExpression(&part_copy); // Update bindings
 			groups.push_back(std::move(part_copy));
 		}
 
 		for (auto &expr : window.expressions) {
 			auto &w_expr = expr->Cast<BoundWindowExpression>();
-			aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
+			aggregates.emplace_back(TranslateAggregate(w_expr));
 		}
 
 		// args: group_index, aggregate_index, ...
@@ -223,6 +189,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		agg_op->groups = std::move(groups);
 		agg_op->children.push_back(std::move(copy_child));
+		local_replacer.VisitOperator(*agg_op);
 		agg_op->ResolveOperatorTypes();
 
 		if (agg_op->types.size() <= agg_op->groups.size()) {

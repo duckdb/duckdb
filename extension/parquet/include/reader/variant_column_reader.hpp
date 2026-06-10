@@ -18,7 +18,7 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
 
 public:
-	VariantColumnReader(ClientContext &context, ParquetReader &reader, const ParquetColumnSchema &schema,
+	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                    vector<unique_ptr<ColumnReader>> child_readers_p);
 
 	ClientContext &context;

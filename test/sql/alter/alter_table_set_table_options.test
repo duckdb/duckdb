@@ -34,15 +34,16 @@ ALTER TABLE tbl1 RESET (foo, buzz);
 ----
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
 
+# Error depends on PEG parser or PostgreSQL parser
 statement error
 ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
 ----
-<REGEX>:.*Parser Error: "'baz'".*
+<REGEX>:(.*Parser Error.*"'baz'".*|.*Parser Error.* Reset option.*cannot set any value.*)
 
 statement error
 ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
 ----
-<REGEX>:.*Parser Error: "'baz'".*
+<REGEX>:(.*Parser Error.*"'baz'".*|.*Parser Error.* Reset option.*cannot set any value.*)
 
 statement error
 ALTER TABLE tbl1 RESET ();

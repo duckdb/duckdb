@@ -28,6 +28,29 @@ set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Copy compile_commands.json into <repo-root>/.cache/clangd/ after every successful build.
+# .cache/ is intentionally outside build/ so it survives `make clean` (which does rm -rf build).
+# The build-type name is derived from the last component of CMAKE_BINARY_DIR, so build dirs must
+# be two levels below the repo root (e.g. build/debug, .cache/clangd/debug) for the repo-root
+# derivation (CMAKE_BINARY_DIR/../..) to be correct. This works in both standalone duckdb builds
+# and extension builds where duckdb/ is a submodule.
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND UNIX)
+  get_filename_component(_clangd_build_name "${CMAKE_BINARY_DIR}" NAME)
+  get_filename_component(_repo_root "${CMAKE_BINARY_DIR}/../.." ABSOLUTE)
+  set(_clangd_cache_dir "${_repo_root}/.cache/clangd")
+  add_custom_target(clangd_cache ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_clangd_cache_dir}/${_clangd_build_name}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/${_clangd_build_name}/compile_commands.json"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/compile_commands.json"
+    COMMENT "Updating .cache/clangd (${_clangd_build_name})"
+    VERBATIM
+  )
+endif()
+
 set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -434,6 +457,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
+option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
@@ -460,9 +484,18 @@ option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
+option(ENABLE_JEMALLOC "Enable jemalloc as the memory allocator (only on supported platforms)" TRUE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
+
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
+if(DISABLE_BUILTIN_HTTPLIB)
+  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
+endif()
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -495,6 +528,9 @@ if(NATIVE_ARCH)
 endif()
 
 if(OVERRIDE_NEW_DELETE)
+  if (NOT ENABLE_JEMALLOC)
+    message(FATAL_ERROR "Cannot override new/delete without jemalloc enabled")
+  endif ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_OVERRIDE_NEW_DELETE")
 endif()
 
@@ -656,20 +692,33 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
+set(DUCKDB_RELEASE_LINK_JOBS
+    4
+    CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
+set(DUCKDB_DEBUG_LINK_JOBS
+    2
+    CACHE STRING "Maximum number of concurrent linker jobs for non-Release builds")
+
+# Throttle linker concurrency (mainly effective for Ninja) to avoid OOM in debug-like builds.
+set_property(GLOBAL PROPERTY JOB_POOLS
+             release_link_jobs=${DUCKDB_RELEASE_LINK_JOBS}
+             debug_link_jobs=${DUCKDB_DEBUG_LINK_JOBS})
+if(NOT DEFINED CMAKE_JOB_POOL_LINK)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_JOB_POOL_LINK release_link_jobs)
+  else()
+    set(CMAKE_JOB_POOL_LINK debug_link_jobs)
+  endif()
+endif()
+message(STATUS
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(DEFAULT_BUILD_TYPE "Release")
   message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
   set(CMAKE_BUILD_TYPE
       "${DEFAULT_BUILD_TYPE}"
       CACHE STRING "Choose the type of build." FORCE)
-endif()
-
-if(OS_NAME STREQUAL "windows")
-  list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
-  if (${_index} GREATER -1)
-    # have to throw an error because this will crash at runtime
-    message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
-  endif()
 endif()
 
 include_directories(src/include)
@@ -688,6 +737,7 @@ include_directories(third_party/pcg)
 include_directories(third_party/pdqsort)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
+include_directories(third_party/httplib)
 include_directories(third_party/jaro_winkler)
 include_directories(third_party/vergesort)
 include_directories(third_party/yyjson/include)
@@ -782,6 +832,13 @@ endfunction()
 
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
+
+if(ENABLE_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT EMSCRIPTEN AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+  set(JEMALLOC_ENABLED TRUE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ENABLE_JEMALLOC")
+  include_directories(third_party/jemalloc/include)
+  add_third_party(jemalloc)
+endif()
 
 if(PREBUILT_BINARY)
   message("Using pre-built static library from file ${PREBUILT_BINARY}")

@@ -127,7 +127,9 @@ def get_includes(fpath, text):
             or included_file == 'generated_extension_headers.hpp'
         ):
             continue
-        if 'allocator.cpp' in fpath and included_file.endswith('jemalloc_extension.hpp'):
+        if 'allocator_jemalloc.cpp' in fpath and (
+            included_file.endswith('jemalloc.h') or included_file.endswith('malloc_ncpus.h')
+        ):
             continue
         if x[0] in include_statements:
             raise Exception(f"duplicate include {x[0]} in file {fpath}")
@@ -177,7 +179,7 @@ def find_license(original_file):
     file = original_file
     license = ""
     while True:
-        (file, end) = os.path.split(file)
+        file, end = os.path.split(file)
         if file == "":
             break
         potential_license = os.path.join(file, "LICENSE")
@@ -212,7 +214,7 @@ def write_file(current_file, ignore_excluded=False):
             + "\n\n// LICENSE_CHANGE_END\n"
         )
 
-    (statements, includes) = get_includes(current_file, text)
+    statements, includes = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
     if len(statements) > 0:
         index = text.find(statements[-1])
@@ -424,7 +426,7 @@ def gather_file(current_file, source_files, header_files):
     with open_utf8(current_file, 'r') as f:
         text = f.read()
 
-    (statements, includes) = get_includes(current_file, text)
+    statements, includes = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
     if len(statements) > 0:
         index = text.find(statements[-1])

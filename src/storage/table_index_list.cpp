@@ -120,6 +120,15 @@ void TableIndexList::CommitDrop(const string &name) {
 	}
 }
 
+unordered_set<string> TableIndexList::DistinctIndexTypes() const {
+	lock_guard<mutex> lock(index_entries_lock);
+	unordered_set<string> result;
+	for (auto &entry : index_entries) {
+		result.insert(entry->index->GetIndexType());
+	}
+	return result;
+}
+
 bool TableIndexList::NameIsUnique(const string &name) {
 	// Only covers PK, FK, and UNIQUE indexes.
 	lock_guard<mutex> lock(index_entries_lock);

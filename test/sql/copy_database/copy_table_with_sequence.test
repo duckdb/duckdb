@@ -102,5 +102,6 @@ copy from database memory to backup;
 statement ok
 drop sequence memory.backup.seq cascade;
 
-statement ok
-drop sequence backup.backup.seq cascade;
+query IIIIIIIIIIIIIIII
+from duckdb_sequences()
+----

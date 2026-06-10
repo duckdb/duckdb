@@ -132,6 +132,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// GEOMETRY type, WKB blob
+	DUCKDB_TYPE_GEOMETRY = 40,
+	// VARIANT type
+	DUCKDB_TYPE_VARIANT = 41,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -498,7 +502,7 @@ typedef struct {
 } duckdb_bit;
 
 //! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
-//! The absolute value of the number is stored in `data` in little endian format.
+//! The absolute value of the number is stored in `data` in big endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;

@@ -7,9 +7,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/path.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -63,6 +65,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 
 static const ConfigurationOption internal_options[] = {
 
+    DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
@@ -73,6 +76,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnredactedSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedConfigsSetting),
     DUCKDB_GLOBAL(AllowedDirectoriesSetting),
     DUCKDB_GLOBAL(AllowedPathsSetting),
     DUCKDB_SETTING(ArrowLargeBufferSizeSetting),
@@ -87,6 +91,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
+    DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
@@ -115,6 +120,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_SETTING_CALLBACK(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
+    DUCKDB_LOCAL(EnableCachingOperatorsSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalAccessSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalFileCacheSetting),
     DUCKDB_SETTING(EnableFSSTVectorsSetting),
@@ -136,13 +142,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    DUCKDB_SETTING(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceMbedtlsUnsafeSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
-    DUCKDB_SETTING(HTTPProxySetting),
+    DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
     DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
@@ -194,20 +201,22 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_SETTING(UsernameSetting),
+    DUCKDB_SETTING_CALLBACK(VacuumRebuildIndexesSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
+    DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 96),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 40),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 115),
-                                                     DUCKDB_SETTING_ALIAS("user", 130),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 23),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 129),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 101),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 43),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 120),
+                                                     DUCKDB_SETTING_ALIAS("user", 135),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 25),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 134),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -544,10 +553,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
-	} else if (StringUtil::Contains(options.database_path, "?")) {
-		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
-		options.temporary_directory = options.database_path + ".tmp";
+		options.temporary_directory = Path::AddSuffixToPath(options.database_path, ".tmp");
 	}
 }
 
@@ -560,6 +567,14 @@ void DBConfig::CheckLock(const String &name) {
 	if (allowed_settings.find(name.ToStdString()) != allowed_settings.end()) {
 		// we are always allowed to change these settings
 		return;
+	}
+	if (!options.allowed_configs.empty()) {
+		auto option = GetOptionByName(name);
+		auto canonical_name = option ? string(option->name) : name.ToStdString();
+		if (options.allowed_configs.find(canonical_name) != options.allowed_configs.end()) {
+			// settings that are allowed through allowed_configs
+			return;
+		}
 	}
 	// not allowed!
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
@@ -793,6 +808,37 @@ string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 	return result;
 }
 
+void DBConfig::AddAllowedConfig(const string &config_name) {
+	if (config_name.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
+	}
+	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
+		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+	}
+	// Validate that the config name refers to a known setting (built-in or extension)
+	// and resolve aliases to canonical names
+	auto option = GetOptionByName(config_name);
+	if (option) {
+		// Store the canonical name so alias lookups work in CheckLock
+		options.allowed_configs.insert(option->name);
+		return;
+	}
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(config_name, extension_option)) {
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	// Check if the setting belongs to a known extension (even if not yet loaded)
+	auto extension_name = ExtensionHelper::FindExtensionInEntries(config_name, EXTENSION_SETTINGS);
+	if (!extension_name.empty()) {
+		// Accept the setting - the extension may be autoloaded later when the setting is used
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+}
+
 void DBConfig::AddAllowedDirectory(const string &path) {
 	auto allowed_directory = SanitizeAllowedPath(path);
 	if (allowed_directory.empty()) {
@@ -909,6 +955,16 @@ SerializationCompatibility SerializationCompatibility::Latest() {
 
 bool SerializationCompatibility::Compare(idx_t property_version) const {
 	return property_version <= serialization_version;
+}
+
+void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
+	lock_guard<mutex> guard(http_util_lock);
+	old_http_utils.push_back(http_util);
+	http_util.atomic_store(new_http_util);
+}
+
+HTTPUtil &DBConfig::GetHTTPUtil() const {
+	return *http_util.atomic_load();
 }
 
 } // namespace duckdb

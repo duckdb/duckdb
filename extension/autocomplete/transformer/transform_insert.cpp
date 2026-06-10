@@ -22,6 +22,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	transformer.TransformOptional<InsertColumnOrder>(list_pr, 5, result->column_order);
 	transformer.TransformOptional<vector<string>>(list_pr, 6, result->columns);
 	auto insert_values = transformer.Transform<InsertValues>(list_pr.Child<ListParseResult>(7));
+	if (!result->columns.empty() && insert_values.default_values) {
+		throw ParserException(
+		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
+	}
 	if (insert_values.default_values) {
 		result->default_values = true;
 	}
@@ -106,6 +110,12 @@ PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &trans
 	result.indexed_columns = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, result.where_clause);
 	return result;
+}
+
+OnConflictExpressionTarget
+PEGTransformerFactory::TransformOnConflictIndexTarget(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 }
 
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,

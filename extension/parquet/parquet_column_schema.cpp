@@ -93,17 +93,21 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 		return nullptr;
 	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
-		auto stats = NumericStats::CreateUnknown(type);
 		auto &row_groups = file_meta_data.row_groups;
 		D_ASSERT(row_group_idx_p < row_groups.size());
+		if (row_groups[row_group_idx_p].num_rows == 0) {
+			return NumericStats::CreateEmpty(type).ToUnique();
+		}
+
 		idx_t row_group_offset_min = 0;
 		for (idx_t i = 0; i < row_group_idx_p; i++) {
 			row_group_offset_min += row_groups[i].num_rows;
 		}
 
+		auto stats = NumericStats::CreateUnknown(type);
 		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
-		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min +
-		                                                                     row_groups[row_group_idx_p].num_rows)));
+		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(
+		                                row_group_offset_min + row_groups[row_group_idx_p].num_rows - 1)));
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}

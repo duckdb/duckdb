@@ -154,18 +154,17 @@ void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &stat
 
 void GeoColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
                            Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	return base_column->Update(transaction, data_table, column_index, update_vector, row_ids, update_count,
-	                           row_group_start);
+	throw NotImplementedException("GEOMETRY Update is not supported");
 }
+
 void GeoColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                  idx_t update_count, idx_t depth, idx_t row_group_start) {
-	return base_column->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth,
-	                                 row_group_start);
+	throw NotImplementedException("GEOMETRY Update is not supported");
 }
 
 unique_ptr<BaseStatistics> GeoColumnData::GetUpdateStatistics() {
-	return base_column->GetUpdateStatistics();
+	return nullptr;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -346,6 +345,20 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		checkpoint_state->inner_column = base_column;
 		checkpoint_state->inner_column_state =
 		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
+
+		if (base_column->GetType().id() == LogicalTypeId::GEOMETRY) {
+			// Get the stats from the base column.
+			checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
+		} else {
+			// Otherwise interpret stats from shredded column
+			const auto types = Geometry::GetSpecializedType(checkpoint_state->storage_type);
+			const auto gtype = types.first;
+			const auto vtype = types.second;
+
+			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
+			InterpretStats(*new_stats, *checkpoint_state->global_stats, gtype, vtype);
+		}
+
 		return std::move(checkpoint_state);
 	}
 
@@ -593,7 +606,7 @@ void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, Geom
 	Geometry::FromVectorizedFormat(source, target, count, type, result_offset);
 }
 
-static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType geom_type) {
+static const BaseStatistics *GetVertexStats(const BaseStatistics &stats, GeometryType geom_type) {
 	switch (geom_type) {
 	case GeometryType::POINT: {
 		return StructStats::GetChildStats(stats);
@@ -628,7 +641,7 @@ static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType 
 	}
 }
 
-void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
+void GeoColumnData::InterpretStats(const BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
                                    VertexType vert_type) {
 	// Copy base stats
 	target.CopyBase(source);

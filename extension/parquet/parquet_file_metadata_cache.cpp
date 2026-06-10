@@ -58,7 +58,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	if (validation_mode == CacheValidationMode::NO_VALIDATION) {
 		return ParquetCacheValidity::VALID;
 	}
-	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path)) {
+	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && !FileSystem::IsRemoteFile(info.path)) {
 		return ParquetCacheValidity::VALID;
 	}
 	if (info.extended_info == nullptr) {

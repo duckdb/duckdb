@@ -1,0 +1,26 @@
+# name: test/sql/collate/nop_collation_join_filter_pushdown.test
+# description: Test join filter pushdown works with NOP collation
+# group: [collate]
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+statement ok
+SET disabled_optimizers TO 'column_lifetime,compressed_materialization';
+
+statement ok
+CREATE TABLE s (a text);
+
+statement ok
+INSERT INTO s SELECT 'val_' || range FROM range(10000);;
+
+statement ok
+CREATE TABLE t (b text);
+
+statement ok
+INSERT INTO t VALUES ('val_3');
+
+query II
+EXPLAIN ANALYZE SELECT * FROM s, t WHERE a = b COLLATE C;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*

@@ -82,6 +82,8 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 		strings.emplace_back(reinterpret_cast<const char *>(bytes + last_offset), next_offset - last_offset);
 		last_offset = next_offset;
 	}
+	//! header byte + offsets region + string bytes
+	total_size = static_cast<idx_t>(bytes - reinterpret_cast<const_data_ptr_t>(metadata_data)) + last_offset;
 }
 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
@@ -147,7 +149,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValue::NullValue();
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return VariantValue(Value::BOOLEAN(true));

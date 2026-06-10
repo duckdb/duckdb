@@ -569,7 +569,7 @@ jobs:
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
-    - uses: mymindstorm/setup-emsdk@v12
+    - uses: emscripten-core/setup-emsdk@v12
       with:
         version: 'latest'
 

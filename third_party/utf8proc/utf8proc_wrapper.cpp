@@ -397,13 +397,12 @@ size_t Utf8Proc::RenderWidth(const char *s, size_t len, size_t pos) {
 
 size_t Utf8Proc::RenderWidth(const std::string &str) {
 	size_t render_width = 0;
-	size_t pos = 0;
-	while (pos < str.size()) {
-		int sz;
-		auto codepoint = Utf8Proc::UTF8ToCodepoint(str.c_str() + pos, sz);
-		auto properties = duckdb::utf8proc_get_property(codepoint);
-		render_width += properties->charwidth;
-		pos += sz;
+	for (auto cluster : Utf8Proc::GraphemeClusters(str.c_str(), str.size())) {
+		// use the width of the first codepoint in the grapheme cluster
+		// combining marks, ZWJ, variation selectors, etc. have charwidth 0
+		// and multi-codepoint clusters (e.g. ZWJ emoji sequences) should only
+		// count the base character's width, not the sum of all codepoints
+		render_width += Utf8Proc::RenderWidth(str.c_str(), str.size(), cluster.start);
 	}
 	return render_width;
 }

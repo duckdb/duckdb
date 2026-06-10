@@ -27,7 +27,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 
 		if (opt_name == "owned_by") {
 			if (used.find(SequenceInfo::SEQ_OWN) != used.end()) {
-				throw ParserException("Owned by value should be passed as most once");
+				throw ParserException("Owned by value should be passed at most once");
 			}
 			used.insert(SequenceInfo::SEQ_OWN);
 

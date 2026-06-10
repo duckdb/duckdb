@@ -136,21 +136,24 @@ public:
 	}
 
 	void Clear() {
-		// Return all local blocks back to global
-		if (!touched.empty()) {
-			block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
-			touched.clear();
+		if (alive_token && alive_token->load()) {
+			// Allocator is still alive — return local blocks to global queues
+			if (!touched.empty()) {
+				block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
+			}
+			if (!untouched.empty()) {
+				block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
+			}
 		}
-		if (!untouched.empty()) {
-			block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
-			untouched.clear();
-		}
+		touched.clear();
+		untouched.clear();
 	}
 
 private:
 	void Initialize(const BlockAllocator &block_allocator_p) {
 		cached_uuid = block_allocator_p.uuid;
 		block_allocator = block_allocator_p;
+		alive_token = block_allocator_p.alive_token;
 		untouched.clear();
 		touched.clear();
 		untouched.reserve(BATCH_SIZE);
@@ -184,6 +187,8 @@ private:
 private:
 	hugeint_t cached_uuid;
 	optional_ptr<const BlockAllocator> block_allocator;
+	// Whether the BlockAllocator is still alive.
+	shared_ptr<atomic<bool>> alive_token;
 
 	static constexpr idx_t BATCH_SIZE = 128;
 	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
@@ -214,12 +219,14 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
     : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
-      physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()) {
+      physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
+      alive_token(make_shared_ptr<atomic<bool>>(true)) {
 	D_ASSERT(IsPowerOfTwo(block_size));
 	Resize(physical_memory_size_p);
 }
 
 BlockAllocator::~BlockAllocator() {
+	alive_token->store(false);
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	if (IsActive()) {
 		try {

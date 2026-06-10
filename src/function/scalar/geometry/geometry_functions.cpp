@@ -81,7 +81,7 @@ static void CRSFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionInput &input) {
 	const auto &return_type = input.children[0]->return_type;
-	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
+	if (return_type.id() != LogicalTypeId::GEOMETRY) {
 		// parameter - unknown return type
 		return nullptr;
 	}
@@ -91,12 +91,11 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 
 static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		// parameter - unknown return type
+	if (arguments[0]->return_type.id() != LogicalTypeId::GEOMETRY) {
 		return nullptr;
 	}
 
-	// Check if the CRS is set in the first argument
+	// Propagate the CRS from the input argument to the parameter type
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }

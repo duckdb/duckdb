@@ -22,31 +22,32 @@ PhysicalResultCollector::PhysicalResultCollector(PhysicalPlan &physical_plan, Pr
 	types = data.types;
 }
 
-PhysicalOperator &PhysicalResultCollector::GetResultCollector(ClientContext &context, PreparedStatementData &data) {
+unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientContext &context,
+                                                                         PreparedStatementData &data) {
 	auto &physical_plan = *data.physical_plan;
 	auto &root = physical_plan.Root();
 
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
 		// Not an order-preserving plan: use the parallel materialized collector.
 		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-			return physical_plan.Make<PhysicalBufferedCollector>(data, true);
+			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, true);
 		}
-		return physical_plan.Make<PhysicalMaterializedCollector>(data, true);
+		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, true);
 	}
 
 	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
 		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
 		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-			return physical_plan.Make<PhysicalBufferedCollector>(data, false);
+			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, false);
 		}
-		return physical_plan.Make<PhysicalMaterializedCollector>(data, false);
+		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, false);
 	}
 
 	// Order-preserving plan, and we can use the batch index: use a batch collector.
 	if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-		return physical_plan.Make<PhysicalBufferedBatchCollector>(data);
+		return make_uniq<PhysicalBufferedBatchCollector>(physical_plan, data);
 	}
-	return physical_plan.Make<PhysicalBatchCollector>(data);
+	return make_uniq<PhysicalBatchCollector>(physical_plan, data);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {

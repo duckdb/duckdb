@@ -1204,10 +1204,13 @@ public:
 			// wrap all JSON objects in an array
 			out.Print("[");
 		}
-		out.Print("{");
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		// Booleans are cast to VARCHAR ("true"/"false") in ConvertChunk; emit them as JSON booleans, not strings.
+		if (type.id() == duckdb::LogicalTypeId::BOOLEAN) {
+			return false;
+		}
 		if (!type.IsNumeric()) {
 			return true;
 		}
@@ -1228,8 +1231,9 @@ public:
 				// wrap all JSON objects in an array
 				out.Print(",");
 			}
-			out.Print("\n{");
+			out.Print("\n");
 		}
+		out.Print("{");
 		auto &data = row.data;
 		auto &is_null = row.is_null;
 		auto &types = result.types;

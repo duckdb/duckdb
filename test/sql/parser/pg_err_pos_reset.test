@@ -1,0 +1,34 @@
+# name: test/sql/parser/pg_err_pos_reset.test
+# description: Verify pg_err_pos is reset between parses so stale position
+# group: [parser]
+
+#              does not leak into unrelated error messages
+
+# Step 1: A syntax error that sets pg_err_pos via errposition().
+# Any normal parse error (e.g., a misspelled keyword) triggers
+# scanner_yyerror -> errposition(), leaving pg_err_pos non-zero.
+statement error
+SELECT 1 AS foo frommmm bar;
+----
+syntax error
+
+# Step 2: A parse error that throws via errhint() BEFORE
+# errposition() is reached.  The LIMIT #,# syntax triggers
+# the grammar rule that calls errhint("Use separate LIMIT and
+# OFFSET clauses."), which throws immediately — so
+# parser_errposition in the same ereport() comma-expression
+# is never evaluated.
+# Without the fix, the stale pg_err_pos from Step 1 causes a
+# spurious "LINE 1:" indicator in this error message.
+# With the fix (pg_err_pos = 0 in pg_parser_init), no position
+# is emitted and LINE 1: must not appear.
+statement error
+SELECT 1 LIMIT 5,10;
+----
+errhint NOT IMPLEMENTED
+
+# Verify LINE 1: does not appear in the errhint error
+statement error
+SELECT 1 LIMIT 5,10;
+----
+<!REGEX>:(?s).*LINE 1:.*

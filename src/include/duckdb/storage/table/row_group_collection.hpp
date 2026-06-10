@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/common/enums/row_group_append_mode.hpp"
 
 namespace duckdb {
 
@@ -116,7 +117,8 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           optional_idx checkpoint_row_group_count);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -125,7 +127,8 @@ public:
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) const;
+	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
@@ -157,15 +160,17 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	void SetAppendRequiresNewRowGroup();
+	void SetRowGroupAppendMode(RowGroupAppendMode mode);
 	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
 	idx_t GetSegmentCount();
+
+	//! Get a ptr to the raw segment tree. This can be useful for some extensions to have directly exposed.
+	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;
 
-	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
 
 private:
@@ -191,8 +196,8 @@ private:
 	MetaBlockPointer metadata_pointer;
 	//! Other metadata pointers
 	vector<MetaBlockPointer> metadata_pointers;
-	//! Whether or not we need to append a new row group prior to appending
-	bool requires_new_row_group;
+	//! Controls whether the next append creates a new row group or reuses the existing one
+	RowGroupAppendMode row_group_append_mode;
 };
 
 class RowGroupIterationHelper {

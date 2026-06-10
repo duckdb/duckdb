@@ -717,6 +717,9 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 				// type was explicitly provided by the user
 				continue;
 			}
+			if (HivePartitioning::IsNull(part.second)) {
+				continue; // don't update detected_types for this partition/file
+			}
 			LogicalType detected_type = LogicalType::VARCHAR;
 			Value value(part.second);
 			for (auto &candidate : candidates) {

@@ -6,12 +6,19 @@
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
+#include "shortcuts.hpp"
 #endif
 
 namespace duckdb_shell {
 
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
-	state.bail_on_error = state.StringToBool(args[1]);
+	if (args[1] == "auto") {
+		state.bail = BailOnError::AUTOMATIC;
+	} else if (state.StringToBool(args[1])) {
+		state.bail = BailOnError::BAIL_ON_ERROR;
+	} else {
+		state.bail = BailOnError::DONT_BAIL_ON_ERROR;
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -160,7 +167,7 @@ MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 	int rc = 0;
 	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
 		// exit immediately if a custom error code is provided
-		exit(rc);
+		ShellState::Exit(rc);
 	}
 	return MetadataResult::EXIT;
 }
@@ -211,6 +218,25 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+#ifdef HAVE_LINENOISE
+		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
+			auto shortcuts = duckdb::GetShellShortcuts();
+			const char *current_category = nullptr;
+			for (auto &entry : shortcuts) {
+				if (!current_category || strcmp(current_category, entry.category) != 0) {
+					if (current_category) {
+						state.PrintF("\n");
+					}
+					current_category = entry.category;
+					duckdb_shell::ShellHighlight highlighter(state);
+					highlighter.PrintText(entry.category, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+					state.PrintF("\n");
+				}
+				state.PrintF("  %-24s %s\n", entry.key_name, entry.description);
+			}
+			return MetadataResult::SUCCESS;
+		}
+#endif
 		idx_t n = state.PrintHelp(args[1].c_str());
 		if (n == 0) {
 			state.PrintF("Nothing matches '%s'\n", args[1].c_str());
@@ -498,13 +524,6 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
-#if defined(_WIN32) || defined(WIN32)
-MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
-	state.win_utf8_mode = true;
-	return MetadataResult::SUCCESS;
-}
-#endif
-
 MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
 	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
@@ -522,7 +541,7 @@ MetadataResult ToggleCompletionRendering(ShellState &state, const vector<string>
 }
 
 MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
+	if (args.size() != 1) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(true);
@@ -530,7 +549,7 @@ MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
+	if (args.size() != 1) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(false);
@@ -907,7 +926,8 @@ static const MetadataCommand metadata_commands[] = {
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)
-    {"utf8", 1, SetUTF8Mode, "", "Enable experimental UTF-8 console output mode", 0, ""},
+    {"utf8", 1, [](ShellState &, const vector<string> &) -> MetadataResult { return MetadataResult::SUCCESS; }, "",
+     "Deprecated. This option is accepted for compatibility but has no effect.", 0, ""},
 #endif
     {nullptr, 0, nullptr, 0, nullptr}};
 
@@ -1044,6 +1064,9 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	}
 	if (!print_extended) {
 		PrintF("\nRun .help --all for extended information\n");
+#ifdef HAVE_LINENOISE
+		PrintF("Run .help shortcuts for keyboard shortcuts\n");
+#endif
 	}
 	return print_info_list.size();
 }

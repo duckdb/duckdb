@@ -308,6 +308,7 @@ string_t BignumIntermediate::Add(Vector &result_vector, const BignumIntermediate
 			auto target_data = target.GetDataWriteable();
 			Bignum::SetHeader(target_data, 1, false);
 			target_data[Bignum::BIGNUM_HEADER_SIZE] = 0;
+			target.SetSizeAndFinalize(1 + Bignum::BIGNUM_HEADER_SIZE, result_size);
 			return target;
 
 		} else if (is_absolute_bigger == SMALLER) {

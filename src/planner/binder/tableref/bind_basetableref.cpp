@@ -69,12 +69,16 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 			auto &subquery = replacement_function->Cast<SubqueryRef>();
 			subquery.column_name_alias = ref.column_name_alias;
 		} else {
+			// carry the alias to the wrapping SubqueryRef so qualified references
+			// like `SELECT d.x FROM _ AS d` can resolve against the outer ref
+			auto inner_alias = replacement_function->alias;
 			auto select_node = make_uniq<SelectNode>();
 			select_node->select_list.push_back(make_uniq<StarExpression>());
 			select_node->from_table = std::move(replacement_function);
 			auto select_stmt = make_uniq<SelectStatement>();
 			select_stmt->node = std::move(select_node);
 			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
+			subquery->alias = std::move(inner_alias);
 			subquery->column_name_alias = ref.column_name_alias;
 			replacement_function = std::move(subquery);
 		}

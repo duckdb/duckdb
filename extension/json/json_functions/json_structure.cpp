@@ -336,7 +336,6 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		if (success) {
-			date_format_map.ShrinkFormatsToSize(type, i);
 			return true;
 		}
 	}
@@ -534,6 +533,9 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
@@ -687,6 +689,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 	}
 	case LogicalTypeId::LIST: {
 		// Only lists can be merged into a list
+		if (type.id() != LogicalTypeId::LIST) {
+			return -1;
+		}
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
 		const auto &merged_child_type = ListType::GetChildType(merged);
 		const auto &type_child_type = ListType::GetChildType(type);

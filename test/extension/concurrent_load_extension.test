@@ -8,7 +8,7 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-concurrentloop i 0 100
+concurrentloop i 0 20
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';

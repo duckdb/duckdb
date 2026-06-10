@@ -215,6 +215,11 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 	this->validity = std::move(validity_p);
 }
 
+ValidityColumnData &StandardColumnData::GetValidityData() {
+	D_ASSERT(validity);
+	return *validity;
+}
+
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
 	                              PartialBlockManager &partial_block_manager)

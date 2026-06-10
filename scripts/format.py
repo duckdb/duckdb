@@ -115,7 +115,6 @@ ignored_directories = [
     os.path.join('tools', 'rpkg', 'src', 'duckdb'),
     os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
     os.path.join('extension', 'tpcds', 'dsdgen'),
-    os.path.join('extension', 'jemalloc', 'jemalloc'),
     os.path.join('extension', 'icu', 'third_party'),
     os.path.join('tools', 'nodejs', 'src', 'duckdb'),
 ]

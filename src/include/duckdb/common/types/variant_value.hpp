@@ -37,9 +37,20 @@ public:
 		return value_type == VariantValueType::MISSING;
 	}
 
+	static VariantValue NullValue() {
+		return VariantValue(Value());
+	}
+
 public:
 	void AddChild(const string &key, VariantValue &&val);
 	void AddItem(VariantValue &&val);
+
+	void SetItems(vector<VariantValue> &&values);
+	void ReserveItems(idx_t count);
+	void AddItems(vector<VariantValue>::iterator begin, vector<VariantValue>::iterator end);
+	map<string, VariantValue> TakeObjectChildren();
+	const map<string, VariantValue> &ObjectChildren() const;
+	const vector<VariantValue> &ArrayItems() const;
 
 public:
 	duckdb_yyjson::yyjson_mut_val *ToJSON(ClientContext &context, duckdb_yyjson::yyjson_mut_doc *doc) const;
@@ -47,10 +58,12 @@ public:
 
 public:
 	VariantValueType value_type;
+	Value primitive_value;
+
+private:
 	//! FIXME: how can we get a deterministic child order for a partially shredded object?
 	map<string, VariantValue> object_children;
 	vector<VariantValue> array_items;
-	Value primitive_value;
 };
 
 } // namespace duckdb

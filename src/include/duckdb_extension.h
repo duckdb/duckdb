@@ -677,6 +677,11 @@ typedef struct {
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 #endif
 
+// API to operate on GEOMETRY types.
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
+#endif
+
 // API to register a custom log storage.
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_log_storage (*duckdb_create_log_storage)();
@@ -1306,6 +1311,9 @@ typedef struct {
 #define duckdb_file_handle_seek               duckdb_ext_api.duckdb_file_handle_seek
 #define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
 #define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
+
+// Version unstable_new_geo_functions
+#define duckdb_geometry_type_get_crs duckdb_ext_api.duckdb_geometry_type_get_crs
 
 // Version unstable_new_logger_functions
 #define duckdb_create_log_storage              duckdb_ext_api.duckdb_create_log_storage

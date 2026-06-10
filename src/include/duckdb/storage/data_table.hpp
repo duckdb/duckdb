@@ -235,6 +235,8 @@ public:
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetRowGroupCount() const;
+	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
@@ -252,6 +254,12 @@ public:
 	                             optional_ptr<LocalTableStorage> local_storage, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
+
+	//! Direct access to the row group collection. Intended for extensions that need to walk storage internals;
+	//! prefer the higher-level DataTable API for normal use.
+	const shared_ptr<RowGroupCollection> &GetRowGroupCollection() const {
+		return row_groups;
+	}
 
 	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;
@@ -296,6 +304,9 @@ private:
 
 	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
+
+	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
+	void RebuildIndexes();
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,

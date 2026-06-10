@@ -47,13 +47,13 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 		state.start = state.handle.Ptr();
 		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
+			auto len_position = state.start + sizeof(UndoFlags);
+			auto payload_position = len_position + sizeof(uint32_t);
 			UndoFlags type = Load<UndoFlags>(state.start);
-			state.start += sizeof(UndoFlags);
+			uint32_t len = Load<uint32_t>(len_position);
 
-			uint32_t len = Load<uint32_t>(state.start);
-			state.start += sizeof(uint32_t);
-			callback(type, state.start);
-			state.start += len;
+			callback(type, payload_position);
+			state.start = payload_position + len;
 		}
 		state.current = state.current->prev;
 	}

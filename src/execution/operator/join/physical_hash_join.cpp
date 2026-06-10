@@ -208,6 +208,8 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+	//! Bloom filter pushes deferred until HashJoinFinalizeEvent::FinishEvent, once the filter is fully populated
+	vector<pair<reference<const JoinFilterPushdownFilter>, idx_t>> deferred_bloom_filters;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -418,13 +420,10 @@ static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bo
 }
 
 static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant) {
-	idx_t tuple_width = 0;
-	all_constant = true;
-	for (auto &type : types) {
-		tuple_width += GetTypeIdSize(type.InternalType());
-		all_constant &= TypeIsConstantSize(type.InternalType());
-	}
-	return tuple_width + AlignValue(types.size()) / 8 + GetTypeIdSize(PhysicalType::UINT64);
+	TupleDataLayout layout;
+	layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	all_constant = layout.AllConstant();
+	return layout.GetRowWidth();
 }
 
 static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vector<LogicalType> &types,
@@ -433,7 +432,11 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
+	if (tuple_width == 0) {
+		throw InternalException("GetPartitioningSpaceRequirement: tuple width should not be 0");
+	}
+
+	auto tuples_per_block = MaxValue<idx_t>(buffer_manager.GetBlockSize() / tuple_width, 1);
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
@@ -581,6 +584,9 @@ public:
 	void FinishEvent() override {
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
+		for (auto &entry : sink.deferred_bloom_filters) {
+			sink.op.filter_pushdown->PushBloomFilter(entry.first, *sink.hash_table, sink.op, entry.second);
+		}
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
@@ -726,7 +732,13 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
 	value_set_t unique_ht_values;
 	for (idx_t k = 0; k < key_count; k++) {
-		unique_ht_values.insert(build_vector.GetValue(k));
+		// Cast to storage type, only insert if it succeeds
+		auto value = build_vector.GetValue(k);
+		if (info.columns[filter_idx].storage_type.IsValid() &&
+		    !value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+			return; // it's all or nothing sadly
+		}
+		unique_ht_values.insert(value);
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
@@ -799,10 +811,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 	return final_min_max;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                              const PhysicalComparisonJoin &op,
-                                                              unique_ptr<DataChunk> final_min_max,
-                                                              const bool is_perfect_hashtable) const {
+unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(
+    ClientContext &context, optional_ptr<JoinHashTable> ht, const PhysicalComparisonJoin &op,
+    unique_ptr<DataChunk> final_min_max, const bool is_perfect_hashtable,
+    optional_ptr<vector<pair<reference<const JoinFilterPushdownFilter>, idx_t>>> deferred_bloom_filters) const {
 	if (probe_info.empty()) {
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
@@ -811,12 +823,24 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
-			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
+			const auto &pushdown_column = info.columns[filter_idx];
+			auto &filter_col_idx = pushdown_column.probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
 
 			auto min_val = final_min_max->data[min_idx].GetValue(0);
 			auto max_val = final_min_max->data[max_idx].GetValue(0);
+
+			// Cast to storage type, skip if fails
+			if (pushdown_column.storage_type.IsValid()) {
+				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+					continue;
+				}
+			}
+
 			if (min_val.IsNull() || max_val.IsNull()) {
 				// min/max is NULL
 				// this can happen in case all values in the RHS column are NULL, but they are still pushed into the
@@ -870,8 +894,15 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					break;
 				}
 
-				if (ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
-					PushBloomFilter(info, *ht, op, filter_col_idx);
+				auto condition_type = op.conditions[join_condition[filter_idx]].left->return_type;
+				bool has_cast = condition_type != pushdown_column.storage_type;
+				if (!has_cast && ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
+					if (deferred_bloom_filters) {
+						// Defer the push until HashJoinFinalizeEvent::FinishEvent so the scan
+						// only sees the filter once the bloom filter is fully populated.
+						ht->SetBuildBloomFilter(true);
+						deferred_bloom_filters->emplace_back(info, filter_col_idx);
+					}
 				}
 			}
 		}
@@ -883,7 +914,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
 	auto final_min_max = FinalizeMinMax(gstate);
-	return FinalizeFilters(context, ht, op, std::move(final_min_max), false);
+	return FinalizeFilters(context, ht, op, std::move(final_min_max), false, nullptr);
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -978,7 +1009,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	if (filter_min_max) {
-		filter_pushdown->FinalizeFilters(context, &ht, *this, std::move(filter_min_max), use_perfect_hash);
+		filter_pushdown->FinalizeFilters(context, &ht, *this, std::move(filter_min_max), use_perfect_hash,
+		                                 &sink.deferred_bloom_filters);
 	}
 
 	// In case of a large build side or duplicates, use regular hash join
