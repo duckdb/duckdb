@@ -168,6 +168,27 @@ struct AggregateStateField {
 	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
 	vector<AggregateStateField> children;
 
+	//! The alignment of this field when placed as a struct member, mirroring the C++ struct layout rules.
+	//! For OPTIONAL the alignment is that of the wrapped value - the trailing is_set bool does not affect it.
+	idx_t GetAlignment() const {
+		if (kind == AggregateFieldKind::OPTIONAL) {
+			D_ASSERT(children.size() == 1);
+			return children[0].GetAlignment();
+		}
+		return MinValue<idx_t>(field_size, 8);
+	}
+
+	//! Shift this field's offsets to place it at `offset` within its parent.
+	//! The value child of an OPTIONAL is relative to the same parent base as the optional itself, so it shifts along;
+	//! STRUCT children are relative to the struct's own base and stay untouched.
+	void ShiftBase(idx_t offset) {
+		field_offset += offset;
+		if (kind == AggregateFieldKind::OPTIONAL) {
+			D_ASSERT(children.size() == 1);
+			children[0].ShiftBase(offset);
+		}
+	}
+
 	static idx_t GetPhysicalSize(const LogicalType &type) {
 		if (type.id() != LogicalTypeId::STRUCT) {
 			return GetTypeIdSize(type.InternalType());
@@ -226,8 +247,8 @@ struct StructStateType {
 	template <class T>
 	static void AppendChildField(AggregateStateField &field, idx_t &offset) {
 		auto child = BuildStateField<T>();
-		offset = AlignValue(offset, MinValue<idx_t>(child.field_size, 8));
-		child.field_offset = offset;
+		offset = AlignValue(offset, child.GetAlignment());
+		child.ShiftBase(offset);
 		offset += child.field_size;
 		field.children.push_back(std::move(child));
 	}

@@ -155,21 +155,21 @@ AGGREGATE_STATE
 
 # Casting first state to struct should work
 query T
-SELECT (first(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+SELECT (first(42) export_state)::struct("value" integer);
 ----
-{'value': 42, 'is_set': true, 'is_null': false}
+{'value': 42}
 
 # Casting last state to struct should work
 query T
-SELECT (last(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+SELECT (last(42) export_state)::struct("value" integer);
 ----
-{'value': 42, 'is_set': true, 'is_null': false}
+{'value': 42}
 
 # Casting any_value state to struct should work
 query T
-SELECT (any_value(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+SELECT (any_value(42) export_state)::struct("value" integer);
 ----
-{'value': 42, 'is_set': true, 'is_null': false}
+{'value': 42}
 
 # product() has the new get_state_type callback
 query T
