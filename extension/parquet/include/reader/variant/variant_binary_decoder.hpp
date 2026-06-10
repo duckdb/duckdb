@@ -32,12 +32,13 @@ public:
 
 public:
 	VariantMetadataHeader header;
-	const_data_ptr_t offsets;
-	const_data_ptr_t bytes;
 
 	//! The json object keys have to be null-terminated
 	//! But we don't receive them null-terminated
 	vector<string> strings;
+
+	//! Total byte length of the metadata region.
+	idx_t total_size;
 };
 
 //! ------------ Value ------------
@@ -134,17 +135,18 @@ public:
 	VariantBinaryDecoder() = delete;
 
 public:
-	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
+	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data, idx_t data_offset,
+	                           idx_t data_size);
 
 public:
 	static VariantValue PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                        const_data_ptr_t data);
-	static VariantValue ShortStringDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                      const_data_ptr_t data);
+	                                        const_data_ptr_t data, idx_t data_offset, idx_t data_size);
+	static VariantValue ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data,
+	                                      idx_t data_offset, idx_t data_size);
 	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                 const_data_ptr_t data);
+	                                 const_data_ptr_t data, idx_t data_offset, idx_t data_size);
 	static VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                const_data_ptr_t data);
+	                                const_data_ptr_t data, idx_t data_offset, idx_t data_size);
 };
 
 } // namespace duckdb
