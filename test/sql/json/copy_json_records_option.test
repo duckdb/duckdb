@@ -10,7 +10,7 @@ COPY (SELECT 1 AS a, 'hello' AS b UNION ALL SELECT 2, 'world') TO '{TEST_DIR}/re
 
 # Setup: write a JSON array of bare scalars using the CSV trick ([0,1,2])
 statement ok
-COPY (SELECT list(range) FROM range(3)) TO '{TEST_DIR}/values.json' (FORMAT CSV, QUOTE '', HEADER 0);
+COPY (SELECT '[0,1,2]') TO '{TEST_DIR}/values.json' (FORMAT CSV, QUOTE '', HEADER 0);
 
 # RECORDS 'true' — read newline-delimited JSON objects into a multi-column table
 statement ok
