@@ -1,7 +1,5 @@
 # name: test/sql/logging/enable_logging_file_no_path.test
-# description: Regression test for issue 9144 - selecting file log storage without a usable path
-#             must fail cleanly instead of poisoning the log storage and aborting with an
-#             uncaught exception on the end-of-query / shutdown flush.
+# description: Selecting file log storage without a usable path must fail cleanly instead of poisoning the log storage
 # group: [logging]
 
 require noforcestorage

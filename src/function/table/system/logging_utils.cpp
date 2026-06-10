@@ -99,8 +99,8 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		// Already-active file storage keeps its existing path; only guard a fresh switch.
 		if (current_storage != LogConfig::FILE_STORAGE_NAME) {
 			auto path_entry = result->storage_config.find("path");
-			bool has_usable_path = path_entry != result->storage_config.end() &&
-			                       !path_entry->second.IsNull() && !path_entry->second.ToString().empty();
+			bool has_usable_path = path_entry != result->storage_config.end() && !path_entry->second.IsNull() &&
+			                       !path_entry->second.ToString().empty();
 			if (!has_usable_path) {
 				throw InvalidInputException(
 				    "Cannot enable 'file' log storage without a valid path. Provide one via storage_path, "
