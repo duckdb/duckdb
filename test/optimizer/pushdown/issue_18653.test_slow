@@ -15,7 +15,7 @@ select id, value
 from test_table
 cross join unnest(values) as values(value) where id = 87100;
 ----
-analyzed_plan	<REGEX>:(.*DELIM_JOIN.*FILTER.*)|(.*CTE Name:.*__duckdb_delim.*FILTER.*)
+analyzed_plan	<REGEX>:(.*DELIM_JOIN.*FILTER.*)|(.*UNNEST.*FILTER.*)
 
 query II
 select id, value
