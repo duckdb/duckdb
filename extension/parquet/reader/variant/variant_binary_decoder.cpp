@@ -9,7 +9,6 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -218,12 +217,9 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
-		//! Follow the JSON serialization guide by converting BINARY to Base64:
-		//! For example: `"dmFyaWFudAo="`
 		auto size = Load<uint32_t>(data);
-		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
-		auto base64_string = Blob::ToBase64(string_t(string_data, size));
-		return VariantValue(Value(base64_string));
+		auto string_data = data + sizeof(uint32_t);
+		return VariantValue(Value::BLOB(string_data, size));
 	}
 	case VariantPrimitiveType::STRING: {
 		auto size = Load<uint32_t>(data);
