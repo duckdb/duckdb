@@ -104,7 +104,7 @@ struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
 
 //! Maps a single C++ field type to a LogicalType.
 //! OptionalStateType<T> → PrimitiveToLogicalType<T>() (the optional encoding is captured in
-//! AggregateStateField::is_optional) T with STATE_TYPE → nested struct type otherwise → PrimitiveToLogicalType<T>()
+//! AggregateStateField::kind) T with STATE_TYPE → nested struct type otherwise → PrimitiveToLogicalType<T>()
 template <class T>
 LogicalType FieldToLogicalType() {
 	if constexpr (IsOptionalStateType<T>::value) {
@@ -116,18 +116,30 @@ LogicalType FieldToLogicalType() {
 	}
 }
 
+//! Describes the kind of a single field within an aggregate state layout.
+enum class AggregateFieldKind : uint8_t {
+	//! Scalar value. field_offset = byte offset of the value.
+	PRIMITIVE,
+	//! Compound struct. field_offset = byte offset of the struct base.
+	//! children = one entry per struct member (offsets relative to this field's base).
+	STRUCT,
+	//! Nullable wrapper. field_offset = byte offset of the bool is_set flag.
+	//! children has exactly one entry: the value field (PRIMITIVE, STRUCT, or SORT_KEY).
+	//! The value field's field_offset is relative to the same parent base as this field.
+	OPTIONAL,
+	//! Binary sort key (stored as string_t). field_offset = byte offset of the string_t.
+	//! sort_key_order carries the ordering. Always appears as children[0] of an OPTIONAL field.
+	SORT_KEY,
+};
+
 //! Per-field layout information within an aggregate state.
-//! field_offset: byte offset of this field relative to the parent struct's base.
-//! is_optional: true when this field is an OptionalStateType<T> — physically T value + bool is_set at
-//! field_offset+sizeof(T). children: non-empty only when the field is itself a STRUCT; each child's offset is relative
-//! to this field's base.
 struct AggregateStateField {
 	idx_t field_offset = 0;
-	bool is_optional = false;
-	//! When true, the field is a binary sort key (string_t + bool is_set).
-	//! Serialize decodes it to the logical type; deserialize re-encodes from the logical type.
-	bool is_sort_key = false;
-	OrderType sort_key_order = OrderType::ASCENDING;
+	//! Physical byte size of the data described by this field (including nested struct members).
+	//! For OPTIONAL: includes is_set bool (field_offset + sizeof(bool)).
+	idx_t field_size = 0;
+	AggregateFieldKind kind = AggregateFieldKind::PRIMITIVE;
+	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
 	vector<AggregateStateField> children;
 
 	static idx_t GetPhysicalSize(const LogicalType &type) {
@@ -154,6 +166,9 @@ struct AggregateStateField {
 			offset = AlignValue(offset, MinValue<idx_t>(child_size, 8));
 			AggregateStateField child_field;
 			child_field.field_offset = offset;
+			child_field.field_size = child_size;
+			child_field.kind = (child_type.id() == LogicalTypeId::STRUCT) ? AggregateFieldKind::STRUCT
+			                                                               : AggregateFieldKind::PRIMITIVE;
 			PopulateChildren(child_type, child_field);
 			field.children.push_back(std::move(child_field));
 			offset += child_size;
@@ -161,35 +176,9 @@ struct AggregateStateField {
 	}
 };
 
-//! Populate one field's worth of AggregateStateField children from a C++ type T.
-//! Advances `offset` by the physical size of T (including the is_set bool for OptionalStateType).
+// Forward-declared so StructStateType::AppendChildren can call it before the full definition below.
 template <class T>
-void PopulateFieldFromType(AggregateStateField &parent, idx_t &offset) {
-	AggregateStateField child;
-	if constexpr (IsOptionalStateType<T>::value) {
-		using V = typename T::value_type;
-		constexpr idx_t alignment = MinValue<idx_t>(sizeof(V), 8);
-		offset = AlignValue(offset, alignment);
-		child.field_offset = offset;
-		child.is_optional = true;
-		parent.children.push_back(std::move(child));
-		offset += sizeof(V) + sizeof(bool);
-	} else if constexpr (HasStructStateType<T>::value) {
-		auto logical = FieldToLogicalType<T>();
-		idx_t sz = AggregateStateField::GetPhysicalSize(logical);
-		offset = AlignValue(offset, MinValue<idx_t>(sz, 8));
-		child.field_offset = offset;
-		AggregateStateField::PopulateChildren(logical, child);
-		parent.children.push_back(std::move(child));
-		offset += sz;
-	} else {
-		constexpr idx_t alignment = MinValue<idx_t>(sizeof(T), 8);
-		offset = AlignValue(offset, alignment);
-		child.field_offset = offset;
-		parent.children.push_back(std::move(child));
-		offset += sizeof(T);
-	}
-}
+AggregateStateField BuildStateField();
 
 //! Describes a struct-typed aggregate state layout. Intended for use as a nested type inside an aggregate STATE struct:
 //!   static constexpr const char *STATE_NAMES[] = {"field_a", "field_b"};
@@ -207,10 +196,19 @@ struct StructStateType {
 		return LogicalType::STRUCT(std::move(children));
 	}
 
-	//! Populate field children using compile-time type knowledge, correctly handling OptionalStateType<T>.
-	static void PopulateField(AggregateStateField &field) {
-		idx_t offset = 0;
-		(PopulateFieldFromType<Ts>(field, offset), ...);
+	//! Appends one child field for type T into field.children, advancing offset by the field's physical size.
+	template <class T>
+	static void AppendChildField(AggregateStateField &field, idx_t &offset) {
+		auto child = BuildStateField<T>();
+		offset = AlignValue(offset, MinValue<idx_t>(child.field_size, 8));
+		child.field_offset = offset;
+		offset += child.field_size;
+		field.children.push_back(std::move(child));
+	}
+
+	//! Populate field.children for all member types, computing offsets from sizes.
+	static void AppendChildren(AggregateStateField &field, idx_t &offset) {
+		(AppendChildField<Ts>(field, offset), ...);
 	}
 };
 
@@ -220,19 +218,81 @@ struct IsStructStateType : std::false_type {};
 template <class... Ts>
 struct IsStructStateType<StructStateType<Ts...>> : std::true_type {};
 
+//! Build an AggregateStateField for a compile-time state type T, with field_offset=0.
+//! field_size is always set to the physical byte size of T's data (see kind docs for details).
+//!
+//! Composable rules:
+//!   - OptionalStateType<V>  → OPTIONAL: is_set at field_offset=V.field_size, wraps BuildStateField<V>()
+//!   - StateSortKey<ORDER>   → SORT_KEY: field_size=sizeof(string_t)
+//!   - StructStateType<Ts…>  → STRUCT: children built via AppendChildren, field_size=total child data size
+//!   - anything else         → PRIMITIVE: field_size=sizeof(T)
+template <class T>
+AggregateStateField BuildStateField() {
+	AggregateStateField field;
+	if constexpr (IsOptionalStateType<T>::value) {
+		using V = typename T::value_type;
+		field.kind = AggregateFieldKind::OPTIONAL;
+		auto value_child = BuildStateField<V>();
+		value_child.field_offset = 0;
+		field.field_offset = value_child.field_size; // is_set follows the value data
+		field.field_size = value_child.field_size + sizeof(bool);
+		field.children.push_back(std::move(value_child));
+	} else if constexpr (IsStateSortKeyType<T>::value) {
+		field.kind = AggregateFieldKind::SORT_KEY;
+		field.sort_key_order = T::order_type;
+		field.field_size = sizeof(string_t);
+	} else if constexpr (IsStructStateType<T>::value) {
+		// T is StructStateType<Ts...> — the phantom descriptor type itself
+		field.kind = AggregateFieldKind::STRUCT;
+		idx_t offset = 0;
+		T::AppendChildren(field, offset);
+		field.field_size = offset; // total physical size of all members
+	} else if constexpr (HasStructStateType<T>::value) {
+		// T is a concrete C++ struct that declares STATE_TYPE = StructStateType<...>
+		field.kind = AggregateFieldKind::STRUCT;
+		idx_t offset = 0;
+		T::STATE_TYPE::AppendChildren(field, offset);
+		field.field_size = sizeof(T);
+	} else {
+		// PRIMITIVE
+		field.field_size = sizeof(T);
+	}
+	return field;
+}
+
 //! Top-level description of an aggregate state for export/import purposes.
 //! Returned by the aggregate_get_state_type_t callback registered via SetStructStateExport.
 //!
-//! - Primitive state (e.g. int64_t for count): type=BIGINT, field.children empty, field.is_optional=false
-//! - Optional state (e.g. OptionalStateType<bool>): type=BOOLEAN, field.is_optional=true, field.children empty
-//! - Struct state: type=STRUCT(...), field.children fully populated via StructStateType::PopulateField
-//! total_state_size is the aligned size of the full state (stride between consecutive states in a buffer).
+//! - Primitive state (e.g. int64_t for count): field.kind=PRIMITIVE, field.field_offset=0, field.children empty.
+//! - Optional primitive (e.g. OptionalStateType<double>): field.kind=OPTIONAL,
+//!   field.field_offset=sizeof(double) (is_set offset), field.children=[{kind=PRIMITIVE, field_offset=0}].
+//! - Optional struct: field.kind=OPTIONAL, field.field_offset=struct_size (is_set offset),
+//!   field.children=[{kind=STRUCT, field_offset=0, children=[struct fields]}].
+//! - Non-optional struct: field.kind=STRUCT, field.field_offset=0, field.children=[struct fields].
+//! total_state_size is the aligned stride between consecutive states in a packed buffer.
 struct AggregateStateLayout {
 	AggregateStateLayout() = default;
 	AggregateStateLayout(LogicalType type_p, idx_t total_state_size_p, bool is_optional = false)
 	    : type(std::move(type_p)), total_state_size(total_state_size_p) {
-		field.is_optional = is_optional;
-		AggregateStateField::PopulateChildren(type, field);
+		if (is_optional) {
+			field.kind = AggregateFieldKind::OPTIONAL;
+			field.field_offset = AggregateStateField::GetPhysicalSize(type); // is_set after the value
+			field.field_size = field.field_offset + sizeof(bool);
+			AggregateStateField value_child;
+			value_child.field_offset = 0;
+			value_child.field_size = field.field_offset;
+			value_child.kind = (type.id() == LogicalTypeId::STRUCT) ? AggregateFieldKind::STRUCT
+			                                                         : AggregateFieldKind::PRIMITIVE;
+			AggregateStateField::PopulateChildren(type, value_child);
+			field.children.push_back(std::move(value_child));
+		} else if (type.id() == LogicalTypeId::STRUCT) {
+			field.kind = AggregateFieldKind::STRUCT;
+			AggregateStateField::PopulateChildren(type, field);
+			field.field_size = AggregateStateField::GetPhysicalSize(type);
+		} else {
+			field.field_size = AggregateStateField::GetPhysicalSize(type);
+		}
+		// else: field.kind = PRIMITIVE (default), field.children empty
 	}
 
 	LogicalType type;
