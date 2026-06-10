@@ -716,11 +716,7 @@ inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 			}
 			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 			layout.field = BuildStateField<ST>();
-			if constexpr (IsStateListType<ST>::value) {
-				// linked list state - set up the segment functions used to read/write the linked list
-				D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
-				GetSegmentDataFunctions(layout.list_functions, ListType::GetChildType(layout.type));
-			}
+			AggregateStateField::PopulateListFunctions(layout.type, layout.field);
 			return layout;
 		});
 	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {

@@ -178,9 +178,18 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 	case AggregateFieldKind::PRIMITIVE:
 		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset);
 		break;
-	case AggregateFieldKind::LIST:
-		// linked lists are handled at the top level (SerializeState) - they cannot be nested in other fields
-		throw InternalException("LIST fields are only supported as the top-level field of an aggregate state");
+	case AggregateFieldKind::LIST: {
+		// linked list field: build the result LIST vector from each state's linked list
+		// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
+		D_ASSERT(type.id() == LogicalTypeId::LIST);
+		vector<LinkedList> linked_lists;
+		linked_lists.reserve(count);
+		for (idx_t i = 0; i < count; i++) {
+			linked_lists.push_back(Load<LinkedList>(addresses[i] + base + field.field_offset));
+		}
+		field.list_functions.BuildLists(linked_lists, result, 0);
+		break;
+	}
 	}
 }
 
@@ -232,17 +241,9 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 	case AggregateFieldKind::PRIMITIVE:
 		TemplateDispatch<LoadOp>(type.InternalType(), stride, input_vec, count, dest_buffer, base + field.field_offset);
 		break;
-	case AggregateFieldKind::LIST:
-		// linked lists are handled at the top level (DeserializeState) - they cannot be nested in other fields
-		throw InternalException("LIST fields are only supported as the top-level field of an aggregate state");
-	}
-}
-
-static void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                             data_ptr_t dest_buffer, ArenaAllocator &allocator) {
-	if (layout.field.kind == AggregateFieldKind::LIST) {
-		// linked list state: append each row of the input LIST value into the state's linked list
-		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
+	case AggregateFieldKind::LIST: {
+		// linked list field: append each row of the input LIST vector into the state's linked list
+		D_ASSERT(type.id() == LogicalTypeId::LIST);
 		// the child data is appended through the ListSegmentFunctions API, which takes a RecursiveUnifiedVectorFormat
 		RecursiveUnifiedVectorFormat child_data;
 		Vector::RecursiveToUnifiedFormat(ListVector::GetChild(input_vec), child_data);
@@ -252,30 +253,23 @@ static void DeserializeState(const AggregateStateLayout &layout, const Vector &i
 			LinkedList linked_list;
 			const auto entry = values[i];
 			if (entry.IsValid()) {
-				// NULL input states keep an empty linked list
-				layout.list_functions.AppendListEntry(allocator, linked_list, child_data, entry.GetValue());
+				// NULL inputs keep an empty linked list
+				field.list_functions.AppendListEntry(allocator, linked_list, child_data, entry.GetValue());
 			}
-			Store<LinkedList>(linked_list, dest_buffer + i * layout.total_state_size + layout.field.field_offset);
+			Store<LinkedList>(linked_list, dest_buffer + i * stride + base + field.field_offset);
 		}
-		return;
+		break;
 	}
+	}
+}
+
+static void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                             data_ptr_t dest_buffer, ArenaAllocator &allocator) {
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
 }
 
 static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count,
                            const data_ptr_t *addresses) {
-	if (layout.field.kind == AggregateFieldKind::LIST) {
-		// linked list state: build the result LIST value from each state's linked list
-		// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
-		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
-		vector<LinkedList> linked_lists;
-		linked_lists.reserve(count);
-		for (idx_t i = 0; i < count; i++) {
-			linked_lists.push_back(Load<LinkedList>(addresses[i] + layout.field.field_offset));
-		}
-		layout.list_functions.BuildLists(linked_lists, result, 0);
-		return;
-	}
 	SerializeField(layout.type, layout.field, result, count, addresses, 0);
 }
 

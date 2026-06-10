@@ -183,7 +183,7 @@ template <class T>
 LogicalType FieldToLogicalType(const StateLayoutTypeInfo &info) {
 	if constexpr (IsOptionalStateType<T>::value) {
 		return FieldToLogicalType<typename T::value_type>(info);
-	} else if constexpr (IsStateSortKeyType<T>::value || IsStateTypedValueType<T>::value) {
+	} else if constexpr (IsStateSortKeyType<T>::value || IsStateTypedValueType<T>::value || IsStateListType<T>::value) {
 		return ResolveStateSourceType<typename T::SOURCE_TYPE>(info);
 	} else if constexpr (HasStructStateType<T>::value) {
 		return T::STATE_TYPE::GetLogicalType(T::STATE_NAMES, info);
@@ -193,22 +193,22 @@ LogicalType FieldToLogicalType(const StateLayoutTypeInfo &info) {
 }
 
 //! Describes the kind of a single field within an aggregate state layout.
-enum class AggregateFieldKind : uint8_t {
+enum class AggregateFieldKind {
 	//! Scalar value. field_offset = byte offset of the value.
 	PRIMITIVE,
 	//! Compound struct. field_offset = byte offset of the struct base.
 	//! children = one entry per struct member (offsets relative to this field's base).
 	STRUCT,
 	//! Nullable wrapper. field_offset = byte offset of the bool is_set flag.
-	//! children has exactly one entry: the value field (PRIMITIVE, STRUCT, or SORT_KEY).
+	//! children has exactly one entry: the value field (PRIMITIVE, STRUCT, SORT_KEY or LIST).
 	//! The value field's field_offset is relative to the same parent base as this field.
 	OPTIONAL,
 	//! Binary sort key (stored as string_t). field_offset = byte offset of the string_t.
 	//! sort_key_order carries the ordering. Always appears as children[0] of an OPTIONAL field.
 	SORT_KEY,
 	//! Linked list of values (stored as a LinkedList, see list_segment.hpp). field_offset = byte offset of the
-	//! LinkedList. Exported as a LIST value; an empty linked list is exported as NULL. Only supported as the
-	//! top-level field of a state - the segment functions live in AggregateStateLayout::list_functions.
+	//! LinkedList. Exported as a LIST value; an empty linked list is exported as NULL.
+	//! The segment functions used to read/write the linked list live in AggregateStateField::list_functions.
 	LIST,
 };
 
@@ -221,6 +221,9 @@ struct AggregateStateField {
 	AggregateFieldKind kind = AggregateFieldKind::PRIMITIVE;
 	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
 	vector<AggregateStateField> children;
+	//! The segment functions used to read/write the linked list - only set when kind is LIST
+	//! (populated by PopulateListFunctions, which requires the resolved logical type)
+	ListSegmentFunctions list_functions;
 
 	//! The alignment of this field when placed as a struct member, mirroring the C++ struct layout rules.
 	//! For OPTIONAL the alignment is that of the wrapped value - the trailing is_set bool does not affect it.
@@ -240,6 +243,31 @@ struct AggregateStateField {
 		if (kind == AggregateFieldKind::OPTIONAL) {
 			D_ASSERT(children.size() == 1);
 			children[0].ShiftBase(offset);
+		}
+	}
+
+	//! Populate the segment functions of all LIST fields in the field tree, walking the (resolved) logical type
+	//! alongside the fields. Called once when the layout is created.
+	static void PopulateListFunctions(const LogicalType &type, AggregateStateField &field) {
+		switch (field.kind) {
+		case AggregateFieldKind::LIST:
+			D_ASSERT(type.id() == LogicalTypeId::LIST);
+			GetSegmentDataFunctions(field.list_functions, ListType::GetChildType(type));
+			break;
+		case AggregateFieldKind::OPTIONAL:
+			D_ASSERT(field.children.size() == 1);
+			PopulateListFunctions(type, field.children[0]);
+			break;
+		case AggregateFieldKind::STRUCT: {
+			const auto &child_types = StructType::GetChildTypes(type);
+			D_ASSERT(child_types.size() == field.children.size());
+			for (idx_t child_idx = 0; child_idx < field.children.size(); child_idx++) {
+				PopulateListFunctions(child_types[child_idx].second, field.children[child_idx]);
+			}
+			break;
+		}
+		default:
+			break;
 		}
 	}
 
@@ -405,8 +433,6 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
-	//! The segment functions used to read/write the linked list state when field.kind is LIST
-	ListSegmentFunctions list_functions;
 };
 
 } // namespace duckdb
