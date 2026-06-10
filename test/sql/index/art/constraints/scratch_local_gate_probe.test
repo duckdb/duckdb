@@ -1,0 +1,137 @@
+# name: test/sql/index/art/constraints/scratch_local_gate_probe.test
+# group: [constraints]
+
+# scratch: can local append/delete indexes ever present a gated leaf to a unique insert?
+# All single-transaction churn — deterministic, no concurrency timing needed.
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'seed');
+
+# (A) Repeated DELETE+INSERT of the SAME key within one transaction.
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM tbl WHERE id = 1;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a1');
+
+statement ok
+DELETE FROM tbl WHERE id = 1;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a2');
+
+statement ok
+DELETE FROM tbl WHERE id = 1;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'a3');
+
+statement ok
+COMMIT;
+
+query II
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	a3
+
+# (B) PK value ping-pong (1 -> 2 -> 1 ...) within one transaction.
+statement ok
+BEGIN;
+
+statement ok
+UPDATE tbl SET id = 2 WHERE id = 1;
+
+statement ok
+UPDATE tbl SET id = 1 WHERE id = 2;
+
+statement ok
+UPDATE tbl SET id = 2 WHERE id = 1;
+
+statement ok
+UPDATE tbl SET id = 1 WHERE id = 2;
+
+statement ok
+COMMIT;
+
+query II
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	a3
+
+# (C) Repeated UPSERT churn on the same key within one transaction.
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'u1') ON CONFLICT (id) DO UPDATE SET payload = excluded.payload;
+
+statement ok
+DELETE FROM tbl WHERE id = 1;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'u2') ON CONFLICT (id) DO UPDATE SET payload = excluded.payload;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'u3') ON CONFLICT (id) DO UPDATE SET payload = excluded.payload;
+
+statement ok
+COMMIT;
+
+query II
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	u3
+
+# (D) Concurrent-overlap variant with an old pinning txn AND a held checkpoint pressure:
+#     old pins original; con1 churns key=1 many times; force a checkpoint mid-flight.
+statement ok old2
+BEGIN;
+
+query I old2
+SELECT count(*) FROM tbl;
+----
+1
+
+statement ok con3
+BEGIN;
+
+statement ok con3
+DELETE FROM tbl WHERE id = 1;
+
+statement ok con3
+INSERT INTO tbl VALUES (1, 'c1');
+
+statement ok con3
+DELETE FROM tbl WHERE id = 1;
+
+statement ok con3
+INSERT INTO tbl VALUES (1, 'c2');
+
+statement ok con3
+COMMIT;
+
+statement ok
+CHECKPOINT;
+
+statement ok old2
+COMMIT;
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	c2
