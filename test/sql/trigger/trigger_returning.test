@@ -696,3 +696,76 @@ statement error
 DELETE FROM neg_del USING neg_using WHERE neg_del.id = neg_using.x RETURNING neg_using.x;
 ----
 Referenced table "neg_using" not found!
+
+# ─── Case-variant real column named RowID ────────────────────────────────────
+# A real column whose name only differs from rowid by case must shadow the virtual
+# rowid (ReferencedVirtualColumns matches names case-insensitively).
+
+statement ok
+CREATE TABLE cv ("RowID" INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO cv VALUES (7, 70);
+
+statement ok
+CREATE TABLE cv_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER cv_trg AFTER DELETE ON cv FOR EACH STATEMENT
+    INSERT INTO cv_log VALUES ('d');
+
+# RETURNING * yields only the two real columns — the virtual rowid is shadowed.
+query II
+DELETE FROM cv RETURNING *;
+----
+7	70
+
+# Explicit reference returns the real column's value, not a physical row id.
+statement ok
+INSERT INTO cv VALUES (8, 80);
+
+query I
+DELETE FROM cv RETURNING "RowID";
+----
+8
+
+# ─── DEFAULT and NULL values flow through the base CTE ───────────────────────
+
+statement ok
+CREATE TABLE df (id INTEGER, n INTEGER DEFAULT 42, m INTEGER);
+
+statement ok
+CREATE TABLE df_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER df_trg AFTER INSERT ON df FOR EACH STATEMENT
+    INSERT INTO df_log VALUES ('d');
+
+# Omitted column takes its DEFAULT, unspecified column is NULL.
+query III
+INSERT INTO df (id) VALUES (1) RETURNING *;
+----
+1	42	NULL
+
+# Explicit DEFAULT keyword and explicit NULL.
+query III
+INSERT INTO df VALUES (2, DEFAULT, NULL) RETURNING id, n, m;
+----
+2	42	NULL
+
+# ─── Nested column types (LIST, MAP) in RETURNING ────────────────────────────
+
+statement ok
+CREATE TABLE nst (id INTEGER, l INTEGER[], mp MAP(VARCHAR, INTEGER));
+
+statement ok
+CREATE TABLE nst_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER nst_trg AFTER INSERT ON nst FOR EACH STATEMENT
+    INSERT INTO nst_log VALUES ('d');
+
+query III
+INSERT INTO nst VALUES (1, [1, 2, 3], MAP(['a', 'b'], [10, 20])) RETURNING id, l, mp;
+----
+1	[1, 2, 3]	{a=10, b=20}
