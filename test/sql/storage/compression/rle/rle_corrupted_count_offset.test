@@ -1,6 +1,8 @@
 # name: test/sql/storage/compression/rle/rle_corrupted_count_offset.test
 # group: [rle]
 
+require vector_size 2048
+
 load data/storage/rle_corrupt_count_offset.db readonly
 
 query I

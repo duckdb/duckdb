@@ -1,6 +1,8 @@
 # name: test/sql/storage/compression/alprd/alprd_corrupted_dict_size.test
 # group: [alprd]
 
+require vector_size 2048
+
 unzip data/storage/alprd_corrupted_dict_size.db.gz __TEST_DIR__/alprd_corrupted_dict_size.db
 
 statement ok

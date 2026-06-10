@@ -1,6 +1,8 @@
 # name: test/sql/storage/compression/alp/alp_corrupted_file.test
 # group: [alp]
 
+require vector_size 2048
+
 unzip data/storage/alp_corrupted.db.gz __TEST_DIR__/alp_corrupted.db
 
 statement ok

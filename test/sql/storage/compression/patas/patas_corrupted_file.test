@@ -1,6 +1,8 @@
 # name: test/sql/storage/compression/patas/patas_corrupted_file.test
 # group: [patas]
 
+require vector_size 2048
+
 load data/storage/patas_corrupt.db readonly
 
 query I
