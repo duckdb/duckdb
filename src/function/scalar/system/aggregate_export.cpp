@@ -524,8 +524,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	DeserializeState(layout, inputs[0], count, temp_state_buf.get());
 
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), allocator,
+	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 }
