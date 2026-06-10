@@ -427,6 +427,10 @@ void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gs
 	}
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	if (!state.local_state) {
+		// FIXME: We should be able to retrieve metrics from table functions with only a global state.
+		return;
+	}
 	if (function.get_metrics) {
 		function.get_metrics(context, bind_data.get(), *gstate.global_state, *state.local_state, requested_metrics,
 		                     metrics);

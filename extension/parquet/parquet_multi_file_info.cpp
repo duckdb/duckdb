@@ -53,12 +53,15 @@ private:
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
-	    : row_group_index(0), batch_index(0), op(op_p) {
+	    : row_group_index(0), batch_index(0), total_row_groups_to_scan(0), op(op_p) {
 	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
 	idx_t batch_index;
+	//! Total number of row groups dispatched for scanning across all files.
+	//! Updated under the MultiFileGlobalState lock as row groups are handed out.
+	idx_t total_row_groups_to_scan;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
 };
@@ -366,6 +369,24 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 	return result;
 }
 
+static void ParquetGetMetrics(ClientContext &, const FunctionData *, GlobalTableFunctionState &global_state_p,
+                              LocalTableFunctionState &local_state_p, const profiler_settings_t &requested_metrics,
+                              profiler_metrics_t &metrics) {
+	auto &mf_gstate = global_state_p.Cast<MultiFileGlobalState>();
+	auto &mf_lstate = local_state_p.Cast<MultiFileLocalState>();
+	auto &gstate = mf_gstate.global_state->Cast<ParquetReadGlobalState>();
+	auto &lstate = mf_lstate.local_state->Cast<ParquetReadLocalState>();
+
+	if (requested_metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED) != requested_metrics.end()) {
+		// per-thread count of row groups actually read; summed across threads by the profiler
+		metrics[MetricType::OPERATOR_ROW_GROUPS_SCANNED] = Value::UBIGINT(lstate.scan_state.row_groups_scanned);
+	}
+	if (requested_metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) != requested_metrics.end()) {
+		// shared total across all files; reported identically by every thread
+		metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] = Value::UBIGINT(gstate.total_row_groups_to_scan);
+	}
+}
+
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -383,6 +404,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;
 	table_function.pushdown_expression = ParquetScanPushdownExpression;
 	table_function.get_partition_stats = ParquetGetPartitionStats;
+	table_function.get_metrics = ParquetGetMetrics;
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
 	table_function.late_materialization = true;
@@ -687,6 +709,8 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 	// The current reader has rowgroups left to be scanned
 	lstate.group_indexes = {gstate.row_group_index};
 	gstate.row_group_index++;
+	// Count this row group towards the total to be scanned (called under the MultiFileGlobalState lock)
+	gstate.total_row_groups_to_scan++;
 	return true;
 }
 
