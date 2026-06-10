@@ -107,7 +107,8 @@ VariantValue ConvertShreddedValue<timestamp_ns_t>::Convert(timestamp_ns_t val) {
 //! binary
 template <>
 VariantValue ConvertShreddedValue<string_t>::ConvertBlob(string_t val) {
-	//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to Base64 happens now in VariantValue::ToJSON.
+	//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to Base64
+	//! happens now in VariantValue::ToJSON.
 	return VariantValue(Value::BLOB(const_data_ptr_cast(val.GetData()), val.GetSize()));
 }
 //! string
