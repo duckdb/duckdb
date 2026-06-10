@@ -23,12 +23,12 @@
 namespace duckdb {
 
 //! Sanitizes a string to have only low case chars and underscores
-string SanitizeExportIdentifier(const string &str) {
+string SanitizeExportIdentifier(const Identifier &str) {
 	// Copy the original string to result
-	string result(str);
+	string result(str.GetIdentifierName());
 
-	for (idx_t i = 0; i < str.length(); ++i) {
-		auto c = str[i];
+	for (idx_t i = 0; i < result.length(); ++i) {
+		auto c = result[i];
 		if (c >= 'a' && c <= 'z') {
 			// If it is lower case just continue
 			continue;
@@ -46,10 +46,10 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
+bool ReferencedTableIsOrdered(const Identifier &referenced_table, catalog_entry_vector_t &ordered) {
 	for (auto &entry : ordered) {
 		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
-		if (StringUtil::CIEquals(table_entry.name, referenced_table)) {
+		if (table_entry.name == referenced_table) {
 			// The referenced table is already ordered
 			return true;
 		}
@@ -157,8 +157,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	BindCopyOptions(*stmt.info);
 
 	// lookup the format in the catalog
-	auto &copy_function =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	auto &copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(
+	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format));
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -225,26 +225,26 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->catalog = catalog;
+		info->catalog = Identifier(catalog);
 		info->schema = table.schema.name;
 		info->table = table.name;
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
 		// Let's verify if any on these columns have not null constraints
-		vector<string> not_null_columns;
+		vector<Identifier> not_null_columns;
 		for (auto &constraint : table.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();
-				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+				not_null_columns.emplace_back(table.GetColumn(not_null_constraint.index).GetName().GetIdentifierName());
 			}
 		}
 		for (auto &col : table.GetColumns().Physical()) {
-			select_list.push_back(std::make_pair(col.Name(), col.Type()));
+			select_list.emplace_back(std::make_pair(col.Name(), col.Type()));
 		}
 
 		ExportedTableData exported_data;
-		exported_data.database_name = catalog;
+		exported_data.database_name = Identifier(catalog);
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 
@@ -274,7 +274,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
-	stmt.info->catalog = catalog;
+	stmt.info->catalog = Identifier(catalog);
 	// prepare the options for export
 	auto &format = stmt.info->format;
 	auto &options = stmt.info->options;

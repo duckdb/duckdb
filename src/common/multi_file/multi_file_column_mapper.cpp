@@ -497,7 +497,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		//! FIXME: the 'default_value' should only be used if the STRUCT's default value is not NULL
 		if (child_map.default_value) {
 			// found a default value for this child - emplace it
-			child_map.default_value->SetAlias(global_child.name);
+			child_map.default_value->SetAlias(Identifier(global_child.name));
 			default_expressions.push_back(std::move(child_map.default_value));
 		}
 	}
@@ -685,7 +685,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 					MultiFileLocalColumnId local_id(reader.columns.size());
 					auto local_index = global_id.RemapRootIndex(local_id.GetId());
 
-					reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+					reader.columns.emplace_back(virtual_entry->second.name.GetIdentifierName(), virtual_column_type);
 					reader.column_ids.push_back(local_id);
 					reader.column_indexes.push_back(std::move(local_index));
 					reader.AddVirtualColumn(id);
@@ -713,7 +713,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
 			if (!entry.IsValid()) {
-				ThrowColumnNotFoundError(global_column.name);
+				ThrowColumnNotFoundError(global_column.name.GetIdentifierName());
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
 			auto local_index = global_id.RemapRootIndex(local_id.GetId());

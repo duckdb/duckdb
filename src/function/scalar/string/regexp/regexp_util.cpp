@@ -107,16 +107,16 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 	if (children.empty()) {
 		throw BinderException("Group name list must be non-empty");
 	}
-	case_insensitive_set_t name_set;
+	identifier_set_t name_set;
 	for (auto &child : children) {
 		if (child.IsNull()) {
 			throw BinderException("NULL group name in %s", function_name);
 		}
 		auto name = child.ToString();
-		if (name_set.find(name) != name_set.end()) {
+		if (name_set.find(Identifier(name)) != name_set.end()) {
 			throw BinderException("Duplicate group name '%s' in %s", name, function_name);
 		}
-		name_set.insert(name);
+		name_set.insert(Identifier(name));
 		out_names.push_back(name);
 		out_struct_children.emplace_back(make_pair(name, LogicalType::VARCHAR));
 	}

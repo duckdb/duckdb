@@ -33,7 +33,7 @@ struct MultiFileReaderInterface {
 	                              const vector<string> &expected_names, const vector<LogicalType> &expected_types);
 	virtual unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                         unique_ptr<BaseFileReaderOptions> options) = 0;
-	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	virtual void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                        MultiFileBindData &bind_data) = 0;
 	virtual void FinalizeBindData(MultiFileBindData &multi_file_data);
 	virtual void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
@@ -69,7 +69,7 @@ struct MultiFileReaderInterface {
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileFunction(string name_p)
+	explicit MultiFileFunction(Identifier name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
@@ -110,7 +110,7 @@ public:
 			result->names.emplace_back("empty");
 			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 			return_types = result->types;
-			names = result->names;
+			names = IdentifiersToStrings(result->names);
 			return std::move(result);
 		}
 
@@ -133,7 +133,7 @@ public:
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
-			names = result->names;
+			names = IdentifiersToStrings(result->names);
 		} else {
 			// We're deserializing from a previously successful bind call
 			// verify that the amount of columns still matches
@@ -188,7 +188,7 @@ public:
 
 		MultiFileOptions file_options;
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first);
+			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
 			if (loption == "allow_empty") {
 				multi_file_reader->ParseOption(loption, kv.second, file_options, context);
 				if (file_options.allow_empty) {
@@ -204,11 +204,11 @@ public:
 
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first);
+			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (interface->ParseOption(context, kv.first, kv.second, file_options, *options)) {
+			if (interface->ParseOption(context, kv.first.GetIdentifierName(), kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);

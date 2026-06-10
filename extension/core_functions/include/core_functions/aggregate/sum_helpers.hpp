@@ -12,6 +12,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
@@ -25,22 +26,22 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 
 template <class T>
 struct SumState {
-	bool isset;
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
 	T value;
-
-	void Combine(const SumState<T> &other) {
-		this->isset = other.isset || this->isset;
-		this->value += other.value;
-	}
+	bool is_set;
 };
 
 struct KahanSumState {
-	bool isset;
+	static constexpr const char *STATE_NAMES[] = {"value", "err"};
+	using STATE_TYPE = OptionalStateType<StructStateType<double, double>>;
+
 	double value;
 	double err;
+	bool is_set;
 
 	void Combine(const KahanSumState &other) {
-		this->isset = other.isset || this->isset;
+		this->is_set = other.is_set || this->is_set;
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}

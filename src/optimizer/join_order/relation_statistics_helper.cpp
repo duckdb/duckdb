@@ -211,8 +211,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
 	if (catalog_table) {
-		name = catalog_table->name;
-		return_stats.table_name = name;
+		name = catalog_table->name.GetIdentifierName();
+		return_stats.table_name = Identifier(name);
 	}
 
 	// first push back basic distinct counts for each column (if we have them).
@@ -222,7 +222,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		auto distinct_count = GetDistinctCount(get, context, column_ids[i], base_table_cardinality);
 		if (distinct_count.distinct_count > 0) {
 			return_stats.column_distinct_count.emplace_back(distinct_count.distinct_count, distinct_count.source);
-			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
+			return_stats.column_names.push_back(Identifier(name + "." + get.names.at(column_id)));
 		} else {
 			// treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
@@ -231,9 +231,9 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			                                                DistinctCountSource::CARDINALITY);
 			auto column_name = string("column");
 			if (column_id < get.names.size()) {
-				column_name = get.names.at(column_id);
+				column_name = get.names.at(column_id).GetIdentifierName();
 			}
-			return_stats.column_names.push_back(get.GetName() + "." + column_name);
+			return_stats.column_names.push_back(Identifier(get.GetName() + "." + column_name));
 		}
 	}
 
@@ -278,13 +278,13 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context) {
 	RelationStats stats;
-	stats.table_name = delim_get.GetName();
+	stats.table_name = Identifier(delim_get.GetName());
 	idx_t card = delim_get.EstimateCardinality(context);
 	stats.cardinality = card;
 	stats.stats_initialized = true;
 	for (auto &binding : delim_get.GetColumnBindings()) {
 		stats.column_distinct_count.emplace_back(1, DistinctCountSource::CARDINALITY);
-		stats.column_names.push_back("column" + to_string(binding.column_index));
+		stats.column_names.push_back(Identifier("column" + to_string(binding.column_index)));
 	}
 	return stats;
 }
@@ -292,9 +292,9 @@ RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &de
 RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection &proj, RelationStats &child_stats) {
 	auto proj_stats = RelationStats();
 	proj_stats.cardinality = child_stats.cardinality;
-	proj_stats.table_name = proj.GetName();
+	proj_stats.table_name = Identifier(proj.GetName());
 	for (auto &expr : proj.expressions) {
-		proj_stats.column_names.push_back(expr->GetName());
+		proj_stats.column_names.emplace_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
 		D_ASSERT(res.FoundExpression());
 		if (res.expression_is_constant) {
@@ -350,7 +350,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 			stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 			stats.column_names.push_back(child_stats.column_names.at(i));
 		}
-		stats.table_name += "joined with " + child_stats.table_name;
+		stats.table_name = Identifier(stats.table_name + "joined with " + child_stats.table_name);
 		max_card = MaxValue(max_card, child_stats.cardinality);
 	}
 	stats.stats_initialized = true;
@@ -417,12 +417,12 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
-	ret.table_name = string();
+	ret.table_name = Identifier(string());
 	for (auto &stats : child_stats) {
 		if (!ret.table_name.empty()) {
-			ret.table_name += " joined with ";
+			ret.table_name = Identifier(ret.table_name + " joined with ");
 		}
-		ret.table_name += stats.table_name;
+		ret.table_name = Identifier(ret.table_name + stats.table_name);
 		// MARK joins are nonreorderable. They won't return initialized stats
 		// continue in this case.
 		if (!stats.stats_initialized) {

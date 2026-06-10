@@ -20,7 +20,7 @@ public:
 	PrepareStatement();
 
 	unique_ptr<SQLStatement> statement;
-	string name;
+	Identifier name;
 
 protected:
 	PrepareStatement(const PrepareStatement &other);

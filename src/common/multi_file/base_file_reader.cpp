@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-unique_ptr<BaseStatistics> BaseFileReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> BaseFileReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
 
@@ -24,7 +24,7 @@ double BaseFileReader::GetProgressInFile(ClientContext &context) {
 	return 0;
 }
 
-unique_ptr<BaseStatistics> BaseUnionData::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> BaseUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
 

@@ -39,18 +39,19 @@ public:
 		return context;
 	}
 
-	optional_ptr<CatalogEntry> GetEntry(const string &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+	optional_ptr<CatalogEntry> GetEntry(const Identifier &catalog, const Identifier &schema,
+	                                    const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
-	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const Identifier &schema, const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
-	LogicalType GetType(const string &catalog, const string &schema, const string &name,
+	LogicalType GetType(const Identifier &catalog, const Identifier &schema, const Identifier &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
-	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
+	LogicalType GetType(Catalog &catalog, const Identifier &schema, const Identifier &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 
-	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const EntryLookupInfo &schema_lookup,
+	optional_ptr<SchemaCatalogEntry> GetSchema(const Identifier &catalog, const EntryLookupInfo &schema_lookup,
 	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	const CatalogSearchPath &GetSearchPath() const;

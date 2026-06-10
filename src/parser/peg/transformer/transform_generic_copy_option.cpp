@@ -78,10 +78,10 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 }
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    const string &copy_option_name,
+                                                                    const Identifier &copy_option_name,
                                                                     GenericCopyOptionValue generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = StringUtil::Lower(copy_option_name);
+	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
 	if (!generic_copy_option_value.has_value) {
 		return copy_option;
 	}
@@ -96,7 +96,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			}
 		}
 
-		if (StringUtil::CIEquals(copy_option.name, "ORDER_BY")) {
+		if (copy_option.name == "ORDER_BY") {
 			copy_option.expression = CreateOrderByRowFunction(orders);
 		} else if (has_order_modifier) {
 			throw ParserException("ORDER BY modifiers are only supported in the ORDER_BY option");

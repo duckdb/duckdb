@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
@@ -24,7 +25,7 @@ class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, case_insensitive_map_t<idx_t> named_param_map);
+	                             string query, identifier_map_t<idx_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
@@ -42,7 +43,7 @@ public:
 	//! The error message (if success = false)
 	ErrorData error;
 	//! The parameter mapping
-	case_insensitive_map_t<idx_t> named_param_map;
+	identifier_map_t<idx_t> named_param_map;
 
 public:
 	//! Returns the stored error message
@@ -60,7 +61,7 @@ public:
 	//! Returns the result SQL types of the prepared statement
 	DUCKDB_API const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
-	DUCKDB_API const vector<string> &GetNames();
+	DUCKDB_API const vector<Identifier> &GetNames();
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
@@ -75,14 +76,14 @@ public:
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Create a pending query result of the prepared statement with the given set named arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(case_insensitive_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(identifier_map_t<BoundParameterData> &named_values,
 	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<BoundParameterData> &named_values,
+	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values,
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
@@ -93,14 +94,14 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
-	                                    const case_insensitive_map_t<PAYLOAD> &values) {
+	static string ExcessValuesException(const identifier_map_t<idx_t> &parameters,
+	                                    const identifier_map_t<PAYLOAD> &values) {
 		// Too many values
 		set<string> excess_set;
 		for (auto &pair : values) {
 			auto &name = pair.first;
 			if (!parameters.count(name)) {
-				excess_set.insert(name);
+				excess_set.insert(name.GetIdentifierName());
 			}
 		}
 		vector<string> excess_values;
@@ -112,17 +113,17 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
-	                                     const case_insensitive_map_t<PAYLOAD> &values) {
+	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
+	                                     const identifier_map_t<PAYLOAD> &values) {
 		// Missing values
-		set<string> missing_set;
+		identifier_set_t missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
 				missing_set.insert(name);
 			}
 		}
-		vector<string> missing_values;
+		vector<Identifier> missing_values;
 		for (auto &val : missing_set) {
 			missing_values.push_back(val);
 		}
@@ -131,8 +132,7 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(const case_insensitive_map_t<PAYLOAD> &provided,
-	                             const case_insensitive_map_t<idx_t> &expected) {
+	static void VerifyParameters(const identifier_map_t<PAYLOAD> &provided, const identifier_map_t<idx_t> &expected) {
 		if (expected.size() == provided.size()) {
 			// Same amount of identifiers, if
 			for (auto &pair : expected) {
