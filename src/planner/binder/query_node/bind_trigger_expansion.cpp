@@ -87,8 +87,7 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatal
 	expanded_tables.insert(table);
 	auto bound = ExpandTriggers(node, table, before_triggers, after_triggers);
 
-	// Erasing from the set, so we will track expanded tables only while we're on the same node in the recursive stack,
-	// meaning we're on the same "trigger" in the trigger chain.
+	// Only track this table as expanded for the duration of its own subtree in the trigger chain.
 	expanded_tables.erase(table);
 	return make_uniq<BoundStatement>(std::move(bound));
 }
@@ -102,8 +101,7 @@ MakeTransitionTableAliasCTE(const string &base_cte_name, const case_insensitive_
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	auto alias_select = make_uniq<SelectNode>();
 	auto star = make_uniq<StarExpression>();
-	// Exclude virtual columns projected for RETURNING so trigger bodies scanning
-	// the transition table with SELECT * don't see implementation-level columns.
+	// Hide injected virtual columns from trigger bodies that SELECT * over the transition table.
 	for (auto &name : exclude_columns) {
 		star->ExcludeListMutable().insert(QualifiedColumnName(name));
 	}
@@ -158,9 +156,8 @@ static string GetTableAlias(const QueryNode &node, const string &fallback) {
 	}
 }
 
-// The raw RETURNING alias as the no-trigger DML paths pass it to BindReturning: the
-// table_ref alias if present, else empty (BindReturning then derives catalog.schema.table
-// from the table entry, so schema-qualified RETURNING columns resolve identically).
+// Raw table_ref alias (empty if none) — an empty alias lets the binding derive
+// catalog.schema.table from the entry, so qualified RETURNING columns resolve.
 static string GetReturningAlias(const QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::INSERT_QUERY_NODE:
@@ -174,8 +171,7 @@ static string GetReturningAlias(const QueryNode &node) {
 	}
 }
 
-// Virtual columns (rowid, …) exposed to RETURNING for this DML — mirrors the no-trigger path,
-// where only DELETE passes virtual columns to BindReturning (INSERT/UPDATE error on rowid).
+// Virtual columns exposed to RETURNING — only DELETE, mirroring the no-trigger path.
 static virtual_column_map_t ReturningVirtualColumns(const QueryNode &node, const TableCatalogEntry &table) {
 	if (node.type == QueryNodeType::DELETE_QUERY_NODE) {
 		return table.GetVirtualColumns();
@@ -183,12 +179,9 @@ static virtual_column_map_t ReturningVirtualColumns(const QueryNode &node, const
 	return virtual_column_map_t();
 }
 
-// Collect the virtual columns the user's RETURNING list references, so the base CTE can
-// materialise them by name (the base DML's RETURNING * does not include rowid).  Matched
-// permissively on the trailing identifier — the only table in RETURNING scope is the target,
-// so any `rowid`-named ref means the target's rowid; over-matching is harmless (the column is
-// merely materialised, and ReturningBinder still rejects a genuinely bad qualifier).  Returns
-// (virtual-column id, name) pairs in a stable order, deduplicated.
+// Virtual columns the RETURNING list references, so the base CTE can materialise them (RETURNING *
+// does not include rowid).  Matched on the trailing identifier — the only table in scope is the
+// target.  Returns (id, name) pairs, deduplicated.
 static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr<ParsedExpression>> &returning_list,
                                                                const virtual_column_map_t &virtual_cols,
                                                                const TableCatalogEntry &table) {
@@ -196,9 +189,8 @@ static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr
 	if (virtual_cols.empty()) {
 		return result;
 	}
-	// A virtual column shadowed by a real column of the same name is NOT virtual here — RETURNING *
-	// already materialises the real column and ReturningBinder binds the ref to it.  Injecting would
-	// duplicate the name and the transition-alias EXCLUDE would drop the real column.
+	// A virtual column shadowed by a real column of the same name is not virtual here: RETURNING *
+	// already materialises the real column, and injecting would duplicate the name.
 	case_insensitive_set_t real_names;
 	for (auto &col : table.GetColumns().Logical()) {
 		real_names.insert(col.Name());
@@ -248,9 +240,8 @@ static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<
 	}
 }
 
-// Build the trigger CTE chain as a SelectNode: BEFORE bodies → base DML (RETURNING *, plus any
-// referenced virtual columns) → AFTER bodies.  The outer projection drives execution; for the
-// RETURNING case it is a plain `SELECT *` whose output we rebind through ReturningBinder below.
+// Build the trigger CTE chain as a SelectNode: BEFORE bodies → base DML → AFTER bodies.
+// For RETURNING the outer projection is a plain SELECT *, rebound through ReturningBinder later.
 static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const TableCatalogEntry &table,
                                                 const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
                                                 const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
@@ -279,8 +270,8 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
 
-	// Base CTE: the DML with RETURNING * (full rows for transition tables) plus referenced
-	// virtual columns appended so they are materialised for the final RETURNING projection.
+	// Base CTE: the DML with RETURNING * (full rows for transition tables), plus referenced
+	// virtual columns appended so they are materialised for the RETURNING projection.
 	auto base_node = node.Copy();
 	auto &base_returning = GetDMLReturningList(*base_node);
 	base_returning.push_back(make_uniq<StarExpression>());
@@ -295,8 +286,6 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 	base_cte->is_trigger_generated = true;
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
-	// AFTER bodies — transition aliases exclude injected virtual columns so trigger bodies that
-	// SELECT * over the transition table do not see implementation-level columns.
 	AddAfterTriggerCTEs(*outer, after_triggers, base_cte_name, uuid_suffix, injected_names);
 	return outer;
 }
@@ -330,9 +319,8 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 		return chain;
 	}
 
-	// Re-project the materialised chain output under a stable index.  The base CTE's RETURNING *
-	// produces every logical column in order, then the injected virtual columns — so we register an
-	// identity base-table binding (logical column i → child position i) below.
+	// Re-project the chain output under a stable index so the identity base-table binding below
+	// (logical column i → child position i) lines up with it.
 	auto base_index = GenerateTableIndex();
 	auto child_bindings = chain.plan->GetColumnBindings();
 	D_ASSERT(child_bindings.size() == chain.types.size());
@@ -343,11 +331,10 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	auto base_proj = make_uniq<LogicalProjection>(base_index, std::move(passthrough));
 	base_proj->AddChild(std::move(chain.plan));
 
-	// Bind the user's RETURNING list as the no-trigger path does — ReturningBinder over a base-table
-	// binding of the real table.  This rejects aggregates/subqueries/windows, resolves schema/catalog-
-	// qualified columns, and decides virtual-vs-real rowid by the actual binding.  Unlike the no-trigger
-	// BindReturning, the bound column ids are the identity over all logical columns (generated included),
-	// because our child materialises every logical column in order rather than the DML's compacted shape.
+	// Bind RETURNING with ReturningBinder over a base-table binding of the real table — same rules as
+	// the no-trigger path (rejects aggregates/subqueries/windows, resolves qualified columns, virtual
+	// vs real rowid).  bound_columns is the identity over all logical columns (generated included)
+	// because our RETURNING * child materialises every logical column in order.
 	auto returning_binder_owner = Binder::CreateBinder(context);
 	vector<string> col_names;
 	vector<LogicalType> col_types;
@@ -379,8 +366,8 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 		proj_exprs.push_back(std::move(bound_expr));
 	}
 
-	// Virtual columns bind to a sentinel column id (e.g. rowid → ROW_ID), but the chain materialised
-	// them as ordinary trailing columns at logical_count + k.  Remap those bindings to the real positions.
+	// Virtual columns bind to a sentinel id, but the chain materialised them as trailing columns at
+	// logical_count + k.  Remap those bindings to their real positions.
 	if (!injected_virtuals.empty()) {
 		unordered_map<column_t, idx_t> remap;
 		for (idx_t k = 0; k < injected_virtuals.size(); k++) {
