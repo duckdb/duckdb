@@ -1,0 +1,29 @@
+# name: test/sql/merge/trigger_merge_into.test
+# description: Test MERGE INTO
+# group: [merge]
+
+statement ok
+CREATE TABLE people (id INTEGER, name VARCHAR, salary FLOAT);
+
+statement ok
+CREATE TRIGGER insert_after AFTER INSERT ON people FOR EACH STATEMENT
+MERGE INTO people
+    USING (
+        SELECT
+            unnest([3, 1]) AS id,
+            unnest(['Sarah', 'John']) AS name,
+            unnest([95_000.0, 105_000.0]) AS salary
+    ) AS upserts
+    ON (upserts.id = people.id)
+    WHEN MATCHED THEN UPDATE
+    WHEN NOT MATCHED THEN INSERT;
+
+statement ok
+INSERT INTO people VALUES (1, 'John', 92_000.0), (2, 'Anna', 100_000.0);
+
+query III 
+FROM people;
+----
+1	John	105000.0
+2	Anna	100000.0
+3	Sarah	95000.0
