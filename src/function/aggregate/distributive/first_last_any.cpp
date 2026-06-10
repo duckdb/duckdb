@@ -15,7 +15,8 @@ namespace {
 template <class T>
 struct FirstState {
 	static constexpr const char *STATE_NAMES[] = {"value"};
-	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<T>>>;
+	//! The value is exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateTypedValue<T, StateReturnType>>>>;
 
 	using VALUE_TYPE = T;
 	T value;

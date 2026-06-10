@@ -24,7 +24,8 @@ namespace {
 template <class T>
 struct MinMaxState {
 	using value_type = T;
-	using STATE_TYPE = OptionalStateType<T>;
+	//! The value is exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+	using STATE_TYPE = OptionalStateType<StateTypedValue<T, StateReturnType>>;
 	T value;
 	bool is_set;
 };

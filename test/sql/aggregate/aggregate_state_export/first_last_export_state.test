@@ -41,6 +41,17 @@ SELECT any_value(NULL::INTEGER) EXPORT_STATE;
 ----
 NULL
 
+# values are exported with the aggregate's return type (e.g. DATE instead of the physical type)
+query I
+SELECT (any_value(DATE '2000-01-01') EXPORT_STATE)::STRUCT(value DATE);
+----
+{'value': 2000-01-01}
+
+query I
+SELECT (last(d) EXPORT_STATE)::STRUCT(value DECIMAL(4,1)) FROM (VALUES (1.5), (4.2)) t(d);
+----
+{'value': 4.2}
+
 # basic roundtrips for first/last/any_value
 query III
 SELECT finalize(first(i) EXPORT_STATE), finalize(last(i) EXPORT_STATE), finalize(any_value(i) EXPORT_STATE)

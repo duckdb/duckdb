@@ -87,6 +87,17 @@ SELECT typeof((min(v) EXPORT_STATE)::BLOB) FROM (VALUES ('\xAA\xBB'::BLOB)) t(v)
 ----
 BLOB
 
+# values are exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+query I
+SELECT (min(d) EXPORT_STATE)::VARCHAR FROM (VALUES (DATE '2000-01-01'), (DATE '2010-01-01')) t(d);
+----
+2000-01-01
+
+query I
+SELECT (max(u) EXPORT_STATE)::VARCHAR FROM (VALUES (UUID '5ABF4945-15A5-4D27-8B25-1D9E0E9DDF0F')) t(u);
+----
+5abf4945-15a5-4d27-8b25-1d9e0e9ddf0f
+
 # stress test - min export/import roundtrips for all types
 statement ok
 SELECT min(COLUMNS(*)) EXPORT_STATE FROM test_all_types();

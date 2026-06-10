@@ -134,6 +134,12 @@ SELECT typeof((arg_min(v, v) EXPORT_STATE)::STRUCT(arg BLOB, "by" BLOB)) FROM (V
 ----
 STRUCT(arg BLOB, "by" BLOB)
 
+# all values are exported with the corresponding runtime types (e.g. DATE instead of the physical type)
+query I
+SELECT (arg_min(d, b) EXPORT_STATE)::STRUCT(arg DATE, "by" DATE) FROM (VALUES (DATE '2000-01-01', DATE '2010-01-01')) t(d, b);
+----
+{'arg': 2000-01-01, 'by': 2010-01-01}
+
 # stress test - arg_min export/import roundtrips for all types
 statement ok
 SELECT arg_min(COLUMNS(*), COLUMNS(*)) EXPORT_STATE FROM test_all_types();
