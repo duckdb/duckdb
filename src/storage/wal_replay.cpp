@@ -881,6 +881,12 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	// A view can be owned by a feature (the feature's public-facing view). When a feature is dropped the cascade
+	// emits a DROP_VIEW record *before* the DROP_FEATURE record, so on replay the view is still owned by the
+	// not-yet-replayed feature. Cascade here so the owning feature is dropped alongside it; the subsequent
+	// DROP_FEATURE record then becomes a no-op. For an ordinary view nothing depends on it at replay time (a
+	// committed non-cascade DROP guarantees that), so cascade is harmless.
+	info.cascade = true;
 	catalog.DropEntry(context, info);
 }
 
@@ -988,6 +994,10 @@ void WriteAheadLogDeserializer::ReplayDropFeature() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	// The feature may already have been dropped by the cascade of its owned view's DROP_VIEW record (which is
+	// replayed first). Tolerate that, and cascade so the owned view is dropped if this record happens to run first.
+	info.cascade = true;
+	info.if_not_found = OnEntryNotFound::RETURN_NULL;
 	catalog.DropEntry(context, info);
 }
 
