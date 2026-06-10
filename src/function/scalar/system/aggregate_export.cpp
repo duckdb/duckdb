@@ -1,5 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -176,21 +178,19 @@ struct LoadPrimitiveOptionalOp {
 	}
 };
 
-void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                      data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count, data_ptr_t dest_buffer,
+                      ArenaAllocator &allocator) {
 	if (layout.field.is_sort_key && layout.field.is_optional) {
 		// Sort key field: encode the input values as sort keys and store in the state buffer.
 		Vector sort_keys(LogicalType::BLOB);
-		CreateSortKeyHelpers::CreateSortKey(input_vec, count,
-		                                    OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST),
-		                                    sort_keys);
+		CreateSortKeyHelpers::CreateSortKey(
+		    input_vec, count, OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST), sort_keys);
 		auto *key_data = FlatVector::GetData<string_t>(sort_keys);
 		UnifiedVectorFormat idata;
 		input_vec.ToUnifiedFormat(idata);
 		for (idx_t i = 0; i < count; i++) {
 			auto *value_ptr = reinterpret_cast<string_t *>(dest_buffer + i * layout.total_state_size);
-			auto *is_set_ptr =
-			    reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + sizeof(string_t));
+			auto *is_set_ptr = reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + sizeof(string_t));
 			if (!idata.validity.RowIsValid(idata.sel->get_index(i))) {
 				*is_set_ptr = false;
 			} else {
@@ -205,6 +205,24 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 				}
 				*is_set_ptr = true;
 			}
+		}
+	} else if (layout.field.is_list) {
+		// Linked list state: append each row of the input LIST value into the state's linked list.
+		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
+		// the child data is appended through the ListSegmentFunctions API, which takes a RecursiveUnifiedVectorFormat
+		RecursiveUnifiedVectorFormat child_data;
+		Vector::RecursiveToUnifiedFormat(ListVector::GetChild(input_vec), child_data);
+
+		auto values = input_vec.Values<list_entry_t>();
+		for (idx_t i = 0; i < count; i++) {
+			auto &linked_list = *reinterpret_cast<LinkedList *>(dest_buffer + i * layout.total_state_size);
+			linked_list = LinkedList();
+			const auto entry = values[i];
+			if (!entry.IsValid()) {
+				// NULL input state - leave the linked list empty
+				continue;
+			}
+			layout.list_functions.AppendListEntry(allocator, linked_list, child_data, entry.GetValue());
 		}
 	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
 		// Optional struct: deserialize children, then derive is_set from the struct's row validity.
@@ -250,11 +268,20 @@ void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t co
 				FlatVector::SetNull(result, i, true);
 			} else {
 				const string_t sort_key = Load<string_t>(addresses[i] + base_offset);
-				CreateSortKeyHelpers::DecodeSortKey(sort_key, result, i,
-				                                    OrderModifiers(layout.field.sort_key_order,
-				                                                   OrderByNullType::NULLS_LAST));
+				CreateSortKeyHelpers::DecodeSortKey(
+				    sort_key, result, i, OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST));
 			}
 		}
+	} else if (layout.field.is_list) {
+		// Linked list state: build the result LIST value from each state's linked list.
+		// An empty linked list is exported as NULL, matching the finalize semantics of list aggregates.
+		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
+		vector<reference<const LinkedList>> linked_lists;
+		linked_lists.reserve(count);
+		for (idx_t i = 0; i < count; i++) {
+			linked_lists.push_back(*reinterpret_cast<const LinkedList *>(addresses[i] + base_offset));
+		}
+		layout.list_functions.BuildLists(linked_lists, result, 0);
 	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
 		// Optional struct: mark null rows in the struct's validity, then serialize children for all rows.
 		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
@@ -287,16 +314,18 @@ void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t co
 
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
+	//! The state layout, including the segment functions when the state is a linked list
+	AggregateStateLayout layout;
 
 	unsafe_unique_array<data_t> state_buffer0, state_buffer1;
 	Vector addresses0, addresses1;
 
 	ArenaAllocator allocator;
 
-	explicit CombineState(idx_t state_size_p)
-	    : state_size(state_size_p),
-	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
-	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	explicit CombineState(const ExportAggregateBindData &bind_data)
+	    : state_size(bind_data.state_size), layout(GetLayout(bind_data.aggr)),
+	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(bind_data.state_size))),
+	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(bind_data.state_size))),
 	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
 };
@@ -304,19 +333,22 @@ struct CombineState : public FunctionLocalState {
 unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                 FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
-	return make_uniq<CombineState>(bind_data.state_size);
+	return make_uniq<CombineState>(bind_data);
 }
 
 struct FinalizeState : public FunctionLocalState {
 	idx_t state_size;
+	//! The state layout, including the segment functions when the state is a linked list
+	AggregateStateLayout layout;
+
 	unsafe_unique_array<data_t> state_buffer;
 	Vector addresses;
 
 	ArenaAllocator allocator;
 
-	explicit FinalizeState(idx_t state_size_p)
-	    : state_size(state_size_p),
-	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	explicit FinalizeState(const ExportAggregateBindData &bind_data)
+	    : state_size(bind_data.state_size), layout(GetLayout(bind_data.aggr)),
+	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(bind_data.state_size))),
 	      addresses(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
 };
@@ -324,7 +356,7 @@ struct FinalizeState : public FunctionLocalState {
 unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                  FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
-	return make_uniq<FinalizeState>(bind_data.state_size);
+	return make_uniq<FinalizeState>(bind_data);
 }
 
 void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &result) {
@@ -335,7 +367,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
 
-	auto layout = GetLayout(bind_data.aggr);
+	auto &layout = local_state.layout;
 
 	auto count = input.size();
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, count);
@@ -370,7 +402,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		                  input.data[0].GetType().ToString(), input.data[1].GetType().ToString());
 	}
 
-	auto layout = GetLayout(bind_data.aggr);
+	auto &layout = local_state.layout;
 	auto count = input.size();
 
 	result.Flatten();

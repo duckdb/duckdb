@@ -10,6 +10,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/type_util.hpp"
+#include "duckdb/common/types/list_segment.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,27 @@ template <class T>
 struct IsStateSortKeyType : std::false_type {};
 template <OrderType O>
 struct IsStateSortKeyType<StateSortKey<O>> : std::true_type {};
+
+//! Describes where the exported logical type of a state comes from when it cannot be expressed statically.
+enum class StateLayoutType : uint8_t {
+	//! The logical type is the bound aggregate function's return type (only known after binding)
+	RETURN_TYPE
+};
+
+//! Phantom marker type for use as an aggregate STATE's STATE_TYPE.
+//! Signals that the state is a LinkedList (see list_segment.hpp) holding the rows of a LIST value.
+//! Export reads the linked list into a LIST vector; import appends the LIST value's rows back into a linked list.
+//! LAYOUT describes where the list's logical type comes from.
+template <StateLayoutType LAYOUT>
+struct StateListType {
+	static constexpr StateLayoutType layout_type = LAYOUT;
+};
+
+//! Detection trait: true when T is StateListType<LAYOUT> for some LAYOUT.
+template <class T>
+struct IsStateListType : std::false_type {};
+template <StateLayoutType L>
+struct IsStateListType<StateListType<L>> : std::true_type {};
 
 //! Detection trait: true when STATE is itself a C++ primitive type mappable to a LogicalType via PrimitiveToLogicalType
 template <class T>
@@ -128,6 +150,9 @@ struct AggregateStateField {
 	//! Serialize decodes it to the logical type; deserialize re-encodes from the logical type.
 	bool is_sort_key = false;
 	OrderType sort_key_order = OrderType::ASCENDING;
+	//! When true, the field is a LinkedList (see list_segment.hpp) holding the rows of a LIST value.
+	//! Serialize builds the LIST value from the linked list; deserialize appends the rows back into a linked list.
+	bool is_list = false;
 	vector<AggregateStateField> children;
 
 	static idx_t GetPhysicalSize(const LogicalType &type) {
@@ -238,6 +263,8 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
+	//! The segment functions used to read/write the linked list state when field.is_list is set
+	ListSegmentFunctions list_functions;
 };
 
 } // namespace duckdb

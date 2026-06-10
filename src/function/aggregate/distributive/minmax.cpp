@@ -280,13 +280,11 @@ struct MinMaxSortKeyState : BaseMinMaxStringState {
 template <typename OP>
 static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	using STATE = MinMaxSortKeyState<OP::ORDER_TYPE>;
-	auto result =
-	    AggregateFunction({type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>,
-	                      AggregateFunction::StateInitialize<STATE, OP>,
-	                      AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
-	                      AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
-	                      nullptr);
+	auto result = AggregateFunction(
+	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind, nullptr);
 	AggregateFunction::WireStructStateType<STATE>(result);
 	return result;
 }

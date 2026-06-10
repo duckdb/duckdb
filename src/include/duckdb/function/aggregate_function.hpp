@@ -567,7 +567,13 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
-			if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
+			if constexpr (IsStateListType<typename STATE::STATE_TYPE>::value) {
+				static_assert(STATE::STATE_TYPE::layout_type == StateLayoutType::RETURN_TYPE,
+				              "StateListType only supports StateLayoutType::RETURN_TYPE");
+				// GetListStateLayout is defined after BoundAggregateFunction to avoid the incomplete-type issue
+				constexpr idx_t aligned_size = (sizeof(STATE) + 7ULL) & ~7ULL;
+				result.SetStructStateExport(&AggregateFunction::GetListStateLayout<aligned_size>);
+			} else if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
 				using T = typename STATE::STATE_TYPE::value_type;
 				if constexpr (IsStateSortKeyType<T>::value) {
 					// GetSortKeyStateLayout is defined after BoundAggregateFunction to avoid the incomplete-type issue
@@ -605,6 +611,11 @@ public:
 	//! Defined after BoundAggregateFunction to avoid the incomplete-type issue.
 	template <OrderType ORDER, idx_t ALIGNED_SIZE>
 	static AggregateStateLayout GetSortKeyStateLayout(const BoundAggregateFunction &);
+
+	//! Callback for linked list states: layout type is the aggregate's LIST return type (known after bind).
+	//! Defined after BoundAggregateFunction to avoid the incomplete-type issue.
+	template <idx_t ALIGNED_SIZE>
+	static AggregateStateLayout GetListStateLayout(const BoundAggregateFunction &);
 
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
@@ -741,6 +752,18 @@ inline AggregateStateLayout AggregateFunction::GetSortKeyStateLayout(const Bound
 	layout.field.is_optional = true;
 	layout.field.is_sort_key = true;
 	layout.field.sort_key_order = ORDER;
+	return layout;
+}
+
+// Defined here (after BoundAggregateFunction is complete) so the body can call GetReturnType().
+template <idx_t ALIGNED_SIZE>
+inline AggregateStateLayout AggregateFunction::GetListStateLayout(const BoundAggregateFunction &bound_function) {
+	AggregateStateLayout layout;
+	layout.type = bound_function.GetReturnType();
+	D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
+	layout.total_state_size = ALIGNED_SIZE;
+	layout.field.is_list = true;
+	GetSegmentDataFunctions(layout.list_functions, ListType::GetChildType(layout.type));
 	return layout;
 }
 

@@ -52,7 +52,13 @@ struct ListSegmentFunctions {
 
 	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &input_data,
 	               idx_t &entry_idx) const;
+	//! Append all rows of the given list entry (indexing into child_data) to the linked list
+	void AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &child_data,
+	                     const list_entry_t &list_entry) const;
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const;
+	//! Build a LIST result vector from a set of linked lists - one per row, written at rows [offset, offset + count).
+	//! Rows with an empty linked list (total_capacity == 0) are set to NULL.
+	void BuildLists(const vector<reference<const LinkedList>> &linked_lists, Vector &result, idx_t offset) const;
 };
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type);
