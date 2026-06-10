@@ -14,32 +14,40 @@ namespace duckdb {
 
 namespace {
 
+//! Assigns a value to the state, holding any extra information required to do so.
+//! For non-string types this is empty and the assignment is a plain copy.
 template <class T>
-inline void ArgMinMaxAssignValue(T &target, T new_value, uint32_t &alloc_size,
-                                 AggregateInputData &aggregate_input_data) {
-	target = new_value;
-}
-
-//! Strings are stored in the arena allocator, re-using the previous allocation when overwriting the value
-template <>
-inline void ArgMinMaxAssignValue(string_t &target, string_t new_value, uint32_t &alloc_size,
-                                 AggregateInputData &aggregate_input_data) {
-	if (new_value.IsInlined()) {
+struct ArgMinMaxValueAssign {
+	void Assign(T &target, T new_value, AggregateInputData &aggregate_input_data) {
 		target = new_value;
-		alloc_size = 0;
-	} else {
-		auto len = UnsafeNumericCast<uint32_t>(new_value.GetSize());
-		char *ptr;
-		if (alloc_size >= len) {
-			ptr = target.GetDataWriteable();
-		} else {
-			alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
-			ptr = char_ptr_cast(aggregate_input_data.allocator.Allocate(alloc_size));
-		}
-		memcpy(ptr, new_value.GetData(), len);
-		target = string_t(ptr, len);
 	}
-}
+};
+
+//! Strings are stored in the arena allocator, re-using the previous allocation when overwriting the value.
+//! The allocation size is kept here - it is not part of the exported state.
+template <>
+struct ArgMinMaxValueAssign<string_t> {
+	//! The size of the arena allocation for a non-inlined string value
+	uint32_t alloc_size;
+
+	void Assign(string_t &target, string_t new_value, AggregateInputData &aggregate_input_data) {
+		if (new_value.IsInlined()) {
+			target = new_value;
+			alloc_size = 0;
+		} else {
+			auto len = UnsafeNumericCast<uint32_t>(new_value.GetSize());
+			char *ptr;
+			if (alloc_size >= len) {
+				ptr = target.GetDataWriteable();
+			} else {
+				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				ptr = char_ptr_cast(aggregate_input_data.allocator.Allocate(alloc_size));
+			}
+			memcpy(ptr, new_value.GetData(), len);
+			target = string_t(ptr, len);
+		}
+	}
+};
 
 template <typename T>
 inline void ArgMinMaxReadValue(Vector &result, T &arg, T &target) {
@@ -51,10 +59,10 @@ inline void ArgMinMaxReadValue(Vector &result, string_t &arg, string_t &target) 
 	target = StringVector::AddStringOrBlob(result, arg);
 }
 
-//! String values are exported with the corresponding runtime type of the bound function (LAYOUT) - they can be
+//! String values are exported with the corresponding runtime type of the bound function (SOURCE) - they can be
 //! e.g. VARCHAR or BLOB values.
-template <class T, StateLayoutType LAYOUT>
-using ArgMinMaxExportType = typename std::conditional<std::is_same<T, string_t>::value, StateString<LAYOUT>, T>::type;
+template <class T, class SOURCE>
+using ArgMinMaxExportType = typename std::conditional<std::is_same<T, string_t>::value, StateString<SOURCE>, T>::type;
 
 //! The aggregate state of arg_min/arg_max is nullable on two levels: the state itself is NULL when no row has been
 //! recorded yet (is_set, the outer optional), while the recorded "arg" and "by" values can themselves be NULL (the
@@ -65,9 +73,8 @@ struct ArgMinMaxState {
 	using BY_TYPE = B;
 
 	static constexpr const char *STATE_NAMES[] = {"arg", "by"};
-	using STATE_TYPE =
-	    OptionalStateType<StructStateType<OptionalStateType<ArgMinMaxExportType<A, StateLayoutType::RETURN_TYPE>>,
-	                                      OptionalStateType<ArgMinMaxExportType<B, StateLayoutType::SECOND_ARGUMENT>>>>;
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<ArgMinMaxExportType<A, StateReturnType>>,
+	                                                     OptionalStateType<ArgMinMaxExportType<B, StateInputType<1>>>>>;
 
 	A arg;
 	//! Whether the recorded argument is valid (i.e. not NULL)
@@ -77,16 +84,33 @@ struct ArgMinMaxState {
 	bool value_is_valid;
 	//! Whether the state has been set (i.e. we have recorded a row)
 	bool is_set;
-	//! Arena allocation sizes for non-inlined string values - not part of the exported state
-	uint32_t arg_alloc_size;
-	uint32_t value_alloc_size;
+	//! Assignment helpers - these hold the arena allocation size for string values (and are empty otherwise),
+	//! and are not part of the exported state
+	ArgMinMaxValueAssign<A> arg_assign;
+	ArgMinMaxValueAssign<B> value_assign;
 
 	void AssignArg(A input, AggregateInputData &aggregate_input_data) {
-		ArgMinMaxAssignValue<A>(arg, input, arg_alloc_size, aggregate_input_data);
+		arg_assign.Assign(arg, input, aggregate_input_data);
 	}
 	void AssignBy(B input, AggregateInputData &aggregate_input_data) {
-		ArgMinMaxAssignValue<B>(value, input, value_alloc_size, aggregate_input_data);
+		value_assign.Assign(value, input, aggregate_input_data);
 	}
+};
+
+//! State for the vector arg_min/arg_max variants: the argument is stored as a binary sort key, while the "by"
+//! value is typed - exported with the return type and the second argument type of the bound function respectively.
+template <OrderType ORDER, class B>
+struct ArgMinMaxVectorState : ArgMinMaxState<string_t, B> {
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateSortKey<StateReturnType, ORDER>>,
+	                                                     OptionalStateType<StateTypedValue<B, StateInputType<1>>>>>;
+};
+
+//! State for the generic arg_min/arg_max variants: both the argument and the "by" value are stored as binary
+//! sort keys.
+template <OrderType ORDER>
+struct ArgMinMaxSortKeyState : ArgMinMaxState<string_t, string_t> {
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateSortKey<StateReturnType, ORDER>>,
+	                                                     OptionalStateType<StateSortKey<StateInputType<1>, ORDER>>>>;
 };
 
 template <class COMPARATOR>
@@ -226,6 +250,8 @@ struct GenericArgMinMaxState {
 
 template <typename COMPARATOR, OrderType ORDER_TYPE, class UPDATE_TYPE = SpecializedGenericArgMinMaxState>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
+	static constexpr OrderType ORDER = ORDER_TYPE;
+
 	template <class STATE>
 	static void Update(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
 	                   Vector &state_vector, idx_t count) {
@@ -350,30 +376,6 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		}
 	}
 
-	//! The exported state is STRUCT({'arg': <return type>, 'by': <by type>}) - the logical types are only known
-	//! after binding, while the physical layout is known statically. The arg is always stored as a sort key;
-	//! the by value is stored as a sort key only for the generic implementation.
-	template <class STATE>
-	static AggregateStateLayout GetStateLayout(const BoundAggregateFunction &bound_function) {
-		AggregateStateLayout layout;
-		child_list_t<LogicalType> children;
-		children.emplace_back("arg", bound_function.GetReturnType());
-		children.emplace_back("by", bound_function.GetArguments()[1]);
-		layout.type = LogicalType::STRUCT(std::move(children));
-		layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-		if (std::is_same<UPDATE_TYPE, GenericArgMinMaxState<ORDER_TYPE>>::value) {
-			// the by value is stored as a sort key
-			layout.field =
-			    BuildStateField<OptionalStateType<StructStateType<OptionalStateType<StateSortKey<ORDER_TYPE>>,
-			                                                      OptionalStateType<StateSortKey<ORDER_TYPE>>>>>();
-		} else {
-			layout.field =
-			    BuildStateField<OptionalStateType<StructStateType<OptionalStateType<StateSortKey<ORDER_TYPE>>,
-			                                                      OptionalStateType<typename STATE::BY_TYPE>>>>();
-		}
-		return layout;
-	}
-
 	template <ArgMinMaxNullHandling NULL_HANDLING>
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &context = input.GetClientContext();
@@ -405,13 +407,13 @@ bind_aggregate_function_t GetBindFunction(const ArgMinMaxNullHandling null_handl
 
 template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_handling) {
-	using STATE = ArgMinMaxState<string_t, string_t>;
+	using STATE = ArgMinMaxSortKeyState<OP::ORDER>;
 	auto bind = GetBindFunction<OP>(null_handling);
 	auto function = AggregateFunction(
 	    {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
 	    AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
-	function.SetStructStateExport(OP::template GetStateLayout<STATE>);
+	AggregateFunction::WireStructStateType<STATE>(function);
 	return function;
 }
 
@@ -419,13 +421,13 @@ template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type,
                                                      const ArgMinMaxNullHandling null_handling) {
 #ifndef DUCKDB_SMALLER_BINARY
-	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
+	using STATE = ArgMinMaxVectorState<OP::ORDER, BY_TYPE>;
 	auto bind = GetBindFunction<OP>(null_handling);
 	auto function = AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
 	                                  AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
 	                                  AggregateFunction::StateCombine<STATE, OP>,
 	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
-	function.SetStructStateExport(OP::template GetStateLayout<STATE>);
+	AggregateFunction::WireStructStateType<STATE>(function);
 	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);

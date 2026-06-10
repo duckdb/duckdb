@@ -565,8 +565,7 @@ void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector
 	}
 }
 
-void ListSegmentFunctions::BuildLists(const vector<reference<const LinkedList>> &linked_lists, Vector &result,
-                                      idx_t offset) const {
+void ListSegmentFunctions::BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	const idx_t count = linked_lists.size();
 
@@ -576,7 +575,7 @@ void ListSegmentFunctions::BuildLists(const vector<reference<const LinkedList>> 
 
 	// first iterate over all entries and set up the list entries, and get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-		auto &linked_list = linked_lists[i].get();
+		auto &linked_list = linked_lists[i];
 		const auto rid = offset + i;
 		result_data[rid].offset = total_len;
 		if (linked_list.total_capacity == 0) {
@@ -593,7 +592,7 @@ void ListSegmentFunctions::BuildLists(const vector<reference<const LinkedList>> 
 	ListVector::Reserve(result, total_len);
 	auto &result_child = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto &linked_list = linked_lists[i].get();
+		auto &linked_list = linked_lists[i];
 		if (linked_list.total_capacity == 0) {
 			continue;
 		}

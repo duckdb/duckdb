@@ -11,7 +11,7 @@ struct ListAggState {
 	LinkedList linked_list;
 
 	//! The state is a linked list of values - exported/imported as the aggregate's LIST return type
-	using STATE_TYPE = StateListType<StateLayoutType::RETURN_TYPE>;
+	using STATE_TYPE = StateListType<StateReturnType>;
 };
 
 struct ListFunction {
@@ -74,7 +74,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	ListSegmentFunctions functions;
 	GetSegmentDataFunctions(functions, ListType::GetChildType(result.GetType()));
 
-	vector<reference<const LinkedList>> linked_lists;
+	vector<LinkedList> linked_lists;
 	linked_lists.reserve(count);
 	for (idx_t i = 0; i < count; i++) {
 		linked_lists.push_back(states[i].GetValue()->linked_list);

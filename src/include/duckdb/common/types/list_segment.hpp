@@ -58,7 +58,7 @@ struct ListSegmentFunctions {
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const;
 	//! Build a LIST result vector from a set of linked lists - one per row, written at rows [offset, offset + count).
 	//! Rows with an empty linked list (total_capacity == 0) are set to NULL.
-	void BuildLists(const vector<reference<const LinkedList>> &linked_lists, Vector &result, idx_t offset) const;
+	void BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const;
 };
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type);

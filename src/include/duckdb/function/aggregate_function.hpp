@@ -707,7 +707,13 @@ inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 		using ST = typename STATE::STATE_TYPE;
 		result.SetStructStateExport([](const BoundAggregateFunction &bound) {
 			AggregateStateLayout layout;
-			layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+			if (bound.GetReturnType().IsAggregateState()) {
+				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+				// its return type IS the state type already
+				layout.type = bound.GetReturnType();
+			} else {
+				layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+			}
 			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 			layout.field = BuildStateField<ST>();
 			if constexpr (IsStateListType<ST>::value) {
@@ -727,28 +733,19 @@ inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 // Defined here (after BoundAggregateFunction is complete) so the body can access the bound function's types.
 template <class ST, class STATE>
 inline LogicalType AggregateFunction::BuildStateLogical(const BoundAggregateFunction &bound_function) {
-	// the runtime types of the bound function, indexed by StateLayoutType
-	LogicalType layout_types[2];
-	layout_types[static_cast<uint8_t>(StateLayoutType::RETURN_TYPE)] = bound_function.GetReturnType();
-	const auto &arguments = bound_function.GetArguments();
-	if (arguments.size() >= 2) {
-		layout_types[static_cast<uint8_t>(StateLayoutType::SECOND_ARGUMENT)] = arguments[1];
-	}
-	if constexpr (IsOptionalStateType<ST>::value) {
+	// the runtime types of the bound function - used to resolve StateReturnType/StateInputType sources
+	StateLayoutTypeInfo info {bound_function.GetReturnType(), bound_function.GetArguments()};
+	if constexpr (IsStateListType<ST>::value) {
+		return ResolveStateSourceType<typename ST::SOURCE_TYPE>(info);
+	} else if constexpr (IsOptionalStateType<ST>::value) {
 		using V = typename ST::value_type;
-		if constexpr (IsStateSortKeyType<V>::value) {
-			return bound_function.GetReturnType();
-		} else if constexpr (IsStructStateType<V>::value) {
-			return V::GetLogicalType(STATE::STATE_NAMES, layout_types);
+		if constexpr (IsStructStateType<V>::value) {
+			return V::GetLogicalType(STATE::STATE_NAMES, info);
 		} else {
-			return FieldToLogicalType<V>(layout_types);
+			return FieldToLogicalType<V>(info);
 		}
-	} else if constexpr (IsStateListType<ST>::value) {
-		static_assert(ST::layout_type == StateLayoutType::RETURN_TYPE,
-		              "StateListType only supports StateLayoutType::RETURN_TYPE");
-		return bound_function.GetReturnType();
 	} else {
-		return ST::GetLogicalType(STATE::STATE_NAMES, layout_types);
+		return ST::GetLogicalType(STATE::STATE_NAMES, info);
 	}
 }
 

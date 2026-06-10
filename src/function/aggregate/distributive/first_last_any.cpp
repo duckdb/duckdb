@@ -58,11 +58,15 @@ struct FirstStringStateBase {
 struct FirstStringState : FirstStringStateBase {
 	static constexpr const char *STATE_NAMES[] = {"value"};
 	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
-	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateString<StateLayoutType::RETURN_TYPE>>>>;
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateString<StateReturnType>>>>;
 };
 
-//! State for arbitrary types - the value is stored as a binary sort key.
-struct FirstSortKeyState : FirstStringStateBase {};
+//! State for arbitrary types - the value is stored as a binary sort key, exported as the aggregate's return type.
+struct FirstSortKeyState : FirstStringStateBase {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	using STATE_TYPE =
+	    OptionalStateType<StructStateType<OptionalStateType<StateSortKey<StateReturnType, OrderType::ASCENDING>>>>;
+};
 
 struct FirstFunctionBase {
 	static bool IgnoreNull() {
@@ -317,19 +321,6 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
-
-	//! The exported state is STRUCT({'value': <return type>}) - the value field's logical type is only known after
-	//! binding, while the physical layout (a sort key with two levels of nullability) is known statically.
-	static AggregateStateLayout GetStateLayout(const BoundAggregateFunction &bound_function) {
-		AggregateStateLayout layout;
-		child_list_t<LogicalType> children;
-		children.emplace_back("value", bound_function.GetReturnType());
-		layout.type = LogicalType::STRUCT(std::move(children));
-		layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-		layout.field = BuildStateField<
-		    OptionalStateType<StructStateType<OptionalStateType<StateSortKey<OrderType::ASCENDING>>>>>();
-		return layout;
-	}
 };
 
 template <class T, bool LAST, bool SKIP_NULLS>
@@ -427,7 +418,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
 		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind, nullptr,
 		    nullptr, nullptr);
-		fun.SetStructStateExport(OP::GetStateLayout);
+		AggregateFunction::WireStructStateType<STATE>(fun);
 		return fun;
 	}
 	}

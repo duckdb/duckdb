@@ -169,7 +169,7 @@ struct BaseMinMaxStringState {
 
 struct MinMaxStringState : BaseMinMaxStringState {
 	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
-	using STATE_TYPE = OptionalStateType<StateString<StateLayoutType::RETURN_TYPE>>;
+	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
 };
 
 struct StringMinMaxBase : public MinMaxBase {
@@ -275,7 +275,7 @@ struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {};
 
 template <OrderType ORDER>
 struct MinMaxSortKeyState : BaseMinMaxStringState {
-	using STATE_TYPE = OptionalStateType<StateSortKey<ORDER>>;
+	using STATE_TYPE = OptionalStateType<StateSortKey<StateReturnType, ORDER>>;
 };
 
 template <typename OP>
