@@ -14,81 +14,76 @@ namespace duckdb {
 
 namespace {
 
-struct ArgMinMaxStateBase {
-	ArgMinMaxStateBase() : is_initialized(false), arg_null(false), val_null(false) {
-	}
-
-	template <class T>
-	static inline void CreateValue(T &value) {
-	}
-
-	template <class T>
-	static inline void AssignValue(T &target, T new_value, AggregateInputData &aggregate_input_data) {
-		target = new_value;
-	}
-
-	template <typename T>
-	static inline void ReadValue(Vector &result, T &arg, T &target) {
-		target = arg;
-	}
-
-	bool is_initialized;
-	bool arg_null;
-	bool val_null;
-};
-
-// Out-of-line specialisations
-template <>
-void ArgMinMaxStateBase::CreateValue(string_t &value) {
-	value = string_t(uint32_t(0));
+template <class T>
+inline void ArgMinMaxAssignValue(T &target, T new_value, uint32_t &alloc_size,
+                                 AggregateInputData &aggregate_input_data) {
+	target = new_value;
 }
 
+//! Strings are stored in the arena allocator, re-using the previous allocation when overwriting the value
 template <>
-void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value, AggregateInputData &aggregate_input_data) {
+inline void ArgMinMaxAssignValue(string_t &target, string_t new_value, uint32_t &alloc_size,
+                                 AggregateInputData &aggregate_input_data) {
 	if (new_value.IsInlined()) {
 		target = new_value;
+		alloc_size = 0;
 	} else {
-		// non-inlined string, need to allocate space for it
-		auto len = new_value.GetSize();
+		auto len = UnsafeNumericCast<uint32_t>(new_value.GetSize());
 		char *ptr;
-		if (!target.IsInlined() && target.GetSize() >= len) {
-			// Target has enough space, reuse ptr
-			ptr = target.GetPointer();
+		if (alloc_size >= len) {
+			ptr = target.GetDataWriteable();
 		} else {
-			// Target might be too small, allocate
-			ptr = reinterpret_cast<char *>(aggregate_input_data.allocator.Allocate(len));
+			alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+			ptr = char_ptr_cast(aggregate_input_data.allocator.Allocate(alloc_size));
 		}
 		memcpy(ptr, new_value.GetData(), len);
-		target = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+		target = string_t(ptr, len);
 	}
 }
 
+template <typename T>
+inline void ArgMinMaxReadValue(Vector &result, T &arg, T &target) {
+	target = arg;
+}
+
 template <>
-void ArgMinMaxStateBase::ReadValue(Vector &result, string_t &arg, string_t &target) {
+inline void ArgMinMaxReadValue(Vector &result, string_t &arg, string_t &target) {
 	target = StringVector::AddStringOrBlob(result, arg);
 }
 
+//! The aggregate state of arg_min/arg_max is nullable on two levels: the state itself is NULL when no row has been
+//! recorded yet (is_set, the outer optional), while the recorded "arg" and "by" values can themselves be NULL (the
+//! inner optionals). Valid exported states are e.g. NULL, {'arg': NULL, 'by': 42} and {'arg': 1, 'by': 42}.
 template <class A, class B>
-struct ArgMinMaxState : public ArgMinMaxStateBase {
+struct ArgMinMaxState {
 	using ARG_TYPE = A;
 	using BY_TYPE = B;
 
-	ARG_TYPE arg;
-	BY_TYPE value;
+	static constexpr const char *STATE_NAMES[] = {"arg", "by"};
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<A>, OptionalStateType<B>>>;
 
-	ArgMinMaxState() {
-		CreateValue(arg);
-		CreateValue(value);
+	A arg;
+	//! Whether the recorded argument is valid (i.e. not NULL)
+	bool arg_is_valid;
+	B value;
+	//! Whether the recorded "by" value is valid (i.e. not NULL)
+	bool value_is_valid;
+	//! Whether the state has been set (i.e. we have recorded a row)
+	bool is_set;
+	//! Arena allocation sizes for non-inlined string values - not part of the exported state
+	uint32_t arg_alloc_size;
+	uint32_t value_alloc_size;
+
+	void AssignArg(A input, AggregateInputData &aggregate_input_data) {
+		ArgMinMaxAssignValue<A>(arg, input, arg_alloc_size, aggregate_input_data);
+	}
+	void AssignBy(B input, AggregateInputData &aggregate_input_data) {
+		ArgMinMaxAssignValue<B>(value, input, value_alloc_size, aggregate_input_data);
 	}
 };
 
 template <class COMPARATOR>
 struct ArgMinMaxBase {
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.~STATE();
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE>
 	static void Assign(STATE &state, const A_TYPE &x, const B_TYPE &y, const bool x_null, const bool y_null,
 	                   AggregateInputData &aggregate_input_data) {
@@ -96,16 +91,18 @@ struct ArgMinMaxBase {
 		const auto &bind_data = aggregate_input_data.bind_data->Cast<ArgMinMaxFunctionData>();
 
 		if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL) {
-			STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
-			STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
+			state.arg_is_valid = true;
+			state.value_is_valid = true;
+			state.AssignArg(x, aggregate_input_data);
+			state.AssignBy(y, aggregate_input_data);
 		} else {
-			state.arg_null = x_null;
-			state.val_null = y_null;
-			if (!state.arg_null) {
-				STATE::template AssignValue<A_TYPE>(state.arg, x, aggregate_input_data);
+			state.arg_is_valid = !x_null;
+			state.value_is_valid = !y_null;
+			if (state.arg_is_valid) {
+				state.AssignArg(x, aggregate_input_data);
 			}
-			if (!state.val_null) {
-				STATE::template AssignValue<B_TYPE>(state.value, y, aggregate_input_data);
+			if (state.value_is_valid) {
+				state.AssignBy(y, aggregate_input_data);
 			}
 		}
 	}
@@ -114,25 +111,25 @@ struct ArgMinMaxBase {
 	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &binary) {
 		D_ASSERT(binary.input.bind_data);
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
-		if (!state.is_initialized) {
+		if (!state.is_set) {
 			if (bind_data.null_handling == ArgMinMaxNullHandling::IGNORE_ANY_NULL &&
 			    binary.left_mask.RowIsValid(binary.lidx) && binary.right_mask.RowIsValid(binary.ridx)) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
-				state.is_initialized = true;
+				state.is_set = true;
 				return;
 			}
 			if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ARG_NULL &&
 			    binary.right_mask.RowIsValid(binary.ridx)) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
-				state.is_initialized = true;
+				state.is_set = true;
 				return;
 			}
 			if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL) {
 				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx),
 				       !binary.right_mask.RowIsValid(binary.ridx), binary.input);
-				state.is_initialized = true;
+				state.is_set = true;
 			}
 		} else {
 			OP::template Execute<A_TYPE, B_TYPE, STATE>(state, x, y, binary);
@@ -145,7 +142,7 @@ struct ArgMinMaxBase {
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 
 		if (binary.right_mask.RowIsValid(binary.ridx) &&
-		    (state.val_null || COMPARATOR::Operation(y_data, state.value))) {
+		    (!state.value_is_valid || COMPARATOR::Operation(y_data, state.value))) {
 			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ANY_NULL ||
 			    binary.left_mask.RowIsValid(binary.lidx)) {
 				Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
@@ -155,23 +152,23 @@ struct ArgMinMaxBase {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggregate_input_data) {
-		if (!source.is_initialized) {
+		if (!source.is_set) {
 			return;
 		}
 
-		if (!target.is_initialized || target.val_null ||
-		    (!source.val_null && COMPARATOR::Operation(source.value, target.value))) {
-			Assign(target, source.arg, source.value, source.arg_null, false, aggregate_input_data);
-			target.is_initialized = true;
+		if (!target.is_set || !target.value_is_valid ||
+		    (source.value_is_valid && COMPARATOR::Operation(source.value, target.value))) {
+			Assign(target, source.arg, source.value, !source.arg_is_valid, false, aggregate_input_data);
+			target.is_set = true;
 		}
 	}
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_initialized || state.arg_null) {
+		if (!state.is_set || !state.arg_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
-			STATE::template ReadValue<T>(finalize_data.result, state.arg, target);
+			ArgMinMaxReadValue<T>(finalize_data.result, state.arg, target);
 		}
 	}
 
@@ -188,6 +185,7 @@ struct ArgMinMaxBase {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		}
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -231,7 +229,6 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		UnifiedVectorFormat adata;
 		arg.ToUnifiedFormat(adata);
 
-		using ARG_TYPE = typename STATE::ARG_TYPE;
 		using BY_TYPE = typename STATE::BY_TYPE;
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
@@ -261,10 +258,11 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			const auto bidx = bdata.sel->get_index(i);
 
 			if (!bdata.validity.RowIsValid(bidx)) {
-				if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL && !state.is_initialized) {
-					state.val_null = true;
+				if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL && !state.is_set) {
+					state.value_is_valid = false;
 					if (!arg_null) {
-						state.is_initialized = true;
+						state.is_set = true;
+						state.arg_is_valid = true;
 						if (&state == last_state) {
 							assign_count--;
 						}
@@ -277,9 +275,10 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 			const auto bval = bys[bidx];
 
-			if (!state.is_initialized || state.val_null || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
-				STATE::template AssignValue<BY_TYPE>(state.value, bval, aggregate_input_data);
-				state.arg_null = arg_null;
+			if (!state.is_set || !state.value_is_valid || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
+				state.AssignBy(bval, aggregate_input_data);
+				state.value_is_valid = true;
+				state.arg_is_valid = !arg_null;
 				// micro-adaptivity: it is common we overwrite the same state repeatedly
 				// e.g. when running arg_max(val, ts) and ts is sorted in ascending order
 				// this check essentially says:
@@ -292,7 +291,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 					assign_sel[assign_count++] = UnsafeNumericCast<sel_t>(i);
 					last_state = &state;
 				}
-				state.is_initialized = true;
+				state.is_set = true;
 			}
 		}
 		if (assign_count == 0) {
@@ -311,37 +310,61 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		for (idx_t i = 0; i < assign_count; i++) {
 			const auto sidx = sdata.sel->get_index(sel.get_index(i));
 			auto &state = *states[sidx];
-			STATE::template AssignValue<ARG_TYPE>(state.arg, sort_key_data[i], aggregate_input_data);
+			state.AssignArg(sort_key_data[i], aggregate_input_data);
 		}
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggregate_input_data) {
-		if (!source.is_initialized) {
+		if (!source.is_set) {
 			return;
 		}
-		if (!target.is_initialized || target.val_null ||
-		    (!source.val_null && COMPARATOR::Operation(source.value, target.value))) {
-			target.val_null = source.val_null;
-			if (!target.val_null) {
-				STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value, aggregate_input_data);
+		if (!target.is_set || !target.value_is_valid ||
+		    (source.value_is_valid && COMPARATOR::Operation(source.value, target.value))) {
+			target.value_is_valid = source.value_is_valid;
+			if (target.value_is_valid) {
+				target.AssignBy(source.value, aggregate_input_data);
 			}
-			target.arg_null = source.arg_null;
-			if (!target.arg_null) {
-				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg, aggregate_input_data);
+			target.arg_is_valid = source.arg_is_valid;
+			if (target.arg_is_valid) {
+				target.AssignArg(source.arg, aggregate_input_data);
 			}
-			target.is_initialized = true;
+			target.is_set = true;
 		}
 	}
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (!state.is_initialized || state.arg_null) {
+		if (!state.is_set || !state.arg_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			CreateSortKeyHelpers::DecodeSortKey(state.arg, finalize_data.result, finalize_data.result_idx,
 			                                    OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST));
 		}
+	}
+
+	//! The exported state is STRUCT({'arg': <return type>, 'by': <by type>}) - the logical types are only known
+	//! after binding, while the physical layout is known statically. The arg is always stored as a sort key;
+	//! the by value is stored as a sort key only for the generic implementation.
+	template <class STATE>
+	static AggregateStateLayout GetStateLayout(const BoundAggregateFunction &bound_function) {
+		AggregateStateLayout layout;
+		child_list_t<LogicalType> children;
+		children.emplace_back("arg", bound_function.GetReturnType());
+		children.emplace_back("by", bound_function.GetArguments()[1]);
+		layout.type = LogicalType::STRUCT(std::move(children));
+		layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+		if (std::is_same<UPDATE_TYPE, GenericArgMinMaxState<ORDER_TYPE>>::value) {
+			// the by value is stored as a sort key
+			layout.field =
+			    BuildStateField<OptionalStateType<StructStateType<OptionalStateType<StateSortKey<ORDER_TYPE>>,
+			                                                      OptionalStateType<StateSortKey<ORDER_TYPE>>>>>();
+		} else {
+			layout.field =
+			    BuildStateField<OptionalStateType<StructStateType<OptionalStateType<StateSortKey<ORDER_TYPE>>,
+			                                                      OptionalStateType<typename STATE::BY_TYPE>>>>();
+		}
+		return layout;
 	}
 
 	template <ArgMinMaxNullHandling NULL_HANDLING>
@@ -353,6 +376,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		}
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -376,11 +400,12 @@ template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_handling) {
 	using STATE = ArgMinMaxState<string_t, string_t>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	return AggregateFunction(
+	auto function = AggregateFunction(
 	    {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
-	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>, OP::template Update<STATE>,
-	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind,
-	    AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
+	function.SetStructStateExport(OP::template GetStateLayout<STATE>);
+	return function;
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
@@ -389,11 +414,12 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 #ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	return AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
-	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	auto function = AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
+	                                  AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
+	                                  AggregateFunction::StateCombine<STATE, OP>,
+	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind);
+	function.SetStructStateExport(OP::template GetStateLayout<STATE>);
+	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetSignature().GetParameter(0).SetType(type);
@@ -449,12 +475,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
                                                const ArgMinMaxNullHandling null_handling) {
 #ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
-	auto function =
-	    AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP, AggregateDestructorType::LEGACY>(
-	        type, by_type, type);
-	if (type.InternalType() == PhysicalType::VARCHAR || by_type.InternalType() == PhysicalType::VARCHAR) {
-		function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
-	}
+	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);

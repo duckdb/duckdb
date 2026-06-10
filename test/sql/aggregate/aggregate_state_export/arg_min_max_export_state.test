@@ -1,0 +1,129 @@
+# name: test/sql/aggregate/aggregate_state_export/arg_min_max_export_state.test
+# description: Test EXPORT_STATE for arg_min/arg_max - states are nullable on two levels
+# group: [aggregate_state_export]
+
+# empty input exports a NULL state
+query I
+SELECT arg_min(a, b) EXPORT_STATE FROM (SELECT 1 a, 1 b WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(arg_min(a, b) EXPORT_STATE) FROM (SELECT 1 a, 1 b WHERE false) t;
+----
+NULL
+
+# the state records both the argument and the ordering value
+query I
+SELECT (arg_min(a, b) EXPORT_STATE)::STRUCT(arg INTEGER, "by" INTEGER) FROM (VALUES (1, 10), (2, 5), (3, 20)) t(a, b);
+----
+{'arg': 2, 'by': 5}
+
+query I
+SELECT (arg_max(a, b) EXPORT_STATE)::STRUCT(arg INTEGER, "by" INTEGER) FROM (VALUES (1, 10), (2, 5), (3, 20)) t(a, b);
+----
+{'arg': 3, 'by': 20}
+
+# basic roundtrips
+query II nosort argminmax1
+SELECT arg_min(a, b), arg_max(a, b) FROM (VALUES (1, 10), (2, 5), (3, 20)) t(a, b);
+----
+
+query II nosort argminmax1
+SELECT finalize(arg_min(a, b) EXPORT_STATE), finalize(arg_max(a, b) EXPORT_STATE) FROM (VALUES (1, 10), (2, 5), (3, 20)) t(a, b);
+----
+
+# arg_min_null records NULL arguments - the arg field is NULL at the inner level
+query I
+SELECT (arg_min_null(a, b) EXPORT_STATE)::STRUCT(arg INTEGER, "by" INTEGER) FROM (VALUES (NULL, 5), (2, 10)) t(a, b);
+----
+{'arg': NULL, 'by': 5}
+
+query I
+SELECT finalize(arg_min_null(a, b) EXPORT_STATE) FROM (VALUES (NULL, 5), (2, 10)) t(a, b);
+----
+NULL
+
+# strings as argument and ordering value - both inlined and non-inlined
+query II
+SELECT finalize(arg_min(a, b) EXPORT_STATE), finalize(arg_max(a, b) EXPORT_STATE)
+FROM (VALUES ('this-is-a-very-long-string-that-is-not-inlined', 'bbb'), ('apple', 'aaa-also-a-very-long-string')) t(a, b);
+----
+apple	this-is-a-very-long-string-that-is-not-inlined
+
+query I
+SELECT (arg_min(a, b) EXPORT_STATE)::STRUCT(arg VARCHAR, "by" VARCHAR) FROM (VALUES ('a-long-string-that-is-not-inlined', 'x')) t(a, b);
+----
+{'arg': a-long-string-that-is-not-inlined, 'by': x}
+
+# complex argument types go through the sort key state
+query I
+SELECT (arg_min(a, b) EXPORT_STATE)::STRUCT(arg STRUCT(x INTEGER), "by" INTEGER) FROM (VALUES ({'x': 1}, 10), ({'x': 2}, 5)) t(a, b);
+----
+{'arg': {'x': 2}, 'by': 5}
+
+query I
+SELECT finalize(arg_min(a, b) EXPORT_STATE) FROM (VALUES ([1, 2], 10), ([3], 5)) t(a, b);
+----
+[3]
+
+# complex types for both argument and ordering value (generic implementation)
+query I
+SELECT (arg_min(a, b) EXPORT_STATE)::STRUCT(arg INTEGER[], "by" INTEGER[]) FROM (VALUES ([1, 2], [10]), ([3], [5])) t(a, b);
+----
+{'arg': [3], 'by': [5]}
+
+query I
+SELECT finalize(arg_max(a, b) EXPORT_STATE) FROM (VALUES ([1, 2], [10]), ([3], [5])) t(a, b);
+----
+[1, 2]
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, range d FROM range(100);
+
+query III nosort grouped_argminmax
+SELECT g, arg_min(d, d % 7), arg_max(d, d % 7) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort grouped_argminmax
+SELECT g, finalize(arg_min(d, d % 7) EXPORT_STATE), finalize(arg_max(d, d % 7) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE argminmax_state AS SELECT g, arg_min(d, d % 7) EXPORT_STATE mn, arg_max(d, d % 7) EXPORT_STATE mx FROM dummy GROUP BY g;
+
+query III nosort grouped_argminmax
+SELECT g, finalize(mn), finalize(mx) FROM argminmax_state ORDER BY g;
+----
+
+# combine_aggr across groups
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT arg_min(a, b) EXPORT_STATE AS s FROM (VALUES (1, 10), (2, 5)) t(a, b)
+    UNION ALL
+    SELECT arg_min(a, b) EXPORT_STATE AS s FROM (VALUES (3, 1)) t(a, b)
+    UNION ALL
+    SELECT arg_min(a, b) EXPORT_STATE AS s FROM (SELECT 1 a, 1 b WHERE false) t
+) t;
+----
+3
+
+# to_aggregate_state with the various state shapes
+query I
+SELECT finalize(to_aggregate_state(NULL::STRUCT(arg INTEGER, "by" INTEGER), 'arg_min', ['INTEGER', 'INTEGER']));
+----
+NULL
+
+query I
+SELECT finalize(to_aggregate_state({'arg': 42, 'by': 1}::STRUCT(arg INTEGER, "by" INTEGER), 'arg_min', ['INTEGER', 'INTEGER']));
+----
+42
+
+query I
+SELECT finalize(combine(
+    to_aggregate_state({'arg': 42, 'by': 5}::STRUCT(arg INTEGER, "by" INTEGER), 'arg_min', ['INTEGER', 'INTEGER']),
+    to_aggregate_state({'arg': 84, 'by': 1}::STRUCT(arg INTEGER, "by" INTEGER), 'arg_min', ['INTEGER', 'INTEGER'])));
+----
+84
