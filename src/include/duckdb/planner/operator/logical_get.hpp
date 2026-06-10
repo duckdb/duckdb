@@ -42,6 +42,7 @@ public:
 	vector<ProjectionIndex> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
+	bool pushed_any_filter_to_table_function = false;
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
