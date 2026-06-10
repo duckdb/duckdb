@@ -96,8 +96,8 @@ static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
 static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
 static constexpr const char *TRIGGER_BEFORE_BODY_CTE_PREFIX = "__duckdb_trigger_before_body_";
 
-static unique_ptr<CommonTableExpressionInfo>
-MakeTransitionTableAliasCTE(const Identifier &base_cte_name, const identifier_set_t &exclude_columns) {
+static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const Identifier &base_cte_name,
+                                                                         const identifier_set_t &exclude_columns) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	auto alias_select = make_uniq<SelectNode>();
 	auto star = make_uniq<StarExpression>();
@@ -183,8 +183,8 @@ static virtual_column_map_t ReturningVirtualColumns(const QueryNode &node, const
 // does not include rowid).  Matched on the trailing identifier — the only table in scope is the
 // target.  Returns (id, name) pairs, deduplicated.
 static vector<pair<column_t, Identifier>> ReferencedVirtualColumns(vector<unique_ptr<ParsedExpression>> &returning_list,
-                                                                  const virtual_column_map_t &virtual_cols,
-                                                                  const TableCatalogEntry &table) {
+                                                                   const virtual_column_map_t &virtual_cols,
+                                                                   const TableCatalogEntry &table) {
 	vector<pair<column_t, Identifier>> result;
 	if (virtual_cols.empty()) {
 		return result;
