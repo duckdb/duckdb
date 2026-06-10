@@ -1,5 +1,8 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -91,6 +94,55 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
+// Find aggregate expression children
+void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
+                                          vector<reference<unique_ptr<ParsedExpression>>> &exprs) {
+	if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &fn_expr = expr->Cast<FunctionExpression>();
+
+		// Look up the function in the catalog, check to see if it is actually an aggregate function
+		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, fn_expr.function_name);
+		auto entry = GetCatalogEntry(fn_expr.catalog, fn_expr.schema, fn_entry, OnEntryNotFound::RETURN_NULL);
+
+		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			exprs.push_back(expr);
+			return;
+		}
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { FindAggregateExprs(child_expr, exprs); });
+}
+
+void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def) {
+	auto macro_copy = macro_def.expression->Copy();
+	vector<reference<unique_ptr<ParsedExpression>>> aggregate_exprs;
+	FindAggregateExprs(macro_copy, aggregate_exprs);
+
+	// Only allowed if the macro body has a single aggregate expression
+	if (aggregate_exprs.size() != 1) {
+		throw BinderException("Window function macro bodies must contain exactly one aggregate function");
+	}
+
+	// The window spec is pushed down to the aggregate function target within the macro body
+	unique_ptr<ParsedExpression> &agg_expr_ref = aggregate_exprs[0];
+	auto &agg_fn_expr = agg_expr_ref->Cast<FunctionExpression>();
+
+	// Transfer the macro function attributes
+	auto &window_expr = expr->Cast<WindowExpression>();
+	window_expr.catalog = agg_fn_expr.catalog;
+	window_expr.schema = agg_fn_expr.schema;
+	window_expr.function_name = agg_fn_expr.function_name;
+	window_expr.children = std::move(agg_fn_expr.children);
+	window_expr.distinct = agg_fn_expr.distinct;
+	window_expr.filter_expr = std::move(agg_fn_expr.filter);
+	// TODO: transfer order_bys when window functions support them
+
+	// Replace the aggregate expression with the new window expression
+	agg_expr_ref = std::move(expr);
+	expr = std::move(macro_copy);
+}
+
 void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
                                              unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
@@ -111,21 +163,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	// replace current expression with stored macro expression
 	// special case: If this is a window function, then we need to return a window expression
 	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		//	Only allowed if the expression is a function
-		if (macro_def.expression->GetExpressionType() != ExpressionType::FUNCTION) {
-			throw BinderException("Window function macros must be functions");
-		}
-		auto macro_copy = macro_def.expression->Copy();
-		auto &macro_expr = macro_copy->Cast<FunctionExpression>();
-		// Transfer the macro function attributes
-		auto &window_expr = expr->Cast<WindowExpression>();
-		window_expr.catalog = macro_expr.catalog;
-		window_expr.schema = macro_expr.schema;
-		window_expr.function_name = macro_expr.function_name;
-		window_expr.children = std::move(macro_expr.children);
-		window_expr.distinct = macro_expr.distinct;
-		window_expr.filter_expr = std::move(macro_expr.filter);
-		// TODO: transfer order_bys when window functions support them
+		UnfoldWindowMacroExpression(expr, macro_def);
 	} else {
 		expr = macro_def.expression->Copy();
 	}
