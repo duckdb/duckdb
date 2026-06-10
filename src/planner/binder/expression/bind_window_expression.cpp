@@ -80,7 +80,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 
 	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
+	auto function = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name),
+	                                                   std::move(children), error, true);
 	if (!function) {
 		error.Throw();
 	}
@@ -196,7 +197,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
 
-	vector<pair<string, unique_ptr<Expression>>> arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(window.GetArguments().size());
 	for (auto &arg : window.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
@@ -211,7 +212,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		if (window.IsLegacyFunctionCall()) {
-			arguments.emplace_back(string(), std::move(bound_arg));
+			arguments.emplace_back(Identifier(), std::move(bound_arg));
 		} else {
 			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
@@ -381,8 +382,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// move the WINDOW expression into the set of bound windows
 	auto &window_type = result->GetReturnType();
 	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
-	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), window_type,
-	                                                  ColumnBinding(node.window_index, window_idx), depth);
+	auto colref =
+	    make_uniq<BoundColumnRefExpression>(name, window_type, ColumnBinding(node.window_index, window_idx), depth);
 	return BindResult(std::move(colref));
 }
 

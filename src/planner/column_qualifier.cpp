@@ -19,50 +19,49 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-static string GetSQLValueFunctionName(const string &column_name) {
-	const auto lcase = StringUtil::Lower(column_name);
-	if (lcase == "current_catalog") {
+static Identifier GetSQLValueFunctionName(const Identifier &column_name) {
+	if (column_name == "current_catalog") {
 		return "current_catalog";
 	}
-	if (lcase == "current_date") {
+	if (column_name == "current_date") {
 		return "current_date";
 	}
-	if (lcase == "current_schema") {
+	if (column_name == "current_schema") {
 		return "current_schema";
 	}
-	if (lcase == "current_role") {
+	if (column_name == "current_role") {
 		return "current_role";
 	}
-	if (lcase == "current_time") {
+	if (column_name == "current_time") {
 		return "get_current_time";
 	}
-	if (lcase == "current_timestamp") {
+	if (column_name == "current_timestamp") {
 		return "get_current_timestamp";
 	}
-	if (lcase == "current_user") {
+	if (column_name == "current_user") {
 		return "current_user";
 	}
-	if (lcase == "localtime") {
+	if (column_name == "localtime") {
 		return "current_localtime";
 	}
-	if (lcase == "localtimestamp") {
+	if (column_name == "localtimestamp") {
 		return "current_localtimestamp";
 	}
-	if (lcase == "session_user") {
+	if (column_name == "session_user") {
 		return "session_user";
 	}
-	if (lcase == "user") {
+	if (column_name == "user") {
 		return "user";
 	}
-	return string();
+	return Identifier();
 }
 
-unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_name) {
+unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const Identifier &column_name) {
 	for (auto &ext : PlannerExtension::Iterate(context)) {
 		if (ext.get_sql_value_function) {
 			PlannerExtensionInput input {context, *this, ext.planner_info.get()};
 			unique_ptr<ParsedExpression> result;
-			auto result_type = ext.get_sql_value_function(input, column_name, result);
+			auto result_type = ext.get_sql_value_function(input, column_name.GetIdentifierName(), result);
 			if (result_type == GetSQLValueFunctionReturnType::FINISH_BINDING || result) {
 				return result;
 			}
@@ -79,7 +78,7 @@ unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_na
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::CreateStructExtract(unique_ptr<ParsedExpression> base,
-                                                                  const string &field_name) {
+                                                                  const Identifier &field_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
 	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));
@@ -108,7 +107,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 		BindingAlias alias(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1]);
 		binding = binder.bind_context.GetBinding(alias, error);
 		if (!binding) {
-			alias = BindingAlias(col_ref.ColumnNames()[0], INVALID_SCHEMA, col_ref.ColumnNames()[1]);
+			alias = BindingAlias(col_ref.ColumnNames()[0], Identifier::InvalidSchema(), col_ref.ColumnNames()[1]);
 			binding = binder.bind_context.GetBinding(alias, error);
 		}
 		break;
@@ -138,8 +137,8 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr, const string &column_name,
-                                                                ErrorData &error) {
+unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,
+                                                                const Identifier &column_name, ErrorData &error) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
@@ -193,8 +192,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 	return nullptr;
 }
 
-void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
-                                         vector<unordered_set<string>> &lambda_params,
+void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
                                          const bool within_function_expression) {
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
@@ -228,7 +226,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	case ExpressionType::POSITIONAL_REFERENCE: {
 		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.GetAlias().empty()) {
-			string table_name, column_name;
+			Identifier table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
 			if (error.empty()) {
 				ref.SetAlias(column_name);
@@ -279,7 +277,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	}
 	// the schema is set - check if we can turn this the schema into a column ref
 	// does this function exist in the system catalog?
-	func = binder.GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+	func = binder.GetCatalogEntry(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_lookup,
+	                              OnEntryNotFound::RETURN_NULL);
 	if (!func) {
 		// we could not find the function - bail
 		return nullptr;
@@ -305,7 +304,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 }
 
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
-                                                 vector<unordered_set<string>> &lambda_params) {
+                                                 vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
@@ -374,7 +373,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 		}
 	}
 	ErrorData catalog_table_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], INVALID_SCHEMA, col_ref.ColumnNames()[1],
+	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], Identifier::InvalidSchema(), col_ref.ColumnNames()[1],
 	                                    col_ref.ColumnNames()[2], catalog_table_error);
 	if (binding) {
 		// part1 is a catalog - the column reference is "catalog.table.column"
@@ -419,13 +418,13 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 	optional_idx table_pos;
 	for (const auto &binding_entry : binder.bind_context.GetBindingsList()) {
 		auto &alias = binding_entry->GetBindingAlias();
-		string catalog = alias.GetCatalog();
-		string schema = alias.GetSchema();
-		string table = alias.GetAlias();
+		string catalog = alias.GetCatalog().GetIdentifierName();
+		string schema = alias.GetSchema().GetIdentifierName();
+		string table = alias.GetAlias().GetIdentifierName();
 		auto entry = binding_entry->GetStandardEntry();
 		if (entry) {
-			catalog = entry->ParentCatalog().GetName();
-			schema = entry->ParentSchema().name;
+			catalog = entry->ParentCatalog().GetName().GetIdentifierName();
+			schema = entry->ParentSchema().name.GetIdentifierName();
 		}
 
 		for (idx_t i = 0; i < 3; i++) {

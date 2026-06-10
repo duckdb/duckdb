@@ -165,7 +165,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 
 	const auto &logical_get = current_op.get().Cast<LogicalGet>();
 	const auto column_index = logical_get.GetColumnIds()[column_id];
-	return logical_get.GetColumnName(column_index);
+	return logical_get.GetColumnName(column_index).GetIdentifierName();
 }
 
 //! Late materialization recreates a payload by re-scanning the base table column and re-applying a type cast at the
@@ -303,7 +303,8 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 	fun_name += params.order_type == OrderType::ASCENDING ? "min" : "max";
 	fun_name += params.can_be_null && (requires_arg || change_to_arg) ? "_nulls_last" : "";
 
-	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, fun_name);
+	auto &fun_entry =
+	    catalog.GetEntry<AggregateFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(fun_name));
 	const auto &fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
 }
@@ -324,7 +325,8 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 		// For more than one arg, we must use struct pack
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		FunctionBinder function_binder(context);
-		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
+		auto &struct_pack_entry =
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "struct_pack");
 		const auto &struct_pack_fun =
 		    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
 		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
@@ -372,7 +374,8 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// array_length
-	auto &array_length_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "array_length");
+	auto &array_length_entry =
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "array_length");
 	vector<unique_ptr<Expression>> array_length_exprs;
 	array_length_exprs.push_back(std::move(aggregate_column_ref));
 	array_length_exprs.push_back(make_uniq<BoundConstantExpression>(1));
@@ -383,7 +386,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 
 	// generate_series
 	auto &generate_series_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "generate_series");
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "generate_series");
 
 	vector<unique_ptr<Expression>> generate_series_exprs;
 	generate_series_exprs.push_back(make_uniq<BoundConstantExpression>(1));
@@ -446,7 +449,7 @@ void TopNWindowElimination::AddStructExtractExprs(
 	FunctionBinder function_binder(context);
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &struct_extract_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_extract");
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "struct_extract");
 	const auto &struct_extract_fun =
 	    struct_extract_entry.functions.GetFunctionByArguments(context, {struct_type, LogicalType::VARCHAR});
 
@@ -672,15 +675,15 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 		auto column_id = binding.ToString();
 		if (window.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// The column index points to the correct column binding
-			aggregate_args.push_back(
-			    make_uniq<BoundColumnRefExpression>(column_id, window_child_types[binding.column_index], binding));
+			aggregate_args.push_back(make_uniq<BoundColumnRefExpression>(
+			    Identifier(column_id), window_child_types[binding.column_index], binding));
 		} else {
 			// The child operator could have multiple or no table indexes. Therefore, we must find the right type first
 			const auto child_column_idx =
 			    static_cast<idx_t>(std::find(window_child_bindings.begin(), window_child_bindings.end(), binding) -
 			                       window_child_bindings.begin());
-			aggregate_args.push_back(
-			    make_uniq<BoundColumnRefExpression>(column_id, window_child_types[child_column_idx], binding));
+			aggregate_args.push_back(make_uniq<BoundColumnRefExpression>(
+			    Identifier(column_id), window_child_types[child_column_idx], binding));
 		}
 	}
 
@@ -1224,9 +1227,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
 		auto lhs_expr = make_uniq<BoundColumnRefExpression>(
-		    alias, lhs->types[lhs_rowid_idx], ColumnBinding {lhs->GetTableIndex()[0], ProjectionIndex(lhs_rowid_idx)});
+		    Identifier(alias), lhs->types[lhs_rowid_idx],
+		    ColumnBinding {lhs->GetTableIndex()[0], ProjectionIndex(lhs_rowid_idx)});
 		auto rhs_expr =
-		    make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		    make_uniq<BoundColumnRefExpression>(Identifier(alias), rhs->types[aggregate_offset + i],
 		                                        ColumnBinding {GetAggregateIdx(rhs), ProjectionIndex(rhs_rowid_idx)});
 		join->conditions.push_back(
 		    JoinCondition(std::move(lhs_expr), std::move(rhs_expr), ExpressionType::COMPARE_EQUAL));

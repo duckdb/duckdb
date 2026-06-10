@@ -558,7 +558,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -839,7 +839,7 @@ static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &
 	auto fields = UnionType::CopyMemberTypes(type);
 	vector<string> names;
 	for (const auto &field : fields) {
-		names.push_back(field.first);
+		names.emplace_back(field.first);
 	}
 
 	bool success = true;

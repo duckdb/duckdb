@@ -7,15 +7,20 @@
 #include "duckdb/common/types/hash.hpp"
 namespace duckdb {
 
-TypeExpression::TypeExpression(string catalog, string schema, string type_name,
+TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
                                vector<unique_ptr<ParsedExpression>> children_p)
     : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), catalog(std::move(catalog)),
       schema(std::move(schema)), type_name(std::move(type_name)), children(std::move(children_p)) {
 	D_ASSERT(!this->type_name.empty());
 }
 
-TypeExpression::TypeExpression(string type_name, vector<unique_ptr<ParsedExpression>> children)
-    : TypeExpression(INVALID_CATALOG, INVALID_SCHEMA, std::move(type_name), std::move(children)) {
+TypeExpression::TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children)
+    : TypeExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), std::move(type_name),
+                     std::move(children)) {
+}
+
+TypeExpression::TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children)
+    : TypeExpression(Identifier(type_name), std::move(children)) {
 }
 
 TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE) {
@@ -33,16 +38,16 @@ string TypeExpression::ToString() const {
 	auto &params = children;
 
 	// LIST and ARRAY have special syntax
-	if (result.empty() && StringUtil::CIEquals(type_name, "LIST") && params.size() == 1) {
+	if (result.empty() && type_name == "LIST" && params.size() == 1) {
 		return params[0]->ToString() + "[]";
 	}
-	if (result.empty() && StringUtil::CIEquals(type_name, "ARRAY") && params.size() == 2) {
+	if (result.empty() && type_name == "ARRAY" && params.size() == 2) {
 		auto &type_param = params[0];
 		auto &size_param = params[1];
 		return type_param->ToString() + "[" + size_param->ToString() + "]";
 	}
 	// So does STRUCT, MAP and UNION
-	if (result.empty() && StringUtil::CIEquals(type_name, "STRUCT")) {
+	if (result.empty() && type_name == "STRUCT") {
 		if (params.empty()) {
 			return "STRUCT";
 		}
@@ -56,7 +61,7 @@ string TypeExpression::ToString() const {
 		struct_result += ")";
 		return struct_result;
 	}
-	if (result.empty() && StringUtil::CIEquals(type_name, "UNION")) {
+	if (result.empty() && type_name == "UNION") {
 		if (params.empty()) {
 			return "UNION";
 		}
@@ -71,27 +76,27 @@ string TypeExpression::ToString() const {
 		return union_result;
 	}
 
-	if (result.empty() && StringUtil::CIEquals(type_name, "MAP") && params.size() == 2) {
+	if (result.empty() && type_name == "MAP" && params.size() == 2) {
 		return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
 	}
 
-	if (result.empty() && StringUtil::CIEquals(type_name, "VARCHAR") && !params.empty()) {
-		if (params.back()->HasAlias() && StringUtil::CIEquals(params.back()->GetAlias(), "collation")) {
+	if (result.empty() && type_name == "VARCHAR" && !params.empty()) {
+		if (params.back()->HasAlias() && params.back()->GetAlias() == "collation") {
 			// Special case for VARCHAR with collation
 			auto collate_expr = params.back()->Cast<ConstantExpression>();
 			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));
 		}
 	}
 
-	if (result.empty() && StringUtil::CIEquals(type_name, "INTERVAL") && !params.empty()) {
+	if (result.empty() && type_name == "INTERVAL" && !params.empty()) {
 		// We ignore interval types parameters.
 		return "INTERVAL";
 	}
 
-	auto type_id = TransformStringToLogicalTypeId(type_name);
+	auto type_id = TransformStringToLogicalTypeId(type_name.GetIdentifierName());
 	if (type_id != LogicalTypeId::UNBOUND && type_id != LogicalTypeId::SQLNULL) {
 		// Built-in type name
-		result += type_name;
+		result += type_name.GetIdentifierName();
 	} else {
 		result += SQLIdentifier(type_name);
 	}

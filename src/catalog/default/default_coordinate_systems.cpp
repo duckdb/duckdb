@@ -44,7 +44,7 @@ DefaultCoordinateSystemGenerator::DefaultCoordinateSystemGenerator(Catalog &cata
 }
 
 unique_ptr<CatalogEntry> DefaultCoordinateSystemGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                              const string &entry_name) {
+                                                                              const Identifier &entry_name) {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}
@@ -62,14 +62,14 @@ unique_ptr<CatalogEntry> DefaultCoordinateSystemGenerator::CreateDefaultEntry(Cl
 	return nullptr;
 }
 
-vector<string> DefaultCoordinateSystemGenerator::GetDefaultEntries() {
+vector<Identifier> DefaultCoordinateSystemGenerator::GetDefaultEntries() {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return {};
 	}
 
-	vector<string> entries;
+	vector<Identifier> entries;
 	for (const auto &crs_definition : DEFAULT_CRS_DEFINITIONS) {
-		entries.push_back(crs_definition.name);
+		entries.emplace_back(crs_definition.name);
 	}
 	return entries;
 }

@@ -4,8 +4,8 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
-    PEGTransformer &transformer, const bool &unique_index, const bool &if_not_exists, const string &index_name,
-    unique_ptr<BaseTableRef> base_table_name, const vector<string> &insert_column_list, const string &index_type,
+    PEGTransformer &transformer, const bool &unique_index, const bool &if_not_exists, const Identifier &index_name,
+    unique_ptr<BaseTableRef> base_table_name, const vector<string> &insert_column_list, const Identifier &index_type,
     vector<unique_ptr<ParsedExpression>> index_element, case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
     unique_ptr<ParsedExpression> where_clause) {
 	auto result = make_uniq<CreateStatement>();
@@ -20,10 +20,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(
 	index_info->table = base_table_name->table_name;
 	index_info->catalog = base_table_name->catalog_name;
 	index_info->schema = base_table_name->schema_name;
-	index_info->index_type = index_type.empty() ? "ART" : index_type;
+	index_info->index_type = index_type.empty() ? "ART" : index_type.GetIdentifierName();
 	for (auto &column : insert_column_list) {
-		index_info->expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
-		index_info->parsed_expressions.push_back(make_uniq<ColumnRefExpression>(column, base_table_name->table_name));
+		index_info->expressions.push_back(
+		    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
+		index_info->parsed_expressions.push_back(
+		    make_uniq<ColumnRefExpression>(Identifier(column), base_table_name->table_name));
 	}
 	for (auto &expr : index_element) {
 		if (expr->GetExpressionType() == ExpressionType::COLLATE) {
@@ -50,7 +52,7 @@ string PEGTransformerFactory::TransformDottedIdentifierString(PEGTransformer &tr
 	return StringUtil::Join(dotted_identifier, ".");
 }
 
-string PEGTransformerFactory::TransformIndexType(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformIndexType(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
@@ -74,10 +76,10 @@ PEGTransformerFactory::TransformWithList(PEGTransformer &transformer,
 
 case_insensitive_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformRelOptionList(PEGTransformer &transformer,
-                                              vector<pair<string, unique_ptr<ParsedExpression>>> rel_option) {
+                                              vector<pair<Identifier, unique_ptr<ParsedExpression>>> rel_option) {
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> result;
 	for (auto &option : rel_option) {
-		result.insert({option.first, std::move(option.second)});
+		result.insert({option.first.GetIdentifierName(), std::move(option.second)});
 	}
 	return result;
 }
@@ -98,8 +100,12 @@ bool PEGTransformerFactory::TransformWithoutOids(PEGTransformer &transformer) {
 	return false;
 }
 
-pair<string, unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, const string &rel_option_name,
+Identifier PEGTransformerFactory::TransformRelOptionName(PEGTransformer &transformer, const string &child) {
+	return Identifier(child);
+}
+
+pair<Identifier, unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
                                           unique_ptr<ParsedExpression> rel_option_argument_opt) {
 	if (!rel_option_argument_opt) {
 		return {rel_option_name, make_uniq<ConstantExpression>(Value())};

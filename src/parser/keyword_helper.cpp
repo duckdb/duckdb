@@ -1,6 +1,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,9 @@ string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool
 		return text;
 	}
 	return WriteQuotedAndEscaped(text, quote);
+}
+
+SQLIdentifier::SQLIdentifier(const Identifier &id) : raw_string(id.GetIdentifierName()) {
 }
 
 string SQLIdentifier::ToString(const string &identifier) {

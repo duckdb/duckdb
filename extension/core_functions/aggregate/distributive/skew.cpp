@@ -10,6 +10,9 @@ namespace duckdb {
 namespace {
 
 struct SkewState {
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double>;
+
 	idx_t n;
 	double sum;
 	double sum_sqr;
@@ -81,22 +84,11 @@ struct SkewnessOperation {
 	}
 };
 
-LogicalType GetSkewnessStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("n", LogicalType::UBIGINT);
-	children.emplace_back("sum", LogicalType::DOUBLE);
-	children.emplace_back("sum_sqr", LogicalType::DOUBLE);
-	children.emplace_back("sum_cub", LogicalType::DOUBLE);
-	return LogicalType::STRUCT(std::move(children));
-}
-
 } // namespace
 
 AggregateFunction SkewnessFun::GetFunction() {
-	auto result = AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(LogicalType::DOUBLE,
-	                                                                                              LogicalType::DOUBLE);
-	result.SetStructStateExport(GetSkewnessStateType);
-	return result;
+	return AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(LogicalType::DOUBLE,
+	                                                                                       LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

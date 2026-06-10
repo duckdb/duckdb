@@ -608,7 +608,7 @@ string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression
 	}
 	// Default: use standard expression ToString with column name substitution
 	auto expr_copy = expression.Copy();
-	auto name_expr = make_uniq<BoundReferenceExpression>(column_name, LogicalType::INVALID, 0ULL);
+	auto name_expr = make_uniq<BoundReferenceExpression>(Identifier(column_name), LogicalType::INVALID, 0ULL);
 	ReplaceExpressionRecursive(expr_copy, *name_expr, ExpressionType::BOUND_REF);
 	return expr_copy->ToString();
 }

@@ -68,7 +68,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 		throw BinderException("can only add an index to a base table");
 	}
 	auto &get = bound_table.plan->Cast<LogicalGet>();
-	get.names = column_list.GetColumnNames();
+	get.names = StringsToIdentifiers(column_list.GetColumnNames());
 
 	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
 	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(bound_table.plan),

@@ -107,7 +107,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 
 	//! Names and types going into the file(s)
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 	//! Where to write the file

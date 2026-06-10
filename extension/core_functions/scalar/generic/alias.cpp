@@ -5,10 +5,10 @@ namespace duckdb {
 
 namespace {
 struct AliasBindData : public FunctionData {
-	explicit AliasBindData(string alias_p) : alias(std::move(alias_p)) {
+	explicit AliasBindData(Identifier alias_p) : alias(std::move(alias_p)) {
 	}
 
-	string alias;
+	Identifier alias;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<AliasBindData>(alias);
