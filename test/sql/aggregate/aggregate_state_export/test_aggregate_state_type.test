@@ -57,7 +57,7 @@ AGGREGATE_STATE
 statement ok
 CREATE TABLE t2_count_int AS SELECT count(range::INT) EXPORT_STATE as state FROM range(10);
 
-# bit_xor is now opted-in to struct-based state
+# bit_xor is now opted-in to optional state
 query T
 SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE);
 ----
