@@ -68,12 +68,12 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInter
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
     PEGTransformer &transformer, unique_ptr<SelectStatement> intersect_chain,
-    vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> select_set_op_chain_tail) {
+    optional<vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>> select_set_op_chain_tail) {
 	auto select = std::move(intersect_chain);
-	if (select_set_op_chain_tail.empty()) {
+	if (!select_set_op_chain_tail) {
 		return select;
 	}
-	for (auto &tail : select_set_op_chain_tail) {
+	for (auto &tail : *select_set_op_chain_tail) {
 		auto setop_result = std::move(tail.first);
 		auto right_select = std::move(tail.second);
 		if (select->node->type == QueryNodeType::SET_OPERATION_NODE && select->node->modifiers.empty() &&
@@ -102,12 +102,12 @@ PEGTransformerFactory::TransformSelectSetOpChainTail(PEGTransformer &transformer
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformIntersectChain(
     PEGTransformer &transformer, unique_ptr<SelectStatement> select_atom,
-    vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>> intersect_chain_tail) {
+    optional<vector<pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>>> intersect_chain_tail) {
 	auto select = std::move(select_atom);
-	if (intersect_chain_tail.empty()) {
+	if (!intersect_chain_tail) {
 		return select;
 	}
-	for (auto &tail : intersect_chain_tail) {
+	for (auto &tail : *intersect_chain_tail) {
 		auto intersect_node = std::move(tail.first);
 		auto right_select = std::move(tail.second);
 		intersect_node->children.push_back(std::move(select->node));
@@ -372,13 +372,15 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGT
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClause(PEGTransformer &transformer,
-                                                                        const bool &include_or_exclude_nulls,
+                                                                        const optional<bool> &include_or_exclude_nulls,
                                                                         unique_ptr<TableRef> table_unpivot_clause_body,
-                                                                        const TableAlias &table_alias) {
+                                                                        const optional<TableAlias> &table_alias) {
 	auto &result = table_unpivot_clause_body->Cast<PivotRef>();
-	result.include_nulls = include_or_exclude_nulls;
-	result.alias = table_alias.name;
-	result.column_name_alias = table_alias.column_name_alias;
+	result.include_nulls = include_or_exclude_nulls.value_or(false);
+	if (table_alias) {
+		result.alias = table_alias->name;
+		result.column_name_alias = table_alias->column_name_alias;
+	}
 	return table_unpivot_clause_body;
 }
 
@@ -449,20 +451,24 @@ static bool PivotEntryIsTuple(const PivotColumnEntry &entry) {
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClauseBody(
     PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> target_list, vector<PivotColumn> pivot_value_list,
-    const vector<string> &pivot_group_by_list) {
+    const optional<vector<string>> &pivot_group_by_list) {
 	auto result = make_uniq<PivotRef>();
 	result->aggregates = std::move(target_list);
 	result->pivots = std::move(pivot_value_list);
-	result->groups = pivot_group_by_list;
+	if (pivot_group_by_list) {
+		result->groups = *pivot_group_by_list;
+	}
 	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransformer &transformer,
                                                                       unique_ptr<TableRef> table_pivot_clause_body,
-                                                                      const TableAlias &table_alias) {
+                                                                      const optional<TableAlias> &table_alias) {
 	auto &result = table_pivot_clause_body->Cast<PivotRef>();
-	result.alias = table_alias.name;
-	result.column_name_alias = table_alias.column_name_alias;
+	if (table_alias) {
+		result.alias = table_alias->name;
+		result.column_name_alias = table_alias->column_name_alias;
+	}
 	return table_pivot_clause_body;
 }
 
@@ -989,30 +995,33 @@ PEGTransformerFactory::TransformSelectParens(PEGTransformer &transformer,
 }
 
 vector<unique_ptr<ResultModifier>>
-PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, vector<OrderByNode> order_by_clause,
-                                                unique_ptr<ResultModifier> limit_offset) {
+PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer,
+                                                optional<vector<OrderByNode>> order_by_clause,
+                                                optional<unique_ptr<ResultModifier>> limit_offset) {
 	vector<unique_ptr<ResultModifier>> result;
-	if (!order_by_clause.empty()) {
+	if (order_by_clause) {
 		auto order_modifier = make_uniq<OrderModifier>();
-		order_modifier->orders = std::move(order_by_clause);
+		order_modifier->orders = std::move(*order_by_clause);
 		result.push_back(std::move(order_modifier));
 	}
 	if (limit_offset) {
-		result.push_back(std::move(limit_offset));
+		result.push_back(std::move(*limit_offset));
 	}
 	return result;
 }
 
-unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer,
-                                                                             LimitPercentResult limit_clause,
-                                                                             LimitPercentResult offset_clause) {
-	return VerifyLimitOffset(limit_clause, offset_clause);
+unique_ptr<ResultModifier>
+PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer, LimitPercentResult limit_clause,
+                                                  optional<LimitPercentResult> offset_clause) {
+	LimitPercentResult empty_offset;
+	return VerifyLimitOffset(limit_clause, offset_clause ? *offset_clause : empty_offset);
 }
 
-unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer,
-                                                                             LimitPercentResult offset_clause,
-                                                                             LimitPercentResult limit_clause) {
-	return VerifyLimitOffset(limit_clause, offset_clause);
+unique_ptr<ResultModifier>
+PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer, LimitPercentResult offset_clause,
+                                                  optional<LimitPercentResult> limit_clause) {
+	LimitPercentResult empty_limit;
+	return VerifyLimitOffset(limit_clause ? *limit_clause : empty_limit, offset_clause);
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformTableStatement(PEGTransformer &transformer,
@@ -1033,24 +1042,27 @@ PEGTransformerFactory::TransformSimpleSelectParens(PEGTransformer &transformer,
 
 unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectFromClause(PEGTransformer &transformer,
                                                                         unique_ptr<SelectNode> select_clause,
-                                                                        unique_ptr<TableRef> from_clause) {
+                                                                        optional<unique_ptr<TableRef>> from_clause) {
 	if (from_clause) {
-		select_clause->from_table = std::move(from_clause);
+		select_clause->from_table = std::move(*from_clause);
 	} else {
 		select_clause->from_table = make_uniq<EmptyTableRef>();
 	}
 	return select_clause;
 }
 
-unique_ptr<SelectNode> PEGTransformerFactory::TransformFromSelectClause(PEGTransformer &transformer,
-                                                                        unique_ptr<TableRef> from_clause,
-                                                                        unique_ptr<SelectNode> select_clause) {
+unique_ptr<SelectNode>
+PEGTransformerFactory::TransformFromSelectClause(PEGTransformer &transformer, unique_ptr<TableRef> from_clause,
+                                                 optional<unique_ptr<SelectNode>> select_clause) {
+	unique_ptr<SelectNode> result;
 	if (!select_clause) {
-		select_clause = make_uniq<SelectNode>();
-		select_clause->select_list.push_back(make_uniq<StarExpression>());
+		result = make_uniq<SelectNode>();
+		result->select_list.push_back(make_uniq<StarExpression>());
+	} else {
+		result = std::move(*select_clause);
 	}
-	select_clause->from_table = std::move(from_clause);
-	return select_clause;
+	result->from_table = std::move(from_clause);
+	return result;
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -1059,21 +1071,21 @@ PEGTransformerFactory::TransformUsingKey(PEGTransformer &transformer,
 	return target_list;
 }
 
-unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer,
-                                                                    DistinctClause distinct_clause,
-                                                                    vector<unique_ptr<ParsedExpression>> target_list) {
+unique_ptr<SelectNode>
+PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer, optional<DistinctClause> distinct_clause,
+                                             optional<vector<unique_ptr<ParsedExpression>>> target_list) {
 	auto result = make_uniq<SelectNode>();
-	if (distinct_clause.is_distinct) {
+	if (distinct_clause && distinct_clause->is_distinct) {
 		auto distinct_modifier = make_uniq<DistinctModifier>();
-		for (auto &distinct_on : distinct_clause.distinct_targets) {
+		for (auto &distinct_on : distinct_clause->distinct_targets) {
 			distinct_modifier->distinct_on_targets.push_back(distinct_on->Copy());
 		}
 		result->modifiers.push_back(std::move(distinct_modifier));
 	}
-	if (target_list.empty()) {
+	if (!target_list) {
 		throw ParserException("SELECT clause without selection list");
 	}
-	for (auto &expr_ptr : target_list) {
+	for (auto &expr_ptr : *target_list) {
 		result->select_list.push_back(std::move(expr_ptr));
 	}
 	return result;
@@ -1096,11 +1108,14 @@ DistinctClause PEGTransformerFactory::TransformDistinctAll(PEGTransformer &trans
 	return result;
 }
 
-DistinctClause PEGTransformerFactory::TransformDistinctOn(PEGTransformer &transformer,
-                                                          vector<unique_ptr<ParsedExpression>> distinct_on_targets) {
+DistinctClause
+PEGTransformerFactory::TransformDistinctOn(PEGTransformer &transformer,
+                                           optional<vector<unique_ptr<ParsedExpression>>> distinct_on_targets) {
 	DistinctClause result;
 	result.is_distinct = true;
-	result.distinct_targets = std::move(distinct_on_targets);
+	if (distinct_on_targets) {
+		result.distinct_targets = std::move(*distinct_on_targets);
+	}
 	return result;
 }
 
@@ -1110,30 +1125,38 @@ PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer,
 	return expression;
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
+unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer, const bool &has_result,
                                                                    unique_ptr<TableRef> subquery_reference,
-                                                                   const TableAlias &table_alias) {
-	subquery_reference->alias = table_alias.name;
-	subquery_reference->column_name_alias = table_alias.column_name_alias;
+                                                                   const optional<TableAlias> &table_alias) {
+	if (table_alias) {
+		subquery_reference->alias = table_alias->name;
+		subquery_reference->column_name_alias = table_alias->column_name_alias;
+	}
 	return subquery_reference;
 }
 
-unique_ptr<TableRef>
-PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer, const string &table_alias_colon,
-                                             unique_ptr<BaseTableRef> base_table_name, const TableAlias &table_alias,
-                                             unique_ptr<AtClause> at_clause, unique_ptr<SampleOptions> sample_clause) {
-	if (!table_alias_colon.empty()) {
-		base_table_name->alias = table_alias_colon;
+unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer,
+                                                                  const optional<string> &table_alias_colon,
+                                                                  unique_ptr<BaseTableRef> base_table_name,
+                                                                  const optional<TableAlias> &table_alias,
+                                                                  optional<unique_ptr<AtClause>> at_clause,
+                                                                  optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (table_alias_colon) {
+		base_table_name->alias = *table_alias_colon;
 	}
-	if (!table_alias.name.empty() && !table_alias_colon.empty()) {
+	if (table_alias && table_alias_colon) {
 		throw ParserException("Table reference %s cannot have two aliases", base_table_name->ToString());
 	}
-	if (!table_alias.name.empty()) {
-		base_table_name->alias = table_alias.name;
-		base_table_name->column_name_alias = table_alias.column_name_alias;
+	if (table_alias) {
+		base_table_name->alias = table_alias->name;
+		base_table_name->column_name_alias = table_alias->column_name_alias;
 	}
-	base_table_name->at_clause = std::move(at_clause);
-	base_table_name->sample = std::move(sample_clause);
+	if (at_clause) {
+		base_table_name->at_clause = std::move(*at_clause);
+	}
+	if (sample_clause) {
+		base_table_name->sample = std::move(*sample_clause);
+	}
 	return std::move(base_table_name);
 }
 
@@ -1143,22 +1166,24 @@ string PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transform
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer,
                                                                unique_ptr<SelectStatement> values_clause,
-                                                               const TableAlias &table_alias) {
+                                                               const optional<TableAlias> &table_alias) {
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(values_clause));
-	subquery_ref->alias = table_alias.name;
-	subquery_ref->column_name_alias = table_alias.column_name_alias;
+	if (table_alias) {
+		subquery_ref->alias = table_alias->name;
+		subquery_ref->column_name_alias = table_alias->column_name_alias;
+	}
 	return std::move(subquery_ref);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransformer &transformer,
-                                                                    const string &table_alias_colon,
+                                                                    const optional<string> &table_alias_colon,
                                                                     unique_ptr<TableRef> table_ref,
-                                                                    const TableAlias &table_alias,
-                                                                    unique_ptr<SampleOptions> sample_clause) {
-	if (!table_alias_colon.empty() && !table_alias.name.empty()) {
+                                                                    const optional<TableAlias> &table_alias,
+                                                                    optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (table_alias_colon && table_alias) {
 		throw ParserException("Table reference %s cannot have two aliases", table_ref->ToString());
 	}
-	if (table_alias_colon.empty() && table_alias.name.empty()) {
+	if (!table_alias_colon && !table_alias && !sample_clause) {
 		return table_ref;
 	}
 	auto select_statement = make_uniq<SelectStatement>();
@@ -1167,14 +1192,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 	select_node->from_table = std::move(table_ref);
 	select_statement->node = std::move(select_node);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
-	if (!table_alias_colon.empty()) {
-		subquery->alias = table_alias_colon;
+	if (table_alias_colon) {
+		subquery->alias = *table_alias_colon;
 	}
-	if (!table_alias.name.empty()) {
-		subquery->alias = table_alias.name;
-		subquery->column_name_alias = table_alias.column_name_alias;
+	if (table_alias) {
+		subquery->alias = table_alias->name;
+		subquery->column_name_alias = table_alias->column_name_alias;
 	}
-	subquery->sample = std::move(sample_clause);
+	if (sample_clause) {
+		subquery->sample = std::move(*sample_clause);
+	}
 	return std::move(subquery);
 }
 
@@ -1245,12 +1272,12 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTa
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
-                                                                     const string &catalog_qualification,
-                                                                     const string &schema_qualification,
+                                                                     const optional<string> &catalog_qualification,
+                                                                     const optional<string> &schema_qualification,
                                                                      const string &table_function_name) {
 	QualifiedName result;
-	result.catalog = catalog_qualification.empty() ? INVALID_CATALOG : catalog_qualification;
-	result.schema = schema_qualification.empty() ? INVALID_SCHEMA : schema_qualification;
+	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
 	if (!result.catalog.empty() && result.schema.empty()) {
 		result.schema = result.catalog;
 		result.catalog = INVALID_CATALOG;
@@ -1261,24 +1288,31 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
 
 vector<FunctionArgument>
 PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
-                                                       vector<FunctionArgument> function_argument) {
-	return function_argument;
+                                                       optional<vector<FunctionArgument>> function_argument) {
+	if (function_argument) {
+		return std::move(*function_argument);
+	}
+	return {};
 }
 
 TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transformer,
                                                         const QualifiedName &identifier_or_string_literal,
-                                                        const vector<string> &column_aliases) {
+                                                        const optional<vector<string>> &column_aliases) {
 	TableAlias result;
 	result.name = identifier_or_string_literal.name;
-	result.column_name_alias = column_aliases;
+	if (column_aliases) {
+		result.column_name_alias = *column_aliases;
+	}
 	return result;
 }
 
 TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer, const string &identifier,
-                                                               const vector<string> &column_aliases) {
+                                                               const optional<vector<string>> &column_aliases) {
 	TableAlias result;
 	result.name = identifier;
-	result.column_name_alias = column_aliases;
+	if (column_aliases) {
+		result.column_name_alias = *column_aliases;
+	}
 	return result;
 }
 
@@ -1327,10 +1361,11 @@ JoinPrefix PEGTransformerFactory::TransformCrossJoinPrefix(PEGTransformer &trans
 	return result;
 }
 
-JoinPrefix PEGTransformerFactory::TransformNaturalJoinPrefix(PEGTransformer &transformer, const JoinType &join_type) {
+JoinPrefix PEGTransformerFactory::TransformNaturalJoinPrefix(PEGTransformer &transformer,
+                                                             const optional<JoinType> &join_type) {
 	JoinPrefix result;
 	result.ref_type = JoinRefType::NATURAL;
-	result.join_type = join_type;
+	result.join_type = join_type.value_or(JoinType::INNER);
 	return result;
 }
 
@@ -1392,10 +1427,10 @@ SampleMethod PEGTransformerFactory::TransformSampleFunction(PEGTransformer &tran
 	return EnumUtil::FromString<SampleMethod>(col_id);
 }
 
-pair<SampleMethod, optional_idx> PEGTransformerFactory::TransformSampleProperties(PEGTransformer &transformer,
-                                                                                  const string &col_id,
-                                                                                  const optional_idx &sample_seed) {
-	return make_pair(EnumUtil::FromString<SampleMethod>(col_id), sample_seed);
+pair<SampleMethod, optional_idx>
+PEGTransformerFactory::TransformSampleProperties(PEGTransformer &transformer, const string &col_id,
+                                                 const optional<optional_idx> &sample_seed) {
+	return make_pair(EnumUtil::FromString<SampleMethod>(col_id), sample_seed ? *sample_seed : optional_idx());
 }
 
 optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &transformer,
@@ -1411,7 +1446,7 @@ optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transfor
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransformer &transformer,
                                                                       unique_ptr<ParsedExpression> sample_value,
-                                                                      const bool &sample_unit) {
+                                                                      const optional<bool> &sample_unit) {
 	auto result = make_uniq<SampleOptions>();
 	if (sample_value->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException(sample_value->GetQueryLocation(),
@@ -1419,7 +1454,7 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 	}
 	auto &const_expr = sample_value->Cast<ConstantExpression>();
 	auto &sample_value_const = const_expr.GetValue();
-	result->is_percentage = sample_unit;
+	result->is_percentage = sample_unit.value_or(false);
 	if (result->is_percentage) {
 		auto percentage = sample_value_const.GetValue<double>();
 		if (percentage < 0 || percentage > 100) {
@@ -1453,9 +1488,10 @@ PEGTransformerFactory::TransformSubqueryReference(PEGTransformer &transformer,
 
 OrderByNode PEGTransformerFactory::TransformOrderByExpression(PEGTransformer &transformer,
                                                               unique_ptr<ParsedExpression> expression,
-                                                              const OrderType &desc_or_asc,
-                                                              const OrderByNullType &nulls_first_or_last) {
-	return OrderByNode(desc_or_asc, nulls_first_or_last, std::move(expression));
+                                                              const optional<OrderType> &desc_or_asc,
+                                                              const optional<OrderByNullType> &nulls_first_or_last) {
+	return OrderByNode(desc_or_asc.value_or(OrderType::ORDER_DEFAULT),
+	                   nulls_first_or_last.value_or(OrderByNullType::ORDER_DEFAULT), std::move(expression));
 }
 
 vector<OrderByNode> PEGTransformerFactory::TransformOrderByClause(PEGTransformer &transformer,
@@ -1469,12 +1505,13 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressionList(PEGTra
 }
 
 vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &transformer,
-                                                               const OrderType &desc_or_asc,
-                                                               const OrderByNullType &nulls_first_or_last) {
+                                                               const optional<OrderType> &desc_or_asc,
+                                                               const optional<OrderByNullType> &nulls_first_or_last) {
 	vector<OrderByNode> result;
 	auto star_expr = make_uniq<StarExpression>();
 	star_expr->IsColumnsMutable() = true;
-	result.push_back(OrderByNode(desc_or_asc, nulls_first_or_last, std::move(star_expr)));
+	result.push_back(OrderByNode(desc_or_asc.value_or(OrderType::ORDER_DEFAULT),
+	                             nulls_first_or_last.value_or(OrderByNullType::ORDER_DEFAULT), std::move(star_expr)));
 	return result;
 }
 
@@ -1489,7 +1526,8 @@ LimitPercentResult PEGTransformerFactory::TransformOffsetClause(PEGTransformer &
 }
 
 LimitPercentResult PEGTransformerFactory::TransformOffsetValue(PEGTransformer &transformer,
-                                                               unique_ptr<ParsedExpression> expression) {
+                                                               unique_ptr<ParsedExpression> expression,
+                                                               const bool &has_result) {
 	LimitPercentResult result;
 	result.expression = std::move(expression);
 	return result;
@@ -1524,9 +1562,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAsCollabe
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionOptIdentifier(
-    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const string &identifier) {
-	if (!identifier.empty()) {
-		expression->SetAlias(identifier);
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const optional<string> &identifier) {
+	if (identifier) {
+		expression->SetAlias(*identifier);
 	}
 	return expression;
 }

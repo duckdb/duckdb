@@ -8,7 +8,10 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from generate_transformer import load_grammar_types, load_matcher_rule_overrides
+from generate_transformer import load_grammar_types, load_grammar_types_yaml, load_matcher_rule_overrides
+
+
+OPTIONAL_SEMANTIC_VALUES = False
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +507,19 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
         return _wrap_extraction(ExtractionKind.PARENS, child)
     if isinstance(node, OptionalNode):
         child = _plan_extraction(node.child, rule_types, excluded_rules, identifier_override_rules)
-        return _wrap_extraction(ExtractionKind.OPTIONAL, child)
+        if not OPTIONAL_SEMANTIC_VALUES:
+            return _wrap_extraction(ExtractionKind.OPTIONAL, child)
+        if child is None:
+            return None
+        if child.kind == ExtractionKind.SKIP:
+            return ExtractionPlan(kind=ExtractionKind.OPTIONAL, cpp_type="bool", var_name="has_result")
+        return ExtractionPlan(
+            kind=ExtractionKind.OPTIONAL,
+            cpp_type=f"optional<{child.cpp_type}>",
+            var_name=child.var_name,
+            by_value=child.by_value,
+            child=child,
+        )
     if isinstance(node, (ListMacroNode, RepeatNode)):
         child_node = node.inner if isinstance(node, ListMacroNode) else node.child
         child = _plan_extraction(child_node, rule_types, excluded_rules, identifier_override_rules)
@@ -584,6 +599,10 @@ def _format_default_initializer(cpp_type, initializer):
     return f"= {cpp_type}::{initializer}"
 
 
+def _optional_child_temp_name(target_name, depth):
+    return _temp_name(target_name, "value", depth)
+
+
 def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=True, depth=0):
     """Emit recursive extraction code for a plan rooted at source_expr."""
     target_name = target_name or plan.var_name
@@ -612,19 +631,24 @@ def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=T
         opt_name = _temp_name(target_name, "opt", depth)
         lines = []
         if declare:
-            initializer = _format_default_initializer(plan.cpp_type, plan.default_initializer)
-            lines.append(f"{indent}{plan.cpp_type} {target_name} {initializer};")
+            lines.append(f"{indent}{plan.cpp_type} {target_name} {{}};")
         lines.extend(
             [
                 f"{indent}auto &{opt_name} = {source_expr}.Cast<OptionalParseResult>();",
-                f"{indent}if ({opt_name}.HasResult()) {{",
             ]
         )
+        if plan.child is None:
+            lines.append(f"{indent}{target_name} = {opt_name}.HasResult();")
+            return lines
+        value_name = _optional_child_temp_name(target_name, depth)
+        lines.append(f"{indent}if ({opt_name}.HasResult()) {{")
         lines.extend(
             _emit_extraction(
-                plan.child, f"{opt_name}.GetResult()", target_name, indent + "\t", declare=False, depth=depth + 1
+                plan.child, f"{opt_name}.GetResult()", value_name, indent + "\t", declare=True, depth=depth + 1
             )
         )
+        value_expr = f"std::move({value_name})" if plan.child.by_value else value_name
+        lines.append(f"{indent}\t{target_name} = {value_expr};")
         lines.append(f"{indent}}}")
         return lines
     if plan.kind in (ExtractionKind.LIST, ExtractionKind.REPEAT):
@@ -1270,9 +1294,13 @@ def print_manual_steps(all_results):
             step += 1
 
 
-def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
+def process_gram_file(
+    gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules, optional_value_grammars
+):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
+    global OPTIONAL_SEMANTIC_VALUES
     gram_stem = gram_filename.removesuffix('.gram')
+    OPTIONAL_SEMANTIC_VALUES = gram_stem in optional_value_grammars
     gram_path = statements_dir / gram_filename
     try:
         rules = parse_peg_grammar(gram_path.read_text())
@@ -1335,12 +1363,14 @@ def main():
         'vacuum.gram',
     ]
     grammar_types_file = type_dir / 'grammar_types.yml'
+    grammar_types_data = load_grammar_types_yaml(grammar_types_file)
+    optional_value_grammars = set(grammar_types_data.get('optional_value_grammars', []))
     matcher_overrides = load_matcher_rule_overrides(grammar_types_file)
     matcher_rule_names = set(matcher_overrides.keys())
     identifier_override_rules = load_identifier_override_rules(grammar_types_file)
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
     results = [
-        process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
+        process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules, optional_value_grammars)
         for f in gram_files_to_gen
     ]
 
