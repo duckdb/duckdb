@@ -10,7 +10,7 @@ COPY (SELECT SUM(42) EXPORT_STATE AS state) TO '{TEST_DIR}/exported_state.parque
 query I
 SELECT to_aggregate_state(state, 'sum', ['INTEGER']) FROM '{TEST_DIR}/exported_state.parquet'
 ----
-{'isset': true, 'value': 42}
+42
 
 query I
 SELECT finalize(to_aggregate_state(state, 'sum', ['INTEGER'])) FROM '{TEST_DIR}/exported_state.parquet'

@@ -567,18 +567,29 @@ public:
 	template <class STATE>
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
-			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return AggregateStateLayout(STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES),
-				                            AlignValue<idx_t>(sizeof(STATE)));
-			});
+			if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
+				result.SetStructStateExport([](const BoundAggregateFunction &) {
+					using T = typename STATE::STATE_TYPE::value_type;
+					if constexpr (IsStructStateType<T>::value) {
+						return AggregateStateLayout(T::GetLogicalType(STATE::STATE_NAMES),
+						                            AlignValue<idx_t>(sizeof(STATE)), true);
+					} else {
+						return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)),
+						                            true);
+					}
+				});
+			} else {
+				result.SetStructStateExport([](const BoundAggregateFunction &) {
+					AggregateStateLayout layout;
+					layout.type = STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES);
+					layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+					STATE::STATE_TYPE::PopulateField(layout.field);
+					return layout;
+				});
+			}
 		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
 			result.SetStructStateExport([](const BoundAggregateFunction &) {
 				return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
-			});
-		} else if constexpr (HasOptionalPrimitiveType<STATE>::value) {
-			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return AggregateStateLayout(PrimitiveToLogicalType<typename STATE::value_type>(),
-				                            AlignValue<idx_t>(sizeof(STATE)), true);
 			});
 		}
 	}

@@ -1,6 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/optional.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -137,15 +137,17 @@ struct StoreOp {
 	}
 };
 
-// Serialize optional<T> state buffers into a result vector, setting NULL for disengaged optionals.
+// Serialize an OptionalStateType<T> state buffer (flat: T value at +0, bool is_set at +sizeof(T))
+// into a result vector, setting NULL when is_set=false.
 struct StorePrimitiveOptionalOp {
 	template <class T>
 	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses, idx_t base_offset) {
 		auto dst = FlatVector::Writer<T>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			const auto opt = Load<optional<T>>(addresses[i] + base_offset);
-			if (opt.has_value()) {
-				dst.WriteValue(*opt);
+			const auto value = Load<T>(addresses[i] + base_offset);
+			const bool is_set = Load<bool>(addresses[i] + base_offset + sizeof(T));
+			if (is_set) {
+				dst.WriteValue(value);
 			} else {
 				dst.WriteNull();
 			}
@@ -153,18 +155,21 @@ struct StorePrimitiveOptionalOp {
 	}
 };
 
-// Deserialize a nullable input vector into optional<T> state buffer slots.
+// Deserialize a nullable input vector into OptionalStateType<T> state buffer slots
+// (flat: T value at +0, bool is_set at +sizeof(T)).
 struct LoadPrimitiveOptionalOp {
 	template <class T>
 	static void Operation(const Vector &input, idx_t count, data_ptr_t base_ptr, idx_t aligned_state_size) {
 		auto values = input.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
 			const auto entry = values[i];
-			auto &opt = *reinterpret_cast<optional<T> *>(base_ptr + i * aligned_state_size);
+			auto *value_ptr = reinterpret_cast<T *>(base_ptr + i * aligned_state_size);
+			auto *is_set_ptr = reinterpret_cast<bool *>(base_ptr + i * aligned_state_size + sizeof(T));
 			if (entry.IsValid()) {
-				opt = entry.GetValue();
+				*value_ptr = entry.GetValue();
+				*is_set_ptr = true;
 			} else {
-				opt = nullopt;
+				*is_set_ptr = false;
 			}
 		}
 	}
@@ -172,7 +177,22 @@ struct LoadPrimitiveOptionalOp {
 
 void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                       data_ptr_t dest_buffer) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
+	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+		// Optional struct: deserialize children, then derive is_set from the struct's row validity.
+		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		const auto &struct_entries = StructVector::GetEntries(input_vec);
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
+			                                  child.is_optional);
+			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset);
+		}
+		auto &validity = FlatVector::Validity(input_vec);
+		for (idx_t i = 0; i < count; i++) {
+			*reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + struct_size) = validity.RowIsValid(i);
+		}
+	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(layout.type);
 		const auto &struct_entries = StructVector::GetEntries(input_vec);
 		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
@@ -191,7 +211,22 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 
 void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
                     idx_t base_offset = 0) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
+	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+		// Optional struct: mark null rows in the struct's validity, then serialize children for all rows.
+		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		auto &struct_entries = StructVector::GetEntries(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!Load<bool>(addresses[i] + base_offset + struct_size)) {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, 0, child.is_optional);
+			SerializeState(child_layout, struct_entries[field_idx], count, addresses, base_offset + child.field_offset);
+		}
+	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(layout.type);
 		auto &struct_entries = StructVector::GetEntries(result);
 		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {

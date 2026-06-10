@@ -1,12 +1,10 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 
 namespace duckdb {
 
@@ -14,12 +12,10 @@ namespace {
 
 template <class T>
 struct BitState {
-	static constexpr const char *STATE_NAMES[] = {"is_set", "value"};
-	using STATE_TYPE = StructStateType<bool, T>;
-
-	using TYPE = T;
-	bool is_set;
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
 	T value;
+	bool is_set;
 };
 
 template <class OP>
@@ -67,11 +63,6 @@ struct BitwiseOperation {
 		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, INPUT_TYPE input) {
-		state.value = typename STATE::TYPE(input);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {
@@ -80,11 +71,16 @@ struct BitwiseOperation {
 		}
 		if (!target.is_set) {
 			// target is NULL, use source value directly.
-			OP::template Assign<typename STATE::TYPE>(target, source.value);
+			OP::template Assign<typename STATE::value_type>(target, source.value);
 			target.is_set = true;
 		} else {
-			OP::template Execute<typename STATE::TYPE>(target, source.value);
+			OP::template Execute<typename STATE::value_type>(target, source.value);
 		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		state.value = typename STATE::value_type(input);
 	}
 
 	template <class T, class STATE>
@@ -125,7 +121,8 @@ template <class OP>
 struct SimpleBitwiseOperation : public NumericBitwiseOperation<SimpleBitwiseOperation<OP>> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value = OP::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
+		state.value =
+		    OP::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
 	}
 };
 
@@ -137,7 +134,8 @@ struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value = BitXor::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
+		state.value =
+		    BitXor::template Operation<typename STATE::value_type>(state.value, typename STATE::value_type(input));
 	}
 
 	template <class INPUT_TYPE, class STATE>
@@ -145,7 +143,7 @@ struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 		if ((count & 1) != 0) {
 			NumericBitwiseOperation<BitXorOperation>::template UpdateClusteredLocal<INPUT_TYPE>(local, input);
 		} else if (count != 0 && !local.is_set) {
-			local.value = typename STATE::TYPE(0);
+			local.value = typename STATE::value_type(0);
 			local.is_set = true;
 		}
 	}
@@ -158,6 +156,8 @@ struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 		}
 	}
 };
+
+using BitStringState = BitState<string_t>;
 
 struct BitStringBitwiseOperation : public BitwiseOperation {
 	template <class STATE>
@@ -227,9 +227,8 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
-
 	bit_and.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
+	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringAndOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
 	return bit_and;
 }
@@ -240,7 +239,7 @@ AggregateFunctionSet BitOrFun::GetFunctions() {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
 	bit_or.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
+	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringOrOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
 	return bit_or;
 }
@@ -251,7 +250,7 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	bit_xor.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
+	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringXorOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
 	return bit_xor;
 }
