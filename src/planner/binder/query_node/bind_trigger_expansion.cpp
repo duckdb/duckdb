@@ -319,17 +319,11 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 		return chain;
 	}
 
-	// Re-project the chain output under a stable index so the identity base-table binding below
-	// (logical column i → child position i) lines up with it.
-	auto base_index = GenerateTableIndex();
+	// SELECT * over the base CTE yields a projection with contiguous bindings (index, 0..n-1), so we
+	// bind the RETURNING list against that index directly as an identity base-table binding.
 	auto child_bindings = chain.plan->GetColumnBindings();
-	D_ASSERT(child_bindings.size() == chain.types.size());
-	vector<unique_ptr<Expression>> passthrough;
-	for (idx_t i = 0; i < child_bindings.size(); i++) {
-		passthrough.push_back(make_uniq<BoundColumnRefExpression>(chain.names[i], chain.types[i], child_bindings[i]));
-	}
-	auto base_proj = make_uniq<LogicalProjection>(base_index, std::move(passthrough));
-	base_proj->AddChild(std::move(chain.plan));
+	D_ASSERT(!child_bindings.empty() && child_bindings.size() == chain.types.size());
+	auto base_index = child_bindings[0].table_index;
 
 	// Bind RETURNING with ReturningBinder over a base-table binding of the real table — same rules as
 	// the no-trigger path (rejects aggregates/subqueries/windows, resolves qualified columns, virtual
@@ -389,7 +383,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	}
 
 	auto returning_projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(proj_exprs));
-	returning_projection->AddChild(std::move(base_proj));
+	returning_projection->AddChild(std::move(chain.plan));
 	result.plan = std::move(returning_projection);
 
 	auto &properties = GetStatementProperties();
