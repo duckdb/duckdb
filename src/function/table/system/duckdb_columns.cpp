@@ -238,7 +238,7 @@ public:
 
 private:
 	ViewCatalogEntry &entry;
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	vector<LogicalType> types;
 	bool bound_view = false;
 };

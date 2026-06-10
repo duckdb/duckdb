@@ -8,7 +8,7 @@
       {
         "id": 100,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 101,
@@ -52,7 +52,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*>"
+        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*, Identifier, identifier_map_t<idx_t>>"
       }
     ],
     "pointer_type": "none"
@@ -181,7 +181,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
           "id": 101,
@@ -339,7 +339,7 @@
       {
         "id": 101,
         "name": "unpivot_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -350,7 +350,7 @@
       {
         "id": 103,
         "name": "pivot_enum",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -372,7 +372,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -415,7 +415,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,
@@ -859,7 +859,7 @@
       },
       {"id": 135,
         "name": "sql_types_per_column",
-        "type": "case_insensitive_map_t<idx_t>",
+        "type": "identifier_map_t<idx_t>",
         "property": "options.sql_types_per_column"
       },
       {"id": 136,
@@ -1033,22 +1033,22 @@
       {
         "id": 100,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 102,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
         "name": "column",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
     "pointer_type": "none"
@@ -1077,17 +1077,17 @@
       {
         "id": 1,
         "name": "table_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 2,
         "name": "schema_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 3,
         "name": "database_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 4,
@@ -1097,7 +1097,7 @@
       {
         "id": 5,
         "name": "not_null_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
     "pointer_type": "none"
@@ -1154,7 +1154,7 @@
       {
         "id": 100,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 101,

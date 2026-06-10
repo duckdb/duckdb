@@ -60,7 +60,8 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	aggr.GetOrderBysMutable().reset();
 
 	ErrorData error;
-	auto sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(sort_children), error);
+	auto sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
 	if (!sort_key) {
 		error.Throw();
 	}
@@ -70,8 +71,8 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 
 	//  Look up the arg_xxx_name function in the catalog
 	QueryErrorContext error_context;
-	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, arg_xxx_name,
-	                                                              error_context);
+	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(arg_xxx_name), error_context);
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	// bind the aggregate
@@ -95,6 +96,10 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 
 	// only apply to LogicalAggregate nodes
 	if (op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return nullptr;
+	}
+	// don't rewrite state-export aggregates - the rewrite would lose the STATE_EXPORT mode
+	if (aggr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
 		return nullptr;
 	}
 

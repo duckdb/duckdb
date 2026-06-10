@@ -164,12 +164,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::UNBOUND:
 		return PhysicalType::UNKNOWN;
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
-		// Legacy aggregate state - opaque BLOB,
-		return PhysicalType::VARCHAR;
-	}
-	case LogicalTypeId::AGGREGATE_STATE:
-		return PhysicalType::STRUCT;
 	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	default:
@@ -509,12 +503,6 @@ string LogicalType::ToString() const {
 			return expr->ToString();
 		}
 	}
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
-		return LegacyAggregateStateType::GetTypeName(*this);
-	}
-	case LogicalTypeId::AGGREGATE_STATE: {
-		return AggregateStateType::GetTypeName(*this);
-	}
 	case LogicalTypeId::SQLNULL: {
 		return "\"NULL\"";
 	}
@@ -539,7 +527,7 @@ string LogicalType::ToString() const {
 // LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
-	auto type = DefaultTypeGenerator::GetDefaultType(str);
+	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));
 	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -927,50 +915,79 @@ public:
 	}
 };
 
-static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                const LogicalType &right, LogicalType &result) {
-	D_ASSERT(right.id() != left.id());
-	if (right.id() == LogicalTypeId::VARIANT) {
-		result = right;
-		return true;
-	}
-	if (left.id() == LogicalTypeId::VARIANT) {
-		result = left;
-		return true;
-	}
-
-	// left and right are not equal
+static bool CombineNullOrUnknown(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                                 LogicalType &result) {
 	// NULL/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};
-	for (auto &other_type : other_types) {
-		if (left.id() == other_type) {
-			result = LogicalType::NormalizeType(right);
-			return true;
-		} else if (right.id() == other_type) {
-			result = LogicalType::NormalizeType(left);
-			return true;
-		}
+	if (left.id() == LogicalTypeId::SQLNULL || right.id() == LogicalTypeId::SQLNULL) {
+		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::SQLNULL ? right : left);
+	} else {
+		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::UNKNOWN ? right : left);
 	}
+	return true;
+}
 
+static bool CombineEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left, const LogicalType &right,
+                        LogicalType &result) {
 	// for enums, match the varchar rules
 	if (left.id() == LogicalTypeId::ENUM) {
 		return logical_type_resolver.Operation(LogicalType::VARCHAR, right, result);
-	} else if (right.id() == LogicalTypeId::ENUM) {
-		return logical_type_resolver.Operation(left, LogicalType::VARCHAR, result);
 	}
+	return logical_type_resolver.Operation(left, LogicalType::VARCHAR, result);
+}
 
-	// for everything but enums - string literals also take the other type
-	if (left.id() == LogicalTypeId::STRING_LITERAL) {
-		result = LogicalType::NormalizeType(right);
-		return true;
-	} else if (right.id() == LogicalTypeId::STRING_LITERAL) {
-		result = LogicalType::NormalizeType(left);
-		return true;
-	}
+static bool CombineVariant(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                           LogicalType &result) {
+	result = right.id() == LogicalTypeId::VARIANT ? right : left;
+	return true;
+}
 
-	// for other types - use implicit cast rules to check if we can combine the types.
-	// With a context: go through CastFunctionSet so that any registered casts are honored.
-	// Without a context: consult the built-in CastRules table directly.
+// for everything but enums - string literals also take the other type
+static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
+                                 LogicalType &result) {
+	result = LogicalType::NormalizeType(left.id() == LogicalTypeId::STRING_LITERAL ? right : left);
+	return true;
+}
+
+using CombineTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
+                                          const LogicalType &right, LogicalType &result);
+struct CombineUnequalTypesRule {
+	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive
+	CombineTypesRuleFunction function;
+};
+
+static bool MatchesVariant(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::VARIANT || right.id() == LogicalTypeId::VARIANT;
+}
+
+static bool MatchesNullOrUnknown(const LogicalType &left, const LogicalType &right) {
+	auto null_or_unknown = [](const LogicalType &type) {
+		return type.id() == LogicalTypeId::SQLNULL || type.id() == LogicalTypeId::UNKNOWN;
+	};
+	return null_or_unknown(left) || null_or_unknown(right);
+}
+
+static bool MatchesEnum(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::ENUM || right.id() == LogicalTypeId::ENUM;
+}
+
+static bool MatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
+	return left.id() == LogicalTypeId::STRING_LITERAL || right.id() == LogicalTypeId::STRING_LITERAL;
+}
+
+// Rules are matched in order, so the first matching rule wins (VARIANT and NULL/UNKNOWN are matched
+// before ENUM, ENUM before STRING_LITERAL). Each `matches` predicate is order-insensitive in (left, right).
+static const CombineUnequalTypesRule COMBINE_UNEQUAL_TYPES_RULES[] = {
+    {MatchesVariant, CombineVariant},
+    {MatchesNullOrUnknown, CombineNullOrUnknown},
+    {MatchesEnum, CombineEnum},
+    {MatchesStringLiteral, CombineStringLiteral},
+};
+
+// Generic combine engine: try the implicit cast rules in both directions and keep the cheaper one. With a
+// context we go through CastFunctionSet so that any registered casts are honored; without a context we
+// consult the built-in CastRules table directly. Returns false when neither direction can be cast.
+static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                      const LogicalType &right, LogicalType &result) {
 	auto left_to_right_cost = logical_type_resolver.context
 	                              ? CastFunctionSet::ImplicitCastCost(*logical_type_resolver.context, left, right)
 	                              : CastRules::ImplicitCast(left, right);
@@ -1005,6 +1022,22 @@ static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, cons
 		} else {
 			result = left;
 		}
+		return true;
+	}
+	return false;
+}
+
+static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	D_ASSERT(right.id() != left.id());
+	for (auto &combine_rule : COMBINE_UNEQUAL_TYPES_RULES) {
+		if (combine_rule.matches(left, right)) {
+			return combine_rule.function(logical_type_resolver, left, right, result);
+		}
+	}
+
+	// for other types - try to combine through the generic implicit cast rules
+	if (TryCombineViaImplicitCast(logical_type_resolver, left, right, result)) {
 		return true;
 	}
 	// for integer literals - rerun the operation with the underlying type
@@ -1060,7 +1093,7 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 
 	// Create a super-set of the STRUCT fields.
 	// First, create a name->index map of the right children.
-	InsertionOrderPreservingMap<idx_t> right_children_map;
+	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> right_children_map;
 	for (idx_t i = 0; i < right_children.size(); i++) {
 		auto &name = right_children[i].first;
 		right_children_map[name] = i;
@@ -1096,96 +1129,124 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 	return true;
 }
 
+struct CombineEqualTypesRule {
+	LogicalTypeId type;
+	CombineTypesRuleFunction function;
+};
+
+static bool CombineEqualStringLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                      const LogicalType &right, LogicalType &result) {
+	result = LogicalType::VARCHAR;
+	return true;
+}
+static bool CombineEqualIntegerLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                       const LogicalType &right, LogicalType &result) {
+	// for two integer literals we unify the underlying types
+	return logical_type_resolver.Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
+}
+static bool CombineEqualEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                             const LogicalType &right, LogicalType &result) {
+	// If both types are different ENUMs we do a string comparison.
+	result = left == right ? left : LogicalType::VARCHAR;
+	return true;
+}
+static bool CombineEqualVarchar(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	// varchar: use type that has collation (if any)
+	if (StringType::GetCollation(right).empty()) {
+		result = left;
+	} else {
+		result = right;
+	}
+	return true;
+}
+static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                                const LogicalType &right, LogicalType &result) {
+	// unify the width/scale so that the resulting decimal always fits
+	// "width - scale" gives us the number of digits on the left side of the decimal point
+	// "scale" gives us the number of digits allowed on the right of the decimal point
+	// using the max of these of the two types gives us the new decimal size
+	auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+	auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+	auto extra_width =
+	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
+	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+	auto width = NumericCast<uint8_t>(extra_width + scale);
+	if (width > DecimalType::MaxWidth()) {
+		// if the resulting decimal does not fit, we truncate the scale
+		width = DecimalType::MaxWidth();
+		scale = NumericCast<uint8_t>(width - extra_width);
+	}
+	result = LogicalType::DECIMAL(width, scale);
+	return true;
+}
+static bool CombineEqualList(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                             const LogicalType &right, LogicalType &result) {
+	// list: perform max recursively on child type
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		return false;
+	}
+	result = LogicalType::LIST(new_child);
+	return true;
+}
+static bool CombineEqualArray(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                              const LogicalType &right, LogicalType &result) {
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
+		return false;
+	}
+	auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
+	result = LogicalType::ARRAY(new_child, new_size);
+	return true;
+}
+static bool CombineEqualMap(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                            const LogicalType &right, LogicalType &result) {
+	// map: perform max recursively on child type
+	LogicalType new_child;
+	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		return false;
+	}
+	result = LogicalType::MAP(new_child);
+	return true;
+}
+static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
+                              const LogicalType &right, LogicalType &result) {
+	auto left_member_count = UnionType::GetMemberCount(left);
+	auto right_member_count = UnionType::GetMemberCount(right);
+	if (left_member_count != right_member_count) {
+		// return the "larger" type, with the most members
+		result = left_member_count > right_member_count ? left : right;
+		return true;
+	}
+	// otherwise, keep left, don't try to meld the two together.
+	result = left;
+	return true;
+}
+
+static const CombineEqualTypesRule COMBINE_EQUAL_TYPES_RULES[] = {
+    {LogicalTypeId::STRING_LITERAL, CombineEqualStringLiteral},
+    {LogicalTypeId::INTEGER_LITERAL, CombineEqualIntegerLiteral},
+    {LogicalTypeId::ENUM, CombineEqualEnum},
+    {LogicalTypeId::VARCHAR, CombineEqualVarchar},
+    {LogicalTypeId::DECIMAL, CombineEqualDecimal},
+    {LogicalTypeId::LIST, CombineEqualList},
+    {LogicalTypeId::ARRAY, CombineEqualArray},
+    {LogicalTypeId::MAP, CombineEqualMap},
+    {LogicalTypeId::STRUCT, CombineStructTypes},
+    {LogicalTypeId::UNION, CombineEqualUnion},
+};
+
 static bool CombineEqualTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                               const LogicalType &right, LogicalType &result) {
-	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
-	switch (type_id) {
-	case LogicalTypeId::STRING_LITERAL:
-		// two string literals convert to varchar
-		result = LogicalType::VARCHAR;
-		return true;
-	case LogicalTypeId::INTEGER_LITERAL:
-		// for two integer literals we unify the underlying types
-		return logical_type_resolver.Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
-	case LogicalTypeId::ENUM:
-		// If both types are different ENUMs we do a string comparison.
-		result = left == right ? left : LogicalType::VARCHAR;
-		return true;
-	case LogicalTypeId::VARCHAR:
-		// varchar: use type that has collation (if any)
-		if (StringType::GetCollation(right).empty()) {
-			result = left;
-		} else {
-			result = right;
+	for (auto &combine_rule : COMBINE_EQUAL_TYPES_RULES) {
+		if (type_id == combine_rule.type) {
+			return combine_rule.function(logical_type_resolver, left, right, result);
 		}
-		return true;
-	case LogicalTypeId::DECIMAL: {
-		// unify the width/scale so that the resulting decimal always fits
-		// "width - scale" gives us the number of digits on the left side of the decimal point
-		// "scale" gives us the number of digits allowed on the right of the decimal point
-		// using the max of these of the two types gives us the new decimal size
-		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
-		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width =
-		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
-		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-		auto width = NumericCast<uint8_t>(extra_width + scale);
-		if (width > DecimalType::MaxWidth()) {
-			// if the resulting decimal does not fit, we truncate the scale
-			width = DecimalType::MaxWidth();
-			scale = NumericCast<uint8_t>(width - extra_width);
-		}
-		result = LogicalType::DECIMAL(width, scale);
-		return true;
 	}
-	case LogicalTypeId::LIST: {
-		// list: perform max recursively on child type
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-			return false;
-		}
-		result = LogicalType::LIST(new_child);
-		return true;
-	}
-	case LogicalTypeId::ARRAY: {
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right),
-		                                     new_child)) {
-			return false;
-		}
-		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
-		result = LogicalType::ARRAY(new_child, new_size);
-		return true;
-	}
-	case LogicalTypeId::MAP: {
-		// map: perform max recursively on child type
-		LogicalType new_child;
-		if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-			return false;
-		}
-		result = LogicalType::MAP(new_child);
-		return true;
-	}
-	case LogicalTypeId::STRUCT: {
-		return CombineStructTypes(logical_type_resolver, left, right, result);
-	}
-	case LogicalTypeId::UNION: {
-		auto left_member_count = UnionType::GetMemberCount(left);
-		auto right_member_count = UnionType::GetMemberCount(right);
-		if (left_member_count != right_member_count) {
-			// return the "larger" type, with the most members
-			result = left_member_count > right_member_count ? left : right;
-			return true;
-		}
-		// otherwise, keep left, don't try to meld the two together.
-		result = left;
-		return true;
-	}
-	default:
-		result = left;
-		return true;
-	}
+	result = left;
+	return true;
 }
 
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
@@ -1318,12 +1379,11 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 150;
 	// weirdo types
 	case LogicalTypeId::LAMBDA:
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::UNBOUND:
 	case LogicalTypeId::TYPE:
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
 		break;
 	}
 	return 1000;
@@ -1373,7 +1433,7 @@ void LogicalType::Verify() const {
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
-		case_insensitive_set_t child_names;
+		identifier_set_t child_names;
 		bool all_empty = true;
 		for (auto &entry : StructType::GetChildTypes(*this)) {
 			if (entry.first.empty()) {
@@ -1456,6 +1516,10 @@ void LogicalType::Serialize(Serializer &serializer) const {
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
 	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+	if (id == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
+		// convert legacy aggregate state to blob on deserialize
+		return LogicalType::BLOB;
+	}
 
 	LogicalType result(id, std::move(type_info));
 
@@ -1603,66 +1667,11 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 }
 
 //===--------------------------------------------------------------------===//
-// Legacy Aggregate State Type
-//===--------------------------------------------------------------------===//
-const aggregate_state_t &LegacyAggregateStateType::GetStateType(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return info->Cast<LegacyAggregateStateTypeInfo>().state_type;
-}
-
-const string LegacyAggregateStateType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE);
-	auto info = type.AuxInfo();
-	if (!info) {
-		return "LEGACY_AGGREGATE_STATE<?>";
-	}
-	auto aggr_state = info->Cast<LegacyAggregateStateTypeInfo>().state_type;
-	return "LEGACY_AGGREGATE_STATE<" + aggr_state.function_name + "(" +
-	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
-	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
-	       ")" + "::" + aggr_state.return_type.ToString() + ">";
-}
-
-//===--------------------------------------------------------------------===//
-// Aggregate State Type (Struct Based)
-//===--------------------------------------------------------------------===//
-
-const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
-		return LegacyAggregateStateType::GetStateType(type);
-	}
-	D_ASSERT(type.IsAggregateStateStructType());
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return info->Cast<AggregateStateTypeInfo>().state_type;
-}
-
-const string AggregateStateType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.IsAggregateStateStructType());
-	auto info = type.AuxInfo();
-	if (!info) {
-		return "AGGREGATE_STATE<?>";
-	}
-	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
-	auto struct_type = LogicalType::STRUCT(GetChildTypes(type));
-	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
-	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
-	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
-	       ")" + "::" + aggr_state.return_type.ToString() + ", " + struct_type.ToString() + ">";
-}
-
-bool LogicalType::IsAggregateStateStructType() const {
-	return id() == LogicalTypeId::AGGREGATE_STATE && InternalType() == PhysicalType::STRUCT;
-}
-
-//===--------------------------------------------------------------------===//
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT || type.IsAggregateStateStructType());
+	         type.id() == LogicalTypeId::VARIANT);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1675,7 +1684,7 @@ const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index
 	return child_types[index].second;
 }
 
-const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
+const Identifier &StructType::GetChildName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	return child_types[index].first;
@@ -1684,7 +1693,7 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &name) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		if (StringUtil::CIEquals(child_types[i].first, name)) {
+		if (child_types[i].first == name) {
 			return i;
 		}
 	}
@@ -1705,17 +1714,6 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
-}
-
-LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type, child_list_t<LogicalType> struct_child_types) {
-	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type), std::move(struct_child_types));
-	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
-}
-
-LogicalType LogicalType::LEGACY_AGGREGATE_STATE(aggregate_state_t state_type) {
-	// Legacy BLOB aggregate state
-	auto info = make_shared_ptr<LegacyAggregateStateTypeInfo>(std::move(state_type));
-	return LogicalType(LogicalTypeId::LEGACY_AGGREGATE_STATE, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1779,7 +1777,7 @@ const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index
 	return child_types[index + 1].second;
 }
 
-const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+const Identifier &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	// skip the "tag" field
@@ -1861,6 +1859,9 @@ bool LogicalType::IsJSONType() const {
 	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == JSON_TYPE_NAME;
 }
 
+bool LogicalType::IsAggregateState() const {
+	return HasAlias() && GetAlias() == "AGGREGATE_STATE";
+}
 //===--------------------------------------------------------------------===//
 // Array Type
 //===--------------------------------------------------------------------===//
@@ -2127,7 +2128,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 	}
 
 	// Try to bind as far as we can
-	auto result = DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+	auto result = DefaultTypeGenerator::TryDefaultBind(name.GetIdentifierName(), bound_args);
 	if (result.id() != LogicalTypeId::INVALID) {
 		return result;
 	}

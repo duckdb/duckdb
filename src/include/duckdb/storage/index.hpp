@@ -52,7 +52,7 @@ public:
 	virtual const string &GetIndexType() const = 0;
 
 	//! The name of the index
-	virtual const string &GetIndexName() const = 0;
+	virtual const Identifier &GetIndexName() const = 0;
 
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;

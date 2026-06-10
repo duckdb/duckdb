@@ -39,7 +39,7 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 	VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.HasStateDestructorCallback()) {
-			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+			AggregateInputData aggr_input_data(aggr, state.allocator);
 			aggr.function.GetStateDestructorCallback()(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
@@ -50,7 +50,7 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
                                  DataChunk &payload, idx_t arg_idx, optional_ptr<const ClusteredAggr> clustered) {
 	auto count = addresses.size();
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+	AggregateInputData aggr_input_data(aggr, state.allocator);
 	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
 	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
 	auto inputs = aggr.child_count ? payload.data.data() + arg_idx : nullptr;
@@ -131,8 +131,7 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.HasStateCombineCallback());
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator,
-		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		AggregateInputData aggr_input_data(aggr, state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 		aggr.function.GetStateCombineCallback()(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
@@ -165,7 +164,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+		AggregateInputData aggr_input_data(aggr, state.allocator);
 		aggr.function.GetStateFinalizeCallback()(addresses_copy, aggr_input_data, target, result.size(), 0);
 		FlatVector::SetSize(target, count_t(result.size()));
 

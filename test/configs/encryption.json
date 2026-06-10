@@ -4,6 +4,7 @@
   "on_new_connection": "USE __test__config__crypto;",
   "on_load": "skip",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json",
   "statically_loaded_extensions": [
     "core_functions",
     "httpfs"
@@ -16,27 +17,16 @@
         "test/extension/load_extension.test",
         "test/extension/autoloading_types.test",
         "test/sql/settings/drop_set_schema.test",
-        "test/sql/show_select/test_describe_all.test",
         "test/extension/test_custom_type_modifier_cast.test",
         "test/extension/test_alias_point.test",
         "test/extension/load_test_alias.test",
         "test/fuzzer/pedro/incomplete_checkpoint.test",
         "test/sql/catalog/test_set_search_path.test",
-        "test/sql/catalog/function/attached_macro.test",
-        "test/sql/catalog/test_temporary.test",
-        "test/sql/pragma/test_show_tables_temp_views.test",
         "test/sql/storage/temp_directory/max_swap_space_error.test",
-        "test/sql/pg_catalog/system_functions.test",
-        "test/sql/attach/attach_table_info.test",
-        "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/attach_show_all_tables.test",
-        "test/sql/attach/attach_default_table.test",
         "test/sql/attach/attach_icu_collation.test",
         "test/sql/function/list/lambdas/incorrect.test",
         "test/sql/json/test_json_serialize_sql.test",
-        "test/sql/attach/attach_views.test",
         "test/sql/table_function/duckdb_databases.test",
-        "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/logging/file_system_logging_attach.test",
         "test/sql/logging/file_system_logging_attach_deadlock.test",
         "test/sql/storage/read_duckdb/read_duckdb_basic.test"
@@ -50,10 +40,10 @@
     },
     {
       "reason": "Expects httpfs to not be present",
-      "paths" : [
-          "test/sql/secrets/create_secret_hffs_autoload.test",
-          "test/sql/secrets/secret_autoloading_errors.test",
-          "test/sql/partitioning/hive_partitioning_autodetect.test"
+      "paths": [
+        "test/sql/secrets/create_secret_hffs_autoload.test",
+        "test/sql/secrets/secret_autoloading_errors.test",
+        "test/sql/partitioning/hive_partitioning_autodetect.test"
       ]
     },
     {
@@ -67,12 +57,7 @@
     {
       "reason": "CREATE TRIGGER requires storage version v2.0.0 but encrypted databases use an older default storage version",
       "paths": [
-        "test/sql/trigger/create_trigger_catalog.test",
-        "test/sql/trigger/create_trigger_parse.test",
-        "test/sql/trigger/create_trigger_wal.test",
-        "test/sql/trigger/drop_trigger.test",
         "test/sql/trigger/drop_trigger_parse.test",
-        "test/sql/trigger/drop_trigger_wal.test",
         "test/sql/trigger/trigger_after_delete.test",
         "test/sql/trigger/trigger_after_insert.test",
         "test/sql/trigger/trigger_after_insert_referencing.test",
@@ -87,19 +72,6 @@
         "test/sql/trigger/trigger_before_after_mixed.test",
         "test/sql/trigger/trigger_returning.test",
         "test/sql/trigger/trigger_returning_binder_parity.test"
-      ]
-    },
-    {
-      "reason": "Expects db with name 'memory'",
-      "paths": [
-        "test/sql/attach/show_databases.test",
-        "test/sql/attach/show_schemas.test"
-      ]
-    },
-    {
-      "reason": "Test relies on temp directory being required for dbgen, but with an encrypted persistent DB the buffer manager uses the DB file as external storage, so the invalid temp directory is never accessed.",
-      "paths": [
-        "test/sql/tpch/dbgen_error.test"
       ]
     }
   ]

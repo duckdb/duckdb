@@ -18,13 +18,13 @@ public:
 	static constexpr const TableFilterType TYPE = TableFilterType::LEGACY_STRUCT_EXTRACT;
 
 public:
-	LegacyStructFilter(idx_t child_idx, string child_name, unique_ptr<TableFilter> child_filter);
+	LegacyStructFilter(idx_t child_idx, Identifier child_name, unique_ptr<TableFilter> child_filter);
 
 	//! The field index to filter on
 	idx_t child_idx;
 
 	//! The field name to filter on
-	string child_name;
+	Identifier child_name;
 
 	//! The child filter
 	unique_ptr<TableFilter> child_filter;

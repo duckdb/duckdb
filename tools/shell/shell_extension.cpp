@@ -53,7 +53,7 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
+	return make_uniq<ColumnDataRef>(state.last_result->Collection(), StringsToIdentifiers(state.last_result->names));
 }
 
 // Runs after the binder has finished. Releases the previous last_result early if it's

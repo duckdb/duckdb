@@ -2309,9 +2309,9 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		if (i > 0) {
 			condition_info += "\n";
 		}
-		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName().GetIdentifierName(),
 		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
-		                                     join_condition.GetRHS().GetName());
+		                                     join_condition.GetRHS().GetName().GetIdentifierName());
 	}
 
 	if (predicate) {

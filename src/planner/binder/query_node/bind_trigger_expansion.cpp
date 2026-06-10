@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -19,6 +18,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
@@ -53,14 +53,14 @@ unique_ptr<BoundStatement> Binder::TryExpandTriggers(QueryNode &node, TableCatal
 	// Triggers without an OF list are unrestricted and always fire.
 	if (event_type == TriggerEventType::UPDATE_EVENT && node.type == QueryNodeType::UPDATE_QUERY_NODE) {
 		auto &update_node = node.Cast<UpdateQueryNode>();
-		case_insensitive_set_t updated_columns;
+		identifier_set_t updated_columns;
 		if (update_node.set_info) {
 			updated_columns.insert(update_node.set_info->columns.begin(), update_node.set_info->columns.end());
 		}
 		auto trigger_does_not_fire = [&](const_reference<TriggerCatalogEntry> trig) {
 			const auto &of_cols = trig.get().columns;
 			return !of_cols.empty() && std::none_of(of_cols.begin(), of_cols.end(),
-			                                        [&](const string &c) { return updated_columns.count(c) > 0; });
+			                                        [&](const Identifier &c) { return updated_columns.count(c) > 0; });
 		};
 		auto drop_non_firing = [&](vector<const_reference<TriggerCatalogEntry>> &triggers) {
 			triggers.erase(std::remove_if(triggers.begin(), triggers.end(), trigger_does_not_fire), triggers.end());
@@ -97,7 +97,7 @@ static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
 static constexpr const char *TRIGGER_BEFORE_BODY_CTE_PREFIX = "__duckdb_trigger_before_body_";
 
 static unique_ptr<CommonTableExpressionInfo>
-MakeTransitionTableAliasCTE(const string &base_cte_name, const case_insensitive_set_t &exclude_columns) {
+MakeTransitionTableAliasCTE(const Identifier &base_cte_name, const identifier_set_t &exclude_columns) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	auto alias_select = make_uniq<SelectNode>();
 	auto star = make_uniq<StarExpression>();
@@ -127,7 +127,7 @@ static vector<unique_ptr<ParsedExpression>> &GetDMLReturningList(QueryNode &node
 	}
 }
 
-static string GetTableAlias(const QueryNode &node, const string &fallback) {
+static Identifier GetTableAlias(const QueryNode &node, const Identifier &fallback) {
 	switch (node.type) {
 	case QueryNodeType::INSERT_QUERY_NODE: {
 		auto &n = node.Cast<InsertQueryNode>();
@@ -158,16 +158,16 @@ static string GetTableAlias(const QueryNode &node, const string &fallback) {
 
 // Raw table_ref alias (empty if none) — an empty alias lets the binding derive
 // catalog.schema.table from the entry, so qualified RETURNING columns resolve.
-static string GetReturningAlias(const QueryNode &node) {
+static Identifier GetReturningAlias(const QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::INSERT_QUERY_NODE:
-		return node.Cast<InsertQueryNode>().table_ref ? node.Cast<InsertQueryNode>().table_ref->alias : string();
+		return node.Cast<InsertQueryNode>().table_ref ? node.Cast<InsertQueryNode>().table_ref->alias : Identifier();
 	case QueryNodeType::UPDATE_QUERY_NODE:
-		return node.Cast<UpdateQueryNode>().table ? node.Cast<UpdateQueryNode>().table->alias : string();
+		return node.Cast<UpdateQueryNode>().table ? node.Cast<UpdateQueryNode>().table->alias : Identifier();
 	case QueryNodeType::DELETE_QUERY_NODE:
-		return node.Cast<DeleteQueryNode>().table ? node.Cast<DeleteQueryNode>().table->alias : string();
+		return node.Cast<DeleteQueryNode>().table ? node.Cast<DeleteQueryNode>().table->alias : Identifier();
 	default:
-		return string();
+		return Identifier();
 	}
 }
 
@@ -182,16 +182,16 @@ static virtual_column_map_t ReturningVirtualColumns(const QueryNode &node, const
 // Virtual columns the RETURNING list references, so the base CTE can materialise them (RETURNING *
 // does not include rowid).  Matched on the trailing identifier — the only table in scope is the
 // target.  Returns (id, name) pairs, deduplicated.
-static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr<ParsedExpression>> &returning_list,
-                                                               const virtual_column_map_t &virtual_cols,
-                                                               const TableCatalogEntry &table) {
-	vector<pair<column_t, string>> result;
+static vector<pair<column_t, Identifier>> ReferencedVirtualColumns(vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                                  const virtual_column_map_t &virtual_cols,
+                                                                  const TableCatalogEntry &table) {
+	vector<pair<column_t, Identifier>> result;
 	if (virtual_cols.empty()) {
 		return result;
 	}
 	// A virtual column shadowed by a real column of the same name is not virtual here: RETURNING *
 	// already materialises the real column, and injecting would duplicate the name.
-	case_insensitive_set_t real_names;
+	identifier_set_t real_names;
 	for (auto &col : table.GetColumns().Logical()) {
 		real_names.insert(col.Name());
 	}
@@ -206,7 +206,7 @@ static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr
 				if (real_names.find(vc.second.name) != real_names.end()) {
 					continue;
 				}
-				if (StringUtil::CIEquals(cn.back(), vc.second.name) && seen.insert(vc.first).second) {
+				if (cn.back() == vc.second.name && seen.insert(vc.first).second) {
 					result.emplace_back(vc.first, vc.second.name);
 				}
 			}
@@ -216,11 +216,11 @@ static vector<pair<column_t, string>> ReferencedVirtualColumns(vector<unique_ptr
 }
 
 static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
-                                const string &base_cte_name, const string &uuid_suffix,
-                                const case_insensitive_set_t &injected_names) {
+                                const Identifier &base_cte_name, const string &uuid_suffix,
+                                const identifier_set_t &injected_names) {
 	for (idx_t i = 0; i < after_triggers.size(); i++) {
 		auto &trigger = after_triggers[i].get();
-		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+		Identifier body_cte_name(string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix);
 
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 		trig_cte->query_node = trigger.trigger_action->Copy();
@@ -245,9 +245,9 @@ static void AddAfterTriggerCTEs(SelectNode &outer, const vector<const_reference<
 static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const TableCatalogEntry &table,
                                                 const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
                                                 const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
-                                                const string &uuid_suffix, const string &base_cte_name,
+                                                const string &uuid_suffix, const Identifier &base_cte_name,
                                                 bool has_returning,
-                                                const vector<pair<column_t, string>> &injected_virtuals) {
+                                                const vector<pair<column_t, Identifier>> &injected_virtuals) {
 	auto outer = make_uniq<SelectNode>();
 	if (has_returning) {
 		outer->select_list.push_back(make_uniq<StarExpression>());
@@ -262,7 +262,7 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 
 	// BEFORE bodies (no transition tables — REFERENCING is rejected at CREATE time).
 	for (idx_t i = 0; i < before_triggers.size(); i++) {
-		auto body_cte_name = string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+		Identifier body_cte_name(string(TRIGGER_BEFORE_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix);
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 		trig_cte->query_node = before_triggers[i].get().trigger_action->Copy();
 		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
@@ -275,7 +275,7 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 	auto base_node = node.Copy();
 	auto &base_returning = GetDMLReturningList(*base_node);
 	base_returning.push_back(make_uniq<StarExpression>());
-	case_insensitive_set_t injected_names;
+	identifier_set_t injected_names;
 	for (auto &vc : injected_virtuals) {
 		base_returning.push_back(make_uniq<ColumnRefExpression>(vc.second));
 		injected_names.insert(vc.second);
@@ -303,10 +303,10 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 
 	auto virtual_columns = ReturningVirtualColumns(node, table);
 	auto injected_virtuals = has_returning ? ReferencedVirtualColumns(user_returning_list, virtual_columns, table)
-	                                       : vector<pair<column_t, string>>();
+	                                       : vector<pair<column_t, Identifier>>();
 
 	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
-	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
+	Identifier base_cte_name(TRIGGER_BASE_CTE_PREFIX + uuid_suffix);
 
 	auto outer = BuildTriggerChain(node, table, before_triggers, after_triggers, uuid_suffix, base_cte_name,
 	                               has_returning, injected_virtuals);
@@ -330,7 +330,7 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	// vs real rowid).  bound_columns is the identity over all logical columns (generated included)
 	// because our RETURNING * child materialises every logical column in order.
 	auto returning_binder_owner = Binder::CreateBinder(context);
-	vector<string> col_names;
+	vector<Identifier> col_names;
 	vector<LogicalType> col_types;
 	vector<ColumnIndex> bound_columns;
 	idx_t logical_count = 0;

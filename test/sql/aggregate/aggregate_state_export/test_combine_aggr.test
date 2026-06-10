@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_combine_aggr.test
+# name: test/sql/aggregate/aggregate_state_export/test_combine_aggr.test
 # description: Test the combine_aggr aggregate function. Based on `test_state_export_struct.test`
-# group: [aggregates]
+# group: [aggregate_state_export]
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
@@ -49,7 +49,7 @@ select finalize(combine_aggr(state))::integer from states where g = 0;
 45
 
 # Persistence
-load {TEST_DIR}/test_combine_aggr_persistence.db
+load {TEST_DIR}/test_combine_aggr_persistence.db readwrite v2.0.0
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
@@ -86,10 +86,14 @@ statement error
 select finalize(finalize(combine_aggr(state))) from states;
 ----
 
-# Can't call the aggregate combine on a legacy aggregate state
+# skewness states are struct-based and can be combined
 statement ok
-CREATE TABLE legacy_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
+CREATE TABLE skew_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
 
-statement error
-select combine_aggr(state) from legacy_states;
+query I nosort skew_res
+select skewness(d) from dummy;
+----
+
+query I nosort skew_res
+select finalize(combine_aggr(state)) from skew_states;
 ----

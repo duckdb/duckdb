@@ -14,14 +14,14 @@ namespace duckdb {
 void Expression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExpressionClass>(100, "expression_class", expression_class);
 	serializer.WriteProperty<ExpressionType>(101, "type", type);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	serializer.WritePropertyWithDefault<Identifier>(102, "alias", alias);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "expression_class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
-	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
+	auto alias = deserializer.ReadPropertyWithDefault<Identifier>(102, "alias");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
@@ -214,16 +214,16 @@ unique_ptr<Expression> BoundOperatorExpression::Deserialize(Deserializer &deseri
 
 void BoundParameterExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
+	serializer.WritePropertyWithDefault<duckdb::Identifier>(200, "identifier", identifier);
 	serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
 	serializer.WritePropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data", parameter_data);
 }
 
 unique_ptr<Expression> BoundParameterExpression::Deserialize(Deserializer &deserializer) {
-	auto identifier = deserializer.ReadPropertyWithDefault<string>(200, "identifier");
+	auto identifier = deserializer.ReadPropertyWithDefault<duckdb::Identifier>(200, "identifier");
 	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
 	auto parameter_data = deserializer.ReadPropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data");
-	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), std::move(identifier), std::move(return_type), std::move(parameter_data)));
+	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), identifier, std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 

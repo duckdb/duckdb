@@ -657,7 +657,7 @@ statement error
 INSERT INTO neg VALUES (1, 99) ON CONFLICT DO UPDATE SET v = EXCLUDED.v
     RETURNING id, v, EXCLUDED.v;
 ----
-Referenced table "EXCLUDED" not found!
+<REGEX>:.*'excluded' qualified columns are not supported in the RETURNING clause.*
 
 # UPDATE … FROM <alias> RETURNING <alias>.col still errors on triggered table
 statement ok

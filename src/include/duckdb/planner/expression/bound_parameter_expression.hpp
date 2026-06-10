@@ -18,13 +18,13 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_PARAMETER;
 
 public:
-	explicit BoundParameterExpression(const string &identifier);
+	explicit BoundParameterExpression(const duckdb::Identifier &identifier);
 
 public:
-	const string &Identifier() const {
+	const duckdb::Identifier &Identifier() const {
 		return identifier;
 	}
-	string &IdentifierMutable() {
+	duckdb::Identifier &IdentifierMutable() {
 		return identifier;
 	}
 	const shared_ptr<BoundParameterData> &ParameterData() const {
@@ -54,11 +54,11 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
-	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,
-	                         shared_ptr<BoundParameterData> parameter_data);
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, duckdb::Identifier identifier,
+	                         LogicalType return_type, shared_ptr<BoundParameterData> parameter_data);
 
 private:
-	string identifier;
+	duckdb::Identifier identifier;
 	shared_ptr<BoundParameterData> parameter_data;
 };
 

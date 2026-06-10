@@ -35,7 +35,7 @@ enum class CommitMode { COMMIT, REVERT_COMMIT };
 //! An index that has been marked for removal from a table's index list once the commit chain succeeds.
 struct PendingIndexRemoval {
 	reference<TableIndexList> indexes;
-	string name;
+	Identifier name;
 };
 
 //! Accumulates block marks and index removals during commit so they can be applied together once the
@@ -51,7 +51,7 @@ public:
 	//! Register an index to be removed from a table's index list during FinalizeCommit. Index removal will drop in
 	//! memory index data and also marks all blocks on disk as free blocks allowing for reclamation. Block marking for
 	//! indexes is handled implicitly along destruction paths for index memory.
-	void RemoveIndex(TableIndexList &indexes, string name);
+	void RemoveIndex(TableIndexList &indexes, Identifier name);
 	//! Finalize accumulated block marks and index removals.
 	void FinalizeCommit();
 	//! True if no work has been queued.

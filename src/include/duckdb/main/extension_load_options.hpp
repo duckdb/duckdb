@@ -10,11 +10,12 @@
 
 #include "duckdb/common/string.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct ExtensionLoadOptions {
 	string extension_name;
-	string alias = "";
+	Identifier alias;
 };
 
 } // namespace duckdb

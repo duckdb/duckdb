@@ -137,6 +137,9 @@ public:
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
 	}
+	inline bool IsSkipped() const {
+		return !chunk;
+	}
 
 	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
 	                              idx_t row_group_ordinal_p) {

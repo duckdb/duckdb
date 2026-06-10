@@ -806,7 +806,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 
 	// Prepare a long time running QueryAppender
 	duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
-	duckdb::vector<string> names = {"i"};
+	duckdb::vector<duckdb::Identifier> names = {"i"};
 	// This query will run for a long time by cross joining a huge range
 	string long_query = "INSERT INTO ints SELECT i FROM appended_data, range(1000000000000)";
 	QueryAppender app(con, long_query, types, names);

@@ -19,7 +19,7 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
 }
 
 unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
-	ScalarFunctionSet set(name);
+	ScalarFunctionSet set {name};
 	set.functions = functions.functions;
 	auto result = make_uniq<CreateScalarFunctionInfo>(std::move(set));
 	CopyFunctionProperties(*result);

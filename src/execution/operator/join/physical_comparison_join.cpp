@@ -36,9 +36,9 @@ InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() con
 			condition_info += "\n";
 		}
 		D_ASSERT(join_condition.IsComparison());
-		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName().GetIdentifierName(),
 		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
-		                                     join_condition.GetRHS().GetName());
+		                                     join_condition.GetRHS().GetName().GetIdentifierName());
 	}
 
 	if (predicate) {

@@ -29,7 +29,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 	// create the default schema
 	CreateSchemaInfo info;
-	info.schema = DEFAULT_SCHEMA;
+	info.schema = Identifier::DefaultSchema();
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
@@ -134,7 +134,7 @@ optional_ptr<SchemaCatalogEntry> DuckCatalog::LookupSchema(CatalogTransaction tr
                                                            OnEntryNotFound if_not_found) {
 	auto &schema_name = schema_lookup.GetEntryName();
 	D_ASSERT(!schema_name.empty());
-	auto entry = schemas->GetEntry(transaction, schema_name);
+	auto entry = schemas->GetEntry(transaction, Identifier(schema_name));
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException(schema_lookup.GetErrorContext(), "Schema with name %s does not exist!", schema_name);

@@ -1,9 +1,6 @@
-# name: test/sql/aggregate/aggregates/test_state_export_struct.test
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_struct.test
 # description: Test the state export functionality, for opted-in aggregate functions with struct-based AGGREGATE_STATE
-# group: [aggregates]
-
-# We know that forward compatibility won't be preserved
-require noforcestorage
+# group: [aggregate_state_export]
 
 statement ok
 SET storage_compatibility_version = 'latest';
@@ -208,9 +205,9 @@ SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY 
 
 # Regression: struct shape for state export
 query T
-SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
+SELECT (regr_count(1, 2) export_state)::ubigint
 ----
-{'count': 1}
+1
 
 query T
 SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
@@ -333,11 +330,6 @@ query II nosort res8a
 SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
 query II nosort res8a2
 SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 ----
@@ -345,16 +337,6 @@ SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 query II nosort res8a2
 SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
-
-query T
-SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
-query T
-SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': false}
 
 query III nosort res8b
 SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
@@ -364,15 +346,15 @@ query III nosort res8b
 SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+query I
+SELECT (bit_and(42) export_state)::UINTEGER;
 ----
-{'is_set': true, 'value': 42}
+42
 
-query T
-SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+query I
+SELECT (bit_xor(100) export_state)::UBIGINT;
 ----
-{'is_set': true, 'value': 100}
+100
 
 # kurtosis and kurtosis_pop
 
@@ -457,26 +439,26 @@ statement error
 SELECT finalize(finalize(avg(d) EXPORT_STATE)) from dummy;
 ----
 
-# Casting to struct should work
+# Casting to type should work
 query T
-SELECT (count(42) export_state)::struct(count bigint);
+SELECT (count(42) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
-SELECT (count(*) export_state)::struct(count bigint);
+SELECT (count(*) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
-SELECT (sum(42) export_state)::struct(isset boolean, "value" bigint);
+SELECT (sum(42) export_state)::hugeint;
 ----
-{'isset': true, 'value': 42}
+42
 
 query T
-SELECT (sum(100) export_state)::struct(isset boolean, "value" hugeint);
+SELECT (sum(100) export_state)::hugeint;
 ----
-{'isset': true, 'value': 100}
+100
 
 # EXPORT_STATAE on a window function is not supported
 statement error
@@ -659,23 +641,60 @@ group_0	This is a very long string that exceeds the 12 byte inlining threshold f
 group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
 group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
 
-# parquet round-trip: write AGGREGATE_STATE directly
-# count() has state STRUCT(count BIGINT) which parquet preserves exactly
+# parquet round-trip: we can write AGGREGATE_STATE to parquet directly
 require parquet
 
 statement ok
 COPY (SELECT g, count(d) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '{TEST_DIR}/count_state.parquet' (FORMAT PARQUET);
 
-query II
+# however, the aggregate state info is lost in the round-trip - the column is read back as a plain STRUCT
+# combining with a plain STRUCT is not allowed - both arguments must be aggregate states
+statement error
 SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, count(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '{TEST_DIR}/count_state.parquet' USING(g) ORDER BY g;
 ----
-0	20
-1	20
-2	20
-3	20
-4	20
-5	20
-6	20
-7	20
-8	20
-9	20
+Cannot COMBINE aggregate states from different functions
+
+# we can use to_aggregate_state to convert the struct back into an aggregate state
+statement ok
+COPY (SELECT g, avg(d::DOUBLE) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '{TEST_DIR}/avg_state.parquet' (FORMAT PARQUET);
+
+query II
+SELECT g, FINALIZE(COMBINE(s2, to_aggregate_state(s1, 'avg', ['DOUBLE']))) FROM (SELECT g, avg(d::DOUBLE) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '{TEST_DIR}/avg_state.parquet' USING(g) ORDER BY g;
+----
+0	45.0
+1	46.0
+2	47.0
+3	48.0
+4	49.0
+5	50.0
+6	51.0
+7	52.0
+8	53.0
+9	54.0
+
+# the signature can also be passed as a list of TYPE values
+query II
+SELECT g, FINALIZE(to_aggregate_state(s1, 'avg', [make_type('DOUBLE')])) FROM '{TEST_DIR}/avg_state.parquet' ORDER BY g;
+----
+0	45.0
+1	46.0
+2	47.0
+3	48.0
+4	49.0
+5	50.0
+6	51.0
+7	52.0
+8	53.0
+9	54.0
+
+# the input type must be convertable to the state layout
+statement error
+SELECT to_aggregate_state(42, 'avg', ['DOUBLE']);
+----
+Unimplemented type for cast
+
+# the aggregate name must be constant
+statement error
+SELECT to_aggregate_state(s1, g::VARCHAR, ['DOUBLE']) FROM '{TEST_DIR}/avg_state.parquet';
+----
+must be constant
