@@ -378,14 +378,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	auto &args = function.GetArgumentsMutable();
 
-	// the first child is the list, the second child is the lambda expression
-	// constexpr idx_t list_ix = 0;
-	constexpr idx_t list_idx = 0;
-	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(args[lambda_expr_idx].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA);
+	// list lambda functions use the existing (list, lambda) shape; invoke is the only lambda
+	// function that accepts the lambda expression as the first argument.
+	const idx_t lambda_expr_idx = func.name == "invoke" ? 0 : 1;
+	if (args.size() <= lambda_expr_idx ||
+	    args[lambda_expr_idx].GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
+		return BindResult("This scalar function requires a lambda expression!");
+	}
 
 	vector<LogicalType> function_child_types;
-	// bind the list
 	ErrorData error;
 
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
@@ -408,13 +409,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		function_child_types.push_back(child->GetReturnType());
 	}
 
-	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*args[list_idx].GetExpressionMutable());
-	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
-	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
-	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-	    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
-		return BindResult("Invalid LIST argument during lambda function binding!");
+	if (lambda_expr_idx == 1) {
+		// get the logical type of the children of the list
+		auto &list_child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
+		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
+		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
+		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+			return BindResult("Invalid LIST argument during lambda function binding!");
+		}
 	}
 
 	// bind the lambda parameter
