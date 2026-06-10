@@ -197,7 +197,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
+	auto &partial_block_manager = checkpoint_manager.GetIndexPartialBlockManager();
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(serialization_info, partial_block_manager);
 
 	if (debug_verify_blocks) {
 		for (auto &entry : index_storage_infos.ordered_infos) {

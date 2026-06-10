@@ -1039,7 +1039,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo ART::SerializeToDisk(const case_insensitive_map_t<Value> &options,
+                                      PartialBlockManager &partial_block_manager) {
 	lock_guard<mutex> guard(lock);
 
 	// If the storage format uses deprecated leaf storage,
@@ -1050,7 +1051,7 @@ IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensiti
 	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 
 	// Store the data on disk as partial blocks and set the block ids.
-	WritePartialBlocks(context, v1_0_0_storage);
+	WritePartialBlocks(partial_block_manager, v1_0_0_storage);
 
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
@@ -1079,15 +1080,11 @@ IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &option
 	return info;
 }
 
-void ART::WritePartialBlocks(QueryContext context, const bool v1_0_0_storage) {
-	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
-
+void ART::WritePartialBlocks(PartialBlockManager &partial_block_manager, const bool v1_0_0_storage) {
 	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	for (idx_t i = 0; i < allocator_count; i++) {
 		(*allocators)[i]->SerializeBuffers(partial_block_manager);
 	}
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void ART::InitAllocators(const IndexStorageInfo &info) {
