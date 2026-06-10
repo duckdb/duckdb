@@ -101,7 +101,12 @@ public:
 		segment_ptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
 
 		total_segment_offset += AlpRDConstants::HEADER_SIZE;
-		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+
+		if (actual_dictionary_size > AlpRDConstants::MAX_DICTIONARY_SIZE) {
+			throw IOException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+		}
+		idx_t actual_dictionary_size_bytes =
+		    static_cast<idx_t>(actual_dictionary_size) * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		const idx_t left_parts_dict_max_size = sizeof(vector_state.left_parts_dict);
 		if (total_segment_offset + actual_dictionary_size_bytes > metadata_ptr_offset ||
