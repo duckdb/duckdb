@@ -205,6 +205,7 @@ public:
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
+	virtual void PrepareWrite(ColumnWriterState &state) = 0;
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
 public:

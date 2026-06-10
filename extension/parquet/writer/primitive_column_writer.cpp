@@ -14,7 +14,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -29,6 +28,29 @@ using duckdb_parquet::PageType;
 
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
+class ParquetPagePayloadBuffer : public AsyncWriteBuffer {
+public:
+	ParquetPagePayloadBuffer(const_data_ptr_t data_p, idx_t size_p, unique_ptr<MemoryStream> temp_writer_p,
+	                         AllocatedData compressed_buf_p)
+	    : data(data_p), size(size_p), temp_writer(std::move(temp_writer_p)),
+	      compressed_buf(std::move(compressed_buf_p)) {
+	}
+
+	const_data_ptr_t Ptr() const override {
+		return data;
+	}
+
+	idx_t Size() const override {
+		return size;
+	}
+
+private:
+	const_data_ptr_t data;
+	idx_t size;
+	unique_ptr<MemoryStream> temp_writer;
+	AllocatedData compressed_buf;
+};
 
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                              vector<string> schema_path)
@@ -376,22 +398,39 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 }
 
+void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
+
+	// Flush the last page and materialize any dictionary page before the row-group flush path.
+	FlushPage(state);
+	if (HasDictionary(state)) {
+		FlushDictionary(state, state.stats_state.get());
+	}
+
+	for (auto &write_info : state.write_info) {
+		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
+		D_ASSERT(!write_info.prepared_header);
+		D_ASSERT(!write_info.prepared_payload);
+
+		write_info.prepared_header = writer.PrepareWrite(write_info.page_header);
+		auto payload_buffer = make_uniq<ParquetPagePayloadBuffer>(
+		    write_info.compressed_data, write_info.compressed_size, std::move(write_info.temp_writer),
+		    std::move(write_info.compressed_buf));
+		write_info.prepared_payload = writer.PrepareWriteData(std::move(payload_buffer));
+	}
+}
+
 void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
-	// flush the last page (if any remains)
-	FlushPage(state);
-
 	auto &column_writer = writer.GetWriter();
 	auto start_offset = column_writer.GetTotalWritten();
-	// flush the dictionary
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = UnsafeNumericCast<int64_t>(DictionarySize(state));
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
 		column_chunk.meta_data.dictionary_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
-		FlushDictionary(state, state.stats_state.get());
 	}
 
 	// record the start position of the pages for this column
@@ -407,12 +446,13 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
-		auto header_start_offset = column_writer.GetTotalWritten();
-		writer.Write(write_info.page_header);
+		D_ASSERT(write_info.prepared_header);
+		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)
-		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
+		total_uncompressed_size += write_info.prepared_header->Size();
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
+		writer.WriteData(std::move(write_info.prepared_header));
+		writer.WriteData(std::move(write_info.prepared_payload));
 	}
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);

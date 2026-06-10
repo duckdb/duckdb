@@ -13,6 +13,7 @@
 #include <string>
 
 #include "column_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "parquet_statistics.hpp"
@@ -48,6 +49,8 @@ struct PageWriteInformation {
 	size_t compressed_size;
 	data_ptr_t compressed_data;
 	AllocatedData compressed_buf;
+	unique_ptr<AsyncWriteBuffer> prepared_header;
+	unique_ptr<AsyncWriteBuffer> prepared_payload;
 };
 
 class PrimitiveColumnWriterState : public ColumnWriterState {
@@ -88,6 +91,7 @@ public:
 	             bool vector_can_span_multiple_pages) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+	void PrepareWrite(ColumnWriterState &state) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
 	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 
