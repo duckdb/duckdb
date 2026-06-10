@@ -630,7 +630,9 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 // the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
 // extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function) {
-	LogicalType state_layout = bound_function.GetStateType().type;
+	// copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in place,
+	// and the state layout type can share its type info with e.g. the aggregate's input expressions
+	LogicalType state_layout = bound_function.GetStateType().type.Copy();
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());

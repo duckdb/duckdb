@@ -167,3 +167,9 @@ query I
 SELECT finalize(combine(to_aggregate_state([1, 2], 'list', ['INTEGER']), to_aggregate_state([3], 'list', ['INTEGER'])));
 ----
 [3, 1, 2]
+
+# stress test - list export/import roundtrips for all types
+query I
+SELECT list_bool_and([*columns(*)]) = true FROM (SELECT finalize(list(columns(*)) EXPORT_STATE) IS NOT DISTINCT FROM list(columns(*)) FROM test_all_types());
+----
+true

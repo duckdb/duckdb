@@ -115,10 +115,10 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 } // namespace
 
 AggregateFunction ListFun::GetFunction() {
-	auto func = AggregateFunction(
-	    {LogicalType::TEMPLATE("T")}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
-	    AggregateFunction::StateSize<ListAggState>, AggregateFunction::StateInitialize<ListAggState, ListFunction>,
-	    ListUpdateFunction, ListCombineFunction, ListFinalize, nullptr, nullptr, nullptr, nullptr);
+	auto func = AggregateFunction({LogicalType::TEMPLATE("T")}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
+	                              AggregateFunction::StateSize<ListAggState>,
+	                              AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
+	                              ListCombineFunction, ListFinalize, nullptr, nullptr, nullptr, nullptr);
 	AggregateFunction::WireStructStateType<ListAggState>(func);
 
 	return func;
