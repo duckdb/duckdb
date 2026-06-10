@@ -140,74 +140,113 @@ struct StoreOp {
 	}
 };
 
-// Serialize an OptionalStateType<T> state buffer (flat: T value at +0, bool is_set at +sizeof(T))
-// into a result vector, setting NULL when is_set=false.
-struct StorePrimitiveOptionalOp {
-	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *addresses, idx_t base_offset) {
-		auto dst = FlatVector::Writer<T>(result, count);
+// Recursively serialize a state field to a result vector.
+// base: accumulated byte offset from the state slot start to this field's parent base.
+// Each child's field_offset is relative to that parent base.
+static void SerializeField(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
+                           const data_ptr_t *addresses, idx_t base) {
+	switch (field.kind) {
+	case AggregateFieldKind::OPTIONAL:
+		D_ASSERT(field.children.size() == 1);
 		for (idx_t i = 0; i < count; i++) {
-			const auto value = Load<T>(addresses[i] + base_offset);
-			const bool is_set = Load<bool>(addresses[i] + base_offset + sizeof(T));
-			if (is_set) {
-				dst.WriteValue(value);
-			} else {
-				dst.WriteNull();
+			if (!Load<bool>(addresses[i] + base + field.field_offset)) {
+				FlatVector::SetNull(result, i, true);
 			}
 		}
-	}
-};
-
-// Deserialize a nullable input vector into OptionalStateType<T> state buffer slots
-// (flat: T value at +0, bool is_set at +sizeof(T)).
-struct LoadPrimitiveOptionalOp {
-	template <class T>
-	static void Operation(const Vector &input, idx_t count, data_ptr_t base_ptr, idx_t aligned_state_size) {
-		auto values = input.Values<T>();
+		SerializeField(type, field.children[0], result, count, addresses, base);
+		break;
+	case AggregateFieldKind::SORT_KEY:
 		for (idx_t i = 0; i < count; i++) {
-			const auto entry = values[i];
-			auto *value_ptr = reinterpret_cast<T *>(base_ptr + i * aligned_state_size);
-			auto *is_set_ptr = reinterpret_cast<bool *>(base_ptr + i * aligned_state_size + sizeof(T));
-			if (entry.IsValid()) {
-				*value_ptr = entry.GetValue();
-				*is_set_ptr = true;
-			} else {
-				*is_set_ptr = false;
+			if (!FlatVector::Validity(result).RowIsValid(i)) {
+				continue;
 			}
+			const string_t sort_key = Load<string_t>(addresses[i] + base + field.field_offset);
+			CreateSortKeyHelpers::DecodeSortKey(sort_key, result, i,
+			                                    OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST));
 		}
+		break;
+	case AggregateFieldKind::STRUCT: {
+		const auto &child_types = StructType::GetChildTypes(type);
+		auto &struct_entries = StructVector::GetEntries(result);
+		const idx_t new_base = base + field.field_offset;
+		for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
+			SerializeField(child_types[field_idx].second, field.children[field_idx], struct_entries[field_idx], count,
+			               addresses, new_base);
+		}
+		break;
 	}
-};
+	case AggregateFieldKind::PRIMITIVE:
+		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset);
+		break;
+	case AggregateFieldKind::LINKED_LIST:
+		// linked lists are handled at the top level (SerializeState) - they cannot be nested in other fields
+		throw InternalException("LINKED_LIST fields are only supported as the top-level field of an aggregate state");
+	}
+}
 
-void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count, data_ptr_t dest_buffer,
-                      ArenaAllocator &allocator) {
-	if (layout.field.is_sort_key && layout.field.is_optional) {
-		// Sort key field: encode the input values as sort keys and store in the state buffer.
+// Recursively deserialize an input vector into a packed state buffer.
+// base: accumulated byte offset within each state slot for this field's parent base.
+static void DeserializeField(const LogicalType &type, const AggregateStateField &field, const Vector &input_vec,
+                             idx_t count, data_ptr_t dest_buffer, idx_t stride, idx_t base, ArenaAllocator &allocator) {
+	switch (field.kind) {
+	case AggregateFieldKind::OPTIONAL: {
+		D_ASSERT(field.children.size() == 1);
+		UnifiedVectorFormat idata;
+		input_vec.ToUnifiedFormat(idata);
+		for (idx_t i = 0; i < count; i++) {
+			const bool is_set = idata.validity.RowIsValid(idata.sel->get_index(i));
+			*reinterpret_cast<bool *>(dest_buffer + i * stride + base + field.field_offset) = is_set;
+		}
+		DeserializeField(type, field.children[0], input_vec, count, dest_buffer, stride, base, allocator);
+		break;
+	}
+	case AggregateFieldKind::SORT_KEY: {
 		Vector sort_keys(LogicalType::BLOB);
 		CreateSortKeyHelpers::CreateSortKey(
-		    input_vec, count, OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST), sort_keys);
+		    input_vec, count, OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST), sort_keys);
 		auto *key_data = FlatVector::GetData<string_t>(sort_keys);
 		UnifiedVectorFormat idata;
 		input_vec.ToUnifiedFormat(idata);
 		for (idx_t i = 0; i < count; i++) {
-			auto *value_ptr = reinterpret_cast<string_t *>(dest_buffer + i * layout.total_state_size);
-			auto *is_set_ptr = reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + sizeof(string_t));
 			if (!idata.validity.RowIsValid(idata.sel->get_index(i))) {
-				*is_set_ptr = false;
+				continue;
+			}
+			auto *value_ptr = reinterpret_cast<string_t *>(dest_buffer + i * stride + base + field.field_offset);
+			const auto &sort_key = key_data[i];
+			if (sort_key.IsInlined()) {
+				*value_ptr = sort_key;
 			} else {
-				const auto &sort_key = key_data[i];
-				if (sort_key.IsInlined()) {
-					*value_ptr = sort_key;
-				} else {
-					const auto len = sort_key.GetSize();
-					auto *buf = char_ptr_cast(allocator.Allocate(len));
-					memcpy(buf, sort_key.GetData(), len);
-					*value_ptr = string_t(buf, UnsafeNumericCast<uint32_t>(len));
-				}
-				*is_set_ptr = true;
+				const auto len = sort_key.GetSize();
+				auto *buf = char_ptr_cast(allocator.Allocate(len));
+				memcpy(buf, sort_key.GetData(), len);
+				*value_ptr = string_t(buf, UnsafeNumericCast<uint32_t>(len));
 			}
 		}
-	} else if (layout.field.is_list) {
-		// Linked list state: append each row of the input LIST value into the state's linked list.
+		break;
+	}
+	case AggregateFieldKind::STRUCT: {
+		const auto &child_types = StructType::GetChildTypes(type);
+		const auto &struct_entries = StructVector::GetEntries(input_vec);
+		const idx_t new_base = base + field.field_offset;
+		for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
+			DeserializeField(child_types[field_idx].second, field.children[field_idx], struct_entries[field_idx], count,
+			                 dest_buffer, stride, new_base, allocator);
+		}
+		break;
+	}
+	case AggregateFieldKind::PRIMITIVE:
+		TemplateDispatch<LoadOp>(type.InternalType(), stride, input_vec, count, dest_buffer, base + field.field_offset);
+		break;
+	case AggregateFieldKind::LINKED_LIST:
+		// linked lists are handled at the top level (DeserializeState) - they cannot be nested in other fields
+		throw InternalException("LINKED_LIST fields are only supported as the top-level field of an aggregate state");
+	}
+}
+
+static void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
+                             data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	if (layout.field.kind == AggregateFieldKind::LINKED_LIST) {
+		// linked list state: append each row of the input LIST value into the state's linked list
 		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
 		// the child data is appended through the ListSegmentFunctions API, which takes a RecursiveUnifiedVectorFormat
 		RecursiveUnifiedVectorFormat child_data;
@@ -215,7 +254,8 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 
 		auto values = input_vec.Values<list_entry_t>();
 		for (idx_t i = 0; i < count; i++) {
-			auto &linked_list = *reinterpret_cast<LinkedList *>(dest_buffer + i * layout.total_state_size);
+			auto &linked_list =
+			    *reinterpret_cast<LinkedList *>(dest_buffer + i * layout.total_state_size + layout.field.field_offset);
 			linked_list = LinkedList();
 			const auto entry = values[i];
 			if (!entry.IsValid()) {
@@ -224,92 +264,26 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 			}
 			layout.list_functions.AppendListEntry(allocator, linked_list, child_data, entry.GetValue());
 		}
-	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
-		// Optional struct: deserialize children, then derive is_set from the struct's row validity.
-		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		const auto &struct_entries = StructVector::GetEntries(input_vec);
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
-			                                  child.is_optional);
-			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset,
-			                 allocator);
-		}
-		auto &validity = FlatVector::Validity(input_vec);
-		for (idx_t i = 0; i < count; i++) {
-			*reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + struct_size) = validity.RowIsValid(i);
-		}
-	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		const auto &struct_entries = StructVector::GetEntries(input_vec);
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
-			                                  child.is_optional);
-			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset,
-			                 allocator);
-		}
-	} else if (layout.field.is_optional) {
-		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.type.InternalType(), input_vec, count, dest_buffer,
-		                                          layout.total_state_size);
-	} else {
-		TemplateDispatch<LoadOp>(layout.type.InternalType(), layout.total_state_size, input_vec, count, dest_buffer, 0);
+		return;
 	}
+	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
 }
 
-void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
-                    idx_t base_offset = 0) {
-	if (layout.field.is_sort_key && layout.field.is_optional) {
-		// Sort key field: decode each sort key back to the return type.
-		for (idx_t i = 0; i < count; i++) {
-			const bool is_set = Load<bool>(addresses[i] + base_offset + sizeof(string_t));
-			if (!is_set) {
-				FlatVector::SetNull(result, i, true);
-			} else {
-				const string_t sort_key = Load<string_t>(addresses[i] + base_offset);
-				CreateSortKeyHelpers::DecodeSortKey(
-				    sort_key, result, i, OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST));
-			}
-		}
-	} else if (layout.field.is_list) {
-		// Linked list state: build the result LIST value from each state's linked list.
-		// An empty linked list is exported as NULL, matching the finalize semantics of list aggregates.
+static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count,
+                           const data_ptr_t *addresses) {
+	if (layout.field.kind == AggregateFieldKind::LINKED_LIST) {
+		// linked list state: build the result LIST value from each state's linked list
+		// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
 		D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
 		vector<reference<const LinkedList>> linked_lists;
 		linked_lists.reserve(count);
 		for (idx_t i = 0; i < count; i++) {
-			linked_lists.push_back(*reinterpret_cast<const LinkedList *>(addresses[i] + base_offset));
+			linked_lists.push_back(*reinterpret_cast<const LinkedList *>(addresses[i] + layout.field.field_offset));
 		}
 		layout.list_functions.BuildLists(linked_lists, result, 0);
-	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
-		// Optional struct: mark null rows in the struct's validity, then serialize children for all rows.
-		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		auto &struct_entries = StructVector::GetEntries(result);
-		for (idx_t i = 0; i < count; i++) {
-			if (!Load<bool>(addresses[i] + base_offset + struct_size)) {
-				FlatVector::SetNull(result, i, true);
-			}
-		}
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			AggregateStateLayout child_layout(child_types[field_idx].second, 0, child.is_optional);
-			SerializeState(child_layout, struct_entries[field_idx], count, addresses, base_offset + child.field_offset);
-		}
-	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
-		const auto &child_types = StructType::GetChildTypes(layout.type);
-		auto &struct_entries = StructVector::GetEntries(result);
-		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
-			const auto &child = layout.field.children[field_idx];
-			AggregateStateLayout child_layout(child_types[field_idx].second, 0, child.is_optional);
-			SerializeState(child_layout, struct_entries[field_idx], count, addresses, base_offset + child.field_offset);
-		}
-	} else if (layout.field.is_optional) {
-		TemplateDispatch<StorePrimitiveOptionalOp>(layout.type.InternalType(), result, count, addresses, base_offset);
-	} else {
-		TemplateDispatch<StoreOp>(layout.type.InternalType(), result, count, addresses, base_offset);
+		return;
 	}
+	SerializeField(layout.type, layout.field, result, count, addresses, 0);
 }
 
 struct CombineState : public FunctionLocalState {

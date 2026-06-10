@@ -564,58 +564,31 @@ public:
 	}
 
 public:
-	template <class STATE>
-	static void WireStructStateType(AggregateFunction &result) {
-		if constexpr (HasStructStateType<STATE>::value) {
-			if constexpr (IsStateListType<typename STATE::STATE_TYPE>::value) {
-				static_assert(STATE::STATE_TYPE::layout_type == StateLayoutType::RETURN_TYPE,
-				              "StateListType only supports StateLayoutType::RETURN_TYPE");
-				// GetListStateLayout is defined after BoundAggregateFunction to avoid the incomplete-type issue
-				constexpr idx_t aligned_size = (sizeof(STATE) + 7ULL) & ~7ULL;
-				result.SetStructStateExport(&AggregateFunction::GetListStateLayout<aligned_size>);
-			} else if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
-				using T = typename STATE::STATE_TYPE::value_type;
-				if constexpr (IsStateSortKeyType<T>::value) {
-					// GetSortKeyStateLayout is defined after BoundAggregateFunction to avoid the incomplete-type issue
-					// (BoundAggregateFunction is only forward-declared at this point in the header).
-					constexpr idx_t aligned_size = (sizeof(STATE) + 7ULL) & ~7ULL;
-					result.SetStructStateExport(&AggregateFunction::GetSortKeyStateLayout<T::order_type, aligned_size>);
-				} else if constexpr (IsStructStateType<T>::value) {
-					result.SetStructStateExport([](const BoundAggregateFunction &) {
-						return AggregateStateLayout(T::GetLogicalType(STATE::STATE_NAMES),
-						                            AlignValue<idx_t>(sizeof(STATE)), true);
-					});
-				} else {
-					result.SetStructStateExport([](const BoundAggregateFunction &) {
-						return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)),
-						                            true);
-					});
-				}
+	//! Returns the logical type for state type ST, using return_type as the value type for sort-key and linked list
+	//! states (whose decoded type equals the aggregate's runtime return type).
+	template <class ST, class STATE>
+	static LogicalType BuildStateLogical(const LogicalType &return_type) {
+		if constexpr (IsOptionalStateType<ST>::value) {
+			using V = typename ST::value_type;
+			if constexpr (IsStateSortKeyType<V>::value) {
+				return return_type;
+			} else if constexpr (IsStructStateType<V>::value) {
+				return V::GetLogicalType(STATE::STATE_NAMES);
 			} else {
-				result.SetStructStateExport([](const BoundAggregateFunction &) {
-					AggregateStateLayout layout;
-					layout.type = STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES);
-					layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-					STATE::STATE_TYPE::PopulateField(layout.field);
-					return layout;
-				});
+				return PrimitiveToLogicalType<V>();
 			}
-		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
-			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
-			});
+		} else if constexpr (IsStateListType<ST>::value) {
+			static_assert(ST::layout_type == StateLayoutType::RETURN_TYPE,
+			              "StateListType only supports StateLayoutType::RETURN_TYPE");
+			return return_type;
+		} else {
+			return ST::GetLogicalType(STATE::STATE_NAMES);
 		}
 	}
 
-	//! Callback for sort key optional state: layout type is the aggregate's return type (known after bind).
-	//! Defined after BoundAggregateFunction to avoid the incomplete-type issue.
-	template <OrderType ORDER, idx_t ALIGNED_SIZE>
-	static AggregateStateLayout GetSortKeyStateLayout(const BoundAggregateFunction &);
-
-	//! Callback for linked list states: layout type is the aggregate's LIST return type (known after bind).
-	//! Defined after BoundAggregateFunction to avoid the incomplete-type issue.
-	template <idx_t ALIGNED_SIZE>
-	static AggregateStateLayout GetListStateLayout(const BoundAggregateFunction &);
+	//! Defined out-of-line (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
+	template <class STATE>
+	static void WireStructStateType(AggregateFunction &result);
 
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
@@ -743,28 +716,28 @@ public:
 	}
 };
 
-// Defined here (after BoundAggregateFunction is complete) so the body can call GetReturnType().
-template <OrderType ORDER, idx_t ALIGNED_SIZE>
-inline AggregateStateLayout AggregateFunction::GetSortKeyStateLayout(const BoundAggregateFunction &bound_function) {
-	AggregateStateLayout layout;
-	layout.type = bound_function.GetReturnType();
-	layout.total_state_size = ALIGNED_SIZE;
-	layout.field.is_optional = true;
-	layout.field.is_sort_key = true;
-	layout.field.sort_key_order = ORDER;
-	return layout;
-}
-
-// Defined here (after BoundAggregateFunction is complete) so the body can call GetReturnType().
-template <idx_t ALIGNED_SIZE>
-inline AggregateStateLayout AggregateFunction::GetListStateLayout(const BoundAggregateFunction &bound_function) {
-	AggregateStateLayout layout;
-	layout.type = bound_function.GetReturnType();
-	D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
-	layout.total_state_size = ALIGNED_SIZE;
-	layout.field.is_list = true;
-	GetSegmentDataFunctions(layout.list_functions, ListType::GetChildType(layout.type));
-	return layout;
+// Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
+template <class STATE>
+inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
+	if constexpr (HasStructStateType<STATE>::value) {
+		using ST = typename STATE::STATE_TYPE;
+		result.SetStructStateExport([](const BoundAggregateFunction &bound) {
+			AggregateStateLayout layout;
+			layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound.GetReturnType());
+			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+			layout.field = BuildStateField<ST>();
+			if constexpr (IsStateListType<ST>::value) {
+				// linked list state - set up the segment functions used to read/write the linked list
+				D_ASSERT(layout.type.id() == LogicalTypeId::LIST);
+				GetSegmentDataFunctions(layout.list_functions, ListType::GetChildType(layout.type));
+			}
+			return layout;
+		});
+	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
+		result.SetStructStateExport([](const BoundAggregateFunction &) {
+			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
+		});
+	}
 }
 
 } // namespace duckdb
