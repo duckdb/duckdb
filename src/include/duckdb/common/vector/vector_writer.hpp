@@ -368,10 +368,14 @@ public:
 	}
 	DynamicListWriter(const DynamicListWriter &) = delete;
 	DynamicListWriter(DynamicListWriter &&) = delete;
-	~DynamicListWriter() {
-		parent.list_data[row_idx] = {base_offset, current_idx};
-		parent.child_offset = base_offset + current_idx;
-		VectorWriterSetListSize(parent.list_vec, base_offset + current_idx);
+	~DynamicListWriter() noexcept {
+		try {
+			parent.list_data[row_idx] = {base_offset, current_idx};
+			parent.child_offset = base_offset + current_idx;
+			VectorWriterSetListSize(parent.list_vec, base_offset + current_idx);
+		} catch (...) {
+			D_ASSERT(false);
+		}
 		// suppress the writer's count-mismatch assertion (the reserved capacity
 		// is typically larger than what was actually written) and destroy it.
 		child_writer.Truncate();
@@ -500,10 +504,14 @@ public:
 	}
 	DynamicListAppender(const DynamicListAppender &) = delete;
 	DynamicListAppender(DynamicListAppender &&) = delete;
-	~DynamicListAppender() {
-		parent.list_data[row_idx] = {base_offset, current_length};
-		parent.child_offset = base_offset + current_length;
-		VectorWriterSetListSize(parent.list_vec, base_offset + current_length);
+	~DynamicListAppender() noexcept {
+		try {
+			parent.list_data[row_idx] = {base_offset, current_length};
+			parent.child_offset = base_offset + current_length;
+			VectorWriterSetListSize(parent.list_vec, base_offset + current_length);
+		} catch (...) {
+			D_ASSERT(false);
+		}
 	}
 
 	//! Copy `copy_count` rows out of `source` (selected via source_sel/source_offset/source_count)

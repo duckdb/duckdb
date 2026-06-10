@@ -22,23 +22,14 @@ public:
 	ExtraOperatorInfo() : file_filters(""), sample_options(nullptr) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &&extra_info) noexcept
-	    : file_filters(std::move(extra_info.file_filters)), sample_options(std::move(extra_info.sample_options)) {
-		if (extra_info.total_files.IsValid()) {
-			total_files = extra_info.total_files.GetIndex();
-		}
-		if (extra_info.filtered_files.IsValid()) {
-			filtered_files = extra_info.filtered_files.GetIndex();
-		}
+	    : file_filters(std::move(extra_info.file_filters)), total_files(extra_info.total_files),
+	      filtered_files(extra_info.filtered_files), sample_options(std::move(extra_info.sample_options)) {
 	}
 	ExtraOperatorInfo &operator=(ExtraOperatorInfo &&extra_info) noexcept {
 		if (this != &extra_info) {
-			file_filters = extra_info.file_filters;
-			if (extra_info.total_files.IsValid()) {
-				total_files = extra_info.total_files.GetIndex();
-			}
-			if (extra_info.filtered_files.IsValid()) {
-				filtered_files = extra_info.filtered_files.GetIndex();
-			}
+			file_filters = std::move(extra_info.file_filters);
+			total_files = extra_info.total_files;
+			filtered_files = extra_info.filtered_files;
 			sample_options = std::move(extra_info.sample_options);
 		}
 		return *this;
