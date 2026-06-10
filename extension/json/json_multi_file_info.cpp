@@ -256,6 +256,25 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		}
 		return true;
 	}
+	if (loption == "records") {
+		JSONCheckSingleParameter(key, values);
+		auto &val = values.back();
+		if (val.type().id() == LogicalTypeId::BOOLEAN) {
+			options.record_type = BooleanValue::Get(val) ? JSONRecordType::RECORDS : JSONRecordType::VALUES;
+		} else {
+			auto arg = StringUtil::Lower(StringValue::Get(val));
+			if (arg == "auto") {
+				options.record_type = JSONRecordType::AUTO_DETECT;
+			} else if (arg == "true") {
+				options.record_type = JSONRecordType::RECORDS;
+			} else if (arg == "false") {
+				options.record_type = JSONRecordType::VALUES;
+			} else {
+				throw BinderException("COPY (FORMAT JSON) \"records\" parameter must be one of ['auto', 'true', 'false'].");
+			}
+		}
+		return true;
+	}
 	return false;
 }
 
@@ -364,6 +383,9 @@ void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderO
 	auto &options = reader_options.options;
 	options.name_list = expected_names;
 	options.sql_type_list = expected_types;
+	if (options.record_type == JSONRecordType::VALUES && expected_types.size() != 1) {
+		throw BinderException("COPY (FORMAT JSON) with \"records\" set to 'false' requires a single column.");
+	}
 	if (options.auto_detect && options.format != JSONFormat::ARRAY) {
 		options.format = JSONFormat::AUTO_DETECT;
 	}
