@@ -52,13 +52,6 @@ static ClientContext &RequireClientContext(QueryContext context) {
 	return *client_context;
 }
 
-static idx_t MultiplyCap(idx_t lhs, idx_t rhs) {
-	if (lhs != 0 && rhs > NumericLimits<idx_t>::Maximum() / lhs) {
-		return NumericLimits<idx_t>::Maximum();
-	}
-	return lhs * rhs;
-}
-
 static idx_t MemoryStateUpdateGranularity(idx_t max_pending_bytes, idx_t coalesce_threshold) {
 	constexpr idx_t MINIMUM_UPDATE_GRANULARITY = 1024ULL * 1024ULL;
 	auto threshold = max_pending_bytes / 16;
@@ -81,10 +74,10 @@ private:
 };
 
 AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const string &path_p,
-                                 FileOpenFlags open_flags, AsyncFileWriterOptions options)
+                                 FileOpenFlags open_flags)
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
-	ResolveOptions(options);
+	ResolveWriteSettings();
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	if (scheduler.NumberOfAsyncThreads() > 0) {
 		executor = make_uniq<TaskExecutor>(client_context, TaskSchedulerType::ASYNC);
@@ -116,7 +109,7 @@ AsyncFileWriter::BatchGuard::~BatchGuard() {
 	}
 }
 
-void AsyncFileWriter::ResolveOptions(AsyncFileWriterOptions options) {
+void AsyncFileWriter::ResolveWriteSettings() {
 	bool local_file = fs.IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {
@@ -126,19 +119,11 @@ void AsyncFileWriter::ResolveOptions(AsyncFileWriterOptions options) {
 		}
 	}
 
-	copied_buffer_capacity = options.copied_buffer_capacity;
-	if (copied_buffer_capacity == 0) {
-		copied_buffer_capacity = AsyncFileWriterOptions::DEFAULT_COPIED_BUFFER_CAPACITY;
-	}
-
-	coalesce_threshold = local_file ? options.local_coalesce_threshold : options.remote_coalesce_threshold;
-	if (coalesce_threshold == 0) {
-		coalesce_threshold = AsyncFileWriterOptions::DEFAULT_LOCAL_COALESCE_THRESHOLD;
-	}
+	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
-	max_pending_bytes = MultiplyCap(options.max_pending_bytes_per_thread, regular_threads);
+	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
 }
 
 idx_t AsyncFileWriter::GetFileSize() {
@@ -159,8 +144,8 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
-	if (write_size >= copied_buffer_capacity) {
-		SealCopiedBuffer(false);
+	if (write_size >= DEFAULT_COPIED_BUFFER_CAPACITY) {
+		SealCopiedBuffer(ScheduleMode::DEFER);
 		auto owned_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, write_size);
 		owned_buffer->Append(buffer, write_size);
 		RegisterWrite(std::move(owned_buffer));
@@ -173,7 +158,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		{
 			lock_guard<mutex> guard(lock);
 			if (!copied_buffer) {
-				copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, copied_buffer_capacity);
+				copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
 			}
 			auto append_size = MinValue(write_size - offset, copied_buffer->Remaining());
 			copied_buffer->Append(buffer + offset, append_size);
@@ -184,7 +169,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			}
 		}
 		if (sealed_buffer) {
-			RegisterWrite(std::move(sealed_buffer), false);
+			RegisterWrite(std::move(sealed_buffer), WriteAccounting::ALREADY_COUNTED);
 		}
 	}
 }
@@ -193,18 +178,19 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 	if (!buffer || buffer->Size() == 0) {
 		return;
 	}
-	SealCopiedBuffer(false);
+	SealCopiedBuffer(ScheduleMode::DEFER);
 	RegisterWrite(std::move(buffer));
 }
 
-void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, bool update_total_written,
-                                    bool allow_schedule) {
+void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, WriteAccounting accounting,
+                                    ScheduleMode schedule_mode) {
 	RethrowTaskError();
 	if (closed) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
 	auto write_size = buffer->Size();
+	auto update_total_written = accounting == WriteAccounting::ADD_TO_TOTAL_WRITTEN;
 	if (!executor) {
 		WriteBuffer(buffer->Ptr(), write_size);
 		if (update_total_written) {
@@ -222,7 +208,7 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, bool up
 			total_written += write_size;
 		}
 		pending_writes.push_back(std::move(buffer));
-		if (allow_schedule && !task_scheduled && batch_depth == 0) {
+		if (schedule_mode == ScheduleMode::ALLOW && !task_scheduled && batch_depth == 0) {
 			task_scheduled = true;
 			should_schedule = true;
 		}
@@ -235,7 +221,7 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, bool up
 	}
 }
 
-void AsyncFileWriter::SealCopiedBuffer(bool allow_schedule) {
+void AsyncFileWriter::SealCopiedBuffer(ScheduleMode schedule_mode) {
 	unique_ptr<CopiedAsyncWriteBuffer> sealed_buffer;
 	{
 		lock_guard<mutex> guard(lock);
@@ -244,7 +230,7 @@ void AsyncFileWriter::SealCopiedBuffer(bool allow_schedule) {
 		}
 		sealed_buffer = std::move(copied_buffer);
 	}
-	RegisterWrite(std::move(sealed_buffer), false, allow_schedule);
+	RegisterWrite(std::move(sealed_buffer), WriteAccounting::ALREADY_COUNTED, schedule_mode);
 }
 
 void AsyncFileWriter::ScheduleTask() {
@@ -260,7 +246,7 @@ void AsyncFileWriter::SchedulePendingWrites() {
 	if (!executor) {
 		return;
 	}
-	SealCopiedBuffer(false);
+	SealCopiedBuffer(ScheduleMode::DEFER);
 	bool should_schedule = false;
 	{
 		lock_guard<mutex> guard(lock);
@@ -274,11 +260,12 @@ void AsyncFileWriter::SchedulePendingWrites() {
 	}
 }
 
-void AsyncFileWriter::UpdateMemoryState(bool force) {
+void AsyncFileWriter::UpdateMemoryState(MemoryUpdateMode mode) {
 	if (!memory_state) {
 		return;
 	}
 
+	auto force = mode == MemoryUpdateMode::FORCE;
 	// TMM is shared state; report coarse backlog changes instead of touching it for every registered write.
 	idx_t current_pending_bytes;
 	bool should_update;
@@ -324,13 +311,11 @@ void AsyncFileWriter::DrainPendingWrites() {
 			writes = std::move(pending_writes);
 			pending_writes.clear();
 		}
-		WritePendingWrites(writes);
+		auto drained_bytes = WritePendingWrites(writes);
 		{
 			lock_guard<mutex> guard(lock);
-			for (auto &write : writes) {
-				D_ASSERT(pending_bytes >= write->Size());
-				pending_bytes -= write->Size();
-			}
+			D_ASSERT(pending_bytes >= drained_bytes);
+			pending_bytes -= drained_bytes;
 		}
 		UpdateMemoryState();
 	}
@@ -358,19 +343,22 @@ void AsyncFileWriter::EndBatch() {
 		batch_done = batch_depth == 0;
 	}
 	if (batch_done) {
-		UpdateMemoryState(true);
+		UpdateMemoryState(MemoryUpdateMode::FORCE);
 		SchedulePendingWrites();
 	}
 }
 
-void AsyncFileWriter::WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes) {
+idx_t AsyncFileWriter::WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes) {
 	// The writer is a sequential stream: keep registration order and write through the handle's current position.
+	idx_t drained_bytes = 0;
 	idx_t i = 0;
 	while (i < writes.size()) {
 		auto &write = *writes[i];
 		auto write_size = write.Size();
 		if (write_size >= coalesce_threshold) {
 			WriteBuffer(write.Ptr(), write_size);
+			drained_bytes += write_size;
+			writes[i].reset();
 			i++;
 			continue;
 		}
@@ -387,6 +375,8 @@ void AsyncFileWriter::WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &w
 		}
 		if (end == i + 1) {
 			WriteBuffer(write.Ptr(), write_size);
+			drained_bytes += write_size;
+			writes[i].reset();
 			i++;
 			continue;
 		}
@@ -394,13 +384,19 @@ void AsyncFileWriter::WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &w
 		auto coalesced = BufferAllocator::Get(client_context).Allocate(coalesced_size);
 		idx_t offset = 0;
 		for (idx_t write_idx = i; write_idx < end; write_idx++) {
-			auto &current = *writes[write_idx];
-			memcpy(coalesced.get() + offset, current.Ptr(), current.Size());
-			offset += current.Size();
+			auto &current = writes[write_idx];
+			auto current_size = current->Size();
+			memcpy(coalesced.get() + offset, current->Ptr(), current_size);
+			offset += current_size;
+			// The coalesced buffer owns these bytes now; release the sources before the physical write.
+			current.reset();
 		}
+		D_ASSERT(offset == coalesced_size);
 		WriteBuffer(coalesced.get(), coalesced_size);
+		drained_bytes += coalesced_size;
 		i = end;
 	}
+	return drained_bytes;
 }
 
 void AsyncFileWriter::WriteBuffer(data_ptr_t buffer, idx_t size) {
@@ -428,7 +424,7 @@ void AsyncFileWriter::ApplyBackpressure() {
 			return;
 		}
 	}
-	SealCopiedBuffer(false);
+	SealCopiedBuffer(ScheduleMode::DEFER);
 	while (true) {
 		idx_t current_pending_bytes;
 		{
@@ -448,13 +444,13 @@ void AsyncFileWriter::ApplyBackpressure() {
 }
 
 void AsyncFileWriter::WaitAll() {
-	SealCopiedBuffer(false);
+	SealCopiedBuffer(ScheduleMode::DEFER);
 	if (executor) {
 		{
 			lock_guard<mutex> guard(lock);
 			batch_depth = 0;
 		}
-		UpdateMemoryState(true);
+		UpdateMemoryState(MemoryUpdateMode::FORCE);
 		SchedulePendingWrites();
 		executor->WorkOnTasks();
 	}

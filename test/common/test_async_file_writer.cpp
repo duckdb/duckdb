@@ -53,17 +53,6 @@ static string ReadFile(const string &path) {
 	return result;
 }
 
-static AsyncFileWriterOptions TestOptions(idx_t coalesce_threshold = 8, idx_t max_pending_bytes_per_thread = 1024,
-                                          idx_t copied_buffer_capacity =
-                                              AsyncFileWriterOptions::DEFAULT_COPIED_BUFFER_CAPACITY) {
-	AsyncFileWriterOptions options;
-	options.local_coalesce_threshold = coalesce_threshold;
-	options.remote_coalesce_threshold = coalesce_threshold;
-	options.max_pending_bytes_per_thread = max_pending_bytes_per_thread;
-	options.copied_buffer_capacity = copied_buffer_capacity;
-	return options;
-}
-
 static unique_ptr<Connection> CreateConnectionWithAsyncThreads(DuckDB &db, idx_t async_threads = 1) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
@@ -85,8 +74,7 @@ TEST_CASE("AsyncFileWriter requires a client context", "[async_file_writer]") {
 		fs.RemoveFile(path);
 	}
 
-	REQUIRE_THROWS_AS(AsyncFileWriter(QueryContext(), fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions()),
-	                  InvalidInputException);
+	REQUIRE_THROWS_AS(AsyncFileWriter(QueryContext(), fs, path), InvalidInputException);
 	REQUIRE(!fs.FileExists(path));
 }
 
@@ -99,7 +87,7 @@ TEST_CASE("AsyncFileWriter registers writes before async drain", "[async_file_wr
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(const_data_ptr_cast("ab"), 2);
@@ -125,7 +113,7 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(const_data_ptr_cast("ab"), 2);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
 
@@ -148,7 +136,7 @@ TEST_CASE("AsyncFileWriter buffers small copied writes", "[async_file_writer]") 
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(const_data_ptr_cast("PA"), 2);
 	writer.WriteData(const_data_ptr_cast("R1"), 2);
 
@@ -162,6 +150,34 @@ TEST_CASE("AsyncFileWriter buffers small copied writes", "[async_file_writer]") 
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter preserves order around large copied writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_small_large_small.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		string large(8192, 'x');
+		writer.WriteData(const_data_ptr_cast("PAR1"), 4);
+		writer.WriteData(const_data_ptr_cast(large.data()), large.size());
+		writer.WriteData(const_data_ptr_cast("PARE"), 4);
+		REQUIRE(writer.GetTotalWritten() == 8200);
+	}
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == "PAR1" + string(8192, 'x') + "PARE");
+	REQUIRE(fs.write_sizes.size() == 3);
+	REQUIRE(fs.write_sizes[0] == 4);
+	REQUIRE(fs.write_sizes[1] == 8192);
+	REQUIRE(fs.write_sizes[2] == 4);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter copies transient WriteData input", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithNoAsyncThreads(db);
@@ -172,7 +188,7 @@ TEST_CASE("AsyncFileWriter copies transient WriteData input", "[async_file_write
 	}
 
 	string payload = "abcdef";
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(const_data_ptr_cast(payload.data()), payload.size());
 	payload = "XXXXXX";
 	writer.Close();
@@ -190,7 +206,7 @@ TEST_CASE("AsyncFileWriter flush waits for pending writes", "[async_file_writer]
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	auto batch_guard = writer.StartBatch();
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 	REQUIRE(fs.write_sizes.empty());
@@ -211,23 +227,27 @@ TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[asyn
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions(4));
+	string large(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD, 'a');
+	string small_a(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD / 2, 'b');
+	string small_b(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD / 2, 'c');
+
+	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("ef"));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("gh"));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_a));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_b));
 	}
 	writer.Close();
 
-	REQUIRE(ReadFile(path) == "abcdefgh");
+	REQUIRE(ReadFile(path) == large + small_a + small_b);
 	REQUIRE(fs.write_sizes.size() == 2);
-	REQUIRE(fs.write_sizes[0] == 4);
-	REQUIRE(fs.write_sizes[1] == 4);
+	REQUIRE(fs.write_sizes[0] == large.size());
+	REQUIRE(fs.write_sizes[1] == small_a.size() + small_b.size());
 	fs.RemoveFile(path);
 }
 
-TEST_CASE("AsyncFileWriter applies backpressure outside registration", "[async_file_writer]") {
+TEST_CASE("AsyncFileWriter does not apply backpressure during a batch", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
 	TrackingWriteFileSystem fs;
@@ -236,7 +256,7 @@ TEST_CASE("AsyncFileWriter applies backpressure outside registration", "[async_f
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions(1, 0));
+	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
@@ -244,10 +264,9 @@ TEST_CASE("AsyncFileWriter applies backpressure outside registration", "[async_f
 		REQUIRE(fs.write_sizes.empty());
 	}
 
-	writer.ApplyBackpressure();
-	REQUIRE(fs.write_sizes.size() == 2);
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcdefgh");
+	REQUIRE(fs.write_sizes.size() == 1);
 	fs.RemoveFile(path);
 }
 
@@ -260,7 +279,7 @@ TEST_CASE("AsyncFileWriter batches writes before scheduling", "[async_file_write
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions(1, 0));
+	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
@@ -271,10 +290,9 @@ TEST_CASE("AsyncFileWriter batches writes before scheduling", "[async_file_write
 		REQUIRE(fs.write_sizes.empty());
 	}
 
-	writer.ApplyBackpressure();
-	REQUIRE(fs.write_sizes.size() == 2);
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcdefgh");
+	REQUIRE(fs.write_sizes.size() == 1);
 	fs.RemoveFile(path);
 }
 
@@ -287,7 +305,7 @@ TEST_CASE("AsyncFileWriter close drains an open batch", "[async_file_writer]") {
 		fs.RemoveFile(path);
 	}
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	auto batch_guard = writer.StartBatch();
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 	writer.Close();
@@ -306,7 +324,7 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 	}
 	fs.fail_writes = true;
 
-	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
