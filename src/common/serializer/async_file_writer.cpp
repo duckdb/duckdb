@@ -131,7 +131,6 @@ idx_t AsyncFileWriter::GetFileSize() {
 }
 
 idx_t AsyncFileWriter::GetTotalWritten() const {
-	lock_guard<mutex> guard(lock);
 	return total_written;
 }
 
@@ -155,18 +154,15 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	idx_t offset = 0;
 	while (offset < write_size) {
 		unique_ptr<CopiedAsyncWriteBuffer> sealed_buffer;
-		{
-			lock_guard<mutex> guard(lock);
-			if (!copied_buffer) {
-				copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
-			}
-			auto append_size = MinValue(write_size - offset, copied_buffer->Remaining());
-			copied_buffer->Append(buffer + offset, append_size);
-			total_written += append_size;
-			offset += append_size;
-			if (copied_buffer->Remaining() == 0) {
-				sealed_buffer = std::move(copied_buffer);
-			}
+		if (!copied_buffer) {
+			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
+		}
+		auto append_size = MinValue(write_size - offset, copied_buffer->Remaining());
+		copied_buffer->Append(buffer + offset, append_size);
+		total_written += append_size;
+		offset += append_size;
+		if (copied_buffer->Remaining() == 0) {
+			sealed_buffer = std::move(copied_buffer);
 		}
 		if (sealed_buffer) {
 			RegisterWrite(std::move(sealed_buffer), WriteAccounting::ALREADY_COUNTED);
@@ -194,7 +190,6 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, WriteAc
 	if (!executor) {
 		WriteBuffer(buffer->Ptr(), write_size);
 		if (update_total_written) {
-			lock_guard<mutex> guard(lock);
 			total_written += write_size;
 		}
 		return;
@@ -203,15 +198,15 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, WriteAc
 	bool should_schedule = false;
 	{
 		lock_guard<mutex> guard(lock);
-		pending_bytes += write_size;
-		if (update_total_written) {
-			total_written += write_size;
-		}
 		pending_writes.push_back(std::move(buffer));
+		pending_bytes += write_size;
 		if (schedule_mode == ScheduleMode::ALLOW && !task_scheduled && batch_depth == 0) {
 			task_scheduled = true;
 			should_schedule = true;
 		}
+	}
+	if (update_total_written) {
+		total_written += write_size;
 	}
 	if (should_schedule) {
 		UpdateMemoryState();
@@ -222,14 +217,10 @@ void AsyncFileWriter::RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, WriteAc
 }
 
 void AsyncFileWriter::SealCopiedBuffer(ScheduleMode schedule_mode) {
-	unique_ptr<CopiedAsyncWriteBuffer> sealed_buffer;
-	{
-		lock_guard<mutex> guard(lock);
-		if (!copied_buffer || copied_buffer->Size() == 0) {
-			return;
-		}
-		sealed_buffer = std::move(copied_buffer);
+	if (!copied_buffer || copied_buffer->Size() == 0) {
+		return;
 	}
+	auto sealed_buffer = std::move(copied_buffer);
 	RegisterWrite(std::move(sealed_buffer), WriteAccounting::ALREADY_COUNTED, schedule_mode);
 }
 
@@ -418,11 +409,8 @@ void AsyncFileWriter::ApplyBackpressure() {
 		return;
 	}
 	RethrowTaskError();
-	{
-		lock_guard<mutex> guard(lock);
-		if (batch_depth > 0) {
-			return;
-		}
+	if (batch_depth > 0) {
+		return;
 	}
 	SealCopiedBuffer(ScheduleMode::DEFER);
 	while (true) {
@@ -475,10 +463,7 @@ void AsyncFileWriter::Sync() {
 void AsyncFileWriter::Truncate(idx_t size) {
 	WaitAll();
 	handle->Truncate(NumericCast<int64_t>(size));
-	{
-		lock_guard<mutex> guard(lock);
-		total_written = size;
-	}
+	total_written = size;
 	if (handle->CanSeek() && handle->SeekPosition() > size) {
 		handle->Seek(size);
 	}
