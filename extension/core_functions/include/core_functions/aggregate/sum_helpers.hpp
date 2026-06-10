@@ -33,12 +33,12 @@ struct SumState {
 };
 
 struct KahanSumState {
-	static constexpr const char *STATE_NAMES[] = {"is_set", "value", "err"};
-	using STATE_TYPE = StructStateType<bool, double, double>;
+	static constexpr const char *STATE_NAMES[] = {"value", "err"};
+	using STATE_TYPE = OptionalStateType<StructStateType<double, double>>;
 
-	bool is_set;
 	double value;
 	double err;
+	bool is_set;
 
 	void Combine(const KahanSumState &other) {
 		this->is_set = other.is_set || this->is_set;

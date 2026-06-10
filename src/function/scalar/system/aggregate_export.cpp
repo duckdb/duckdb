@@ -177,7 +177,22 @@ struct LoadPrimitiveOptionalOp {
 
 void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
                       data_ptr_t dest_buffer) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
+	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+		// Optional struct: deserialize children, then derive is_set from the struct's row validity.
+		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		const auto &struct_entries = StructVector::GetEntries(input_vec);
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
+			                                  child.is_optional);
+			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset);
+		}
+		auto &validity = FlatVector::Validity(input_vec);
+		for (idx_t i = 0; i < count; i++) {
+			*reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + struct_size) = validity.RowIsValid(i);
+		}
+	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(layout.type);
 		const auto &struct_entries = StructVector::GetEntries(input_vec);
 		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
@@ -196,7 +211,22 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 
 void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
                     idx_t base_offset = 0) {
-	if (layout.type.id() == LogicalTypeId::STRUCT) {
+	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+		// Optional struct: mark null rows in the struct's validity, then serialize children for all rows.
+		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
+		const auto &child_types = StructType::GetChildTypes(layout.type);
+		auto &struct_entries = StructVector::GetEntries(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!Load<bool>(addresses[i] + base_offset + struct_size)) {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {
+			const auto &child = layout.field.children[field_idx];
+			AggregateStateLayout child_layout(child_types[field_idx].second, 0, child.is_optional);
+			SerializeState(child_layout, struct_entries[field_idx], count, addresses, base_offset + child.field_offset);
+		}
+	} else if (layout.type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(layout.type);
 		auto &struct_entries = StructVector::GetEntries(result);
 		for (idx_t field_idx = 0; field_idx < layout.field.children.size(); field_idx++) {

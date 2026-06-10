@@ -570,7 +570,13 @@ public:
 			if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
 				result.SetStructStateExport([](const BoundAggregateFunction &) {
 					using T = typename STATE::STATE_TYPE::value_type;
-					return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)), true);
+					if constexpr (IsStructStateType<T>::value) {
+						return AggregateStateLayout(T::GetLogicalType(STATE::STATE_NAMES),
+						                            AlignValue<idx_t>(sizeof(STATE)), true);
+					} else {
+						return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)),
+						                            true);
+					}
 				});
 			} else {
 				result.SetStructStateExport([](const BoundAggregateFunction &) {

@@ -194,6 +194,12 @@ struct StructStateType {
 	}
 };
 
+//! Detection trait: true when T is StructStateType<Us...> for some Us.
+template <class T>
+struct IsStructStateType : std::false_type {};
+template <class... Ts>
+struct IsStructStateType<StructStateType<Ts...>> : std::true_type {};
+
 //! Top-level description of an aggregate state for export/import purposes.
 //! Returned by the aggregate_get_state_type_t callback registered via SetStructStateExport.
 //!
@@ -206,9 +212,7 @@ struct AggregateStateLayout {
 	AggregateStateLayout(LogicalType type_p, idx_t total_state_size_p, bool is_optional = false)
 	    : type(std::move(type_p)), total_state_size(total_state_size_p) {
 		field.is_optional = is_optional;
-		if (!is_optional) {
-			AggregateStateField::PopulateChildren(type, field);
-		}
+		AggregateStateField::PopulateChildren(type, field);
 	}
 
 	LogicalType type;
