@@ -510,6 +510,15 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	SerializeState(layout, result, count, addresses_ptrs);
 }
 
+// the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
+// aggregate's combine expects its own bind data, so we forward it here
+void CombineAggrStateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
+	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
+	                                 aggr_input_data.combine_type);
+	bind_data.aggr.GetStateCombineCallback()(source, target, combine_input, count);
+}
+
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
@@ -520,7 +529,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
 	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
-	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
+	function.SetStateCombineCallback(CombineAggrStateCombine);
 
 	function.SetReturnType(arguments[0]->GetReturnType());
 

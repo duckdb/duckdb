@@ -73,7 +73,10 @@
         "test/sql/aggregate/aggregate_state_export/test_combine_aggr.test",
         "test/sql/aggregate/aggregate_state_export/test_aggregate_state_type.test",
         "test/sql/aggregate/aggregate_state_export/test_corr_state_export.test",
-        "test/sql/aggregate/aggregate_state_export/test_state_export_struct.test"
+        "test/sql/aggregate/aggregate_state_export/test_state_export_struct.test",
+        "test/sql/aggregate/aggregate_state_export/arg_min_max_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/first_last_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/list_export_state.test"
       ]
     },
     {
