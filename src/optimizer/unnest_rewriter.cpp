@@ -671,15 +671,36 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		path_to_unnest.push_back(curr_op);
 		D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = curr_op->get()->Cast<LogicalProjection>();
+		D_ASSERT(proj.expressions.size() > distinct_unnest_count);
+		auto tbl_idx = proj.table_index;
+		auto payload_count = proj.expressions.size() - distinct_unnest_count;
 
 		// pop the unnest columns and the delim index
-		D_ASSERT(proj.expressions.size() > distinct_unnest_count);
+		for (idx_t i = payload_count; i < proj.expressions.size(); i++) {
+			auto &expr = proj.expressions[i];
+			if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &colref = expr->Cast<BoundColumnRefExpression>();
+			auto removed_binding = colref.Binding();
+			if (removed_binding.table_index == overwritten_tbl_idx &&
+			    removed_binding.column_index.GetIndex() < delim_columns.size()) {
+				removed_binding = delim_columns[removed_binding.column_index.GetIndex()];
+			}
+			for (idx_t lhs_idx = 0; lhs_idx < lhs_bindings.size(); lhs_idx++) {
+				if (removed_binding == lhs_bindings[lhs_idx].binding) {
+					ColumnBinding source_binding(tbl_idx, ProjectionIndex(i));
+					ColumnBinding target_binding(tbl_idx, ProjectionIndex(lhs_idx));
+					updater.replace_bindings.emplace_back(source_binding, target_binding);
+					break;
+				}
+			}
+		}
 		for (idx_t i = 0; i < distinct_unnest_count; i++) {
 			proj.expressions.pop_back();
 		}
 
 		// store all shifted current bindings
-		auto tbl_idx = proj.table_index;
 		for (idx_t i = 0; i < proj.expressions.size(); i++) {
 			ColumnBinding source_binding(tbl_idx, ProjectionIndex(i));
 			ColumnBinding target_binding(tbl_idx, ProjectionIndex(i + shift));
@@ -750,6 +771,11 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		// add the existing expressions again
 		for (idx_t expr_idx = 0; expr_idx < existing_expressions.size(); expr_idx++) {
 			proj.expressions.push_back(std::move(existing_expressions[expr_idx]));
+		}
+
+		proj.types.clear();
+		for (auto &expr : proj.expressions) {
+			proj.types.push_back(expr->GetReturnType());
 		}
 	}
 }
