@@ -141,8 +141,9 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 using MinOperation = NumericMinMaxBase<Min>;
 using MaxOperation = NumericMinMaxBase<Max>;
 
-struct MinMaxStringState {
-	using STATE_TYPE = OptionalStateType<string_t>;
+//! Shared state layout for both MinMaxStringState and MinMaxSortKeyState.
+//! Stores a string_t value (regular string or sort key blob) with power-of-two allocation reuse.
+struct BaseMinMaxStringState {
 	string_t value;
 	bool is_set;
 	uint32_t alloc_size;
@@ -164,6 +165,10 @@ struct MinMaxStringState {
 			value = string_t(ptr, len);
 		}
 	}
+};
+
+struct MinMaxStringState : BaseMinMaxStringState {
+	using STATE_TYPE = OptionalStateType<string_t>;
 };
 
 struct StringMinMaxBase : public MinMaxBase {
@@ -267,13 +272,23 @@ struct MinOperationVector : VectorMinMaxBase<OrderType::ASCENDING> {};
 
 struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {};
 
-template <typename OP, typename STATE>
+template <OrderType ORDER>
+struct MinMaxSortKeyState : BaseMinMaxStringState {
+	using STATE_TYPE = OptionalStateType<StateSortKey<ORDER>>;
+};
+
+template <typename OP>
 static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
-	return AggregateFunction(
-	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
-	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind, nullptr);
+	using STATE = MinMaxSortKeyState<OP::ORDER_TYPE>;
+	auto result =
+	    AggregateFunction({type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>,
+	                      AggregateFunction::StateInitialize<STATE, OP>,
+	                      AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
+	                      AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
+	                      nullptr);
+	AggregateFunction::WireStructStateType<STATE>(result);
+	return result;
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
@@ -285,7 +300,7 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
 	case PhysicalType::ARRAY:
-		return GetMinMaxFunction<OP_VECTOR, MinMaxStringState>(type);
+		return GetMinMaxFunction<OP_VECTOR>(type);
 	default:
 		return GetUnaryAggregate<OP>(type);
 	}

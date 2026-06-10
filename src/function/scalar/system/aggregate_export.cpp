@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -176,8 +177,36 @@ struct LoadPrimitiveOptionalOp {
 };
 
 void DeserializeState(const AggregateStateLayout &layout, const Vector &input_vec, idx_t count,
-                      data_ptr_t dest_buffer) {
-	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+                      data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	if (layout.field.is_sort_key && layout.field.is_optional) {
+		// Sort key field: encode the input values as sort keys and store in the state buffer.
+		Vector sort_keys(LogicalType::BLOB);
+		CreateSortKeyHelpers::CreateSortKey(input_vec, count,
+		                                    OrderModifiers(layout.field.sort_key_order, OrderByNullType::NULLS_LAST),
+		                                    sort_keys);
+		auto *key_data = FlatVector::GetData<string_t>(sort_keys);
+		UnifiedVectorFormat idata;
+		input_vec.ToUnifiedFormat(idata);
+		for (idx_t i = 0; i < count; i++) {
+			auto *value_ptr = reinterpret_cast<string_t *>(dest_buffer + i * layout.total_state_size);
+			auto *is_set_ptr =
+			    reinterpret_cast<bool *>(dest_buffer + i * layout.total_state_size + sizeof(string_t));
+			if (!idata.validity.RowIsValid(idata.sel->get_index(i))) {
+				*is_set_ptr = false;
+			} else {
+				const auto &sort_key = key_data[i];
+				if (sort_key.IsInlined()) {
+					*value_ptr = sort_key;
+				} else {
+					const auto len = sort_key.GetSize();
+					auto *buf = char_ptr_cast(allocator.Allocate(len));
+					memcpy(buf, sort_key.GetData(), len);
+					*value_ptr = string_t(buf, UnsafeNumericCast<uint32_t>(len));
+				}
+				*is_set_ptr = true;
+			}
+		}
+	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
 		// Optional struct: deserialize children, then derive is_set from the struct's row validity.
 		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
 		const auto &child_types = StructType::GetChildTypes(layout.type);
@@ -186,7 +215,8 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 			const auto &child = layout.field.children[field_idx];
 			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
 			                                  child.is_optional);
-			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset);
+			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset,
+			                 allocator);
 		}
 		auto &validity = FlatVector::Validity(input_vec);
 		for (idx_t i = 0; i < count; i++) {
@@ -199,7 +229,8 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 			const auto &child = layout.field.children[field_idx];
 			AggregateStateLayout child_layout(child_types[field_idx].second, layout.total_state_size,
 			                                  child.is_optional);
-			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset);
+			DeserializeState(child_layout, struct_entries[field_idx], count, dest_buffer + child.field_offset,
+			                 allocator);
 		}
 	} else if (layout.field.is_optional) {
 		TemplateDispatch<LoadPrimitiveOptionalOp>(layout.type.InternalType(), input_vec, count, dest_buffer,
@@ -211,7 +242,20 @@ void DeserializeState(const AggregateStateLayout &layout, const Vector &input_ve
 
 void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
                     idx_t base_offset = 0) {
-	if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
+	if (layout.field.is_sort_key && layout.field.is_optional) {
+		// Sort key field: decode each sort key back to the return type.
+		for (idx_t i = 0; i < count; i++) {
+			const bool is_set = Load<bool>(addresses[i] + base_offset + sizeof(string_t));
+			if (!is_set) {
+				FlatVector::SetNull(result, i, true);
+			} else {
+				const string_t sort_key = Load<string_t>(addresses[i] + base_offset);
+				CreateSortKeyHelpers::DecodeSortKey(sort_key, result, i,
+				                                    OrderModifiers(layout.field.sort_key_order,
+				                                                   OrderByNullType::NULLS_LAST));
+			}
+		}
+	} else if (layout.field.is_optional && layout.type.id() == LogicalTypeId::STRUCT) {
 		// Optional struct: mark null rows in the struct's validity, then serialize children for all rows.
 		const idx_t struct_size = AggregateStateField::GetPhysicalSize(layout.type);
 		const auto &child_types = StructType::GetChildTypes(layout.type);
@@ -299,7 +343,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
 	}
 
-	DeserializeState(layout, input.data[0], count, local_state.state_buffer.get());
+	DeserializeState(layout, input.data[0], count, local_state.state_buffer.get(), local_state.allocator);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, count, 0);
@@ -347,8 +391,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 
 	// Deserialize both inputs — null rows are skipped by LoadOp, keeping the initialized empty state
-	DeserializeState(layout, input.data[0], count, local_state.state_buffer0.get());
-	DeserializeState(layout, input.data[1], count, local_state.state_buffer1.get());
+	DeserializeState(layout, input.data[0], count, local_state.state_buffer0.get(), local_state.allocator);
+	DeserializeState(layout, input.data[1], count, local_state.state_buffer1.get(), local_state.allocator);
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
 	                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
@@ -522,7 +566,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
-	DeserializeState(layout, inputs[0], count, temp_state_buf.get());
+	DeserializeState(layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
 
 	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);

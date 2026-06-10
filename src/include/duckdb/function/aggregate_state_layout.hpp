@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/type_util.hpp"
 
@@ -32,6 +33,21 @@ template <class T>
 struct IsOptionalStateType : std::false_type {};
 template <class T>
 struct IsOptionalStateType<OptionalStateType<T>> : std::true_type {};
+
+//! Phantom marker type for use inside OptionalStateType.
+//! Signals that the field stores a binary sort key (string_t) that must be decoded/encoded
+//! via CreateSortKeyHelpers when exporting/importing aggregate state.
+//! ORDER is the ordering used when creating the sort key.
+template <OrderType ORDER>
+struct StateSortKey {
+	static constexpr OrderType order_type = ORDER;
+};
+
+//! Detection trait: true when T is StateSortKey<ORDER> for some ORDER.
+template <class T>
+struct IsStateSortKeyType : std::false_type {};
+template <OrderType O>
+struct IsStateSortKeyType<StateSortKey<O>> : std::true_type {};
 
 //! Detection trait: true when STATE is itself a C++ primitive type mappable to a LogicalType via PrimitiveToLogicalType
 template <class T>
@@ -108,6 +124,10 @@ LogicalType FieldToLogicalType() {
 struct AggregateStateField {
 	idx_t field_offset = 0;
 	bool is_optional = false;
+	//! When true, the field is a binary sort key (string_t + bool is_set).
+	//! Serialize decodes it to the logical type; deserialize re-encodes from the logical type.
+	bool is_sort_key = false;
+	OrderType sort_key_order = OrderType::ASCENDING;
 	vector<AggregateStateField> children;
 
 	static idx_t GetPhysicalSize(const LogicalType &type) {

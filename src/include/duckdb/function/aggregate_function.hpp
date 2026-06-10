@@ -568,16 +568,23 @@ public:
 	static void WireStructStateType(AggregateFunction &result) {
 		if constexpr (HasStructStateType<STATE>::value) {
 			if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
-				result.SetStructStateExport([](const BoundAggregateFunction &) {
-					using T = typename STATE::STATE_TYPE::value_type;
-					if constexpr (IsStructStateType<T>::value) {
+				using T = typename STATE::STATE_TYPE::value_type;
+				if constexpr (IsStateSortKeyType<T>::value) {
+					// GetSortKeyStateLayout is defined after BoundAggregateFunction to avoid the incomplete-type issue
+					// (BoundAggregateFunction is only forward-declared at this point in the header).
+					constexpr idx_t aligned_size = (sizeof(STATE) + 7ULL) & ~7ULL;
+					result.SetStructStateExport(&AggregateFunction::GetSortKeyStateLayout<T::order_type, aligned_size>);
+				} else if constexpr (IsStructStateType<T>::value) {
+					result.SetStructStateExport([](const BoundAggregateFunction &) {
 						return AggregateStateLayout(T::GetLogicalType(STATE::STATE_NAMES),
 						                            AlignValue<idx_t>(sizeof(STATE)), true);
-					} else {
+					});
+				} else {
+					result.SetStructStateExport([](const BoundAggregateFunction &) {
 						return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)),
 						                            true);
-					}
-				});
+					});
+				}
 			} else {
 				result.SetStructStateExport([](const BoundAggregateFunction &) {
 					AggregateStateLayout layout;
@@ -593,6 +600,11 @@ public:
 			});
 		}
 	}
+
+	//! Callback for sort key optional state: layout type is the aggregate's return type (known after bind).
+	//! Defined after BoundAggregateFunction to avoid the incomplete-type issue.
+	template <OrderType ORDER, idx_t ALIGNED_SIZE>
+	static AggregateStateLayout GetSortKeyStateLayout(const BoundAggregateFunction &);
 
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
@@ -719,5 +731,17 @@ public:
 		return callbacks.get_state_type(*this);
 	}
 };
+
+// Defined here (after BoundAggregateFunction is complete) so the body can call GetReturnType().
+template <OrderType ORDER, idx_t ALIGNED_SIZE>
+inline AggregateStateLayout AggregateFunction::GetSortKeyStateLayout(const BoundAggregateFunction &bound_function) {
+	AggregateStateLayout layout;
+	layout.type = bound_function.GetReturnType();
+	layout.total_state_size = ALIGNED_SIZE;
+	layout.field.is_optional = true;
+	layout.field.is_sort_key = true;
+	layout.field.sort_key_order = ORDER;
+	return layout;
+}
 
 } // namespace duckdb
