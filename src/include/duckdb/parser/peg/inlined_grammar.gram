@@ -744,7 +744,9 @@ FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunction
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
-DistinctOrAll <- 'DISTINCT' / 'ALL'
+DistinctOrAll <- DistinctKeyword / AllKeyword
+DistinctKeyword <- 'DISTINCT'
+AllKeyword <- 'ALL'
 ExportClause <- 'EXPORT_STATE'
 WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'? Expression)
@@ -1397,7 +1399,9 @@ TableAliasWithoutAs <- Identifier ColumnAliases?
 
 AtClause <- 'AT' Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
-AtUnit <- 'VERSION' / 'TIMESTAMP'
+AtUnit <- VersionAtUnit / TimestampAtUnit
+VersionAtUnit <- 'VERSION'
+TimestampAtUnit <- 'TIMESTAMP'
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
@@ -1450,7 +1454,9 @@ GroupByList <- List(GroupByExpression)
 GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
 EmptyGroupingItem <- '(' ')'
 CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
-CubeOrRollup <- 'CUBE' / 'ROLLUP'
+CubeOrRollup <- CubeKeyword / RollupKeyword
+CubeKeyword <- 'CUBE'
+RollupKeyword <- 'ROLLUP'
 GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
 
 SubqueryReference <- Parens(SelectStatementInternal)

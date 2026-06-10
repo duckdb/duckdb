@@ -166,7 +166,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
 	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformIdentifier);
-	REGISTER_TRANSFORM(TransformCubeOrRollup);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -375,8 +374,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSetopClause);
 	REGISTER_TRANSFORM(TransformSetIntersectClause);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
-	REGISTER_TRANSFORM(TransformSetopUnion);
-	REGISTER_TRANSFORM(TransformSetopExcept);
+	REGISTER_TRANSFORM(TransformDistinctKeyword);
+	REGISTER_TRANSFORM(TransformAllKeyword);
 	REGISTER_TRANSFORM(TransformTableRef);
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
@@ -386,30 +385,15 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformMaterialized);
 	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
-	REGISTER_TRANSFORM(TransformTableFunctionAliasColon);
 	REGISTER_TRANSFORM(TransformRegularJoinClause);
-	REGISTER_TRANSFORM(TransformAtUnit);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
 	REGISTER_TRANSFORM(TransformSampleEntryCount);
 	REGISTER_TRANSFORM(TransformSampleEntryFunction);
-	REGISTER_TRANSFORM(TransformSamplePercentage);
-	REGISTER_TRANSFORM(TransformSampleRows);
 	REGISTER_TRANSFORM(TransformGroupByList);
 	REGISTER_TRANSFORM(TransformGroupByExpression);
 	REGISTER_TRANSFORM(TransformEmptyGroupingItem);
 	REGISTER_TRANSFORM(TransformCubeOrRollupClause);
 	REGISTER_TRANSFORM(TransformGroupingSetsClause);
-	REGISTER_TRANSFORM(TransformLimitExpression);
-	REGISTER_TRANSFORM(TransformFullJoin);
-	REGISTER_TRANSFORM(TransformLeftJoin);
-	REGISTER_TRANSFORM(TransformRightJoin);
-	REGISTER_TRANSFORM(TransformSemiJoin);
-	REGISTER_TRANSFORM(TransformAntiJoin);
-	REGISTER_TRANSFORM(TransformInnerJoin);
-	REGISTER_TRANSFORM(TransformDescendingOrder);
-	REGISTER_TRANSFORM(TransformAscendingOrder);
-	REGISTER_TRANSFORM(TransformNullsFirst);
-	REGISTER_TRANSFORM(TransformNullsLast);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {

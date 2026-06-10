@@ -156,18 +156,26 @@ unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTran
 	return result;
 }
 
-bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return StringUtil::CIEquals(choice_pr.Cast<KeywordParseResult>().keyword, "distinct");
-}
-
-SetOperationType PEGTransformerFactory::TransformSetopUnion(PEGTransformer &transformer, ParseResult &parse_result) {
+SetOperationType PEGTransformerFactory::TransformSetopUnion(PEGTransformer &transformer) {
 	return SetOperationType::UNION;
 }
 
-SetOperationType PEGTransformerFactory::TransformSetopExcept(PEGTransformer &transformer, ParseResult &parse_result) {
+SetOperationType PEGTransformerFactory::TransformSetopExcept(PEGTransformer &transformer) {
 	return SetOperationType::EXCEPT;
+}
+
+bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<bool>(choice_pr.GetResult());
+}
+
+bool PEGTransformerFactory::TransformDistinctKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
+	return false;
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTransformer &transformer,
@@ -251,17 +259,6 @@ string PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &trans
 
 string PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &transformer, const string &catalog_name) {
 	return catalog_name;
-}
-
-QualifiedName
-PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                                               optional_ptr<ParseResult> parse_result) {
-	QualifiedName result;
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
-	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
-	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
@@ -539,27 +536,27 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 	return std::move(result);
 }
 
-JoinType PEGTransformerFactory::TransformFullJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformFullJoin(PEGTransformer &transformer, const bool &has_result) {
 	return JoinType::OUTER;
 }
 
-JoinType PEGTransformerFactory::TransformLeftJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformLeftJoin(PEGTransformer &transformer, const bool &has_result) {
 	return JoinType::LEFT;
 }
 
-JoinType PEGTransformerFactory::TransformRightJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformRightJoin(PEGTransformer &transformer, const bool &has_result) {
 	return JoinType::RIGHT;
 }
 
-JoinType PEGTransformerFactory::TransformSemiJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformSemiJoin(PEGTransformer &transformer) {
 	return JoinType::SEMI;
 }
 
-JoinType PEGTransformerFactory::TransformAntiJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformAntiJoin(PEGTransformer &transformer) {
 	return JoinType::ANTI;
 }
 
-JoinType PEGTransformerFactory::TransformInnerJoin(PEGTransformer &transformer, ParseResult &parse_result) {
+JoinType PEGTransformerFactory::TransformInnerJoin(PEGTransformer &transformer) {
 	return JoinType::INNER;
 }
 
@@ -585,45 +582,43 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	return std::move(result);
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-
-	auto table_alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-
-	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
-
+unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
+    PEGTransformer &transformer, const string &table_alias_colon, const QualifiedName &qualified_table_function,
+    vector<FunctionArgument> table_function_arguments, const bool &has_result,
+    optional<unique_ptr<SampleOptions>> sample_clause) {
 	auto result = make_uniq<TableFunctionRef>();
-	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
-	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
+	result->with_ordinality = has_result ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
-	result->alias = table_alias;
-	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
+	result->alias = table_alias_colon;
+	if (sample_clause) {
+		result->sample = std::move(*sample_clause);
+	}
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformAtUnit(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+string PEGTransformerFactory::TransformVersionAtUnit(PEGTransformer &transformer) {
+	return "VERSION";
 }
 
-OrderType PEGTransformerFactory::TransformDescendingOrder(PEGTransformer &transformer, ParseResult &parse_result) {
+string PEGTransformerFactory::TransformTimestampAtUnit(PEGTransformer &transformer) {
+	return "TIMESTAMP";
+}
+
+OrderType PEGTransformerFactory::TransformDescendingOrder(PEGTransformer &transformer) {
 	return OrderType::DESCENDING;
 }
 
-OrderType PEGTransformerFactory::TransformAscendingOrder(PEGTransformer &transformer, ParseResult &parse_result) {
+OrderType PEGTransformerFactory::TransformAscendingOrder(PEGTransformer &transformer) {
 	return OrderType::ASCENDING;
 }
 
-OrderByNullType PEGTransformerFactory::TransformNullsFirst(PEGTransformer &transformer, ParseResult &parse_result) {
+OrderByNullType PEGTransformerFactory::TransformNullsFirst(PEGTransformer &transformer) {
 	return OrderByNullType::NULLS_FIRST;
 }
 
-OrderByNullType PEGTransformerFactory::TransformNullsLast(PEGTransformer &transformer, ParseResult &parse_result) {
+OrderByNullType PEGTransformerFactory::TransformNullsLast(PEGTransformer &transformer) {
 	return OrderByNullType::NULLS_LAST;
 }
 
@@ -647,11 +642,11 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 }
 
 LimitPercentResult PEGTransformerFactory::TransformLimitExpression(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                   unique_ptr<ParsedExpression> expression,
+                                                                   const bool &has_result) {
 	LimitPercentResult result;
-	result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	result.is_percent = list_pr.Child<OptionalParseResult>(1).HasResult();
+	result.expression = std::move(expression);
+	result.is_percent = has_result;
 	return result;
 }
 
@@ -777,10 +772,12 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 	return result_sets;
 }
 
-string PEGTransformerFactory::TransformCubeOrRollup(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
+string PEGTransformerFactory::TransformCubeKeyword(PEGTransformer &transformer) {
+	return "CUBE";
+}
+
+string PEGTransformerFactory::TransformRollupKeyword(PEGTransformer &transformer) {
+	return "ROLLUP";
 }
 
 GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -980,11 +977,11 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryCount(PEGTr
 	return sample_count;
 }
 
-bool PEGTransformerFactory::TransformSamplePercentage(PEGTransformer &transformer, ParseResult &parse_result) {
+bool PEGTransformerFactory::TransformSamplePercentage(PEGTransformer &transformer) {
 	return true;
 }
 
-bool PEGTransformerFactory::TransformSampleRows(PEGTransformer &transformer, ParseResult &parse_result) {
+bool PEGTransformerFactory::TransformSampleRows(PEGTransformer &transformer) {
 	return false;
 }
 

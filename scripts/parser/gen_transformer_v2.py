@@ -1370,7 +1370,9 @@ def main():
     identifier_override_rules = load_identifier_override_rules(grammar_types_file)
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
     results = [
-        process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules, optional_value_grammars)
+        process_gram_file(
+            f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules, optional_value_grammars
+        )
         for f in gram_files_to_gen
     ]
 

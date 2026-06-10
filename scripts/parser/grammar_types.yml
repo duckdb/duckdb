@@ -952,11 +952,15 @@ String:
     - BaseWindowName
     - Framing
     - AtUnit
+    - VersionAtUnit
+    - TimestampAtUnit
     - InsertAlias
     - UpdateAlias
     - TableAliasColon
     - TrimDirection
     - CubeOrRollup
+    - CubeKeyword
+    - RollupKeyword
     - SecretStorageSpecifier
     - SecretName
     - TriggerName
@@ -1019,6 +1023,8 @@ Bool:
     - PreserveRows
     - DeleteRows
     - DistinctOrAll
+    - DistinctKeyword
+    - AllKeyword
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1555,20 +1561,6 @@ excluded_rules:
   - Unique
   - RowOrStruct
   - SetData
-  - SetopUnion
-  - SetopExcept
-  - FullJoin
-  - LeftJoin
-  - RightJoin
-  - SemiJoin
-  - AntiJoin
-  - InnerJoin
-  - DescendingOrder
-  - AscendingOrder
-  - NullsFirst
-  - NullsLast
-  - SamplePercentage
-  - SampleRows
   - SelectStatement
   - SelectStatementInternal
   - SimpleSelect
@@ -1584,9 +1576,7 @@ excluded_rules:
   - CTEBodyContent
   - Materialized
   - TableFunctionLateralOpt
-  - TableFunctionAliasColon
   - RegularJoinClause
-  - AtUnit
   - WindowDefinition
   - SampleEntryCount
   - SampleEntryFunction
@@ -1594,7 +1584,5 @@ excluded_rules:
   - GroupByExpression
   - EmptyGroupingItem
   - CubeOrRollupClause
-  - CubeOrRollup
   - GroupingSetsClause
-  - LimitExpression
   - SingleArrowPair
