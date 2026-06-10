@@ -6,6 +6,7 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -601,6 +602,11 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 	// copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in place,
 	// and the state layout type can share its type info with e.g. the aggregate's input expressions
 	LogicalType state_layout = bound_function.GetStateType().type.Copy();
+	if (state_layout.id() == LogicalTypeId::ENUM) {
+		// LogicalType::Copy keeps sharing enum type info to avoid copying the dictionary - copy the type info
+		// explicitly here, otherwise SetAlias/SetExtensionInfo modify the original enum type
+		state_layout = LogicalType(LogicalTypeId::ENUM, state_layout.AuxInfo()->Copy());
+	}
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());
