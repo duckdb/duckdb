@@ -113,10 +113,27 @@ public:
 		return GeometryExtent {EMPTY_MIN, EMPTY_MIN, EMPTY_MIN, EMPTY_MIN, EMPTY_MAX, EMPTY_MAX, EMPTY_MAX, EMPTY_MAX};
 	}
 
-	// Does this extent have any X/Y values set?
-	// In other words, is the range of the x/y axes not empty and not unknown?
+	// Does this extent have the X axis set?
+	// In other words, is the range of the x-axis not empty and not unknown?
+	bool HasX() const {
+		return std::isfinite(x_min) && std::isfinite(x_max);
+	}
+	// Does this extent have the Y axis set?
+	// In other words, is the range of the y-axis not empty and not unknown?
+	bool HasY() const {
+		return std::isfinite(y_min) && std::isfinite(y_max);
+	}
+	// Does this extent have both X and Y axes set?
+	// In other words, are the ranges of both the x and y axes not empty and not unknown?
+	// Used to gate serialization, where a non-finite axis cannot be represented.
 	bool HasXY() const {
-		return std::isfinite(x_min) && std::isfinite(y_min) && std::isfinite(x_max) && std::isfinite(y_max);
+		return HasX() && HasY();
+	}
+	// Can this extent be used for X/Y zonemap pruning?
+	// A single finite axis is enough: an unknown axis is treated as an infinite range,
+	// which intersects everything, so pruning simply degrades to the finite axis.
+	bool CanPruneXY() const {
+		return HasX() || HasY();
 	}
 	// Does this extent have any Z values set?
 	// In other words, is the range of the Z-axis not empty and not unknown?

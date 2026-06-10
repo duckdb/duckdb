@@ -4,6 +4,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -231,8 +232,10 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	// This has been checked before and needs to be true for the checks below to be valid
-	D_ASSERT(data.extent.HasXY());
+	// This has been checked before and needs to be true for the checks below to be valid.
+	// Note: only one axis needs to be set; an unknown axis is an infinite range that
+	// intersects everything, so the IntersectsXY/ContainsXY math below stays valid.
+	D_ASSERT(data.extent.CanPruneXY());
 
 	const auto &geom = StringValue::Get(constant);
 	auto extent = GeometryExtent::Empty();
@@ -288,8 +291,23 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	const auto lhs_kind = func.children[0]->GetExpressionType();
-	const auto rhs_kind = func.children[1]->GetExpressionType();
+	// The column reference may be wrapped in a GEOMETRY -> GEOMETRY cast (e.g. a CRS-erasing cast inserted to match
+	// the predicate's argument type). Such casts only change CRS metadata, not coordinates, so the bounding box
+	// remains valid. Look through them when classifying the operands.
+	auto strip_geometry_cast = [](const Expression &child) -> const Expression * {
+		if (child.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
+			auto &cast = child.Cast<BoundCastExpression>();
+			if (cast.child->return_type.id() == LogicalTypeId::GEOMETRY) {
+				return cast.child.get();
+			}
+		}
+		return &child;
+	};
+
+	const auto &lhs = *strip_geometry_cast(*func.children[0]);
+	const auto &rhs = *strip_geometry_cast(*func.children[1]);
+	const auto lhs_kind = lhs.GetExpressionType();
+	const auto rhs_kind = rhs.GetExpressionType();
 	const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT && rhs_kind == ExpressionType::BOUND_REF;
 	const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT && lhs_kind == ExpressionType::BOUND_REF;
 
@@ -300,16 +318,18 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto &data = GetDataUnsafe(stats);
 
-	if (!data.extent.HasXY()) {
-		// If the extent is empty or unknown, we cannot prune
+	if (!data.extent.CanPruneXY()) {
+		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
+		// A single known axis is enough: the unknown axis is an infinite range that
+		// intersects everything, so pruning degrades to the known axis.
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
 	if (lhs_is_const) {
-		return CheckIntersectionFilter(data, func.children[0]->Cast<BoundConstantExpression>().value);
+		return CheckIntersectionFilter(data, lhs.Cast<BoundConstantExpression>().value);
 	}
 	if (rhs_is_const) {
-		return CheckIntersectionFilter(data, func.children[1]->Cast<BoundConstantExpression>().value);
+		return CheckIntersectionFilter(data, rhs.Cast<BoundConstantExpression>().value);
 	}
 	// Else, no constant argument
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;

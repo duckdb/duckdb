@@ -98,6 +98,8 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 		strings.emplace_back(reinterpret_cast<const char *>(metadata_data + data_start + last_offset), string_size);
 		last_offset = next_offset;
 	}
+	//! header byte + offsets region + string bytes
+	total_size = metadata_offset + last_offset;
 }
 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {

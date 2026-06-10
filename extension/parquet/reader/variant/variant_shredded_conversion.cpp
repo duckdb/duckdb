@@ -10,7 +10,6 @@
 #include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
-
 template <class T>
 struct ConvertShreddedValue {
 	static VariantValue Convert(T val);
@@ -324,7 +323,7 @@ public:
 } // namespace
 
 static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &value, idx_t offset, idx_t length,
-                                                  idx_t total_size) {
+                                                  idx_t total_size, bool add_metadata_offset = false) {
 	UnifiedVectorFormat value_format;
 	value.ToUnifiedFormat(total_size, value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
@@ -339,15 +338,25 @@ static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &valu
 	vector<VariantValue> ret(length);
 	for (idx_t i = 0; i < length; i++) {
 		auto index = value_format.sel->get_index(i + offset);
-		if (validity.RowIsValid(index)) {
-			auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
-			VariantMetadata variant_metadata(metadata_value);
-
-			auto &value_buffer = value_data[index];
-			auto binary_value = value_buffer.GetData();
-			ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value), 0,
-			                                      value_buffer.GetSize());
+		if (!validity.RowIsValid(index)) {
+			continue;
 		}
+		//! 'metadata' and 'value' are the same vector: each row holds the full binary Variant value (metadata
+		//! followed by the value blob). Decode the metadata, then read the value right after it.
+		auto &metadata_value = metadata_data[metadata_format.sel->get_index(i)];
+		VariantMetadata variant_metadata(metadata_value);
+
+		auto &value_buffer = value_data[index];
+		auto binary_value = value_buffer.GetData();
+
+		idx_t value_offset = 0;
+		if (add_metadata_offset) {
+			//! For a full variant binary value (metadata followed by value)
+			//! The value bytes start directly after the metadata bytes
+			value_offset += variant_metadata.total_size;
+		}
+		ret[i] = VariantBinaryDecoder::Decode(variant_metadata, const_data_ptr_cast(binary_value), value_offset,
+		                                      value_buffer.GetSize());
 	}
 	return ret;
 }
@@ -561,6 +570,26 @@ vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector
 	} else {
 		return ConvertBinaryEncoding(metadata, *value, offset, length, total_size);
 	}
+}
+
+void VariantShreddedConversion::ConvertBinaryToVariant(Vector &metadata_and_value, idx_t offset, idx_t length,
+                                                       idx_t total_size, Vector &result) {
+	auto res = ConvertBinaryEncoding(metadata_and_value, metadata_and_value, offset, length, total_size, true);
+	VariantValue::ToVARIANT(res, result);
+}
+
+static void FromParquetVariant(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto num_values = input.size();
+	auto &metadata_value = input.data[0];
+
+	VariantShreddedConversion::ConvertBinaryToVariant(metadata_value, 0, num_values, num_values, result);
+}
+
+ScalarFunction VariantShreddedConversion::GetBytesToVariantFunction() {
+	ScalarFunction transform("variant_bytes_to_variant", {LogicalType::BLOB}, LogicalType::VARIANT(),
+	                         FromParquetVariant);
+	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	return transform;
 }
 
 } // namespace duckdb
