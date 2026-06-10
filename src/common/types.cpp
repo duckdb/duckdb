@@ -1011,13 +1011,6 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                 const LogicalType &right, LogicalType &result) {
 	D_ASSERT(right.id() != left.id());
-	if (logical_type_resolver.context) {
-		bool success;
-		if (CastFunctionSet::Get(*logical_type_resolver.context)
-		        .TryCombineUnequalTypes(logical_type_resolver, left, right, result, success)) {
-			return success;
-		}
-	}
 	for (auto &combine_rule : COMBINE_UNEQUAL_TYPES_RULES) {
 		if (combine_rule.matches(left, right)) {
 			return combine_rule.function(logical_type_resolver, left, right, result);
@@ -1227,13 +1220,6 @@ static const CombineEqualTypesRule COMBINE_EQUAL_TYPES_RULES[] = {
 
 static bool CombineEqualTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                               const LogicalType &right, LogicalType &result) {
-	if (logical_type_resolver.context) {
-		bool success;
-		if (CastFunctionSet::Get(*logical_type_resolver.context)
-		        .TryCombineEqualTypes(logical_type_resolver, left, right, result, success)) {
-			return success;
-		}
-	}
 	auto type_id = left.id();
 	for (auto &combine_rule : COMBINE_EQUAL_TYPES_RULES) {
 		if (type_id == combine_rule.type) {
@@ -1254,6 +1240,13 @@ static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resol
 	if (!right.GetAlias().empty()) {
 		result = right;
 		return true;
+	}
+	if (logical_type_resolver.context) {
+		bool success;
+		if (CastFunctionSet::Get(*logical_type_resolver.context)
+		        .TryCombineTypes(logical_type_resolver, left, right, result, success)) {
+			return success;
+		}
 	}
 	if (left.id() != right.id()) {
 		return CombineUnequalTypes(logical_type_resolver, left, right, result);

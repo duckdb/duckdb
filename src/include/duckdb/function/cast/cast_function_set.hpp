@@ -85,24 +85,19 @@ public:
 	                                     bind_cast_function_t bind, int64_t implicit_cast_cost = -1);
 
 	//! Register a combine rule for LogicalType::TryGetMaxLogicalType. Registered rules are consulted before the
-	//! built-in rules, most-recently-registered first. Equal rules fire when both type ids match, unequal when they
-	//! differ.
-	DUCKDB_API void RegisterCombineEqualTypesRule(CombineTypesRule rule);
-	DUCKDB_API void RegisterCombineUnequalTypesRule(CombineTypesRule rule);
+	//! built-in rules, most-recently-registered first.
+	DUCKDB_API void RegisterCombineTypesRule(CombineTypesRule rule);
 	//! Apply the first matching registered rule. Returns true if a rule matched (its result is written to `success`),
 	//! false if none matched and the caller should fall back to the built-in rules.
-	bool TryCombineEqualTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
-	                          LogicalType &result, bool &success);
-	bool TryCombineUnequalTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
-	                            LogicalType &result, bool &success);
+	bool TryCombineTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
+	                     LogicalType &result, bool &success);
 
 private:
 	optional_ptr<DBConfig> config;
 	vector<BindCastFunction> bind_functions;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
 	optional_ptr<MapCastInfo> map_info;
-	vector<CombineTypesRule> combine_equal_rules;
-	vector<CombineTypesRule> combine_unequal_rules;
+	vector<CombineTypesRule> combine_rules;
 
 private:
 	void RegisterCastFunction(const LogicalType &source, const LogicalType &target, MapCastNode node);
