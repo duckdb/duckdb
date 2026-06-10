@@ -209,7 +209,11 @@ void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "columns", columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
-	serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	} else {
+		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
+	}
 	serializer.WritePropertyWithDefault<bool>(205, "update_is_del_and_insert", update_is_del_and_insert);
 }
 
@@ -549,7 +553,11 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
-	serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	} else {
+		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
+	}
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
 	serializer.WritePropertyWithDefault<TableIndex>(204, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
