@@ -537,14 +537,14 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	D_ASSERT(expected_types == bound_insert.expected_types);
 	expected_names.reserve(named_column_map.size());
 	for (auto &column_index : named_column_map) {
-		expected_names.push_back(table.GetColumn(column_index).Name());
+		expected_names.push_back(table.GetColumn(column_index).Name().GetIdentifierName());
 	}
 
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
 	auto function_data = function.copy_from_bind(context, input, expected_names, expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 expected_types, expected_names);
+	                                 expected_types, StringsToIdentifiers(expected_names));
 	for (idx_t i = 0; i < expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
@@ -677,13 +677,15 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
-	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+	auto entry =
+	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

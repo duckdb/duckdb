@@ -77,8 +77,8 @@ public:
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
 		return all_transactions;
 	}
-	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
-	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
+	optional_ptr<AttachedDatabase> GetReferencedDatabase(const Identifier &name);
+	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const Identifier &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
 
@@ -98,7 +98,7 @@ private:
 	//! The set of used (referenced) databases.
 	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
 	//! Map of name -> database for databases that are in-use by this transaction.
-	case_insensitive_map_t<reference<AttachedDatabase>> used_databases;
+	identifier_map_t<reference<AttachedDatabase>> used_databases;
 };
 
 } // namespace duckdb

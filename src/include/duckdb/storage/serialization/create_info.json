@@ -17,12 +17,12 @@
       {
         "id": 101,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 102,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
@@ -66,7 +66,7 @@
       {
         "id": 110,
         "name": "extension_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -81,13 +81,13 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string",
+        "type": "Identifier",
         "property": "index_name"
       },
       {
         "id": 201,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -113,7 +113,7 @@
       {
         "id": 206,
         "name": "names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 207,
@@ -144,7 +144,7 @@
       {
         "id": 200,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -199,12 +199,12 @@
       {
         "id": 200,
         "name": "view_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
@@ -219,7 +219,7 @@
       {
         "id": 204,
         "name": "names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,
@@ -232,8 +232,8 @@
       {
         "id": 206,
         "name": "column_comments_map",
-        "type": "unordered_map<string, Value>",
-        "default": "unordered_map<string, Value>()",
+        "type": "identifier_map_t<Value>",
+        "default": "identifier_map_t<Value>()",
         "version": "v1.5.0"
       }
     ],
@@ -250,7 +250,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -271,7 +271,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -299,7 +299,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -350,7 +350,7 @@
       {
         "id": 200,
         "name": "trigger_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -371,7 +371,7 @@
       {
         "id": 206,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 207,
@@ -386,12 +386,12 @@
       {
         "id": 209,
         "name": "referencing_new_table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 210,
         "name": "referencing_old_table",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   }

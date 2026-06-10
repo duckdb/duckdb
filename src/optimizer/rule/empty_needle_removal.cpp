@@ -17,7 +17,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
 
-	unordered_set<string> functions = {"prefix", "contains", "suffix"};
+	identifier_set_t functions = {"prefix", "contains", "suffix"};
 	func->function = make_uniq<ManyFunctionMatcher>(functions);
 	root = std::move(func);
 }

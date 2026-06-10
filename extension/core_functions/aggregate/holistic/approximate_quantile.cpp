@@ -267,7 +267,7 @@ unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
 
 AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	auto function = GetApproximateQuantileDecimalAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;
@@ -388,7 +388,7 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 
 AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	auto function = GetApproxQuantileListAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;

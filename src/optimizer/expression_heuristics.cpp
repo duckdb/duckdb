@@ -127,12 +127,11 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return ComparisonExpressionCost(expr);
 	}
-	unordered_map<std::string, idx_t> function_costs = {
-	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
-	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
-	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
-	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
-	    {"||", 200}};
+	identifier_map_t<idx_t> function_costs = {{"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
+	                                          {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
+	                                          {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
+	                                          {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
+	                                          {"||", 200}};
 
 	idx_t cost_children = 0;
 	for (auto &child : expr.GetChildren()) {

@@ -102,7 +102,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	}
 	ProjectionIndex col_idx(node.grouping_functions.size());
 	node.grouping_functions.push_back(std::move(group_indexes));
-	return BindResult(make_uniq<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
+	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(op.GetName()), LogicalType::BIGINT,
 	                                                      ColumnBinding(node.groupings_index, col_idx), depth));
 }
 
@@ -114,7 +114,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		const auto &aggr_index = it->second;
 		const auto return_type = node.aggregates[aggr_index]->GetReturnType();
 		auto uncollated_first_expression = make_uniq<BoundColumnRefExpression>(
-		    expr.GetName(), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
+		    Identifier(expr.GetName()), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 
 		if (node.groups.grouping_sets.size() <= 1) {
 			// if there are no more than two grouping sets, you can return the uncollated first expression.
@@ -126,7 +126,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		// otherwise you can return the "first" of the uncollated expression.
 		auto &group = node.groups.group_expressions[group_index];
 		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
-		    expr.GetName(), group->GetReturnType(), ColumnBinding(node.group_index, group_index), depth);
+		    Identifier(expr.GetName()), group->GetReturnType(), ColumnBinding(node.group_index, group_index), depth);
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
@@ -138,7 +138,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		return BindResult(std::move(case_expr));
 	} else {
 		auto &group = node.groups.group_expressions[group_index];
-		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->GetReturnType(),
+		return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), group->GetReturnType(),
 		                                                      ColumnBinding(node.group_index, group_index), depth));
 	}
 }

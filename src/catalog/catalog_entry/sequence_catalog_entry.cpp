@@ -114,7 +114,7 @@ string SequenceCatalogEntry::ToSQL() const {
 
 	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
-	ss << name;
+	ss << name.GetIdentifierName();
 	ss << " INCREMENT BY " << seq_data.increment;
 	ss << " MINVALUE " << seq_data.min_value;
 	ss << " MAXVALUE " << seq_data.max_value;

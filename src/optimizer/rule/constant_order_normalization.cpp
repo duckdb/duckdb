@@ -128,8 +128,8 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	for (idx_t i = 1; i < ordered_bindings.size(); ++i) {
 		// Right child.
 		children.push_back(ordered_bindings[i].get().Copy());
-		new_root = binder.BindScalarFunction(DEFAULT_SCHEMA, root.Function().GetName(), std::move(children), error,
-		                                     root.IsOperator());
+		new_root = binder.BindScalarFunction(Identifier::DefaultSchema(), root.Function().GetName(),
+		                                     std::move(children), error, root.IsOperator());
 		if (!new_root) {
 			error.Throw();
 		}

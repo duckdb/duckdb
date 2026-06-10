@@ -105,8 +105,8 @@ struct IcuBindData : public FunctionData {
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
 	}
-	static string DecodeFunctionName(const string &fname) {
-		return fname.substr(FUNCTION_PREFIX.size());
+	static string DecodeFunctionName(const Identifier &fname) {
+		return fname.GetIdentifierName().substr(FUNCTION_PREFIX.size());
 	}
 };
 
@@ -200,7 +200,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 
 static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction,
+	                      ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
 	result.SetSerializeCallback(IcuBindData::Serialize);
@@ -470,7 +471,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUCollateFunction(collation, ""), false, false);
+		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
 	}
 

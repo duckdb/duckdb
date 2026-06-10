@@ -22,7 +22,7 @@
 namespace duckdb {
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
-                                                              const vector<string> &names) {
+                                                              const vector<Identifier> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
 	D_ASSERT(aliases.size() == names.size());
 
@@ -37,7 +37,7 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 unique_ptr<BoundMergeIntoAction>
 Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
                         vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
-                        const vector<BindingAlias> &source_aliases, const vector<string> &source_names) {
+                        const vector<BindingAlias> &source_aliases, const vector<Identifier> &source_names) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
@@ -212,7 +212,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
-	string table_alias = node.target->alias;
+	auto table_alias = node.target->alias;
 	auto bound_table = target_binder->Bind(*node.target);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
@@ -262,7 +262,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	// get the source names/types and collect source table indices for validation
 	vector<BindingAlias> source_aliases;
-	vector<string> source_names;
+	vector<Identifier> source_names;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
 		auto &column_names = binding.GetColumnNames();
@@ -278,10 +278,11 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
-	// bind table constraints/default values in case these are referenced by any merge action
+	// bind table constraints/default values in case these are referenced
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name, schema_name);
+	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
 
 	merge_into->bound_constraints = BindConstraints(table);
 

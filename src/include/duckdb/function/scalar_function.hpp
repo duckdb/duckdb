@@ -365,8 +365,8 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	DUCKDB_API ScalarFunction(string name, FunctionSignature sig, scalar_function_t function);
-	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
+	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),

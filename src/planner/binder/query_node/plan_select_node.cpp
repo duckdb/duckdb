@@ -95,8 +95,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		    result->GetReturnType(),
 		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
 
-		vector<pair<string, unique_ptr<Expression>>> first_children;
-		first_children.emplace_back("", std::move(finalize_ref));
+		vector<pair<Identifier, unique_ptr<Expression>>> first_children;
+		first_children.emplace_back(Identifier(), std::move(finalize_ref));
 		auto first_fun = function_binder.BindAggregateFunction(first_function, std::move(first_children), error);
 
 		finalize_expressions.push_back(std::move(result));

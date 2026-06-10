@@ -74,10 +74,10 @@ public:
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const string &name) const;
+	DUCKDB_API bool ColumnExists(const Identifier &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
 	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
@@ -101,7 +101,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &name, bool if_exists = false) const;
 	DUCKDB_API StorageIndex GetStorageIndex(const ColumnIndex &column_index) const;
 
 	//! Returns the scan function that can be used to scan the given table

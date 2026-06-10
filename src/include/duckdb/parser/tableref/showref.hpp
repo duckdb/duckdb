@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -25,11 +26,11 @@ public:
 	ShowRef();
 
 	//! The table name (if any)
-	string table_name;
+	Identifier table_name;
 	//! The catalog name (if any)
-	string catalog_name;
+	Identifier catalog_name;
 	//! The schema name (if any)
-	string schema_name;
+	Identifier schema_name;
 	//! The QueryNode of select query (if any)
 	unique_ptr<QueryNode> query;
 	//! Whether or not we are requesting a summary or a describe

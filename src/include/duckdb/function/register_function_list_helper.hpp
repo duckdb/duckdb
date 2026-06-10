@@ -30,26 +30,28 @@ static void FillFunctionParameters(FunctionDescription &function_description, co
 	}
 }
 
-static vector<string> GetExamplesForFunctionAlias(const string &function_name, const string &alias_of,
+static vector<string> GetExamplesForFunctionAlias(const Identifier &function_name, const Identifier &alias_of,
                                                   vector<string> &all_examples) {
 	vector<string> filtered_examples;
-	bool is_operator = (!function_name.empty() && !(function_name[0] >= 'a' && function_name[0] <= 'z') &&
-	                    !(function_name[0] >= 'A' && function_name[0] <= 'Z'));
-	bool alias_of_is_operator = (!alias_of.empty() && !(alias_of[0] >= 'a' && alias_of[0] <= 'z') &&
-	                             !(alias_of[0] >= 'A' && alias_of[0] <= 'Z'));
+	auto &function_name_str = function_name.GetIdentifierName();
+	auto &alias_of_str = alias_of.GetIdentifierName();
+	bool is_operator = (!function_name_str.empty() && !(function_name_str[0] >= 'a' && function_name_str[0] <= 'z') &&
+	                    !(function_name_str[0] >= 'A' && function_name_str[0] <= 'Z'));
+	bool alias_of_is_operator = (!alias_of_str.empty() && !(alias_of_str[0] >= 'a' && alias_of_str[0] <= 'z') &&
+	                             !(alias_of_str[0] >= 'A' && alias_of_str[0] <= 'Z'));
 	// select examples with matching function name
 	for (string &example : all_examples) {
-		if (example.compare(0, function_name.size(), function_name) == 0 ||
-		    (is_operator && example.find(function_name) != string::npos)) {
+		if (example.compare(0, function_name_str.size(), function_name_str) == 0 ||
+		    (is_operator && example.find(function_name_str) != string::npos)) {
 			filtered_examples.emplace_back(std::move(example));
 		}
 	}
 	// fallback 1: create fitting examples by replacing canonical name by function_name
 	if (filtered_examples.empty() && !alias_of.empty() && !alias_of_is_operator && !is_operator) {
 		for (string &example : all_examples) {
-			if (example.compare(0, alias_of.size(), alias_of) == 0) {
-				filtered_examples.emplace_back(function_name +
-				                               example.substr(alias_of.size(), example.size() - alias_of.size()));
+			if (example.compare(0, alias_of_str.size(), alias_of_str) == 0) {
+				filtered_examples.emplace_back(
+				    function_name + example.substr(alias_of_str.size(), example.size() - alias_of_str.size()));
 			}
 		}
 	}

@@ -1,9 +1,9 @@
 diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
-index eb462ed..99da185 100644
+index cf049a9..a37867f 100644
 --- a/src/storage/quack_catalog.cpp
 +++ b/src/storage/quack_catalog.cpp
-@@ -126,12 +126,11 @@ DatabaseSize QuackCatalog::GetDatabaseSize(ClientContext &context) {
- 	throw NotImplementedException("GetDatabaseSize not implemented yet");
+@@ -142,12 +142,11 @@ unique_ptr<TableRef> QuackCatalog::RemoteExecute(ClientContext &context, const s
+ 	return func_ref;
  }
  
 -//! Whether or not this is an in-memory SQLite database

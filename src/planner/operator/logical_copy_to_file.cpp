@@ -23,12 +23,13 @@ vector<LogicalType> LogicalCopyToFile::GetTypesWithoutPartitions(const vector<Lo
 	return types;
 }
 
-vector<string> LogicalCopyToFile::GetNamesWithoutPartitions(const vector<string> &col_names,
-                                                            const vector<column_t> &part_cols, bool write_part_cols) {
+vector<Identifier> LogicalCopyToFile::GetNamesWithoutPartitions(const vector<Identifier> &col_names,
+                                                                const vector<column_t> &part_cols,
+                                                                bool write_part_cols) {
 	if (write_part_cols || part_cols.empty()) {
 		return col_names;
 	}
-	vector<string> names;
+	vector<Identifier> names;
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
 		if (part_col_set.find(col_idx) == part_col_set.end()) {
@@ -84,7 +85,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto per_thread_output = deserializer.ReadProperty<bool>(204, "per_thread_output");
 	auto partition_output = deserializer.ReadProperty<bool>(205, "partition_output");
 	auto partition_columns = deserializer.ReadProperty<vector<idx_t>>(206, "partition_columns");
-	auto names = deserializer.ReadProperty<vector<string>>(207, "names");
+	auto names = deserializer.ReadProperty<vector<Identifier>>(207, "names");
 	auto expected_types = deserializer.ReadProperty<vector<LogicalType>>(208, "expected_types");
 	auto copy_info =
 	    unique_ptr_cast<ParseInfo, CopyInfo>(deserializer.ReadProperty<unique_ptr<ParseInfo>>(209, "copy_info"));
@@ -93,8 +94,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto &context = deserializer.Get<ClientContext &>();
 	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
-	auto &func_catalog_entry =
-	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	auto &func_catalog_entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(
+	    context, Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name));
 	if (func_catalog_entry.type != CatalogType::COPY_FUNCTION_ENTRY) {
 		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 	}

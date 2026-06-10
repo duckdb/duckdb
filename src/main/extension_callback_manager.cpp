@@ -40,8 +40,8 @@ ExtensionCallbackManager::ExtensionCallbackManager() : callback_registry(make_sh
 ExtensionCallbackManager::~ExtensionCallbackManager() {
 }
 
-void ExtensionCallbackManager::AddExtensionSchema(const string &schema) {
-	extension_schemas.push_back(schema);
+void ExtensionCallbackManager::AddExtensionSchema(const Identifier &schema) {
+	extension_schemas.push_back(schema.GetIdentifierName());
 }
 
 vector<string> ExtensionCallbackManager::GetExtensionSchemas() const {

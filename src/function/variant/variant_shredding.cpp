@@ -206,7 +206,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		auto &key = shredded_types[child_idx].first;
 		VariantPathComponent path_component;
 		path_component.lookup_mode = VariantChildLookupMode::BY_KEY;
-		path_component.key = key;
+		path_component.key = key.GetIdentifierName();
 
 		ValidityMask lookup_validity(count);
 		ValidityMask all_valid_validity(count);

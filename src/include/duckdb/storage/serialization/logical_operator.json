@@ -394,7 +394,7 @@
       {
         "id": 203,
         "name": "bound_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -579,7 +579,7 @@
       {
         "id": 201,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -631,7 +631,7 @@
       {
         "id": 202,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -1016,7 +1016,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1043,7 +1043,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

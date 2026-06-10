@@ -179,6 +179,7 @@ DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.R
 
 MOVE_LIST = [
     'string',
+    'Identifier',
     'ParsedExpression*',
     'CommonTableExpressionMap',
     'LogicalType',
@@ -330,6 +331,8 @@ supported_member_entries = [
 def has_default_by_default(type):
     if is_pointer(type):
         return True
+    if type == 'identifier_set_t':
+        return True
     if is_container(type):
         if 'IndexVector' in type:
             return False
@@ -338,17 +341,20 @@ def has_default_by_default(type):
         return True
     if type == 'string':
         return True
+    if type in ('Identifier', 'duckdb::Identifier'):
+        # Identifier behaves like string: the empty identifier is its default
+        return True
     if is_zeroable(type):
         return True
     return False
 
 
 def normalize_json_type(type_str):
-    """Map JSON-only type names to their C++ equivalents for serialization."""
-    if type_str == 'Identifier':
-        return 'string'
-    if type_str == 'vector<Identifier>':
-        return 'vector<string>'
+    """Map JSON-only type names to their C++ equivalents for serialization.
+
+    Identifier is a first-class type that serializes wire-compatibly with a plain string
+    (see Serializer::WriteValue(const Identifier&) / Deserializer::Read<Identifier>()), so it is
+    emitted verbatim rather than being downgraded to string."""
     return type_str
 
 

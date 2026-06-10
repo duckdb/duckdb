@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateSecretInfo : public CreateInfo { // NOLINT: work-around bug in clang-tidy
@@ -28,11 +29,11 @@ public:
 	//! The type of secret
 	unique_ptr<ParsedExpression> type;
 	//! Which storage to use (empty for default)
-	string storage_type;
+	Identifier storage_type;
 	//! (optionally) the provider of the secret credentials
 	unique_ptr<ParsedExpression> provider;
 	//! (optionally) the name of the secret
-	string name;
+	Identifier name;
 	//! (optionally) the scope of the secret
 	unique_ptr<ParsedExpression> scope;
 	//! Named parameter list (if any)
