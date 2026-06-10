@@ -16,6 +16,7 @@
 namespace duckdb {
 
 class ClientContext;
+class CopiedAsyncWriteBuffer;
 class TemporaryMemoryState;
 
 class AsyncWriteBuffer {
@@ -32,7 +33,10 @@ struct AsyncFileWriterOptions {
 	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = 4096;
 	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
 	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_COPIED_BUFFER_CAPACITY = 4096;
 
+	//! Capacity of the staging buffer used to copy small transient WriteData inputs.
+	idx_t copied_buffer_capacity = DEFAULT_COPIED_BUFFER_CAPACITY;
 	//! Maximum byte size for coalescing small writes on local file systems.
 	idx_t local_coalesce_threshold = DEFAULT_LOCAL_COALESCE_THRESHOLD;
 	//! Maximum byte size for coalescing small writes on remote file systems.
@@ -101,7 +105,8 @@ public:
 	DUCKDB_API idx_t GetTotalWritten() const;
 
 private:
-	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer);
+	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, bool update_total_written = true, bool allow_schedule = true);
+	void SealCopiedBuffer(bool allow_schedule = true);
 	void ScheduleTask();
 	void SchedulePendingWrites();
 	void BeginBatch();
@@ -109,7 +114,7 @@ private:
 	void UpdateMemoryState(bool force = false);
 	idx_t BackpressureBudget();
 	void DrainPendingWrites();
-	void WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes);
+	idx_t WritePendingWrites(vector<unique_ptr<AsyncWriteBuffer>> &writes);
 	void WriteBuffer(data_ptr_t buffer, idx_t size);
 	void RethrowTaskError();
 	void ResolveOptions(AsyncFileWriterOptions options);
@@ -125,6 +130,8 @@ private:
 	unique_ptr<TemporaryMemoryState> memory_state;
 
 	mutable mutex lock;
+	//! Copy staging buffer for small transient WriteData inputs. This is separate from async write coalescing.
+	unique_ptr<CopiedAsyncWriteBuffer> copied_buffer;
 	//! Pending buffers are kept in registration order. No per-write offset is needed for this stream writer.
 	vector<unique_ptr<AsyncWriteBuffer>> pending_writes;
 	idx_t pending_bytes = 0;
@@ -134,6 +141,7 @@ private:
 	bool task_scheduled = false;
 	bool closed = false;
 
+	idx_t copied_buffer_capacity = 0;
 	idx_t coalesce_threshold = 0;
 	idx_t max_pending_bytes = 0;
 };

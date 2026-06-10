@@ -53,11 +53,14 @@ static string ReadFile(const string &path) {
 	return result;
 }
 
-static AsyncFileWriterOptions TestOptions(idx_t coalesce_threshold = 8, idx_t max_pending_bytes_per_thread = 1024) {
+static AsyncFileWriterOptions TestOptions(idx_t coalesce_threshold = 8, idx_t max_pending_bytes_per_thread = 1024,
+                                          idx_t copied_buffer_capacity =
+                                              AsyncFileWriterOptions::DEFAULT_COPIED_BUFFER_CAPACITY) {
 	AsyncFileWriterOptions options;
 	options.local_coalesce_threshold = coalesce_threshold;
 	options.remote_coalesce_threshold = coalesce_threshold;
 	options.max_pending_bytes_per_thread = max_pending_bytes_per_thread;
+	options.copied_buffer_capacity = copied_buffer_capacity;
 	return options;
 }
 
@@ -133,6 +136,29 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcd");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter buffers small copied writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_small_copied.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path, AsyncFileWriter::DEFAULT_OPEN_FLAGS, TestOptions());
+	writer.WriteData(const_data_ptr_cast("PA"), 2);
+	writer.WriteData(const_data_ptr_cast("R1"), 2);
+
+	REQUIRE(writer.GetTotalWritten() == 4);
+	REQUIRE(fs.write_sizes.empty());
+
+	writer.Close();
+	REQUIRE(ReadFile(path) == "PAR1");
+	REQUIRE(fs.write_sizes.size() == 1);
+	REQUIRE(fs.write_sizes[0] == 4);
 	fs.RemoveFile(path);
 }
 
