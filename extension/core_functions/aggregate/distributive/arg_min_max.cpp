@@ -51,6 +51,11 @@ inline void ArgMinMaxReadValue(Vector &result, string_t &arg, string_t &target) 
 	target = StringVector::AddStringOrBlob(result, arg);
 }
 
+//! String values are exported with the corresponding runtime type of the bound function (LAYOUT) - they can be
+//! e.g. VARCHAR or BLOB values.
+template <class T, StateLayoutType LAYOUT>
+using ArgMinMaxExportType = typename std::conditional<std::is_same<T, string_t>::value, StateString<LAYOUT>, T>::type;
+
 //! The aggregate state of arg_min/arg_max is nullable on two levels: the state itself is NULL when no row has been
 //! recorded yet (is_set, the outer optional), while the recorded "arg" and "by" values can themselves be NULL (the
 //! inner optionals). Valid exported states are e.g. NULL, {'arg': NULL, 'by': 42} and {'arg': 1, 'by': 42}.
@@ -60,7 +65,9 @@ struct ArgMinMaxState {
 	using BY_TYPE = B;
 
 	static constexpr const char *STATE_NAMES[] = {"arg", "by"};
-	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<A>, OptionalStateType<B>>>;
+	using STATE_TYPE =
+	    OptionalStateType<StructStateType<OptionalStateType<ArgMinMaxExportType<A, StateLayoutType::RETURN_TYPE>>,
+	                                      OptionalStateType<ArgMinMaxExportType<B, StateLayoutType::SECOND_ARGUMENT>>>>;
 
 	A arg;
 	//! Whether the recorded argument is valid (i.e. not NULL)

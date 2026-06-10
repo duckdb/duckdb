@@ -80,3 +80,18 @@ SELECT finalize(combine_aggr(s)) FROM (
 ) t;
 ----
 banana
+
+# string values are exported with the aggregate's return type (e.g. BLOB instead of VARCHAR)
+query I
+SELECT typeof((min(v) EXPORT_STATE)::BLOB) FROM (VALUES ('\xAA\xBB'::BLOB)) t(v);
+----
+BLOB
+
+# stress test - min export/import roundtrips for all types
+statement ok
+SELECT min(COLUMNS(*)) EXPORT_STATE FROM test_all_types();
+
+query I
+SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(min(COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
+----
+true

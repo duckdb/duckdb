@@ -57,7 +57,8 @@ struct FirstStringStateBase {
 
 struct FirstStringState : FirstStringStateBase {
 	static constexpr const char *STATE_NAMES[] = {"value"};
-	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<string_t>>>;
+	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateString<StateLayoutType::RETURN_TYPE>>>>;
 };
 
 //! State for arbitrary types - the value is stored as a binary sort key.

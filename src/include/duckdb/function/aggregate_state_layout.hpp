@@ -53,8 +53,23 @@ struct IsStateSortKeyType<StateSortKey<O>> : std::true_type {};
 //! Describes where the exported logical type of a state comes from when it cannot be expressed statically.
 enum class StateLayoutType : uint8_t {
 	//! The logical type is the bound aggregate function's return type (only known after binding)
-	RETURN_TYPE
+	RETURN_TYPE = 0,
+	//! The logical type is the bound aggregate function's second argument type (only known after binding)
+	SECOND_ARGUMENT = 1
 };
+
+//! Phantom marker type for fields that are physically stored as a string_t, while their exported logical type
+//! comes from the bound aggregate function as described by LAYOUT (e.g. VARCHAR, BLOB or BIT values).
+template <StateLayoutType LAYOUT>
+struct StateString {
+	static constexpr StateLayoutType layout_type = LAYOUT;
+};
+
+//! Detection trait: true when T is StateString<LAYOUT> for some LAYOUT.
+template <class T>
+struct IsStateStringType : std::false_type {};
+template <StateLayoutType L>
+struct IsStateStringType<StateString<L>> : std::true_type {};
 
 //! Phantom marker type for use as an aggregate STATE's STATE_TYPE.
 //! Signals that the state is a LinkedList (see list_segment.hpp) holding the rows of a LIST value.
@@ -125,14 +140,19 @@ template <>
 struct HasPrimitiveLogicalType<interval_t> : std::true_type {};
 
 //! Maps a single C++ field type to a LogicalType.
-//! OptionalStateType<T> → PrimitiveToLogicalType<T>() (the optional encoding is captured in
-//! AggregateStateField::kind) T with STATE_TYPE → nested struct type otherwise → PrimitiveToLogicalType<T>()
+//! layout_types holds the runtime types of the bound function, indexed by StateLayoutType - used to resolve
+//! fields whose logical type cannot be expressed statically (e.g. StateString).
+//! OptionalStateType<T> → the type of T (the optional encoding is captured in AggregateStateField::kind)
+//! StateString<LAYOUT> → layout_types[LAYOUT]   T with STATE_TYPE → nested struct type
+//! otherwise → PrimitiveToLogicalType<T>()
 template <class T>
-LogicalType FieldToLogicalType() {
+LogicalType FieldToLogicalType(const LogicalType *layout_types) {
 	if constexpr (IsOptionalStateType<T>::value) {
-		return PrimitiveToLogicalType<typename T::value_type>();
+		return FieldToLogicalType<typename T::value_type>(layout_types);
+	} else if constexpr (IsStateStringType<T>::value) {
+		return layout_types[static_cast<uint8_t>(T::layout_type)];
 	} else if constexpr (HasStructStateType<T>::value) {
-		return T::STATE_TYPE::GetLogicalType(T::STATE_NAMES);
+		return T::STATE_TYPE::GetLogicalType(T::STATE_NAMES, layout_types);
 	} else {
 		return PrimitiveToLogicalType<T>();
 	}
@@ -236,10 +256,10 @@ AggregateStateField BuildStateField();
 //! Names are passed at call time (STATE::STATE_NAMES) rather than as template arguments.
 template <typename... Ts>
 struct StructStateType {
-	static LogicalType GetLogicalType(const char *const *names) {
+	static LogicalType GetLogicalType(const char *const *names, const LogicalType *layout_types) {
 		child_list_t<LogicalType> children;
 		idx_t i = 0;
-		(children.emplace_back(names[i++], FieldToLogicalType<Ts>()), ...);
+		(children.emplace_back(names[i++], FieldToLogicalType<Ts>(layout_types)), ...);
 		return LogicalType::STRUCT(std::move(children));
 	}
 
@@ -287,6 +307,9 @@ AggregateStateField BuildStateField() {
 	} else if constexpr (IsStateSortKeyType<T>::value) {
 		field.kind = AggregateFieldKind::SORT_KEY;
 		field.sort_key_order = T::order_type;
+		field.field_size = sizeof(string_t);
+	} else if constexpr (IsStateStringType<T>::value) {
+		// stored as a plain string_t - only the logical type is resolved at bind time
 		field.field_size = sizeof(string_t);
 	} else if constexpr (IsStateListType<T>::value) {
 		field.kind = AggregateFieldKind::LINKED_LIST;

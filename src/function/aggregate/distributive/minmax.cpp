@@ -168,7 +168,8 @@ struct BaseMinMaxStringState {
 };
 
 struct MinMaxStringState : BaseMinMaxStringState {
-	using STATE_TYPE = OptionalStateType<string_t>;
+	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
+	using STATE_TYPE = OptionalStateType<StateString<StateLayoutType::RETURN_TYPE>>;
 };
 
 struct StringMinMaxBase : public MinMaxBase {

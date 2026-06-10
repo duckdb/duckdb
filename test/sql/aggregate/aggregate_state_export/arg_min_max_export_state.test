@@ -127,3 +127,18 @@ SELECT finalize(combine(
     to_aggregate_state({'arg': 84, 'by': 1}::STRUCT(arg INTEGER, "by" INTEGER), 'arg_min', ['INTEGER', 'INTEGER'])));
 ----
 84
+
+# string values are exported with the corresponding runtime types (e.g. BLOB instead of VARCHAR)
+query I
+SELECT typeof((arg_min(v, v) EXPORT_STATE)::STRUCT(arg BLOB, "by" BLOB)) FROM (VALUES ('\xAA\xBB'::BLOB)) t(v);
+----
+STRUCT(arg BLOB, "by" BLOB)
+
+# stress test - arg_min export/import roundtrips for all types
+statement ok
+SELECT arg_min(COLUMNS(*), COLUMNS(*)) EXPORT_STATE FROM test_all_types();
+
+query I
+SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(arg_min(COLUMNS(*), COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
+----
+true
