@@ -54,6 +54,10 @@ prev_output_lines.sort()
 subprocess.run(["git", "clean", "-fd"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
 
+# clean and reset submodules too
+subprocess.run(["git", "submodule", "foreach", "git", "clean", "-fd"], check=True)
+subprocess.run(["git", "submodule", "foreach", "git", "reset", "--hard", "HEAD"], check=True)
+
 
 def apply_patch(patch_file):
     ARGUMENTS = ["patch", "-p1", "--forward", "-i"]
