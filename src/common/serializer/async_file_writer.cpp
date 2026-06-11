@@ -483,7 +483,8 @@ idx_t AsyncFileWriter::TakePendingWrites(vector<PendingWrite> &writes) {
 	for (idx_t write_idx = 0; write_idx < end; write_idx++) {
 		writes.push_back(std::move(pending_writes[write_idx]));
 	}
-	pending_writes.erase(pending_writes.begin(), pending_writes.begin() + end);
+	auto erase_end = pending_writes.begin() + NumericCast<vector<PendingWrite>::difference_type>(end);
+	pending_writes.erase(pending_writes.begin(), erase_end);
 	D_ASSERT(pending_bytes >= selected_bytes);
 	pending_bytes -= selected_bytes;
 	in_flight_bytes += selected_bytes;
