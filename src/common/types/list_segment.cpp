@@ -443,6 +443,11 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 		// read the string
 		auto &result_str = aggr_vector_data[total_count + i];
 		auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
+		if (child_offset + str_length <= current_segment->capacity) {
+			result_str = string_t(GetStringData(current_segment) + child_offset, NumericCast<uint32_t>(str_length));
+			child_offset += str_length;
+			continue;
+		}
 		// allocate an empty string for the given size
 		result_str = StringVector::EmptyString(result, str_length);
 		auto result_data = result_str.GetDataWriteable();
