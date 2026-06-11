@@ -21,21 +21,10 @@ class Pipeline;
 struct PipelineRenderNode;
 
 struct TextTreeRendererConfig {
-	void EnableDetailed() {
-		max_extra_lines = 1000;
-		detailed = true;
-	}
-
-	void EnableStandard() {
-		max_extra_lines = 30;
-		detailed = false;
-	}
-
 	idx_t maximum_render_width = 240;
 	idx_t node_render_width = 29;
 	idx_t minimum_render_width = 15;
 	idx_t max_extra_lines = 30;
-	bool detailed = false;
 
 	// Formatting options
 	char thousand_separator = ',';
@@ -96,12 +85,6 @@ public:
 	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
 	string RenderProfiler(const QueryProfiler &profiler) override;
 
-	void EnableDetailed() {
-		config.EnableDetailed();
-	}
-	void EnableStandard() {
-		config.EnableStandard();
-	}
 	bool UsesRawKeyNames() override {
 		return true;
 	}

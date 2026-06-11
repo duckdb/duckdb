@@ -40,7 +40,7 @@ class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
-enum class ProfilingMode : uint8_t { DISABLED = 0, STANDARD = 1, DETAILED = 2 };
+enum class ProfilingMode : uint8_t { DISABLED = 0, STANDARD = 1 };
 
 //! A JSON-like recursive profiling value.
 //! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value
@@ -86,7 +86,6 @@ public:
 
 public:
 	DUCKDB_API bool IsEnabled() const;
-	DUCKDB_API bool IsDetailedEnabled() const;
 	//! Create the TreeRenderer for the given profiler format name (e.g. "json", "query_tree"). Returns nullptr for the
 	//! "no_output" format, and throws if the format name is not recognized.
 	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const string &name) const;

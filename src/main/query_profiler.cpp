@@ -81,10 +81,6 @@ bool QueryProfiler::IsEnabled() const {
 	return is_explain_analyze || ClientConfig::GetConfig(context).profiling_mode != ProfilingMode::DISABLED;
 }
 
-bool QueryProfiler::IsDetailedEnabled() const {
-	return !is_explain_analyze && ClientConfig::GetConfig(context).profiling_mode == ProfilingMode::DETAILED;
-}
-
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
 	auto format = StringUtil::Lower(name);
 	// "no_output" produces no profiler output and so has no renderer
@@ -115,9 +111,6 @@ unique_ptr<TreeRenderer> QueryProfiler::GetPrinter(const ExplainFormat &format) 
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	if (IsDetailedEnabled()) {
-		return true;
-	}
 	if (metrics) {
 		return metrics->MetricIsTracked("optimizer.join_order");
 	}
@@ -1056,11 +1049,6 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 
 void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
 	TextTreeRenderer renderer;
-	if (IsDetailedEnabled()) {
-		renderer.EnableDetailed();
-	} else {
-		renderer.EnableStandard();
-	}
 	renderer.Render(node, ss);
 }
 

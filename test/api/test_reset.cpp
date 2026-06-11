@@ -106,7 +106,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
-	    {"profiling_mode", {"detailed"}},
+	    {"profiling_mode", {"standard"}},
 	    {"disabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},

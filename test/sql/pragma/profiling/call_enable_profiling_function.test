@@ -108,7 +108,7 @@ CALL enable_profiling(mode='detailed')
 query I
 SELECT CURRENT_SETTING('profiling_mode');
 ----
-detailed
+standard
 
 statement error
 CALL enable_profiling(mode='i dont exist hehe')
@@ -222,7 +222,7 @@ io.total_bytes_written
 query I
 SELECT CURRENT_SETTING('profiling_mode');
 ----
-detailed
+standard
 
 # Other way around doesn't work
 statement error

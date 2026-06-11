@@ -1673,7 +1673,8 @@ struct ProfilingCoverageSetting {
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
+	static constexpr const char *Description = "Enables the profiler (detailed profiling information is always "
+	                                           "collected - DETAILED is a deprecated alias of STANDARD)";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

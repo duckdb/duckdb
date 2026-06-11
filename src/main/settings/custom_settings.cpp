@@ -883,10 +883,6 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	}
 
 	config.profiler_print_format = parameter;
-	if (parameter == "query_tree_optimizer") {
-		// the "query_tree_optimizer" profiler format additionally profiles the optimizer
-		config.profiling_mode = ProfilingMode::DETAILED;
-	}
 }
 
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
@@ -1244,14 +1240,10 @@ Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
 void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	auto &config = ClientConfig::GetConfig(context);
-	if (parameter == "standard") {
+	if (parameter == "standard" || parameter == "detailed" || parameter == "all") {
+		// detailed profiling information is always gathered - "detailed" and "all" are kept for backwards
+		// compatibility and behave the same as "standard"
 		config.profiling_mode = ProfilingMode::STANDARD;
-	} else if (parameter == "detailed") {
-		config.profiling_mode = ProfilingMode::DETAILED;
-	} else if (parameter == "all") {
-		if (config.profiling_mode == ProfilingMode::DISABLED) {
-			config.profiling_mode = ProfilingMode::STANDARD;
-		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
 		                      parameter);
@@ -1268,7 +1260,7 @@ Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 	if (config.profiling_mode == ProfilingMode::DISABLED) {
 		return Value();
 	}
-	return Value(config.profiling_mode == ProfilingMode::DETAILED ? "detailed" : "standard");
+	return Value("standard");
 }
 
 //===----------------------------------------------------------------------===//

@@ -1140,7 +1140,7 @@
     },
     {
         "name": "profiling_mode",
-        "description": "The profiling mode (STANDARD or DETAILED)",
+        "description": "Enables the profiler (detailed profiling information is always collected - DETAILED is a deprecated alias of STANDARD)",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true
