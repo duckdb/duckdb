@@ -8,7 +8,8 @@
 # CREATE MACRO lambda_macro(c1, c2) AS list_transform([c1, c2], (x, i) -> x + i + 1);
 
 # The file has a vector size of 2048.
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 unzip data/storage/lambda_storage.db.gz {TEST_DIR}/lambda_storage.db
 

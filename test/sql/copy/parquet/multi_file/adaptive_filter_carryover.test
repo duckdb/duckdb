@@ -6,7 +6,8 @@ require parquet
 
 # AdaptiveFilter swap timing depends on vector size, and parquet row group layout
 # depends on block size
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 require block_size 262144
 

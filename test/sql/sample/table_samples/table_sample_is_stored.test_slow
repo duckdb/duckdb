@@ -5,7 +5,8 @@
 mode skip flaky
 
 # required when testing table samples. See basic_sample_test.test
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 require icu
 

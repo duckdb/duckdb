@@ -2,7 +2,8 @@
 # description: Test ON CONFLICT statement on the same conflicting row.
 # group: [upsert]
 
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 statement ok
 SET preserve_insertion_order = false;

@@ -15,7 +15,8 @@ require skip_reload
 require block_size 262144
 
 # The temporary directory usage changes with the vector size.
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 # Set a temp_directory to offload data
 statement ok

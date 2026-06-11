@@ -6,7 +6,8 @@ mode skip flaky
 # currently require fixed vector size since the "randomness" of the sample depends on
 # the vector size. If the vector size decreases, the randomness of the sample decreases
 # This is especially noticeable for small tables and their samples
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 load {TEST_DIR}/test_samples_basic.db
 
