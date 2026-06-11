@@ -39,7 +39,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
-		auto key_str = unsafe_yyjson_get_str(key);
+		string key_str(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		if (names.find(key_str) != names.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
