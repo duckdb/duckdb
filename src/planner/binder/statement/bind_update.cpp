@@ -140,7 +140,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	}
 	auto &table = *table_ptr;
 
-	if (auto expanded = TryExpandTriggers(node, node.returning_list, table, TriggerEventType::UPDATE_EVENT)) {
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::UPDATE_EVENT)) {
 		return std::move(*expanded);
 	}
 

@@ -543,7 +543,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
 
-	if (auto expanded = TryExpandTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
 	}
 

@@ -465,9 +465,9 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
-	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                             TableCatalogEntry &table, TriggerEventType event_type);
-	BoundStatement ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
+	                                             TriggerEventType event_type);
+	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
 	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
