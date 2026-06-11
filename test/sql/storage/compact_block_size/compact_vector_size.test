@@ -2,7 +2,8 @@
 # description: Various tests with a compact vector size of 512
 # group: [compact_block_size]
 
-require exact_vector_size 512
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT = 512, 'requires vector_size=512')
 
 # The vector size of this file is 2048.
 statement error
