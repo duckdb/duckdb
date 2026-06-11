@@ -9,9 +9,54 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/list_segment.hpp"
 #include "SkipList.h"
 
 namespace duckdb {
+
+//! Flattens the values of a linked list into a contiguous array for interpolation.
+//! The flattened values are mutable - the interpolators partially sort them in place.
+//! The flattened chunk is cached in the finalize data's local state, so that it is allocated (at most) once per
+//! result chunk instead of once per finalized group.
+template <class INPUT_TYPE>
+struct FlattenedQuantileValues : FunctionLocalState {
+	FlattenedQuantileValues(const LogicalType &type, idx_t capacity_p) : capacity(capacity_p) {
+		chunk.Initialize(Allocator::DefaultAllocator(), {type}, capacity_p);
+	}
+
+	//! Flatten the values of the given linked list into the chunk cached in the finalize data
+	static FlattenedQuantileValues &Flatten(AggregateFinalizeData &finalize_data, const LinkedList &linked_list) {
+		const auto type = PrimitiveToLogicalType<INPUT_TYPE>();
+		const auto required_capacity = MaxValue<idx_t>(linked_list.total_capacity, 1);
+		if (!finalize_data.local_state) {
+			finalize_data.local_state = make_uniq<FlattenedQuantileValues>(type, NextPowerOfTwo(required_capacity));
+		}
+		auto &values = finalize_data.local_state->Cast<FlattenedQuantileValues>();
+		if (values.capacity < required_capacity) {
+			// grow the cached chunk
+			values.capacity = NextPowerOfTwo(required_capacity);
+			values.chunk.Destroy();
+			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+		} else {
+			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
+			values.chunk.Reset();
+		}
+		ListSegmentFunctions functions;
+		GetSegmentDataFunctions(functions, type);
+		functions.BuildListVector(linked_list, values.chunk.data[0], 0);
+		return values;
+	}
+
+	INPUT_TYPE *Data() {
+		return FlatVector::GetDataMutable<INPUT_TYPE>(chunk.data[0]);
+	}
+
+	//! The flattened values (a single-column chunk) - strings are materialized into the chunk's string heap
+	DataChunk chunk;
+	//! The allocated capacity of the chunk
+	idx_t capacity;
+};
 
 struct QuantileOperation {
 	template <class STATE>
@@ -33,11 +78,23 @@ struct QuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (source.v.empty()) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
+		if (source.v.total_capacity == 0) {
 			return;
 		}
-		target.v.insert(target.v.end(), source.v.begin(), source.v.end());
+		if (input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+			// append the source linked list to the target
+			if (target.v.total_capacity == 0) {
+				target.v = source.v;
+			} else {
+				target.v.last_segment->next = source.v.first_segment;
+				target.v.last_segment = source.v.last_segment;
+				target.v.total_capacity += source.v.total_capacity;
+			}
+			return;
+		}
+		// we cannot absorb the source - copy the values by traversing the linked list
+		ListSegmentCopy<typename STATE::InputType>(input_data.allocator, source.v, target.v);
 	}
 
 	template <class STATE>
@@ -266,15 +323,15 @@ struct QuantileState {
 	using InputType = INPUT_TYPE;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
 
-	// Regular aggregation
-	vector<INPUT_TYPE> v;
+	//! Regular aggregation: the values are accumulated in a linked list
+	LinkedList v;
 
-	// Window Quantile State
+	// Window Quantile State (only used for window execution)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
 
 	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
-		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
+		ListSegmentAppendValue<INPUT_TYPE>(aggr_input.allocator, v, element);
 	}
 
 	bool HasTree() const {

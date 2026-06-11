@@ -62,4 +62,23 @@ struct ListSegmentFunctions {
 };
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type);
+
+//! Append a single non-NULL value to a linked list using the standard list segment layout.
+//! Values appended this way are interchangeable with values appended through ListSegmentFunctions::AppendRow.
+template <class T>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const T &value);
+
+//! Strings copy their characters into the child segments of the linked list.
+template <>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const string_t &value);
+
+//! Append all (non-NULL) values of the source linked list to the target linked list by traversing its segments.
+//! The values must have been appended through ListSegmentAppendValue / the standard list segment layout.
+template <class T>
+void ListSegmentCopy(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
+//! Strings re-assemble their characters from the child segments of the source linked list.
+template <>
+void ListSegmentCopy<string_t>(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
 } // namespace duckdb

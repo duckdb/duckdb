@@ -159,15 +159,16 @@ template <bool DISCRETE, class TYPE_OP = QuantileStandardType>
 struct QuantileScalarOperation : public QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
-		target = interp.template Operation<typename STATE::InputType, T>(state.v.data(), finalize_data.result);
+		auto &flattened = FlattenedQuantileValues<typename STATE::InputType>::Flatten(finalize_data, state.v);
+		QuantileInterpolator<DISCRETE> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
+		target = interp.template Operation<typename STATE::InputType, T>(flattened.Data(), finalize_data.result);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -234,15 +235,16 @@ struct QuantileScalarFallback : QuantileOperation {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
-		auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+		auto &flattened = FlattenedQuantileValues<string_t>::Flatten(finalize_data, state.v);
+		QuantileInterpolator<true> interp(bind_data.quantiles[0], state.v.total_capacity, bind_data.desc);
+		auto interpolation_result = interp.InterpolateInternal<string_t>(flattened.Data());
 		CreateSortKeyHelpers::DecodeSortKey(interpolation_result, finalize_data.result, finalize_data.result_idx,
 		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 	}
@@ -255,7 +257,7 @@ template <class CHILD_TYPE, bool DISCRETE>
 struct QuantileListOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -268,7 +270,8 @@ struct QuantileListOperation : QuantileOperation {
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
-		auto v_t = state.v.data();
+		auto &flattened = FlattenedQuantileValues<typename STATE::InputType>::Flatten(finalize_data, state.v);
+		auto v_t = flattened.Data();
 		D_ASSERT(v_t);
 
 		auto &entry = target;
@@ -276,7 +279,7 @@ struct QuantileListOperation : QuantileOperation {
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			QuantileInterpolator<DISCRETE> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<DISCRETE> interp(quantile, state.v.total_capacity, bind_data.desc);
 			interp.begin = lower;
 			rdata[ridx + q] = interp.template Operation<typename STATE::InputType, CHILD_TYPE>(v_t, result);
 			lower = interp.FRN;
@@ -342,7 +345,7 @@ struct QuantileListFallback : QuantileOperation {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -354,16 +357,16 @@ struct QuantileListFallback : QuantileOperation {
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 
-		D_ASSERT(state.v.data());
+		auto &flattened = FlattenedQuantileValues<string_t>::Flatten(finalize_data, state.v);
 
 		auto &entry = target;
 		entry.offset = ridx;
 		idx_t lower = 0;
 		for (const auto &q : bind_data.order) {
 			const auto &quantile = bind_data.quantiles[q];
-			QuantileInterpolator<true> interp(quantile, state.v.size(), bind_data.desc);
+			QuantileInterpolator<true> interp(quantile, state.v.total_capacity, bind_data.desc);
 			interp.begin = lower;
-			auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+			auto interpolation_result = interp.InterpolateInternal<string_t>(flattened.Data());
 			CreateSortKeyHelpers::DecodeSortKey(interpolation_result, result, ridx + q,
 			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 			lower = interp.FRN;
