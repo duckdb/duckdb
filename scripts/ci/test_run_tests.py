@@ -1416,7 +1416,7 @@ assertions: 359 | 358 passed | 1 failed
             ],
         )
 
-    def test_unparseable_batch_failure_dumps_raw_output(self):
+    def test_unparsable_batch_failure_dumps_raw_output(self):
         # when we cannot extract a useful failure description, the raw unittest output should be dumped
         # so that CI logs contain everything needed to diagnose the failure
         batch = ["/tmp/a.test", "/tmp/b.test"]
