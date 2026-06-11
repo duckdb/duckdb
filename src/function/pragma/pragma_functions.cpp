@@ -24,7 +24,6 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 	if (config.profiling_mode == ProfilingMode::DISABLED) {
 		config.profiling_mode = ProfilingMode::STANDARD;
 	}
-	config.emit_profiler_output = true;
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {

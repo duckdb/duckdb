@@ -238,8 +238,8 @@ void QueryProfiler::EndQuery() {
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
-	// EXPLAIN ANALYZE output is not written by the profiler.
-	if (IsEnabled() && !is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
+	// EXPLAIN ANALYZE output is not written by the profiler, and the "no_output" format emits no output.
+	if (!is_explain_analyze && ClientConfig::GetConfig(context).profiler_print_format != "no_output") {
 		emit_output = true;
 	}
 

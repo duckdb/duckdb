@@ -40,10 +40,6 @@ struct ClientConfig {
 	//! Default "*" means all metrics are tracked.
 	vector<string> tracked_metrics = {"*"};
 
-	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
-	//! to output anything
-	bool emit_profiler_output = true;
-
 	//! system-wide progress bar disable.
 	const char *system_progress_bar_disable_reason = nullptr;
 	//! If the progress bar is enabled or not.

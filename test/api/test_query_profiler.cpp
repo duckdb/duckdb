@@ -13,8 +13,8 @@ TEST_CASE("Test query profiler", "[api]") {
 	string output;
 
 	con.EnableProfiling();
-	// don't pollute the console with profiler info.
-	con.context->config.emit_profiler_output = false;
+	// don't pollute the console with profiler info - write it to a file in the test directory instead.
+	con.context->config.profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
 
 	string query = "SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2";
 	REQUIRE_NO_FAIL(con.Query(query));
@@ -37,8 +37,8 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	string output;
 
 	con.EnableProfiling();
-	// don't pollute the console with profiler info.
-	con.context->config.emit_profiler_output = false;
+	// don't pollute the console with profiler info - write it to a file in the test directory instead.
+	con.context->config.profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
 
 	// Disable `QUERY_SQL` in profiling output by only tracking other metrics.
 	REQUIRE_NO_FAIL(
@@ -65,7 +65,7 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	//
 	// con.EnableProfiling();
 	//
-	// con.context->config.emit_profiler_output = false;
+	// con.context->config.profiler_save_location = TestCreatePath("test_query_profiler_output.txt");
 	//
 	// // Test interupting a query and running a new one afterward.
 	// // The latency should reflect the new one.

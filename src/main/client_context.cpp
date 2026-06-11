@@ -1292,7 +1292,6 @@ void ClientContext::EnableProfiling() {
 	if (client_config.profiling_mode == ProfilingMode::DISABLED) {
 		client_config.profiling_mode = ProfilingMode::STANDARD;
 	}
-	client_config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {

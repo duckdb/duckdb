@@ -864,14 +864,12 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 
 	auto &config = ClientConfig::GetConfig(context);
 
-	// Validate the format name (throws on an unrecognized format). CreateProfiler returns nullptr for "no_output",
-	// which is the only format that does not emit output.
-	auto renderer = QueryProfiler::Get(context).CreateProfiler(parameter);
+	// Validate the format name (throws on an unrecognized format).
+	QueryProfiler::Get(context).CreateProfiler(parameter);
 
 	if (config.profiling_mode == ProfilingMode::DISABLED) {
 		config.profiling_mode = ProfilingMode::STANDARD;
 	}
-	config.emit_profiler_output = renderer != nullptr;
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -895,7 +893,6 @@ void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
 	config.profiling_mode = ClientConfig().profiling_mode;
-	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -1264,7 +1261,6 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiling_mode = ClientConfig().profiling_mode;
-	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
