@@ -14,6 +14,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 struct DecimalAvgState {
+	static constexpr const char *STATE_NAMES[] = {"sum", "count"};
+	using STATE_TYPE = StructStateType<hugeint_t, uint64_t>;
+
 	hugeint_t sum;  // accumulated integer value at the input's scale
 	uint64_t count; // number of non-NULL rows accumulated so far
 };
@@ -144,6 +147,7 @@ static unique_ptr<FunctionData> BindDecimalAverage(BindAggregateFunctionInput &i
 		throw InternalException("decimal_average: unexpected physical type");
 	}
 	function.SetName(std::move(name));
+	function.GetArguments()[0] = input_type;
 	return nullptr;
 }
 
