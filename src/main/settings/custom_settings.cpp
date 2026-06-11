@@ -11,6 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -1232,6 +1233,50 @@ void ProfileOutputSetting::ResetLocal(ClientContext &context) {
 Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.profiler_save_location);
+}
+
+//===----------------------------------------------------------------------===//
+// Profiler Renderer Settings
+//===----------------------------------------------------------------------===//
+void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull() || input.type().id() != LogicalTypeId::MAP) {
+		throw InvalidInputException("Invalid profiling_renderer_settings type \"%s\", expected a map of settings "
+		                            "(e.g. {'maximum_render_width': 300})",
+		                            input.type().ToString());
+	}
+	unordered_map<string, Value> new_settings;
+	for (auto &entry : MapValue::GetChildren(input)) {
+		auto &key_value = StructValue::GetChildren(entry);
+		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1];
+	}
+	// eagerly configure the renderer of the current profiler format to validate the setting values
+	auto renderer = QueryProfiler::Get(context).GetRenderer();
+	if (renderer) {
+		renderer->Configure(new_settings);
+	}
+	config.profiling_renderer_settings = std::move(new_settings);
+}
+
+void ProfilingRendererSettingsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profiling_renderer_settings.clear();
+}
+
+Value ProfilingRendererSettingsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	// sort the settings by name so that the rendered value is deterministic
+	vector<string> setting_names;
+	for (auto &entry : config.profiling_renderer_settings) {
+		setting_names.push_back(entry.first);
+	}
+	std::sort(setting_names.begin(), setting_names.end());
+	vector<Value> keys;
+	vector<Value> values;
+	for (auto &name : setting_names) {
+		keys.emplace_back(name);
+		values.push_back(config.profiling_renderer_settings.at(name).DefaultCastAs(LogicalType::VARCHAR));
+	}
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
 }
 
 //===----------------------------------------------------------------------===//

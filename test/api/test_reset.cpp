@@ -210,6 +210,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "profiling_renderer_settings",
 	    "worker_threads",
 	    "tracked_metrics",
 	    "debug_verification_mode",

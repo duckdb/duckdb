@@ -39,6 +39,9 @@ struct ClientConfig {
 	//! Glob patterns for tracked_metrics (controls which metrics are gathered and displayed).
 	//! Default "*" means all metrics are tracked.
 	vector<string> tracked_metrics = {"*"};
+	//! Settings that are passed to the renderer of the profiler output (e.g. 'maximum_render_width' for the text
+	//! renderer). Settings that are not recognized by the active renderer are ignored.
+	unordered_map<string, Value> profiling_renderer_settings;
 
 	//! system-wide progress bar disable.
 	const char *system_progress_bar_disable_reason = nullptr;

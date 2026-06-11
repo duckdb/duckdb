@@ -1146,6 +1146,13 @@
         "custom_implementation": true
     },
     {
+        "name": "profiling_renderer_settings",
+        "description": "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings not recognized by the active renderer are ignored",
+        "type": "MAP(VARCHAR, VARCHAR)",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "progress_bar_time",
         "description": "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
         "type": "BIGINT",

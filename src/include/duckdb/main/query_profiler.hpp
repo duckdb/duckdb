@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/enums/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -89,8 +89,10 @@ public:
 	//! Create the TreeRenderer for the given profiler format name (e.g. "json", "query_tree"). Returns nullptr for the
 	//! "no_output" format, and throws if the format name is not recognized.
 	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const string &name) const;
-	//! Returns the renderer to use for the given ExplainFormat, taking the configured default format into account.
-	DUCKDB_API unique_ptr<TreeRenderer> GetPrinter(const ExplainFormat &format = ExplainFormat::DEFAULT()) const;
+	//! Returns the renderer to use for the given ProfilerPrintFormat, taking the configured default format into
+	//! account.
+	DUCKDB_API unique_ptr<TreeRenderer>
+	GetRenderer(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT()) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -139,9 +141,9 @@ public:
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
 	DUCKDB_API void Print();
 
-	//! Render the profiler output as a string, formatted based on the given ExplainFormat (or the configured default
-	//! profiler format when ExplainFormat::DEFAULT is passed).
-	DUCKDB_API string ToString(const ExplainFormat &format = ExplainFormat::DEFAULT()) const;
+	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
+	//! default profiler format when ProfilerPrintFormat::DEFAULT is passed).
+	DUCKDB_API string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT()) const;
 	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
 	//! profiling-disabled and no-output cases.
 	DUCKDB_API string ToString(const string &profiler_format_name) const;

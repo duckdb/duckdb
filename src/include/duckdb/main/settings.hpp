@@ -1681,6 +1681,18 @@ struct ProfilingModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ProfilingRendererSettingsSetting {
+	using RETURN_TYPE = unordered_map<string, string>;
+	static constexpr const char *Name = "profiling_renderer_settings";
+	static constexpr const char *Description =
+	    "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings "
+	    "not recognized by the active renderer are ignored";
+	static constexpr const char *InputType = "MAP(VARCHAR, VARCHAR)";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProgressBarTimeSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "progress_bar_time";

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/enums/profiler_print_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
@@ -50,9 +50,9 @@ public:
 	shared_ptr<ClientContext> context;
 
 public:
-	//! Returns query profiling information for the current query, formatted according to the given ExplainFormat
-	//! (e.g. ExplainFormat::JSON()). ExplainFormat::DEFAULT() uses the configured default profiler format.
-	DUCKDB_API string GetProfilingInformation(const ExplainFormat &format = ExplainFormat::DEFAULT());
+	//! Returns query profiling information for the current query, formatted according to the given ProfilerPrintFormat
+	//! (e.g. ProfilerPrintFormat::JSON()). ProfilerPrintFormat::DEFAULT() uses the configured default profiler format.
+	DUCKDB_API string GetProfilingInformation(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT());
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();

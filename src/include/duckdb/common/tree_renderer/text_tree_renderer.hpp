@@ -85,6 +85,8 @@ public:
 	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
 	string RenderProfiler(const QueryProfiler &profiler) override;
 
+	void Configure(const unordered_map<string, Value> &settings) override;
+
 	bool UsesRawKeyNames() override {
 		return true;
 	}

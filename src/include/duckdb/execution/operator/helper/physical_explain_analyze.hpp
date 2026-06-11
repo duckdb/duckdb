@@ -10,7 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/enums/profiler_print_format.hpp"
 
 namespace duckdb {
 
@@ -19,13 +19,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPLAIN_ANALYZE;
 
 public:
-	PhysicalExplainAnalyze(PhysicalPlan &physical_plan, vector<LogicalType> types, ExplainFormat format)
+	PhysicalExplainAnalyze(PhysicalPlan &physical_plan, vector<LogicalType> types, ProfilerPrintFormat format)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1),
 	      format(std::move(format)) {
 	}
 
 public:
-	ExplainFormat format;
+	ProfilerPrintFormat format;
 
 public:
 	// Source interface

@@ -46,7 +46,7 @@ Connection::~Connection() {
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 
-string Connection::GetProfilingInformation(const ExplainFormat &format) {
+string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {
 	return QueryProfiler::Get(*context).ToString(format);
 }
 

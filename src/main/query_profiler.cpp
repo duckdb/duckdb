@@ -82,25 +82,17 @@ bool QueryProfiler::IsEnabled() const {
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
-	auto format = StringUtil::Lower(name);
-	// "no_output" produces no profiler output and so has no renderer
-	if (format == "no_output") {
-		return nullptr;
+	// formats are resolved through the renderer registry, which matches case-insensitively and throws on
+	// unrecognized formats - "no_output" has no renderer, for which CreateRenderer returns nullptr
+	auto renderer = TreeRenderer::CreateRenderer(name);
+	if (renderer) {
+		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	}
-	// the profiler's "query_tree"/"query_tree_optimizer" formats render as the text query tree ("text")
-	if (format == "query_tree" || format == "query_tree_optimizer" || format == "text") {
-		return TreeRenderer::CreateRenderer("text");
-	}
-	if (format == "json" || format == "html" || format == "graphviz" || format == "mermaid") {
-		return TreeRenderer::CreateRenderer(format);
-	}
-	throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, "
-	                      "no_output, html, graphviz, mermaid]",
-	                      name);
+	return renderer;
 }
 
-unique_ptr<TreeRenderer> QueryProfiler::GetPrinter(const ExplainFormat &format) const {
-	if (format == ExplainFormat::DEFAULT()) {
+unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
+	if (format == ProfilerPrintFormat::DEFAULT()) {
 		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
 		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
 		auto name = ClientConfig::GetConfig(context).profiler_print_format;
@@ -305,8 +297,8 @@ MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
 	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
-string QueryProfiler::ToString(const ExplainFormat &explain_format) const {
-	auto renderer = GetPrinter(explain_format);
+string QueryProfiler::ToString(const ProfilerPrintFormat &explain_format) const {
+	auto renderer = GetRenderer(explain_format);
 	return RenderProfilerOutput(renderer.get());
 }
 
@@ -1049,6 +1041,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 
 void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
 	TextTreeRenderer renderer;
+	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);
 }
 

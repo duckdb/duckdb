@@ -24,7 +24,7 @@ TEST_CASE("Test query profiler", "[api]") {
 	bool query_found_in_output = output.find(query) != std::string::npos;
 	REQUIRE(query_found_in_output);
 
-	output = con.GetProfilingInformation(ExplainFormat::JSON());
+	output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
 	REQUIRE(output.size() > 0);
 	query_found_in_output = output.find(query) != std::string::npos;
 	REQUIRE(query_found_in_output);
@@ -51,7 +51,7 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	bool query_not_found_in_output = output.find(query) == std::string::npos;
 	REQUIRE(query_not_found_in_output);
 
-	output = con.GetProfilingInformation(ExplainFormat::JSON());
+	output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
 	REQUIRE(output.size() > 0);
 	query_not_found_in_output = output.find(query) == std::string::npos;
 	REQUIRE(query_not_found_in_output);

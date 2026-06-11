@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/main/profiling_node.hpp"
 #include "duckdb/common/render_tree.hpp"
 
@@ -30,11 +32,18 @@ public:
 public:
 	void ToStream(RenderTree &root, std::ostream &ss);
 	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
-	//! Create a TreeRenderer for the given format name (e.g. "json", "text"). Throws if the name is not recognized.
+	//! Create a TreeRenderer for the given format name (e.g. "json", "text"). The name is matched case-insensitively
+	//! and throws if it is not recognized. Returns nullptr for formats that render no output (i.e. "no_output").
 	//! This is the primary, name-based factory; new render formats are added here.
 	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
-	//! Create a TreeRenderer for the given ExplainFormat (thin wrapper over the name-based factory).
-	static unique_ptr<TreeRenderer> CreateRenderer(const ExplainFormat &format);
+	//! Create a TreeRenderer for the given ProfilerPrintFormat (thin wrapper over the name-based factory).
+	static unique_ptr<TreeRenderer> CreateRenderer(const ProfilerPrintFormat &format);
+
+	//! Generic configuration of the renderer: passes renderer settings (e.g. from the "profiling_renderer_settings"
+	//! setting) to the renderer. Renderers override this to handle the settings they support, and throw on invalid
+	//! setting values. Unrecognized settings are ignored - they may be intended for a different renderer.
+	virtual void Configure(const unordered_map<string, Value> &settings) {
+	}
 
 	virtual bool UsesRawKeyNames() {
 		return false;

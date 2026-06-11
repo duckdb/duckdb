@@ -5,7 +5,7 @@
 #include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/enums/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -25,54 +25,67 @@ string TreeRenderer::RenderProfilerDisabled() {
 }
 
 //===--------------------------------------------------------------------===//
-// Explain format registry
+// Print format registry
 //===--------------------------------------------------------------------===//
-// Single source of truth mapping an explain format name to the TreeRenderer that renders it. The EXPLAIN parser
-// (ExplainFormat::FromString), the query profiler, and the TreeRenderer factory all resolve formats through this
+// Single source of truth mapping a print format name to the TreeRenderer that renders it. The EXPLAIN parser
+// (ProfilerPrintFormat::FromString), the query profiler, and the TreeRenderer factory all resolve formats through this
 // table.
 template <class T>
 static unique_ptr<TreeRenderer> MakeRenderer() {
 	return make_uniq<T>();
 }
 
-struct ExplainFormatEntry {
+static unique_ptr<TreeRenderer> MakeNoOutputRenderer() {
+	// the "no_output" format renders nothing and so has no renderer
+	return nullptr;
+}
+
+struct ProfilerPrintFormatEntry {
 	const char *name;
 	unique_ptr<TreeRenderer> (*create_renderer)();
 };
 
-static const ExplainFormatEntry EXPLAIN_FORMATS[] = {
-    {"default", MakeRenderer<TextTreeRenderer>},      {"text", MakeRenderer<TextTreeRenderer>},
-    {"json", MakeRenderer<JSONTreeRenderer>},         {"html", MakeRenderer<HTMLTreeRenderer>},
-    {"graphviz", MakeRenderer<GRAPHVIZTreeRenderer>}, {"yaml", MakeRenderer<YAMLTreeRenderer>},
+static const ProfilerPrintFormatEntry PRINT_FORMATS[] = {
+    {"default", MakeRenderer<TextTreeRenderer>},
+    {"text", MakeRenderer<TextTreeRenderer>},
+    // aliases of "text" used by the profiler (e.g. PRAGMA enable_profiling = 'query_tree')
+    {"query_tree", MakeRenderer<TextTreeRenderer>},
+    {"query_tree_optimizer", MakeRenderer<TextTreeRenderer>},
+    // format that renders no output at all
+    {"no_output", MakeNoOutputRenderer},
+    {"json", MakeRenderer<JSONTreeRenderer>},
+    {"html", MakeRenderer<HTMLTreeRenderer>},
+    {"graphviz", MakeRenderer<GRAPHVIZTreeRenderer>},
+    {"yaml", MakeRenderer<YAMLTreeRenderer>},
     {"mermaid", MakeRenderer<MermaidTreeRenderer>},
 };
 
 //! Look up the registry entry for a format name, throwing InvalidInputException (listing valid names) when unknown.
-static const ExplainFormatEntry &LookupExplainFormat(const string &name) {
+static const ProfilerPrintFormatEntry &LookupProfilerPrintFormat(const string &name) {
 	auto lower = StringUtil::Lower(name);
-	for (auto &entry : EXPLAIN_FORMATS) {
+	for (auto &entry : PRINT_FORMATS) {
 		if (lower == entry.name) {
 			return entry;
 		}
 	}
 	vector<string> options;
-	for (auto &entry : EXPLAIN_FORMATS) {
+	for (auto &entry : PRINT_FORMATS) {
 		options.push_back(entry.name);
 	}
 	throw InvalidInputException("\"%s\" is not a valid FORMAT argument, valid options are: %s", name,
 	                            StringUtil::Join(options, ", "));
 }
 
-ExplainFormat ExplainFormat::FromString(const string &name) {
+ProfilerPrintFormat ProfilerPrintFormat::FromString(const string &name) {
 	// return the canonical (lowercase) name for the matched entry
-	return ExplainFormat(LookupExplainFormat(name).name);
+	return ProfilerPrintFormat(LookupProfilerPrintFormat(name).name);
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const string &name) {
-	return LookupExplainFormat(name).create_renderer();
+	return LookupProfilerPrintFormat(name).create_renderer();
 }
 
-unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ExplainFormat &format) {
+unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ProfilerPrintFormat &format) {
 	return CreateRenderer(format.ToString());
 }
 
