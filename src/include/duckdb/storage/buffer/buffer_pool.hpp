@@ -32,8 +32,6 @@ struct BufferEvictionNode {
 	weak_ptr<BlockMemory> memory_p;
 	idx_t handle_sequence_number;
 
-	bool CanUnload(BlockMemory &memory);
-	shared_ptr<BlockMemory> TryGetBlockMemory();
 	bool IsDeadNode(optional_idx debug_sleep_micros = optional_idx());
 };
 

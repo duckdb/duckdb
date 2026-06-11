@@ -44,28 +44,6 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx
 	D_ASSERT(!memory_p.expired());
 }
 
-bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
-	if (handle_sequence_number != memory.GetEvictionSequenceNumber()) {
-		// handle was used in between
-		return false;
-	}
-	return memory.CanUnload();
-}
-
-shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
-	auto shared_memory_p = memory_p.lock();
-	if (!shared_memory_p) {
-		// The block memory has been destroyed.
-		return nullptr;
-	}
-	if (!CanUnload(*shared_memory_p)) {
-		// The memory handle was used in between.
-		return nullptr;
-	}
-	// The node is the latest node in the queue with this memory.
-	return shared_memory_p;
-}
-
 bool BufferEvictionNode::IsDeadNode(optional_idx debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
 	if (debug_sleep_micros.IsValid()) {
