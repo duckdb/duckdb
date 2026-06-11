@@ -1198,7 +1198,7 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 // Profile Output
 //===----------------------------------------------------------------------===//
-void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
 
@@ -1224,11 +1224,11 @@ void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 	config.profiler_save_location = parameter;
 }
 
-void ProfileOutputSetting::ResetLocal(ClientContext &context) {
+void ProfilingOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
 }
 
-Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
+Value ProfilingOutputSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.profiler_save_location);
 }

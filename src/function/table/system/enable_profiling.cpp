@@ -31,7 +31,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 		}
 
 		EnableProfilingSetting::ResetLocal(context);
-		ProfileOutputSetting::ResetLocal(context);
+		ProfilingOutputSetting::ResetLocal(context);
 	}
 
 	if (!bind_data.format.IsNull()) {
@@ -43,7 +43,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.save_location.IsNull()) {
-		ProfileOutputSetting::SetLocal(context, bind_data.save_location);
+		ProfilingOutputSetting::SetLocal(context, bind_data.save_location);
 	}
 
 	if (!bind_data.mode.IsNull()) {
