@@ -314,6 +314,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
+include(CheckCXXSymbolExists)
+check_cxx_symbol_exists(fdatasync "unistd.h" DUCKDB_HAVE_FDATASYNC)
+if(DUCKDB_HAVE_FDATASYNC)
+  add_definitions(-DDUCKDB_HAVE_FDATASYNC=1)
+endif()
+
 if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-rc[0-9]+$")
   if (DUCKDB_EXPLICIT_VERSION)
     if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
