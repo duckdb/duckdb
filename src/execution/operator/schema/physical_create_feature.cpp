@@ -115,8 +115,7 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalCreateFeature::Combine(ExecutionContext &context,
-                                                     OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalCreateFeature::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateFeatureGlobalState>();
 	auto &lstate = input.local_state.Cast<CreateFeatureLocalState>();
 	if (!gstate.table || !lstate.collection_index.IsValid()) {
