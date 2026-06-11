@@ -657,7 +657,7 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 		const auto &merged_child_types = StructType::GetChildTypes(merged);
 		const auto &type_child_types = StructType::GetChildTypes(type);
 
-		unordered_map<string, const LogicalType &> merged_child_types_map;
+		identifier_map_t<const LogicalType &> merged_child_types_map;
 		for (const auto &merged_child : merged_child_types) {
 			merged_child_types_map.emplace(merged_child.first, merged_child.second);
 		}
@@ -689,6 +689,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 	}
 	case LogicalTypeId::LIST: {
 		// Only lists can be merged into a list
+		if (type.id() != LogicalTypeId::LIST) {
+			return -1;
+		}
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
 		const auto &merged_child_type = ListType::GetChildType(merged);
 		const auto &type_child_type = ListType::GetChildType(type);

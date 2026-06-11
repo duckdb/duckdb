@@ -42,7 +42,7 @@ struct PreparedStatementCallbackInfo {
 
 struct BindPreparedStatementCallbackInfo {
 	PreparedStatementData &prepared_statement;
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+	optional_ptr<identifier_map_t<BoundParameterData>> parameters;
 };
 
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state

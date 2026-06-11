@@ -79,9 +79,7 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if (info.db) {
-		TaskScheduler::GetScheduler(*info.db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
-	}
+	Allocator::SetBackgroundThreads(input.GetValue<bool>());
 }
 
 //===----------------------------------------------------------------------===//
@@ -129,23 +127,8 @@ Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &co
 //===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
-void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
-	}
-}
-
-void AllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.allocator_flush_threshold = DBConfigOptions().allocator_flush_threshold;
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
-	}
-}
-
-Value AllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
+void AllocatorFlushThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	StringUtil::ParseFormattedBytes(input.ToString());
 }
 
 //===----------------------------------------------------------------------===//
@@ -1034,37 +1017,6 @@ void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
-// Enable H T T P Logging
-//===----------------------------------------------------------------------===//
-void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_http_logging = input.GetValue<bool>();
-
-	// NOTE: this is a deprecated setting: we mimic the old behaviour by setting the log storage output to STDOUT and
-	// enabling logging for http only. Note that this behaviour is slightly wonky in that it sets all sorts of logging
-	// config
-	auto &log_manager = LogManager::Get(context);
-	if (config.enable_http_logging) {
-		log_manager.SetEnableLogging(true);
-		log_manager.SetLogLevel(HTTPLogType::LEVEL);
-		unordered_set<string> enabled_log_types = {HTTPLogType::NAME};
-		log_manager.SetEnabledLogTypes(enabled_log_types);
-		log_manager.SetLogStorage(*context.db, LogConfig::STDOUT_STORAGE_NAME);
-	} else {
-		log_manager.SetEnableLogging(false);
-	}
-}
-
-void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
-}
-
-Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_http_logging);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Mbedtls
 //===----------------------------------------------------------------------===//
 
@@ -1100,24 +1052,6 @@ void ForceMbedtlsUnsafeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 Value ForceMbedtlsUnsafeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.force_mbedtls);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Logging Output
-//===----------------------------------------------------------------------===//
-void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
-	                              "logging for more information");
-}
-
-void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
-	throw NotImplementedException("This setting is deprecated and can no longer be used. Check out the DuckDB docs on "
-	                              "logging for more information");
-}
-
-Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.http_logging_output);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1480,6 +1414,21 @@ Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
+// Standard Vector Size
+//===----------------------------------------------------------------------===//
+void StandardVectorSizeSetting::SetGlobal(DatabaseInstance *, DBConfig &, const Value &) {
+	throw InvalidInputException("standard_vector_size is a read-only setting determined at compile time");
+}
+
+void StandardVectorSizeSetting::ResetGlobal(DatabaseInstance *, DBConfig &) {
+	throw InvalidInputException("standard_vector_size is a read-only setting determined at compile time");
+}
+
+Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
+	return Value::UBIGINT(DuckDB::StandardVectorSize());
+}
+
+//===----------------------------------------------------------------------===//
 // Streaming Buffer Size
 //===----------------------------------------------------------------------===//
 void StreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1598,6 +1547,34 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
+}
+
+//===----------------------------------------------------------------------===//
+// Async Threads
+//===----------------------------------------------------------------------===//
+void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 0) {
+		throw SyntaxException("Cannot have negative async_threads!");
+	}
+	auto new_async_threads = NumericCast<idx_t>(new_val);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.async_threads = new_async_threads;
+}
+
+void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.async_threads = new_async_threads;
+}
+
+Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.async_threads));
 }
 
 //===----------------------------------------------------------------------===//

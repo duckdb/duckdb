@@ -27,17 +27,17 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableSet(PEGTransformer
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransformer &transformer,
                                                                        unique_ptr<BaseTableRef> base_table_name,
-                                                                       const string &update_alias) {
+                                                                       const Identifier &update_alias) {
 	base_table_name->alias = update_alias;
 	return std::move(base_table_name);
 }
 
-string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, const string &col_id) {
-	return col_id;
+Identifier PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, const Identifier &col_id) {
+	return Identifier(col_id);
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTransformer &transformer,
-                                                                         const vector<string> &column_name,
+                                                                         const vector<Identifier> &column_name,
                                                                          unique_ptr<ParsedExpression> expression) {
 	auto result = make_uniq<UpdateSetInfo>();
 	result->columns = column_name;
@@ -45,18 +45,20 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 	bool is_row_assignment = false;
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_ref = expression->Cast<FunctionExpression>();
-		if (StringUtil::CIEquals(func_ref.FunctionName(), "row")) {
+		if (func_ref.FunctionName() == "row") {
 			is_row_assignment = true;
 		}
 	}
 
 	if (is_row_assignment) {
 		auto &func_expr = expression->Cast<FunctionExpression>();
-		if (func_expr.GetChildren().size() != result->columns.size()) {
+		if (func_expr.GetArguments().size() != result->columns.size()) {
 			throw ParserException("Could not perform assignment, expected %d values, got %d", result->columns.size(),
-			                      func_expr.GetChildren().size());
+			                      func_expr.GetArguments().size());
 		}
-		result->expressions = std::move(func_expr.GetChildrenMutable());
+		for (auto &arg : func_expr.GetArgumentsMutable()) {
+			result->expressions.push_back(std::move(arg.GetExpressionMutable()));
+		}
 	} else {
 		result->expressions.reserve(result->columns.size());
 		for (idx_t i = 0; i < result->columns.size(); i++) {
@@ -71,7 +73,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
     PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element) {
 	auto result = make_uniq<UpdateSetInfo>();
 	for (auto &element : update_set_element) {
-		result->columns.push_back(std::move(element.first));
+		result->columns.emplace_back(std::move(element.first));
 		result->expressions.push_back(std::move(element.second));
 	}
 	return result;
@@ -83,12 +85,12 @@ PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, co
 	return {update_set_column_target, std::move(expression)};
 }
 
-string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, const string &column_name,
-                                                             const vector<string> &dot_identifier) {
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, const Identifier &column_name,
+                                                             const vector<Identifier> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Qualified column names in UPDATE .. SET not supported");
 	}
-	return column_name;
+	return column_name.GetIdentifierName();
 }
 
 } // namespace duckdb

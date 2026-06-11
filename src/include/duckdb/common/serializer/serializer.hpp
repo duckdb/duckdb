@@ -11,6 +11,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -26,7 +27,6 @@
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
-
 class SerializationOptions {
 public:
 	SerializationOptions() = default;
@@ -315,8 +315,8 @@ protected:
 
 	// Insertion Order Preserving Map
 	// serialized as a list of pairs
-	template <class V>
-	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
+	template <class V, class KEY, class INDEX_MAP>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V, KEY, INDEX_MAP> &map) {
 		auto count = map.size();
 		OnListBegin(count);
 		for (auto &entry : map) {
@@ -383,6 +383,10 @@ protected:
 	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const char *str) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
+	//! Identifiers are serialized identically to a plain string (preserving the original casing)
+	void WriteValue(const Identifier &value) {
+		WriteValue(value.GetIdentifierName());
+	}
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
 	}

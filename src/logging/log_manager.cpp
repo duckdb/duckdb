@@ -274,6 +274,7 @@ void LogManager::RegisterDefaultLogTypes() {
 	RegisterLogType(make_uniq<MetricsLogType>());
 	RegisterLogType(make_uniq<AdaptiveFilterLogType>());
 	RegisterLogType(make_uniq<ParquetPrefetchLogType>());
+	RegisterLogType(make_uniq<AsyncTaskScheduleLogType>());
 }
 
 } // namespace duckdb

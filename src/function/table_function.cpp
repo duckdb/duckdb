@@ -14,7 +14,7 @@ PartitionStatistics::PartitionStatistics() : row_start(0), count(0), count_type(
 TableFunctionInfo::~TableFunctionInfo() {
 }
 
-TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function_,
+TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function_,
                              table_function_bind_t bind, table_function_init_global_t init_global,
                              table_function_init_local_t init_local)
     : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),
@@ -30,7 +30,7 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
       return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
-TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function_,
+TableFunction::TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function_,
                              table_function_bind_t bind, table_function_init_global_t init_global,
                              table_function_init_local_t init_local)
     : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),

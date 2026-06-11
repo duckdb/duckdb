@@ -22,7 +22,7 @@ public:
 
 public:
 	BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth = 0);
-	BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
+	BoundColumnRefExpression(Identifier alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
 
 public:
 	bool IsScalar() const override {
@@ -46,7 +46,7 @@ public:
 	}
 
 	string ToString() const override;
-	string GetName() const override;
+	Identifier GetName() const override;
 
 	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;

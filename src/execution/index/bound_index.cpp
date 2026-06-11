@@ -15,7 +15,7 @@ namespace duckdb {
 // Bound index
 //-------------------------------------------------------------------------------
 
-BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexConstraintType index_constraint_type,
                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
@@ -249,7 +249,6 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);
 				table_chunk.data[col_id].Slice(sel, rows_to_process);
 			}
-			table_chunk.SetCardinality(rows_to_process);
 			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
 
 			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {

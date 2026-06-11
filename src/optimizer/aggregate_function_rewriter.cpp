@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -77,7 +78,8 @@ public:
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
+		auto &sum_entry =
+		    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, Identifier::DefaultSchema(), "sum");
 		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
@@ -329,7 +331,7 @@ private:
 
 			// Add COUNT([x]) to the aggregate list
 			FunctionBinder function_binder(optimizer.context);
-			const auto count_fun = CountFunctionBase::GetFunction();
+			const auto count_fun = count_arg ? CountFunctionBase::GetFunction() : CountStarFun::GetFunction();
 			vector<unique_ptr<Expression>> count_args;
 			if (count_arg) {
 				count_args.push_back(std::move(count_arg));

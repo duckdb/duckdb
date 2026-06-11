@@ -23,7 +23,8 @@ public:
 
 public:
 	BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
-	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
+	BoundLambdaRefExpression(Identifier alias, LogicalType type, ColumnBinding binding, idx_t lambda_idx,
+	                         idx_t depth = 0);
 
 public:
 	const ColumnBinding &Binding() const {

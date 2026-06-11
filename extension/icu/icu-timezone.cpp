@@ -102,7 +102,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
@@ -386,8 +385,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		rdata[0] = GetLocalTimestamp(state);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -402,8 +401,8 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 		rdata[0] = Timestamp::GetTime(local);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -543,8 +542,8 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		}
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
 		                               Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,

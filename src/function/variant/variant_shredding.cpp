@@ -175,7 +175,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	(void)validity;
 
 	//! Collect the nested data for the objects
-	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		//! When we're shredding an object, the top-level struct of it should always be valid
@@ -204,12 +206,12 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		auto &key = shredded_types[child_idx].first;
 		VariantPathComponent path_component;
 		path_component.lookup_mode = VariantChildLookupMode::BY_KEY;
-		path_component.key = key;
+		path_component.key = key.GetIdentifierName();
 
 		ValidityMask lookup_validity(count);
 		ValidityMask all_valid_validity(count);
-		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
-		                              nested_data.get(), all_valid_validity, count);
+		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity, nested_data,
+		                              all_valid_validity, count);
 
 		if (lookup_validity.CanHaveNull()) {
 			optional_ptr<Vector> typed_value_vector;

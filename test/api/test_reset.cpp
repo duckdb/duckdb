@@ -121,7 +121,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"enable_http_logging", {false}},
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
@@ -204,7 +203,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "default_block_size",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
-	    "http_logging_output",
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
@@ -215,6 +213,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "worker_threads",
 	    "tracked_metrics",
 	    "debug_verification_mode",
+	    "standard_vector_size",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;

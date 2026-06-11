@@ -29,7 +29,7 @@ public:
 
 class ExtensionActiveLoad {
 public:
-	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p, string alias_p)
+	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, Identifier extension_name_p, Identifier alias_p)
 	    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)),
 	      alias(std::move(alias_p)) {};
 
@@ -38,8 +38,8 @@ public:
 	DatabaseInstance &db;
 	unique_lock<mutex> load_lock;
 	ExtensionInfo &info;
-	string extension_name;
-	string alias;
+	Identifier extension_name;
+	Identifier alias;
 
 public:
 	void FinishLoad(ExtensionInstallInfo &install_info);
@@ -63,7 +63,7 @@ public:
 private:
 	DatabaseInstance &db;
 	mutex lock;
-	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	identifier_map_t<unique_ptr<ExtensionInfo>> loaded_extensions_info;
 	string extension_load_prefix;
 };
 

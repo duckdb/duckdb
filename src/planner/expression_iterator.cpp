@@ -70,39 +70,39 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_SUBQUERY: {
 		auto &subquery_expr = expr.Cast<BoundSubqueryExpression>();
-		for (auto &child : subquery_expr.children) {
+		for (auto &child : subquery_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_WINDOW: {
 		auto &window_expr = expr.Cast<BoundWindowExpression>();
-		for (auto &partition : window_expr.partitions) {
+		for (auto &partition : window_expr.PartitionsMutable()) {
 			callback(partition);
 		}
-		for (auto &order : window_expr.orders) {
+		for (auto &order : window_expr.OrderByMutable()) {
 			callback(order.expression);
 		}
-		for (auto &child : window_expr.children) {
+		for (auto &child : window_expr.GetChildrenMutable()) {
 			callback(child);
 		}
-		if (window_expr.filter_expr) {
-			callback(window_expr.filter_expr);
+		if (window_expr.FilterMutable()) {
+			callback(window_expr.FilterMutable());
 		}
-		if (window_expr.start_expr) {
-			callback(window_expr.start_expr);
+		if (window_expr.StartExprMutable()) {
+			callback(window_expr.StartExprMutable());
 		}
-		if (window_expr.end_expr) {
-			callback(window_expr.end_expr);
+		if (window_expr.EndExprMutable()) {
+			callback(window_expr.EndExprMutable());
 		}
-		for (auto &order : window_expr.arg_orders) {
+		for (auto &order : window_expr.ArgOrdersMutable()) {
 			callback(order.expression);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_UNNEST: {
 		auto &unnest_expr = expr.Cast<BoundUnnestExpression>();
-		callback(unnest_expr.child);
+		callback(unnest_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:

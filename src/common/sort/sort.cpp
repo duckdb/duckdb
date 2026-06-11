@@ -52,7 +52,8 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	}
 
 	ErrorData error;
-	create_sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(create_children), error);
+	create_sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(create_children), error);
 	if (!create_sort_key) {
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
 	}
@@ -92,7 +93,7 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	for (idx_t key_idx = 0; key_idx < orders.size(); key_idx++) {
 		const auto &key_order_expr = *orders[key_idx].expression;
 		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			input_column_to_key.emplace(key_order_expr.Cast<BoundReferenceExpression>().index, key_idx);
+			input_column_to_key.emplace(key_order_expr.Cast<BoundReferenceExpression>().Index(), key_idx);
 		}
 	}
 

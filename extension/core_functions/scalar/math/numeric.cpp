@@ -524,7 +524,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	auto fname = StringUtil::Upper(bound_function.GetName());
+	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
@@ -1727,6 +1727,9 @@ namespace {
 struct FactorialOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
+		if (left < 0) {
+			throw OutOfRangeException("factorial of a negative number is undefined");
+		}
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
 			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {

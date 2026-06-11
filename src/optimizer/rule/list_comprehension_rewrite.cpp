@@ -25,8 +25,8 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.Function().GetName(),
-	                                                          OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                          expr.Function().GetName(), OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return false;
 	}
@@ -61,7 +61,7 @@ optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &stru
 bool UsesIndexParameter(Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 		auto &ref = expr.Cast<BoundReferenceExpression>();
-		if (ref.index == 0) {
+		if (ref.Index() == 0) {
 			return true;
 		}
 	}
@@ -73,7 +73,7 @@ bool UsesIndexParameter(Expression &expr) {
 			}
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 				auto &ref = child.Cast<BoundReferenceExpression>();
-				if (ref.index == 0) {
+				if (ref.Index() == 0) {
 					uses_index = true;
 					return;
 				}
@@ -87,8 +87,8 @@ void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
 	ExpressionIterator::VisitExpressionClassMutable(expr, ExpressionClass::BOUND_REF,
 	                                                [&](unique_ptr<Expression> &child) {
 		                                                auto &ref = child->Cast<BoundReferenceExpression>();
-		                                                D_ASSERT(ref.index > 0);
-		                                                ref.index--;
+		                                                D_ASSERT(ref.Index() > 0);
+		                                                ref.IndexMutable()--;
 	                                                });
 }
 
@@ -107,7 +107,7 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 	auto &struct_ref = struct_arg->Cast<BoundReferenceExpression>();
-	if (struct_ref.index != 0) {
+	if (struct_ref.Index() != 0) {
 		return false;
 	}
 

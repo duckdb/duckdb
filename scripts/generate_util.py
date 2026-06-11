@@ -51,7 +51,9 @@ def is_order_modifier_ptr(type_str):
 
 
 def is_expression_map(type_str):
-    return 'case_insensitive_map_t<' in type_str and 'ParsedExpression*' in type_str
+    return (
+        'case_insensitive_map_t<' in type_str or 'identifier_map_t<' in type_str
+    ) and 'ParsedExpression*' in type_str
 
 
 def member_should_be_compared(member):
@@ -109,6 +111,22 @@ def generate_case_check_comparison(field_name, indent):
     ]
 
 
+def generate_func_arg_comparison(field_name, indent):
+    i = indent
+    ii = indent + '\t'
+    iii = indent + '\t\t'
+    return [
+        f'{i}if ({field_name}.size() != other_p.{field_name}.size()) {{',
+        f'{ii}return false;',
+        f'{i}}}',
+        f'{i}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
+        f'{ii}if (!{field_name}[i].Equals(other_p.{field_name}[i])) {{',
+        f'{iii}return false;',
+        f'{ii}}}',
+        f'{i}}}',
+    ]
+
+
 def generate_expression_map_comparison(field_name, indent):
     i = indent
     ii = indent + '\t'
@@ -137,7 +155,7 @@ def generate_ci_vector_string_comparison(field_name, indent):
         f'{ii}return false;',
         f'{indent}}}',
         f'{indent}for (idx_t i = 0; i < {field_name}.size(); i++) {{',
-        f'{ii}if (!StringUtil::CIEquals({field_name}[i], other_p.{field_name}[i])) {{',
+        f'{ii}if ({field_name}[i] != other_p.{field_name}[i]) {{',
         f'{iii}return false;',
         f'{ii}}}',
         f'{indent}}}',
@@ -148,9 +166,9 @@ def generate_member_comparison(member, indent='\t'):
     field_name = get_member_field_name(member)
     type_str = member['type']
 
-    if type_str == 'Identifier':
+    if type_str in ('Identifier', 'duckdb::Identifier'):
         return [
-            f'{indent}if (!StringUtil::CIEquals({field_name}, other_p.{field_name})) {{',
+            f'{indent}if ({field_name} != other_p.{field_name}) {{',
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]
@@ -191,6 +209,8 @@ def generate_member_comparison(member, indent='\t'):
         return generate_order_by_comparison(field_name, indent)
     elif type_str == 'vector<CaseCheck>':
         return generate_case_check_comparison(field_name, indent)
+    elif type_str == 'vector<FunctionArgument>':
+        return generate_func_arg_comparison(field_name, indent)
     elif is_expression_map(type_str):
         return generate_expression_map_comparison(field_name, indent)
     else:
@@ -290,6 +310,13 @@ def generate_member_copy(member, indent='\t'):
             f'{indent}}}',
         ]
 
+    if type_str == 'vector<FunctionArgument>':
+        return [
+            f'{indent}for (auto &arg : {field}) {{',
+            f'{ii}copy->{field}.emplace_back(arg.Copy());',
+            f'{indent}}}',
+        ]
+
     if type_str == 'vector<OrderByNode>':
         return [
             f'{indent}for (auto &order : {field}) {{',
@@ -329,6 +356,9 @@ def generate_subclass_copy(entry):
 
     lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
     lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
+
+    if class_name == 'FunctionExpression' or class_name == 'WindowExpression':
+        lines.append('\tcopy->is_legacy_function_call = is_legacy_function_call;')
 
     for member in entry.get('members', []):
         if member_should_be_copied(member):
@@ -384,18 +414,20 @@ def generate_member_hash(member, indent='\t'):
         return []
     if type_str == 'vector<CaseCheck>':
         return []
+    if type_str == 'vector<FunctionArgument>':
+        return []
     if is_expression_map(type_str):
         return []
     # complex key types — skip
     if 'qualified_column_map_t' in type_str or 'qualified_column_set_t' in type_str:
         return []
 
-    if type_str == 'Identifier':
-        return [f'{indent}hash = CombineHash(hash, StringUtil::CIHash({field_name}));']
+    if type_str in ('Identifier', 'duckdb::Identifier'):
+        return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'vector<Identifier>':
         return [
             f'{indent}for (auto &s : {field_name}) {{',
-            f'{indent}\thash = CombineHash(hash, StringUtil::CIHash(s));',
+            f'{indent}\thash = CombineHash(hash, s.Hash());',
             f'{indent}}}',
         ]
 
@@ -475,6 +507,7 @@ def member_is_iterable_expression(member):
         or is_parsed_expression_list(type_str)
         or type_str == 'vector<CaseCheck>'
         or type_str == 'vector<OrderByNode>'
+        or type_str == 'vector<FunctionArgument>'
         or is_expression_map(type_str)
         or is_order_modifier_ptr(type_str)
     )
@@ -513,6 +546,12 @@ def generate_member_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &item : {access}) {{',
                 f'\t\t\tresult.Append(item.second);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpressionMutable());',
                 f'\t\t}}',
             ]
         if type_str == 'vector<OrderByNode>':
@@ -623,6 +662,12 @@ def generate_member_const_children_appends(member, expr_var):
                 f'\t\t\tfor (auto &order : {access}->orders) {{',
                 f'\t\t\t\tresult.Append(*order.expression);',
                 f'\t\t\t}}',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<FunctionArgument>':
+            return [
+                f'\t\tfor (auto &arg : {access}) {{',
+                f'\t\t\tresult.Append(arg.GetExpression());',
                 f'\t\t}}',
             ]
         return []

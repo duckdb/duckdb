@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 		throw NotImplementedException("ANALYZE VERBOSE is not implemented yet");
 	}
 	if (analyze_target.ref) {
-		result->info->columns = std::move(analyze_target.columns);
+		result->info->columns = analyze_target.columns;
 		result->info->ref = std::move(analyze_target.ref);
 		result->info->has_table = true;
 	}
@@ -26,7 +26,7 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &tran
                                                             const vector<string> &name_list) {
 	AnalyzeTarget result;
 	result.ref = std::move(base_table_name);
-	result.columns = name_list;
+	result.columns = StringsToIdentifiers(name_list);
 	return result;
 }
 

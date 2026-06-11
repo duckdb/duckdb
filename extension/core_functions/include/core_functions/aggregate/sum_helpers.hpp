@@ -12,6 +12,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
@@ -25,32 +26,22 @@ static inline void KahanAddInternal(double input, double &summed, double &err) {
 
 template <class T>
 struct SumState {
-	bool isset;
+	using value_type = T;
+	using STATE_TYPE = OptionalStateType<T>;
 	T value;
-
-	void Initialize() {
-		this->isset = false;
-		this->value = 0;
-	}
-
-	void Combine(const SumState<T> &other) {
-		this->isset = other.isset || this->isset;
-		this->value += other.value;
-	}
+	bool is_set;
 };
 
 struct KahanSumState {
-	bool isset;
+	static constexpr const char *STATE_NAMES[] = {"value", "err"};
+	using STATE_TYPE = OptionalStateType<StructStateType<double, double>>;
+
 	double value;
 	double err;
-
-	void Initialize() {
-		this->isset = false;
-		this->err = 0.0;
-	}
+	bool is_set;
 
 	void Combine(const KahanSumState &other) {
-		this->isset = other.isset || this->isset;
+		this->is_set = other.is_set || this->is_set;
 		KahanAddInternal(other.value, this->value, this->err);
 		KahanAddInternal(other.err, this->value, this->err);
 	}
@@ -161,12 +152,6 @@ struct AddToHugeint {
 
 template <class STATEOP, class ADDOP>
 struct BaseSumOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.value = 0;
-		STATEOP::template Initialize<STATE>(state);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		STATEOP::template Combine<STATE>(source, target, aggr_input_data);

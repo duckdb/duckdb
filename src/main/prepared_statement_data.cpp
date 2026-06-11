@@ -22,7 +22,7 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
-bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
+bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name,
                           const StatementProperties::CatalogIdentity catalog_identity) {
 	// some catalogs don't support catalog version, we can't check identity in that case
 	if (!catalog_identity.catalog_version.IsValid()) {
@@ -40,7 +40,7 @@ bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
 }
 
 bool PreparedStatementData::RequireRebind(ClientContext &context,
-                                          optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
+                                          optional_ptr<identifier_map_t<BoundParameterData>> values) {
 	idx_t count = values ? values->size() : 0;
 	CheckParameterCount(count);
 	if (!unbound_statement) {
@@ -78,15 +78,15 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	return false;
 }
 
-void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> values) {
+void PreparedStatementData::Bind(identifier_map_t<BoundParameterData> values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	CheckParameterCount(values.size());
 
 	// bind the required values
 	for (auto &it : value_map) {
-		const string &identifier = it.first;
-		auto lookup = values.find(identifier);
+		const string &identifier = it.first.GetIdentifierName();
+		auto lookup = values.find(it.first);
 		if (lookup == values.end()) {
 			throw BinderException("Could not find parameter with identifier %s", identifier);
 		}
@@ -101,7 +101,7 @@ void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> valu
 	}
 }
 
-bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &result) {
+bool PreparedStatementData::TryGetType(const Identifier &identifier, LogicalType &result) {
 	auto it = value_map.find(identifier);
 	if (it == value_map.end()) {
 		return false;
@@ -114,7 +114,7 @@ bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &re
 	return true;
 }
 
-LogicalType PreparedStatementData::GetType(const string &identifier) {
+LogicalType PreparedStatementData::GetType(const Identifier &identifier) {
 	LogicalType result;
 	if (!TryGetType(identifier, result)) {
 		throw BinderException("Could not find parameter identified with: %s", identifier);

@@ -136,7 +136,8 @@ enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FI
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
 typedef void (*copy_options_t)(ClientContext &context, CopyOptionsInput &input);
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
-                                                   const vector<string> &names, const vector<LogicalType> &sql_types);
+                                                   const vector<Identifier> &names,
+                                                   const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
                                                                       const string &file_path);
@@ -182,7 +183,7 @@ enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS_AND_FILE_LIST = 1,
 	WRITTEN_FILE_STATISTICS = 2
 };
-vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
+vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
 
 struct CopyFunctionFileStatistics {
@@ -232,7 +233,7 @@ public:
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
-	explicit CopyFunction(const string &name);
+	explicit CopyFunction(const Identifier &name);
 
 	//! Plan rewrite copy function
 	copy_to_plan_t plan;
@@ -264,9 +265,6 @@ public:
 
 	//! Additional function info, passed to the bind
 	shared_ptr<CopyFunctionInfo> function_info;
-
-	//! Whether this copy function supports writing SQLNULL (e.g. Parquet UNKNOWN/NullType)
-	bool supports_sql_null = false;
 };
 
 } // namespace duckdb

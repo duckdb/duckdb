@@ -36,8 +36,11 @@
         "name": "allocator_flush_threshold",
         "description": "Peak allocation threshold at which to flush the allocator after completing a task.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "134217728B",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "allow_community_extensions",
@@ -146,6 +149,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "64"
+    },
+    {
+        "name": "async_threads",
+        "description": "The number of total async threads used by the system for tasks like I/O.",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "auto_checkpoint_skip_wal_threshold",
@@ -346,6 +356,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
@@ -459,6 +476,13 @@
         "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
     },
     {
+        "name": "delim_join_as_cte",
+        "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
@@ -563,14 +587,6 @@
         "scope": "global",
         "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
-    },
-    {
-        "name": "enable_http_logging",
-        "description": "(deprecated) Enables HTTP logging",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "EnableHTTPLoggingSetting",
-        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -785,14 +801,6 @@
         ]
     },
     {
-        "name": "http_logging_output",
-        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "struct": "HTTPLoggingOutputSetting",
-        "custom_implementation": true
-    },
-    {
         "name": "http_proxy",
         "description": "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)",
         "type": "VARCHAR",
@@ -889,6 +897,13 @@
         "default_value": "50"
     },
     {
+        "name": "legacy_disable_null_type",
+        "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",
@@ -940,7 +955,7 @@
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit)",
         "type": "BIGINT",
-        "scope": "local",
+        "default_scope": "local",
         "default_value": "0"
     },
     {
@@ -1176,6 +1191,17 @@
         "custom_implementation": true
     },
     {
+        "name": "standard_vector_size",
+        "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "storage_block_prefetch",
         "description": "In which scenarios to use storage block prefetching",
         "type": "ENUM<StorageBlockPrefetch>",
@@ -1242,7 +1268,7 @@
     },
     {
         "name": "vacuum_rebuild_indexes",
-        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0",

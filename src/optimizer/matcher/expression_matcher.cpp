@@ -68,6 +68,34 @@ bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 	return SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy);
 }
 
+bool InUniformExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
+		return false;
+	}
+	auto &expr = expr_p.Cast<BoundOperatorExpression>();
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN ||
+	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
+		return false;
+	}
+
+	auto &entries = expr.GetChildrenMutable();
+	if (entries.size() < 2) {
+		return false;
+	}
+
+	if (!probe_matcher->Match(*entries[0], bindings)) {
+		return false;
+	}
+
+	for (idx_t i = 1; i < entries.size(); ++i) {
+		if (!child_matcher->Match(*entries[i], bindings)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
@@ -98,6 +126,9 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
+	if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return false;
+	}
 	if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 		return false;
 	}

@@ -1,0 +1,30 @@
+# name: test/sql/window/test_window_aggregate_macro.test
+# description: Test acceptable macro use for window aggregates
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE MACRO tinyint_min(a) as cast(min(a) as tinyint);
+
+statement ok
+CREATE MACRO max_plus_one(a) as 1 + max(a);
+
+statement ok
+create or replace table test as (
+    select unnest(range(1000)) as x
+);
+
+# Standard scalar usage
+query II
+SELECT tinyint_min(x), max_plus_one(x) FROM test;
+----
+0	1000
+
+
+# Whole-table window (same result as above)
+query II
+SELECT DISTINCT tinyint_min(x) OVER (), max_plus_one(x) OVER () FROM test;
+----
+0	1000

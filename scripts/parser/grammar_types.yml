@@ -338,6 +338,7 @@ Expression:
   by_value: true
   rules:
     - Expression
+    - ColumnDefaultExpr
     - SingleExpression
     - BaseExpression
     - LambdaArrowExpression
@@ -452,6 +453,7 @@ Expression:
     - DefArgStringLiteral
     - NoneLiteral
     - NumberLiteral
+    - TypeVariations
     - TimeType
     - NumericType
     - SimpleNumericType
@@ -459,7 +461,8 @@ Expression:
     - FloatType
     - DecimalType
     - SimpleType
-    - CharacterType
+    - CharacterSimpleType
+    - QualifiedSimpleType
     - MapType
     - RowType
     - GeometryType
@@ -468,6 +471,10 @@ Expression:
     - BitType
     - IntervalType
     - IntervalInterval
+    - IntervalWithSpecifier
+    - IntervalWithRangeSpecifier
+    - IntervalWithSimpleSpecifier
+    - IntervalWithoutSpecifier
     - IntervalNumber
     - SetofType
     - DecType
@@ -542,7 +549,6 @@ ExpressionList:
     - BoundedListExpression
     - SliceBound
     - TargetList
-    - TableFunctionArguments
     - PragmaParameters
     - ReturningClause
     - WindowPartition
@@ -565,6 +571,12 @@ ExpressionList:
     - SetAssignment
     - VariableList
     - UsingKey
+
+FunctionArgumentList:
+  type: "vector<FunctionArgument>"
+  by_value: true
+  rules:
+    - TableFunctionArguments
 
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
@@ -608,6 +620,9 @@ StringList:
     - TriggerColumnList
     - StarSymbolColumnList
     - PivotGroupByList
+    - UnpivotHeader
+    - UnpivotHeaderSingle
+    - UnpivotHeaderList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -653,6 +668,9 @@ QualifiedName:
     - QualifiedSequenceName
     - IdentifierOrStringLiteral
     - QualifiedTypeName
+    - TypeNameAsQualifiedName
+    - SchemaReservedTypeName
+    - CatalogReservedSchemaTypeName
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
@@ -667,6 +685,8 @@ QualifiedName:
     - QualifiedTableFunction
     - UseTarget
     - UseTargetCatalogSchema
+    - SchemaNameAsUseTarget
+    - CatalogNameAsUseTarget
     - CatalogReservedSchemaIdentifier
     - SchemaReservedIdentifierOrStringLiteral
 
@@ -777,6 +797,11 @@ GenericCopyOption:
     - DelimiterAsOption
     - EscapeAsOption
     - ExplainOption
+    - BinaryOption
+    - FreezeOption
+    - OidsOption
+    - CsvOption
+    - HeaderOption
 
 GenericCopyOptionValue:
   type: "GenericCopyOptionValue"
@@ -831,7 +856,7 @@ SettingInfo:
 
 PartitionSortedOptions:
   type: "PartitionSortedOptions"
-  by_value: false
+  by_value: true
   rules:
     - PartitionSortedOptions
     - PartitionOptSortedOptions
@@ -839,10 +864,25 @@ PartitionSortedOptions:
 
 ColumnElements:
   type: "ColumnElements"
-  by_value: false
+  by_value: true
   rules:
-    - CreateColumnList
     - CreateTableColumnList
+
+CreateTableDefinition:
+  type: "CreateTableDefinition"
+  by_value: true
+  rules:
+    - CreateTableDefinition
+    - CreateTableAs
+    - CreateColumnList
+
+CreateTableColumnElement:
+  type: "CreateTableColumnElement"
+  by_value: true
+  rules:
+    - CreateTableColumnElement
+    - CreateTableColumnDefinition
+    - CreateTableConstraint
 
 # ---------------------------------------------------------------------------
 # Primitive types
@@ -852,19 +892,17 @@ String:
   type: "string"
   by_value: false
   rules:
-    - AttachAlias
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - CollationName
-    - IndexType
-    - RelOptionName
     - DottedIdentifierString
+    - DotColLabel
+    - ColLabel
+    - UnreservedKeyword
+    - ColumnNameKeyword
+    - FuncNameKeyword
+    - TypeNameKeyword
     - IndexName
-    - ColId
-    - ColIdOrString
-    - ColLabelOrString
-    - TypeFuncName
     - Identifier
     - ExportSource
     - ReservedKeyword
@@ -882,22 +920,10 @@ String:
     - Factor
     - ExponentOperator
     - PrefixOperator
-    - TableQualification
-    - ReservedTableQualification
-    - CatalogQualification
-    - SchemaQualification
-    - ReservedSchemaQualification
-    - BaseWindowName
     - Framing
     - AtUnit
-    - InsertAlias
-    - UpdateAlias
-    - TableAliasColon
     - TrimDirection
     - CubeOrRollup
-    - SecretStorageSpecifier
-    - SecretName
-    - TriggerName
     - UpdateAction
     - DeleteAction
     - KeyAction
@@ -906,26 +932,27 @@ String:
     - CascadeKeyAction
     - SetNullKeyAction
     - SetDefaultKeyAction
-    - ReservedIdentifierOrStringLiteral
-    - DropSecretStorage
     - SeqMinOrMax
-    - ConstraintName
-    - ExplainOptionName
     - OperatorLiteral
-    - DotIdentifier
-    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
     - OptFreeze
     - OptVerbose
-    - ExtensionAlias
     - ExplainOptionAnalyze
     - DropNullability
     - SetNullability
     - MinValue
     - MaxValue
-    - IdentifierColId
+    - CharacterType
+    - IntType
+    - IntegerType
+    - SmallintType
+    - BigintType
+    - RealType
+    - BooleanType
+    - DoubleType
+    - UpdateSetColumnTarget
 
 Bool:
   type: "bool"
@@ -936,9 +963,17 @@ Bool:
     - FromOrTo
     - CastOrTryCast
     - WithData
+    - WithDataOnly
+    - WithNoData
     - CommitAction
     - PreserveOrDelete
     - GeneratedColumnType
+    - VirtualGeneratedColumn
+    - StoredGeneratedColumn
+    - NullConstraint
+    - NotNullColumnConstraint
+    - PreserveRows
+    - DeleteRows
     - DistinctOrAll
     - Materialized
     - SampleUnit
@@ -973,6 +1008,8 @@ Bool:
     - CopyTo
     - ForceQuote
     - ForceNotNull
+    - WithRule
+    - WithoutRule
 
 
 Int64:
@@ -981,6 +1018,7 @@ Int64:
   rules:
     - ArrayBounds
     - SquareBracketsArray
+    - ArrayKeyword
 
 LogicalType:
   type: "LogicalType"
@@ -1000,6 +1038,8 @@ TransactionModifierType:
   rules:
     - ReadOnly
     - ReadWrite
+    - ReadOrWrite
+    - ReadOnlyOrReadWrite
 
 # ---------------------------------------------------------------------------
 # Structs passed by value (contain move-only members like unique_ptr<T>)
@@ -1074,6 +1114,7 @@ TriggerTiming:
     - TriggerBefore
     - TriggerAfter
     - TriggerInsteadOf
+    - TriggerTiming
 
 TriggerForEach:
   type: "TriggerForEach"
@@ -1081,6 +1122,206 @@ TriggerForEach:
   rules:
     - ForEachRow
     - ForEachStatement
+    - ForEachClause
+
+# ---------------------------------------------------------------------------
+# Enum / simple-value categories
+# ---------------------------------------------------------------------------
+
+DatePartSpecifier:
+  type: "DatePartSpecifier"
+  by_value: false
+  rules:
+    - Interval
+    - IntervalToInterval
+    - IntervalToIntervalAsType
+    - YearKeyword
+    - MonthKeyword
+    - DayKeyword
+    - HourKeyword
+    - MinuteKeyword
+    - SecondKeyword
+    - MillisecondKeyword
+    - MicrosecondKeyword
+    - WeekKeyword
+    - QuarterKeyword
+    - DecadeKeyword
+    - CenturyKeyword
+    - MillenniumKeyword
+    - YearToMonth
+    - DayToHour
+    - DayToMinute
+    - DayToSecond
+    - HourToMinute
+    - HourToSecond
+    - MinuteToSecond
+
+CopyDatabaseType:
+  type: "CopyDatabaseType"
+  by_value: false
+  rules:
+    - CopyDatabaseFlag
+    - SchemaOrData
+    - CopySchema
+    - CopyData
+
+LogicalTypeId:
+  type: "LogicalTypeId"
+  by_value: false
+  rules:
+    - TimeOrTimestamp
+    - TimeTypeId
+    - TimestampTypeId
+
+ShowType:
+  type: "ShowType"
+  by_value: false
+  rules:
+    - ShowOrDescribeOrSummarize
+    - ShowOrDescribe
+    - Summarize
+    - SummarizeRule
+    - ShowRule
+    - DescribeRule
+    - DescribeLongRule
+    - DescRule
+
+ExpressionType:
+  type: "ExpressionType"
+  by_value: false
+  rules:
+    - ComparisonOperator
+    - IsDistinctFromOp
+    - LambdaOperator
+
+SecretPersistType:
+  type: "SecretPersistType"
+  by_value: false
+  rules:
+    - Temporary
+    - Persistent
+    - TempPersistent
+    - TemporaryPersistent
+
+InsertColumnOrder:
+  type: "InsertColumnOrder"
+  by_value: false
+  rules:
+    - ByNameOrPosition
+    - InsertByNameOrder
+    - InsertByPositionOrder
+    - InsertByName
+    - InsertByPosition
+
+OnConflictAction:
+  type: "OnConflictAction"
+  by_value: false
+  rules:
+    - OrAction
+    - InsertOrReplace
+    - InsertOrIgnore
+
+MergeActionCondition:
+  type: "MergeActionCondition"
+  by_value: false
+  rules:
+    - BySourceOrTarget
+    - BySource
+    - ByTarget
+
+ExtensionRepositoryInfo:
+  type: "ExtensionRepositoryInfo"
+  by_value: false
+  rules:
+    - FromSource
+    - FromSourceIdentifier
+    - FromSourceString
+
+SampleIdx:
+  type: "optional_idx"
+  by_value: false
+  rules:
+    - SampleSeed
+    - RepeatableSample
+
+QualifiedColumnSet:
+  type: "qualified_column_set_t"
+  by_value: false
+  rules:
+    - ExcludeList
+    - ExcludeNameList
+    - ExcludeNameSingle
+
+QualifiedColumnMap:
+  type: "qualified_column_map_t<string>"
+  by_value: false
+  rules:
+    - RenameList
+    - RenameEntryList
+    - SingleRenameEntry
+
+# ---------------------------------------------------------------------------
+# Structs / pairs passed by value (contain move-only members like unique_ptr<T>)
+# ---------------------------------------------------------------------------
+
+DescribeTarget:
+  type: "DescribeTarget"
+  by_value: true
+  rules:
+    - DescribeTarget
+    - DescribeBaseTableName
+    - DescribeStringLiteral
+
+OnConflictExpressionTarget:
+  type: "OnConflictExpressionTarget"
+  by_value: true
+  rules:
+    - OnConflictTarget
+    - OnConflictExpressionTarget
+    - OnConflictIndexTarget
+
+InsertValues:
+  type: "InsertValues"
+  by_value: true
+  rules:
+    - InsertValues
+    - SelectInsertValues
+    - DefaultValues
+
+SequenceOptionEntry:
+  type: "pair<string, unique_ptr<SequenceOption>>"
+  by_value: true
+  rules:
+    - SequenceOption
+    - SeqSetCycle
+    - SeqCycle
+    - SeqNoCycle
+    - SeqSetIncrement
+    - SeqSetMinMax
+    - SeqNoMinMax
+    - SeqStartWith
+    - SeqOwnedBy
+
+RelOptionMap:
+  type: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
+  by_value: true
+  rules:
+    - WithList
+    - RelOptionOrOids
+    - RelOptionList
+    - Oids
+    - ReplaceList
+    - ReplaceEntries
+    - ReplaceEntrySingle
+    - ReplaceEntryList
+
+MergeMatchClause:
+  type: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
+  by_value: true
+  rules:
+    - MergeMatch
+    - MatchedClause
+    - NotMatchedClause
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -1089,150 +1330,75 @@ TriggerForEach:
 
 overrides:
   # common.gram
-  ColIdType: "pair<string, LogicalType>"
+  ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
-  TimeOrTimestamp: "LogicalTypeId"
-  Interval: "DatePartSpecifier"
-  IntervalToInterval: "DatePartSpecifier"
-  # copy.gram
-  CopyDatabaseFlag: "CopyDatabaseType"
-  SchemaOrData: "CopyDatabaseType"
   # create_index.gram
-  RelOption: "pair<string, unique_ptr<ParsedExpression>>"
-  WithList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  RelOptionOrOids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
+  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
   # create_table.gram
-  ColumnDefinition: "ConstraintColumnDefinition"
+  ColumnDefinition:
+    type: "ConstraintColumnDefinition"
+    by_value: true
   KeyActions: "KeyActions"
-  GeneratedColumn: "GeneratedColumnDefinition"
-  CreateTableAs: "CreateTableAs"
-  IdentifierList: "ColumnList"
-  Temporary: "SecretPersistType"
-  # create_trigger.gram
-  ForEachClause: "TriggerForEach"
-  TriggerTiming: "TriggerTiming"
-  # create_type.gram (EnumSelectType is already in SelectStatement category)
-  # describe.gram
-  DescribeTarget:
-    type: "DescribeTarget"
+  GeneratedColumn:
+    type: "GeneratedColumnDefinition"
     by_value: true
-  DescribeBaseTableName:
-    type: "DescribeTarget"
+  IdentifierList:
+    type: "ColumnList"
     by_value: true
-  DescribeStringLiteral:
-    type: "DescribeTarget"
-    by_value: true
-  ShowOrDescribeOrSummarize: "ShowType"
-  ShowOrDescribe: "ShowType"
-  Summarize: "ShowType"
-  SummarizeRule: "ShowType"
-  ShowRule: "ShowType"
-  DescribeRule: "ShowType"
-  DescribeLongRule: "ShowType"
-  DescRule: "ShowType"
-  # copy.gram
-  CopySchema: "CopyDatabaseType"
-  CopyData: "CopyDatabaseType"
-  BinaryOption: "GenericCopyOption"
-  FreezeOption: "GenericCopyOption"
-  OidsOption: "GenericCopyOption"
-  CsvOption: "GenericCopyOption"
-  HeaderOption: "GenericCopyOption"
-
   # expression.gram
-  ComparisonOperator: "ExpressionType"
-  IsDistinctFromOp: "ExpressionType"
-  LambdaOperator: "ExpressionType"
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen: "CaseCheck"
-  ExcludeList: "qualified_column_set_t"
-  ExcludeNameList: "qualified_column_set_t"
-  ExcludeNameSingle: "qualified_column_set_t"
   ExcludeName: "QualifiedColumnName"
-  ReplaceList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  ReplaceEntries: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  ReplaceEntrySingle: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
-  ReplaceEntryList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
-  RenameList: "qualified_column_map_t<string>"
-  RenameEntryList: "qualified_column_map_t<string>"
-  SingleRenameEntry: "qualified_column_map_t<string>"
   RenameEntry: "pair<QualifiedColumnName, string>"
-  # insert.gram
-  OrAction: "OnConflictAction"
-  InsertOrReplace: "OnConflictAction"
-  InsertOrIgnore: "OnConflictAction"
-  OnConflictTarget:
-    type: "OnConflictExpressionTarget"
-    by_value: true
-  OnConflictExpressionTarget:
-    type: "OnConflictExpressionTarget"
-    by_value: true
-  OnConflictIndexTarget:
-    type: "OnConflictExpressionTarget"
-    by_value: true
-  InsertValues:
-    type: "InsertValues"
-    by_value: true
-  SelectInsertValues:
-    type: "InsertValues"
-    by_value: true
-  DefaultValues:
-    type: "InsertValues"
-    by_value: true
-  ByNameOrPosition: "InsertColumnOrder"
-  InsertByNameOrder: "InsertColumnOrder"
-  InsertByPositionOrder: "InsertColumnOrder"
-  InsertByName: "InsertColumnOrder"
-  InsertByPosition: "InsertColumnOrder"
-  # load.gram
-  FromSource: "ExtensionRepositoryInfo"
-  FromSourceIdentifier: "ExtensionRepositoryInfo"
-  FromSourceString: "ExtensionRepositoryInfo"
-  # merge_into.gram
-  MergeMatch: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
-  MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
-  NotMatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
-  BySourceOrTarget: "MergeActionCondition"
-  BySource: "MergeActionCondition"
-  ByTarget: "MergeActionCondition"
-  # pivot.gram
-  UnpivotHeader: "vector<string>"
-  UnpivotHeaderSingle: "vector<string>"
-  UnpivotHeaderList: "vector<string>"
-  # create_sequence.gram
-  SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
-  SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
-  SeqCycle: "pair<string, unique_ptr<SequenceOption>>"
-  SeqNoCycle: "pair<string, unique_ptr<SequenceOption>>"
-  SeqSetIncrement: "pair<string, unique_ptr<SequenceOption>>"
-  SeqSetMinMax: "pair<string, unique_ptr<SequenceOption>>"
-  SeqNoMinMax: "pair<string, unique_ptr<SequenceOption>>"
-  SeqStartWith: "pair<string, unique_ptr<SequenceOption>>"
-  SeqOwnedBy: "pair<string, unique_ptr<SequenceOption>>"
   # select.gram
   SetopType: "SetOperationType"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
-  SampleSeed: "optional_idx"
-  RepeatableSample: "optional_idx"
   SampleFunction: "SampleMethod"
-  # transaction.gram
-  ReadOrWrite: "TransactionModifierType"
-  ReadOnlyOrReadWrite: "TransactionModifierType"
   # select.gram (ordering)
   DescOrAsc: "OrderType"
   NullsFirstOrLast: "OrderByNullType"
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
-  UpdateSetColumnTarget: "string"
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
 # ---------------------------------------------------------------------------
+
+IdentifierType:
+  type: "Identifier"
+  by_value: false
+  rules:
+    - ColId
+    - ColIdOrString
+    - ColLabelOrString
+    - TypeFuncName
+    - IdentifierColId
+    - ReservedIdentifierOrStringLiteral
+    - AttachAlias
+    - CollationName
+    - IndexType
+    - RelOptionName
+    - TableQualification
+    - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
+    - ReservedSchemaQualification
+    - BaseWindowName
+    - InsertAlias
+    - UpdateAlias
+    - TableAliasColon
+    - SecretStorageSpecifier
+    - SecretName
+    - TriggerName
+    - DropSecretStorage
+    - ConstraintName
+    - ExplainOptionName
+    - DotIdentifier
+    - IdentifierDot
+    - ExtensionAlias
 
 matcher_rule_overrides:
   Identifier:
@@ -1318,6 +1484,7 @@ excluded_rules:
   - UnpivotStatement
   - CommentValue
   - Program
+  - Statement
   - Database
   - AbortOrRollback
   - CommitOrEnd
@@ -1325,13 +1492,13 @@ excluded_rules:
   - Transaction
   - VariableAssign
   - ColLabel
+  - ColLabelOrString
   - GroupingOrGroupingId
   - RowOrRows
   - Recursive
   - StarSymbol
   - PlainIdentifier
   - QuotedIdentifier
-  - CreateTableColumnElement
   - IntervalNumber
   - AtTimeZoneOperator
   - Generated

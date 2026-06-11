@@ -22,8 +22,8 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
 	}
 	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-	string catalog_name = base_table_ref.catalog_name;
-	string schema_name = base_table_ref.schema_name;
+	Identifier catalog_name = base_table_ref.catalog_name;
+	Identifier schema_name = base_table_ref.schema_name;
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
 	auto &table_entry =
@@ -94,7 +94,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			break;
 		}
 		if (entry->internal) {
-			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name);
+			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
 		}
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {

@@ -4,8 +4,8 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
-unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
-                                                            vector<string> &aliases,
+unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const Identifier &name,
+                                                            vector<Identifier> &aliases,
                                                             vector<unique_ptr<ParsedExpression>> &key_targets) {
 	if (node->type != QueryNodeType::SET_OPERATION_NODE) {
 		return node;
@@ -29,15 +29,12 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	auto owned_set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
 	recursive_node->union_all = owned_set_node->setop_all;
 
-	if (!owned_set_node->modifiers.empty()) {
-		for (auto &modifier : owned_set_node->modifiers) {
-			if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
-			    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-				throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
-			}
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-				throw ParserException("ORDER BY in a recursive query is not allowed");
-			}
+	for (auto &modifier : owned_set_node->modifiers) {
+		if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
+			throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
+		}
+		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			throw ParserException("ORDER BY in a recursive query is not allowed");
 		}
 	}
 	if (owned_set_node->children.size() == 2) {
@@ -101,7 +98,7 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
-	info->aliases = insert_column_list;
+	info->aliases = StringsToIdentifiers(insert_column_list);
 	if (!with_list.empty()) {
 		for (auto &option_entry : with_list) {
 			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {

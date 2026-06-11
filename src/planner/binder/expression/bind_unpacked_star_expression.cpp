@@ -31,8 +31,8 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 				if (new_expr->GetAlias().empty()) {
 					new_expr->SetAlias(colref.GetColumnName());
 				} else {
-					new_expr->SetAlias(
-					    Binder::ReplaceColumnsAlias(new_expr->GetAlias(), colref.GetColumnName(), regex));
+					new_expr->SetAlias(Identifier(Binder::ReplaceColumnsAlias(
+					    new_expr->GetAlias().GetIdentifierName(), colref.GetColumnName().GetIdentifierName(), regex)));
 				}
 			}
 		}
@@ -46,10 +46,14 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 
 	// Replace children
 	expression_list_t new_children;
-	for (auto &child : function_expr.GetChildrenMutable()) {
-		AddChild(child, new_children, star_list, star, regex);
+	for (auto &child : function_expr.GetArgumentsMutable()) {
+		AddChild(child.GetExpressionMutable(), new_children, star_list, star, regex);
 	}
-	function_expr.GetChildrenMutable() = std::move(new_children);
+
+	function_expr.GetArgumentsMutable().clear();
+	for (auto &child : new_children) {
+		function_expr.GetArgumentsMutable().emplace_back(std::move(child));
+	}
 
 	// Replace ORDER_BY
 	if (function_expr.OrderBy()) {

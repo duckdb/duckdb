@@ -29,7 +29,9 @@
         "test/sql/settings/max_execution_time.test",
         "test/sql/settings/operator_memory_limit.test",
         "test/sql/table_function/duckdb_eviction_queues.test",
-        "test/sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test"
+        "test/sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test",
+        "test/sql/optimizer/table_filters.test",
+        "test/optimizer/partial_aggregate_pushdown.test"
       ]
     },
     {
@@ -59,7 +61,9 @@
       "reason": "Relies on exact hash function output.",
       "paths": [
         "test/sql/function/generic/hash_func.test",
-        "test/sql/copy/file_size_bytes.test"
+        "test/sql/copy/file_size_bytes.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test"
       ]
     }
   ]

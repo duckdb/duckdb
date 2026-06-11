@@ -26,7 +26,7 @@ namespace duckdb {
 
 struct LegacyStructPathEntry {
 	idx_t child_idx;
-	string child_name;
+	Identifier child_name;
 };
 
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
@@ -103,7 +103,7 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 		if (!TryExtractLegacySubject(*func.GetChildren()[0], struct_path)) {
 			return false;
 		}
-		string child_name;
+		Identifier child_name;
 		if (func.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
 		    !StructType::IsUnnamed(func.GetChildren()[0]->GetReturnType())) {
 			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx);
@@ -130,7 +130,7 @@ static void NormalizeLegacyExpression(unique_ptr<Expression> &expr) {
 		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
 	    });
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.index = 0; });
+	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.IndexMutable() = 0; });
 }
 
 static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundFunctionExpression &comparison) {

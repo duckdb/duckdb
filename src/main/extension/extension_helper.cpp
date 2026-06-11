@@ -122,6 +122,8 @@ static const DefaultExtension internal_extensions[] = {
     {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
     {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
     {"lance", "Adds support for querying Lance datasets", false},
+    {"avro", "Adds support for reading Avro files", false},
+    {"unity_catalog", "Adds support for connecting to Unity Catalog", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -347,7 +349,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 #ifndef WASM_LOADABLE_EXTENSIONS
-	case_insensitive_set_t seen_extensions;
+	identifier_set_t seen_extensions;
 
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
@@ -359,7 +361,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 		auto extension_file_name = StringUtil::GetFileName(path);
 		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-		seen_extensions.insert(extension_name);
+		seen_extensions.insert(Identifier(extension_name));
 
 		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});

@@ -63,8 +63,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
 			auto it = filter_indexes.find(filter_ref);
 			if (it == filter_indexes.end()) {
-				filter_indexes[filter_ref] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++;
+				filter_indexes[filter_ref] = bound_ref_expr.Index();
+				bound_ref_expr.IndexMutable() = aggregate_input_idx++;
 			} else {
 				++aggregate_input_idx;
 			}
@@ -127,7 +127,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 		auto &group = groups[group_idx];
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
-		group_chunk.data[group_idx].Reference(chunk.data[bound_ref_expr.index]);
+		group_chunk.data[group_idx].Reference(chunk.data[bound_ref_expr.Index()]);
 	}
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
@@ -135,7 +135,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 		for (auto &child_expr : aggr.GetChildren()) {
 			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.Index()]);
 		}
 	}
 	for (auto &aggregate : aggregates) {
@@ -146,10 +146,6 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
 		}
 	}
-
-	group_chunk.SetCardinality(chunk.size());
-
-	aggregate_input_chunk.SetCardinality(chunk.size());
 
 	group_chunk.Verify(context.client.db);
 	aggregate_input_chunk.Verify(context.client.db);

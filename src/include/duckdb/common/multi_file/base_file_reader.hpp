@@ -74,7 +74,7 @@ public:
 public:
 	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
-	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 
@@ -144,7 +144,7 @@ public:
 	virtual optional_idx TryGetCardinalityEstimate() const {
 		return optional_idx();
 	}
-	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 
 public:
 	template <class TARGET>

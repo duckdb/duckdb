@@ -8,8 +8,8 @@ string QualifiedName::ToString() const {
 	return ParseInfo::QualifierToString(catalog, schema, name);
 }
 
-vector<string> QualifiedName::ParseComponents(const string &input) {
-	vector<string> result;
+vector<Identifier> QualifiedName::ParseComponents(const string &input) {
+	vector<Identifier> result;
 	idx_t idx = 0;
 	string entry;
 
@@ -26,7 +26,7 @@ normal:
 	}
 	goto end;
 separator:
-	result.push_back(entry);
+	result.push_back(Identifier(entry));
 	entry = "";
 	idx++;
 	goto normal;
@@ -43,15 +43,15 @@ quoted:
 	throw ParserException("Unterminated quote in qualified name! (input: %s)", input);
 end:
 	if (!entry.empty()) {
-		result.push_back(entry);
+		result.push_back(Identifier(entry));
 	}
 	return result;
 }
 
 QualifiedName QualifiedName::Parse(const string &input) {
-	string catalog;
-	string schema;
-	string name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier name;
 
 	auto entries = ParseComponents(input);
 	if (entries.empty()) {
@@ -78,12 +78,12 @@ QualifiedName QualifiedName::Parse(const string &input) {
 
 QualifiedColumnName::QualifiedColumnName() {
 }
-QualifiedColumnName::QualifiedColumnName(string column_p) : column(std::move(column_p)) {
+QualifiedColumnName::QualifiedColumnName(Identifier column_p) : column(std::move(column_p)) {
 }
-QualifiedColumnName::QualifiedColumnName(string table_p, string column_p)
+QualifiedColumnName::QualifiedColumnName(Identifier table_p, Identifier column_p)
     : table(std::move(table_p)), column(std::move(column_p)) {
 }
-QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, string column_p)
+QualifiedColumnName::QualifiedColumnName(const BindingAlias &alias, Identifier column_p)
     : catalog(alias.GetCatalog()), schema(alias.GetSchema()), table(alias.GetAlias()), column(std::move(column_p)) {
 }
 
@@ -133,8 +133,7 @@ bool QualifiedColumnName::IsQualified() const {
 }
 
 bool QualifiedColumnName::operator==(const QualifiedColumnName &rhs) const {
-	return StringUtil::CIEquals(catalog, rhs.catalog) && StringUtil::CIEquals(schema, rhs.schema) &&
-	       StringUtil::CIEquals(table, rhs.table) && StringUtil::CIEquals(column, rhs.column);
+	return catalog == rhs.catalog && schema == rhs.schema && table == rhs.table && column == rhs.column;
 }
 
 } // namespace duckdb

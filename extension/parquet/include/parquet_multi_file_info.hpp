@@ -60,7 +60,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                     vector<LogicalType> &expected_types) override;
 	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;

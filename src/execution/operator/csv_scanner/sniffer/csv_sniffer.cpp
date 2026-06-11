@@ -80,7 +80,7 @@ void CSVSniffer::SetResultOptions() const {
 AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
-		return AdaptiveSnifferResult(*set_columns.types, *set_columns.names, true);
+		return AdaptiveSnifferResult(*set_columns.types, StringsToIdentifiers(*set_columns.names), true);
 	}
 	// Return Types detected
 	vector<LogicalType> return_types;
@@ -140,7 +140,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-	return {detected_types, names, sniffed_column_counts.result_position > 1};
+	return {detected_types, StringsToIdentifiers(names), sniffed_column_counts.result_position > 1};
 }
 
 SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
@@ -253,9 +253,9 @@ SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 	}
 	options.was_type_manually_set = manually_set;
 	if (set_columns.IsSet()) {
-		return SnifferResult(*set_columns.types, *set_columns.names);
+		return SnifferResult(*set_columns.types, StringsToIdentifiers(*set_columns.names));
 	}
-	return SnifferResult(detected_types, names);
+	return SnifferResult(detected_types, StringsToIdentifiers(names));
 }
 
 } // namespace duckdb

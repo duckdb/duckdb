@@ -46,7 +46,7 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
-ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db,
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
@@ -455,8 +455,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 			result.data[i].Reference(input.data[i]);
 		}
 	}
-
-	result.SetCardinality(input.size());
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
@@ -476,7 +474,6 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const 
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
 	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 

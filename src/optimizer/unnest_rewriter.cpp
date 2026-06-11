@@ -162,7 +162,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				}
 				auto &bind_col = proj.expressions[col_bind.column_index]->Cast<BoundColumnRefExpression>();
 				auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
-				unnest_expr->child = proj.expressions[col_bind.column_index]->Copy();
+				unnest_expr->ChildMutable() = proj.expressions[col_bind.column_index]->Copy();
 				bind_col.BindingMutable() = ColumnBinding(unnest_get_index, bind_col.Binding().column_index);
 				auto unnest_proj_idx = ColumnBinding::PushExpression(unnest->expressions, std::move(unnest_expr));
 				ColumnBinding new_column_ref(bind_col.Binding().table_index, unnest_proj_idx);

@@ -89,7 +89,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
-	result.SetCardinality(input ? input->size() : 1);
+	result.SetChildCardinality(input ? input->size() : 1);
 	result.Verify(context);
 }
 
@@ -167,8 +167,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
-			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
-			        type.id() == LogicalTypeId::AGGREGATE_STATE || type.id() == LogicalTypeId::TYPE) {
+			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE) {
 				    return true;
 			    }
 			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {

@@ -316,9 +316,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// bind the children of the function expression
 	ErrorData error;
 
-	// bind of each child
-	for (idx_t i = 0; i < function.GetChildren().size(); i++) {
-		BindChild(function.GetChildrenMutable()[i], depth, error);
+	// bind each child
+	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
+		BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
 	}
 
 	if (error.HasError()) {
@@ -329,16 +329,31 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
-	// all children bound successfully
-	// extract the children and types
-	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < function.GetChildren().size(); i++) {
-		auto &child = BoundExpression::GetExpression(*function.GetChildren()[i]);
-		children.push_back(std::move(child));
+	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
+	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
+	// overload.
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
+	arguments.reserve(function.GetArguments().size());
+	for (auto &arg : function.GetArgumentsMutable()) {
+		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+
+		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
+		// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
+		// Only override the alias when the argument actually carries a name, otherwise we would clobber the
+		// display alias the binding assigned (e.g. clearing a column reference's name to its raw binding).
+		if (!arg.GetName().empty()) {
+			bound_arg->SetAlias(arg.GetName());
+		}
+		if (function.IsLegacyFunctionCall()) {
+			arguments.emplace_back(string(), std::move(bound_arg));
+		} else {
+			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
+		}
 	}
 
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.IsOperator(), &binder);
+	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
@@ -361,37 +376,40 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		return BindResult("This scalar function does not support lambdas!");
 	}
 
+	auto &args = function.GetArgumentsMutable();
+
 	// the first child is the list, the second child is the lambda expression
 	// constexpr idx_t list_ix = 0;
 	constexpr idx_t list_idx = 0;
 	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(function.GetChildren()[lambda_expr_idx]->GetExpressionClass() == ExpressionClass::LAMBDA);
+	D_ASSERT(args[lambda_expr_idx].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	vector<LogicalType> function_child_types;
 	// bind the list
 	ErrorData error;
-	for (idx_t i = 0; i < function.GetChildren().size(); i++) {
+
+	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
 		if (i == lambda_expr_idx) {
 			function_child_types.push_back(LogicalType::LAMBDA);
 			continue;
 		}
 
-		if (function.GetChildren()[i]->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		if (args[i].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
 			return BindResult("No function matches the given name and argument types: '" + function.ToString() +
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		BindChild(function.GetChildrenMutable()[i], depth, error);
+		BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*function.GetChildren()[i]);
+		const auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
 		function_child_types.push_back(child->GetReturnType());
 	}
 
 	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*function.GetChildren()[list_idx]);
+	auto &list_child = BoundExpression::GetExpression(*args[list_idx].GetExpressionMutable());
 	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
 	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
 	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
@@ -400,7 +418,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = function.GetChildren()[lambda_expr_idx]->Cast<LambdaExpression>();
+	auto &lambda_expr = args[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
 	const bool is_list_reduce = func.name == "list_reduce";
@@ -445,13 +463,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.GetChildren()[lambda_expr_idx]->GetAlias();
+	auto alias = args[lambda_expr_idx].GetExpression().GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
-	if (!alias.empty()) {
-		bind_lambda_result.expression->SetAlias(alias);
-	}
-	function.GetChildrenMutable()[lambda_expr_idx] =
-	    make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+
+	args[lambda_expr_idx].GetExpressionMutable() = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -460,8 +475,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// all children bound successfully
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < function.GetChildren().size(); i++) {
-		auto &child = BoundExpression::GetExpression(*function.GetChildren()[i]);
+	for (idx_t i = 0; i < args.size(); i++) {
+		auto &child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
 		children.push_back(std::move(child));
 	}
 
@@ -542,7 +557,7 @@ string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                              const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);

@@ -85,11 +85,6 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 template <class COMPARATOR>
 struct ArgMinMaxBase {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		new (&state) STATE;
-	}
-
-	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.~STATE();
 	}

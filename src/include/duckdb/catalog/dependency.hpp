@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -137,18 +139,18 @@ public:
 struct CatalogEntryInfo {
 public:
 	CatalogType type;
-	string schema;
-	string name;
+	Identifier schema;
+	Identifier name;
 
 public:
 	bool operator==(const CatalogEntryInfo &other) const {
 		if (other.type != type) {
 			return false;
 		}
-		if (!StringUtil::CIEquals(other.schema, schema)) {
+		if (other.schema != schema) {
 			return false;
 		}
-		if (!StringUtil::CIEquals(other.name, name)) {
+		if (other.name != name) {
 			return false;
 		}
 		return true;

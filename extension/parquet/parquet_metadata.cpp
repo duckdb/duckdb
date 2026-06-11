@@ -855,7 +855,8 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
 	auto comparison = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(probe_column_name, column_type, 0),
+	    ExpressionType::COMPARE_EQUAL,
+	    make_uniq<BoundReferenceExpression>(Identifier(probe_column_name), column_type, 0),
 	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
 	filter = make_uniq<ExpressionFilter>(std::move(comparison));
 }
@@ -941,7 +942,7 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METAD
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FILE_META_DATA>(file_meta_types, file_meta_names);
 	child_list_t<LogicalType> file_meta_children;
 	for (idx_t i = 0; i < file_meta_types.size(); i++) {
-		file_meta_children.push_back(make_pair(file_meta_names[i], file_meta_types[i]));
+		file_meta_children.emplace_back(make_pair(file_meta_names[i], file_meta_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(file_meta_children))));
 
@@ -951,7 +952,7 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METAD
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>(row_group_types, row_group_names);
 	child_list_t<LogicalType> row_group_children;
 	for (idx_t i = 0; i < row_group_types.size(); i++) {
-		row_group_children.push_back(make_pair(row_group_names[i], row_group_types[i]));
+		row_group_children.emplace_back(make_pair(row_group_names[i], row_group_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(row_group_children))));
 
@@ -961,7 +962,7 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METAD
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::SCHEMA>(schema_types, schema_names);
 	child_list_t<LogicalType> schema_children;
 	for (idx_t i = 0; i < schema_types.size(); i++) {
-		schema_children.push_back(make_pair(schema_names[i], schema_types[i]));
+		schema_children.emplace_back(make_pair(schema_names[i], schema_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(schema_children))));
 
@@ -971,7 +972,7 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FULL_METAD
 	ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>(kv_types, kv_names);
 	child_list_t<LogicalType> kv_children;
 	for (idx_t i = 0; i < kv_types.size(); i++) {
-		kv_children.push_back(make_pair(kv_names[i], kv_types[i]));
+		kv_children.emplace_back(make_pair(kv_names[i], kv_types[i]));
 	}
 	return_types.emplace_back(LogicalType::LIST(LogicalType::STRUCT(std::move(kv_children))));
 }
@@ -1109,8 +1110,6 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 		} else {
 			rows_to_output = left_in_vector;
 		}
-
-		output.SetCardinality(output_count + rows_to_output);
 
 		for (idx_t i = 0; i < rows_to_output; ++i) {
 			local_state.processor->ReadRow(output_vectors, local_state.row_idx + i, *local_state.reader);

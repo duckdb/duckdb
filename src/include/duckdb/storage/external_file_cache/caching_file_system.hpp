@@ -21,12 +21,14 @@
 
 namespace duckdb {
 
+class Allocator;
 class BufferHandle;
 class ClientContext;
 class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
@@ -42,6 +44,8 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
+	//! Get the buffer-manager-backed Allocator.
+	DUCKDB_API Allocator &GetBufferAllocator() const;
 	//! Read [nr_bytes] bytes at the requested [location].
 	//! Returns a buffer handle group that keeps the data pinned in memory.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
@@ -56,6 +60,7 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
 

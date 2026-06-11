@@ -24,7 +24,7 @@ void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamTy
 	}
 }
 
-bool PEGTransformer::GetParam(const string &identifier, idx_t &index, PreparedParamType type) {
+bool PEGTransformer::GetParam(const Identifier &identifier, idx_t &index, PreparedParamType type) {
 	ParamTypeCheck(last_param_type, type);
 	auto entry = named_parameter_map.find(identifier);
 	if (entry == named_parameter_map.end()) {
@@ -34,7 +34,7 @@ bool PEGTransformer::GetParam(const string &identifier, idx_t &index, PreparedPa
 	return true;
 }
 
-void PEGTransformer::SetParam(const string &identifier, idx_t index, PreparedParamType type) {
+void PEGTransformer::SetParam(const Identifier &identifier, idx_t index, PreparedParamType type) {
 	ParamTypeCheck(last_param_type, type);
 	last_param_type = type;
 	D_ASSERT(!named_parameter_map.count(identifier));
@@ -65,9 +65,9 @@ unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<Creat
 	auto info = make_uniq<CreateTypeInfo>();
 	info->temporary = true;
 	info->internal = false;
-	info->catalog = INVALID_CATALOG;
-	info->schema = INVALID_SCHEMA;
-	info->name = std::move(entry->enum_name);
+	info->catalog = Identifier::InvalidCatalog();
+	info->schema = Identifier::InvalidSchema();
+	info->name = Identifier(std::move(entry->enum_name));
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
@@ -112,10 +112,13 @@ unique_ptr<SQLStatement> PEGTransformer::CreatePivotStatement(unique_ptr<SQLStat
 			    "PIVOT ... ON %s IN (val1, val2, ...)",
 			    pivot->column->ToString());
 		}
-		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
+		auto enum_stmt = GenerateCreateEnumStmt(std::move(pivot));
+		enum_stmt->query = enum_stmt->ToString();
+		result->statements.push_back(std::move(enum_stmt));
 	}
 	result->stmt_location = statement->stmt_location;
 	result->stmt_length = statement->stmt_length;
+	statement->query = statement->ToString();
 	result->statements.push_back(std::move(statement));
 	return std::move(result);
 }
@@ -149,8 +152,8 @@ bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary e
 	return start_is_default && end_is_default;
 }
 
-unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name) {
-	auto it = window_clauses.find(string(window_name));
+unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &window_name) {
+	auto it = window_clauses.find(window_name);
 	if (it == window_clauses.end()) {
 		throw ParserException("window \"%s\" does not exist", window_name);
 	}

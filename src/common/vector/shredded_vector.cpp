@@ -44,8 +44,8 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	auto unshredded_val = unshredded.GetValue(index);
 
 	child_list_t<LogicalType> shredded_subtypes;
-	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
-	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("unshredded", unshredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("shredded", shredded.GetType()));
 	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
 	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val, count_t(1));
 	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val, count_t(1));
