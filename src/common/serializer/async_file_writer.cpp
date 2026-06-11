@@ -119,12 +119,6 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 		if (SupportsPositionalWrites()) {
 			drain_mode = DrainMode::POSITIONAL;
 			max_active_drain_tasks = async_threads;
-			if (local_file) {
-				auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
-				auto local_task_limit =
-				    MaxValue<idx_t>(regular_threads / DEFAULT_LOCAL_REGULAR_THREADS_PER_DRAIN_TASK, 1);
-				max_active_drain_tasks = MinValue(max_active_drain_tasks, local_task_limit);
-			}
 		}
 		executor = make_uniq<TaskExecutor>(client_context, TaskSchedulerType::ASYNC);
 		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);

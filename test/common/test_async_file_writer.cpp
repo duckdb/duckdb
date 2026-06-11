@@ -3,6 +3,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -246,6 +247,85 @@ private:
 	string data;
 };
 
+class BlockingAsyncTaskState {
+public:
+	bool WaitForStarted(idx_t count) {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return started_tasks >= count; });
+	}
+
+	void Release() {
+		{
+			lock_guard<mutex> guard(lock);
+			released = true;
+		}
+		cv.notify_all();
+	}
+
+	void Enter() {
+		unique_lock<mutex> guard(lock);
+		started_tasks++;
+		cv.notify_all();
+		cv.wait(guard, [&]() { return released; });
+	}
+
+private:
+	mutex lock;
+	std::condition_variable cv;
+	idx_t started_tasks = 0;
+	bool released = false;
+};
+
+class BlockingAsyncTask : public BaseExecutorTask {
+public:
+	BlockingAsyncTask(TaskExecutor &executor, BlockingAsyncTaskState &state_p)
+	    : BaseExecutorTask(executor), state(state_p) {
+	}
+
+	void ExecuteTask() override {
+		state.Enter();
+	}
+
+private:
+	BlockingAsyncTaskState &state;
+};
+
+class AsyncThreadBlocker {
+public:
+	AsyncThreadBlocker(ClientContext &context, idx_t task_count_p)
+	    : task_count(task_count_p), executor(context, TaskSchedulerType::ASYNC) {
+		for (idx_t task_idx = 0; task_idx < task_count; task_idx++) {
+			executor.ScheduleTask(make_uniq<BlockingAsyncTask>(executor, state));
+		}
+	}
+
+	~AsyncThreadBlocker() {
+		Release();
+	}
+
+	bool WaitForStarted() {
+		return state.WaitForStarted(task_count);
+	}
+
+	void Release() {
+		if (released) {
+			return;
+		}
+		state.Release();
+		try {
+			executor.WorkOnTasks();
+		} catch (...) {
+		}
+		released = true;
+	}
+
+private:
+	idx_t task_count;
+	BlockingAsyncTaskState state;
+	TaskExecutor executor;
+	bool released = false;
+};
+
 static string ReadFile(const string &path) {
 	LocalFileSystem fs;
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
@@ -261,17 +341,41 @@ static unique_ptr<Connection> CreateConnectionWithAsyncThreads(DuckDB &db, idx_t
 	return con;
 }
 
-static unique_ptr<Connection> CreateConnectionWithThreads(DuckDB &db, idx_t regular_threads, idx_t async_threads) {
-	auto con = make_uniq<Connection>(db);
-	REQUIRE_NO_FAIL(con->Query("SET threads=" + to_string(regular_threads)));
-	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
-	return con;
-}
-
 static unique_ptr<Connection> CreateConnectionWithNoAsyncThreads(DuckDB &db) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=0"));
 	return con;
+}
+
+static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	AsyncThreadBlocker async_thread_blocker(*con->context, 2);
+	REQUIRE(async_thread_blocker.WaitForStarted());
+
+	BlockingWriteFileSystem fs(true, local_file);
+	auto path = TestCreatePath(path_name);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string large(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
+	string tail = "tail";
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+	CHECK(fs.BlockedWrites() == 0);
+
+	async_thread_blocker.Release();
+	CHECK(fs.WaitForBlockedWrites(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	CHECK(fs.BlockedWrites() == 1);
+
+	fs.ReleaseWrites();
+	writer.Close();
+	REQUIRE(ReadFile(path) == large + tail);
+	fs.RemoveFile(path);
 }
 
 } // namespace
@@ -534,11 +638,11 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 	fs.RemoveFile(path);
 }
 
-TEST_CASE("AsyncFileWriter caps local positional draining", "[async_file_writer]") {
+TEST_CASE("AsyncFileWriter drains local positional writes on multiple async threads", "[async_file_writer]") {
 	DuckDB db(nullptr);
-	auto con = CreateConnectionWithThreads(db, 10, 8);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
 	BlockingWriteFileSystem fs(true);
-	auto path = TestCreatePath("async_file_writer_local_positional_cap.tmp");
+	auto path = TestCreatePath("async_file_writer_local_parallel_positional.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
 	}
@@ -554,13 +658,13 @@ TEST_CASE("AsyncFileWriter caps local positional draining", "[async_file_writer]
 		batch_guard.Finish();
 	}
 
-	REQUIRE(fs.WaitForBlockedWrites(1));
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	REQUIRE(fs.BlockedWrites() == 1);
-	REQUIRE(fs.MaxActiveWrites() == 1);
+	auto saw_two_blocked_writes = fs.WaitForBlockedWrites(2);
+	auto max_active_writes = fs.MaxActiveWrites();
 
 	fs.ReleaseWrites();
 	writer.Close();
+	REQUIRE(saw_two_blocked_writes);
+	REQUIRE(max_active_writes >= 2);
 	REQUIRE(ReadFile(path) == first + second);
 	fs.RemoveFile(path);
 }
@@ -679,6 +783,14 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 	writer.Close();
 	REQUIRE(ReadFile(path) == large + tail);
 	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter local queued drain task covers newly registered tiny tail", "[async_file_writer]") {
+	TestQueuedDrainTaskCoversNewTinyTail(true, "async_file_writer_local_queued_large_then_tiny.tmp");
+}
+
+TEST_CASE("AsyncFileWriter remote queued drain task covers newly registered tiny tail", "[async_file_writer]") {
+	TestQueuedDrainTaskCoversNewTinyTail(false, "async_file_writer_remote_queued_large_then_tiny.tmp");
 }
 
 TEST_CASE("AsyncFileWriter falls back to one drain task without positional writes", "[async_file_writer]") {

@@ -76,8 +76,6 @@ public:
 	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
 	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
-	//! Local buffered writes rarely benefit from many concurrent pwrite calls to one file.
-	static constexpr idx_t DEFAULT_LOCAL_REGULAR_THREADS_PER_DRAIN_TASK = 16;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
