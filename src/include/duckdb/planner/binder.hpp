@@ -297,10 +297,12 @@ public:
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
+	                                          const vector<unique_ptr<Expression>> &bound_defaults,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+	                   const vector<unique_ptr<Expression>> &bound_defaults,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions,
 	                   bool prioritize_table_when_binding = false);
@@ -586,6 +588,12 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
+
+	unique_ptr<LogicalOperator> ResolveInputProjection(LogicalInsert &insert,
+	                                                   const IndexVector<idx_t, PhysicalIndex> &column_index_map,
+	                                                   unique_ptr<LogicalOperator> root,
+	                                                   const vector<LogicalType> &source_types);
+
 	unique_ptr<BoundMergeIntoAction>
 	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
 	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
