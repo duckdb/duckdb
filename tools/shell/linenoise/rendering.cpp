@@ -130,7 +130,7 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
  *
  * Rewrite the currently edited line accordingly to the buffer content,
  * cursor position, and number of columns of the terminal. */
-void Linenoise::RefreshSingleLine() const {
+void Linenoise::RefreshSingleLine() {
 	char seq[64];
 	size_t plen = GetPromptWidth();
 	int fd = ofd;
@@ -142,6 +142,10 @@ void Linenoise::RefreshSingleLine() const {
 	renderText(render_pos, render_buf, render_len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
 
 	AppendBuffer append_buffer;
+	if (clear_screen) {
+		append_buffer.Append("\x1b[2J\x1b[H");
+		clear_screen = false;
+	}
 	/* Cursor to left edge */
 	append_buffer.Append("\r");
 	/* Write the prompt and the current buffer content */
@@ -797,6 +801,7 @@ void Linenoise::RefreshMultiLine() {
 	auto render_len = this->len;
 	idx_t render_start = 0;
 	idx_t render_end = render_len;
+	bool do_clear_screen = clear_screen;
 	if (clear_screen) {
 		old_cursor_rows = 0;
 		old_rows = 0;
@@ -908,6 +913,11 @@ void Linenoise::RefreshMultiLine() {
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
 	AppendBuffer append_buffer;
+	if (do_clear_screen) {
+		/* erase screen + home cursor as part of the same write as the
+		 * redraw, so the prompt is guaranteed to land at row 1 */
+		append_buffer.Append("\x1b[2J\x1b[H");
+	}
 	if (old_rows > old_cursor_rows) {
 		int extra_rows = old_rows - old_cursor_rows;
 		Linenoise::Log("go down %d\n", extra_rows);

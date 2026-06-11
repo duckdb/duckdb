@@ -146,7 +146,7 @@ public:
 	KeyPress Search(KeyPress key_press);
 
 	void RefreshMultiLine();
-	void RefreshSingleLine() const;
+	void RefreshSingleLine();
 	void RefreshSearch();
 
 	size_t PrevChar() const;
