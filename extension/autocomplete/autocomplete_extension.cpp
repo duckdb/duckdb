@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 
@@ -154,7 +155,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		if (entry == matches.end()) {
 			throw InternalException("Auto-complete match not found");
 		}
-		if (result.size() > fuzzy_suggestion_count) {
+		if (results.size() > fuzzy_suggestion_count) {
 			// after we exceed the "fuzzy_suggestion_count" we only accept exact suggestion matches
 			if (!StringUtil::StartsWith(StringUtil::Lower(result), lower_prefix)) {
 				break;
@@ -251,28 +252,145 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
+static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context, const string &catalog_name = "") {
 	vector<AutoCompleteCandidate> suggestions;
-	auto all_entries = GetAllSchemas(context);
-	for (auto &entry_ref : all_entries) {
-		auto &entry = entry_ref.get();
-		AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_SCHEMA_NAME, 0);
-		candidate.extra_char = '.';
-		suggestions.push_back(std::move(candidate));
+	if (!catalog_name.empty()) {
+		auto catalog_ptr = Catalog::GetCatalogEntry(context, catalog_name);
+		if (!catalog_ptr) {
+			return suggestions;
+		}
+		catalog_ptr->ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
+			AutoCompleteCandidate candidate(schema.name, SuggestionState::SUGGEST_SCHEMA_NAME, 0);
+			candidate.extra_char = '.';
+			suggestions.push_back(std::move(candidate));
+		});
+	} else {
+		auto all_entries = GetAllSchemas(context);
+		for (auto &entry_ref : all_entries) {
+			auto &entry = entry_ref.get();
+			AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_SCHEMA_NAME, 0);
+			candidate.extra_char = '.';
+			suggestions.push_back(std::move(candidate));
+		}
 	}
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
+//! Look up a schema by catalog_name + schema_name. Uses direct Catalog API.
+//! When catalog_name is empty, searches all catalogs for matching schema.
+static vector<reference<SchemaCatalogEntry>> FindSchemas(ClientContext &context, const string &catalog_name,
+                                                         const string &schema_name) {
+	vector<reference<SchemaCatalogEntry>> result;
+	if (!catalog_name.empty()) {
+		auto catalog_ptr = Catalog::GetCatalogEntry(context, catalog_name);
+		if (catalog_ptr) {
+			auto schema_ptr = catalog_ptr->GetSchema(context, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (schema_ptr) {
+				result.push_back(*schema_ptr);
+			}
+		}
+	} else {
+		auto all_schemas = GetAllSchemas(context);
+		for (auto &schema_ref : all_schemas) {
+			if (StringUtil::CIEquals(schema_ref.get().name, schema_name)) {
+				result.push_back(schema_ref);
+			}
+		}
+	}
+	return result;
+}
+
+static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context, const string &catalog_name = "",
+                                                      const string &schema_name = "") {
 	vector<AutoCompleteCandidate> suggestions;
-	auto all_entries = GetAllTables(context, true);
-	for (auto &entry_ref : all_entries) {
-		auto &entry = entry_ref.get();
-		// prioritize user-defined entries (views & tables)
-		int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
-		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, bonus);
+	if (!schema_name.empty()) {
+		auto schemas = FindSchemas(context, catalog_name, schema_name);
+		for (auto &schema_ref : schemas) {
+			auto &schema = schema_ref.get();
+			schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+				int32_t bonus = entry.internal ? 0 : 1;
+				suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, bonus);
+			});
+			schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+				suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, 0);
+			});
+		}
+	} else {
+		auto all_entries = GetAllTables(context, true);
+		for (auto &entry_ref : all_entries) {
+			auto &entry = entry_ref.get();
+			// prioritize user-defined entries (views & tables)
+			int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
+			suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, bonus);
+		}
 	}
 	return suggestions;
+}
+
+//! Strip double-quotes from a quoted identifier token, returning the unquoted name.
+//! For unquoted tokens, returns the text as-is.
+static string UnquoteIdentifier(const string &text) {
+	if (text.size() >= 2 && text.front() == '"' && text.back() == '"') {
+		auto inner = text.substr(1, text.size() - 2);
+		return StringUtil::Replace(inner, "\"\"", "\"");
+	}
+	return text;
+}
+
+//! Returns true if a token looks like an identifier (quoted or unquoted keyword-like text).
+static bool TokenIsIdentifier(const string &text) {
+	if (text.empty()) {
+		return false;
+	}
+	if (text.front() == '"' && text.back() == '"') {
+		return true;
+	}
+	return BaseTokenizer::CharacterIsKeyword(text[0]);
+}
+
+//! Qualification context extracted from the token stream before the cursor.
+struct QualificationContext {
+	string catalog_name; //! The catalog qualifier, if present (empty otherwise).
+	string schema_name;  //! The schema qualifier, if present (empty otherwise).
+	bool has_qualification = false;
+};
+
+//! Extract catalog/schema qualification context from the end of the token stream.
+//! Recognizes patterns:
+//!   [..., identifier, '.']                        → schema (or catalog) qualifier
+//!   [..., identifier, '.', identifier, '.']        → catalog + schema qualifier
+static QualificationContext ExtractQualificationContext(const vector<MatcherToken> &tokens) {
+	QualificationContext result;
+	auto token_count = tokens.size();
+	if (token_count < 2) {
+		return result;
+	}
+	// The last token must be a dot separator
+	auto &last_token = tokens[token_count - 1];
+	if (last_token.text != ".") {
+		return result;
+	}
+	// The token before the dot must be an identifier
+	auto &qualifier_token = tokens[token_count - 2];
+	if (!TokenIsIdentifier(qualifier_token.text)) {
+		return result;
+	}
+	string first_qualifier = UnquoteIdentifier(qualifier_token.text);
+	// Check for double qualification: "catalog.schema."
+	if (token_count >= 4) {
+		auto &dot_token = tokens[token_count - 3];
+		auto &catalog_token = tokens[token_count - 4];
+		if (dot_token.text == "." && TokenIsIdentifier(catalog_token.text)) {
+			result.catalog_name = UnquoteIdentifier(catalog_token.text);
+			result.schema_name = first_qualifier;
+			result.has_qualification = true;
+			return result;
+		}
+	}
+	// Single qualifier — could be catalog or schema; the caller disambiguates.
+	result.schema_name = first_qualifier;
+	result.has_qualification = true;
+	return result;
 }
 
 static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
@@ -286,40 +404,80 @@ static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
 	}
 	return suggestions;
 }
-static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
-	vector<AutoCompleteCandidate> suggestions;
-	auto all_entries = GetAllTables(context, false);
-	for (auto &entry_ref : all_entries) {
-		auto &entry = entry_ref.get();
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry.Cast<TableCatalogEntry>();
-			int32_t bonus = entry.internal ? 0 : 3;
-			for (auto &col : table.GetColumns().Logical()) {
-				suggestions.emplace_back(col.GetName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
-			}
-		} else if (entry.type == CatalogType::VIEW_ENTRY) {
-			auto &view = entry.Cast<ViewCatalogEntry>();
-			int32_t bonus = entry.internal ? 0 : 3;
-			auto column_info = view.GetColumnInfo();
-			if (column_info) {
-				// view has names
-				for (idx_t n = 0; n < column_info->names.size(); n++) {
-					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
-					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
-				}
-			} else {
-				// add only aliases
-				for (auto &col : view.aliases) {
-					suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
-				}
+
+static void ScanSchemaForColumns(ClientContext &context, SchemaCatalogEntry &schema,
+                                 vector<AutoCompleteCandidate> &suggestions) {
+	schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		auto &table = entry.Cast<TableCatalogEntry>();
+		int32_t bonus = entry.internal ? 0 : 3;
+		for (auto &col : table.GetColumns().Logical()) {
+			suggestions.emplace_back(col.GetName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+		}
+	});
+	schema.Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry &entry) {
+		auto &view = entry.Cast<ViewCatalogEntry>();
+		int32_t bonus = entry.internal ? 0 : 3;
+		auto column_info = view.GetColumnInfo();
+		if (column_info) {
+			for (idx_t n = 0; n < column_info->names.size(); n++) {
+				auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+				suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 			}
 		} else {
-			if (StringUtil::CharacterIsOperator(entry.name[0])) {
-				continue;
+			for (auto &col : view.aliases) {
+				suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 			}
-			int32_t bonus = entry.internal ? 0 : 2;
-			suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
-		};
+		}
+	});
+	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+		if (StringUtil::CharacterIsOperator(entry.name[0])) {
+			return;
+		}
+		int32_t bonus = entry.internal ? 0 : 2;
+		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+	});
+}
+
+static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context, const string &catalog_name = "",
+                                                       const string &schema_name = "") {
+	vector<AutoCompleteCandidate> suggestions;
+	if (!schema_name.empty()) {
+		auto schemas = FindSchemas(context, catalog_name, schema_name);
+		for (auto &schema_ref : schemas) {
+			ScanSchemaForColumns(context, schema_ref.get(), suggestions);
+		}
+	} else {
+		auto all_entries = GetAllTables(context, false);
+		for (auto &entry_ref : all_entries) {
+			auto &entry = entry_ref.get();
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				auto &table = entry.Cast<TableCatalogEntry>();
+				int32_t bonus = entry.internal ? 0 : 3;
+				for (auto &col : table.GetColumns().Logical()) {
+					suggestions.emplace_back(col.GetName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
+			} else if (entry.type == CatalogType::VIEW_ENTRY) {
+				auto &view = entry.Cast<ViewCatalogEntry>();
+				int32_t bonus = entry.internal ? 0 : 3;
+				auto column_info = view.GetColumnInfo();
+				if (column_info) {
+					for (idx_t n = 0; n < column_info->names.size(); n++) {
+						auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+						suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+					}
+				} else {
+					for (auto &col : view.aliases) {
+						suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+					}
+				}
+			} else {
+				if (StringUtil::CharacterIsOperator(entry.name[0])) {
+					continue;
+				}
+				int32_t bonus = entry.internal ? 0 : 2;
+				suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			};
+		}
 	}
 	return suggestions;
 }
@@ -364,25 +522,24 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &context) {
+static vector<AutoCompleteCandidate> SuggestFunctionName(ClientContext &context, CatalogType catalog_type,
+                                                         SuggestionState suggestion_type,
+                                                         const string &catalog_name = "",
+                                                         const string &schema_name = "") {
 	vector<AutoCompleteCandidate> suggestions;
-	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
-	for (const auto &scalar_function : scalar_functions) {
-		AutoCompleteCandidate candidate(scalar_function.get().name, SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, 0);
-		suggestions.push_back(std::move(candidate));
+	if (!schema_name.empty()) {
+		auto schemas = FindSchemas(context, catalog_name, schema_name);
+		for (auto &schema_ref : schemas) {
+			auto &schema = schema_ref.get();
+			schema.Scan(context, catalog_type,
+			            [&](CatalogEntry &entry) { suggestions.emplace_back(entry.name, suggestion_type, 0); });
+		}
+	} else {
+		auto functions = Catalog::GetAllEntries(context, catalog_type);
+		for (const auto &function : functions) {
+			suggestions.emplace_back(function.get().name, suggestion_type, 0);
+		}
 	}
-
-	return suggestions;
-}
-
-static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &context) {
-	vector<AutoCompleteCandidate> suggestions;
-	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
-	for (const auto &table_function : table_functions) {
-		AutoCompleteCandidate candidate(table_function.get().name, SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, 0);
-		suggestions.push_back(std::move(candidate));
-	}
-
 	return suggestions;
 }
 
@@ -441,6 +598,13 @@ public:
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
 		if (state == TokenizeState::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
+		}
+		// A trailing dot in NUMERIC state is a qualifier separator (e.g., "schema."), not a number.
+		// Push it as a token so the PEG matcher can recognize the qualified-name pattern.
+		if (state == TokenizeState::NUMERIC && last_word_p == ".") {
+			tokens.emplace_back(".", last_pos_p);
+			last_word_p = "";
+			last_pos_p = last_pos_p + 1;
 		}
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
@@ -623,6 +787,9 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 		// still no suggestions - return
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
 	}
+	// extract qualification context from the token stream (e.g., "catalog.schema." or "schema.")
+	auto qual = ExtractQualificationContext(tokens);
+
 	vector<AutoCompleteCandidate> available_suggestions;
 	for (auto &suggestion : suggestions) {
 		idx_t suggestion_pos = tokenizer.last_pos;
@@ -630,7 +797,12 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
 		case SuggestionState::SUGGEST_VARIABLE:
-			// variables have no suggestions available
+			// Variables normally have no suggestions. But QualifiedName (used by CREATE TABLE etc.)
+			// uses ReservedIdentifier which maps to SUGGEST_VARIABLE. When we're inside a qualified
+			// name (tokens end with "schema."), suggest tables in that schema.
+			if (qual.has_qualification) {
+				new_suggestions = SuggestTableName(context, qual.catalog_name, qual.schema_name);
+			}
 			break;
 		case SuggestionState::SUGGEST_KEYWORD:
 			new_suggestions.emplace_back(suggestion.keyword);
@@ -639,13 +811,13 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestCatalogName(context);
 			break;
 		case SuggestionState::SUGGEST_SCHEMA_NAME:
-			new_suggestions = SuggestSchemaName(context);
+			new_suggestions = SuggestSchemaName(context, qual.has_qualification ? qual.schema_name : "");
 			break;
 		case SuggestionState::SUGGEST_TABLE_NAME:
-			new_suggestions = SuggestTableName(context);
+			new_suggestions = SuggestTableName(context, qual.catalog_name, qual.schema_name);
 			break;
 		case SuggestionState::SUGGEST_COLUMN_NAME:
-			new_suggestions = SuggestColumnName(context);
+			new_suggestions = SuggestColumnName(context, qual.catalog_name, qual.schema_name);
 			break;
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			new_suggestions = SuggestType(context);
@@ -657,10 +829,14 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			}
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
-			new_suggestions = SuggestScalarFunctionName(context);
+			new_suggestions =
+			    SuggestFunctionName(context, CatalogType::SCALAR_FUNCTION_ENTRY,
+			                        SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, qual.catalog_name, qual.schema_name);
 			break;
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			new_suggestions = SuggestTableFunctionName(context);
+			new_suggestions =
+			    SuggestFunctionName(context, CatalogType::TABLE_FUNCTION_ENTRY,
+			                        SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, qual.catalog_name, qual.schema_name);
 			break;
 		case SuggestionState::SUGGEST_PRAGMA_NAME:
 			new_suggestions = SuggestPragmaName(context);
