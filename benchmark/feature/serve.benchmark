@@ -1,0 +1,7 @@
+# name: benchmark/feature/serve.benchmark
+# description: Time SERVE (point-in-time feature retrieval via LEFT ASOF JOIN)
+# group: [feature]
+
+template benchmark/feature/feature.benchmark.in
+BENCH_NAME=FeatureServe
+RUN_QUERY=SERVE FEATURE user_activity_full FOR serve_requests;
