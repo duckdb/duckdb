@@ -9,6 +9,9 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/sql_identifier.hpp"
@@ -87,13 +90,73 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
+	auto &lstate = input.local_state.Cast<CreateFeatureLocalState>();
 	auto &storage = gstate.table->GetStorage();
 	chunk.Flatten();
 
-	vector<unique_ptr<BoundConstraint>> empty_constraints;
-	storage.LocalAppend(*gstate.table, context.client, chunk, empty_constraints, true);
-	gstate.insert_count += chunk.size();
+	// Lazily create a per-thread optimistic row group collection so that each
+	// pipeline thread appends to its own collection without contention.
+	if (!lstate.collection_index.IsValid()) {
+		lock_guard<mutex> l(gstate.lock);
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, storage);
+		auto optimistic_collection = lstate.optimistic_writer->CreateCollection(storage, info->result_types);
+		auto &collection = *optimistic_collection->collection;
+		collection.InitializeEmpty();
+		collection.InitializeAppend(lstate.local_append_state);
+		lstate.collection_index = storage.CreateOptimisticCollection(context.client, std::move(optimistic_collection));
+	}
+
+	auto &optimistic_collection = storage.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
+	auto new_row_group = collection.Append(chunk, lstate.local_append_state);
+	if (new_row_group) {
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
+	}
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+SinkCombineResultType PhysicalCreateFeature::Combine(ExecutionContext &context,
+                                                     OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<CreateFeatureGlobalState>();
+	auto &lstate = input.local_state.Cast<CreateFeatureLocalState>();
+	if (!gstate.table || !lstate.collection_index.IsValid()) {
+		return SinkCombineResultType::FINISHED;
+	}
+
+	auto &storage = gstate.table->GetStorage();
+	const idx_t row_group_size = storage.GetRowGroupSize();
+	auto &optimistic_collection = storage.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
+
+	TransactionData tdata(0, 0);
+	collection.FinalizeAppend(tdata, lstate.local_append_state);
+	auto append_count = collection.GetTotalRows();
+
+	lock_guard<mutex> l(gstate.lock);
+	gstate.insert_count += append_count;
+	vector<unique_ptr<BoundConstraint>> empty_constraints;
+	if (append_count < row_group_size) {
+		// Few rows - append directly to the transaction-local storage.
+		LocalAppendState append_state;
+		storage.InitializeLocalAppend(append_state, *gstate.table, context.client, empty_constraints);
+		auto &transaction = DuckTransaction::Get(context.client, gstate.table->catalog);
+		for (auto &append_chunk : collection.Chunks(transaction)) {
+			storage.LocalAppend(append_state, *gstate.table, context.client, append_chunk, false);
+		}
+		storage.FinalizeLocalAppend(append_state);
+	} else {
+		// We optimistically wrote row groups to disk - merge them into the transaction-local storage.
+		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
+		lstate.optimistic_writer->FinalFlush();
+		storage.LocalMerge(context.client, *gstate.table, optimistic_collection);
+		auto &optimistic_writer = storage.GetOptimisticWriter(context.client);
+		optimistic_writer.Merge(*lstate.optimistic_writer);
+	}
+	return SinkCombineResultType::FINISHED;
+}
+
+unique_ptr<LocalSinkState> PhysicalCreateFeature::GetLocalSinkState(ExecutionContext &context) const {
+	return make_uniq<CreateFeatureLocalState>();
 }
 
 //===--------------------------------------------------------------------===//

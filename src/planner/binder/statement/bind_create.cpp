@@ -843,14 +843,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		    "JOIN %s ON %s.%s = spine.%s "
 		    "AND %s.%s < spine.bucket "
 		    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
-		    "GROUP BY spine.%s, spine.bucket "
-		    "ORDER BY spine.%s, spine.bucket",
+		    "GROUP BY spine.%s, spine.bucket",
 		    entity, agg_exprs,             // outer SELECT
 		    entity, gran, ts, gran, table, // spine subquery
 		    table, table, entity, entity,  // JOIN
 		    table, ts,                     // AND <
 		    table, ts, window_interval,    // AND >=
-		    entity, entity);               // GROUP BY, ORDER BY
+		    entity);                       // GROUP BY
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());
