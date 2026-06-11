@@ -189,6 +189,8 @@ struct CopyFunctionFileStatistics {
 	idx_t row_count = 0;
 	idx_t file_size_bytes = 0;
 	Value footer_size_bytes;
+	//! Number of row groups in the written file (NULL when not applicable to the format)
+	Value row_group_count;
 	// map of column name -> statistics name -> statistics value
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
 };

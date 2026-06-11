@@ -2566,6 +2566,9 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 
 	// partition_keys map(varchar, varchar)
 	chunk.data[5].Append(info.partition_keys);
+
+	// row group count BIGINT
+	chunk.data[6].Append(file_stats.row_group_count);
 }
 
 bool PhysicalCopyToFile::Rotate() const {
