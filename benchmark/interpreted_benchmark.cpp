@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"

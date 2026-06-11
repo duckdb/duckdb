@@ -1,4 +1,4 @@
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/fstream.hpp"
@@ -13,8 +13,8 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/main/gathered_metrics.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
@@ -78,7 +78,7 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze || ClientConfig::GetConfig(context).profiling_mode != ProfilingMode::DISABLED;
+	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {

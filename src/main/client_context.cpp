@@ -21,7 +21,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/stream_query_result.hpp"
@@ -1289,15 +1289,13 @@ void ClientContext::CancelTransaction() {
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);
-	if (client_config.profiling_mode == ProfilingMode::DISABLED) {
-		client_config.profiling_mode = ProfilingMode::STANDARD;
-	}
+	client_config.enable_profiler = true;
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);
-	client_config.profiling_mode = ProfilingMode::DISABLED;
+	client_config.enable_profiler = false;
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {

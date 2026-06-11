@@ -1,10 +1,10 @@
-#include "duckdb/main/gathered_metrics.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include "yyjson.hpp"

@@ -147,9 +147,9 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/main/gathered_metrics.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/query_parameters.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -4223,24 +4223,6 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value) {
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
-}
-
-const StringUtil::EnumStringLiteral *GetProfilingModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ProfilingMode::DISABLED), "DISABLED" },
-		{ static_cast<uint32_t>(ProfilingMode::STANDARD), "STANDARD" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ProfilingMode>(ProfilingMode value) {
-	return StringUtil::EnumToString(GetProfilingModeValues(), 2, "ProfilingMode", static_cast<uint32_t>(value));
-}
-
-template<>
-ProfilingMode EnumUtil::FromString<ProfilingMode>(const char *value) {
-	return static_cast<ProfilingMode>(StringUtil::StringToEnum(GetProfilingModeValues(), 2, "ProfilingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetProfilingParameterNamesValues() {

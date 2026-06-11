@@ -5,10 +5,10 @@
 #include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
-#include "duckdb/common/enums/profiler_print_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 
 namespace duckdb {
 

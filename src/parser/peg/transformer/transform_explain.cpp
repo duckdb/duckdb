@@ -9,7 +9,7 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	// resolve the format name through the shared explain format registry (see common/enums/profiler_print_format.hpp)
+	// resolve the format name through the shared explain format registry (see main/profiler/profiler_print_format.hpp)
 	return ProfilerPrintFormat::FromString(val.GetValue<string>());
 }
 

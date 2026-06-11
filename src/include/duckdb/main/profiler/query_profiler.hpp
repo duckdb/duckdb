@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/query_profiler.hpp
+// duckdb/main/profiler/query_profiler.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/common/enums/profiler_print_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -24,8 +24,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/profiling_node.hpp"
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 
 namespace duckdb {
 
@@ -39,8 +39,6 @@ struct MetricsTimer;
 class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
-
-enum class ProfilingMode : uint8_t { DISABLED = 0, STANDARD = 1 };
 
 //! A JSON-like recursive profiling value.
 //! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value

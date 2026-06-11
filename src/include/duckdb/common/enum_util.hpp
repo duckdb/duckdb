@@ -380,8 +380,6 @@ enum class PreserveOrderType : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
 
-enum class ProfilingMode : uint8_t;
-
 enum class ProfilingParameterNames : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
@@ -1078,9 +1076,6 @@ const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilingMode>(ProfilingMode value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
@@ -1865,9 +1860,6 @@ PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);
 
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
-
-template<>
-ProfilingMode EnumUtil::FromString<ProfilingMode>(const char *value);
 
 template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);

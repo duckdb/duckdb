@@ -15,7 +15,7 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/main/user_settings.hpp"
 
 namespace duckdb {
@@ -28,8 +28,8 @@ typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, Prepa
     get_result_collector_t;
 
 struct ClientConfig {
-	//! The query profiling mode - whether the profiler is disabled, or profiles in standard or detailed mode.
-	ProfilingMode profiling_mode = ProfilingMode::DISABLED;
+	//! If the query profiler is enabled or not.
+	bool enable_profiler = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
 	string profiler_print_format = "query_tree";

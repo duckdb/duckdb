@@ -12,7 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {

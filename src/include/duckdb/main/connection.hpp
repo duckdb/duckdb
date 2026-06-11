@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/profiler_print_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"

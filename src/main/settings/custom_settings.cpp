@@ -27,7 +27,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -868,9 +868,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	// Validate the format name (throws on an unrecognized format).
 	QueryProfiler::Get(context).CreateProfiler(parameter);
 
-	if (config.profiling_mode == ProfilingMode::DISABLED) {
-		config.profiling_mode = ProfilingMode::STANDARD;
-	}
+	config.enable_profiler = true;
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -889,12 +887,12 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
-	config.profiling_mode = ClientConfig().profiling_mode;
+	config.enable_profiler = ClientConfig().enable_profiler;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (config.profiling_mode == ProfilingMode::DISABLED) {
+	if (!config.enable_profiler) {
 		return Value();
 	}
 	return Value(config.profiler_print_format);
@@ -1288,7 +1286,7 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	if (parameter == "standard" || parameter == "detailed" || parameter == "all") {
 		// detailed profiling information is always gathered - "detailed" and "all" are kept for backwards
 		// compatibility and behave the same as "standard"
-		config.profiling_mode = ProfilingMode::STANDARD;
+		config.enable_profiler = true;
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
 		                      parameter);
@@ -1297,12 +1295,12 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiling_mode = ClientConfig().profiling_mode;
+	config.enable_profiler = ClientConfig().enable_profiler;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (config.profiling_mode == ProfilingMode::DISABLED) {
+	if (!config.enable_profiler) {
 		return Value();
 	}
 	return Value("standard");

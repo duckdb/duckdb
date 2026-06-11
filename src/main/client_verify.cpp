@@ -248,10 +248,10 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// (which would lose parser timing captured before StatementVerification was called) and from
 		// overwriting the profiling output file with the EXPLAIN's profiling data.
 		auto &client_config = ClientConfig::GetConfig(*this);
-		auto saved_profiling_mode = client_config.profiling_mode;
+		bool saved_profiler = client_config.enable_profiler;
 		ScopedConfigSetting suppress_profiling(
-		    client_config, [](ClientConfig &config) { config.profiling_mode = ProfilingMode::DISABLED; },
-		    [saved_profiling_mode](ClientConfig &config) { config.profiling_mode = saved_profiling_mode; });
+		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

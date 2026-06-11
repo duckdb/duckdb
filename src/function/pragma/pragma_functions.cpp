@@ -5,7 +5,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiler/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -21,9 +21,7 @@ namespace duckdb {
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (config.profiling_mode == ProfilingMode::DISABLED) {
-		config.profiling_mode = ProfilingMode::STANDARD;
-	}
+	config.enable_profiler = true;
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
@@ -36,7 +34,7 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiling_mode = ProfilingMode::DISABLED;
+	config.enable_profiler = false;
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {

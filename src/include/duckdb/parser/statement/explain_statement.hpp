@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/common/enums/profiler_print_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 
 namespace duckdb {
 
