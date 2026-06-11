@@ -21,11 +21,11 @@ public:
 
 public:
 	explicit ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type = ExplainType::EXPLAIN_STANDARD,
-	                          const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT());
+	                          const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
 	unique_ptr<SQLStatement> stmt;
 	ExplainType explain_type;
-	ProfilerPrintFormat format = ProfilerPrintFormat::DEFAULT();
+	ProfilerPrintFormat format = ProfilerPrintFormat::Default();
 
 protected:
 	ExplainStatement(const ExplainStatement &other);

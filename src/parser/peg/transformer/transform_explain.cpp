@@ -19,7 +19,7 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
                                                  unique_ptr<SQLStatement> explainable_statements) {
 	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
-	auto format = ProfilerPrintFormat::DEFAULT();
+	auto format = ProfilerPrintFormat::Default();
 	if (!explain_option_list.empty()) {
 		for (auto option : explain_option_list) {
 			auto option_name = StringUtil::Lower(option.name.GetIdentifierName());

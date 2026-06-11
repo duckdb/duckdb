@@ -92,7 +92,7 @@ unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
-	if (format == ProfilerPrintFormat::DEFAULT()) {
+	if (format == ProfilerPrintFormat::Default()) {
 		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
 		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
 		auto name = ClientConfig::GetConfig(context).profiler_print_format;

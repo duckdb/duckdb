@@ -51,8 +51,8 @@ public:
 
 public:
 	//! Returns query profiling information for the current query, formatted according to the given ProfilerPrintFormat
-	//! (e.g. ProfilerPrintFormat::JSON()). ProfilerPrintFormat::DEFAULT() uses the configured default profiler format.
-	DUCKDB_API string GetProfilingInformation(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT());
+	//! (e.g. ProfilerPrintFormat::JSON()). ProfilerPrintFormat::Default() uses the configured default profiler format.
+	DUCKDB_API string GetProfilingInformation(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();

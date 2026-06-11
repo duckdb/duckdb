@@ -90,7 +90,7 @@ public:
 	//! Returns the renderer to use for the given ProfilerPrintFormat, taking the configured default format into
 	//! account.
 	DUCKDB_API unique_ptr<TreeRenderer>
-	GetRenderer(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT()) const;
+	GetRenderer(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -140,8 +140,8 @@ public:
 	DUCKDB_API void Print();
 
 	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
-	//! default profiler format when ProfilerPrintFormat::DEFAULT is passed).
-	DUCKDB_API string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT()) const;
+	//! default profiler format when ProfilerPrintFormat::Default is passed).
+	DUCKDB_API string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
 	//! profiling-disabled and no-output cases.
 	DUCKDB_API string ToString(const string &profiler_format_name) const;

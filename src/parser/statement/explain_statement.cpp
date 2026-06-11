@@ -23,7 +23,7 @@ string ExplainStatement::OptionsToString() const {
 		options += "(";
 		options += "ANALYZE";
 	}
-	if (format != ProfilerPrintFormat::DEFAULT()) {
+	if (format != ProfilerPrintFormat::Default()) {
 		if (options.empty()) {
 			options += "(";
 		} else {

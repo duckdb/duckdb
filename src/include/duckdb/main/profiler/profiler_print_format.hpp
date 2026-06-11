@@ -20,10 +20,10 @@ struct ProfilerPrintFormat {
 	}
 
 	//! Named formats.
-	static ProfilerPrintFormat DEFAULT() {
+	static ProfilerPrintFormat Default() {
 		return ProfilerPrintFormat("default");
 	}
-	static ProfilerPrintFormat TEXT() {
+	static ProfilerPrintFormat Text() {
 		return ProfilerPrintFormat("text");
 	}
 	static ProfilerPrintFormat JSON() {
@@ -32,13 +32,13 @@ struct ProfilerPrintFormat {
 	static ProfilerPrintFormat HTML() {
 		return ProfilerPrintFormat("html");
 	}
-	static ProfilerPrintFormat GRAPHVIZ() {
+	static ProfilerPrintFormat Graphviz() {
 		return ProfilerPrintFormat("graphviz");
 	}
 	static ProfilerPrintFormat YAML() {
 		return ProfilerPrintFormat("yaml");
 	}
-	static ProfilerPrintFormat MERMAID() {
+	static ProfilerPrintFormat Mermaid() {
 		return ProfilerPrintFormat("mermaid");
 	}
 
