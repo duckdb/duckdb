@@ -531,6 +531,8 @@ TableRef:
     - BaseTableAliasSet
     - CTEBody
     - CTEBodyContent
+    - CTESelectBody
+    - CTEDMLBody
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
@@ -1574,7 +1576,5 @@ excluded_rules:
   - SimpleSelect
   - TableRef
   - WithClause
-  - CTEBody
-  - CTEBodyContent
   - WindowDefinition
   - SingleArrowPair

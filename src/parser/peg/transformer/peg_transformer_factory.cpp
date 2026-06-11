@@ -375,7 +375,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformAllKeyword);
 	REGISTER_TRANSFORM(TransformTableRef);
 	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
 }
 

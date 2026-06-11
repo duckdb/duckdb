@@ -900,29 +900,24 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const
 	return make_pair(cte_name, std::move(result));
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	// CTEBody <- Parens(CTEBodyContent)
-	auto &inner = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	// CTEBodyContent <- SelectStatementInternal / Statement
-	auto &content_list = inner.Cast<ListParseResult>();
-	auto &body_choice = content_list.Child<ChoiceParseResult>(0);
-	if (body_choice.GetResult().name == "SelectStatementInternal") {
-		auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(body_choice.GetResult());
-		return make_uniq<SubqueryRef>(std::move(select_statement));
-	}
-	// DML body (INSERT / UPDATE / DELETE) - transform as a Statement and extract its QueryNode
-	auto sql_stmt = transformer.Transform<unique_ptr<SQLStatement>>(body_choice.GetResult());
+unique_ptr<TableRef>
+PEGTransformerFactory::TransformCTESelectBody(PEGTransformer &transformer,
+                                              unique_ptr<SelectStatement> select_statement_internal) {
+	return make_uniq<SubqueryRef>(std::move(select_statement_internal));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformCTEDMLBody(PEGTransformer &transformer,
+                                                                unique_ptr<SQLStatement> statement) {
 	unique_ptr<QueryNode> query_node;
-	switch (sql_stmt->type) {
+	switch (statement->type) {
 	case StatementType::INSERT_STATEMENT:
-		query_node = unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(sql_stmt->Cast<InsertStatement>().node));
+		query_node = unique_ptr_cast<InsertQueryNode, QueryNode>(std::move(statement->Cast<InsertStatement>().node));
 		break;
 	case StatementType::UPDATE_STATEMENT:
-		query_node = unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(sql_stmt->Cast<UpdateStatement>().node));
+		query_node = unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(statement->Cast<UpdateStatement>().node));
 		break;
 	case StatementType::DELETE_STATEMENT:
-		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(sql_stmt->Cast<DeleteStatement>().node));
+		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(statement->Cast<DeleteStatement>().node));
 		break;
 	default:
 		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement");

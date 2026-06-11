@@ -5182,6 +5182,46 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWithStatementIn
 	return make_uniq<TypedTransformResult<pair<string, unique_ptr<CommonTableExpressionInfo>>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCTEBodyInternal(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto cte_body_content = transformer.Transform<unique_ptr<TableRef>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = std::move(cte_body_content);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCTEBodyContentInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	unique_ptr<TableRef> result;
+	if (choice_result.name == "SelectStatementInternal") {
+		auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(choice_result);
+		result = TransformCTESelectBody(transformer, std::move(select_statement_internal));
+	} else {
+		auto statement = transformer.Transform<unique_ptr<SQLStatement>>(choice_result);
+		result = TransformCTEDMLBody(transformer, std::move(statement));
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCTESelectBodyInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	auto result = TransformCTESelectBody(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCTEDMLBodyInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto statement = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.GetChild(0));
+	auto result = TransformCTEDMLBody(transformer, std::move(statement));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUsingKeyInternal(PEGTransformer &transformer,
                                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -7575,6 +7615,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"SelectFromClause", &PEGTransformerFactory::TransformSelectFromClauseInternal},
 	    {"FromSelectClause", &PEGTransformerFactory::TransformFromSelectClauseInternal},
 	    {"WithStatement", &PEGTransformerFactory::TransformWithStatementInternal},
+	    {"CTEBody", &PEGTransformerFactory::TransformCTEBodyInternal},
+	    {"CTEBodyContent", &PEGTransformerFactory::TransformCTEBodyContentInternal},
+	    {"CTESelectBody", &PEGTransformerFactory::TransformCTESelectBodyInternal},
+	    {"CTEDMLBody", &PEGTransformerFactory::TransformCTEDMLBodyInternal},
 	    {"UsingKey", &PEGTransformerFactory::TransformUsingKeyInternal},
 	    {"Materialized", &PEGTransformerFactory::TransformMaterializedInternal},
 	    {"SelectClause", &PEGTransformerFactory::TransformSelectClauseInternal},

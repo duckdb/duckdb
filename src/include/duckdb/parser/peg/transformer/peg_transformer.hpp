@@ -616,7 +616,6 @@ private:
 	static unique_ptr<TableRef> TransformTableRef(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<TableRef> TransformCTEBody(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformWindowDefinition(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
@@ -2363,6 +2362,17 @@ private:
 	                       const optional<vector<string>> &insert_column_list,
 	                       optional<vector<unique_ptr<ParsedExpression>>> using_key, const optional<bool> &materialized,
 	                       unique_ptr<TableRef> cte_body);
+	static unique_ptr<TransformResultValue> TransformCTEBodyInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCTEBodyContentInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCTESelectBodyInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformCTESelectBody(PEGTransformer &transformer,
+	                                                   unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformCTEDMLBodyInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformCTEDMLBody(PEGTransformer &transformer, unique_ptr<SQLStatement> statement);
 	static unique_ptr<TransformResultValue> TransformUsingKeyInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformUsingKey(PEGTransformer &transformer,
