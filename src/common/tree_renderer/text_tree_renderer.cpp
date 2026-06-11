@@ -363,7 +363,75 @@ void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
+static idx_t StringRenderWidth(const string &str) {
+	const idx_t size = str.size();
+	const char *input = str.c_str();
+	idx_t pos = 0;
+	idx_t width = 0;
+	while (pos < size) {
+		width += Utf8Proc::RenderWidth(input, size, pos);
+		pos = Utf8Proc::NextGraphemeCluster(input, size, pos);
+	}
+	return width;
+}
+
+static idx_t MaxLineRenderWidth(const string &str) {
+	idx_t best = 0;
+	for (auto &line : StringUtil::Split(str, "\n")) {
+		best = MaxValue<idx_t>(best, StringRenderWidth(line));
+	}
+	return best;
+}
+
+// True when a node embeds a pre-rendered box tree (e.g. a search filter): such
+// content must not be wrapped, so the box is grown to fit it instead.
+static bool HasBoxArt(const RenderTreeNode &node) {
+	for (auto &item : node.extra_text) {
+		if (StringUtil::Contains(item.second, "─")) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Widest unwrapped line the node will render, so node_render_width can grow to
+// fit content (e.g. an embedded filter box tree) instead of wrapping it.
+static idx_t NodeContentWidth(const RenderTreeNode &node) {
+	idx_t needed = StringRenderWidth(node.name);
+	for (auto &item : node.extra_text) {
+		// The renderer puts a value on its own line ("key:" then the value) when
+		// it does not fit inline, so the width it actually needs is the wider of
+		// the value and the "key:" header -- not the inline "key: value" form.
+		idx_t candidate = MaxLineRenderWidth(item.second);
+		if (!StringUtil::StartsWith(item.first, "__")) {
+			candidate = MaxValue<idx_t>(candidate, item.first.size() + 1);
+		}
+		needed = MaxValue<idx_t>(needed, candidate);
+	}
+	return needed;
+}
+
 void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+	idx_t content_width = 0;
+	for (idx_t y = 0; y < root.height; y++) {
+		for (idx_t x = 0; x < root.width; x++) {
+			auto node = root.GetNode(x, y);
+			if (node && HasBoxArt(*node)) {
+				content_width = MaxValue<idx_t>(content_width, NodeContentWidth(*node));
+			}
+		}
+	}
+	// Content renders within node_render_width - 2; +2 for the box borders. Keep
+	// the width odd so connector centering (node_render_width / 2) matches the
+	// odd default.
+	idx_t fit_width = content_width + 2;
+	if (fit_width % 2 == 0) {
+		fit_width++;
+	}
+	if (fit_width > config.node_render_width) {
+		config.node_render_width = fit_width;
+	}
+
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;
