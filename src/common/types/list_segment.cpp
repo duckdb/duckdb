@@ -132,10 +132,10 @@ static const bool *GetNullMask(const ListSegment *segment) {
 	return reinterpret_cast<const bool *>(const_data_ptr_cast(segment) + sizeof(ListSegment));
 }
 
-static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
+static uint16_t GetCapacityForNewSegment(const ListSegmentFunctions &functions, uint16_t capacity) {
 	auto next_power_of_two = idx_t(capacity) * 2;
-	if (next_power_of_two >= NumericLimits<uint16_t>::Maximum()) {
-		return capacity;
+	if (next_power_of_two >= functions.maximum_capacity) {
+		return functions.maximum_capacity;
 	}
 	return uint16_t(next_power_of_two);
 }
@@ -226,7 +226,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 		linked_list.last_segment = segment;
 	} else if (linked_list.last_segment->capacity == linked_list.last_segment->count) {
 		// the last segment of the linked list is full, create a new one and append it
-		auto capacity = GetCapacityForNewSegment(linked_list.last_segment->capacity);
+		auto capacity = GetCapacityForNewSegment(functions, linked_list.last_segment->capacity);
 		segment = functions.create_segment(functions, allocator, capacity);
 		linked_list.last_segment->next = segment;
 		linked_list.last_segment = segment;
@@ -443,10 +443,20 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 		// read the string
 		auto &result_str = aggr_vector_data[total_count + i];
 		auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
-		// allocate an empty string for the given size
+		if (current_segment && child_offset + str_length <= current_segment->capacity) {
+			// reference the string directly - the segment data outlives the result vector
+			result_str =
+			    string_t(GetStringData(current_segment) + child_offset, UnsafeNumericCast<uint32_t>(str_length));
+			child_offset += str_length;
+			if (child_offset == current_segment->capacity) {
+				current_segment = current_segment->next;
+				child_offset = 0;
+			}
+			continue;
+		}
+		// the string spans multiple child segments - copy over the data
 		result_str = StringVector::EmptyString(result, str_length);
 		auto result_data = result_str.GetDataWriteable();
-		// copy over the data
 		idx_t current_offset = 0;
 		while (current_offset < str_length) {
 			if (!current_segment) {
@@ -553,6 +563,23 @@ static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, cons
 	// recurse into the linked list of child values
 	D_ASSERT(functions.child_functions.size() == 1);
 	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, child_size);
+}
+
+void ListSegmentFunctions::InitializeScan(const LinkedList &linked_list, ListSegmentScanState &state) const {
+	state.segment = linked_list.first_segment;
+}
+
+idx_t ListSegmentFunctions::Scan(ListSegmentScanState &state, Vector &result) const {
+	idx_t scan_count = 0;
+	while (state.segment && scan_count + state.segment->count <= STANDARD_VECTOR_SIZE) {
+		read_data(*this, state.segment, result, scan_count);
+		scan_count += state.segment->count;
+		state.segment = state.segment->next;
+	}
+	if (!scan_count && state.segment) {
+		throw InternalException("Cannot scan a list segment that is larger than a vector");
+	}
+	return scan_count;
 }
 
 void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const {
@@ -676,6 +703,7 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		child_function.write_data = nullptr;
 		child_function.read_data = nullptr;
 		child_function.initial_capacity = 16;
+		child_function.maximum_capacity = uint16_t(ListSegmentFunctions::DATA_SEGMENT_MAXIMUM_CAPACITY);
 		functions.child_functions.push_back(child_function);
 		break;
 	}

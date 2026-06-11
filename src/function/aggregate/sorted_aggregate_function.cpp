@@ -164,12 +164,10 @@ struct SortedAggregateBindData : public FunctionData {
 	const idx_t threshold;
 };
 
-//! The sorted aggregate buffers its input rows in a linked list of structs - it shares the state and the
-//! update/combine callbacks of the "list" aggregate function, only the finalize differs.
+//! The sorted aggregate buffers its input rows in a linked list of structs, sharing the "list" callbacks
 struct SortedAggregateState : ListAggState {};
 
 struct SortedAggregateFunction {
-	//! The values stored in the linked list are the buffered input rows packed into a struct
 	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
 		return aggr_input_data.bind_data->Cast<SortedAggregateBindData>().buffered_struct_type;
 	}
@@ -179,7 +177,7 @@ struct SortedAggregateFunction {
 		if (!count) {
 			return;
 		}
-		//	Pack the buffered columns into a single struct vector and append the rows through the list update
+		//	Pack the buffered columns into a single struct vector for the list update
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		Vector packed(order_bind.buffered_struct_type, count);
 		auto &entries = StructVector::GetEntries(packed);
@@ -210,26 +208,25 @@ struct SortedAggregateFunction {
 	static void SinkState(const SortedAggregateBindData &order_bind, SortedAggregateState &state, idx_t group_number,
 	                      ExecutionContext &context, OperatorSinkInput &sink, DataChunk &prefixed) {
 		auto &sort = *order_bind.sort;
-		const auto total_count = state.linked_list.total_capacity;
-		if (!total_count) {
-			return;
-		}
-		//	Build the buffered rows from the linked list
-		Vector rows(order_bind.buffered_struct_type, total_count);
-		order_bind.buffered_funcs.BuildListVector(state.linked_list, rows, 0);
-		auto &entries = StructVector::GetEntries(rows);
-		//	Sink the rows in vector-sized chunks
-		for (idx_t pos = 0; pos < total_count; pos += STANDARD_VECTOR_SIZE) {
-			const auto chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, total_count - pos);
+		ListSegmentScanState scan_state;
+		order_bind.buffered_funcs.InitializeScan(state.linked_list, scan_state);
+		for (;;) {
+			Vector rows(order_bind.buffered_struct_type, STANDARD_VECTOR_SIZE);
+			const auto chunk_count = order_bind.buffered_funcs.Scan(scan_state, rows);
+			if (!chunk_count) {
+				break;
+			}
+			auto &entries = StructVector::GetEntries(rows);
 			prefixed.Reset();
 			prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(group_number)), count_t(1));
 			FlatVector::SetSize(prefixed.data[0], count_t(chunk_count));
 			for (column_t col_idx = 0; col_idx < entries.size(); ++col_idx) {
-				prefixed.data[col_idx + 1].Slice(entries[col_idx], pos, pos + chunk_count);
+				prefixed.data[col_idx + 1].Reference(entries[col_idx]);
+				FlatVector::SetSize(prefixed.data[col_idx + 1], count_t(chunk_count));
 			}
 			sort.Sink(context, prefixed, sink);
 		}
-		//	Release the state (the arena-allocated rows are freed with the allocator)
+		//	Release the state - the rows are freed with the arena allocator
 		state.linked_list = LinkedList();
 	}
 

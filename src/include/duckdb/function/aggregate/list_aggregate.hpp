@@ -14,12 +14,10 @@
 
 namespace duckdb {
 
-//! The state of the "list" aggregate function - aggregates that buffer their input rows in a linked list
-//! (e.g. sorted aggregates) share this state and its callbacks, differing only in their finalize.
+//! The state of the "list" aggregate - shared by aggregates that buffer their input in a linked list
 struct ListAggState {
 	LinkedList linked_list;
 
-	//! The state is a linked list of values - exported/imported as the aggregate's LIST return type
 	using STATE_TYPE = StateListType<StateReturnType>;
 };
 
@@ -28,7 +26,6 @@ struct ListFunction {
 		return false;
 	}
 
-	//! The type of the values stored in the linked list - for "list" this is the child of the LIST return type
 	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
 		return ListType::GetChildType(aggr_input_data.function.GetReturnType());
 	}
@@ -54,7 +51,6 @@ inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	}
 }
 
-//! Absorbs the source states into the combined states by linking the lists together
 inline void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
                                idx_t count) {
 	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
@@ -82,8 +78,7 @@ inline void ListAbsorbFunction(Vector &states_vector, Vector &combined, Aggregat
 	}
 }
 
-//! Combines the source states into the combined states - absorbing when allowed, copying the values otherwise.
-//! OP provides GetElementType(aggr_input_data), returning the type of the values stored in the linked list.
+//! OP provides GetElementType(aggr_input_data), returning the type of the values stored in the linked list
 template <class OP>
 void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	//	Can we use destructive combining?

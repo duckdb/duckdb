@@ -32,6 +32,10 @@ struct LinkedList {
 	ListSegment *last_segment;
 };
 
+struct ListSegmentScanState {
+	const ListSegment *segment = nullptr;
+};
+
 // forward declarations
 struct ListSegmentFunctions;
 typedef ListSegment *(*create_segment_t)(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
@@ -47,6 +51,10 @@ struct ListSegmentFunctions {
 	write_data_to_segment_t write_data;
 	read_data_from_segment_t read_data;
 	uint16_t initial_capacity = ListSegment::INITIAL_CAPACITY;
+	//! Row segments are capped at STANDARD_VECTOR_SIZE so that any segment can be scanned into a single vector
+	uint16_t maximum_capacity = uint16_t(MinValue<idx_t>(STANDARD_VECTOR_SIZE, DATA_SEGMENT_MAXIMUM_CAPACITY));
+
+	static constexpr idx_t DATA_SEGMENT_MAXIMUM_CAPACITY = 32768;
 
 	vector<ListSegmentFunctions> child_functions;
 
@@ -56,6 +64,12 @@ struct ListSegmentFunctions {
 	void AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &child_data,
 	                     const list_entry_t &list_entry) const;
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const;
+
+	void InitializeScan(const LinkedList &linked_list, ListSegmentScanState &state) const;
+	//! Scans up to STANDARD_VECTOR_SIZE rows into the (freshly initialized) result vector,
+	//! returning the number of rows scanned - 0 when the scan is exhausted
+	idx_t Scan(ListSegmentScanState &state, Vector &result) const;
+
 	//! Build a LIST result vector from a set of linked lists - one per row, written at rows [offset, offset + count).
 	//! Rows with an empty linked list (total_capacity == 0) are set to NULL.
 	void BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const;
