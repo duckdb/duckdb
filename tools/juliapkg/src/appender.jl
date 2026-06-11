@@ -38,40 +38,58 @@ DuckDB.close(appender)
 ```
 """
 mutable struct Appender
+    connection::Connection
     handle::duckdb_appender
 
     function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         handle = Ref{duckdb_appender}()
         if duckdb_appender_create(con.handle, something(schema, C_NULL), table, handle) != DuckDBSuccess
             error_ptr = duckdb_appender_error(handle)
-            if error_ptr == C_NULL
-                error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
-            else
-                error_message = string(error_ptr)
+            error_s = "unknown error"
+            if error_ptr != C_NULL
+                error_s = unsafe_string(error_ptr)
             end
+            error_message = "Opening of Appender for table \"$table\" failed: $error_s"
             duckdb_appender_destroy(handle)
             throw(QueryException(error_message))
         end
-        con = new(handle[])
-        finalizer(_close_appender, con)
-        return con
+        app = new(con, handle[])
+        finalizer(_close_appender, app)
+        return app
     end
+
     function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         return Appender(db.main_connection, table, schema)
     end
 end
 
 function _close_appender(appender::Appender)
+    res = DuckDBSuccess
     if appender.handle != C_NULL
+        # After duckdb_appender_destroy() is called any error message can't be retrieved
+        # anymore with duckdb_appender_error(). So ..._close() it first, check for error,
+        # and retrieve the error message if needed, before calling ..._destroy(). We could
+        # return the error in case it occurs, but raising an exception here matches other
+        # calls of Appender.
+        res = duckdb_appender_close(appender.handle)
+        if res != DuckDBSuccess
+            error_ptr = duckdb_appender_error(appender.handle)
+            error_s = "unknown error"
+            if error_ptr != C_NULL
+                error_s = unsafe_string(error_ptr)
+            end
+            error_message = "Closing of Appender failed: $error_s"
+            duckdb_appender_destroy(handle)
+            throw(ConnectionException(error_message))
+        end
         duckdb_appender_destroy(appender.handle)
     end
     appender.handle = C_NULL
-    return
+    return res
 end
 
 function close(appender::Appender)
-    _close_appender(appender)
-    return
+    return _close_appender(appender)
 end
 
 append(appender::Appender, val::AbstractFloat) = duckdb_append_double(appender.handle, Float64(val));
@@ -106,26 +124,22 @@ append(appender::Appender, val::DateTime) =
 function append(appender::Appender, val::AbstractVector{T}) where {T}
     value = create_value(val)
     if length(val) == 0
-        duckdb_append_null(appender.handle)
+        return duckdb_append_null(appender.handle)
     else
-        duckdb_append_value(appender.handle, value.handle)
+        return duckdb_append_value(appender.handle, value.handle)
     end
-    return
 end
 
 function append(appender::Appender, val::Any)
-    println(val)
-    throw(NotImplementedException("unsupported type for append"))
+    throw(NotImplementedException("unsupported type for append: $(typeof(val))"))
 end
 
 function end_row(appender::Appender)
-    duckdb_appender_end_row(appender.handle)
-    return
+    return duckdb_appender_end_row(appender.handle)
 end
 
 function flush(appender::Appender)
-    duckdb_appender_flush(appender.handle)
-    return
+    return duckdb_appender_flush(appender.handle)
 end
 
 DBInterface.close!(appender::Appender) = _close_appender(appender)
