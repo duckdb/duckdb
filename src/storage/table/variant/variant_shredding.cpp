@@ -775,13 +775,13 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 		auto input_val = input.GetValue(i);
 		auto roundtripped_val = roundtrip_result.GetValue(i);
 
-		Vector input_vec(input_val, count_t(1));
-		Vector roundtripped_vec(roundtripped_val, count_t(1));
+		Vector input_vec(input_val);
+		Vector roundtripped_vec(roundtripped_val);
 
-		Vector normalized_input(LogicalType::VARIANT(), count_t(1));
-		Vector normalized_roundtrip(LogicalType::VARIANT(), count_t(1));
-		VariantNormalizer::Normalize(input_vec, normalized_input);
-		VariantNormalizer::Normalize(roundtripped_vec, normalized_roundtrip);
+		Vector normalized_input(LogicalType::VARIANT(), 1);
+		Vector normalized_roundtrip(LogicalType::VARIANT(), 1);
+		VariantNormalizer::Normalize(input_vec, normalized_input, 1);
+		VariantNormalizer::Normalize(roundtripped_vec, normalized_roundtrip, 1);
 
 		auto normalized_input_value = normalized_input.GetValue(0);
 		auto normalized_roundtrip_value = normalized_roundtrip.GetValue(0);
