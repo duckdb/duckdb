@@ -261,6 +261,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantArrayLengthFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExistsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantKeysFun),
