@@ -21,9 +21,10 @@ namespace duckdb {
 struct ListLambdaBindData final : public FunctionData {
 public:
 	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false,
-	                   const bool has_initial = false)
-	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index),
-	      has_initial(has_initial) {};
+	                   const bool has_initial = false, const idx_t parameter_count = 0, const idx_t capture_count = 0,
+	                   const idx_t element_ref_index = DConstants::INVALID_INDEX)
+	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index), has_initial(has_initial),
+	      parameter_count(parameter_count), capture_count(capture_count), element_ref_index(element_ref_index) {};
 
 	//! Return type of the scalar function
 	LogicalType return_type;
@@ -31,18 +32,29 @@ public:
 	unique_ptr<Expression> lambda_expr;
 	//! True, if the last parameter in a lambda parameter list represents the index of the current list element
 	bool has_index;
+	//! True, if the lambda function has an initial value (list_reduce); it is the second child of the function
 	bool has_initial;
+	//! The number of lambda parameters (used to map captures to lambda body reference indices during stats prop.)
+	idx_t parameter_count;
+	//! The number of captured columns (the last capture_count children of the bound function expression)
+	idx_t capture_count;
+	//! The lambda body reference index of the list-element parameter, or DConstants::INVALID_INDEX if the function
+	//! has no list-element parameter (used to seed the element's statistics during statistics propagation)
+	idx_t element_ref_index;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
 		auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
-		return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index, has_initial);
+		return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index, has_initial,
+		                                     parameter_count, capture_count, element_ref_index);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ListLambdaBindData>();
 		return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
-		       has_index == other.has_index && has_initial == other.has_initial;
+		       has_index == other.has_index && has_initial == other.has_initial &&
+		       parameter_count == other.parameter_count && capture_count == other.capture_count &&
+		       element_ref_index == other.element_ref_index;
 	}
 
 	//! Serializes a lambda function's bind data
@@ -68,6 +80,10 @@ public:
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, BoundScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
+
+	//! Statistics callback for the list lambda functions: seeds the list-element and captured-column statistics
+	//! into the lambda body so statistics-driven scalar fast paths (e.g. substring) are selected inside lambdas
+	static unique_ptr<BaseStatistics> ListLambdaStats(ClientContext &context, FunctionStatisticsInput &input);
 
 	//! Internally executes list_transform
 	static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result);

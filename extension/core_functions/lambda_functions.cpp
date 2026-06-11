@@ -8,6 +8,9 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
+#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -214,6 +217,10 @@ void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<Fu
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(102, "has_index", bind_data.has_index);
 	serializer.WritePropertyWithDefault<bool>(103, "has_initial", bind_data.has_initial, false);
+	serializer.WritePropertyWithDefault<idx_t>(104, "parameter_count", bind_data.parameter_count, 0);
+	serializer.WritePropertyWithDefault<idx_t>(105, "capture_count", bind_data.capture_count, 0);
+	serializer.WritePropertyWithDefault<idx_t>(106, "element_ref_index", bind_data.element_ref_index,
+	                                           DConstants::INVALID_INDEX);
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
@@ -222,7 +229,12 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 	                                                                                        unique_ptr<Expression>());
 	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
 	auto has_initial = deserializer.ReadPropertyWithExplicitDefault<bool>(103, "has_initial", false);
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index, has_initial);
+	auto parameter_count = deserializer.ReadPropertyWithExplicitDefault<idx_t>(104, "parameter_count", 0);
+	auto capture_count = deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "capture_count", 0);
+	auto element_ref_index =
+	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "element_ref_index", DConstants::INVALID_INDEX);
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index, has_initial, parameter_count,
+	                                     capture_count, element_ref_index);
 }
 
 //===--------------------------------------------------------------------===//
@@ -375,12 +387,75 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+	auto parameter_count = bound_lambda_expr.ParameterCount();
+	auto capture_count = bound_lambda_expr.Captures().size();
+	// for list_transform/list_filter the list element is the first lambda parameter (column 0), so its body
+	// reference index is parameter_count - 1 (see LambdaFunctions::BindBinaryChildren)
+	auto element_ref_index = parameter_count - 1;
 	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}
 
-	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index, false,
+	                                     parameter_count, capture_count, element_ref_index);
+}
+
+unique_ptr<BaseStatistics> LambdaFunctions::ListLambdaStats(ClientContext &context, FunctionStatisticsInput &input) {
+	// Lambda bodies are executed on a fresh ExpressionExecutor over selection-vector slices that carry no
+	// statistics, so statistics-driven scalar fast paths (e.g. substring's ASCII path) are never selected inside a
+	// lambda. Seed the lambda body's reference statistics here - from the (already propagated) statistics of the
+	// list element and the captured columns - so the optimizer's statistics propagation reaches inside the body.
+	// NOTE: any resulting function-callback swap (e.g. SetFunctionCallback) lives on the in-memory lambda body and
+	// is not serialized; a plan serialized after this pass and re-deserialized (e.g. distributed execution) reverts
+	// to the generic path, exactly as top-level substring does. This is correct, just unoptimized, on that path.
+	if (!input.propagator || !input.bind_data) {
+		return nullptr;
+	}
+	auto &bind_data = input.bind_data->Cast<ListLambdaBindData>();
+	if (!bind_data.lambda_expr) {
+		return nullptr;
+	}
+	auto &child_stats = input.child_stats;
+	// child_stats holds the list argument plus the non-list children; captures are a subset of the latter, so we
+	// need at least capture_count + 1 entries (unsigned comparison, no subtraction => no underflow trap)
+	if (child_stats.size() <= bind_data.capture_count) {
+		return nullptr;
+	}
+
+	// children layout = [list, (initial value?), (nested lambda params...), captures...]. The captures are the last
+	// capture_count children and map to contiguous body reference indices starting at parameter_count + nested_count
+	// - the same layout the lambda executor builds at runtime.
+	idx_t base_child = child_stats.size() - bind_data.capture_count;
+	idx_t initial_count = bind_data.has_initial ? 1 : 0;
+	if (base_child < 1 + initial_count) {
+		// defensive: inconsistent child layout, do not risk seeding incorrect statistics
+		return nullptr;
+	}
+	idx_t nested_count = base_child - 1 - initial_count;
+	idx_t capture_ref_base = bind_data.parameter_count + nested_count;
+
+	// size to cover both the capture references and the (normally smaller) element reference
+	idx_t ref_count = capture_ref_base + bind_data.capture_count;
+	if (bind_data.element_ref_index != DConstants::INVALID_INDEX && bind_data.element_ref_index + 1 > ref_count) {
+		ref_count = bind_data.element_ref_index + 1;
+	}
+	vector<unique_ptr<BaseStatistics>> ref_stats(ref_count);
+
+	// seed the captured columns' statistics at their body reference indices
+	for (idx_t i = 0; i < bind_data.capture_count; i++) {
+		ref_stats[capture_ref_base + i] = child_stats[base_child + i].ToUnique();
+	}
+
+	// seed the list-element parameter's statistics from the list argument's child statistics
+	if (bind_data.element_ref_index != DConstants::INVALID_INDEX && bind_data.element_ref_index < ref_stats.size() &&
+	    child_stats[0].GetStatsType() == StatisticsType::LIST_STATS) {
+		ref_stats[bind_data.element_ref_index] = ListStats::GetChildStats(child_stats[0]).ToUnique();
+	}
+
+	input.propagator->PropagateLambdaStatistics(bind_data.lambda_expr, ref_stats);
+	// we do not derive a result statistic for the lambda function itself
+	return nullptr;
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
