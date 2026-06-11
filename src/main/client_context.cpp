@@ -590,7 +590,7 @@ QueryProgress ClientContext::GetQueryProgress() {
 }
 
 void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
-	case_insensitive_map_t<BoundParameterData> owned_values;
+	identifier_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
 		for (auto &val : params) {
@@ -924,7 +924,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               case_insensitive_map_t<BoundParameterData> &values,
+                                               identifier_map_t<BoundParameterData> &values,
                                                QueryParameters query_parameters) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
@@ -1172,18 +1172,18 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLoc
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(query, empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	PendingQueryParameters params;
 	params.parameters = values;
@@ -1213,7 +1213,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	auto lock = LockContext();
 	auto query = statement->query;
@@ -1301,8 +1301,8 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
-		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
-		                                                                       info.name, OnEntryNotFound::RETURN_NULL);
+		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
+		    *this, Identifier::InvalidCatalog(), info.schema, info.name, OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
@@ -1359,8 +1359,8 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
-                                                      const string &table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &database_name, const Identifier &schema_name,
+                                                      const Identifier &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// Obtain the table from the catalog.
@@ -1380,8 +1380,8 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_nam
 	return result;
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &schema_name, const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
 void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
@@ -1392,11 +1392,11 @@ void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
-	string table_name = "__duckdb_internal_appended_data";
-	vector<string> expected_names;
+	Identifier table_name("__duckdb_internal_appended_data");
+	vector<Identifier> expected_names;
 	auto query = Appender::ConstructQuery(description, table_name, expected_names);
 	auto table_ref = BaseAppender::GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	Append(std::move(stmt));
 }
 

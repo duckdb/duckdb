@@ -17,7 +17,7 @@ namespace duckdb {
 
 constexpr const char *FieldID::DUCKDB_FIELD_ID;
 
-ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<case_insensitive_map_t<FieldID>>()) {
+ChildFieldIDs::ChildFieldIDs() : ids(make_uniq<identifier_map_t<FieldID>>()) {
 }
 
 ChildFieldIDs ChildFieldIDs::Copy() const {
@@ -64,7 +64,7 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 	return name_to_type_map;
 }
 
-static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child_names,
+static void GetChildNamesAndTypes(const LogicalType &type, vector<Identifier> &child_names,
                                   vector<LogicalType> &child_types) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
@@ -88,7 +88,7 @@ static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child
 	} // LCOV_EXCL_STOP
 }
 
-void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
+void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<Identifier> &names,
                                const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
@@ -103,7 +103,7 @@ void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const 
 		}
 
 		// Cannot use GetChildNameToTypeMap here because we lose order, and we want to generate depth-first
-		vector<string> child_names;
+		vector<Identifier> child_names;
 		vector<LogicalType> child_types;
 		GetChildNamesAndTypes(col_type, child_names, child_types);
 		GenerateFieldIDs(inserted.first->second.child_field_ids, field_id, child_names, child_types);
@@ -122,7 +122,7 @@ void FieldID::GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids
 	const auto &struct_children = StructValue::GetChildren(field_ids_value);
 	D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
 	for (idx_t i = 0; i < struct_children.size(); i++) {
-		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
+		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
 		if (col_name == FieldID::DUCKDB_FIELD_ID) {
 			continue;
 		}
@@ -141,7 +141,8 @@ void FieldID::GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids
 			    "column is a partition column. Available column names: [%s]",
 			    col_name, names);
 		}
-		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
+		D_ASSERT(field_ids.ids->find(Identifier(col_name)) ==
+		         field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
 		const auto &child_value = struct_children[i];
 		const auto &child_type = child_value.type();
@@ -172,7 +173,7 @@ void FieldID::GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids
 			}
 			field_id = FieldID(UnsafeNumericCast<int32_t>(field_id_int));
 		}
-		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
+		auto inserted = field_ids.ids->insert(make_pair(Identifier(col_name), std::move(field_id)));
 		D_ASSERT(inserted.second);
 
 		if (child_field_ids_value) {

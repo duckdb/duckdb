@@ -206,7 +206,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		child_list_t<Value> struct_children {{"name", sniffer_result.names[i]},
 		                                     {"type", {sniffer_result.return_types[i].ToString()}}};
 		values.emplace_back(Value::STRUCT(struct_children));
-		columns << "'" << sniffer_result.names[i] << "': '" << sniffer_result.return_types[i].ToString() << "'";
+		columns << "'" << sniffer_result.names[i].GetIdentifierName() << "': '"
+		        << sniffer_result.return_types[i].ToString() << "'";
 		if (i != sniffer_result.return_types.size() - 1) {
 			columns << separator;
 		}

@@ -51,11 +51,11 @@ unique_ptr<MacroFunction>
 PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer, vector<MacroParameter> macro_parameters,
                                                 unique_ptr<MacroFunction> macro_definition_body) {
 	bool default_value_found = false;
-	case_insensitive_string_set_t parameter_names;
+	identifier_set_t parameter_names;
 	for (auto &parameter : macro_parameters) {
 		D_ASSERT(!parameter.name.empty());
 		if (parameter_names.find(parameter.name) != parameter_names.end()) {
-			throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name);
+			throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name.GetIdentifierName());
 		}
 		parameter_names.insert(parameter.name);
 		if (parameter.is_default) {
@@ -98,10 +98,11 @@ vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransf
 }
 
 MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer,
-                                                               const string &type_func_name, const LogicalType &type) {
+                                                               const Identifier &type_func_name,
+                                                               const LogicalType &type) {
 	MacroParameter result;
-	result.name = type_func_name;
-	result.expression = make_uniq<ColumnRefExpression>(type_func_name);
+	result.name = Identifier(type_func_name);
+	result.expression = make_uniq<ColumnRefExpression>(Identifier(type_func_name));
 	if (type.id() != LogicalTypeId::INVALID) {
 		result.type = type;
 	}

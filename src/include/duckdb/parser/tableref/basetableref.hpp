@@ -29,11 +29,11 @@ public:
 	}
 
 	//! The catalog name.
-	string catalog_name;
+	Identifier catalog_name;
 	//! The schema name.
-	string schema_name;
+	Identifier schema_name;
 	//! The table name.
-	string table_name;
+	Identifier table_name;
 	//! The timestamp/version at which to read this table entry (if any)
 	unique_ptr<AtClause> at_clause;
 

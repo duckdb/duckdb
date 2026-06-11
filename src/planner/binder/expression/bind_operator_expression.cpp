@@ -231,8 +231,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function =
-		    make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.GetChildrenMutable()));
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(Identifier(function_name),
+		                                                                     std::move(op.GetChildrenMutable()));
 		return BindExpression(function, depth, false);
 	}
 

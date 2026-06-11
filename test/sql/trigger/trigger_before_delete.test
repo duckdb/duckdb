@@ -142,11 +142,11 @@ SELECT COUNT(*) FROM t_multi_audit;
 ----
 2
 
-# RETURNING is rejected
-statement error
+# RETURNING works on tables with triggers
+query I
 DELETE FROM target RETURNING id;
 ----
-RETURNING is not yet supported on tables with triggers
+3
 
 # DROP TRIGGER works
 statement ok
@@ -155,8 +155,8 @@ DROP TRIGGER trg_basic ON target;
 statement ok
 DELETE FROM target;
 
-# Audit count unchanged
+# Audit count reflects the RETURNING DELETE that fired the trigger
 query I
 SELECT COUNT(*) FROM audit;
 ----
-2
+3

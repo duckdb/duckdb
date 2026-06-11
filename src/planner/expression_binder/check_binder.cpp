@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, const ColumnList &columns,
+CheckBinder::CheckBinder(Binder &binder, ClientContext &context, Identifier table_p, const ColumnList &columns,
                          physical_index_set_t &bound_columns)
     : ExpressionBinder(binder, context), table(std::move(table_p)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
@@ -30,7 +30,7 @@ string CheckBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in check constraints";
 }
 
-BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name) {
+BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name) {
 	idx_t struct_start = 0;
 	if (colref.ColumnNames()[0] == table_name) {
 		struct_start++;
@@ -46,7 +46,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		if (lambda_bindings) {
 			for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-				if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.GetName())) {
+				if ((*lambda_bindings)[i - 1].HasMatchingBinding(Identifier(colref.GetName()))) {
 					// FIXME: support lambdas in CHECK constraints
 					// FIXME: like so: return (*lambda_bindings)[i - 1].Bind(colref, i, depth);
 					// FIXME: and move this to LambdaRefExpression::FindMatchingBinding

@@ -126,8 +126,8 @@ private:
 	//! Bind and evaluate an expression locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
 
-	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const string &catalog_name,
-	                                                const string &schema_name);
+	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const Identifier &catalog_name,
+	                                                const Identifier &schema_name);
 	CatalogPushdownResult RewriteTableFunctionOnly(TableFunctionRef &ref);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
@@ -141,15 +141,15 @@ private:
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
-	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
-	static void StripCatalogName(QueryNode &node, const string &catalog_name);
-	static void StripCatalogName(TableRef &ref, const string &catalog_name);
+	static void StripCatalogName(SQLStatement &statement, const Identifier &catalog_name);
+	static void StripCatalogName(QueryNode &node, const Identifier &catalog_name);
+	static void StripCatalogName(TableRef &ref, const Identifier &catalog_name);
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
-	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
+	static void StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name);
 	bool RefersToLocalTable(const ColumnRefExpression &col_ref) const;
 
-	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;
+	bool RefersToCTE(const Identifier &cte_name, CatalogPushdownResult &result) const;
 
 private:
 	Binder &binder;
@@ -157,8 +157,8 @@ private:
 	unique_ptr<RemotePushdownState> owned_pushdown_state;
 	RemotePushdownState &pushdown_state;
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
-	case_insensitive_set_t local_table_names;
+	identifier_set_t local_table_names;
 	//! CTE name to catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
-	case_insensitive_map_t<CatalogPushdownResult> cte_results;
+	identifier_map_t<CatalogPushdownResult> cte_results;
 };
 } // namespace duckdb

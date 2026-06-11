@@ -14,13 +14,13 @@ namespace duckdb {
 
 class InsertRelation : public Relation {
 public:
-	InsertRelation(shared_ptr<Relation> child, string schema_name, string table_name);
-	InsertRelation(shared_ptr<Relation> child, string catalog_name, string schema_name, string table_name);
+	InsertRelation(shared_ptr<Relation> child, Identifier schema_name, Identifier table_name);
+	InsertRelation(shared_ptr<Relation> child, Identifier catalog_name, Identifier schema_name, Identifier table_name);
 
 	shared_ptr<Relation> child;
-	string catalog_name;
-	string schema_name;
-	string table_name;
+	Identifier catalog_name;
+	Identifier schema_name;
+	Identifier table_name;
 	vector<ColumnDefinition> columns;
 
 public:

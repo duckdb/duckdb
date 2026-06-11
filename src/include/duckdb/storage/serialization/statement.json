@@ -13,7 +13,7 @@
       {
         "id": 101,
         "name": "named_param_map",
-        "type": "case_insensitive_map_t<idx_t>"
+        "type": "identifier_map_t<idx_t>"
       }
     ]
   },
@@ -31,7 +31,7 @@
       {
         "id": 101,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -54,7 +54,7 @@
       {
         "id": 101,
         "name": "indexed_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 102,
@@ -92,7 +92,7 @@
       {
         "id": 103,
         "name": "insert_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 104,
@@ -114,7 +114,7 @@
       {
         "id": 107,
         "name": "exclude_columns",
-        "type": "unordered_set<string>"
+        "type": "identifier_set_t"
       }
     ]
   }

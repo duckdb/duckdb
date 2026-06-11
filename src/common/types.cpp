@@ -527,7 +527,7 @@ string LogicalType::ToString() const {
 // LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
-	auto type = DefaultTypeGenerator::GetDefaultType(str);
+	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));
 	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -1160,7 +1160,7 @@ void LogicalType::Verify() const {
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
-		case_insensitive_set_t child_names;
+		identifier_set_t child_names;
 		bool all_empty = true;
 		for (auto &entry : StructType::GetChildTypes(*this)) {
 			if (entry.first.empty()) {
@@ -1264,7 +1264,8 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 LogicalType LogicalType::Copy() const {
 	LogicalType copy = *this;
 	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		// We copy (i.e., create new) type info, unless the type is an ENUM - enum type info is kept shared to avoid
+		// rebuilding the dictionary lookup map; use DeepCopy to force a copy
 		copy.type_info_ = type_info_->Copy();
 	}
 	return copy;
@@ -1272,8 +1273,7 @@ LogicalType LogicalType::Copy() const {
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+	if (type_info_) {
 		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;
@@ -1411,7 +1411,7 @@ const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index
 	return child_types[index].second;
 }
 
-const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
+const Identifier &StructType::GetChildName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	return child_types[index].first;
@@ -1420,7 +1420,7 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &name) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		if (StringUtil::CIEquals(child_types[i].first, name)) {
+		if (child_types[i].first == name) {
 			return i;
 		}
 	}
@@ -1504,7 +1504,7 @@ const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index
 	return child_types[index + 1].second;
 }
 
-const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+const Identifier &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	// skip the "tag" field
@@ -1781,10 +1781,11 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
+		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
+		// type that was created without a CRS (SetAlias attaches a generic type info)
 		return false;
 	}
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
@@ -1793,11 +1794,9 @@ bool GeoType::HasCRS(const LogicalType &type) {
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
 		throw InternalException("Geometry type has no CRS information");
 	}
-	D_ASSERT(info);
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;
@@ -1855,7 +1854,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 	}
 
 	// Try to bind as far as we can
-	auto result = DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+	auto result = DefaultTypeGenerator::TryDefaultBind(name.GetIdentifierName(), bound_args);
 	if (result.id() != LogicalTypeId::INVALID) {
 		return result;
 	}

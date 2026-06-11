@@ -386,6 +386,15 @@ void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &link
 	segment->count++;
 }
 
+void ListSegmentFunctions::AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list,
+                                           RecursiveUnifiedVectorFormat &child_data,
+                                           const list_entry_t &list_entry) const {
+	for (idx_t child_idx = list_entry.offset; child_idx < list_entry.offset + list_entry.length; child_idx++) {
+		allocator.AlignNext();
+		AppendRow(allocator, linked_list, child_data, child_idx);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Read
 //===--------------------------------------------------------------------===//
@@ -554,6 +563,44 @@ void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector
 		total_count += segment->count;
 		segment = segment->next;
 	}
+}
+
+void ListSegmentFunctions::BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	const idx_t count = linked_lists.size();
+
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
+	idx_t total_len = ListVector::GetListSize(result);
+
+	// first iterate over all entries and set up the list entries, and get the newly required total length
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		const auto rid = offset + i;
+		result_data[rid].offset = total_len;
+		if (linked_list.total_capacity == 0) {
+			// empty linked list - set the result row to NULL
+			mask.SetInvalid(rid);
+			result_data[rid].length = 0;
+			continue;
+		}
+		result_data[rid].length = linked_list.total_capacity;
+		total_len += linked_list.total_capacity;
+	}
+
+	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
+	ListVector::Reserve(result, total_len);
+	auto &result_child = ListVector::GetChildMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		if (linked_list.total_capacity == 0) {
+			continue;
+		}
+		BuildListVector(linked_list, result_child, result_data[offset + i].offset);
+	}
+
+	ListVector::SetListSize(result, total_len);
+	FlatVector::SetSize(result, offset + count);
 }
 
 //===--------------------------------------------------------------------===//

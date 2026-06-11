@@ -21,39 +21,62 @@
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
-
 namespace duckdb {
 
 // Scalar Function
-#define DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                     \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, _PARAM::GetFunction, nullptr, nullptr, nullptr, nullptr, nullptr }
-#define DUCKDB_SCALAR_FUNCTION(_PARAM)       DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_SCALAR_FUNCTION_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                          \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories,                \
+		    _PARAM::GetFunction, nullptr, nullptr, nullptr, nullptr, nullptr                                           \
+	}
+#define DUCKDB_SCALAR_FUNCTION(_PARAM) DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_ALIAS(_PARAM)                                                                           \
+	DUCKDB_SCALAR_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Scalar Function Set
-#define DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                 \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, _PARAM::GetFunctions, nullptr, nullptr, nullptr, nullptr }
-#define DUCKDB_SCALAR_FUNCTION_SET(_PARAM)       DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_SCALAR_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                      \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr,       \
+		    _PARAM::GetFunctions, nullptr, nullptr, nullptr, nullptr                                                   \
+	}
+#define DUCKDB_SCALAR_FUNCTION_SET(_PARAM) DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_SET_ALIAS(_PARAM)                                                                       \
+	DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Aggregate Function
-#define DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                  \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, _PARAM::GetFunction, nullptr, nullptr, nullptr }
-#define DUCKDB_AGGREGATE_FUNCTION(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_AGGREGATE_FUNCTION_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                       \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr,       \
+		    nullptr, _PARAM::GetFunction, nullptr, nullptr, nullptr                                                    \
+	}
+#define DUCKDB_AGGREGATE_FUNCTION(_PARAM) DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_ALIAS(_PARAM)                                                                        \
+	DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Aggregate Function Set
-#define DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                              \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, nullptr, _PARAM::GetFunctions, nullptr, nullptr }
-#define DUCKDB_AGGREGATE_FUNCTION_SET(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                   \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr,       \
+		    nullptr, nullptr, _PARAM::GetFunctions, nullptr, nullptr                                                   \
+	}
+#define DUCKDB_AGGREGATE_FUNCTION_SET(_PARAM) DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(_PARAM)                                                                    \
+	DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Window Function
-#define DUCKDB_WINDOW_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                  \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, nullptr, nullptr, _PARAM::GetFunction, nullptr }
-#define DUCKDB_WINDOW_FUNCTION(_PARAM)       DUCKDB_WINDOW_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_WINDOW_FUNCTION_ALIAS(_PARAM) DUCKDB_WINDOW_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_WINDOW_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                          \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr,       \
+		    nullptr, nullptr, nullptr, _PARAM::GetFunction, nullptr                                                    \
+	}
+#define DUCKDB_WINDOW_FUNCTION(_PARAM) DUCKDB_WINDOW_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_WINDOW_FUNCTION_ALIAS(_PARAM)                                                                           \
+	DUCKDB_WINDOW_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Window Function Set
-#define DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                              \
-	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, nullptr, nullptr, nullptr, _PARAM::GetFunctions }
-#define DUCKDB_WINDOW_FUNCTION_SET(_PARAM)       DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
-#define DUCKDB_WINDOW_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
+#define DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                      \
+	{                                                                                                                  \
+		_NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr,       \
+		    nullptr, nullptr, nullptr, nullptr, _PARAM::GetFunctions                                                   \
+	}
+#define DUCKDB_WINDOW_FUNCTION_SET(_PARAM) DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_WINDOW_FUNCTION_SET_ALIAS(_PARAM)                                                                       \
+	DUCKDB_WINDOW_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Final Function
 #define FINAL_FUNCTION                                                                                                 \
 	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
@@ -238,6 +261,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantArrayLengthFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExistsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantKeysFun),

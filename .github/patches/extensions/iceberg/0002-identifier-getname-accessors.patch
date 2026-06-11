@@ -1,0 +1,1384 @@
+diff --git a/src/catalog/rest/api/catalog_api.cpp b/src/catalog/rest/api/catalog_api.cpp
+index d3eede15..6e5b4fb2 100644
+--- a/src/catalog/rest/api/catalog_api.cpp
++++ b/src/catalog/rest/api/catalog_api.cpp
+@@ -346,7 +346,7 @@ vector<IRCAPISchema> IRCAPI::GetSchemas(ClientContext &context, IcebergCatalog &
+ 		auto &schemas = list_namespaces_response.namespaces;
+ 		for (auto &schema : schemas) {
+ 			IRCAPISchema schema_result;
+-			schema_result.catalog_name = catalog.GetName();
++			schema_result.catalog_name = catalog.GetName().GetIdentifierName();
+ 			schema_result.items = std::move(schema.value);
+ 
+ 			if (catalog.attach_options.support_nested_namespaces) {
+diff --git a/src/catalog/rest/api/iceberg_add_snapshot.cpp b/src/catalog/rest/api/iceberg_add_snapshot.cpp
+index f5a20bc0..7c42f74c 100644
+--- a/src/catalog/rest/api/iceberg_add_snapshot.cpp
++++ b/src/catalog/rest/api/iceberg_add_snapshot.cpp
+@@ -164,7 +164,7 @@ void IcebergAddSnapshot::CreateUpdate(DatabaseInstance &db, ClientContext &conte
+                                       IcebergCommitState &commit_state) const {
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+ 	auto avro_copy_p = schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, "avro");
+ 	D_ASSERT(avro_copy_p);
+ 	auto &avro_copy = avro_copy_p->Cast<CopyFunctionCatalogEntry>().function;
+diff --git a/src/catalog/rest/api/iceberg_create_table_request.cpp b/src/catalog/rest/api/iceberg_create_table_request.cpp
+index a5a34019..46db2e13 100644
+--- a/src/catalog/rest/api/iceberg_create_table_request.cpp
++++ b/src/catalog/rest/api/iceberg_create_table_request.cpp
+@@ -224,7 +224,7 @@ IcebergCreateTableRequest::CreateIcebergColumn(const ColumnDefinition &column_de
+ 		type.primitive_type = rest_api_objects::PrimitiveType();
+ 		type.primitive_type.value = IcebergTypeHelper::LogicalTypeToIcebergType(logical_type);
+ 	}
+-	auto iceberg_column_def = IcebergColumnDefinition::ParseType(name, first_id, required, type, "", nullptr);
++	auto iceberg_column_def = IcebergColumnDefinition::ParseType(name.GetIdentifierName(), first_id, required, type, "", nullptr);
+ 	if (column_def.HasDefaultValue()) {
+ 		auto &default_expr = column_def.DefaultValue();
+ 		auto val = default_binder.Evaluate(default_expr, logical_type);
+diff --git a/src/catalog/rest/api/iceberg_type.cpp b/src/catalog/rest/api/iceberg_type.cpp
+index 176b0bb4..470a3f23 100644
+--- a/src/catalog/rest/api/iceberg_type.cpp
++++ b/src/catalog/rest/api/iceberg_type.cpp
+@@ -98,7 +98,7 @@ rest_api_objects::Type IcebergTypeHelper::CreateIcebergRestType(const LogicalTyp
+ 		auto &children = StructType::GetChildTypes(type);
+ 		for (auto &child : children) {
+ 			auto struct_child = make_uniq<rest_api_objects::StructField>();
+-			struct_child->name = child.first;
++			struct_child->name = child.first.GetIdentifierName();
+ 			struct_child->id = get_next_id();
+ 			struct_child->type =
+ 			    make_uniq<rest_api_objects::Type>(IcebergTypeHelper::CreateIcebergRestType(child.second, get_next_id));
+diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+index 73a96505..89854cdb 100644
+--- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
++++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+@@ -25,7 +25,7 @@
+ namespace duckdb {
+ 
+ IcebergSchemaEntry::IcebergSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
+-    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema)), exists(true),
++    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema.GetIdentifierName())), exists(true),
+       tables(*this) {
+ }
+ 
+@@ -41,7 +41,7 @@ IcebergTransaction &GetICTransaction(CatalogTransaction transaction) {
+ 
+ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, CatalogType catalog_type,
+                                               const string &entry_name, OnCreateConflict on_conflict) {
+-	auto existing_entry = GetEntry(transaction, catalog_type, entry_name);
++	auto existing_entry = GetEntry(transaction, catalog_type, Identifier(entry_name));
+ 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		throw NotImplementedException(
+ 		    "CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements");
+@@ -55,7 +55,7 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
+ 		auto latest_state = iceberg_transaction.GetLatestTableState(table_key);
+ 		if (latest_state && latest_state->IsDroppedOrRenamed()) {
+ 			auto &ic_catalog = catalog.Cast<IcebergCatalog>();
+-			vector<string> qualified_name = {ic_catalog.GetName()};
++			vector<string> qualified_name = {ic_catalog.GetName().GetIdentifierName()};
+ 			qualified_name.insert(qualified_name.end(), namespace_items.begin(), namespace_items.end());
+ 			qualified_name.push_back(entry_name);
+ 			auto qualified_table_name = StringUtil::Join(qualified_name, ".");
+@@ -81,13 +81,13 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
+ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &transaction, ClientContext &context,
+                                                            BoundCreateTableInfo &info) {
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
+-	if (!exists && iceberg_transaction.created_schemas.find(name) == iceberg_transaction.created_schemas.end()) {
++	if (!exists && iceberg_transaction.created_schemas.find(name.GetIdentifierName()) == iceberg_transaction.created_schemas.end()) {
+ 		throw InvalidInputException("Schema with name \"%s\" does not exist", name);
+ 	}
+ 	auto &base_info = info.Base();
+ 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
+ 	// check if we have an existing entry with this name
+-	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table, base_info.on_conflict)) {
++	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table.GetIdentifierName(), base_info.on_conflict)) {
+ 		return nullptr;
+ 	}
+ 
+@@ -108,7 +108,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool delete_entry) {
+ 	auto table_name = info.name;
+ 	// find if info has a table name, if so look for it in
+-	auto table_info_it = tables.GetEntries().find(table_name);
++	auto table_info_it = tables.GetEntries().find(table_name.GetIdentifierName());
+ 	if (table_info_it == tables.GetEntries().end()) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			return;
+@@ -120,7 +120,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool
+ 	}
+ 	if (delete_entry) {
+ 		// Remove the entry from the catalog
+-		tables.GetEntriesMutable().erase(table_name);
++		tables.GetEntriesMutable().erase(table_name.GetIdentifierName());
+ 	} else {
+ 		// Add the table to the transaction's deleted_tables
+ 		auto &transaction = IcebergTransaction::Get(context, catalog).Cast<IcebergTransaction>();
+@@ -363,7 +363,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		}
+ 
+ 		optional_idx column_id;
+-		auto new_schema = current_schema.RemoveColumn(to_remove_column, column_id);
++		auto new_schema = current_schema.RemoveColumn(to_remove_column.GetIdentifierName(), column_id);
+ 		const bool column_exists = column_id.IsValid();
+ 		if (!column_exists) {
+ 			if (!remove_column_info.if_column_exists) {
+@@ -444,7 +444,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			//! The table is dropped or renamed by this transaction, so it's not a conflict anymore
+ 			D_ASSERT(state && state->IsDroppedOrRenamed());
+ 		}
+-		irc_transaction.RenameTable(updated_table, new_name);
++		irc_transaction.RenameTable(updated_table, new_name.GetIdentifierName());
+ 		break;
+ 	}
+ 	case AlterTableType::RENAME_COLUMN: {
+@@ -466,7 +466,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			                       new_name, table_entry.name);
+ 		}
+ 		auto &column = *column_p;
+-		column.name = new_name;
++		column.name = new_name.GetIdentifierName();
+ 
+ 		auto new_schema_id = new_schema->schema_id;
+ 
+@@ -592,13 +592,13 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		new_schema->schema_id++;
+ 
+ 		auto parent_path = column_path;
+-		column_path.push_back(new_field.GetName());
++		column_path.emplace_back(new_field.GetName());
+ 
+ 		auto parent_p = new_schema->GetMutableFromPath(parent_path, nullptr);
+ 		if (!parent_p) {
+ 			throw CatalogException(
+ 			    "The parent column ('%s') does not exist on the table '%s', ADD COLUMN failed to add a new field",
+-			    StringUtil::Join(parent_path, "."), table_entry.name);
++			    StringUtil::Join(IdentifiersToStrings(parent_path), "."), table_entry.name);
+ 		}
+ 		auto &parent = *parent_p;
+ 
+@@ -609,18 +609,18 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			}
+ 			throw CatalogException(
+ 			    "The column ('%s') already exists on the table '%s', ADD COLUMN failed to add a new field",
+-			    StringUtil::Join(column_path, "."), table_entry.name);
++			    StringUtil::Join(IdentifiersToStrings(column_path), "."), table_entry.name);
+ 		}
+ 
+ 		if (parent.type.id() != LogicalTypeId::STRUCT) {
+ 			throw CatalogException("Can't add field '%s' to column '%s', because the parent is not a struct (type: %s)",
+-			                       new_field.GetName(), StringUtil::Join(parent_path, "."), parent.type.ToString());
++			                       new_field.GetName(), StringUtil::Join(IdentifiersToStrings(parent_path), "."), parent.type.ToString());
+ 		}
+ 
+ 		auto &last_column_id = updated_table.table_metadata.last_column_id;
+ 		if (!last_column_id.IsValid()) {
+ 			throw InternalException("No last_column_id when trying to ADD COLUMN %s",
+-			                        StringUtil::Join(column_path, "."));
++			                        StringUtil::Join(IdentifiersToStrings(column_path), "."));
+ 		}
+ 		auto field_id = last_column_id.GetIndex() + 1;
+ 		auto next_field_id = [&field_id]() -> idx_t {
+@@ -648,20 +648,20 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 		auto column_p = new_schema->GetMutableFromPath(column_path, nullptr);
+ 		if (!column_p) {
+ 			throw CatalogException("The column ('%s') doesn't exist on the table '%s', RENAME COLUMN failed",
+-			                       StringUtil::Join(column_path, "."), table_entry.name);
++			                       StringUtil::Join(IdentifiersToStrings(column_path), "."), table_entry.name);
+ 		}
+ 
+ 		auto new_path = column_path;
+ 		new_path.pop_back();
+-		new_path.push_back(new_name);
++		new_path.emplace_back(new_name.GetIdentifierName());
+ 
+ 		auto existing_column = new_schema->GetMutableFromPath(new_path, nullptr);
+ 		if (existing_column) {
+ 			throw CatalogException(
+ 			    "The column ('%s') already exists on the table '%s', RENAME COLUMN failed to rename the field",
+-			    StringUtil::Join(new_path, "."), table_entry.name);
++			    StringUtil::Join(IdentifiersToStrings(new_path), "."), table_entry.name);
+ 		}
+-		column_p->name = new_name;
++		column_p->name = new_name.GetIdentifierName();
+ 		IntroduceNewSchema(updated_table, transaction_data, new_schema);
+ 		return;
+ 	}
+@@ -689,21 +689,21 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 			}
+ 			throw CatalogException(
+ 			    "The column ('%s') doesnt exist on the table '%s', DROP COLUMN failed to remove the field",
+-			    StringUtil::Join(column_path, "."), table_entry.name);
++			    StringUtil::Join(IdentifiersToStrings(column_path), "."), table_entry.name);
+ 		}
+ 		auto &parent = *parent_p;
+-		auto child_it = parent.GetChildIterator(column_path.back());
++		auto child_it = parent.GetChildIterator(column_path.back().GetIdentifierName());
+ 		if (child_it == parent.children.end()) {
+ 			if (if_column_exists) {
+ 				return;
+ 			}
+ 			throw CatalogException(
+ 			    "The column ('%s') doesnt exist on the table '%s', DROP COLUMN failed to remove the field",
+-			    StringUtil::Join(column_path, "."), table_entry.name);
++			    StringUtil::Join(IdentifiersToStrings(column_path), "."), table_entry.name);
+ 		}
+ 		if (parent.children.size() == 1) {
+ 			throw CatalogException("Can't drop field '%s' because it's the last field of the STRUCT!",
+-			                       StringUtil::Join(column_path, "."));
++			                       StringUtil::Join(IdentifiersToStrings(column_path), "."));
+ 		}
+ 		parent.children.erase(child_it);
+ 		IntroduceNewSchema(updated_table, transaction_data, new_schema);
+@@ -748,7 +748,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::LookupEntry(CatalogTransaction tr
+ 	auto table_entry = GetCatalogSet(type).GetEntry(context, lookup_info);
+ 	if (!table_entry) {
+ 		// verify the schema exists
+-		if (!IRCAPI::VerifySchemaExistence(context, ic_catalog, name)) {
++		if (!IRCAPI::VerifySchemaExistence(context, ic_catalog, name.GetIdentifierName())) {
+ 			// set exists to false here
+ 			// we would like to throw an error, but this code is also called when listing schemas,
+ 			// and throwing an error will abort the listing process.
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
+index 2ab9f927..53a9dfcc 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
+@@ -171,7 +171,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	auto &db = DatabaseInstance::GetDatabase(context);
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &catalog_schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto &catalog_schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+ 	auto catalog_entry = catalog_schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "iceberg_scan");
+ 	if (!catalog_entry) {
+ 		throw InvalidInputException("Function with name \"iceberg_scan\" not found!");
+@@ -230,7 +230,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	iceberg_scan_function.function_info = scan_info;
+ 	named_parameter_map_t param_map;
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	TableFunctionRef empty_ref;
+ 
+ 	// Set the S3 path as input to table function
+@@ -238,7 +238,9 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	vector<Value> inputs = {storage_location};
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, iceberg_scan_function,
+ 	                                  empty_ref);
+-	auto result = iceberg_scan_function.bind(context, bind_input, return_types, names);
++	vector<string> bind_names;
++	auto result = iceberg_scan_function.bind(context, bind_input, return_types, bind_names);
++	names = StringsToIdentifiers(bind_names);
+ 	bind_data = std::move(result);
+ 	auto &file_bind_data = bind_data->Cast<MultiFileBindData>();
+ 	D_ASSERT(file_bind_data.file_list);
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+index ce20f92f..375992d3 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+@@ -237,9 +237,9 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
+ 				create_secret_input.scope.push_back(table_location);
+ 			}
+ 		}
+-		create_secret_input.name = StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix);
++		create_secret_input.name = Identifier(StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix));
+ 
+-		create_secret_input.type = storage_type;
++		create_secret_input.type = Identifier(storage_type);
+ 		create_secret_input.provider = "config";
+ 		create_secret_input.storage_type = "memory";
+ 		create_secret_input.options = config_options;
+@@ -258,8 +258,8 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
+ 
+ 		//! TODO: apply the 'overrides' retrieved from the /v1/config endpoint
+ 		config.options = config_options;
+-		config.name = secret_base_name;
+-		config.type = storage_type;
++		config.name = Identifier(secret_base_name);
++		config.type = Identifier(storage_type);
+ 		config.provider = "config";
+ 		config.storage_type = "memory";
+ 	}
+@@ -269,7 +269,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
+ 
+ optional_ptr<CatalogEntry> IcebergTableInformation::CreateSchemaVersion(const IcebergTableSchema &table_schema) {
+ 	CreateTableInfo info;
+-	info.table = name;
++	info.table = Identifier(name);
+ 	for (auto &col : table_schema.columns) {
+ 		info.columns.AddColumn(col->GetColumnDefinition());
+ 	}
+@@ -357,10 +357,10 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpress
+ 		auto key_type = key->GetExpressionType();
+ 		if (key_type == ExpressionType::COLUMN_REF) {
+ 			auto &colref = key->Cast<ColumnRefExpression>();
+-			column_name = colref.ColumnNames().back();
++			column_name = colref.ColumnNames().back().GetIdentifierName();
+ 		} else if (key_type == ExpressionType::FUNCTION) {
+ 			auto &funcexpr = key->Cast<FunctionExpression>();
+-			transform = funcexpr.FunctionName();
++			transform = funcexpr.FunctionName().GetIdentifierName();
+ 			if (funcexpr.GetArguments().empty()) {
+ 				throw NotImplementedException("Unrecognized transform ('%s')", transform);
+ 			} else if (!IcebergTransform::TransformFunctionSupported(transform)) {
+@@ -387,14 +387,14 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpress
+ 					                              EnumUtil::ToChars(funcexpr.GetArguments()[1].GetExpression().GetExpressionType()));
+ 				}
+ 				auto &colref = funcexpr.GetArguments()[1].GetExpression().Cast<ColumnRefExpression>();
+-				column_name = colref.ColumnNames().back();
++				column_name = colref.ColumnNames().back().GetIdentifierName();
+ 			} else {
+ 				if (funcexpr.GetArguments()[0].GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 					throw NotImplementedException("Transforms are only supported on column references, not %s",
+ 					                              EnumUtil::ToChars(funcexpr.GetArguments()[0].GetExpression().GetExpressionType()));
+ 				}
+ 				auto &colref = funcexpr.GetArguments()[0].GetExpression().Cast<ColumnRefExpression>();
+-				column_name = colref.ColumnNames().back();
++				column_name = colref.ColumnNames().back().GetIdentifierName();
+ 			}
+ 		} else {
+ 			throw NotImplementedException("Unsupported partition key type: %s", key->ToString());
+diff --git a/src/catalog/rest/iceberg_catalog.cpp b/src/catalog/rest/iceberg_catalog.cpp
+index 5e636af6..3fdf64b0 100644
+--- a/src/catalog/rest/iceberg_catalog.cpp
++++ b/src/catalog/rest/iceberg_catalog.cpp
+@@ -56,7 +56,7 @@ optional_ptr<SchemaCatalogEntry> IcebergCatalog::LookupSchema(CatalogTransaction
+ 		if (default_schema.empty() && if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			return nullptr;
+ 		}
+-		return GetSchema(transaction, default_schema, if_not_found);
++		return GetSchema(transaction, Identifier(default_schema), if_not_found);
+ 	}
+ 
+ 	auto &schema_name = schema_lookup.GetEntryName();
+@@ -78,19 +78,19 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
+ 	D_ASSERT(context);
+ 
+ 	// Verify schema existence on the server first
+-	bool schema_exists = IRCAPI::VerifySchemaExistence(*context, *this, info.schema);
++	bool schema_exists = IRCAPI::VerifySchemaExistence(*context, *this, info.schema.GetIdentifierName());
+ 
+ 	if (schema_exists) {
+ 		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 			// Schema already exists on the server - get or create a local entry and return it
+-			auto entry = schemas.GetEntry(*context, info.schema, OnEntryNotFound::RETURN_NULL);
++			auto entry = schemas.GetEntry(*context, info.schema.GetIdentifierName(), OnEntryNotFound::RETURN_NULL);
+ 			if (entry) {
+ 				return entry;
+ 			}
+ 			auto new_schema = make_uniq<IcebergSchemaEntry>(*this, info);
+ 			auto schema_name = new_schema->name;
+-			schemas.AddEntry(schema_name, std::move(new_schema));
+-			return &schemas.GetEntry(info.schema);
++			schemas.AddEntry(schema_name.GetIdentifierName(), std::move(new_schema));
++			return &schemas.GetEntry(info.schema.GetIdentifierName());
+ 		}
+ 		throw CatalogException("Schema with name \"%s\" already exists", info.schema);
+ 	}
+@@ -99,9 +99,9 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
+ 	auto &iceberg_transaction = IcebergTransaction::Get(*context, *this);
+ 	auto new_schema = make_uniq<IcebergSchemaEntry>(*this, info);
+ 	auto schema_name = new_schema->name;
+-	schemas.AddEntry(schema_name, std::move(new_schema));
+-	iceberg_transaction.created_schemas.insert(info.schema);
+-	return &schemas.GetEntry(info.schema);
++	schemas.AddEntry(schema_name.GetIdentifierName(), std::move(new_schema));
++	iceberg_transaction.created_schemas.insert(info.schema.GetIdentifierName());
++	return &schemas.GetEntry(info.schema.GetIdentifierName());
+ }
+ 
+ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+@@ -111,13 +111,13 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 	}
+ 
+ 	// Verify schema existence on the server first
+-	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name);
++	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name.GetIdentifierName());
+ 
+ 	if (!schema_exists) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			// remove the entry if it exists locally
+ 			// it could have been created during the bind phase.
+-			GetSchemas().RemoveEntry(info.name);
++			GetSchemas().RemoveEntry(info.name.GetIdentifierName());
+ 			return;
+ 		}
+ 		throw CatalogException("Schema with name \"%s\" does not exist", info.name);
+@@ -125,7 +125,7 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 
+ 	// Schema exists - defer the server deletion to commit
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, *this);
+-	iceberg_transaction.deleted_schemas.insert(info.name);
++	iceberg_transaction.deleted_schemas.insert(info.name.GetIdentifierName());
+ }
+ 
+ unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+@@ -177,7 +177,7 @@ unique_ptr<SecretEntry> IcebergCatalog::GetStorageSecret(ClientContext &context,
+ 		auto secret_entry = context.db->GetSecretManager().GetSecretByName(transaction, secret_name);
+ 		if (secret_entry) {
+ 			auto secret_type = secret_entry->secret->GetType();
+-			if (accepted_secret_types.count(secret_type)) {
++			if (accepted_secret_types.count(secret_type.GetIdentifierName())) {
+ 				return secret_entry;
+ 			}
+ 			throw InvalidConfigurationException(
+diff --git a/src/catalog/rest/iceberg_schema_set.cpp b/src/catalog/rest/iceberg_schema_set.cpp
+index 2fc11727..12112d8e 100644
+--- a/src/catalog/rest/iceberg_schema_set.cpp
++++ b/src/catalog/rest/iceberg_schema_set.cpp
+@@ -63,7 +63,7 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
+ 				throw CatalogException("default schema '%s' does not exist", name);
+ 			}
+ 		}
+-		info.schema = name;
++		info.schema = Identifier(name);
+ 		info.internal = false;
+ 		auto schema_entry = make_uniq<IcebergSchemaEntry>(catalog, info);
+ 		// we will not create entries with empty names
+@@ -124,7 +124,7 @@ void IcebergSchemaSet::LoadEntries(ClientContext &context) {
+ 	auto schemas = IRCAPI::GetSchemas(context, ic_catalog, {});
+ 	for (const auto &schema : schemas) {
+ 		CreateSchemaInfo info;
+-		info.schema = GetSchemaName(schema.items);
++		info.schema = Identifier(GetSchemaName(schema.items));
+ 		info.internal = false;
+ 		auto schema_entry = make_uniq<IcebergSchemaEntry>(catalog, info);
+ 		schema_entry->namespace_items = std::move(schema.items);
+diff --git a/src/catalog/rest/iceberg_table_set.cpp b/src/catalog/rest/iceberg_table_set.cpp
+index d935a578..e57ebf14 100644
+--- a/src/catalog/rest/iceberg_table_set.cpp
++++ b/src/catalog/rest/iceberg_table_set.cpp
+@@ -99,9 +99,9 @@ void IcebergTableSet::Scan(ClientContext &context, const std::function<void(Cata
+ 
+ 		// create a table entry with fake schema data to avoid calling the LoadTableInformation endpoint for every
+ 		// table while listing schemas
+-		CreateTableInfo info(schema, table_info.name);
++		CreateTableInfo info(schema, Identifier(table_info.name));
+ 		vector<ColumnDefinition> columns;
+-		auto col = ColumnDefinition(string("__"), LogicalType::UNKNOWN);
++		auto col = ColumnDefinition(Identifier("__"), LogicalType::UNKNOWN);
+ 		columns.push_back(std::move(col));
+ 		info.columns = ColumnList(std::move(columns));
+ 		auto table_entry = make_uniq<IcebergTableEntry>(table_info, catalog, schema, info, optional_idx());
+@@ -137,7 +137,7 @@ mutex &IcebergTableSet::GetEntryLock() {
+ void IcebergTableSet::LoadEntries(ClientContext &context) {
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
+ 	bool schema_listed =
+-	    iceberg_transaction.listed_schemas.find(schema.name) != iceberg_transaction.listed_schemas.end();
++	    iceberg_transaction.listed_schemas.find(schema.name.GetIdentifierName()) != iceberg_transaction.listed_schemas.end();
+ 	if (schema_listed) {
+ 		return;
+ 	}
+@@ -146,7 +146,7 @@ void IcebergTableSet::LoadEntries(ClientContext &context) {
+ 	for (auto &table : tables) {
+ 		entries.emplace(table.name, make_shared_ptr<IcebergTableInformation>(ic_catalog, schema, table.name));
+ 	}
+-	iceberg_transaction.listed_schemas.insert(schema.name);
++	iceberg_transaction.listed_schemas.insert(schema.name.GetIdentifierName());
+ }
+ 
+ static Value ParseTableProperty(TableFunctionBinder &binder, ClientContext &context, const ParsedExpression &expr_ref,
+@@ -210,9 +210,9 @@ IcebergTableInformation &IcebergTableSet::CreateNewEntry(ClientContext &context,
+ 		               .GetValue<string>();
+ 	}
+ 
+-	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.table);
++	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.table.GetIdentifierName());
+ 	auto &alter_update = iceberg_transaction.GetOrCreateAlter();
+-	auto &table_info = alter_update.CreateTable(key, IcebergTableInformation(catalog, schema, info.table));
++	auto &table_info = alter_update.CreateTable(key, IcebergTableInformation(catalog, schema, info.table.GetIdentifierName()));
+ 	// auto &table_info = emplace_res.first->second;
+ 	auto &table_metadata = table_info.table_metadata;
+ 	auto table_entry = make_uniq<IcebergTableEntry>(table_info, catalog, schema, info, 0);
+diff --git a/src/catalog/rest/storage/authorization/oauth2.cpp b/src/catalog/rest/storage/authorization/oauth2.cpp
+index d21bd9f5..e6cb7bbd 100644
+--- a/src/catalog/rest/storage/authorization/oauth2.cpp
++++ b/src/catalog/rest/storage/authorization/oauth2.cpp
+@@ -388,12 +388,12 @@ unique_ptr<BaseSecret> OAuth2Authorization::CreateCatalogSecretFunction(ClientCo
+ 			// Special handling for extra_http_headers (MAP type)
+ 			if (StringUtil::Lower(param_name) == "extra_http_headers") {
+ 				// Store the MAP value directly, will be parsed later when creating authorization
+-				result->secret_map[param_name] = named_param.second;
++				result->secret_map[Identifier(param_name)] = named_param.second;
+ 			} else if (StringUtil::Lower(param_name) == "expires_in") {
+ 				// Store expires_in as INTEGER (not string)
+-				result->secret_map[param_name] = named_param.second;
++				result->secret_map[Identifier(param_name)] = named_param.second;
+ 			} else {
+-				result->secret_map[param_name] = named_param.second.ToString();
++				result->secret_map[Identifier(param_name)] = named_param.second.ToString();
+ 			}
+ 		} else {
+ 			throw InvalidInputException("Unknown named parameter passed to CreateIRCSecretFunction: %s", param_name);
+@@ -426,7 +426,7 @@ unique_ptr<BaseSecret> OAuth2Authorization::CreateCatalogSecretFunction(ClientCo
+ 	//! ---- Client ID + Client Secret ----
+ 	case_insensitive_set_t required_parameters {"client_id", "client_secret"};
+ 	for (auto &param : required_parameters) {
+-		if (!result->secret_map.count(param)) {
++		if (!result->secret_map.count(Identifier(param))) {
+ 			throw InvalidInputException("Missing required parameter '%s' for authorization_type 'oauth2'", param);
+ 		}
+ 	}
+@@ -544,7 +544,9 @@ unique_ptr<HTTPResponse> OAuth2Authorization::Request(RequestType request_type,
+ 
+ void OAuth2Authorization::SetCatalogSecretParameters(CreateSecretFunction &function) {
+ 	auto &options = IcebergSecretOptions();
+-	function.named_parameters.insert(options.begin(), options.end());
++	for (auto &option : options) {
++		function.named_parameters[Identifier(option.first)] = option.second;
++	}
+ }
+ 
+ void OAuth2Authorization::UpdateTokenState(const string &new_token, int32_t expires_in_seconds,
+diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
+index 4047986d..a6a54518 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -278,7 +278,7 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
+ void IcebergTransaction::DropSecrets(ClientContext &context) {
+ 	auto &secret_manager = SecretManager::Get(context);
+ 	for (auto &secret_name : created_secrets) {
+-		(void)secret_manager.DropSecretByName(context, secret_name, OnEntryNotFound::RETURN_NULL);
++		(void)secret_manager.DropSecretByName(context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
+ 	}
+ }
+ 
+@@ -527,7 +527,7 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
+ 	IRCAPI::CommitTableRename(context, catalog, transaction_json);
+ 
+ 	DropInfo drop_info;
+-	drop_info.name = table_name;
++	drop_info.name = Identifier(table_name);
+ 	drop_info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+ 	schema.DropEntry(context, drop_info, true);
+ 
+@@ -549,9 +549,9 @@ void IcebergTransaction::DoTableDeletes(IcebergTransactionDeleteUpdate &delete_u
+ 	// remove the load table result
+ 	ic_catalog.table_request_cache.Expire(context, table_key);
+ 	// remove the table entry from the catalog
+-	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key).Cast<IcebergSchemaEntry>();
++	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key.GetIdentifierName()).Cast<IcebergSchemaEntry>();
+ 	DropInfo drop_info;
+-	drop_info.name = table_name;
++	drop_info.name = Identifier(table_name);
+ 	drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	schema_entry.DropEntry(context, drop_info, true);
+ }
+diff --git a/src/common/iceberg_utils.cpp b/src/common/iceberg_utils.cpp
+index 48a026b7..4607f944 100644
+--- a/src/common/iceberg_utils.cpp
++++ b/src/common/iceberg_utils.cpp
+@@ -28,7 +28,8 @@ CopyFunctionCatalogEntry &IcebergUtils::GetCopyFunction(ClientContext &context,
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+ 	auto entry =
+-	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
++	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(name),
++	                                                      OnEntryNotFound::RETURN_NULL);
+ 	if (!entry) {
+ 		throw MissingExtensionException(
+ 		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension", name, name);
+@@ -97,23 +98,25 @@ static string ExtractIcebergScanPath(const string &sql) {
+ optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(ClientContext &context, string &input_string) {
+ 	auto qualified_name = QualifiedName::ParseComponents(input_string);
+ 	auto default_db = DatabaseManager::GetDefaultDatabase(context);
+-	auto &catalog = Catalog::GetCatalog(context, default_db);
++	auto &catalog = Catalog::GetCatalog(context, Identifier(default_db));
+ 	switch (qualified_name.size()) {
+ 	case 3: {
+-		auto lookup_info = EntryLookupInfo(CatalogType::TABLE_ENTRY, qualified_name[2]);
+-		auto table = Catalog::GetEntry(context, qualified_name[0], qualified_name[1], lookup_info,
++		auto lookup_info = EntryLookupInfo(CatalogType::TABLE_ENTRY, Identifier(qualified_name[2]));
++		auto table = Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]), lookup_info,
+ 		                               OnEntryNotFound::THROW_EXCEPTION);
+ 		return table;
+ 	}
+ 	case 2: {
+ 		// make sure default catalog is iceberg
+-		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qualified_name[0], qualified_name[1],
++		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, Identifier(qualified_name[0]),
++		                                    Identifier(qualified_name[1]),
+ 		                                    OnEntryNotFound::THROW_EXCEPTION);
+ 		return table_entry;
+ 	}
+ 	case 1: {
+ 		auto schema = catalog.GetDefaultSchema();
+-		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, qualified_name[0],
++		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, Identifier(schema),
++		                                    Identifier(qualified_name[0]),
+ 		                                    OnEntryNotFound::THROW_EXCEPTION);
+ 		return table_entry;
+ 	}
+@@ -130,17 +133,17 @@ optional_ptr<SchemaCatalogEntry> IcebergUtils::GetSchemaEntry(ClientContext &con
+ 	case 1: {
+ 		// input: schema
+ 		// we assume the catalog from context
+-		auto &catalog = Catalog::GetCatalog(context, default_db);
+-		return catalog.GetSchema(context, qualified_name[0], OnEntryNotFound::THROW_EXCEPTION);
++		auto &catalog = Catalog::GetCatalog(context, Identifier(default_db));
++		return catalog.GetSchema(context, Identifier(qualified_name[0]), OnEntryNotFound::THROW_EXCEPTION);
+ 	}
+ 	default: {
+ 		// input: catalog.schema (schema may contain dots for nested namespaces)
+ 		auto catalog_name = qualified_name[0];
+ 		vector<string> schema_parts(qualified_name.begin() + 1, qualified_name.end());
+ 		auto schema_name = StringUtil::Join(schema_parts, ".");
+-		auto lookup_info = EntryLookupInfo(CatalogType::SCHEMA_ENTRY, schema_name);
++		auto lookup_info = EntryLookupInfo(CatalogType::SCHEMA_ENTRY, Identifier(schema_name));
+ 		auto retriever = CatalogEntryRetriever(context);
+-		return retriever.GetSchema(catalog_name, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
++		return retriever.GetSchema(Identifier(catalog_name), lookup_info, OnEntryNotFound::THROW_EXCEPTION);
+ 	}
+ 	}
+ }
+@@ -154,9 +157,10 @@ string IcebergUtils::GetStorageLocation(ClientContext &context, const string &in
+ 			break;
+ 		}
+ 		//! Fully qualified table reference, let's do a lookup
+-		EntryLookupInfo table_info(CatalogType::TABLE_ENTRY, qualified_name[2]);
++		EntryLookupInfo table_info(CatalogType::TABLE_ENTRY, Identifier(qualified_name[2]));
+ 		auto catalog_entry =
+-		    Catalog::GetEntry(context, qualified_name[0], qualified_name[1], table_info, OnEntryNotFound::RETURN_NULL);
++		    Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]), table_info,
++		                              OnEntryNotFound::RETURN_NULL);
+ 		if (!catalog_entry) {
+ 			break;
+ 		}
+diff --git a/src/core/metadata/manifest/iceberg_manifest.cpp b/src/core/metadata/manifest/iceberg_manifest.cpp
+index 531736e7..9eb5acb4 100644
+--- a/src/core/metadata/manifest/iceberg_manifest.cpp
++++ b/src/core/metadata/manifest/iceberg_manifest.cpp
+@@ -435,7 +435,7 @@ idx_t WriteToFile(const IcebergTableMetadata &table_metadata, const IcebergManif
+ 	//! Create the types for the DataChunk
+ 
+ 	child_list_t<Value> field_ids;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> types;
+ 
+ 	auto &current_partition_spec = table_metadata.GetLatestPartitionSpec();
+diff --git a/src/core/metadata/manifest/iceberg_manifest_list.cpp b/src/core/metadata/manifest/iceberg_manifest_list.cpp
+index 463e704e..0fb800fd 100644
+--- a/src/core/metadata/manifest/iceberg_manifest_list.cpp
++++ b/src/core/metadata/manifest/iceberg_manifest_list.cpp
+@@ -270,7 +270,7 @@ namespace {
+ 
+ struct AvroBindSchemaMetadata {
+ 	child_list_t<Value> field_ids;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> types;
+ };
+ 
+@@ -283,7 +283,7 @@ static Value CreateFieldID(int32_t field_id, bool nullable) {
+ 
+ static void AddSimpleColumn(AvroBindSchemaMetadata &metadata, const string &name, const LogicalType &type,
+                             int32_t field_id, bool nullable) {
+-	metadata.names.push_back(name);
++	metadata.names.push_back(Identifier(name));
+ 	metadata.types.push_back(type);
+ 	metadata.field_ids.emplace_back(name, CreateFieldID(field_id, nullable));
+ }
+diff --git a/src/core/metadata/schema/iceberg_column_definition.cpp b/src/core/metadata/schema/iceberg_column_definition.cpp
+index 25bf8174..931c5674 100644
+--- a/src/core/metadata/schema/iceberg_column_definition.cpp
++++ b/src/core/metadata/schema/iceberg_column_definition.cpp
+@@ -84,7 +84,7 @@ IcebergColumnDefinition::ParseType(const string &name, int32_t field_id, bool re
+ 		for (auto &field_p : struct_type.fields) {
+ 			auto &field = *field_p;
+ 			auto child = ParseStructField(field);
+-			struct_children.push_back(std::make_pair(child->name, child->type));
++			struct_children.emplace_back(std::make_pair(child->name, child->type));
+ 			res->children.push_back(std::move(child));
+ 		}
+ 		res->type = LogicalType::STRUCT(std::move(struct_children));
+@@ -291,9 +291,9 @@ ColumnDefinition IcebergColumnDefinition::GetColumnDefinition() const {
+ 		if (type.IsNested()) {
+ 			throw NotImplementedException("DEFAULT values for nested types are not supported currently");
+ 		}
+-		return ColumnDefinition(name, type, make_uniq<ConstantExpression>(*default_to_use), TableColumnType::STANDARD);
++		return ColumnDefinition(Identifier(name), type, make_uniq<ConstantExpression>(*default_to_use), TableColumnType::STANDARD);
+ 	}
+-	return ColumnDefinition(name, type);
++	return ColumnDefinition(Identifier(name), type);
+ }
+ 
+ static bool DefaultsAreEqual(const unique_ptr<Value> &a, const unique_ptr<Value> &b) {
+diff --git a/src/core/metadata/schema/iceberg_table_schema.cpp b/src/core/metadata/schema/iceberg_table_schema.cpp
+index b85b2694..eb4ec6c7 100644
+--- a/src/core/metadata/schema/iceberg_table_schema.cpp
++++ b/src/core/metadata/schema/iceberg_table_schema.cpp
+@@ -72,13 +72,13 @@ static optional_ptr<const IcebergColumnDefinition> GetColumnChild(const IcebergC
+ }
+ 
+ optional_ptr<const IcebergColumnDefinition>
+-IcebergTableSchema::GetFromPath(const vector<string> &path, optional_ptr<optional_idx> name_offset) const {
++IcebergTableSchema::GetFromPath(const vector<Identifier> &path, optional_ptr<optional_idx> name_offset) const {
+ 	D_ASSERT(!path.empty());
+ 
+ 	optional_ptr<const IcebergColumnDefinition> result;
+ 	for (idx_t i = 0; i < columns.size(); i++) {
+ 		auto &column = *columns[i];
+-		if (!StringUtil::CIEquals(column.name, path[0])) {
++		if (column.name != path[0]) {
+ 			continue;
+ 		}
+ 		result = column;
+@@ -96,9 +96,9 @@ IcebergTableSchema::GetFromPath(const vector<string> &path, optional_ptr<optiona
+ 			}
+ 			throw InvalidInputException(
+ 			    "Column path %s points to child of variant column %s - but no name_offset is provided",
+-			    StringUtil::Join(path, "."), res.get().name);
++			    StringUtil::Join(IdentifiersToStrings(path), "."), res.get().name);
+ 		}
+-		auto next_child = GetColumnChild(column, path[i]);
++		auto next_child = GetColumnChild(column, path[i].GetIdentifierName());
+ 		if (!next_child) {
+ 			return nullptr;
+ 		}
+@@ -107,7 +107,7 @@ IcebergTableSchema::GetFromPath(const vector<string> &path, optional_ptr<optiona
+ 	return res.get();
+ }
+ 
+-optional_ptr<IcebergColumnDefinition> IcebergTableSchema::GetMutableFromPath(const vector<string> &path,
++optional_ptr<IcebergColumnDefinition> IcebergTableSchema::GetMutableFromPath(const vector<Identifier> &path,
+                                                                              optional_ptr<optional_idx> names_offset) {
+ 	auto res = GetFromPath(path, names_offset);
+ 	if (!res) {
+diff --git a/src/execution/helpers/equality_delete_helpers.cpp b/src/execution/helpers/equality_delete_helpers.cpp
+index 67db6cda..049666cb 100644
+--- a/src/execution/helpers/equality_delete_helpers.cpp
++++ b/src/execution/helpers/equality_delete_helpers.cpp
+@@ -174,7 +174,7 @@ void IcebergDelete::WriteEqualityDeleteFile(ClientContext &context, IcebergDelete
+ 	auto &copy_fun = IcebergUtils::GetCopyFunction(context, "parquet");
+ 	CopyFunctionBindInput bind_input(*info);
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	auto copy_global_state = copy_fun.function.copy_to_initialize_global(context, *function_data, delete_file_path);
+ 
+ 	ThreadContext thread_context(context);
+diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
+index dbcb29aa..ec53570e 100644
+--- a/src/execution/operator/iceberg_delete.cpp
++++ b/src/execution/operator/iceberg_delete.cpp
+@@ -180,7 +180,7 @@ void IcebergDelete::WritePositionalDeleteFile(ClientContext &context, IcebergDel
+ 	auto &copy_fun = IcebergUtils::GetCopyFunction(context, "parquet");
+ 	CopyFunctionBindInput bind_input(*info);
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	auto copy_global_state = copy_fun.function.copy_to_initialize_global(context, *function_data, delete_file_path);
+ 
+ 	// generate the physical copy to file
+@@ -444,7 +444,7 @@ string IcebergDelete::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> IcebergDelete::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table.name;
++	result["Table Name"] = table.name.GetIdentifierName();
+ 	return result;
+ }
+ 
+@@ -533,7 +533,7 @@ PhysicalOperator &IcebergCatalog::PlanDelete(ClientContext &context, PhysicalPla
+ 	if (!allows_positional_deletes) {
+ 		auto delete_table_property = updated_table_entry.table_info.table_metadata.GetTableProperty(WRITE_DELETE_MODE);
+ 		auto error_message = IcebergCatalog::GetOnlyMergeOnReadSupportedErrorMessage(
+-		    updated_table_entry.name, WRITE_DELETE_MODE, delete_table_property);
++		    updated_table_entry.name.GetIdentifierName(), WRITE_DELETE_MODE, delete_table_property);
+ 		throw NotImplementedException(error_message);
+ 	}
+ 
+diff --git a/src/execution/operator/iceberg_insert.cpp b/src/execution/operator/iceberg_insert.cpp
+index 0c33b81f..66e78bba 100644
+--- a/src/execution/operator/iceberg_insert.cpp
++++ b/src/execution/operator/iceberg_insert.cpp
+@@ -302,7 +302,7 @@ void IcebergInsertGlobalState::AddFiles(DataChunk &chunk, const string &table_na
+ 			}
+ 
+ 			optional_idx name_offset;
+-			auto column_info_p = ic_schema->GetFromPath(column_names, &name_offset);
++			auto column_info_p = ic_schema->GetFromPath(StringsToIdentifiers(column_names), &name_offset);
+ 			if (!column_info_p) {
+ 				auto normalized_col_name = StringUtil::Join(column_names, ".");
+ 				throw InternalException("Column '%s' can not be found in the schema, but returned by RETURN_STATS",
+@@ -365,7 +365,7 @@ void IcebergInsert::AddWrittenFiles(IcebergInsertGlobalState &global_state, Data
+ 	D_ASSERT(table);
+ 	auto &ic_table = table->Cast<IcebergTableEntry>();
+ 	auto &table_metadata = ic_table.table_info.table_metadata;
+-	global_state.AddFiles(chunk, ic_table.name, table_metadata);
++	global_state.AddFiles(chunk, ic_table.name.GetIdentifierName(), table_metadata);
+ }
+ 
+ optional_ptr<TableCatalogEntry> IcebergInsert::GetEffectiveTable() const {
+@@ -468,13 +468,13 @@ string IcebergInsert::GetName() const {
+ InsertionOrderPreservingMap<string> IcebergInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+ 	if (table) {
+-		result["Table Name"] = table->name;
++		result["Table Name"] = table->name.GetIdentifierName();
+ 	} else if (info) {
+-		result["Table Name"] = info->Base().table;
++		result["Table Name"] = info->Base().table.GetIdentifierName();
+ 	} else if (create_state) {
+ 		lock_guard<mutex> guard(create_state->lock);
+ 		if (create_state->table_entry) {
+-			result["Table Name"] = create_state->table_entry->name;
++			result["Table Name"] = create_state->table_entry->name.GetIdentifierName();
+ 		}
+ 	}
+ 	return result;
+@@ -565,7 +565,7 @@ static unique_ptr<Expression> GetDateDiffFunction(ClientContext &context, const
+ 
+ 	ErrorData error;
+ 	FunctionBinder binder(context);
+-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_diff", std::move(children), error, false);
++	auto function = binder.BindScalarFunction(Identifier::DefaultSchema(), "date_diff", std::move(children), error, false);
+ 	if (!function) {
+ 		error.Throw();
+ 	}
+@@ -585,7 +585,7 @@ static unique_ptr<Expression> GetBucketExpression(ClientContext &context, const
+ 
+ 	ErrorData error;
+ 	FunctionBinder binder(context);
+-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, "iceberg_bucket", std::move(children), error, false);
++	auto function = binder.BindScalarFunction(Identifier::DefaultSchema(), "iceberg_bucket", std::move(children), error, false);
+ 	if (!function) {
+ 		error.Throw();
+ 	}
+@@ -605,7 +605,7 @@ static unique_ptr<Expression> GetTruncateExpression(ClientContext &context, cons
+ 
+ 	ErrorData error;
+ 	FunctionBinder binder(context);
+-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, "iceberg_truncate", std::move(children), error, false);
++	auto function = binder.BindScalarFunction(Identifier::DefaultSchema(), "iceberg_truncate", std::move(children), error, false);
+ 	if (!function) {
+ 		error.Throw();
+ 	}
+@@ -698,7 +698,7 @@ static void GeneratePartitionExpressions(ClientContext &context, const IcebergCo
+ 		partition_columns.push_back(partition_column_start++);
+ 
+ 		auto expr = GetPartitionExpression(context, copy_input, field);
+-		projection_names.push_back(field.GetPartitionSpecFieldName());
++		projection_names.push_back(Identifier(field.GetPartitionSpecFieldName()));
+ 		projection_types.push_back(expr->GetReturnType());
+ 		projection_expressions.push_back(std::move(expr));
+ 	}
+@@ -851,10 +851,10 @@ IcebergCopyOptions IcebergInsert::GetCopyOptions(ClientContext &context, const I
+ 
+ 	// copy_to_bind receives physical + virtual only (partition routing columns are stripped
+ 	// by PhysicalCopyToFile before writing, so including them causes a type mismatch).
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 	result.bind_data = std::move(function_data);
+ 
+-	result.names = names_to_write;
++	result.names = StringsToIdentifiers(names_to_write);
+ 	result.expected_types = types_to_write;
+ 
+ 	if (copy_input.partition_spec) {
+@@ -1004,7 +1004,7 @@ static unique_ptr<IcebergTableMetadata> BuildPlaceholderMetadata(BoundCreateTable
+ 	for (auto &col : create_info.columns.Logical()) {
+ 		auto col_def = make_uniq<IcebergColumnDefinition>();
+ 		col_def->id = next_field_id++;
+-		col_def->name = col.Name();
++		col_def->name = col.Name().GetIdentifierName();
+ 		col_def->type = col.Type();
+ 		col_def->required = false;
+ 		schema->columns.push_back(std::move(col_def));
+diff --git a/src/execution/operator/iceberg_update.cpp b/src/execution/operator/iceberg_update.cpp
+index 3a31ef6d..f88f017e 100644
+--- a/src/execution/operator/iceberg_update.cpp
++++ b/src/execution/operator/iceberg_update.cpp
+@@ -226,7 +226,7 @@ string IcebergUpdate::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> IcebergUpdate::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table.name;
++	result["Table Name"] = table.name.GetIdentifierName();
+ 	return result;
+ }
+ 
+diff --git a/src/execution/operator/physical_iceberg_create_table.cpp b/src/execution/operator/physical_iceberg_create_table.cpp
+index 75f06993..d1f86ad7 100644
+--- a/src/execution/operator/physical_iceberg_create_table.cpp
++++ b/src/execution/operator/physical_iceberg_create_table.cpp
+@@ -84,7 +84,7 @@ string PhysicalIcebergCreateTable::GetName() const {
+ InsertionOrderPreservingMap<string> PhysicalIcebergCreateTable::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+ 	if (info) {
+-		result["Table Name"] = info->Base().table;
++		result["Table Name"] = info->Base().table.GetIdentifierName();
+ 	}
+ 	return result;
+ }
+diff --git a/src/function/copy/iceberg_copy_function.cpp b/src/function/copy/iceberg_copy_function.cpp
+index e97fe9f9..b03aaf26 100644
+--- a/src/function/copy/iceberg_copy_function.cpp
++++ b/src/function/copy/iceberg_copy_function.cpp
+@@ -15,7 +15,7 @@ static BoundStatement IcebergCopyPlan(Binder &binder, CopyStatement &stmt) {
+ 	auto child_statement = binder.Bind(*node_copy);
+ 
+ 	// Create bind data with metadata and schema
+-	auto bind_data = make_uniq<CopyIcebergBindData>(copy_info, std::move(child_statement.names),
++	auto bind_data = make_uniq<CopyIcebergBindData>(copy_info, IdentifiersToStrings(child_statement.names),
+ 	                                                std::move(child_statement.types), binder.context);
+ 
+ 	// Create logical copy operator
+@@ -52,7 +52,7 @@ CopyIcebergBindData::CopyIcebergBindData(const CopyInfo &info, vector<string> &&
+ 	// Create ColumnList from query output
+ 	ColumnList columns;
+ 	for (idx_t i = 0; i < names.size(); i++) {
+-		columns.AddColumn(ColumnDefinition(names[i], types[i]));
++		columns.AddColumn(ColumnDefinition(Identifier(names[i]), types[i]));
+ 	}
+ 
+ 	int32_t last_column_id;
+diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
+index 51275147..1192759f 100644
+--- a/src/function/ducklake/iceberg_to_ducklake.cpp
++++ b/src/function/ducklake/iceberg_to_ducklake.cpp
+@@ -115,7 +115,7 @@ public:
+ 		}
+ 
+ 		auto &schema_entry = table_info.schema;
+-		auto &schema = GetSchema(schema_entry.name);
++		auto &schema = GetSchema(schema_entry.name.GetIdentifierName());
+ 
+ 		auto &table = GetTable(table_info);
+ 		schema.tables.push_back(table.table_uuid);
+@@ -800,7 +800,7 @@ static unique_ptr<FunctionData> IcebergToDuckLakeBind(ClientContext &context, Ta
+ 	auto input_string = input.inputs[0].ToString();
+ 	ret->ducklake_catalog = input.inputs[1].ToString();
+ 
+-	auto &catalog = Catalog::GetCatalog(context, input_string);
++	auto &catalog = Catalog::GetCatalog(context, Identifier(input_string));
+ 	auto catalog_type = catalog.GetCatalogType();
+ 	if (catalog_type != "iceberg") {
+ 		throw InvalidInputException("First parameter must be the name of an attached Iceberg catalog");
+@@ -810,7 +810,7 @@ static unique_ptr<FunctionData> IcebergToDuckLakeBind(ClientContext &context, Ta
+ 
+ 	IcebergOptions options;
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+@@ -940,7 +940,7 @@ public:
+ 		auto &bind_data = input.bind_data->Cast<iceberg::ducklake::IcebergToDuckLakeBindData>();
+ 		auto &input_string = bind_data.ducklake_catalog;
+ 
+-		auto &catalog = Catalog::GetCatalog(context, input_string);
++		auto &catalog = Catalog::GetCatalog(context, Identifier(input_string));
+ 		auto catalog_type = catalog.GetCatalogType();
+ 		if (catalog_type != "ducklake") {
+ 			throw InvalidInputException("Second parameter must be the name of an attached DuckLake catalog");
+@@ -948,7 +948,7 @@ public:
+ 
+ 		auto metadata_catalog = StringUtil::Format("__ducklake_metadata_%s", input_string);
+ 		//! Verify the existence of the metadata catalog and that it's attached as well.
+-		(void)Catalog::GetCatalog(context, metadata_catalog);
++		(void)Catalog::GetCatalog(context, Identifier(metadata_catalog));
+ 
+ 		auto &db = DatabaseInstance::GetDatabase(context);
+ 		auto connection = make_uniq<Connection>(db);
+diff --git a/src/function/metadata/iceberg_column_stats.cpp b/src/function/metadata/iceberg_column_stats.cpp
+index 58770948..3c0227f9 100644
+--- a/src/function/metadata/iceberg_column_stats.cpp
++++ b/src/function/metadata/iceberg_column_stats.cpp
+@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> IcebergColumnStatsBind(ClientContext &context, T
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+diff --git a/src/function/metadata/iceberg_load_table_response.cpp b/src/function/metadata/iceberg_load_table_response.cpp
+index f7cde017..a18e748d 100644
+--- a/src/function/metadata/iceberg_load_table_response.cpp
++++ b/src/function/metadata/iceberg_load_table_response.cpp
+@@ -51,7 +51,7 @@ static unique_ptr<HTTPResponse> MakeRequest(ClientContext &context, const Iceber
+ 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("namespaces"));
+ 	url_builder.AddPathComponent(IRCPathComponent::NamespaceComponent(ic_schema.namespace_items));
+ 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("tables"));
+-	url_builder.AddPathComponent(IRCPathComponent::RegularComponent(ic_table_entry.name));
++	url_builder.AddPathComponent(IRCPathComponent::RegularComponent(ic_table_entry.name.GetIdentifierName()));
+ 
+ 	HTTPHeaders headers(*context.db);
+ 	if (ic_catalog.attach_options.access_mode == IRCAccessDelegationMode::VENDED_CREDENTIALS) {
+@@ -76,8 +76,8 @@ static unique_ptr<FunctionData> IcebergLoadTableResponseBind(ClientContext &cont
+ 		                            input_string);
+ 	}
+ 
+-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, qualified_name[2]);
+-	auto catalog_entry = Catalog::GetEntry(context, qualified_name[0], qualified_name[1], table_lookup,
++	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, Identifier(qualified_name[2]));
++	auto catalog_entry = Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]), table_lookup,
+ 	                                       OnEntryNotFound::THROW_EXCEPTION);
+ 
+ 	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
+diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/iceberg_metadata.cpp
+index b2876673..af15f8c3 100644
+--- a/src/function/metadata/iceberg_metadata.cpp
++++ b/src/function/metadata/iceberg_metadata.cpp
+@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Table
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+diff --git a/src/function/metadata/iceberg_partition_stats.cpp b/src/function/metadata/iceberg_partition_stats.cpp
+index 216bc6fd..a1417bd1 100644
+--- a/src/function/metadata/iceberg_partition_stats.cpp
++++ b/src/function/metadata/iceberg_partition_stats.cpp
+@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> IcebergPartitionStatsBind(ClientContext &context
+ 	auto &snapshot_lookup = options.snapshot_lookup;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "allow_moved_paths") {
+ 			options.allow_moved_paths = BooleanValue::Get(val);
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index f621d84c..547799aa 100644
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> IcebergSnapshotsBind(ClientContext &context, Tab
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
+ 	auto bind_data = make_uniq<IcebergSnapshotsBindData>();
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		if (loption == "metadata_compression_codec") {
+ 			bind_data->options.metadata_compression_codec = StringValue::Get(kv.second);
+ 		} else if (loption == "version") {
+diff --git a/src/function/scan/iceberg_scan.cpp b/src/function/scan/iceberg_scan.cpp
+index 87b303da..c9ef5c3b 100644
+--- a/src/function/scan/iceberg_scan.cpp
++++ b/src/function/scan/iceberg_scan.cpp
+@@ -104,10 +104,10 @@ TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &load
+ 		function.named_parameters.erase("schema");
+ 		AddNamedParameters(function);
+ 
+-		function.name = "iceberg_scan";
++		function.SetName("iceberg_scan");
+ 	}
+ 
+-	parquet_scan_copy.name = "iceberg_scan";
++	parquet_scan_copy.SetName("iceberg_scan");
+ 	return parquet_scan_copy;
+ }
+ 
+diff --git a/src/include/catalog/rest/iceberg_catalog.hpp b/src/include/catalog/rest/iceberg_catalog.hpp
+index 9831469e..725b172d 100644
+--- a/src/include/catalog/rest/iceberg_catalog.hpp
++++ b/src/include/catalog/rest/iceberg_catalog.hpp
+@@ -147,7 +147,7 @@ public:
+ 			return CatalogLookupBehavior::STANDARD;
+ 		}
+ 	}
+-	bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) override {
++	bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const Identifier &schema) override {
+ 		return false;
+ 	}
+ 	string GetDefaultSchema() const override {
+diff --git a/src/include/core/metadata/schema/iceberg_table_schema.hpp b/src/include/core/metadata/schema/iceberg_table_schema.hpp
+index 468bd8b0..2e8a12c3 100644
+--- a/src/include/core/metadata/schema/iceberg_table_schema.hpp
++++ b/src/include/core/metadata/schema/iceberg_table_schema.hpp
+@@ -18,9 +18,9 @@ public:
+ 	                                optional_ptr<ColumnIndex> parent);
+ 	static const IcebergColumnDefinition &GetFromColumnIndex(const vector<unique_ptr<IcebergColumnDefinition>> &columns,
+ 	                                                         const ColumnIndex &column_index, idx_t depth);
+-	optional_ptr<const IcebergColumnDefinition> GetFromPath(const vector<string> &path,
++	optional_ptr<const IcebergColumnDefinition> GetFromPath(const vector<Identifier> &path,
+ 	                                                        optional_ptr<optional_idx> names_offset) const;
+-	optional_ptr<IcebergColumnDefinition> GetMutableFromPath(const vector<string> &path,
++	optional_ptr<IcebergColumnDefinition> GetMutableFromPath(const vector<Identifier> &path,
+ 	                                                         optional_ptr<optional_idx> names_offset);
+ 
+ 	static void SchemaToJson(yyjson_mut_doc *doc, yyjson_mut_val *root_object, const rest_api_objects::Schema &schema);
+diff --git a/src/include/execution/operator/iceberg_insert.hpp b/src/include/execution/operator/iceberg_insert.hpp
+index a83b9a77..0f9890cd 100644
+--- a/src/include/execution/operator/iceberg_insert.hpp
++++ b/src/include/execution/operator/iceberg_insert.hpp
+@@ -65,7 +65,7 @@ public:
+ 	bool write_partition_columns;
+ 	bool write_empty_file = true;
+ 	vector<idx_t> partition_columns;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	vector<LogicalType> expected_types;
+ 
+ 	//! Set of projection columns to execute prior to inserting (if any)
+diff --git a/src/include/planning/iceberg_multi_file_list.hpp b/src/include/planning/iceberg_multi_file_list.hpp
+index 5506ac38..f1a17893 100644
+--- a/src/include/planning/iceberg_multi_file_list.hpp
++++ b/src/include/planning/iceberg_multi_file_list.hpp
+@@ -99,7 +99,7 @@ public:
+ 	const IcebergTableSchema &GetSchema() const;
+ 	bool FinishedScanningDeletes() const;
+ 
+-	void Bind(vector<LogicalType> &return_types, vector<string> &names);
++	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
+ 	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
+ 	                                                  vector<column_t> column_indexes) const;
+ 	void ScanPositionalDeleteFile(const BoundIcebergManifestEntry &manifest_entry, DataChunk &result) const;
+@@ -128,7 +128,7 @@ public:
+ public:
+ 	//! MultiFileList API
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<string> &names, const vector<LogicalType> &types,
++	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
+index 983239df..679128cc 100644
+--- a/src/include/planning/iceberg_multi_file_reader.hpp
++++ b/src/include/planning/iceberg_multi_file_reader.hpp
+@@ -44,10 +44,10 @@ public:
+ public:
+ 	shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+ 	                                         const FileGlobInput &glob_input) override;
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
++	                 vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 	unique_ptr<MultiFileReaderGlobalState>
+ 	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
+ 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
+diff --git a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+index eddf0912..23100a34 100644
+--- a/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
++++ b/src/include/planning/metadata_io/avro/iceberg_avro_multi_file_reader.hpp
+@@ -20,7 +20,7 @@ public:
+ public:
+ 	shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
+ 	                                         const FileGlobInput &glob_input) override;
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 
+ 	ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index 9a3bfa8a..9af19733 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -300,11 +300,11 @@ unique_ptr<ExpressionFilter> IcebergMultiFileList::GetFilterForColumnIndex(const
+ 	return make_uniq<ExpressionFilter>(std::move(child_expr));
+ }
+ 
+-void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string> &names) {
++void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	lock_guard<mutex> guard(lock);
+ 
+ 	if (have_bound) {
+-		names = this->names;
++		names = StringsToIdentifiers(this->names);
+ 		return_types = this->types;
+ 		return;
+ 	}
+@@ -334,17 +334,17 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string
+ 
+ 	auto &schema = GetSchema().columns;
+ 	for (auto &schema_entry : schema) {
+-		names.push_back(schema_entry->name);
++		names.push_back(Identifier(schema_entry->name));
+ 		return_types.push_back(schema_entry->type);
+ 	}
+ 
+ 	QueryResult::DeduplicateColumns(names);
+ 	for (idx_t i = 0; i < names.size(); i++) {
+-		schema[i]->name = names[i];
++		schema[i]->name = names[i].GetIdentifierName();
+ 	}
+ 
+ 	have_bound = true;
+-	this->names = names;
++	this->names = IdentifiersToStrings(names);
+ 	this->types = return_types;
+ }
+ 
+@@ -379,7 +379,7 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+ 
+ unique_ptr<MultiFileList>
+ IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                            const vector<string> &names, const vector<LogicalType> &types,
++                                            const vector<Identifier> &names, const vector<LogicalType> &types,
+                                             const vector<column_t> &column_ids, TableFilterSet &filters) const {
+ 	if (!filters.HasFilters()) {
+ 		return nullptr;
+@@ -1262,7 +1262,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
+ 	children.push_back(Value(delete_file_path));
+ 	named_parameter_map_t named_params;
+ 	vector<LogicalType> input_types;
+-	vector<string> input_names;
++	vector<Identifier> input_names;
+ 
+ 	TableFunctionRef empty;
+ 	OpenFileInfo res(delete_file_path);
+diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
+index 3ac91158..f21ca884 100644
+--- a/src/planning/iceberg_multi_file_reader.cpp
++++ b/src/planning/iceberg_multi_file_reader.cpp
+@@ -49,7 +49,7 @@ shared_ptr<MultiFileList> IcebergMultiFileReader::CreateFileList(ClientContext &
+ }
+ 
+ bool IcebergMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-                                  vector<string> &names, MultiFileReaderBindData &bind_data) {
++                                  vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+ 	auto &iceberg_multi_file_list = dynamic_cast<IcebergMultiFileList &>(files);
+ 
+ 	iceberg_multi_file_list.Bind(return_types, names);
+@@ -65,7 +65,7 @@ bool IcebergMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &file
+ }
+ 
+ void IcebergMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
+-                                         vector<LogicalType> &return_types, vector<string> &names,
++                                         vector<LogicalType> &return_types, vector<Identifier> &names,
+                                          MultiFileReaderBindData &bind_data) {
+ 	// Disable all other multifilereader options
+ 	options.auto_detect_hive_partitioning = false;
+@@ -93,19 +93,19 @@ static void ApplyFieldMapping(MultiFileColumnDefinition &col, const vector<Icebe
+ 	}
+ 
+ 	auto name = col.name;
+-	if (parent && parent->type.id() == LogicalTypeId::MAP && StringUtil::CIEquals(name, "key_value")) {
++	if (parent && parent->type.id() == LogicalTypeId::MAP && name == "key_value") {
+ 		//! Deal with MAP, it has a 'key_value' child, which holds the 'key' + 'value' columns
+ 		for (auto &child : col.children) {
+ 			ApplyFieldMapping(child, mappings, fields, context, parent);
+ 		}
+ 		return;
+ 	}
+-	if (parent && parent->type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(name, "list")) {
++	if (parent && parent->type.id() == LogicalTypeId::LIST && name == "list") {
+ 		//! Deal with LIST, it has a 'element' child, which has the column for the underlying list data
+ 		name = "element";
+ 	}
+ 
+-	auto it = fields.find(name);
++	auto it = fields.find(name.GetIdentifierName());
+ 	if (it == fields.end()) {
+ 		DUCKDB_LOG(context, IcebergLogType, "Column '%s' does not have a field-id, and no field-mapping exists for it!",
+ 		           name);
+@@ -504,7 +504,7 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
+ 
+ 	FunctionBinder binder(context);
+ 	ErrorData error;
+-	auto function_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(children), error, true, nullptr);
++	auto function_expr = binder.BindScalarFunction(Identifier::DefaultSchema(), "+", std::move(children), error, true, nullptr);
+ 	if (error.HasError()) {
+ 		error.Throw();
+ 	}
+diff --git a/src/planning/iceberg_optimizer.cpp b/src/planning/iceberg_optimizer.cpp
+index d07bd36d..f7ca9b23 100644
+--- a/src/planning/iceberg_optimizer.cpp
++++ b/src/planning/iceberg_optimizer.cpp
+@@ -86,7 +86,7 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
+ 
+ 				// modify the multi file reader bind data to add the extra column
+ 				mfbd.types.push_back(col_type);
+-				mfbd.names.push_back(col_info->name);
++				mfbd.names.push_back(Identifier(col_info->name));
+ 
+ 				auto new_col = col_info->GetMultiFileColumnDefinition();
+ 				if (!new_col.default_expression) {
+@@ -119,7 +119,8 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
+ 
+ 		auto &catalog = Catalog::GetSystemCatalog(context);
+ 		auto &fn_entry =
+-		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "iceberg_verify_equality_deletes");
++		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
++	                                                 "iceberg_verify_equality_deletes");
+ 		FunctionBinder function_binder(context);
+ 		vector<LogicalType> arg_types;
+ 		for (auto &a : args) {
+diff --git a/src/planning/metadata_io/avro/avro_scan.cpp b/src/planning/metadata_io/avro/avro_scan.cpp
+index c2ae4463..0489c85e 100644
+--- a/src/planning/metadata_io/avro/avro_scan.cpp
++++ b/src/planning/metadata_io/avro/avro_scan.cpp
+@@ -27,7 +27,7 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
+ 	auto &instance = DatabaseInstance::GetDatabase(context);
+ 	auto &system_catalog = Catalog::GetSystemCatalog(instance);
+ 	auto data = CatalogTransaction::GetSystemTransaction(instance);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+ 	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "read_avro");
+ 	if (!catalog_entry) {
+ 		throw InvalidInputException("Function with name \"read_avro\" not found!");
+@@ -40,13 +40,13 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
+ 	children.push_back(Value(path));
+ 	named_parameter_map_t named_params;
+ 	vector<LogicalType> input_types;
+-	vector<string> input_names;
++	vector<Identifier> input_names;
+ 
+ 	const bool is_manifest_list = avro_scan_info->type == AvroScanInfoType::MANIFEST_LIST;
+ 
+ 	TableFunctionRef empty;
+ 	TableFunction dummy_table_function;
+-	dummy_table_function.name = is_manifest_list ? "IcebergManifestList" : "IcebergManifest";
++	dummy_table_function.name = Identifier(is_manifest_list ? "IcebergManifestList" : "IcebergManifest");
+ 	dummy_table_function.get_multi_file_reader = IcebergAvroMultiFileReader::CreateInstance;
+ 	dummy_table_function.function_info = avro_scan_info;
+ 
+diff --git a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+index e811c122..c3f1b673 100644
+--- a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
++++ b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+@@ -394,7 +394,7 @@ BuildManifestSchema(const IcebergSnapshot &snapshot, const IcebergTableMetadata
+ } // namespace manifest_file
+ 
+ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files,
+-                                      vector<LogicalType> &return_types, vector<string> &names,
++                                      vector<LogicalType> &return_types, vector<Identifier> &names,
+                                       MultiFileReaderBindData &bind_data) {
+ 	auto &iceberg_avro_list = dynamic_cast<IcebergAvroMultiFileList &>(files);
+ 
+@@ -417,7 +417,7 @@ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &
+ 	// Populate return_types and names from schema
+ 	for (auto &col : schema) {
+ 		return_types.push_back(col.type);
+-		names.push_back(col.name);
++		names.push_back(Identifier(col.name));
+ 	}
+ 
+ 	// Set the schema in bind_data - framework will use this for mapping
+diff --git a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+index 1666ebc6..758a73da 100644
+--- a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
++++ b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+@@ -32,7 +32,7 @@ TableFunctionSet IcebergFunctions::GetIcebergDeletesScanFunction(ClientContext &
+ 	//! in which case we need to rely on the `'schema.column-mapping.default'` property just like data files do.
+ 	auto &system_catalog = Catalog::GetSystemCatalog(instance);
+ 	auto data = CatalogTransaction::GetSystemTransaction(instance);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+ 	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "parquet_scan");
+ 	if (!catalog_entry) {
+ 		throw InvalidInputException("Function with name \"parquet_scan\" not found!");
+@@ -57,10 +57,10 @@ TableFunctionSet IcebergFunctions::GetIcebergDeletesScanFunction(ClientContext &
+ 
+ 		// Schema param is just confusing here
+ 		function.named_parameters.erase("schema");
+-		function.name = "iceberg_deletes_scan";
++		function.SetName("iceberg_deletes_scan");
+ 	}
+ 
+-	parquet_scan_copy.name = "iceberg_deletes_scan";
++	parquet_scan_copy.SetName("iceberg_deletes_scan");
+ 	return parquet_scan_copy;
+ }
+ 

@@ -19,9 +19,9 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 			info->format = option.children[0].GetValue<string>();
 			info->is_format_auto_detected = false;
 		} else if (option.expression) {
-			info->parsed_options[StringUtil::Upper(option.name)] = option.expression->Copy();
+			info->parsed_options[StringUtil::Upper(option.name.GetIdentifierName())] = option.expression->Copy();
 		} else {
-			info->options[StringUtil::Upper(option.name)] = option.children;
+			info->options[StringUtil::Upper(option.name.GetIdentifierName())] = option.children;
 		}
 	}
 
@@ -30,8 +30,8 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformExportSource(PEGTransformer &transformer, const string &catalog_name) {
-	return catalog_name;
+string PEGTransformerFactory::TransformExportSource(PEGTransformer &transformer, const Identifier &catalog_name) {
+	return catalog_name.GetIdentifierName();
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTransformer &transformer,
