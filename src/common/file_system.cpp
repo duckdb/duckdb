@@ -729,7 +729,8 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+                                                      const FileCompressionOptions &) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 

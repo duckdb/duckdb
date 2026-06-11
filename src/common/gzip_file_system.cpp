@@ -428,12 +428,12 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 }
 
 unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+                                                          const FileCompressionOptions &compression_options) {
 	auto path = handle->path;
-	return make_uniq<GZipFile>(context, std::move(handle), path, write);
+	return make_uniq<GZipFile>(context, std::move(handle), path, compression_options.write);
 }
 
-unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {
+unique_ptr<StreamWrapper> GZipFileSystem::CreateStream(const FileCompressionOptions &) {
 	return make_uniq<MiniZStreamWrapper>();
 }
 

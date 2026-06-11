@@ -17,7 +17,8 @@ class GZipFileSystem : public CompressedFileSystem {
 	static constexpr const idx_t BUFFER_SIZE = 1u << 15;
 
 public:
-	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
+	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+	                                          const FileCompressionOptions &compression_options) override;
 
 	std::string GetName() const override {
 		return "GZipFileSystem";
@@ -31,7 +32,7 @@ public:
 	static string UncompressGZIPString(const string &in);
 	static string UncompressGZIPString(const char *length, idx_t size);
 
-	unique_ptr<StreamWrapper> CreateStream() override;
+	unique_ptr<StreamWrapper> CreateStream(const FileCompressionOptions &compression_options) override;
 	idx_t InBufferSize() override;
 	idx_t OutBufferSize() override;
 };

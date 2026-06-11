@@ -19,11 +19,15 @@ namespace duckdb {
 namespace {
 
 struct ZstdStreamWrapper : public StreamWrapper {
+	explicit ZstdStreamWrapper(int64_t compression_level) : compression_level(compression_level) {
+	}
+
 	~ZstdStreamWrapper() override;
 
 	CompressedFile *file = nullptr;
 	duckdb_zstd::ZSTD_DStream *zstd_stream_ptr = nullptr;
 	duckdb_zstd::ZSTD_CStream *zstd_compress_ptr = nullptr;
+	int64_t compression_level;
 	bool writing = false;
 
 public:
@@ -64,6 +68,11 @@ void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, b
 	this->writing = write;
 	if (write) {
 		zstd_compress_ptr = duckdb_zstd::ZSTD_createCStream();
+		auto res = duckdb_zstd::ZSTD_CCtx_setParameter(zstd_compress_ptr, duckdb_zstd::ZSTD_c_compressionLevel,
+		                                               UnsafeNumericCast<int>(compression_level));
+		if (duckdb_zstd::ZSTD_isError(res)) {
+			throw IOException(duckdb_zstd::ZSTD_getErrorName(res));
+		}
 	} else {
 		zstd_stream_ptr = duckdb_zstd::ZSTD_createDStream();
 	}
@@ -186,9 +195,10 @@ struct ZStdFileSystemHolder {
 
 class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
-	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
-	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
-		Initialize(context, write);
+	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path,
+	         FileCompressionOptions compression_options)
+	    : CompressedFile(zstd_fs, std::move(child_handle_p), path, compression_options) {
+		Initialize(context, compression_options.write);
 	}
 
 	FileCompressionType GetFileCompressionType() override {
@@ -199,13 +209,14 @@ public:
 } // namespace
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+                                                          const FileCompressionOptions &compression_options) {
 	auto path = handle->path;
-	return make_uniq<ZStdFile>(context, std::move(handle), path, write);
+	return make_uniq<ZStdFile>(context, std::move(handle), path, compression_options);
 }
 
-unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {
-	return make_uniq<ZstdStreamWrapper>();
+unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream(const FileCompressionOptions &compression_options) {
+	auto compression_level = compression_options.compression_level.value_or(DefaultCompressionLevel());
+	return make_uniq<ZstdStreamWrapper>(compression_level);
 }
 
 idx_t ZStdFileSystem::InBufferSize() {

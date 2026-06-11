@@ -369,8 +369,8 @@ bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 // Other Operations
 //===----------------------------------------------------------------------===//
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                                    bool write) {
-	return underlying_file_system.OpenCompressedFile(context, std::move(handle), write);
+                                                                    const FileCompressionOptions &compression_options) {
+	return underlying_file_system.OpenCompressedFile(context, std::move(handle), compression_options);
 }
 
 void CachingFileSystemWrapper::SetDisabledFileSystems(const vector<string> &names) {
