@@ -174,7 +174,7 @@ template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.v.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -183,11 +183,12 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		QuantileInterpolator<false> interp(q, state.v.size(), false);
-		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
+		auto &flattened = FlattenedQuantileValues<INPUT_TYPE>::Flatten(finalize_data, state.v);
+		QuantileInterpolator<false> interp(q, state.v.total_capacity, false);
+		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(state.v.data(), finalize_data.result, accessor);
+		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
