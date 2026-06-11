@@ -25,7 +25,7 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
     : function(function_p), info(std::move(info_p)) {
 }
 
-CastFunctionSet::CastFunctionSet() : map_info(nullptr), combine_rules(DefaultCombineTypesRules()) {
+CastFunctionSet::CastFunctionSet() : combine_rules(DefaultCombineTypesRules()), map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
 }
 
