@@ -1,0 +1,241 @@
+# name: test/sql/merge/trigger_merge_into.test
+# description: Test MERGE INTO
+# group: [merge]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE people (id INTEGER, name VARCHAR, salary FLOAT);
+
+statement ok
+CREATE TRIGGER insert_after AFTER INSERT ON people FOR EACH STATEMENT
+MERGE INTO people
+    USING (
+        SELECT
+            unnest([3, 1]) AS id,
+            unnest(['Sarah', 'John']) AS name,
+            unnest([95_000.0, 105_000.0]) AS salary
+    ) AS upserts
+    ON (upserts.id = people.id)
+    WHEN MATCHED THEN UPDATE
+    WHEN NOT MATCHED THEN INSERT;
+
+statement ok
+INSERT INTO people VALUES (1, 'John', 92_000.0), (2, 'Anna', 100_000.0);
+
+query III
+FROM people;
+----
+1	John	105000.0
+2	Anna	100000.0
+3	Sarah	95000.0
+
+# Trigger fires again on a second INSERT (FOR EACH STATEMENT, idempotent merge)
+statement ok
+INSERT INTO people VALUES (4, 'Mike', 80_000.0);
+
+query III rowsort
+FROM people;
+----
+1	John	105000.0
+2	Anna	100000.0
+3	Sarah	95000.0
+4	Mike	80000.0
+
+# AFTER INSERT trigger using REFERENCING NEW TABLE AS as the MERGE INTO source,
+# upserting the new rows into a separate summary table
+statement ok
+CREATE TABLE accounts (id INTEGER, balance INTEGER);
+
+statement ok
+CREATE TABLE account_summary (id INTEGER, balance INTEGER, last_change INTEGER);
+
+statement ok
+CREATE TRIGGER sync_summary AFTER INSERT ON accounts
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+MERGE INTO account_summary
+    USING new_rows ON (account_summary.id = new_rows.id)
+    WHEN MATCHED THEN UPDATE SET balance = new_rows.balance, last_change = new_rows.balance
+    WHEN NOT MATCHED THEN INSERT (id, balance, last_change) VALUES (new_rows.id, new_rows.balance, new_rows.balance);
+
+statement ok
+INSERT INTO accounts VALUES (1, 100), (2, 200);
+
+query III rowsort
+SELECT id, balance, last_change FROM account_summary;
+----
+1	100	100
+2	200	200
+
+# Second INSERT: id=1 is MATCHED (updated), id=3 is NOT MATCHED (inserted)
+statement ok
+INSERT INTO accounts VALUES (1, 150), (3, 300);
+
+query III rowsort
+SELECT id, balance, last_change FROM account_summary;
+----
+1	150	150
+2	200	200
+3	300	300
+
+# WHEN MATCHED THEN DELETE inside a trigger's MERGE INTO body
+statement ok
+CREATE TABLE pending (id INTEGER);
+
+statement ok
+CREATE TABLE processed (id INTEGER);
+
+statement ok
+INSERT INTO processed VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER remove_processed AFTER INSERT ON pending
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+MERGE INTO processed
+    USING new_rows ON (processed.id = new_rows.id)
+    WHEN MATCHED THEN DELETE;
+
+statement ok
+INSERT INTO pending VALUES (2);
+
+query I rowsort
+SELECT id FROM processed;
+----
+1
+3
+
+# AFTER UPDATE trigger with REFERENCING NEW TABLE AS feeding a MERGE INTO body
+statement ok
+CREATE TABLE inventory (id INTEGER, qty INTEGER);
+
+statement ok
+INSERT INTO inventory VALUES (1, 50), (2, 30);
+
+statement ok
+CREATE TABLE inventory_log (id INTEGER, qty INTEGER);
+
+statement ok
+CREATE TRIGGER log_qty_change AFTER UPDATE ON inventory
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+MERGE INTO inventory_log
+    USING new_rows ON (inventory_log.id = new_rows.id)
+    WHEN MATCHED THEN UPDATE SET qty = new_rows.qty
+    WHEN NOT MATCHED THEN INSERT (id, qty) VALUES (new_rows.id, new_rows.qty);
+
+statement ok
+UPDATE inventory SET qty = qty - 10 WHERE id = 1;
+
+query II
+SELECT id, qty FROM inventory_log;
+----
+1	40
+
+statement ok
+UPDATE inventory SET qty = qty + 100 WHERE id = 2;
+
+query II
+SELECT id, qty FROM inventory_log;
+----
+1	40
+2	130
+
+# AFTER DELETE trigger with REFERENCING OLD TABLE AS archiving deleted rows via MERGE INTO
+statement ok
+CREATE TABLE live_orders (id INTEGER, amount INTEGER);
+
+statement ok
+INSERT INTO live_orders VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE archived_orders (id INTEGER, amount INTEGER);
+
+statement ok
+CREATE TRIGGER archive_deleted AFTER DELETE ON live_orders
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+MERGE INTO archived_orders
+    USING old_rows ON (archived_orders.id = old_rows.id)
+    WHEN NOT MATCHED THEN INSERT (id, amount) VALUES (old_rows.id, old_rows.amount);
+
+statement ok
+DELETE FROM live_orders WHERE id = 2;
+
+query II rowsort
+SELECT id, amount FROM archived_orders;
+----
+2	20
+
+query I
+SELECT COUNT(*) FROM live_orders;
+----
+2
+
+# Trigger body MERGE INTO that fails rolls back the entire triggering statement
+statement ok
+CREATE TABLE t_err_src (id INTEGER);
+
+statement ok
+CREATE TABLE t_err_dst (id INTEGER);
+
+statement ok
+INSERT INTO t_err_dst VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_merge_err AFTER INSERT ON t_err_src
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+MERGE INTO t_err_dst
+    USING new_rows ON (t_err_dst.id = new_rows.id)
+    WHEN MATCHED THEN ERROR 'duplicate detected';
+
+statement error
+INSERT INTO t_err_src VALUES (1);
+----
+Constraint Error
+
+query I
+SELECT COUNT(*) FROM t_err_src;
+----
+0
+
+# MERGE INTO inside a trigger body cannot target a different table that itself has triggers
+statement ok
+CREATE TABLE has_own_trigger (id INTEGER);
+
+statement ok
+CREATE TABLE has_own_trigger_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_on_other AFTER INSERT ON has_own_trigger FOR EACH STATEMENT
+    INSERT INTO has_own_trigger_log VALUES ('fired');
+
+statement ok
+CREATE TABLE merge_source_table (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_merge_into_other AFTER INSERT ON merge_source_table
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+MERGE INTO has_own_trigger
+    USING new_rows ON (has_own_trigger.id = new_rows.id)
+    WHEN NOT MATCHED THEN INSERT (id) VALUES (new_rows.id);
+----
+Not implemented Error: MERGE INTO is not supported on tables with triggers
+
+# FOR EACH ROW triggers with a MERGE INTO body are still rejected at CREATE TRIGGER time
+statement ok
+CREATE TABLE row_target (id INTEGER);
+
+statement ok
+CREATE TABLE row_target_2 (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_row_merge AFTER INSERT ON row_target FOR EACH ROW
+MERGE INTO row_target_2
+    USING (SELECT 1 AS id) AS s ON (row_target_2.id = s.id)
+    WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
