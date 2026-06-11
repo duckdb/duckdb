@@ -16,6 +16,11 @@ namespace duckdb {
 
 struct ParquetOperatorPageState;
 
+struct PrimitiveDictionaryTargetData {
+	AllocatedData data;
+	idx_t size = 0;
+};
+
 struct PrimitiveCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input, ParquetOperatorPageState *state) {
@@ -47,7 +52,7 @@ private:
 
 public:
 	static constexpr uint32_t MAXIMUM_POSSIBLE_SIZE = INVALID_INDEX - 1;
-	static constexpr idx_t INITIAL_TARGET_CAPACITY = 1048576;
+	static constexpr idx_t INITIAL_TARGET_CAPACITY = 262144;
 
 	//! PrimitiveDictionary is a fixed-size linear probing hash table for primitive types
 	//! It is used to dictionary-encode data in, e.g., Parquet files
@@ -128,6 +133,15 @@ public:
 	unique_ptr<MemoryStream> GetTargetMemoryStream() const {
 		auto result = make_uniq<MemoryStream>(target_stream.GetData(), target_stream.GetCapacity());
 		result->SetPosition(target_stream.GetPosition());
+		return result;
+	}
+
+	//! Take ownership of the target written values
+	PrimitiveDictionaryTargetData TakeTargetData() {
+		PrimitiveDictionaryTargetData result;
+		result.size = target_stream.GetPosition();
+		result.data = std::move(allocated_target);
+		target_stream = MemoryStream(nullptr, 0);
 		return result;
 	}
 

@@ -30,6 +30,7 @@ class ParquetWriter;
 class Vector;
 class WriteStream;
 struct ParquetColumnSchema;
+struct PrimitiveDictionaryTargetData;
 
 struct PageInformation {
 	idx_t offset = 0;
@@ -125,6 +126,7 @@ protected:
 	//! The number of elements in the dictionary
 	virtual idx_t DictionarySize(PrimitiveColumnWriterState &state_p);
 	void WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer, idx_t row_count);
+	void WriteDictionary(PrimitiveColumnWriterState &state, PrimitiveDictionaryTargetData target_data, idx_t row_count);
 	virtual void FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	void SetParquetStatistics(PrimitiveColumnWriterState &state, duckdb_parquet::ColumnChunk &column);
