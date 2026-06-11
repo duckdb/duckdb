@@ -1,5 +1,5 @@
-# name: test/sql/copy/return_stats_row_group_count.test
-# description: test row_group_count returned by RETURN_STATS for COPY
+# name: test/sql/copy/return_stats_extra_info.test
+# description: test extra_info (row_group_count) returned by RETURN_STATS for COPY
 # group: [copy]
 
 require parquet
@@ -23,13 +23,13 @@ SET preserve_insertion_order={PRESERVE_INSERTION_ORDER};
 query IIIIIII
 COPY integers TO '{TEST_DIR}/rg_count_single.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*rg_count_single.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	1
+<REGEX>:.*rg_count_single.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=1}
 
 # multiple row groups
 query IIIIIII
 COPY integers TO '{TEST_DIR}/rg_count_multi.parquet' (RETURN_STATS, ROW_GROUP_SIZE 2048);
 ----
-<REGEX>:.*rg_count_multi.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	5
+<REGEX>:.*rg_count_multi.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=5}
 
 # returned row group count matches the parquet metadata
 query I
@@ -41,7 +41,7 @@ SELECT count(*) FROM parquet_metadata('{TEST_DIR}/rg_count_multi.parquet');
 query IIIIIII
 COPY empty_test TO '{TEST_DIR}/rg_count_empty.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*rg_count_empty.parquet	0	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	0
+<REGEX>:.*rg_count_empty.parquet	0	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=0}
 
 endloop
 
@@ -49,5 +49,5 @@ endloop
 query IIIIIII rowsort
 COPY partitioned_test TO '{TEST_DIR}/rg_count_partitioned' (FORMAT PARQUET, PARTITION_BY (partition_key), ROW_GROUP_SIZE 2048, RETURN_STATS, OVERWRITE);
 ----
-<REGEX>:.*rg_count_partitioned.*partition_key=0.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=0}	3
-<REGEX>:.*rg_count_partitioned.*partition_key=1.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=1}	3
+<REGEX>:.*rg_count_partitioned.*partition_key=0.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=0}	{row_group_count=3}
+<REGEX>:.*rg_count_partitioned.*partition_key=1.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=1}	{row_group_count=3}
