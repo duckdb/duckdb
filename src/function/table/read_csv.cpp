@@ -145,7 +145,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
+	read_csv.projection_expression_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownProjectionExpression;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }

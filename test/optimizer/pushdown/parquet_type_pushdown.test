@@ -1,0 +1,413 @@
+# name: test/optimizer/pushdown/parquet_type_pushdown.test
+# description: Test Parquet With Pushing Down Type Casts
+# group: [pushdown]
+
+require parquet
+
+# Column is only used casted
+query II
+EXPLAIN SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# Column is only used uncasted
+query II
+EXPLAIN SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# Same as previous example, but with filtering
+query II
+EXPLAIN SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" WHERE smallint_col > 0;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" WHERE smallint_col > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+
+# Multiple columns, one casted
+query II
+EXPLAIN SELECT smallint_col, float_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query II
+SELECT smallint_col, float_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1, 2;
+----
+0	0
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+
+# Column is used uncasted, and there are casted usages in WHERE clause.
+# Parquet reader supports complex filter pushdown and CAST expression pushdown,
+# so this works.
+query II
+EXPLAIN SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE smallint_col::UINTEGER > 0;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE smallint_col::UINTEGER > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+
+# Same cast in SELECT and WHERE: no conflict; TYPE_PUSHDOWN rewrites the cast
+# in the FILTER node before FILTER_PUSHDOWN runs, so filters are created with
+# the already-updated column type.
+query II
+EXPLAIN SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE smallint_col::UINTEGER > 0;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE smallint_col::UINTEGER > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+
+query I
+SELECT COUNT(*) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE smallint_col::UINTEGER > 0;
+----
+4
+
+# GROUP BY + SELECT requires column to be present uncasted, otherwise a binder
+# error is raised
+
+# Examples where we can't push down
+
+# Column is used both casted and uncasted
+query II
+EXPLAIN SELECT smallint_col, smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+SELECT smallint_col, smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1, 2;
+----
+0	0
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+
+# Two different casts of the same column conflict with each other
+query II
+EXPLAIN SELECT smallint_col::UINTEGER, smallint_col::BIGINT FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+SELECT smallint_col::UINTEGER, smallint_col::BIGINT FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1, 2;
+----
+0	0
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+
+# Same cast in SELECT and ORDER BY: no conflict
+query II
+EXPLAIN SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+ORDER BY smallint_col::UINTEGER;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+ORDER BY smallint_col::UINTEGER;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# Cast inside a CTE
+query II
+EXPLAIN WITH t AS (
+    SELECT smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+)
+SELECT c FROM t;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+WITH t AS (
+    SELECT smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+)
+SELECT c FROM t ORDER BY 1;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# Cast inside a subquery
+query II
+EXPLAIN SELECT c FROM (
+    SELECT smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+) sub;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT c FROM (
+    SELECT smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+) sub ORDER BY 1;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# UNION ALL: pushdown in both branches independently
+query II
+EXPLAIN SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+UNION ALL
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+UNION ALL
+SELECT smallint_col::UINTEGER FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+ORDER BY 1;
+----
+0
+0
+0
+0
+0
+0
+0
+0
+1
+1
+1
+1
+1
+1
+1
+1
+
+# TRY_CAST: column is only used with try_cast
+query II
+EXPLAIN SELECT TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1;
+----
+0
+0
+0
+0
+1
+1
+1
+1
+
+# TRY_CAST: same try_cast in SELECT and WHERE; type pushed down so filter uses the new column type
+query II
+EXPLAIN SELECT TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE TRY_CAST(smallint_col AS UINTEGER) > 0;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+WHERE TRY_CAST(smallint_col AS UINTEGER) > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+
+# CAST and TRY_CAST of the same target type: no conflict, both pushed down;
+# PROJECTION remains only to duplicate the column, no cast expressions in the plan
+query II
+EXPLAIN SELECT smallint_col::UINTEGER, TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+query II
+SELECT smallint_col::UINTEGER, TRY_CAST(smallint_col AS UINTEGER) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1, 2;
+----
+0	0
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+
+# CAST and TRY_CAST of different target types: conflict, pushdown blocked
+query II
+EXPLAIN SELECT smallint_col::UINTEGER, TRY_CAST(smallint_col AS BIGINT) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet";
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+SELECT smallint_col::UINTEGER, TRY_CAST(smallint_col AS BIGINT) FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" ORDER BY 1, 2;
+----
+0	0
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+
+query II
+SELECT id, smallint_col::UINTEGER AS c
+FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+ORDER BY c, id;
+----
+0	0
+2	0
+4	0
+6	0
+1	1
+3	1
+5	1
+7	1
+
+query II
+SELECT smallint_col::UINTEGER AS c, COUNT(*)
+FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+GROUP BY c
+ORDER BY c;
+----
+0	4
+1	4
+
+query II
+SELECT smallint_col::UINTEGER AS c, COUNT(*)
+FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+GROUP BY c
+HAVING smallint_col::UINTEGER > 0
+ORDER BY c;
+----
+1	4
+
+query III
+SELECT id, smallint_col::UINTEGER AS c,
+    ROW_NUMBER() OVER (PARTITION BY smallint_col::UINTEGER ORDER BY id) AS rn
+FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+ORDER BY c, id;
+----
+0	0	1
+2	0	2
+4	0	3
+6	0	4
+1	1	1
+3	1	2
+5	1	3
+7	1	4
+
+query II
+WITH t AS (
+    SELECT id, smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+)
+SELECT id, c FROM t ORDER BY c, id;
+----
+0	0
+2	0
+4	0
+6	0
+1	1
+3	1
+5	1
+7	1
+
+query II
+SELECT id, c FROM (
+    SELECT id, smallint_col::UINTEGER AS c
+    FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
+) sub
+ORDER BY c, id;
+----
+0	0
+2	0
+4	0
+6	0
+1	1
+3	1
+5	1
+7	1
+
+query II
+COPY (SELECT {'i': 42, 'j': 84} s) TO '{TEST_DIR}/struct_projection_pushdown.parquet';
+SELECT s.i::UINTEGER, s.j::UBIGINT FROM "{TEST_DIR}/struct_projection_pushdown.parquet";
+----
+42	84
