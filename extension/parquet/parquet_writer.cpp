@@ -1306,6 +1306,7 @@ void ParquetWriter::Finalize() {
 		GatherWrittenStatistics();
 		written_stats->file_size_bytes = writer->GetTotalWritten();
 		written_stats->footer_size_bytes = Value::UBIGINT(footer_size);
+		written_stats->extra_info["row_group_count"] = Value::UBIGINT(NumberOfRowGroups());
 	}
 
 	// flush to disk
