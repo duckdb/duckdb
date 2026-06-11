@@ -2,6 +2,11 @@
 # description: Test EXPORT_STATE for first/last/any_value - states are nullable on two levels
 # group: [aggregate_state_export]
 
+# first/last are only deterministic single-threaded - with multiple threads the combine order of the
+# thread-local states is arbitrary (relevant for small vector sizes, where even small inputs span many chunks)
+statement ok
+SET threads=1;
+
 # empty input exports a NULL state
 query I
 SELECT first(i) EXPORT_STATE FROM (SELECT 1 AS i WHERE false) t;

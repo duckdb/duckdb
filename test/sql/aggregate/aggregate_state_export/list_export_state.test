@@ -2,6 +2,11 @@
 # description: Test EXPORT_STATE for the list aggregate
 # group: [aggregate_state_export]
 
+# list order is only deterministic single-threaded - with multiple threads the combine order of the
+# thread-local states is arbitrary (relevant for small vector sizes, where even small inputs span many chunks)
+statement ok
+SET threads=1;
+
 # basic roundtrip
 query I
 SELECT finalize(list(i) EXPORT_STATE) FROM (VALUES (1), (2), (3)) t(i);

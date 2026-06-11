@@ -2054,10 +2054,11 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
+		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
+		// type that was created without a CRS (SetAlias attaches a generic type info)
 		return false;
 	}
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
@@ -2066,11 +2067,9 @@ bool GeoType::HasCRS(const LogicalType &type) {
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
 		throw InternalException("Geometry type has no CRS information");
 	}
-	D_ASSERT(info);
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;
