@@ -31,7 +31,7 @@ diff --git a/src/functions/uc_table_data_path.cpp b/src/functions/uc_table_data_
 index 20bbd29..5d6758c 100644
 --- a/src/functions/uc_table_data_path.cpp
 +++ b/src/functions/uc_table_data_path.cpp
-@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> UCTableDataPathBind(ClientContext &context, Table
+@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> UCTableDataPathBind(ClientContext &context, Tabl
  
  	auto table_name = input.inputs[0].GetValue<string>();
  

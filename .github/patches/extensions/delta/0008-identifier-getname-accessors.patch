@@ -37,7 +37,7 @@ index 0d43aba..a6570c5 100644
  	info.internal = true;
  	info.macros.push_back(std::move(func));
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index 89b3cd5..edge4a48 100644
+index 89b3cd5..ede4a48 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
 @@ -283,7 +283,7 @@ void ExpressionVisitor::VisitStructLiteral(void *state, uintptr_t sibling_list_i
@@ -67,7 +67,7 @@ index 89b3cd5..edge4a48 100644
  	}
  
  	auto struct_type = LogicalType::STRUCT(children_types);
-@@ -723,7 +723,7 @@ void SchemaVisitor::AppendToList(uintptr_t id, ffi::KernelStringSlice name, Dealt
+@@ -723,7 +723,7 @@ void SchemaVisitor::AppendToList(uintptr_t id, ffi::KernelStringSlice name, Delt
  	}
  
  	// Inject the name

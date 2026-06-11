@@ -82,7 +82,7 @@ diff --git a/src/functions/ducklake_cleanup_files.cpp b/src/functions/ducklake_c
 index 7a1cfaa5..0a842fb5 100644
 --- a/src/functions/ducklake_cleanup_files.cpp
 +++ b/src/functions/ducklake_cleanup_files.cpp
-@@ -62,12 +62,11 @@ static unique_ptr<FunctionData> CleanupBind(ClientContext &context, TableFunction
+@@ -62,12 +62,11 @@ static unique_ptr<FunctionData> CleanupBind(ClientContext &context, TableFunctio
  	bool has_timestamp = false;
  	bool cleanup_all = false;
  	for (auto &entry : input.named_parameters) {
@@ -99,7 +99,7 @@ index 7a1cfaa5..0a842fb5 100644
  			has_timestamp = true;
  		} else {
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index 1803b084..fe56safe4 100644
+index 1803b084..fe56afe4 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
 @@ -56,7 +56,8 @@ vector<BoundOrderByNode> DuckLakeCompactor::BindSortOrders(Binder &binder, DuckL
@@ -785,7 +785,7 @@ diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_me
 index d1cdd2d1..1442cde8 100644
 --- a/src/storage/ducklake_metadata_manager.cpp
 +++ b/src/storage/ducklake_metadata_manager.cpp
-@@ -99,7 +99,7 @@ bool DuckLakeMetadataManager::SupportsInliningColumns(const vector<DuckLakeColumn
+@@ -99,7 +99,7 @@ bool DuckLakeMetadataManager::SupportsInliningColumns(const vector<DuckLakeColum
  bool DuckLakeMetadataManager::CanInlineColumns(const ColumnList &columns) {
  	auto max_identifier_length = MaxIdentifierLength();
  	for (auto &col : columns.Logical()) {
@@ -882,7 +882,7 @@ index 19e54905..02dce1a9 100644
  	if (!function) {
  		error.Throw();
  	}
-@@ -116,7 +117,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContext
+@@ -116,7 +117,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContex
  
  	ErrorData error;
  	FunctionBinder binder(context);
@@ -891,7 +891,7 @@ index 19e54905..02dce1a9 100644
  	if (!and_expr) {
  		error.Throw();
  	}
-@@ -125,7 +126,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContext
+@@ -125,7 +126,7 @@ unique_ptr<Expression> DuckLakePartitionUtils::ApplyBucketTransform(ClientContex
  	mod_children.push_back(std::move(and_expr));
  	mod_children.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(NumericCast<int32_t>(bucket_count))));
  
@@ -1086,7 +1086,7 @@ diff --git a/src/storage/ducklake_secret.cpp b/src/storage/ducklake_secret.cpp
 index 458ef129..b4b3dd89 100644
 --- a/src/storage/ducklake_secret.cpp
 +++ b/src/storage/ducklake_secret.cpp
-@@ -10,7 +10,7 @@ unique_ptr<BaseSecret> DuckLakeSecret::CreateDuckLakeSecretFunction(ClientContext
+@@ -10,7 +10,7 @@ unique_ptr<BaseSecret> DuckLakeSecret::CreateDuckLakeSecretFunction(ClientContex
  		throw InvalidInputException("metadata_path must be defined when creating a DuckLake secret");
  	}
  	for (const auto &named_param : input.options) {
@@ -1237,7 +1237,7 @@ index fce80002..b0f75d1d 100644
  				    if (std::find(missing_columns.begin(), missing_columns.end(), column_name) ==
  				        missing_columns.end()) {
  					    missing_columns.push_back(column_name);
-@@ -468,7 +471,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpress
+@@ -468,7 +471,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
  	}
  	case ExpressionType::FUNCTION: {
  		auto &function = expr.Cast<FunctionExpression>();
@@ -1246,7 +1246,7 @@ index fce80002..b0f75d1d 100644
  
  		// BUCKET logic is different from the other transforms because it has two arguments.
  		if (name == "bucket") {
-@@ -524,10 +527,10 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpress
+@@ -524,10 +527,10 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
  		    "Unsupported partition key %s - only identity columns and year/month/day/hour/bucket are supported",
  		    expr.ToString());
  	}

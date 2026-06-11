@@ -115,7 +115,7 @@ diff --git a/src/postgres_query.cpp b/src/postgres_query.cpp
 index f999617..89ce56e 100644
 --- a/src/postgres_query.cpp
 +++ b/src/postgres_query.cpp
-@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunction
+@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
  	// look up the database to query
  	auto db_name = input.inputs[0].GetValue<string>();
  	auto &db_manager = DatabaseManager::Get(context);
@@ -249,7 +249,7 @@ index c9e7c8b..2243adb 100644
  
  void PostgresCatalogSet::Scan(ClientContext &context, PostgresTransaction &transaction,
 diff --git a/src/storage/postgres_configure_pool.cpp b/src/storage/postgres_configure_pool.cpp
-index 9209be..2032b23 100644
+index 9209dbe..2032b23 100644
 --- a/src/storage/postgres_configure_pool.cpp
 +++ b/src/storage/postgres_configure_pool.cpp
 @@ -25,7 +25,7 @@ struct ConfigurePoolBindData : public TableFunctionData {
@@ -768,7 +768,7 @@ diff --git a/src/storage/postgres_type_set.cpp b/src/storage/postgres_type_set.c
 index 4513555..cee52ac 100644
 --- a/src/storage/postgres_type_set.cpp
 +++ b/src/storage/postgres_type_set.cpp
-@@ -52,7 +52,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResult
+@@ -52,7 +52,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
  	PostgresType postgres_type;
  	CreateTypeInfo info;
  	postgres_type.oid = result.GetInt64(start_row, 1);
@@ -777,7 +777,7 @@ index 4513555..cee52ac 100644
  	// construct the enum
  	idx_t enum_count = end_row - start_row;
  	Vector duckdb_levels(LogicalType::VARCHAR, enum_count);
-@@ -60,7 +60,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResult
+@@ -60,7 +60,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
  		duckdb_levels.SetValue(enum_idx, result.GetString(start_row + enum_idx, 3));
  	}
  	info.type = LogicalType::ENUM(duckdb_levels, enum_count);

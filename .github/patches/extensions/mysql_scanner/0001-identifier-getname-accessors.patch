@@ -308,7 +308,7 @@ index 0dbb60f..75e12fe 100644
  			duplicate = true;
  		}
  		break;
-@@ -780,7 +780,7 @@ static void MySQLCollectColumnRefs(const ParsedExpression &expr, case_insensitive
+@@ -780,7 +780,7 @@ static void MySQLCollectColumnRefs(const ParsedExpression &expr, case_insensitiv
  	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
  		auto &colref = expr.Cast<ColumnRefExpression>();
  		if (!colref.IsQualified()) {

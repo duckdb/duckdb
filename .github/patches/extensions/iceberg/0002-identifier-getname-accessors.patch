@@ -309,7 +309,7 @@ index ce20f92f..375992d3 100644
  	for (auto &col : table_schema.columns) {
  		info.columns.AddColumn(col->GetColumnDefinition());
  	}
-@@ -357,10 +357,10 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpress
+@@ -357,10 +357,10 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
  		auto key_type = key->GetExpressionType();
  		if (key_type == ExpressionType::COLUMN_REF) {
  			auto &colref = key->Cast<ColumnRefExpression>();
@@ -322,7 +322,7 @@ index ce20f92f..375992d3 100644
  			if (funcexpr.GetArguments().empty()) {
  				throw NotImplementedException("Unrecognized transform ('%s')", transform);
  			} else if (!IcebergTransform::TransformFunctionSupported(transform)) {
-@@ -387,14 +387,14 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpress
+@@ -387,14 +387,14 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
  					                              EnumUtil::ToChars(funcexpr.GetArguments()[1].GetExpression().GetExpressionType()));
  				}
  				auto &colref = funcexpr.GetArguments()[1].GetExpression().Cast<ColumnRefExpression>();
@@ -750,7 +750,7 @@ diff --git a/src/execution/helpers/equality_delete_helpers.cpp b/src/execution/h
 index 67db6cda..049666cb 100644
 --- a/src/execution/helpers/equality_delete_helpers.cpp
 +++ b/src/execution/helpers/equality_delete_helpers.cpp
-@@ -174,7 +174,7 @@ void IcebergDelete::WriteEqualityDeleteFile(ClientContext &context, IcebergDelete
+@@ -174,7 +174,7 @@ void IcebergDelete::WriteEqualityDeleteFile(ClientContext &context, IcebergDelet
  	auto &copy_fun = IcebergUtils::GetCopyFunction(context, "parquet");
  	CopyFunctionBindInput bind_input(*info);
  
@@ -878,7 +878,7 @@ index 0c33b81f..66e78bba 100644
  	result.expected_types = types_to_write;
  
  	if (copy_input.partition_spec) {
-@@ -1004,7 +1004,7 @@ static unique_ptr<IcebergTableMetadata> BuildPlaceholderMetadata(BoundCreateTable
+@@ -1004,7 +1004,7 @@ static unique_ptr<IcebergTableMetadata> BuildPlaceholderMetadata(BoundCreateTabl
  	for (auto &col : create_info.columns.Logical()) {
  		auto col_def = make_uniq<IcebergColumnDefinition>();
  		col_def->id = next_field_id++;
@@ -1025,7 +1025,7 @@ diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/
 index b2876673..af15f8c3 100644
 --- a/src/function/metadata/iceberg_metadata.cpp
 +++ b/src/function/metadata/iceberg_metadata.cpp
-@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Table
+@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Tabl
  	auto &snapshot_lookup = options.snapshot_lookup;
  
  	for (auto &kv : input.named_parameters) {
@@ -1053,7 +1053,7 @@ index f621d84c..547799aa 100644
 +++ b/src/function/metadata/iceberg_snapshots.cpp
 @@ -45,7 +45,7 @@ static unique_ptr<FunctionData> IcebergSnapshotsBind(ClientContext &context, Tab
                                                       vector<LogicalType> &return_types, vector<string> &names) {
- 	auto bind_data = make_uniq<IcebergSnapshotsBindData>();
+ 	auto bind_data = make_uniq<IcebergSnaphotsBindData>();
  	for (auto &kv : input.named_parameters) {
 -		auto loption = StringUtil::Lower(kv.first);
 +		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
@@ -1064,7 +1064,7 @@ diff --git a/src/function/scan/iceberg_scan.cpp b/src/function/scan/iceberg_scan
 index 87b303da..c9ef5c3b 100644
 --- a/src/function/scan/iceberg_scan.cpp
 +++ b/src/function/scan/iceberg_scan.cpp
-@@ -104,10 +104,10 @@ TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &load
+@@ -104,10 +104,10 @@ TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &loade
  		function.named_parameters.erase("schema");
  		AddNamedParameters(function);
  
