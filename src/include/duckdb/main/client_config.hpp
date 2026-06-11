@@ -28,10 +28,8 @@ typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, Prepa
     get_result_collector_t;
 
 struct ClientConfig {
-	//! If the query profiler is enabled or not.
-	bool enable_profiler = false;
-	//! If detailed query profiling is enabled
-	bool enable_detailed_profiling = false;
+	//! The query profiling mode - whether the profiler is disabled, or profiles in standard or detailed mode.
+	ProfilingMode profiling_mode = ProfilingMode::DISABLED;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
 	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
 	string profiler_print_format = "query_tree";

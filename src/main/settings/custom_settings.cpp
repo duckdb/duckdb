@@ -868,7 +868,9 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	// which is the only format that does not emit output.
 	auto renderer = QueryProfiler::Get(context).CreateProfiler(parameter);
 
-	config.enable_profiler = true;
+	if (config.profiling_mode == ProfilingMode::DISABLED) {
+		config.profiling_mode = ProfilingMode::STANDARD;
+	}
 	config.emit_profiler_output = renderer != nullptr;
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
@@ -883,18 +885,22 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	}
 
 	config.profiler_print_format = parameter;
+	if (parameter == "query_tree_optimizer") {
+		// the "query_tree_optimizer" profiler format additionally profiles the optimizer
+		config.profiling_mode = ProfilingMode::DETAILED;
+	}
 }
 
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
-	config.enable_profiler = ClientConfig().enable_profiler;
+	config.profiling_mode = ClientConfig().profiling_mode;
 	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (!config.enable_profiler) {
+	if (config.profiling_mode == ProfilingMode::DISABLED) {
 		return Value();
 	}
 	return Value(config.profiler_print_format);
@@ -1242,13 +1248,13 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	auto parameter = StringUtil::Lower(input.ToString());
 	auto &config = ClientConfig::GetConfig(context);
 	if (parameter == "standard") {
-		config.enable_profiler = true;
-		config.enable_detailed_profiling = false;
+		config.profiling_mode = ProfilingMode::STANDARD;
 	} else if (parameter == "detailed") {
-		config.enable_profiler = true;
-		config.enable_detailed_profiling = true;
+		config.profiling_mode = ProfilingMode::DETAILED;
 	} else if (parameter == "all") {
-		config.enable_profiler = true;
+		if (config.profiling_mode == ProfilingMode::DISABLED) {
+			config.profiling_mode = ProfilingMode::STANDARD;
+		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
 		                      parameter);
@@ -1257,17 +1263,16 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.enable_profiler = ClientConfig().enable_profiler;
-	config.enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
+	config.profiling_mode = ClientConfig().profiling_mode;
 	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (!config.enable_profiler) {
+	if (config.profiling_mode == ProfilingMode::DISABLED) {
 		return Value();
 	}
-	return Value(config.enable_detailed_profiling ? "detailed" : "standard");
+	return Value(config.profiling_mode == ProfilingMode::DETAILED ? "detailed" : "standard");
 }
 
 //===----------------------------------------------------------------------===//

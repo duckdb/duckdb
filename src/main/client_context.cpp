@@ -1289,14 +1289,16 @@ void ClientContext::CancelTransaction() {
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);
-	client_config.enable_profiler = true;
+	if (client_config.profiling_mode == ProfilingMode::DISABLED) {
+		client_config.profiling_mode = ProfilingMode::STANDARD;
+	}
 	client_config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);
-	client_config.enable_profiler = false;
+	client_config.profiling_mode = ProfilingMode::DISABLED;
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {

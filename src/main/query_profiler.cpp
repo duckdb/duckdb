@@ -78,11 +78,11 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
+	return is_explain_analyze || ClientConfig::GetConfig(context).profiling_mode != ProfilingMode::DISABLED;
 }
 
 bool QueryProfiler::IsDetailedEnabled() const {
-	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
+	return !is_explain_analyze && ClientConfig::GetConfig(context).profiling_mode == ProfilingMode::DETAILED;
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
@@ -115,8 +115,7 @@ unique_ptr<TreeRenderer> QueryProfiler::GetPrinter(const ExplainFormat &format) 
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	// the "query_tree_optimizer" profiler format additionally profiles the optimizer
-	if (ClientConfig::GetConfig(context).profiler_print_format == "query_tree_optimizer" || IsDetailedEnabled()) {
+	if (IsDetailedEnabled()) {
 		return true;
 	}
 	if (metrics) {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
@@ -49,9 +50,9 @@ public:
 	shared_ptr<ClientContext> context;
 
 public:
-	//! Returns query profiling information for the current query, formatted according to the given profiler format
-	//! name (e.g. "query_tree", "json"). See QueryProfiler::CreateProfiler for the supported format names.
-	DUCKDB_API string GetProfilingInformation(const string &format = "query_tree");
+	//! Returns query profiling information for the current query, formatted according to the given ExplainFormat
+	//! (e.g. ExplainFormat::JSON()). ExplainFormat::DEFAULT() uses the configured default profiler format.
+	DUCKDB_API string GetProfilingInformation(const ExplainFormat &format = ExplainFormat::DEFAULT());
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();

@@ -20,7 +20,9 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	auto bind_data = data.bind_data->Cast<EnableProfilingBindData>();
 
 	auto &client_config = ClientConfig::GetConfig(context);
-	client_config.enable_profiler = true;
+	if (client_config.profiling_mode == ProfilingMode::DISABLED) {
+		client_config.profiling_mode = ProfilingMode::STANDARD;
+	}
 	client_config.emit_profiler_output = true;
 
 	if (!bind_data.format.IsNull() && !bind_data.save_location.IsNull()) {
@@ -118,7 +120,7 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 
 static void DisableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &client_config = ClientConfig::GetConfig(context);
-	client_config.enable_profiler = false;
+	client_config.profiling_mode = ProfilingMode::DISABLED;
 	client_config.emit_profiler_output = false;
 }
 

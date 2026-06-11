@@ -21,7 +21,9 @@ namespace duckdb {
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.enable_profiler = true;
+	if (config.profiling_mode == ProfilingMode::DISABLED) {
+		config.profiling_mode = ProfilingMode::STANDARD;
+	}
 	config.emit_profiler_output = true;
 }
 
@@ -35,7 +37,7 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.enable_profiler = false;
+	config.profiling_mode = ProfilingMode::DISABLED;
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {

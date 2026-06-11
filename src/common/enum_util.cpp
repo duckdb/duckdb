@@ -4225,6 +4225,25 @@ ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
 }
 
+const StringUtil::EnumStringLiteral *GetProfilingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProfilingMode::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(ProfilingMode::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(ProfilingMode::DETAILED), "DETAILED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingMode>(ProfilingMode value) {
+	return StringUtil::EnumToString(GetProfilingModeValues(), 3, "ProfilingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ProfilingMode EnumUtil::FromString<ProfilingMode>(const char *value) {
+	return static_cast<ProfilingMode>(StringUtil::StringToEnum(GetProfilingModeValues(), 3, "ProfilingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetProfilingParameterNamesValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ProfilingParameterNames::FORMAT), "FORMAT" },
