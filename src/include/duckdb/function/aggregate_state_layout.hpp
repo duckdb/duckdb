@@ -202,9 +202,9 @@ enum class AggregateFieldKind {
 	//! Nullable wrapper. field_offset = byte offset of the bool is_set flag.
 	//! children has exactly one entry: the value field (PRIMITIVE, STRUCT, SORT_KEY or LIST).
 	//! The value field's field_offset is relative to the same parent base as this field.
-	OPTIONAL,
+	OPTIONAL_VALUE,
 	//! Binary sort key (stored as string_t). field_offset = byte offset of the string_t.
-	//! sort_key_order carries the ordering. Always appears as children[0] of an OPTIONAL field.
+	//! sort_key_order carries the ordering. Always appears as children[0] of an OPTIONAL_VALUE field.
 	SORT_KEY,
 	//! Linked list of values (stored as a LinkedList, see list_segment.hpp). field_offset = byte offset of the
 	//! LinkedList. Exported as a LIST value; an empty linked list is exported as NULL.
@@ -216,7 +216,7 @@ enum class AggregateFieldKind {
 struct AggregateStateField {
 	idx_t field_offset = 0;
 	//! Physical byte size of the data described by this field (including nested struct members).
-	//! For OPTIONAL: includes is_set bool (field_offset + sizeof(bool)).
+	//! For OPTIONAL_VALUE: includes is_set bool (field_offset + sizeof(bool)).
 	idx_t field_size = 0;
 	AggregateFieldKind kind = AggregateFieldKind::PRIMITIVE;
 	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
@@ -226,9 +226,9 @@ struct AggregateStateField {
 	ListSegmentFunctions list_functions;
 
 	//! The alignment of this field when placed as a struct member, mirroring the C++ struct layout rules.
-	//! For OPTIONAL the alignment is that of the wrapped value - the trailing is_set bool does not affect it.
+	//! For OPTIONAL_VALUE the alignment is that of the wrapped value - the trailing is_set bool does not affect it.
 	idx_t GetAlignment() const {
-		if (kind == AggregateFieldKind::OPTIONAL) {
+		if (kind == AggregateFieldKind::OPTIONAL_VALUE) {
 			D_ASSERT(children.size() == 1);
 			return children[0].GetAlignment();
 		}
@@ -236,11 +236,11 @@ struct AggregateStateField {
 	}
 
 	//! Shift this field's offsets to place it at `offset` within its parent.
-	//! The value child of an OPTIONAL is relative to the same parent base as the optional itself, so it shifts along;
-	//! STRUCT children are relative to the struct's own base and stay untouched.
+	//! The value child of an OPTIONAL_VALUE is relative to the same parent base as the optional itself, so it shifts
+	//! along; STRUCT children are relative to the struct's own base and stay untouched.
 	void ShiftBase(idx_t offset) {
 		field_offset += offset;
-		if (kind == AggregateFieldKind::OPTIONAL) {
+		if (kind == AggregateFieldKind::OPTIONAL_VALUE) {
 			D_ASSERT(children.size() == 1);
 			children[0].ShiftBase(offset);
 		}
@@ -254,7 +254,7 @@ struct AggregateStateField {
 			D_ASSERT(type.id() == LogicalTypeId::LIST);
 			GetSegmentDataFunctions(field.list_functions, ListType::GetChildType(type));
 			break;
-		case AggregateFieldKind::OPTIONAL:
+		case AggregateFieldKind::OPTIONAL_VALUE:
 			D_ASSERT(field.children.size() == 1);
 			PopulateListFunctions(type, field.children[0]);
 			break;
@@ -351,7 +351,7 @@ struct IsStructStateType<StructStateType<Ts...>> : std::true_type {};
 //! field_size is always set to the physical byte size of T's data (see kind docs for details).
 //!
 //! Composable rules:
-//!   - OptionalStateType<V>  → OPTIONAL: is_set at field_offset=V.field_size, wraps BuildStateField<V>()
+//!   - OptionalStateType<V>  → OPTIONAL_VALUE: is_set at field_offset=V.field_size, wraps BuildStateField<V>()
 //!   - StateSortKey<ORDER>   → SORT_KEY: field_size=sizeof(string_t)
 //!   - StructStateType<Ts…>  → STRUCT: children built via AppendChildren, field_size=total child data size
 //!   - anything else         → PRIMITIVE: field_size=sizeof(T)
@@ -360,7 +360,7 @@ AggregateStateField BuildStateField() {
 	AggregateStateField field;
 	if constexpr (IsOptionalStateType<T>::value) {
 		using V = typename T::value_type;
-		field.kind = AggregateFieldKind::OPTIONAL;
+		field.kind = AggregateFieldKind::OPTIONAL_VALUE;
 		auto value_child = BuildStateField<V>();
 		value_child.field_offset = 0;
 		field.field_offset = value_child.field_size; // is_set follows the value data
@@ -399,9 +399,9 @@ AggregateStateField BuildStateField() {
 //! Returned by the aggregate_get_state_type_t callback registered via SetStructStateExport.
 //!
 //! - Primitive state (e.g. int64_t for count): field.kind=PRIMITIVE, field.field_offset=0, field.children empty.
-//! - Optional primitive (e.g. OptionalStateType<double>): field.kind=OPTIONAL,
+//! - Optional primitive (e.g. OptionalStateType<double>): field.kind=OPTIONAL_VALUE,
 //!   field.field_offset=sizeof(double) (is_set offset), field.children=[{kind=PRIMITIVE, field_offset=0}].
-//! - Optional struct: field.kind=OPTIONAL, field.field_offset=struct_size (is_set offset),
+//! - Optional struct: field.kind=OPTIONAL_VALUE, field.field_offset=struct_size (is_set offset),
 //!   field.children=[{kind=STRUCT, field_offset=0, children=[struct fields]}].
 //! - Non-optional struct: field.kind=STRUCT, field.field_offset=0, field.children=[struct fields].
 //! total_state_size is the aligned stride between consecutive states in a packed buffer.
@@ -410,7 +410,7 @@ struct AggregateStateLayout {
 	AggregateStateLayout(LogicalType type_p, idx_t total_state_size_p, bool is_optional = false)
 	    : type(std::move(type_p)), total_state_size(total_state_size_p) {
 		if (is_optional) {
-			field.kind = AggregateFieldKind::OPTIONAL;
+			field.kind = AggregateFieldKind::OPTIONAL_VALUE;
 			field.field_offset = AggregateStateField::GetPhysicalSize(type); // is_set after the value
 			field.field_size = field.field_offset + sizeof(bool);
 			AggregateStateField value_child;

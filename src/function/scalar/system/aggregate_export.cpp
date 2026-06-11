@@ -6,7 +6,6 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -147,7 +146,7 @@ struct StoreOp {
 static void SerializeField(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
                            const data_ptr_t *addresses, idx_t base) {
 	switch (field.kind) {
-	case AggregateFieldKind::OPTIONAL:
+	case AggregateFieldKind::OPTIONAL_VALUE:
 		D_ASSERT(field.children.size() == 1);
 		for (idx_t i = 0; i < count; i++) {
 			if (!Load<bool>(addresses[i] + base + field.field_offset)) {
@@ -199,7 +198,7 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 static void DeserializeField(const LogicalType &type, const AggregateStateField &field, const Vector &input_vec,
                              idx_t count, data_ptr_t dest_buffer, idx_t stride, idx_t base, ArenaAllocator &allocator) {
 	switch (field.kind) {
-	case AggregateFieldKind::OPTIONAL: {
+	case AggregateFieldKind::OPTIONAL_VALUE: {
 		D_ASSERT(field.children.size() == 1);
 		const auto validity = input_vec.Validity();
 		for (idx_t i = 0; i < count; i++) {
@@ -599,14 +598,9 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 // the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
 // extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
 LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function) {
-	// copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in place,
-	// and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = bound_function.GetStateType().type.Copy();
-	if (state_layout.id() == LogicalTypeId::ENUM) {
-		// LogicalType::Copy keeps sharing enum type info to avoid copying the dictionary - copy the type info
-		// explicitly here, otherwise SetAlias/SetExtensionInfo modify the original enum type
-		state_layout = LogicalType(LogicalTypeId::ENUM, state_layout.AuxInfo()->Copy());
-	}
+	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
+	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
+	LogicalType state_layout = bound_function.GetStateType().type.DeepCopy();
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());
