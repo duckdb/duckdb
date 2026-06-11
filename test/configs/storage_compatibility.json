@@ -179,7 +179,7 @@
     {
       "reason": "Too many columns (20k) exceeds CSV field size limit in compatibility test script.",
       "paths": [
-        "test/sql/join/test_hash_join_many_columns.test"
+        "test/sql/join/test_hash_join_many_columns.test_slow"
       ]
     }
   ]
