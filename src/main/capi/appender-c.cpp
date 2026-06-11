@@ -57,8 +57,8 @@ duckdb_state duckdb_appender_create_query(duckdb_connection connection, const ch
 		return DuckDBError;
 	}
 	duckdb::vector<duckdb::LogicalType> types;
-	duckdb::vector<duckdb::string> column_names;
-	duckdb::string table_name;
+	duckdb::vector<duckdb::Identifier> column_names;
+	duckdb::Identifier table_name;
 	for (idx_t c = 0; c < column_count; ++c) {
 		if (!types_p[c]) {
 			return DuckDBError;
@@ -66,7 +66,7 @@ duckdb_state duckdb_appender_create_query(duckdb_connection connection, const ch
 		types.push_back(*reinterpret_cast<duckdb::LogicalType *>(types_p[c]));
 	}
 	if (table_name_p) {
-		table_name = table_name_p;
+		table_name = duckdb::Identifier(table_name_p);
 	}
 	if (column_names_p) {
 		for (idx_t c = 0; c < column_count; ++c) {

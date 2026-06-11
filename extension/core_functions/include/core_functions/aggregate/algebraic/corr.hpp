@@ -15,6 +15,9 @@
 namespace duckdb {
 
 struct CorrState {
+	static constexpr const char *STATE_NAMES[] = {"cov_pop", "dev_pop_x", "dev_pop_y"};
+	using STATE_TYPE = StructStateType<CovarState, StddevState, StddevState>;
+
 	CovarState cov_pop;
 	StddevState dev_pop_x;
 	StddevState dev_pop_y;

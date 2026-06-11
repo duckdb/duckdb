@@ -42,10 +42,10 @@ bool PEGTransformerFactory::TransformFunctionTypeFunction(PEGTransformer &transf
 	return false;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
-                                                                            const CatalogType &comment_macro_table,
-                                                                            const bool &if_exists,
-                                                                            const vector<string> &table_function_name) {
+unique_ptr<DropStatement>
+PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, const CatalogType &comment_macro_table,
+                                                  const bool &if_exists,
+                                                  const vector<Identifier> &table_function_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	if (table_function_name.size() > 1) {
@@ -97,7 +97,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const bo
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTransformer &transformer,
-                                                                        const string &schema_name) {
+                                                                        const Identifier &schema_name) {
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = schema_name;
@@ -105,8 +105,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTrans
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchema(PEGTransformer &transformer,
-                                                                    const string &catalog_qualification,
-                                                                    const string &reserved_schema_name) {
+                                                                    const Identifier &catalog_qualification,
+                                                                    const Identifier &reserved_schema_name) {
 	QualifiedName result;
 	result.catalog = catalog_qualification;
 	result.schema = reserved_schema_name;
@@ -131,7 +131,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransformer &transformer,
-                                                                       const string &index_name) {
+                                                                       const Identifier &index_name) {
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = INVALID_SCHEMA;
@@ -140,8 +140,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransf
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer &transformer,
-                                                                  const string &schema_qualification,
-                                                                  const string &reserved_index_name) {
+                                                                  const Identifier &schema_qualification,
+                                                                  const Identifier &reserved_index_name) {
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = schema_qualification;
@@ -149,10 +149,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
-                                                                         const string &catalog_qualification,
-                                                                         const string &reserved_schema_qualification,
-                                                                         const string &reserved_index_name) {
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const Identifier &reserved_schema_qualification, const Identifier &reserved_index_name) {
 	QualifiedName result;
 	result.catalog = catalog_qualification;
 	result.schema = reserved_schema_qualification;
@@ -182,13 +181,13 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	return result;
 }
 
-string PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTransformer &transformer,
                                                                         const bool &if_exists,
-                                                                        const vector<string> &collation_name) {
+                                                                        const vector<Identifier> &collation_name) {
 	throw NotImplementedException("Cannot drop collation yet");
 	/*
 	auto result = make_uniq<DropStatement>();
@@ -242,8 +241,9 @@ bool PEGTransformerFactory::TransformIfExists(PEGTransformer &transformer) {
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransformer &transformer,
                                                                      const SecretPersistType &temporary,
-                                                                     const bool &if_exists, const string &secret_name,
-                                                                     const string &drop_secret_storage) {
+                                                                     const bool &if_exists,
+                                                                     const Identifier &secret_name,
+                                                                     const Identifier &drop_secret_storage) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	info->type = CatalogType::SECRET_ENTRY;
@@ -252,18 +252,20 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
 
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->name = secret_name;
-	extra_drop_info->secret_storage = drop_secret_storage;
+	extra_drop_info->secret_storage = drop_secret_storage.GetIdentifierName();
 	info->extra_drop_info = std::move(extra_drop_info);
 	result->info = std::move(info);
 	return result;
 }
 
-string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer,
+                                                             const Identifier &identifier) {
 	return identifier;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
-                                                                      const bool &if_exists, const string &trigger_name,
+                                                                      const bool &if_exists,
+                                                                      const Identifier &trigger_name,
                                                                       unique_ptr<BaseTableRef> base_table_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();

@@ -119,7 +119,7 @@ public:
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public PrimitiveColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p)
+	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p)
 	    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	}
 	~StandardColumnWriter() override = default;

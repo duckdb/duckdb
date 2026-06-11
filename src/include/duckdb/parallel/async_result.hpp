@@ -12,6 +12,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 
 namespace duckdb {
 
@@ -20,8 +21,8 @@ class TaskExecutor;
 class Executor;
 
 enum class AsyncResultsExecutionMode : uint8_t {
-	SYNCHRONOUS,  // BLOCKED should not bubble up, and they should be executed synchronously
-	TASK_EXECUTOR // BLOCKED is allowed
+	SYNCHRONOUS,  //! BLOCKED should not bubble up, and they should be executed synchronously
+	TASK_EXECUTOR //! BLOCKED is allowed
 };
 
 class AsyncTask {
@@ -37,25 +38,26 @@ public:
 	AsyncResult() = default;
 	AsyncResult(AsyncResult &&) = default;
 	AsyncResult(SourceResultType t); // NOLINT
-	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task);
+	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task,
+	                     TaskSchedulerType pool_type = TaskSchedulerType::REGULAR);
 	AsyncResult &operator=(SourceResultType t);
 	AsyncResult &operator=(AsyncResultType t);
 	AsyncResult &operator=(AsyncResult &&) noexcept;
-	// Schedule held async_tasks into the Executor, eventually unblocking InterruptState
-	// needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
-	// into INVALID
+	//! Schedule held async_tasks into the Executor, eventually unblocking InterruptState
+	//! needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	//! into INVALID
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
-	// Execute tasks synchronously at callsite
-	// needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
-	// into HAVE_MORE_OUTPUT
+	//! Execute tasks synchronously at callsite
+	//! needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	//! into HAVE_MORE_OUTPUT
 	void ExecuteTasksSynchronously();
 
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
 
-	// Check whether there are tasks associated
+	//! Check whether there are tasks associated
 	bool HasTasks() const;
 	AsyncResultType GetResultType() const;
-	// Extract associated tasks, moving them away, will empty async_tasks and transform to INVALID
+	//! Extract associated tasks, moving them away, will empty async_tasks and transform to INVALID
 	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -68,5 +70,7 @@ public:
 private:
 	AsyncResultType result_type {AsyncResultType::INVALID};
 	vector<unique_ptr<AsyncTask>> async_tasks {};
+	//! The thread pool that the async_tasks are scheduled onto when BLOCKED
+	TaskSchedulerType pool_type {TaskSchedulerType::REGULAR};
 };
 } // namespace duckdb

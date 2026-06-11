@@ -672,7 +672,7 @@ static bool CanInterpolate(const LogicalType &type) {
 struct MedianFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = CanInterpolate(type) ? GetContinuousQuantile(type) : GetDiscreteQuantile(type);
-		fun.name = "median";
+		fun.SetName("median");
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		return fun;
@@ -697,7 +697,7 @@ struct MedianFunction {
 struct DiscreteQuantileListFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = GetDiscreteQuantileList(type);
-		fun.name = "quantile_disc";
+		fun.SetName("quantile_disc");
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
@@ -726,7 +726,7 @@ struct DiscreteQuantileListFunction {
 struct DiscreteQuantileFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = GetDiscreteQuantile(type);
-		fun.name = "quantile_disc";
+		fun.SetName("quantile_disc");
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
@@ -760,7 +760,7 @@ struct DiscreteQuantileFunction {
 struct ContinuousQuantileFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = GetContinuousQuantile(type);
-		fun.name = "quantile_cont";
+		fun.SetName("quantile_cont");
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
@@ -792,7 +792,7 @@ struct ContinuousQuantileFunction {
 struct ContinuousQuantileListFunction {
 	static AggregateFunction GetAggregate(const LogicalType &type) {
 		auto fun = GetContinuousQuantileList(type);
-		fun.name = "quantile_cont";
+		fun.SetName("quantile_cont");
 		fun.SetBindCallback(Bind);
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);

@@ -41,13 +41,13 @@ TEST_CASE("Test custom column + table names in the query appender", "[appender]"
 	types.push_back(LogicalType::INTEGER);
 	types.push_back(LogicalType::VARCHAR);
 
-	duckdb::vector<string> column_names;
+	duckdb::vector<duckdb::Identifier> column_names;
 	column_names.push_back("i");
 	column_names.push_back("value");
 
 	QueryAppender appender(
 	    con, "MERGE INTO tbl USING my_appended_data USING (i) WHEN MATCHED THEN UPDATE WHEN NOT MATCHED THEN INSERT",
-	    types, column_names, "my_appended_data");
+	    types, column_names, duckdb::Identifier("my_appended_data"));
 	appender.BeginRow();
 	appender.Append<int32_t>(1);
 	appender.Append("world");

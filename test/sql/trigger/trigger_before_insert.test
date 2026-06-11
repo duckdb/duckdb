@@ -195,11 +195,11 @@ SELECT n FROM t_counter;
 ----
 2
 
-# RETURNING is rejected on tables with triggers
-statement error
+# RETURNING works on tables with triggers
+query I
 INSERT INTO target VALUES (99, 99) RETURNING id;
 ----
-RETURNING is not yet supported on tables with triggers
+99
 
 # Recursive trigger chain detection (cycle through self)
 statement ok
@@ -225,4 +225,4 @@ INSERT INTO target VALUES (100, 100);
 query I
 SELECT COUNT(*) FROM audit;
 ----
-3
+4

@@ -30,7 +30,7 @@ struct LHSBinding {
 	}
 	ColumnBinding binding;
 	LogicalType type;
-	string alias;
+	Identifier alias;
 };
 
 //! The UnnestRewriterPlanUpdater updates column bindings after changing the operator plan

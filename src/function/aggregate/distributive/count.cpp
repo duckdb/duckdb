@@ -256,10 +256,8 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("count", LogicalType::BIGINT);
-	return LogicalType::STRUCT(std::move(children));
+AggregateStateLayout GetCountStateType(const BoundAggregateFunction &function) {
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -281,7 +279,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
 	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
 	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountClusterUpdate);
-	fun.name = "count";
+	fun.SetName("count");
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
 	fun.SetStatisticsCallback(CountPropagateStats);
@@ -290,11 +288,10 @@ AggregateFunction CountFunctionBase::GetFunction() {
 
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
-	fun.name = "count_star";
+	fun.SetName("count_star");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
-	fun.SetStructStateExport(GetCountStateType);
 	return fun;
 }
 

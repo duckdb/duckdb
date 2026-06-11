@@ -34,29 +34,29 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names,
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<Identifier> names,
 	        TableIndex index);
 	virtual ~Binding() = default;
 
 public:
-	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
-	column_t GetBindingIndex(const string &column_name);
-	bool HasMatchingBinding(const string &column_name);
-	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
+	bool TryGetBindingIndex(const Identifier &column_name, column_t &column_index);
+	column_t GetBindingIndex(const Identifier &column_name);
+	bool HasMatchingBinding(const Identifier &column_name);
+	virtual ErrorData ColumnNotFoundError(const Identifier &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
-	string GetAlias() const;
+	const Identifier &GetAlias() const;
 
 	BindingType GetBindingType();
 	const BindingAlias &GetBindingAlias();
 	TableIndex GetIndex();
 	const vector<LogicalType> &GetColumnTypes();
-	const vector<string> &GetColumnNames();
+	const vector<Identifier> &GetColumnNames();
 	idx_t GetColumnCount();
 	void SetColumnType(idx_t col_idx, LogicalType type);
 
-	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
-	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
+	static BindingAlias GetAlias(const Identifier &explicit_alias, const StandardEntry &entry);
+	static BindingAlias GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry);
 
 public:
 	template <class TARGET>
@@ -88,9 +88,9 @@ protected:
 	//! The types of the bound columns
 	vector<LogicalType> types;
 	//! Column names of the subquery
-	vector<string> names;
+	vector<Identifier> names;
 	//! Name -> index for the names
-	case_insensitive_map_t<column_t> name_map;
+	identifier_map_t<column_t> name_map;
 };
 
 struct EntryBinding : public Binding {
@@ -98,7 +98,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
 
 public:
-	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+	EntryBinding(const Identifier &alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index,
 	             StandardEntry &entry);
 	StandardEntry &entry;
 
@@ -113,7 +113,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::TABLE;
 
 public:
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
+	TableBinding(const Identifier &alias, vector<LogicalType> types, vector<Identifier> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
 	             virtual_column_map_t virtual_columns);
 
@@ -125,10 +125,10 @@ public:
 	virtual_column_map_t virtual_columns;
 
 public:
-	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const Identifier &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
-	ErrorData ColumnNotFoundError(const string &column_name) const override;
+	ErrorData ColumnNotFoundError(const Identifier &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
 	const vector<ColumnIndex> &GetBoundColumnIds() const;
 
@@ -145,12 +145,12 @@ public:
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name);
+	DummyBinding(vector<LogicalType> types, vector<Identifier> names, string dummy_name);
 
 	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
 	//! The name of the dummy binding
-	string dummy_name;
+	Identifier dummy_name;
 
 public:
 	//! Binding macros
@@ -166,16 +166,16 @@ enum class CTEType { CAN_BE_REFERENCED, CANNOT_BE_REFERENCED };
 struct CTEBinding;
 
 struct CTEBindState {
-	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<string> &aliases);
+	CTEBindState(Binder &parent_binder, QueryNode &cte_def, const vector<Identifier> &aliases);
 	~CTEBindState();
 
 	Binder &parent_binder;
 	QueryNode &cte_def;
-	const vector<string> &aliases;
+	const vector<Identifier> &aliases;
 	idx_t active_binder_count;
 	shared_ptr<Binder> query_binder;
 	BoundStatement query;
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> types;
 
 public:
@@ -188,7 +188,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CTE;
 
 public:
-	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, TableIndex index, CTEType type);
+	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index, CTEType type);
 	CTEBinding(BindingAlias alias, shared_ptr<CTEBindState> bind_state, TableIndex index);
 
 public:

@@ -205,9 +205,9 @@ SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY 
 
 # Regression: struct shape for state export
 query T
-SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
+SELECT (regr_count(1, 2) export_state)::ubigint
 ----
-{'count': 1}
+1
 
 query T
 SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
@@ -330,11 +330,6 @@ query II nosort res8a
 SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
 query II nosort res8a2
 SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 ----
@@ -342,16 +337,6 @@ SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
 query II nosort res8a2
 SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
-
-query T
-SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': true}
-
-query T
-SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
-----
-{'empty': false, 'val': false}
 
 query III nosort res8b
 SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
@@ -361,15 +346,15 @@ query III nosort res8b
 SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query T
-SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+query I
+SELECT (bit_and(42) export_state)::UINTEGER;
 ----
-{'is_set': true, 'value': 42}
+42
 
-query T
-SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+query I
+SELECT (bit_xor(100) export_state)::UBIGINT;
 ----
-{'is_set': true, 'value': 100}
+100
 
 # kurtosis and kurtosis_pop
 
@@ -454,26 +439,26 @@ statement error
 SELECT finalize(finalize(avg(d) EXPORT_STATE)) from dummy;
 ----
 
-# Casting to struct should work
+# Casting to type should work
 query T
-SELECT (count(42) export_state)::struct(count bigint);
+SELECT (count(42) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
-SELECT (count(*) export_state)::struct(count bigint);
+SELECT (count(*) export_state)::bigint
 ----
-{'count': 1}
+1
 
 query T
-SELECT (sum(42) export_state)::struct(isset boolean, "value" bigint);
+SELECT (sum(42) export_state)::hugeint;
 ----
-{'isset': true, 'value': 42}
+42
 
 query T
-SELECT (sum(100) export_state)::struct(isset boolean, "value" hugeint);
+SELECT (sum(100) export_state)::hugeint;
 ----
-{'isset': true, 'value': 100}
+100
 
 # EXPORT_STATAE on a window function is not supported
 statement error

@@ -70,7 +70,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	return result;
 }
 
-string AggregateRelation::GetAlias() {
+Identifier AggregateRelation::GetAlias() {
 	return child->GetAlias();
 }
 

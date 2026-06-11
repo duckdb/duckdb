@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name,
+CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, Identifier schema_name, Identifier table_name,
                                          bool temporary_p, OnCreateConflict on_conflict)
     : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name)), table_name(std::move(table_name)), temporary(temporary_p),
@@ -14,8 +14,8 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
 	TryBindRelation(columns);
 }
 
-CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string catalog_name, string schema_name,
-                                         string table_name, bool temporary_p, OnCreateConflict on_conflict)
+CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, Identifier catalog_name, Identifier schema_name,
+                                         Identifier table_name, bool temporary_p, OnCreateConflict on_conflict)
     : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
       catalog_name(std::move(catalog_name)), schema_name(std::move(schema_name)), table_name(std::move(table_name)),
       temporary(temporary_p), on_conflict(on_conflict) {

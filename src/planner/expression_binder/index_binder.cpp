@@ -48,7 +48,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	return index_type->create_instance(input);
 }
 
-void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema) {
+void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const Identifier &schema) {
 	auto &column_ids = get.GetColumnIds();
 	for (auto &column_id : column_ids) {
 		if (column_id.IsRowIdColumn()) {
@@ -61,7 +61,7 @@ void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, co
 
 	info.scan_types.emplace_back(LogicalType::ROW_TYPE);
 	info.names = get.names;
-	info.schema = schema;
+	info.schema = Identifier(schema);
 	info.catalog = get.GetTable()->catalog.GetName();
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 }

@@ -262,9 +262,9 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	}
 
 	auto &type_expr = expr->Cast<TypeExpression>();
-	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName());
-	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog());
-	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema());
+	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName().GetIdentifierName());
+	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog().GetIdentifierName());
+	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema().GetIdentifierName());
 
 	// Try to write the user type mods too
 	vector<Value> user_type_mods;
@@ -302,7 +302,8 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 			user_type_mods.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(mod));
 		}
 
-		result->expr = make_uniq<TypeExpression>(catalog, schema, name, std::move(user_type_mods));
+		result->expr = make_uniq<TypeExpression>(Identifier(catalog), Identifier(schema), Identifier(name),
+		                                         std::move(user_type_mods));
 	}
 
 	return std::move(result);
