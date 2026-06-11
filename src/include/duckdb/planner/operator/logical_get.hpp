@@ -86,7 +86,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
-	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
+	void SetScanOrder(ClientContext &context, unique_ptr<RowGroupOrderOptions> options);
 	void SetPartitionsToScan(vector<idx_t> partition_indices);
 
 	vector<TableIndex> GetTableIndex() const override;

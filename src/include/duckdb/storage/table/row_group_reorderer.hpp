@@ -23,10 +23,10 @@ struct RowGroupOrderOptions {
 	RowGroupOrderOptions(const StorageIndex &column_idx_p, OrderByStatistics order_by_p, OrderType order_type_p,
 	                     OrderByNullType null_order_p, OrderByColumnType column_type_p,
 	                     optional_idx row_limit_p = optional_idx(), idx_t row_group_offset_p = 0,
-	                     idx_t leading_null_group_offset_p = 0)
+	                     idx_t leading_null_group_offset_p = 0, bool single_order_key_p = true)
 	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), null_order(null_order_p),
 	      column_type(column_type_p), row_limit(row_limit_p), row_group_offset(row_group_offset_p),
-	      leading_null_group_offset(leading_null_group_offset_p) {
+	      leading_null_group_offset(leading_null_group_offset_p), single_order_key(single_order_key_p) {
 	}
 
 	const StorageIndex column_idx;
@@ -37,6 +37,7 @@ struct RowGroupOrderOptions {
 	const optional_idx row_limit;
 	const idx_t row_group_offset;
 	const idx_t leading_null_group_offset;
+	const bool single_order_key;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<RowGroupOrderOptions> Deserialize(Deserializer &deserializer);

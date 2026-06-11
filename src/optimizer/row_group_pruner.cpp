@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -63,9 +62,17 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 	ColumnIndex column_index;
 	auto logical_get = FindLogicalGet(*logical_order, column_index);
+	if (!logical_get) {
+		return false;
+	}
 	StorageIndex storage_index;
-	if (!logical_get || !logical_get->TryGetStorageIndex(column_index, storage_index)) {
-		return TrySetBareScanOrderHint(*logical_order, logical_get, row_limit, row_offset);
+	auto table = logical_get->GetTable();
+	if (table && !column_index.IsRowIdColumn() && !column_index.IsVirtualColumn() &&
+	    column_index.GetPrimaryIndex() >= table->GetColumns().LogicalColumnCount()) {
+		// this is ugly code for bm25 to work.
+		storage_index = StorageIndex::FromColumnIndex(column_index);
+	} else if (!logical_get->TryGetStorageIndex(column_index, storage_index)) {
+		return false;
 	}
 
 	if (logical_get->table_filters.HasFilters()) {
@@ -75,68 +82,15 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	}
 
 	// We can use the RowGroupReorderer!
+	const auto single_order_key = logical_order->orders.size() == 1;
 	const auto &primary_order = logical_order->orders[0];
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
-	                                              logical_limit);
+	                                              logical_limit, single_order_key);
 	if (!options) {
 		return false;
 	}
-	logical_get->SetScanOrder(std::move(options));
+	logical_get->SetScanOrder(context, std::move(options));
 
-	return true;
-}
-
-bool RowGroupPruner::TrySetBareScanOrderHint(const LogicalOrder &logical_order, optional_ptr<LogicalGet> logical_get,
-                                             optional_idx row_limit, optional_idx row_offset) const {
-	// FindLogicalGet bails when the scan lacks `filter_pushdown` (an
-	// unrelated capability). Walk single-child to the get directly, and
-	// follow the order col-ref's binding through any intermediate projections.
-	// If a projection slot holds a derived expression (e.g. `2 * score`), the
-	// scan can't honor it as a sort key, so bail.
-	ColumnBinding binding = logical_order.orders[0].expression->Cast<BoundColumnRefExpression>().binding;
-	if (!logical_get) {
-		reference<LogicalOperator> cur = *logical_order.children[0];
-		while (cur.get().type != LogicalOperatorType::LOGICAL_GET) {
-			if (cur.get().children.size() != 1) {
-				return false;
-			}
-			if (cur.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				auto &proj = cur.get().Cast<LogicalProjection>();
-				if (proj.table_index == binding.table_index) {
-					const auto idx = binding.column_index.GetIndex();
-					if (idx >= proj.expressions.size()) {
-						return false;
-					}
-					auto &slot = *proj.expressions[idx];
-					if (slot.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-						return false;
-					}
-					binding = slot.Cast<BoundColumnRefExpression>().binding;
-				}
-			}
-			cur = *cur.get().children[0];
-		}
-		logical_get = cur.get().Cast<LogicalGet>();
-	}
-	if (!logical_get->function.set_scan_order) {
-		return false;
-	}
-	if (binding.table_index != logical_get->table_index) {
-		return false;
-	}
-	if (logical_order.orders.size() != 1 || logical_get->table_filters.HasFilters()) {
-		// Multi-key tie-breaking / pushed filters can't be honored without storage index.
-		row_limit.SetInvalid();
-		row_offset.SetInvalid();
-	}
-	const auto &primary_order = logical_order.orders[0];
-	const auto combined_limit =
-	    row_limit.IsValid()
-	        ? optional_idx(row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0))
-	        : optional_idx();
-	logical_get->SetScanOrder(make_uniq<RowGroupOrderOptions>(StorageIndex{}, OrderByStatistics::MAX, primary_order.type,
-	                                                          primary_order.null_order, OrderByColumnType::NUMERIC,
-	                                                          combined_limit));
 	return true;
 }
 
@@ -189,7 +143,7 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	vector<JoinFilterPushdownColumn> columns {std::move(column)};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
-	                                                      pushdown_targets);
+	                                                      pushdown_targets, true);
 
 	if (pushdown_targets.empty()) {
 		return nullptr;
@@ -211,7 +165,8 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 unique_ptr<RowGroupOrderOptions>
 RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, const optional_idx row_offset,
                                                const BoundOrderByNode &primary_order, const LogicalGet &logical_get,
-                                               const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
+                                               const StorageIndex &storage_index, LogicalLimit &logical_limit,
+                                               const bool single_order_key) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
 	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
@@ -241,13 +196,14 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 
 				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type,
 				                                       combined_limit, offset_puning_result.pruned_row_group_count,
-				                                       offset_puning_result.leading_null_group_offset);
+				                                       offset_puning_result.leading_null_group_offset,
+				                                       single_order_key);
 			}
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
 	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type, combined_limit,
-	                                       NumericCast<uint64_t>(0));
+	                                       NumericCast<uint64_t>(0), NumericCast<uint64_t>(0), single_order_key);
 }
 
 } // namespace duckdb

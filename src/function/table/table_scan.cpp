@@ -971,7 +971,8 @@ vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<F
 	return result;
 }
 
-void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<FunctionData> bind_data_p) {
+void SetScanOrder(ClientContext &context, unique_ptr<RowGroupOrderOptions> order_options,
+                  optional_ptr<FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	bind_data.order_options = std::move(order_options);
 }

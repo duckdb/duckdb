@@ -284,12 +284,12 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
-void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
+void LogicalGet::SetScanOrder(ClientContext &context, unique_ptr<RowGroupOrderOptions> options) {
 	if (!function.set_scan_order) {
 		throw InternalException("LogicalGet::SetScanOrder called but function does not have scan order defined");
 	}
 	row_group_order_options = make_uniq<RowGroupOrderOptions>(*options);
-	function.set_scan_order(std::move(options), bind_data.get());
+	function.set_scan_order(context, std::move(options), bind_data.get());
 }
 
 void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
@@ -416,7 +416,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->bind_data = std::move(bind_data);
 	ConvertLegacyTableFilters(*result);
 	if (row_group_order_options) {
-		result->SetScanOrder(std::move(row_group_order_options));
+		result->SetScanOrder(context, std::move(row_group_order_options));
 	}
 	if (!scan_partition_indices.empty()) {
 		result->SetPartitionsToScan(std::move(scan_partition_indices));
