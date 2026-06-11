@@ -40,12 +40,6 @@ public:
 	string_t() = default;
 	explicit string_t(uint32_t len) {
 		value.inlined.length = len;
-		// Zero the inlined buffer. Callers (e.g. StringVector::EmptyString) hand
-		// the resulting string_t to write paths that fill `len` bytes and then
-		// call Finalize(); the unfilled trailing bytes need to be defined so
-		// that copies of the string_t (e.g. through a constant VARIANT BLOB
-		// flowing into StringStats::Update during constant folding) do not
-		// propagate indeterminate bytes.
 		memset(value.inlined.inlined, 0, INLINE_BYTES);
 	}
 	string_t(const char *data, uint32_t len) {
