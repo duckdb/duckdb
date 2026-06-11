@@ -507,13 +507,7 @@ idx_t AsyncFileWriter::FirstTaskScheduleThreshold() const {
 }
 
 bool AsyncFileWriter::SupportsPositionalWrites() {
-	uint8_t empty = 0;
-	try {
-		handle->Write(context, &empty, 0, 0);
-		return true;
-	} catch (const NotImplementedException &) {
-		return false;
-	}
+	return handle->SupportsPositionalWrites();
 }
 
 idx_t AsyncFileWriter::EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const {

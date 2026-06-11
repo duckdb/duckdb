@@ -76,10 +76,6 @@ public:
 	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		if (nr_bytes == 0 && !positional_supported) {
-			positional_probe_count++;
-			throw NotImplementedException("Injected missing positional write support");
-		}
 		if (!positional_supported) {
 			throw NotImplementedException("Injected missing positional write support");
 		}
@@ -96,6 +92,10 @@ public:
 			LeaveWrite();
 			throw;
 		}
+	}
+
+	bool SupportsPositionalWrites(FileHandle &handle) override {
+		return positional_supported;
 	}
 
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -133,10 +133,6 @@ public:
 		return max_active_writes;
 	}
 
-	idx_t PositionalProbeCount() const {
-		return positional_probe_count;
-	}
-
 private:
 	void EnterWrite() {
 		unique_lock<mutex> guard(block_lock);
@@ -158,7 +154,6 @@ private:
 
 private:
 	const bool positional_supported;
-	idx_t positional_probe_count = 0;
 
 	mutex block_lock;
 	std::condition_variable cv;
@@ -166,6 +161,30 @@ private:
 	idx_t max_active_writes = 0;
 	idx_t blocked_writes = 0;
 	bool release_writes = false;
+};
+
+class SequentialExplicitOffsetWriteFileSystem : public BlockingWriteFileSystem {
+public:
+	SequentialExplicitOffsetWriteFileSystem() : BlockingWriteFileSystem(false, false) {
+	}
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		if (nr_bytes == 0) {
+			return;
+		}
+		if (location != next_write_offset) {
+			throw InternalException("Injected non-sequential write");
+		}
+		next_write_offset += UnsafeNumericCast<idx_t>(nr_bytes);
+		BlockingWriteFileSystem::Write(handle, buffer, nr_bytes);
+	}
+
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		return BlockingWriteFileSystem::Write(handle, buffer, nr_bytes);
+	}
+
+private:
+	idx_t next_write_offset = 0;
 };
 
 class FailingBlockedWriteFileSystem : public TrackingWriteFileSystem {
@@ -793,6 +812,38 @@ TEST_CASE("AsyncFileWriter remote queued drain task covers newly registered tiny
 	TestQueuedDrainTaskCoversNewTinyTail(false, "async_file_writer_remote_queued_large_then_tiny.tmp");
 }
 
+TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as positional", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	SequentialExplicitOffsetWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_sequential_explicit_offset.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
+	}
+
+	auto saw_first_blocked_write = fs.WaitForBlockedWrites(1);
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto max_active_writes = fs.MaxActiveWrites();
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(saw_first_blocked_write);
+	REQUIRE(max_active_writes == 1);
+	REQUIRE(ReadFile(path) == first + second);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter falls back to one drain task without positional writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -821,7 +872,6 @@ TEST_CASE("AsyncFileWriter falls back to one drain task without positional write
 
 	REQUIRE(saw_first_blocked_write);
 	REQUIRE(max_active_writes == 1);
-	REQUIRE(fs.PositionalProbeCount() == 1);
 	REQUIRE(ReadFile(path) == first + second);
 	REQUIRE(fs.write_sizes.size() == 2);
 	fs.RemoveFile(path);

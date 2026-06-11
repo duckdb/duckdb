@@ -169,7 +169,7 @@ private:
 	idx_t CountPendingWriteTasks(idx_t start_write, idx_t available_slots, PendingTaskCountMode mode) const;
 	//! Minimum pending bytes before threshold scheduling starts the first task.
 	idx_t FirstTaskScheduleThreshold() const;
-	//! Probe whether the file system supports independent positional writes.
+	//! Return whether the file handle supports independent positional writes.
 	bool SupportsPositionalWrites();
 	//! Estimate how many drain tasks are useful for the currently queued writes. Caller must hold lock.
 	idx_t EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const;
