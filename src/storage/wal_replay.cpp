@@ -21,6 +21,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -251,6 +252,9 @@ protected:
 
 	void ReplayCreateTrigger();
 	void ReplayDropTrigger();
+
+	void ReplayCreateFeature();
+	void ReplayDropFeature();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -654,6 +658,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TRIGGER:
 		ReplayDropTrigger();
 		break;
+	case WALType::CREATE_FEATURE:
+		ReplayCreateFeature();
+		break;
+	case WALType::DROP_FEATURE:
+		ReplayDropFeature();
+		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -871,6 +881,12 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	// A view can be owned by a feature (the feature's public-facing view). When a feature is dropped the cascade
+	// emits a DROP_VIEW record *before* the DROP_FEATURE record, so on replay the view is still owned by the
+	// not-yet-replayed feature. Cascade here so the owning feature is dropped alongside it; the subsequent
+	// DROP_FEATURE record then becomes a no-op. For an ordinary view nothing depends on it at replay time (a
+	// committed non-cascade DROP guarantees that), so cascade is harmless.
+	info.cascade = true;
 	catalog.DropEntry(context, info);
 }
 
@@ -954,6 +970,35 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.DropTrigger(transaction, info.name, info.cascade);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Feature
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayCreateFeature() {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "feature");
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
+	auto &feature_info = info->Cast<CreateFeatureInfo>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	catalog.CreateFeature(transaction, feature_info);
+}
+
+void WriteAheadLogDeserializer::ReplayDropFeature() {
+	DropInfo info;
+	info.type = CatalogType::FEATURE_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	if (DeserializeOnly()) {
+		return;
+	}
+	// The feature may already have been dropped by the cascade of its owned view's DROP_VIEW record (which is
+	// replayed first). Tolerate that, and cascade so the owned view is dropped if this record happens to run first.
+	info.cascade = true;
+	info.if_not_found = OnEntryNotFound::RETURN_NULL;
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//

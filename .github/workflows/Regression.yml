@@ -358,6 +358,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
+    if: ${{ github.repository == 'duckdb/duckdb' }}
     needs:
       - linux-base
     runs-on: ubuntu-24.04

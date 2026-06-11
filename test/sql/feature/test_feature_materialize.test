@@ -44,19 +44,19 @@ CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARI
 # user 3 @ bucket 01-04: 450.0 (Jan 2 + Jan 3)
 # user 4 @ bucket 01-02: 30.0  (two Jan 1 events)
 # user 4 @ bucket 01-03: 60.0  (both Jan 1 events + Jan 2)
-query ITRI rowsort
+query ITR rowsort
 SELECT * FROM total_spend;
 ----
-1	2024-01-02 00:00:00	100.0	1
-1	2024-01-03 00:00:00	300.0	1
-1	2024-01-05 00:00:00	350.0	1
-2	2024-01-02 00:00:00	50.0	1
-2	2024-01-04 00:00:00	125.0	1
-2	2024-01-06 00:00:00	245.0	1
-3	2024-01-03 00:00:00	300.0	1
-3	2024-01-04 00:00:00	450.0	1
-4	2024-01-02 00:00:00	30.0	1
-4	2024-01-03 00:00:00	60.0	1
+1	2024-01-02 00:00:00	100.0
+1	2024-01-03 00:00:00	300.0
+1	2024-01-05 00:00:00	350.0
+2	2024-01-02 00:00:00	50.0
+2	2024-01-04 00:00:00	125.0
+2	2024-01-06 00:00:00	245.0
+3	2024-01-03 00:00:00	300.0
+3	2024-01-04 00:00:00	450.0
+4	2024-01-02 00:00:00	30.0
+4	2024-01-03 00:00:00	60.0
 
 # Row count
 query I
@@ -83,19 +83,19 @@ SELECT feature_timestamp, total FROM total_spend WHERE user_id = 4;
 statement ok
 CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
-query ITRI rowsort
+query ITR rowsort
 SELECT * FROM avg_spend;
 ----
-1	2024-01-02 00:00:00	100.0	1
-1	2024-01-03 00:00:00	150.0	1
-1	2024-01-05 00:00:00	116.66666666666667	1
-2	2024-01-02 00:00:00	50.0	1
-2	2024-01-04 00:00:00	62.5	1
-2	2024-01-06 00:00:00	81.66666666666667	1
-3	2024-01-03 00:00:00	300.0	1
-3	2024-01-04 00:00:00	225.0	1
-4	2024-01-02 00:00:00	15.0	1
-4	2024-01-03 00:00:00	20.0	1
+1	2024-01-02 00:00:00	100.0
+1	2024-01-03 00:00:00	150.0
+1	2024-01-05 00:00:00	116.66666666666667
+2	2024-01-02 00:00:00	50.0
+2	2024-01-04 00:00:00	62.5
+2	2024-01-06 00:00:00	81.66666666666667
+3	2024-01-03 00:00:00	300.0
+3	2024-01-04 00:00:00	225.0
+4	2024-01-02 00:00:00	15.0
+4	2024-01-03 00:00:00	20.0
 
 query I
 SELECT COUNT(*) FROM avg_spend;
@@ -109,28 +109,28 @@ statement ok
 CREATE FEATURE multi_agg ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
 # user 1 @ bucket 01-03: total=300, cnt=2, avg=150 (aggregates Jan 1 + Jan 2 events)
-query ITRIRI
+query ITRIR
 SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
 ----
-1	2024-01-03 00:00:00	300.0	2	150.0	1
+1	2024-01-03 00:00:00	300.0	2	150.0
 
 # user 1 @ bucket 01-05: total=350, cnt=3, avg≈116.67 (Jan 1 + Jan 2 + Jan 4 events)
-query ITRIRI
+query ITRIR
 SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-05'::TIMESTAMP;
 ----
-1	2024-01-05 00:00:00	350.0	3	116.66666666666667	1
+1	2024-01-05 00:00:00	350.0	3	116.66666666666667
 
 # user 4 @ bucket 01-02: total=30, cnt=2, avg=15 (two Jan 1 events)
-query ITRIRI
+query ITRIR
 SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
-4	2024-01-02 00:00:00	30.0	2	15.0	1
+4	2024-01-02 00:00:00	30.0	2	15.0
 
 # user 4 @ bucket 01-03: total=60, cnt=3, avg=20 (two Jan 1 + one Jan 2)
-query ITRIRI
+query ITRIR
 SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
 ----
-4	2024-01-03 00:00:00	60.0	3	20.0	1
+4	2024-01-03 00:00:00	60.0	3	20.0
 
 # ============================================================
 # COUNT feature: verify row counts per bucket

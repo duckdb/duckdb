@@ -34,7 +34,9 @@ Statement <-
 	MergeIntoStatement /
 	ConnectStatement /
 	DisconnectStatement /
+	ServeFeatureStatement /
 	RefreshFeatureStatement /
+	FeatureAtVersionStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
@@ -197,89 +199,81 @@ TypeNameKeyword <- 'ASOF' /
 'VERBOSE' /
 'SEMI' /
 'ANTI'
-ColumnNameKeyword <- 'BETWEEN' /
-'BIGINT' /
-'BIT' /
-'BOOLEAN' /
-'CHAR' /
-'CHARACTER' /
-'COALESCE' /
-'COLUMNS' /
-'DEC' /
-'DECIMAL' /
-'EXISTS' /
-'EXTRACT' /
-'FLOAT' /
-'GENERATED' /
-'GROUPING' /
-'GROUPING_ID' /
-'INOUT' /
-'INT' /
-'INTEGER' /
-'INTERVAL' /
-'MAP' /
-'NATIONAL' /
-'NCHAR' /
-'NONE' /
-'NULLIF' /
-'NUMERIC' /
-'OUT' /
-'OVERLAY' /
-'POSITION' /
-'PRECISION' /
-'REAL' /
-'ROW' /
-'SETOF' /
-'SMALLINT' /
-'SUBSTRING' /
-'STRUCT' /
-'TIME' /
-'TIMESTAMP' /
-'TREAT' /
-'TRIM' /
-'TRY_CAST' /
-'VALUES' /
-'VARCHAR' /
-'XMLATTRIBUTES' /
-'XMLCONCAT' /
-'XMLELEMENT' /
-'XMLEXISTS' /
-'XMLFOREST' /
-'XMLNAMESPACES' /
-'XMLPARSE' /
-'XMLPI' /
-'XMLROOT' /
-'XMLSERIALIZE' /
-'XMLTABLE'
-FuncNameKeyword <- 'ASOF' /
-'AT' /
-'AUTHORIZATION' /
-'BINARY' /
-'COLLATION' /
-'CONCURRENTLY' /
-'CROSS' /
-'FREEZE' /
-'FULL' /
-'GENERATED' /
-'GLOB' /
-'ILIKE' /
-'INNER' /
-'IS' /
-'ISNULL' /
-'JOIN' /
-'LEFT' /
-'LIKE' /
-'MAP' /
-'NATURAL' /
-'NOTNULL' /
-'OUTER' /
-'OVERLAPS' /
-'POSITIONAL' /
-'RIGHT' /
-'SIMILAR' /
-'STRUCT' /
-'TABLESAMPLE' /
-'VERBOSE'
+ReservedKeyword <- 'ALL' /
+'ANALYSE' /
+'ANALYZE' /
+'AND' /
+'ANY' /
+'ARRAY' /
+'AS' /
+'ASC' /
+'ASYMMETRIC' /
+'BOTH' /
+'CASE' /
+'CAST' /
+'CHECK' /
+'COLLATE' /
+'COLUMN' /
+'CONSTRAINT' /
+'CREATE' /
+'DEFAULT' /
+'DEFERRABLE' /
+'DESC' /
+'DESCRIBE' /
+'DISTINCT' /
+'DO' /
+'ELSE' /
+'END' /
+'EXCEPT' /
+'FALSE' /
+'FETCH' /
+'FOR' /
+'FOREIGN' /
+'FROM' /
+'GROUP' /
+'HAVING' /
+'QUALIFY' /
+'IN' /
+'INITIALLY' /
+'INTERSECT' /
+'INTO' /
+'LAMBDA' /
+'LATERAL' /
+'LEADING' /
+'LIMIT' /
+'NOT' /
+'NULL' /
+'OFFSET' /
+'ON' /
+'ONLY' /
+'OR' /
+'ORDER' /
+'PIVOT' /
+'PIVOT_WIDER' /
+'PIVOT_LONGER' /
+'PLACING' /
+'PRIMARY' /
+'REFERENCES' /
+'RETURNING' /
+'SELECT' /
+'SHOW' /
+'SOME' /
+'SUMMARIZE' /
+'SYMMETRIC' /
+'TABLE' /
+'THEN' /
+'TO' /
+'TRAILING' /
+'TRUE' /
+'UNION' /
+'UNIQUE' /
+'UNPIVOT' /
+'USING' /
+'VARIADIC' /
+'WHEN' /
+'WHERE' /
+'WINDOW' /
+'WITH'
 UnreservedKeyword <- 'ABORT' /
 'ABSOLUTE' /
 'ACCESS' /
@@ -542,6 +536,7 @@ UnreservedKeyword <- 'ABORT' /
 'SEQUENCE' /
 'SEQUENCES' /
 'SERIALIZABLE' /
+'SERVE' /
 'SERVER' /
 'SESSION' /
 'SET' /
@@ -617,110 +612,252 @@ UnreservedKeyword <- 'ABORT' /
 'YEARS' /
 'YES' /
 'ZONE'
-ReservedKeyword <- 'ALL' /
-'ANALYSE' /
-'ANALYZE' /
-'AND' /
-'ANY' /
-'ARRAY' /
-'AS' /
-'ASC' /
-'ASYMMETRIC' /
-'BOTH' /
-'CASE' /
-'CAST' /
-'CHECK' /
-'COLLATE' /
-'COLUMN' /
-'CONSTRAINT' /
-'CREATE' /
-'DEFAULT' /
-'DEFERRABLE' /
-'DESC' /
-'DESCRIBE' /
-'DISTINCT' /
-'DO' /
-'ELSE' /
-'END' /
-'EXCEPT' /
-'FALSE' /
-'FETCH' /
-'FOR' /
-'FOREIGN' /
-'FROM' /
-'GROUP' /
-'HAVING' /
-'QUALIFY' /
-'IN' /
-'INITIALLY' /
-'INTERSECT' /
-'INTO' /
-'LAMBDA' /
-'LATERAL' /
-'LEADING' /
-'LIMIT' /
-'NOT' /
-'NULL' /
-'OFFSET' /
-'ON' /
-'ONLY' /
-'OR' /
-'ORDER' /
-'PIVOT' /
-'PIVOT_WIDER' /
-'PIVOT_LONGER' /
-'PLACING' /
-'PRIMARY' /
-'REFERENCES' /
-'RETURNING' /
-'SELECT' /
-'SHOW' /
-'SOME' /
-'SUMMARIZE' /
-'SYMMETRIC' /
-'TABLE' /
-'THEN' /
-'TO' /
-'TRAILING' /
-'TRUE' /
-'UNION' /
-'UNIQUE' /
-'UNPIVOT' /
-'USING' /
-'VARIADIC' /
-'WHEN' /
-'WHERE' /
-'WINDOW' /
-'WITH'
-InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+FuncNameKeyword <- 'ASOF' /
+'AT' /
+'AUTHORIZATION' /
+'BINARY' /
+'COLLATION' /
+'CONCURRENTLY' /
+'CROSS' /
+'FREEZE' /
+'FULL' /
+'GENERATED' /
+'GLOB' /
+'ILIKE' /
+'INNER' /
+'IS' /
+'ISNULL' /
+'JOIN' /
+'LEFT' /
+'LIKE' /
+'MAP' /
+'NATURAL' /
+'NOTNULL' /
+'OUTER' /
+'OVERLAPS' /
+'POSITIONAL' /
+'RIGHT' /
+'SIMILAR' /
+'STRUCT' /
+'TABLESAMPLE' /
+'VERBOSE'
+ColumnNameKeyword <- 'BETWEEN' /
+'BIGINT' /
+'BIT' /
+'BOOLEAN' /
+'CHAR' /
+'CHARACTER' /
+'COALESCE' /
+'COLUMNS' /
+'DEC' /
+'DECIMAL' /
+'EXISTS' /
+'EXTRACT' /
+'FLOAT' /
+'GENERATED' /
+'GROUPING' /
+'GROUPING_ID' /
+'INOUT' /
+'INT' /
+'INTEGER' /
+'INTERVAL' /
+'MAP' /
+'NATIONAL' /
+'NCHAR' /
+'NONE' /
+'NULLIF' /
+'NUMERIC' /
+'OUT' /
+'OVERLAY' /
+'POSITION' /
+'PRECISION' /
+'REAL' /
+'ROW' /
+'SETOF' /
+'SMALLINT' /
+'SUBSTRING' /
+'STRUCT' /
+'TIME' /
+'TIMESTAMP' /
+'TREAT' /
+'TRIM' /
+'TRY_CAST' /
+'VALUES' /
+'VARCHAR' /
+'XMLATTRIBUTES' /
+'XMLCONCAT' /
+'XMLELEMENT' /
+'XMLEXISTS' /
+'XMLFOREST' /
+'XMLNAMESPACES' /
+'XMLPARSE' /
+'XMLPI' /
+'XMLROOT' /
+'XMLSERIALIZE' /
+'XMLTABLE'
+ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
+ExplainOptionList <- Parens(List(ExplainOption))
+ExplainOption <- ExplainOptionName Expression?
+ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
 
-OrAction <- 'OR' 'REPLACE' / 'IGNORE'
-ByNameOrPosition <- 'BY' InsertByName / InsertByPosition
-InsertByName <- 'NAME'
-InsertByPosition <- 'POSITION'
+ExplainableStatements <-
+    AlterStatement /
+    AnalyzeStatement /
+    CallStatement /
+    CheckpointStatement /
+    CopyStatement /
+    CreateStatement /
+    DeallocateStatement /
+    DeleteStatement /
+    DropStatement /
+    ExecuteStatement /
+    InsertStatement /
+    LoadStatement /
+    MergeIntoStatement /
+    PragmaStatement /
+    PrepareStatement /
+    SelectStatementInternal /
+    TransactionStatement /
+    UpdateStatement /
+    VacuumStatement /
+    SetStatement /
+    ResetStatement
+CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
-InsertTarget <- BaseTableName InsertAlias?
-InsertAlias <- 'AS' Identifier
+SequenceOption <-
+	SeqSetCycle /
+	SeqSetIncrement /
+	SeqSetMinMax /
+	SeqNoMinMax /
+	SeqStartWith /
+	SeqOwnedBy
 
-ColumnList <- List(ColId)
-InsertColumnList <- Parens(ColumnList)
+SeqSetCycle <- 'NO'? 'CYCLE'
+SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
+SeqSetMinMax <- SeqMinOrMax Expression
+SeqNoMinMax <- 'NO' SeqMinOrMax
+SeqStartWith <- 'START' 'WITH'? Expression
+SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 
-InsertValues <- SelectStatementInternal / DefaultValues
-DefaultValues <- 'DEFAULT' 'VALUES'
+SeqMinOrMax <- MinValue / MaxValue
+MinValue <- 'MINVALUE'
+MaxValue <- 'MAXVALUE'
+CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 
-OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
+DescribeStatement <- ShowTables / ShowFeature / ShowSelect / ShowAllTables / ShowQualifiedName
 
-OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget
-OnConflictExpressionTarget <- ColumnIdList WhereClause?
-OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
+ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
+ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
+ShowFeature <- ShowOrDescribe 'FEATURE' IdentifierOrStringLiteral
+ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
+ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+
+ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
+Summarize <- SummarizeRule
+SummarizeRule <- 'SUMMARIZE'
+ShowOrDescribe <- ShowRule / DescribeRule
+ShowRule <- 'SHOW'
+DescribeRule <- 'DESCRIBE' / 'DESC'
+UseStatement <- 'USE' UseTarget
+
+UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
+DotIdentifier <- '.' Identifier
+
+CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
+PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
+
+TypeList <- Parens(List(Type))
+
+CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
+CheckpointForce <- 'FORCE'
+
+AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
+AnalyzeTarget <- BaseTableName NameList?
+AnalyzeVerbose <- 'VERBOSE'
+MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
+MergeIntoUsingClause <- 'USING' TableRef
+MergeMatch <- MatchedClause / NotMatchedClause
+MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
+MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
+UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
+UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
+DeleteMatchClause <- 'DELETE'
+InsertMatchClause <- 'INSERT' InsertMatchInfo?
+InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
+InsertDefaultValues <- 'DEFAULT' 'VALUES'
+InsertByNameOrPosition <- ByNameOrPosition? '*'?
+InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
+DoNothingMatchClause <- 'DO' 'NOTHING'
+ErrorMatchClause <- 'ERROR' Expression?
+UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
+AndExpression <- 'AND' Expression
+NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
+BySourceOrTarget <- BySource / ByTarget
+BySource <- 'BY' 'SOURCE'
+ByTarget <- 'BY' 'TARGET'
 
 
-OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
-OnConflictNothing <- 'DO' 'NOTHING'
 
-ReturningClause <- 'RETURNING' TargetList
+
+
+ConnectStatement <- 'CONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT'
+SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocatePrepare <- 'PREPARE'
+
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+
+TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+
+TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
+TriggerBefore <- 'BEFORE'
+TriggerAfter <- 'AFTER'
+TriggerInsteadOf <- 'INSTEAD' 'OF'
+
+TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
+TriggerEventInsert <- 'INSERT'
+TriggerEventDelete <- 'DELETE'
+TriggerEventUpdate <- 'UPDATE'
+TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
+
+TriggerColumnList <- List(ColId)
+
+ForEachClause <- ForEachRow / ForEachStatement
+ForEachRow <- 'FOR' 'EACH' 'ROW'
+ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
+
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+
+FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
+FeatureWindowClause <- 'WINDOW' NumberLiteral
+FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
+FeatureRetainClause <- 'RETAIN' NumberLiteral
+
+FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
+FeatureGranularityDay <- 'DAY'
+FeatureGranularityHour <- 'HOUR'
+FeatureGranularityMinute <- 'MINUTE'
+
+FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
+FeatureRefreshFull <- 'FULL'
+FeatureRefreshIncremental <- 'INCREMENTAL'
+
+RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+
+FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
+
+ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+
+ServeFeatureKw <- 'FEATURES' / 'FEATURE'
+ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
+ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
+
+CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateRecursive <- 'RECURSIVE'
 
 CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
 
@@ -754,72 +891,59 @@ ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
-DescribeStatement <- ShowTables / ShowFeature / ShowSelect / ShowAllTables / ShowQualifiedName
+AlterStatement <- 'ALTER' AlterOptions
 
-ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
-ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
-ShowFeature <- ShowOrDescribe 'FEATURE' IdentifierOrStringLiteral
-ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
-ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
-ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
-Summarize <- SummarizeRule
-SummarizeRule <- 'SUMMARIZE'
-ShowOrDescribe <- ShowRule / DescribeRule
-ShowRule <- 'SHOW'
-DescribeRule <- 'DESCRIBE' / 'DESC'
-LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
-ExtensionAlias <- 'AS' Identifier
-InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
-UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
-FromSource <- 'FROM' (Identifier / StringLiteral)
-VersionNumber <- 'VERSION' IdentifierOrStringLiteral
-VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
-VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
+AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
+AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
-VacuumParensOptions <- Parens(List(VacuumOption))
-VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
-VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
+        RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
-OptAnalyze <- 'ANALYZE'
-OptFull <- 'FULL'
-OptFreeze <- 'FREEZE'
-OptVerbose <- 'VERBOSE'
+AddConstraint <- 'ADD' TopLevelConstraint
+AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
+AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
+DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
+AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
+RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
+NestedColumnName <- (Identifier '.')* ColumnName
+RenameAlter <- 'RENAME' 'TO' Identifier
+SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
+ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
+SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
+ResetSortedBy <- 'RESET' 'SORTED' 'BY'
+SetOptions <- 'SET' RelOptionList
+ResetOptions <- 'RESET' RelOptionList
 
-NameList <- Parens(List(ColId))
-DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
-DeallocatePrepare <- 'PREPARE'
+AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+AddOrDropDefault <- AddDefault / DropDefault
+AddDefault <- 'SET' 'DEFAULT' Expression
+DropDefault <- 'DROP' 'DEFAULT'
 
-TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+ChangeNullability <- DropOrSet 'NOT' 'NULL'
+DropOrSet <- 'DROP' / 'SET'
 
-TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
-TriggerBefore <- 'BEFORE'
-TriggerAfter <- 'AFTER'
-TriggerInsteadOf <- 'INSTEAD' 'OF'
+AlterType <- SetData? 'TYPE' Type? UsingExpression?
+SetData <- 'SET' 'DATA'?
+UsingExpression <- 'USING' Expression
 
-TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
-TriggerEventInsert <- 'INSERT'
-TriggerEventDelete <- 'DELETE'
-TriggerEventUpdate <- 'UPDATE'
-TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
+AlterViewStmt <- 'VIEW' IfExists? BaseTableName RenameAlter
 
-TriggerColumnList <- List(ColId)
+AlterSequenceStmt <- 'SEQUENCE' IfExists? QualifiedSequenceName AlterSequenceOptions
 
-ForEachClause <- ForEachRow / ForEachStatement
-ForEachRow <- 'FOR' 'EACH' 'ROW'
-ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
+QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
+
+AlterSequenceOptions <- RenameAlter / SetSequenceOption
+SetSequenceOption <- SequenceOption+
+
+AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
-
-DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
-TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
-TargetOptAlias <- BaseTableName 'AS'? ColId?
-DeleteUsingClause <- 'USING' List(TableRef)
 
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
@@ -995,32 +1119,194 @@ ExpressionOptIdentifier <- Expression Identifier?
 ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
 
-MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
-MergeIntoUsingClause <- 'USING' TableRef
-MergeMatch <- MatchedClause / NotMatchedClause
-MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
-MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
-UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
-UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
-DeleteMatchClause <- 'DELETE'
-InsertMatchClause <- 'INSERT' InsertMatchInfo?
-InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
-InsertDefaultValues <- 'DEFAULT' 'VALUES'
-InsertByNameOrPosition <- ByNameOrPosition? '*'?
-InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
-DoNothingMatchClause <- 'DO' 'NOTHING'
-ErrorMatchClause <- 'ERROR' Expression?
-UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
-AndExpression <- 'AND' Expression
-NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
-BySourceOrTarget <- BySource / ByTarget
-BySource <- 'BY' 'SOURCE'
-ByTarget <- 'BY' 'TARGET'
+ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
+CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
+
+MacroOrFunction <- 'MACRO' / 'FUNCTION'
+
+MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
+
+MacroParameters <- List(MacroParameter)
+MacroParameter <- NamedParameter / SimpleParameter
+SimpleParameter <- TypeFuncName Type?
+
+ScalarMacroDefinition <- Expression
+TableMacroDefinition <- 'TABLE' SelectStatementInternal
+
+VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
+VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
+
+VacuumParensOptions <- Parens(List(VacuumOption))
+VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
+VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
+
+OptAnalyze <- 'ANALYZE'
+OptFull <- 'FULL'
+OptFreeze <- 'FREEZE'
+OptVerbose <- 'VERBOSE'
+
+NameList <- Parens(List(ColId))
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+
+OrAction <- 'OR' 'REPLACE' / 'IGNORE'
+ByNameOrPosition <- 'BY' InsertByName / InsertByPosition
+InsertByName <- 'NAME'
+InsertByPosition <- 'POSITION'
+
+InsertTarget <- BaseTableName InsertAlias?
+InsertAlias <- 'AS' Identifier
+
+ColumnList <- List(ColId)
+InsertColumnList <- Parens(ColumnList)
+
+InsertValues <- SelectStatementInternal / DefaultValues
+DefaultValues <- 'DEFAULT' 'VALUES'
+
+OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
+
+OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget
+OnConflictExpressionTarget <- ColumnIdList WhereClause?
+OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 
+OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
+OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictNothing <- 'DO' 'NOTHING'
 
+ReturningClause <- 'RETURNING' TargetList
 
+ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
+ExportSource <- CatalogName 'TO'
+ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
+
+PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
+
+PivotOn <- 'ON' PivotColumnList
+PivotUsing <- 'USING' TargetList
+PivotColumnList <- List(PivotColumnEntry)
+PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
+PivotColumnEntryInternal <- Expression
+PivotColumnSubquery <- BaseExpression 'IN' Parens(SelectStatementInternal)
+
+PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
+UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
+
+UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
+
+IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
+
+ValueOrValues <- 'VALUE' / 'VALUES'
+
+IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
+IncludeNulls <- 'INCLUDE' 'NULLS'
+ExcludeNulls <- 'EXCLUDE' 'NULLS'
+UnpivotHeader <- UnpivotHeaderSingle / UnpivotHeaderList
+UnpivotHeaderSingle <- ColIdOrString
+UnpivotHeaderList <- Parens(List(ColIdOrString))
+
+UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
+
+UpdateTarget <- BaseTableSet / BaseTableAliasSet
+BaseTableSet <- BaseTableName 'SET'
+BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
+UpdateAlias <- 'AS'? ColId
+UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
+UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
+UpdateSetElementList <- List(UpdateSetElement)
+UpdateSetElement <- UpdateSetColumnTarget '=' Expression
+UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
+
+DropStatement <- 'DROP' DropEntries DropBehavior?
+
+DropEntries <-
+	DropTable /
+	DropTableFunction /
+	DropFunction /
+	DropSchema /
+	DropIndex /
+	DropSequence /
+	DropCollation /
+	DropType /
+	DropSecret /
+	DropTrigger /
+	DropFeature
+
+DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
+
+DropFeature <- 'FEATURE' IfExists? IdentifierOrStringLiteral
+
+DropTable <- TableOrView IfExists? List(BaseTableName)
+DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
+DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
+DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
+DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
+QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
+SchemaReservedIndex <- SchemaQualification ReservedIndexName
+CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
+DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
+DropCollation <- 'COLLATION' IfExists? List(CollationName)
+DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
+DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
+
+TableOrView <- CommentTable / CommentView / MaterializedViewEntry
+MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
+FunctionType <- 'MACRO' / 'FUNCTION'
+
+DropBehavior <- 'CASCADE' / 'RESTRICT'
+
+IfExists <- 'IF' 'EXISTS'
+QualifiedSchemaName <- CatalogReservedSchema / SchemaName
+CatalogReservedSchema <- CatalogQualification ReservedSchemaName
+
+DropSecretStorage <- 'FROM' Identifier
+CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
+
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+FromOrTo <- 'FROM' / 'TO'
+
+CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
+
+CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
+CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
+SpecializedOptionList <- SpecializedOption*
+SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
+	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
+
+SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
+BinaryOption <- 'BINARY'
+FreezeOption <- 'FREEZE'
+OidsOption <- 'OIDS'
+CsvOption <- 'CSV'
+HeaderOption <- 'HEADER'
+NullAsOption <- 'NULL' 'AS'? StringLiteral
+DelimiterAsOption <- 'DELIMITER' 'AS'? StringLiteral
+QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
+EscapeAsOption <- 'ESCAPE' 'AS'? StringLiteral
+EncodingOption <- 'ENCODING' StringLiteral
+ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
+PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
+ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
+StarSymbol <- '*'
+
+GenericCopyOptionList <- Parens(List(GenericCopyOption))
+GenericCopyOption <- CopyOptionName GenericCopyOptionValue?
+GenericCopyOptionValue <- GenericCopyOptionParenthesizedExpressionList / Expression
+GenericCopyOptionParenthesizedExpressionList <- Parens(OrderByExpressionList)
+
+CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
+
+CopyDatabaseFlag <- Parens(SchemaOrData)
+SchemaOrData <- CopySchema / CopyData
+CopySchema <- 'SCHEMA'
+CopyData <- 'DATA'
+
+DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
+TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
+TargetOptAlias <- BaseTableName 'AS'? ColId?
+DeleteUsingClause <- 'USING' List(TableRef)
+
+DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
 CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 
@@ -1036,75 +1322,6 @@ RelOptionName <- DottedIdentifier / StringLiteral
 RelOptionArgumentOpt <- '=' DefArg
 DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 NoneLiteral <- 'NONE'
-
-CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
-CreateRecursive <- 'RECURSIVE'
-
-UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
-
-UpdateTarget <- BaseTableSet / BaseTableAliasSet
-BaseTableSet <- BaseTableName 'SET'
-BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
-UpdateAlias <- 'AS'? ColId
-UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
-UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
-UpdateSetElementList <- List(UpdateSetElement)
-UpdateSetElement <- UpdateSetColumnTarget '=' Expression
-UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
-
-PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
-
-TypeList <- Parens(List(Type))
-
-CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
-
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
-ExplainOptionList <- Parens(List(ExplainOption))
-ExplainOption <- ExplainOptionName Expression?
-ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
-
-ExplainableStatements <-
-    AlterStatement /
-    AnalyzeStatement /
-    CallStatement /
-    CheckpointStatement /
-    CopyStatement /
-    CreateStatement /
-    DeallocateStatement /
-    DeleteStatement /
-    DropStatement /
-    ExecuteStatement /
-    InsertStatement /
-    LoadStatement /
-    MergeIntoStatement /
-    PragmaStatement /
-    PrepareStatement /
-    SelectStatementInternal /
-    TransactionStatement /
-    UpdateStatement /
-    VacuumStatement /
-    SetStatement /
-    ResetStatement
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
-ExportSource <- CatalogName 'TO'
-ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
-
-CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
-AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
-AnalyzeTarget <- BaseTableName NameList?
-AnalyzeVerbose <- 'VERBOSE'
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral 'GRANULARITY' FeatureGranularity 'WINDOW' NumberLiteral 'REFRESH' FeatureRefreshMode 'RETAIN' NumberLiteral 'AS' Parens(SelectStatementInternal)
-
-FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
-FeatureGranularityDay <- 'DAY'
-FeatureGranularityHour <- 'HOUR'
-FeatureGranularityMinute <- 'MINUTE'
-
-FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
-FeatureRefreshFull <- 'FULL'
-FeatureRefreshIncremental <- 'INCREMENTAL'
-
-RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 
 ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
@@ -1370,70 +1587,23 @@ ExtractArgument <-
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
     CenturyKeyword / MillenniumKeyword / Identifier / StringLiteral
 
-DetachStatement <- 'DETACH' Database? IfExists? CatalogName
-
-UseStatement <- 'USE' UseTarget
-
-UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-DotIdentifier <- '.' Identifier
-
-AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
-
-Database <- 'DATABASE'
-DatabasePath <- Expression
-AttachAlias <- 'AS' ColId
-AttachOptions <- GenericCopyOptionList
-
-DropStatement <- 'DROP' DropEntries DropBehavior?
-
-DropEntries <-
-	DropTable /
-	DropTableFunction /
-	DropFunction /
-	DropSchema /
-	DropIndex /
-	DropSequence /
-	DropCollation /
-	DropType /
-	DropSecret /
-	DropTrigger /
-	DropFeature
-
-DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
-
-DropFeature <- 'FEATURE' IfExists? IdentifierOrStringLiteral
-
-DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
-DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
-DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
-DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
-QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
-SchemaReservedIndex <- SchemaQualification ReservedIndexName
-CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
-DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
-DropCollation <- 'COLLATION' IfExists? List(CollationName)
-DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
-DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
-
-TableOrView <- CommentTable / CommentView / MaterializedViewEntry
-MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
-FunctionType <- 'MACRO' / 'FUNCTION'
-
-DropBehavior <- 'CASCADE' / 'RESTRICT'
-
-IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName <- CatalogReservedSchema / SchemaName
-CatalogReservedSchema <- CatalogQualification ReservedSchemaName
-
-DropSecretStorage <- 'FROM' Identifier
 PragmaStatement <- 'PRAGMA' (PragmaAssign / PragmaFunction)
 
 PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
 PragmaParameters <- Parens(List(Expression))
 
+CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
+
+SecretStorageSpecifier <- 'IN' Identifier
+SecretName <- ColId
+
+LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+ExtensionAlias <- 'AS' Identifier
+InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+FromSource <- 'FROM' (Identifier / StringLiteral)
+VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
@@ -1459,145 +1629,12 @@ VariableList <- List(Expression)
 
 ResetStatement <- 'RESET' (SetVariable / SetSetting)
 
-PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
+AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
-PivotOn <- 'ON' PivotColumnList
-PivotUsing <- 'USING' TargetList
-PivotColumnList <- List(PivotColumnEntry)
-PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
-PivotColumnEntryInternal <- Expression
-PivotColumnSubquery <- BaseExpression 'IN' Parens(SelectStatementInternal)
-
-PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
-UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'
-
-UnpivotStatement <- UnpivotKeyword TableRef 'ON' TargetList IntoNameValues?
-
-IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
-
-ValueOrValues <- 'VALUE' / 'VALUES'
-
-IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
-IncludeNulls <- 'INCLUDE' 'NULLS'
-ExcludeNulls <- 'EXCLUDE' 'NULLS'
-UnpivotHeader <- UnpivotHeaderSingle / UnpivotHeaderList
-UnpivotHeaderSingle <- ColIdOrString
-UnpivotHeaderList <- Parens(List(ColIdOrString))
-
-CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
-
-MacroOrFunction <- 'MACRO' / 'FUNCTION'
-
-MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
-
-MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / SimpleParameter
-SimpleParameter <- TypeFuncName Type?
-
-ScalarMacroDefinition <- Expression
-TableMacroDefinition <- 'TABLE' SelectStatementInternal
-
-CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
-
-CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
-FromOrTo <- 'FROM' / 'TO'
-
-CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
-
-CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
-CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
-SpecializedOptionList <- SpecializedOption*
-SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
-	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
-
-SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
-BinaryOption <- 'BINARY'
-FreezeOption <- 'FREEZE'
-OidsOption <- 'OIDS'
-CsvOption <- 'CSV'
-HeaderOption <- 'HEADER'
-NullAsOption <- 'NULL' 'AS'? StringLiteral
-DelimiterAsOption <- 'DELIMITER' 'AS'? StringLiteral
-QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
-EscapeAsOption <- 'ESCAPE' 'AS'? StringLiteral
-EncodingOption <- 'ENCODING' StringLiteral
-ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
-PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
-ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
-StarSymbol <- '*'
-
-GenericCopyOptionList <- Parens(List(GenericCopyOption))
-GenericCopyOption <- CopyOptionName GenericCopyOptionValue?
-GenericCopyOptionValue <- GenericCopyOptionParenthesizedExpressionList / Expression
-GenericCopyOptionParenthesizedExpressionList <- Parens(OrderByExpressionList)
-
-CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
-
-CopyDatabaseFlag <- Parens(SchemaOrData)
-SchemaOrData <- CopySchema / CopyData
-CopySchema <- 'SCHEMA'
-CopyData <- 'DATA'
-
-AlterStatement <- 'ALTER' AlterOptions
-
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
-
-AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
-AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
-
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
-        RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
-
-AddConstraint <- 'ADD' TopLevelConstraint
-AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
-AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
-DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
-AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
-RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
-NestedColumnName <- (Identifier '.')* ColumnName
-RenameAlter <- 'RENAME' 'TO' Identifier
-SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
-ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
-SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
-ResetSortedBy <- 'RESET' 'SORTED' 'BY'
-SetOptions <- 'SET' RelOptionList
-ResetOptions <- 'RESET' RelOptionList
-
-AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
-
-AddOrDropDefault <- AddDefault / DropDefault
-AddDefault <- 'SET' 'DEFAULT' Expression
-DropDefault <- 'DROP' 'DEFAULT'
-
-ChangeNullability <- DropOrSet 'NOT' 'NULL'
-DropOrSet <- 'DROP' / 'SET'
-
-AlterType <- SetData? 'TYPE' Type? UsingExpression?
-SetData <- 'SET' 'DATA'?
-UsingExpression <- 'USING' Expression
-
-AlterViewStmt <- 'VIEW' IfExists? BaseTableName RenameAlter
-
-AlterSequenceStmt <- 'SEQUENCE' IfExists? QualifiedSequenceName AlterSequenceOptions
-
-QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
-
-AlterSequenceOptions <- RenameAlter / SetSequenceOption
-SetSequenceOption <- SequenceOption+
-
-AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
-
-ConnectStatement <- 'CONNECT' SessionTarget?
-DisconnectStatement <- 'DISCONNECT'
-SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
-
-CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
-
-SecretStorageSpecifier <- 'IN' Identifier
-SecretName <- ColId
-
-CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
-CheckpointForce <- 'FORCE'
+Database <- 'DATABASE'
+DatabasePath <- Expression
+AttachAlias <- 'AS' ColId
+AttachOptions <- GenericCopyOptionList
 
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
 CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt / CreateFeatureStmt
@@ -1682,24 +1719,3 @@ GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
 PreserveOrDelete <- 'PRESERVE' / 'DELETE'
 
-CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
-
-SequenceOption <-
-	SeqSetCycle /
-	SeqSetIncrement /
-	SeqSetMinMax /
-	SeqNoMinMax /
-	SeqStartWith /
-	SeqOwnedBy
-
-SeqSetCycle <- 'NO'? 'CYCLE'
-SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
-SeqSetMinMax <- SeqMinOrMax Expression
-SeqNoMinMax <- 'NO' SeqMinOrMax
-SeqStartWith <- 'START' 'WITH'? Expression
-SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
-
-SeqMinOrMax <- MinValue / MaxValue
-MinValue <- 'MINVALUE'
-MaxValue <- 'MAXVALUE'
-ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?

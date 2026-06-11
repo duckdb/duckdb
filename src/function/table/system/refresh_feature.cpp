@@ -3,6 +3,10 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -158,25 +162,29 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 		}
 	}
 
-	auto table_id = QuoteIdent(feature_name);
 	int64_t new_version = feat.current_version + 1;
+	auto new_table_name = feature_name + "__v" + duckdb::to_string(new_version);
+	auto new_table_id = QuoteIdent(new_table_name);
+	auto cur_table_name = feature_name + "__v" + duckdb::to_string(feat.current_version);
+	auto cur_table_id = QuoteIdent(cur_table_name);
 
 	// Wrap all operations in a single transaction for atomicity
 	con.BeginTransaction();
 
 	try {
 		if (feat.refresh_mode == FeatureRefreshMode::FULL) {
-			// FULL refresh: compute all rows with new version tag
+			// FULL refresh: create new version table with all rows
 			auto pit_sql = BuildPITQuery(feat, "");
-			auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-			                  " AS __feature_version FROM (" + pit_sql + ")";
-			auto ins_result = con.Query(insert_sql);
-			if (ins_result->HasError()) {
-				throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
+			auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
+			auto create_result = con.Query(create_sql);
+			if (create_result->HasError()) {
+				throw InternalException("Failed to refresh feature '%s': %s", feature_name, create_result->GetError());
 			}
 
-			if (ins_result->RowCount() > 0) {
-				state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
+			// Count rows inserted
+			auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+			if (!count_result->HasError() && count_result->RowCount() > 0) {
+				state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 			}
 
 		} else {
@@ -187,9 +195,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			auto gran = GranularityToSQL(feat.granularity);
 			auto ts_col = QuoteIdent(feat.timestamp_column);
 
-			// Watermark = last materialized ceiling bucket in the current version.
-			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
-			                            " WHERE __feature_version = " + duckdb::to_string(feat.current_version));
+			// Watermark = last materialized ceiling bucket in the current version table.
+			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
 			string watermark;
 			if (!max_result->HasError() && max_result->RowCount() > 0) {
 				auto val = max_result->GetValue(0, 0);
@@ -199,16 +206,17 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 			if (watermark.empty()) {
-				// No existing data — do a full materialization with the new version.
+				// No existing data — do a full materialization into the new version table.
 				auto pit_sql = BuildPITQuery(feat, "");
-				auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-				                  " AS __feature_version FROM (" + pit_sql + ")";
-				auto ins_result = con.Query(insert_sql);
-				if (ins_result->HasError()) {
-					throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
+				auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
+				auto create_result = con.Query(create_sql);
+				if (create_result->HasError()) {
+					throw InternalException("Failed to refresh feature '%s': %s", feature_name,
+					                        create_result->GetError());
 				}
-				if (ins_result->RowCount() > 0) {
-					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
+				auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+				if (!count_result->HasError() && count_result->RowCount() > 0) {
+					state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 			} else {
 				// Last floor bucket = watermark - 1 gran (watermark is a ceiling boundary).
@@ -216,24 +224,22 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				// ceiling bucket is strictly below the watermark (unaffected by recompute).
 				string recompute_from = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
 
-				// Copy unaffected rows (feature_timestamp < watermark) to the new version.
-				auto copy_sql = "INSERT INTO " + table_id + " SELECT * REPLACE (" + duckdb::to_string(new_version) +
-				                " AS __feature_version) FROM " + table_id +
-				                " WHERE __feature_version = " + duckdb::to_string(feat.current_version) +
-				                " AND feature_timestamp < '" + watermark + "'::TIMESTAMP";
-				auto copy_result = con.Query(copy_sql);
-				if (copy_result->HasError()) {
+				// Create the new version table with the unaffected rows (feature_timestamp < watermark)
+				// copied forward from the current version table.
+				auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
+				                  " WHERE feature_timestamp < '" + watermark + "'::TIMESTAMP";
+				auto create_result = con.Query(create_sql);
+				if (create_result->HasError()) {
 					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
-					                        copy_result->GetError());
+					                        create_result->GetError());
 				}
 
-				// Recompute the last floor bucket onward with the new version tag. The spine
-				// is restricted to floors >= recompute_from while the join still looks back
-				// the full window for correct aggregation.
+				// Recompute the last floor bucket onward and insert into the new version table. The spine
+				// is restricted to floors >= recompute_from while the join still looks back the full window
+				// for correct aggregation.
 				string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= " + recompute_from;
 				auto pit_sql = BuildPITQuery(feat, filter);
-				auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-				                  " AS __feature_version FROM (" + pit_sql + ")";
+				auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
 				auto ins_result = con.Query(insert_sql);
 				if (ins_result->HasError()) {
 					throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
@@ -245,27 +251,35 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
-		// Garbage-collect old versions beyond the retain limit.
-		int64_t min_retain_version = new_version - feat.retain_versions + 1;
-		if (min_retain_version > 1) {
-			auto gc_sql =
-			    "DELETE FROM " + table_id + " WHERE __feature_version < " + duckdb::to_string(min_retain_version);
-			auto gc_result = con.Query(gc_sql);
-			if (gc_result->HasError()) {
-				throw InternalException("Failed to garbage-collect old versions for '%s': %s", feature_name,
-				                        gc_result->GetError());
+		// Garbage-collect the version table that just fell outside the retain window.
+		// Each refresh adds exactly one new version, so at most one table is evicted;
+		// older versions were already dropped by previous refreshes.
+		int64_t evicted_version = new_version - feat.retain_versions;
+		if (evicted_version >= 1) {
+			auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
+			auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
+			auto drop_result = con.Query(drop_sql);
+			if (drop_result->HasError()) {
+				throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
+				                        drop_result->GetError());
 			}
 		}
+
+		// A refresh always creates a new version. Persist the version bump transactionally through the
+		// catalog (rather than mutating feat.current_version in place) so it is recorded in the WAL /
+		// checkpoint and survives a restart. This is done on the internal connection's (read-write)
+		// transaction — the outer table-function transaction is read-only — and is committed atomically
+		// together with the version-table creation/GC above.
+		AlterEntryData alter_data(feat_catalog.GetName(), feat_schema.name, feature_name,
+		                          OnEntryNotFound::THROW_EXCEPTION);
+		AlterFeatureInfo alter_info(std::move(alter_data), new_version);
+		feat_catalog.Alter(*con.context, alter_info);
 
 		con.Commit();
 	} catch (...) {
 		con.Rollback();
 		throw;
 	}
-
-	// A refresh always creates a new version.
-	feat.current_version = new_version;
-	feat.last_refresh_timestamp = Timestamp::GetCurrentTimestamp();
 
 	output.SetCardinality(1);
 	output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(state.rows_affected)));

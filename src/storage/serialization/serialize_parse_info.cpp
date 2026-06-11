@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -103,6 +104,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	switch (type) {
 	case AlterType::ALTER_DATABASE:
 		result = AlterDatabaseInfo::Deserialize(deserializer);
+		break;
+	case AlterType::ALTER_FEATURE:
+		result = AlterFeatureInfo::Deserialize(deserializer);
 		break;
 	case AlterType::ALTER_TABLE:
 		result = AlterTableInfo::Deserialize(deserializer);
@@ -268,6 +272,17 @@ unique_ptr<AlterTableInfo> AddFieldInfo::Deserialize(Deserializer &deserializer)
 	auto result = duckdb::unique_ptr<AddFieldInfo>(new AddFieldInfo(std::move(new_field)));
 	deserializer.ReadPropertyWithDefault<bool>(401, "if_field_not_exists", result->if_field_not_exists);
 	deserializer.ReadPropertyWithDefault<vector<string>>(402, "column_path", result->column_path);
+	return std::move(result);
+}
+
+void AlterFeatureInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<int64_t>(300, "new_version", new_version);
+}
+
+unique_ptr<AlterInfo> AlterFeatureInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<AlterFeatureInfo>(new AlterFeatureInfo());
+	deserializer.ReadPropertyWithDefault<int64_t>(300, "new_version", result->new_version);
 	return std::move(result);
 }
 

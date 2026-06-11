@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -464,6 +465,22 @@ void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
 
 void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::DROP_VIEW);
+	serializer.WriteProperty(101, "schema", entry.schema.name);
+	serializer.WriteProperty(102, "name", entry.name);
+	serializer.End();
+}
+
+//===--------------------------------------------------------------------===//
+// FEATURES
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateFeature(const FeatureCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::CREATE_FEATURE);
+	serializer.WriteProperty(101, "feature", &entry);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteDropFeature(const FeatureCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::DROP_FEATURE);
 	serializer.WriteProperty(101, "schema", entry.schema.name);
 	serializer.WriteProperty(102, "name", entry.name);
 	serializer.End();

@@ -137,16 +137,15 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 		auto spine_entity = entity_override.empty() ? feat_entity : QuoteId(entity_override);
 		auto spine_ts = as_of_override.empty() ? QuoteId(feat.timestamp_column) : QuoteId(as_of_override);
 		auto spine = QuoteId(spine_table);
-		auto version = duckdb::to_string(feat.current_version);
 
 		return StringUtil::Format("SELECT spine.*, f.feature_timestamp, "
-		                          "f.* EXCLUDE (%s, feature_timestamp, __feature_version) "
+		                          "f.* EXCLUDE (%s, feature_timestamp) "
 		                          "FROM %s AS spine "
-		                          "ASOF LEFT JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS f "
+		                          "ASOF LEFT JOIN %s AS f "
 		                          "ON spine.%s = f.%s AND spine.%s >= f.feature_timestamp",
 		                          feat_entity,               // EXCLUDE
 		                          spine,                     // FROM
-		                          feat_table, version,       // subquery with version filter
+		                          feat_table,                // feature view (points to latest version)
 		                          spine_entity, feat_entity, // entity join (spine col = feature col)
 		                          spine_ts                   // temporal condition
 		);
@@ -166,16 +165,14 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 		auto feat_entity = QuoteId(feat.entity_column);
 		auto spine_entity = entity_override.empty() ? feat_entity : QuoteId(entity_override);
 		auto spine_ts = as_of_override.empty() ? QuoteId(feat.timestamp_column) : QuoteId(as_of_override);
-		auto version = duckdb::to_string(feat.current_version);
 		auto alias = "f" + duckdb::to_string(i);
 
-		sql += StringUtil::Format(", %s.feature_timestamp AS %s_timestamp, %s.* EXCLUDE (%s, feature_timestamp, "
-		                          "__feature_version)",
-		                          alias, feat.name, alias, feat_entity);
+		sql += StringUtil::Format(", %s.feature_timestamp AS %s_timestamp, %s.* EXCLUDE (%s, feature_timestamp)", alias,
+		                          feat.name, alias, feat_entity);
 
-		joins += StringUtil::Format(" ASOF LEFT JOIN (SELECT * FROM %s WHERE __feature_version = %s) AS %s "
+		joins += StringUtil::Format(" ASOF LEFT JOIN %s AS %s "
 		                            "ON spine.%s = %s.%s AND spine.%s >= %s.feature_timestamp",
-		                            feat_table, version, alias, spine_entity, alias, feat_entity, spine_ts, alias);
+		                            feat_table, alias, spine_entity, alias, feat_entity, spine_ts, alias);
 	}
 
 	sql += " FROM " + QuoteId(spine_table) + " AS spine" + joins;

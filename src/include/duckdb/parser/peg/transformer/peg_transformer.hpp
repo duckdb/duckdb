@@ -575,6 +575,8 @@ private:
 	static FeatureRefreshMode TransformFeatureRefreshMode(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformRefreshFeatureStatement(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformFeatureAtVersionStatement(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformServeFeatureStatement(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
@@ -52,6 +53,12 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		// Triggers do not support ALTER — always a CREATE
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
+		break;
+	case CatalogType::FEATURE_ENTRY:
+		// Features only support a version-bump ALTER, which carries the full new state — so a CREATE
+		// record (with the updated current_version) is written for both CREATE and ALTER.
+		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+		log.WriteCreateFeature(parent.Cast<FeatureCatalogEntry>());
 		break;
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
@@ -150,6 +157,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::TRIGGER_ENTRY:
 			log.WriteDropTrigger(entry.Cast<TriggerCatalogEntry>());
 			break;
+		case CatalogType::FEATURE_ENTRY:
+			log.WriteDropFeature(entry.Cast<FeatureCatalogEntry>());
+			break;
 		case CatalogType::RENAMED_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
@@ -157,7 +167,6 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::SECRET_ENTRY:
 		case CatalogType::SECRET_TYPE_ENTRY:
 		case CatalogType::SECRET_FUNCTION_ENTRY:
-		case CatalogType::FEATURE_ENTRY:
 			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
@@ -176,7 +185,6 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::SECRET_ENTRY:
 	case CatalogType::SECRET_TYPE_ENTRY:
 	case CatalogType::SECRET_FUNCTION_ENTRY:
-	case CatalogType::FEATURE_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:
