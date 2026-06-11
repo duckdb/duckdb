@@ -84,7 +84,8 @@ public:
 	}
 	//! Decrement the dead node counter in the purge queue.
 	inline void DecrementDeadNodes() {
-		total_dead_nodes--;
+		auto old_total_dead_nodes = total_dead_nodes.fetch_sub(1, std::memory_order_relaxed);
+		D_ASSERT(old_total_dead_nodes > 0);
 	}
 	bool HasFileBufferType(const FileBufferType &type) const {
 		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
@@ -241,7 +242,8 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		}
 	}
 
-	total_dead_nodes -= dead_count;
+	auto old_total_dead_nodes = total_dead_nodes.fetch_sub(dead_count, std::memory_order_relaxed);
+	D_ASSERT(old_total_dead_nodes >= dead_count);
 
 	// Re-enqueue alive nodes via producer token — goes into a dedicated sub-queue
 	// that the consumer token has already passed
@@ -282,10 +284,12 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 		                           .count());
 	}
 
-	if (ts != 1) {
-		// we add a newer version, i.e., we kill exactly one previous version
+	if (memory.HasLiveQueueEntry()) {
+		// The block's previous entry is still in the queue. The new entry supersedes it,
+		// i.e., we kill exactly one previous version.
 		queue.IncrementDeadNodes();
 	}
+	memory.SetHasLiveQueueEntry(true);
 
 	// Get the eviction queue for the block and add it
 	BufferEvictionNode node(handle->GetMemoryWeak(), ts);
@@ -484,12 +488,16 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
 		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
-			// something changed in the mean-time, bail out
+			// A newer entry superseded this node: it was counted as dead when that entry was added.
 			DecrementDeadNodes();
 			continue;
 		}
+		// This node is the block's live queue entry, and we just dequeued it: the block no longer
+		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
+		handle->SetHasLiveQueueEntry(false);
 		if (!handle->CanUnload()) {
-			// This node is current, but the block cannot be unloaded right now. It is not a dead node.
+			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
+			// entry when it is unpinned again.
 			continue;
 		}
 
