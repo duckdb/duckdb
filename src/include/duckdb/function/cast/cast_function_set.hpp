@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/combine_types_rule.hpp"
 
 namespace duckdb {
 struct MapCastInfo;
@@ -18,26 +19,6 @@ struct DBConfig;
 typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target);
 typedef int64_t (*implicit_cast_cost_t)(const LogicalType &from, const LogicalType &to);
-
-class LogicalTypeResolver {
-public:
-	explicit LogicalTypeResolver(optional_ptr<ClientContext> context_p) : context(context_p) {
-	}
-	virtual ~LogicalTypeResolver() = default;
-
-	virtual bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) = 0;
-
-public:
-	optional_ptr<ClientContext> context;
-};
-
-typedef bool (*combine_types_rule_function_t)(LogicalTypeResolver &resolver, const LogicalType &left,
-                                              const LogicalType &right, LogicalType &result);
-
-struct CombineTypesRule {
-	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive in (left, right)
-	combine_types_rule_function_t function;
-};
 
 struct GetCastFunctionInput {
 	explicit GetCastFunctionInput(optional_ptr<ClientContext> context = nullptr) : context(context) {
@@ -84,20 +65,23 @@ public:
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target,
 	                                     bind_cast_function_t bind, int64_t implicit_cast_cost = -1);
 
-	//! Register a combine rule for LogicalType::TryGetMaxLogicalType. Registered rules are consulted before the
-	//! built-in rules, most-recently-registered first.
+	//! Register a combine rule for LogicalType::TryGetMaxLogicalType, consulted before previously registered rules
+	//! and the built-in rules
 	DUCKDB_API void RegisterCombineTypesRule(CombineTypesRule rule);
-	//! Apply the first matching registered rule. Returns true if a rule matched (its result is written to `success`),
-	//! false if none matched and the caller should fall back to the built-in rules.
+	//! Run `rules` against (left, right); the first matching rule wins and writes its outcome to `success`.
+	//! Returns false if no rule matched.
+	static bool TryCombineTypes(const vector<CombineTypesRule> &rules, LogicalTypeResolver &resolver,
+	                            const LogicalType &left, const LogicalType &right, LogicalType &result, bool &success);
+	//! Same, over this set's rules (registered + built-in)
 	bool TryCombineTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
 	                     LogicalType &result, bool &success);
 
 private:
 	optional_ptr<DBConfig> config;
 	vector<BindCastFunction> bind_functions;
+	vector<CombineTypesRule> combine_rules;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
 	optional_ptr<MapCastInfo> map_info;
-	vector<CombineTypesRule> combine_rules;
 
 private:
 	void RegisterCastFunction(const LogicalType &source, const LogicalType &target, MapCastNode node);
