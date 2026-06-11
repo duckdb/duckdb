@@ -258,52 +258,71 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct RLEScanState : public SegmentScanState {
-	explicit RLEScanState(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
-		entry_pos = 0;
-		position_in_entry = 0;
-		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= segment.GetBlockSize());
+	explicit RLEScanState(ColumnSegment &segment)
+	    : handle(BufferManager::GetBufferManager(segment.db).Pin(segment.block)), entry_pos(0), position_in_entry(0),
+	      rle_count_offset(UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()))),
+	      data_pointer(reinterpret_cast<T *>(handle.Ptr() + segment.GetBlockOffset() + RLEConstants::RLE_HEADER_SIZE)),
+	      index_pointer(reinterpret_cast<rle_count_t *>(handle.Ptr() + segment.GetBlockOffset() + rle_count_offset)),
+	      max_entry_pos(static_cast<idx_t>(reinterpret_cast<const_data_ptr_t>(handle.Ptr() + segment.GetBlockSize()) -
+	                                       reinterpret_cast<const_data_ptr_t>(index_pointer)) /
+	                    static_cast<idx_t>(sizeof(rle_count_t))) {
+		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
+			//! This would make the index_pointer point into a region reserved for the header data
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+		}
+		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
+			//! This would make the index_pointer start outside of the segment
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+		}
+		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
+			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
+			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+		}
 	}
 
-	inline void SkipInternal(rle_count_t *index_pointer, idx_t skip_count) {
+	inline void SkipInternal(idx_t skip_count) {
 		while (skip_count > 0) {
 			rle_count_t run_end = index_pointer[entry_pos];
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
 
 			skip_count -= skip_amount;
 			position_in_entry += skip_amount;
-			if (ExhaustedRun(index_pointer)) {
+			if (ExhaustedRun()) {
 				ForwardToNextRun();
 			}
 		}
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		auto data = handle.Ptr() + segment.GetBlockOffset();
-		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
-		SkipInternal(index_pointer, skip_count);
+		SkipInternal(skip_count);
 	}
 
 	inline void ForwardToNextRun() {
 		// handled all entries in this RLE value
 		// move to the next entry
 		entry_pos++;
+		if (entry_pos > max_entry_pos) {
+			throw IOException(
+			    "Corrupted RLE segment: index_pointer[entry_pos] would reach outside of the blocks memory");
+		}
 		position_in_entry = 0;
 	}
 
-	inline bool ExhaustedRun(rle_count_t *index_pointer) {
+	inline bool ExhaustedRun() {
 		return position_in_entry >= index_pointer[entry_pos];
 	}
 
 	BufferHandle handle;
 	idx_t entry_pos;
 	idx_t position_in_entry;
-	uint32_t rle_count_offset;
+	const uint32_t rle_count_offset;
 	//! If we are running a filter over the column - the runs that match the filter
 	unsafe_unique_array<bool> matching_runs;
 	idx_t matching_run_count = 0;
+
+	const T *data_pointer;
+	const rle_count_t *index_pointer;
+	const idx_t max_entry_pos;
 };
 
 template <class T>
@@ -338,13 +357,12 @@ static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_c
 }
 
 template <class T>
-static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_pointer, T *data_pointer, idx_t scan_count,
-                            Vector &result) {
+static void RLEScanConstant(RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto result_data = ConstantVector::GetData<T>(result);
-	result_data[0] = data_pointer[scan_state.entry_pos];
+	result_data[0] = scan_state.data_pointer[scan_state.entry_pos];
 	scan_state.position_in_entry += scan_count;
-	if (scan_state.ExhaustedRun(index_pointer)) {
+	if (scan_state.ExhaustedRun()) {
 		scan_state.ForwardToNextRun();
 	}
 	return;
@@ -355,14 +373,10 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
                             idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
-	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
-	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
-
 	// If we are scanning an entire Vector and it contains only a single run
-	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos],
-	                                         scan_count)) {
-		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, scan_count, result);
+	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry,
+	                                         scan_state.index_pointer[scan_state.entry_pos], scan_count)) {
+		RLEScanConstant<T>(scan_state, scan_count, result);
 		return;
 	}
 
@@ -371,10 +385,10 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	idx_t result_end = result_offset + scan_count;
 	while (result_offset < result_end) {
-		rle_count_t run_end = index_pointer[scan_state.entry_pos];
+		rle_count_t run_end = scan_state.index_pointer[scan_state.entry_pos];
 		idx_t run_count = run_end - scan_state.position_in_entry;
 		idx_t remaining_scan_count = result_end - result_offset;
-		T element = data_pointer[scan_state.entry_pos];
+		T element = scan_state.data_pointer[scan_state.entry_pos];
 		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
 			for (idx_t i = 0; i < remaining_scan_count; i++) {
 				result_data[result_offset + i] = element;
@@ -411,13 +425,10 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
                const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
-	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
-	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
-
 	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
-	if (CanEmitConstantVector<true>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], vector_count)) {
-		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, vector_count, result);
+	if (CanEmitConstantVector<true>(scan_state.position_in_entry, scan_state.index_pointer[scan_state.entry_pos],
+	                                vector_count)) {
+		RLEScanConstant<T>(scan_state, vector_count, result);
 		return;
 	}
 
@@ -431,14 +442,14 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
 		}
 		// skip forward to the next index
-		scan_state.SkipInternal(index_pointer, next_idx - prev_idx);
+		scan_state.SkipInternal(next_idx - prev_idx);
 		// read the element
-		result_data[i] = data_pointer[scan_state.entry_pos];
+		result_data[i] = scan_state.data_pointer[scan_state.entry_pos];
 		// move the next to the prev
 		prev_idx = next_idx;
 	}
 	// skip the tail
-	scan_state.SkipInternal(index_pointer, vector_count - prev_idx);
+	scan_state.SkipInternal(vector_count - prev_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -449,9 +460,8 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
                idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
-	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
-	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
+	auto data_pointer = const_cast<T *>(scan_state.data_pointer);
+	auto index_pointer = const_cast<rle_count_t *>(scan_state.index_pointer);
 
 	auto total_run_count = (scan_state.rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T);
 	if (!scan_state.matching_runs) {
@@ -532,7 +542,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 				throw InternalException("Error in RLEFilter - selection vector indices are not ordered");
 			}
 			// skip forward to the next index
-			scan_state.SkipInternal(index_pointer, read_idx - prev_idx);
+			scan_state.SkipInternal(read_idx - prev_idx);
 			prev_idx = read_idx;
 			if (!scan_state.matching_runs[scan_state.entry_pos]) {
 				// this run is filtered out - we don't need to scan it
@@ -543,7 +553,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 			matching_sel.set_index(matching_count++, read_idx);
 		}
 		// skip the tail
-		scan_state.SkipInternal(index_pointer, vector_count - prev_idx);
+		scan_state.SkipInternal(vector_count - prev_idx);
 	}
 
 	// set up the filter result
