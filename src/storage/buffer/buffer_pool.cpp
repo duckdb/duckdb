@@ -492,7 +492,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// get a reference to the underlying block pointer
-		auto handle = node.TryGetBlockMemory();
+		auto handle = node.memory_p.lock();
 		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
 			// Note that for this to trigger we need at least one purge iteration with the setting active.
@@ -503,11 +503,15 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 			continue;
 		}
 
-		// we might be able to free this block: grab the mutex and check if we can free it
+		// We might be able to free this block: grab the mutex and re-check whether this queue entry is stale.
 		auto lock = handle->GetLock();
-		if (!node.CanUnload(*handle)) {
-			// something changed in the mean-time, bail out
+		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
+			// The block was used/re-queued after this node was enqueued, so this node was already counted as dead.
 			DecrementDeadNodes();
+			continue;
+		}
+		if (!handle->CanUnload()) {
+			// This node is current, but the block cannot be unloaded right now. It is not a dead node.
 			continue;
 		}
 
