@@ -444,9 +444,8 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 		auto &result_str = aggr_vector_data[total_count + i];
 		auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
 		if (current_segment && child_offset + str_length <= current_segment->capacity) {
-			// reference the string directly - the segment data outlives the result vector
-			result_str =
-			    string_t(GetStringData(current_segment) + child_offset, UnsafeNumericCast<uint32_t>(str_length));
+			// the string fits in the current segment - reference it directly instead of copying
+			result_str = string_t(GetStringData(current_segment) + child_offset, NumericCast<uint32_t>(str_length));
 			child_offset += str_length;
 			if (child_offset == current_segment->capacity) {
 				current_segment = current_segment->next;
@@ -454,7 +453,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 			}
 			continue;
 		}
-		// the string spans multiple child segments - copy over the data
+		// allocate an empty string for the given size
 		result_str = StringVector::EmptyString(result, str_length);
 		auto result_data = result_str.GetDataWriteable();
 		idx_t current_offset = 0;
