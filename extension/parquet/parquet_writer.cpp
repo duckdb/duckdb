@@ -795,44 +795,42 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 }
 
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
+	auto batch_guard = writer->StartBatch();
 	{
-		auto batch_guard = writer->StartBatch();
-		{
-			lock_guard<mutex> glock(lock);
-			auto &row_group = prepared.row_group;
-			auto &states = prepared.states;
-			if (states.empty()) {
-				throw InternalException("Attempting to flush a row group with no rows");
-			}
-			InitializeSchemaFromPreparedRowGroup(prepared);
-			VerifyPreparedRowGroup(prepared);
-			row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
-			for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
-				const auto &col_writer = column_writers[col_idx];
-				auto write_state = std::move(states[col_idx]);
-				col_writer->FinalizeWrite(*write_state);
-			}
-			// let's make sure all offsets are ay-okay
-			ValidateColumnOffsets(options.file_name, writer->GetTotalWritten(), row_group);
-
-			row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
-			row_group.__isset.total_compressed_size = true;
-
-			if (options.encryption_config) {
-				const auto row_group_ordinal = file_meta_data.row_groups.size();
-				if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
-					throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
-				}
-				row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
-				row_group.__isset.ordinal = true;
-			}
-
-			// append the row group to the file metadata
-			file_meta_data.row_groups.push_back(row_group);
-			file_meta_data.num_rows += row_group.num_rows;
+		lock_guard<mutex> glock(lock);
+		auto &row_group = prepared.row_group;
+		auto &states = prepared.states;
+		if (states.empty()) {
+			throw InternalException("Attempting to flush a row group with no rows");
 		}
+		InitializeSchemaFromPreparedRowGroup(prepared);
+		VerifyPreparedRowGroup(prepared);
+		row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+		for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
+			const auto &col_writer = column_writers[col_idx];
+			auto write_state = std::move(states[col_idx]);
+			col_writer->FinalizeWrite(*write_state);
+		}
+		// let's make sure all offsets are ay-okay
+		ValidateColumnOffsets(options.file_name, writer->GetTotalWritten(), row_group);
+
+		row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
+		row_group.__isset.total_compressed_size = true;
+
+		if (options.encryption_config) {
+			const auto row_group_ordinal = file_meta_data.row_groups.size();
+			if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
+				throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
+			}
+			row_group.ordinal = NumericCast<int16_t>(row_group_ordinal);
+			row_group.__isset.ordinal = true;
+		}
+
+		// append the row group to the file metadata
+		file_meta_data.row_groups.push_back(row_group);
+		file_meta_data.num_rows += row_group.num_rows;
 	}
-	writer->ApplyBackpressure();
+	batch_guard.Finish();
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {

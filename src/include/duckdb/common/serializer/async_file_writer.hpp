@@ -39,7 +39,8 @@ class AsyncFileWriter : public WriteStream {
 	friend class AsyncFileWriterDrainTaskGuard;
 
 public:
-	//! RAII handle that batches write registration. Async draining is delayed until the last guard is destroyed.
+	//! RAII handle that batches write registration. Finish() must be called on the normal path to leave the batch and
+	//! start draining; scope exit only leaves the batch as exception cleanup.
 	class BatchGuard {
 	public:
 		BatchGuard(const BatchGuard &) = delete;
@@ -47,6 +48,10 @@ public:
 		DUCKDB_API BatchGuard(BatchGuard &&other) noexcept;
 		BatchGuard &operator=(BatchGuard &&other) = delete;
 		DUCKDB_API ~BatchGuard();
+
+	public:
+		//! Leave the batch and apply the writer's normal post-batch scheduling/backpressure policy.
+		DUCKDB_API void Finish();
 
 	private:
 		friend class AsyncFileWriter;
@@ -85,7 +90,7 @@ public:
 	//! Transfer ownership of an existing write buffer and register it without copying.
 	DUCKDB_API void WriteData(unique_ptr<AsyncWriteBuffer> buffer);
 
-	//! Delay async task scheduling while the returned guard is alive. Flush/Close still drain registered writes.
+	//! Delay async task scheduling while the returned guard is alive.
 	DUCKDB_API BatchGuard StartBatch();
 	//! Flush this WriteStream by waiting until all registered writes have reached the file handle.
 	DUCKDB_API void Flush();
@@ -143,10 +148,10 @@ private:
 	void SchedulePendingWrites(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
 	//! Schedule drain tasks from already registered pending writes. Safe to call from async drain tasks.
 	void SchedulePendingWritesInternal(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
-	//! Enter a registration batch, delaying async draining until EndBatch.
+	//! Enter a registration batch, delaying async draining until the batch is left.
 	void BeginBatch();
-	//! Leave a registration batch and schedule pending writes when the outermost batch closes.
-	void EndBatch();
+	//! Leave a registration batch without scheduling, blocking, or throwing.
+	void LeaveBatch() noexcept;
 
 	//! Grow the TemporaryMemoryState reservation coarsely; it is released only when the writer closes.
 	void UpdateMemoryState(MemoryUpdateMode mode = MemoryUpdateMode::COARSE);

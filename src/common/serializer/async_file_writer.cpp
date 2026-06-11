@@ -119,6 +119,8 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
 	if (async_threads > 0) {
+		// Positional writes let multiple async tasks drain one logical stream concurrently.
+		// Otherwise the writer keeps one sequential drain task active so file handle ordering remains correct.
 		if (SupportsPositionalWrites()) {
 			drain_mode = DrainMode::POSITIONAL;
 			max_active_drain_tasks = async_threads;
@@ -154,8 +156,23 @@ AsyncFileWriter::BatchGuard::BatchGuard(BatchGuard &&other) noexcept : writer(ot
 }
 
 AsyncFileWriter::BatchGuard::~BatchGuard() {
+	// We would call Finish() here, but that can throw, instead we assert it has been called.
+	D_ASSERT(Exception::UncaughtException() || !writer);
 	if (writer) {
-		writer->EndBatch();
+		writer->LeaveBatch();
+	}
+}
+
+void AsyncFileWriter::BatchGuard::Finish() {
+	if (!writer) {
+		return;
+	}
+	auto &writer_ref = *writer;
+	writer = nullptr;
+	auto apply_backpressure = !writer_ref.closed;
+	writer_ref.LeaveBatch();
+	if (apply_backpressure) {
+		writer_ref.ApplyBackpressure();
 	}
 }
 
@@ -194,6 +211,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 
+	// Caller-owned memory cannot outlive async scheduling, so even large const inputs are copied before registration.
 	if (write_size >= DEFAULT_COPIED_BUFFER_CAPACITY) {
 		SealCopiedBuffer(ScheduleMode::DEFER);
 		auto owned_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, write_size);
@@ -233,6 +251,7 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 		throw IOException("Cannot write to closed file \"%s\"", path);
 	}
 	if (!executor) {
+		// Keep the no-async path buffered like BufferedFileWriter instead of turning every owned buffer into a syscall.
 		WriteDataSynchronously(buffer->Ptr(), buffer->Size());
 		return;
 	}
@@ -353,6 +372,8 @@ void AsyncFileWriter::SchedulePendingWritesInternal(SchedulePolicy policy) {
 		if (batch_depth == 0 && !pending_writes.empty() && active_drain_tasks < max_active_drain_tasks) {
 			auto available_slots = max_active_drain_tasks - active_drain_tasks;
 			schedule_count = EstimateScheduleCount(available_slots, policy);
+			// Reserve task slots before ScheduleTask().
+			// The task destructor releases a slot if scheduling fails before ExecuteTask() starts.
 			active_drain_tasks += schedule_count;
 			pending_drain_tasks += schedule_count;
 		}
@@ -400,6 +421,8 @@ void AsyncFileWriter::UpdateMemoryState(MemoryUpdateMode mode) {
 			// TMM did not fully grant the previous request. Keep retrying it on later growth checks.
 			next_request = memory_request_bytes;
 		} else if (memory_request_bytes == 0) {
+			// Grow coarsely and only release on Close().
+			// Repeatedly shrinking here would touch shared TMM state on the row-group hot path.
 			next_request = min_pending_bytes;
 		} else if (memory_request_bytes >= max_pending_bytes) {
 			return;
@@ -587,23 +610,15 @@ void AsyncFileWriter::BeginBatch() {
 	batch_depth++;
 }
 
-void AsyncFileWriter::EndBatch() {
+void AsyncFileWriter::LeaveBatch() noexcept {
 	if (!executor) {
 		return;
 	}
-	bool batch_done = false;
-	{
-		lock_guard<mutex> guard(lock);
-		if (batch_depth == 0) {
-			return;
-		}
-		batch_depth--;
-		batch_done = batch_depth == 0;
+	lock_guard<mutex> guard(lock);
+	if (batch_depth == 0) {
+		return;
 	}
-	if (batch_done) {
-		UpdateMemoryState(MemoryUpdateMode::FORCE);
-		SchedulePendingWrites();
-	}
+	batch_depth--;
 }
 
 idx_t AsyncFileWriter::WritePendingWrites(vector<PendingWrite> &writes) {
@@ -723,6 +738,7 @@ void AsyncFileWriter::ApplyBackpressure() {
 	}
 	SealCopiedBuffer(ScheduleMode::DEFER);
 	UpdateMemoryState(MemoryUpdateMode::FORCE);
+	SchedulePendingWrites();
 	while (true) {
 		idx_t current_pending_bytes;
 		{
@@ -756,6 +772,8 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 	idx_t previous_batch_depth = 0;
 	bool batch_opened_for_drain = false;
 
+	// Flush/Close must drain registered writes even if the caller currently has scheduling batched off.
+	// Flush restores that batch state, while Close intentionally leaves it closed.
 	auto open_batch_for_drain = [&]() {
 		if (batch_opened_for_drain) {
 			return;

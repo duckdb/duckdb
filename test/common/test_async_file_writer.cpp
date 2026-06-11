@@ -304,6 +304,7 @@ TEST_CASE("AsyncFileWriter registers writes before async drain", "[async_file_wr
 
 		REQUIRE(writer.GetTotalWritten() == 4);
 		REQUIRE(fs.write_sizes.empty());
+		batch_guard.Finish();
 	}
 
 	writer.Close();
@@ -376,6 +377,7 @@ TEST_CASE("AsyncFileWriter preserves order around large copied writes", "[async_
 		writer.WriteData(const_data_ptr_cast(large.data()), large.size());
 		writer.WriteData(const_data_ptr_cast("PARE"), 4);
 		REQUIRE(writer.GetTotalWritten() == 8200);
+		batch_guard.Finish();
 	}
 	writer.Close();
 
@@ -423,6 +425,7 @@ TEST_CASE("AsyncFileWriter flush waits for pending writes", "[async_file_writer]
 	writer.Flush();
 	REQUIRE(ReadFile(path) == "abcd");
 	REQUIRE(fs.write_sizes.size() == 1);
+	batch_guard.Finish();
 	writer.Close();
 	fs.RemoveFile(path);
 }
@@ -447,6 +450,7 @@ TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]"
 
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
 		REQUIRE(fs.write_sizes.size() == 1);
+		batch_guard.Finish();
 	}
 
 	writer.Close();
@@ -474,6 +478,7 @@ TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[asyn
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_a));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_b));
+		batch_guard.Finish();
 	}
 	writer.Close();
 
@@ -501,6 +506,7 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
 	}
 
 	auto saw_two_blocked_writes = fs.WaitForBlockedWrites(2);
@@ -545,6 +551,7 @@ TEST_CASE("AsyncFileWriter caps local positional draining", "[async_file_writer]
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
 	}
 
 	REQUIRE(fs.WaitForBlockedWrites(1));
@@ -606,6 +613,7 @@ TEST_CASE("AsyncFileWriter avoids sub-threshold remote writes when selected byte
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(third));
+		batch_guard.Finish();
 	}
 	writer.Close();
 
@@ -660,6 +668,7 @@ TEST_CASE("AsyncFileWriter falls back to one drain task without positional write
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
 	}
 
 	auto saw_first_blocked_write = fs.WaitForBlockedWrites(1);
@@ -691,6 +700,7 @@ TEST_CASE("AsyncFileWriter does not apply backpressure during a batch", "[async_
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("efgh"));
 		REQUIRE(fs.write_sizes.empty());
+		batch_guard.Finish();
 	}
 
 	writer.Close();
@@ -717,6 +727,7 @@ TEST_CASE("AsyncFileWriter batches writes before scheduling", "[async_file_write
 
 		writer.ApplyBackpressure();
 		REQUIRE(fs.write_sizes.empty());
+		batch_guard.Finish();
 	}
 
 	writer.Close();
@@ -738,6 +749,7 @@ TEST_CASE("AsyncFileWriter close drains an open batch", "[async_file_writer]") {
 	auto batch_guard = writer.StartBatch();
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 	writer.Close();
+	batch_guard.Finish();
 
 	REQUIRE(ReadFile(path) == "abcd");
 	fs.RemoveFile(path);
@@ -757,6 +769,7 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 	{
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
+		batch_guard.Finish();
 	}
 	REQUIRE_THROWS(writer.Close());
 
@@ -782,6 +795,7 @@ TEST_CASE("AsyncFileWriter close drains scheduled tasks after async write error"
 		auto batch_guard = writer.StartBatch();
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
 	}
 	REQUIRE(fs.WaitForEnteredWrites(2));
 
