@@ -607,6 +607,17 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE) && catalog->SupportsPushdown(ref)) {
+			// special case for query
+			if (func_expr.FunctionName() == "query") {
+				const auto &lookup_schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
+				EntryLookupInfo macro_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
+				auto entry = Catalog::GetEntry(binder.context, catalog_name, lookup_schema, macro_lookup,
+				                               OnEntryNotFound::RETURN_NULL);
+				if (entry && entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+					TrackLocalTable(ref);
+					return CatalogPushdownResult::Unknown();
+				}
+			}
 			// "catalog" is remote and we can pushdown this function
 			return CatalogPushdownResult::RemoteReference(*catalog);
 		}
