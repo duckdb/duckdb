@@ -11,9 +11,6 @@ from inline_grammar import parse_peg_grammar, PEGTokenType
 from generate_transformer import load_grammar_types, load_grammar_types_yaml, load_matcher_rule_overrides
 
 
-OPTIONAL_SEMANTIC_VALUES = False
-
-
 # ---------------------------------------------------------------------------
 # Grammar AST - mirrors the Matcher class hierarchy in matcher.cpp
 # ---------------------------------------------------------------------------
@@ -289,17 +286,26 @@ def _box_result(return_type, return_by_value):
     return f"\treturn make_uniq<TypedTransformResult<{return_type}>>({arg});\n"
 
 
-def _emit_string_result_extraction(var_name, source_expr):
+def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
+    # Extract a terminal value from a choice over matcher identifiers / keywords / string literals.
+    # When the rule itself is an Identifier, the keyword/string-literal alternatives are wrapped so
+    # the result is produced as an Identifier directly (no lossy string round-trip).
+    def as_result(expr):
+        return f"Identifier({expr})" if result_type == "Identifier" else expr
+
+    identifier_value = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
+    if result_type != "Identifier":
+        identifier_value = f"{identifier_value}.GetIdentifierName()"
     return (
-        f"\tstring {var_name};\n"
+        f"\t{result_type} {var_name};\n"
         f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<IdentifierParseResult>().identifier;\n"
+        f"\t\t{var_name} = {identifier_value};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::KEYWORD) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<KeywordParseResult>().keyword;\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<KeywordParseResult>().keyword')};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
-        f"\t\t{var_name} = {source_expr}.Cast<StringLiteralParseResult>().result;\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<StringLiteralParseResult>().result')};\n"
         f"\t}} else {{\n"
-        f"\t\t{var_name} = transformer.Transform<string>({source_expr});\n"
+        f"\t\t{var_name} = transformer.Transform<{result_type}>({source_expr});\n"
         f"\t}}\n"
     )
 
@@ -330,7 +336,7 @@ def generate_string_terminal_choice_internal(rule_name, return_type, return_by_v
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        + _emit_string_result_extraction("result", "choice_pr.GetResult()")
+        + _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -482,14 +488,16 @@ class ExtractionPlan:
     identifier: bool = False
 
 
-def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules):
+def _plan_extraction(
+    node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """Build a recursive extraction plan. Nested sequences must collapse to one semantic value."""
     if isinstance(node, LiteralNode):
         return ExtractionPlan(kind=ExtractionKind.SKIP)
     if isinstance(node, ReferenceNode):
         if node.name in identifier_override_rules:
             return ExtractionPlan(
-                kind=ExtractionKind.REFERENCE, cpp_type="string", var_name=to_snake_case(node.name), identifier=True
+                kind=ExtractionKind.REFERENCE, cpp_type="Identifier", var_name=to_snake_case(node.name), identifier=True
             )
         if node.name in rule_types:
             return ExtractionPlan(
@@ -503,11 +511,15 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
             return ExtractionPlan(kind=ExtractionKind.SKIP)
         return None
     if isinstance(node, ParensNode):
-        child = _plan_extraction(node.inner, rule_types, excluded_rules, identifier_override_rules)
+        child = _plan_extraction(
+            node.inner, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
         return _wrap_extraction(ExtractionKind.PARENS, child)
     if isinstance(node, OptionalNode):
-        child = _plan_extraction(node.child, rule_types, excluded_rules, identifier_override_rules)
-        if not OPTIONAL_SEMANTIC_VALUES:
+        child = _plan_extraction(
+            node.child, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
+        if not optional_semantic_values:
             return _wrap_extraction(ExtractionKind.OPTIONAL, child)
         if child is None:
             return None
@@ -522,7 +534,9 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
         )
     if isinstance(node, (ListMacroNode, RepeatNode)):
         child_node = node.inner if isinstance(node, ListMacroNode) else node.child
-        child = _plan_extraction(child_node, rule_types, excluded_rules, identifier_override_rules)
+        child = _plan_extraction(
+            child_node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
         if child is None or child.kind == ExtractionKind.SKIP:
             return None
         return ExtractionPlan(
@@ -535,7 +549,9 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
     if isinstance(node, SequenceNode):
         semantic = []
         for idx, sequence_child in enumerate(node.children):
-            child = _plan_extraction(sequence_child, rule_types, excluded_rules, identifier_override_rules)
+            child = _plan_extraction(
+                sequence_child, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
             if child is None:
                 return None
             if child.kind != ExtractionKind.SKIP:
@@ -550,7 +566,9 @@ def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules
         )
     if isinstance(node, ChoiceNode):
         alternatives = [
-            _plan_extraction(alternative, rule_types, excluded_rules, identifier_override_rules)
+            _plan_extraction(
+                alternative, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
             for alternative in node.alternatives
         ]
         if all(alternative is not None and alternative.kind == ExtractionKind.SKIP for alternative in alternatives):
@@ -672,9 +690,11 @@ def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=T
     raise ValueError(f"Unsupported extraction plan kind: {plan.kind}")
 
 
-def _classify_recursive(node, idx, rule_types, excluded_rules, identifier_override_rules):
+def _classify_recursive(
+    node, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """Classify nested matcher structures by recursively planning and emitting extraction."""
-    plan = _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules)
+    plan = _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values)
     if plan is None:
         return None
     if plan.kind == ExtractionKind.SKIP:
@@ -688,16 +708,22 @@ def _classify_recursive(node, idx, rule_types, excluded_rules, identifier_overri
     )
 
 
-def classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules):
+def classify_sequence_element(
+    child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """
     Classify one element of a SequenceNode.
     Mirrors the token-type switch in MatcherFactory::CreateMatcher().
     Returns SeqElement or None if the element cannot be auto-generated.
     """
-    return _classify_recursive(child, idx, rule_types, excluded_rules, identifier_override_rules)
+    return _classify_recursive(
+        child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+    )
 
 
-def classify_sequence_elements(children, rule_types, excluded_rules, identifier_override_rules):
+def classify_sequence_elements(
+    children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """
     Classify all children of a SequenceNode.
     Mirrors the token loop in MatcherFactory::CreateMatcher().
@@ -706,7 +732,9 @@ def classify_sequence_elements(children, rule_types, excluded_rules, identifier_
     elements = []
     seen = {}  # var_name -> occurrence count, for deduplication
     for idx, child in enumerate(children):
-        elem = classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules)
+        elem = classify_sequence_element(
+            child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
         if elem is None:
             return None
         if not elem.skip:
@@ -726,10 +754,17 @@ def classify_sequence_elements(children, rule_types, excluded_rules, identifier_
     return elements
 
 
-def _sequence_skip_reason(children, rule_types, excluded_rules, identifier_override_rules):
+def _sequence_skip_reason(
+    children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """Return a specific reason string explaining why classify_sequence_elements failed."""
     for idx, child in enumerate(children):
-        if classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules) is not None:
+        if (
+            classify_sequence_element(
+                child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
+            is not None
+        ):
             continue
         inner = child.child if isinstance(child, OptionalNode) else child
         if isinstance(inner, ReferenceNode):
@@ -842,7 +877,15 @@ class GramFileResult:
     body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
-def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
+def collect_generated(
+    gram_stem,
+    rules,
+    rule_types,
+    excluded_rules,
+    provided_rule_names,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
     """Classify all rules; return a GramFileResult."""
     declarations = []
     implementations = []
@@ -931,7 +974,9 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
             else:
                 alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
                 if identifier_alts and not excluded_alts and alt_types <= {"string"}:
-                    if return_type == "string":
+                    if return_type in ("string", "Identifier"):
+                        # string-terminal alternatives are emitted directly as the rule's own type
+                        # (Identifier-typed rules wrap keyword/string-literal alternatives in Identifier)
                         implementations.append(
                             generate_string_terminal_choice_internal(rule_name, return_type, return_by_value)
                         )
@@ -967,14 +1012,18 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
 
         # Normalize a single token or syntax-only choice to a one-element sequence so
         # the all-skip path generates a no-argument semantic body.
-        ast_plan = _plan_extraction(ast, rule_types, excluded_rules, identifier_override_rules)
+        ast_plan = _plan_extraction(
+            ast, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
         if not isinstance(ast, (SequenceNode, ChoiceNode)) or (
             ast_plan is not None and ast_plan.kind == ExtractionKind.SKIP
         ):
             ast = SequenceNode([ast])
 
         if isinstance(ast, SequenceNode):
-            elements = classify_sequence_elements(ast.children, rule_types, excluded_rules, identifier_override_rules)
+            elements = classify_sequence_elements(
+                ast.children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
             if elements is not None:
                 declarations.append(generate_internal_declaration(rule_name))
                 registrations.append(generate_registration(rule_name))
@@ -996,7 +1045,12 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
                     body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
                 continue
             skipped.append(
-                (rule_name, _sequence_skip_reason(ast.children, rule_types, excluded_rules, identifier_override_rules))
+                (
+                    rule_name,
+                    _sequence_skip_reason(
+                        ast.children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+                    ),
+                )
             )
             continue
 
@@ -1298,9 +1352,8 @@ def process_gram_file(
     gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules, optional_value_grammars
 ):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
-    global OPTIONAL_SEMANTIC_VALUES
     gram_stem = gram_filename.removesuffix('.gram')
-    OPTIONAL_SEMANTIC_VALUES = gram_stem in optional_value_grammars
+    optional_semantic_values = gram_stem in optional_value_grammars
     gram_path = statements_dir / gram_filename
     try:
         rules = parse_peg_grammar(gram_path.read_text())
@@ -1312,7 +1365,13 @@ def process_gram_file(
             rules[rule_name].return_type = info.cpp_type
 
     return collect_generated(
-        gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules
+        gram_stem,
+        rules,
+        rule_types,
+        excluded_rules,
+        provided_rule_names,
+        identifier_override_rules,
+        optional_semantic_values,
     )
 
 

@@ -336,7 +336,7 @@ namespace {
 
 struct ShreddedVariantField {
 public:
-	explicit ShreddedVariantField(const string &field_name) : field_name(field_name) {
+	explicit ShreddedVariantField(const Identifier &field_name) : field_name(field_name.GetIdentifierName()) {
 	}
 
 public:

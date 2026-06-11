@@ -1,4 +1,5 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -14,6 +16,8 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -176,7 +180,7 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 		if (reader.cte_index == table_index && reader.correlated_columns == 0) {
 			for (auto &column : correlated_columns) {
 				reader.chunk_types.push_back(column.type);
-				reader.bound_columns.push_back(column.name);
+				reader.bound_columns.emplace_back(column.name);
 			}
 			reader.correlated_columns += correlated_columns.size();
 		}
@@ -228,6 +232,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		DelimJoinCTERewriter::Rewrite(binder, plan);
+	}
 	return plan;
 }
 

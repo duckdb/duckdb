@@ -10,9 +10,9 @@
 namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
-                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<string> names,
-                                           string alias_p)
-    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
+                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<Identifier> names,
+                                           const Identifier &alias_p)
+    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(alias_p.GetIdentifierName()),
       collection(std::move(collection_p)) {
 	// create constant expressions for the values
 	auto types = collection->Types();
@@ -37,14 +37,14 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
 	auto table_ref = make_uniq<ColumnDataRef>(collection);
 	for (auto &col : columns) {
-		table_ref->expected_names.push_back(col.Name());
+		table_ref->expected_names.emplace_back(col.Name());
 	}
-	table_ref->alias = GetAlias();
+	table_ref->alias = Identifier(GetAlias());
 	return std::move(table_ref);
 }
 
-string MaterializedRelation::GetAlias() {
-	return alias;
+Identifier MaterializedRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 const vector<ColumnDefinition> &MaterializedRelation::Columns() {

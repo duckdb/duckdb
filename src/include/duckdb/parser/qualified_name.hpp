@@ -15,27 +15,27 @@
 namespace duckdb {
 
 struct QualifiedName {
-	string catalog;
-	string schema;
-	string name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier name;
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
-	static vector<string> ParseComponents(const string &input);
+	static vector<Identifier> ParseComponents(const string &input);
 	string ToString() const;
 };
 
 struct QualifiedColumnName {
 	QualifiedColumnName();
-	QualifiedColumnName(string column_p); // NOLINT: allow implicit conversion from string to column name
-	QualifiedColumnName(string table_p, string column_p);
-	QualifiedColumnName(const BindingAlias &alias, string column_p);
+	QualifiedColumnName(Identifier column_p); // NOLINT: allow implicit conversion from string to column name
+	QualifiedColumnName(Identifier table_p, Identifier column_p);
+	QualifiedColumnName(const BindingAlias &alias, Identifier column_p);
 
-	string catalog;
-	string schema;
-	string table;
-	string column;
+	Identifier catalog;
+	Identifier schema;
+	Identifier table;
+	Identifier column;
 
 	static QualifiedColumnName Parse(string &input);
 

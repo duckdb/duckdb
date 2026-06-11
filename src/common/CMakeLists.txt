@@ -58,6 +58,7 @@ add_library_unity(
   path.cpp
   fsst.cpp
   gzip_file_system.cpp
+  identifier.cpp
   hive_partitioning.cpp
   pipe_file_system.cpp
   local_file_system.cpp

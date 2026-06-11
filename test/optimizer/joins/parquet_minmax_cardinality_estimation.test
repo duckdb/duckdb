@@ -1,0 +1,112 @@
+# name: test/optimizer/joins/parquet_minmax_cardinality_estimation.test
+# description: Use Parquet min/max as a local join-order distinct-count proxy
+# group: [joins]
+
+require parquet
+
+statement ok
+COPY (SELECT range::INTEGER AS i FROM range(10000)) TO '{TEST_DIR}/minmax_filter.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_filter.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~1 row.*
+
+statement ok
+COPY (
+	SELECT (TIMESTAMP '2020-01-01 00:00:00' + range * INTERVAL '1 millisecond')::TIMESTAMP_MS AS ts
+	FROM range(10000)
+) TO '{TEST_DIR}/minmax_timestamp_filter.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_timestamp_filter.parquet' WHERE ts = TIMESTAMP_MS '2020-01-01 00:00:00.042'
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~1 row.*
+
+statement ok
+COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_sparse_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT (range * 1000)::INTEGER AS k FROM range(10)) TO '{TEST_DIR}/minmax_sparse_b.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_sparse_a.parquet' a JOIN '{TEST_DIR}/minmax_sparse_b.parquet' b USING (k)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~10 rows.*
+
+statement ok
+COPY (
+	SELECT TIMESTAMP '2020-01-01 00:00:00' + (range * 1000) * INTERVAL '1 second' AS ts
+	FROM range(10)
+) TO '{TEST_DIR}/minmax_timestamp_sparse_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (
+	SELECT TIMESTAMP '2020-01-01 00:00:00' + (range * 1000) * INTERVAL '1 second' AS ts
+	FROM range(10)
+) TO '{TEST_DIR}/minmax_timestamp_sparse_b.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_timestamp_sparse_a.parquet' a JOIN '{TEST_DIR}/minmax_timestamp_sparse_b.parquet' b USING (ts)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~10 rows.*
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range = 0 THEN CAST('-9223372036854775808' AS BIGINT)
+		WHEN range = 1 THEN CAST('9223372036854775807' AS BIGINT)
+		ELSE range::BIGINT
+	END AS i
+	FROM range(100)
+) TO '{TEST_DIR}/minmax_overflow_bigint.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_overflow_bigint.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~20 rows.*
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range = 0 THEN 0::UBIGINT
+		WHEN range = 1 THEN CAST('18446744073709551615' AS UBIGINT)
+		ELSE range::UBIGINT
+	END AS i
+	FROM range(100)
+) TO '{TEST_DIR}/minmax_overflow_ubigint.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_overflow_ubigint.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~20 rows.*
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range = 0 THEN CAST('-170141183460469231731687303715884105728' AS HUGEINT)
+		WHEN range = 1 THEN CAST('170141183460469231731687303715884105727' AS HUGEINT)
+		ELSE range::HUGEINT
+	END AS i
+	FROM range(100)
+) TO '{TEST_DIR}/minmax_overflow_hugeint.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_overflow_hugeint.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~20 rows.*
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range = 0 THEN 0::UHUGEINT
+		WHEN range = 1 THEN CAST('340282366920938463463374607431768211455' AS UHUGEINT)
+		ELSE range::UHUGEINT
+	END AS i
+	FROM range(100)
+) TO '{TEST_DIR}/minmax_overflow_uhugeint.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT * FROM '{TEST_DIR}/minmax_overflow_uhugeint.parquet' WHERE i = 42
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*~20 rows.*

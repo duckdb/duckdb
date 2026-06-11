@@ -30,7 +30,7 @@ public:
 	//! The SET information (if action_type == MERGE_UPDATE)
 	unique_ptr<UpdateSetInfo> update_info;
 	//! Column names to insert into (if action_type == MERGE_INSERT)
-	vector<string> insert_columns;
+	vector<Identifier> insert_columns;
 	//! Set of expressions for INSERT
 	vector<unique_ptr<ParsedExpression>> expressions;
 	//! INSERT BY POSITION or INSERT BY NAME
@@ -38,7 +38,7 @@ public:
 	//! Whether or not this is a INSERT DEFAULT VALUES
 	bool default_values = false;
 	//! INSERT_BY_NAME exclude column list - columns to skip when generating the SET list
-	unordered_set<string> exclude_columns;
+	identifier_set_t exclude_columns;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;

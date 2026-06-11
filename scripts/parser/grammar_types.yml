@@ -918,13 +918,9 @@ String:
   type: "string"
   by_value: false
   rules:
-    - AttachAlias
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - CollationName
-    - IndexType
-    - RelOptionName
     - DottedIdentifierString
     - DotColLabel
     - ColLabel
@@ -933,10 +929,6 @@ String:
     - FuncNameKeyword
     - TypeNameKeyword
     - IndexName
-    - ColId
-    - ColIdOrString
-    - ColLabelOrString
-    - TypeFuncName
     - Identifier
     - ExportSource
     - ReservedKeyword
@@ -954,26 +946,14 @@ String:
     - Factor
     - ExponentOperator
     - PrefixOperator
-    - TableQualification
-    - ReservedTableQualification
-    - CatalogQualification
-    - SchemaQualification
-    - ReservedSchemaQualification
-    - BaseWindowName
     - Framing
     - AtUnit
     - VersionAtUnit
     - TimestampAtUnit
-    - InsertAlias
-    - UpdateAlias
-    - TableAliasColon
     - TrimDirection
     - CubeOrRollup
     - CubeKeyword
     - RollupKeyword
-    - SecretStorageSpecifier
-    - SecretName
-    - TriggerName
     - UpdateAction
     - DeleteAction
     - KeyAction
@@ -982,26 +962,18 @@ String:
     - CascadeKeyAction
     - SetNullKeyAction
     - SetDefaultKeyAction
-    - ReservedIdentifierOrStringLiteral
-    - DropSecretStorage
     - SeqMinOrMax
-    - ConstraintName
-    - ExplainOptionName
     - OperatorLiteral
-    - DotIdentifier
-    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
     - OptFreeze
     - OptVerbose
-    - ExtensionAlias
     - ExplainOptionAnalyze
     - DropNullability
     - SetNullability
     - MinValue
     - MaxValue
-    - IdentifierColId
     - CharacterType
     - IntType
     - IntegerType
@@ -1393,10 +1365,10 @@ MergeMatchClause:
 
 overrides:
   # common.gram
-  ColIdType: "pair<string, LogicalType>"
+  ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
   # create_index.gram
-  RelOption: "pair<string, unique_ptr<ParsedExpression>>"
+  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
   # create_table.gram
   ColumnDefinition:
     type: "ConstraintColumnDefinition"
@@ -1424,7 +1396,7 @@ overrides:
   IntersectChainTail:
     type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
     by_value: true
-  WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
+  WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
@@ -1455,6 +1427,39 @@ overrides:
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
 # ---------------------------------------------------------------------------
+
+IdentifierType:
+  type: "Identifier"
+  by_value: false
+  rules:
+    - ColId
+    - ColIdOrString
+    - ColLabelOrString
+    - TypeFuncName
+    - IdentifierColId
+    - ReservedIdentifierOrStringLiteral
+    - AttachAlias
+    - CollationName
+    - IndexType
+    - RelOptionName
+    - TableQualification
+    - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
+    - ReservedSchemaQualification
+    - BaseWindowName
+    - InsertAlias
+    - UpdateAlias
+    - TableAliasColon
+    - SecretStorageSpecifier
+    - SecretName
+    - TriggerName
+    - DropSecretStorage
+    - ConstraintName
+    - ExplainOptionName
+    - DotIdentifier
+    - IdentifierDot
+    - ExtensionAlias
 
 matcher_rule_overrides:
   Identifier:

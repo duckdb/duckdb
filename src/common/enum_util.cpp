@@ -157,6 +157,7 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -399,6 +400,24 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value) {
 	return static_cast<AggregateOrderDependent>(StringUtil::StringToEnum(GetAggregateOrderDependentValues(), 2, "AggregateOrderDependent", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAggregateStateExportModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateStateExportMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(AggregateStateExportMode::STATE_EXPORT), "STATE_EXPORT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value) {
+	return StringUtil::EnumToString(GetAggregateStateExportModeValues(), 2, "AggregateStateExportMode", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value) {
+	return static_cast<AggregateStateExportMode>(StringUtil::StringToEnum(GetAggregateStateExportModeValues(), 2, "AggregateStateExportMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateTypeValues() {
@@ -1624,19 +1643,20 @@ const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
 		{ static_cast<uint32_t>(DebugVerificationMode::DEFAULT), "DEFAULT" },
 		{ static_cast<uint32_t>(DebugVerificationMode::NONE), "NONE" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_VECTORS), "VERIFY_VECTORS" },
-		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" }
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value) {
-	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
-	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", value));
+	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
@@ -1752,6 +1772,26 @@ const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 	return static_cast<DestroyBufferUpon>(StringUtil::StringToEnum(GetDestroyBufferUponValues(), 3, "DestroyBufferUpon", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDistinctCountSourceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DistinctCountSource::CARDINALITY), "CARDINALITY" },
+		{ static_cast<uint32_t>(DistinctCountSource::MIN_MAX), "MIN_MAX" },
+		{ static_cast<uint32_t>(DistinctCountSource::HLL), "HLL" },
+		{ static_cast<uint32_t>(DistinctCountSource::EXACT), "EXACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value) {
+	return StringUtil::EnumToString(GetDistinctCountSourceValues(), 4, "DistinctCountSource", static_cast<uint32_t>(value));
+}
+
+template<>
+DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value) {
+	return static_cast<DistinctCountSource>(StringUtil::StringToEnum(GetDistinctCountSourceValues(), 4, "DistinctCountSource", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {
@@ -2234,20 +2274,19 @@ const StringUtil::EnumStringLiteral *GetExtraTypeInfoTypeValues() {
 		{ static_cast<uint32_t>(ExtraTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
 		{ static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" },
 		{ static_cast<uint32_t>(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), "TEMPLATE_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::GEO_TYPE_INFO), "GEO_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), "AGGREGATE_STATE_TYPE_INFO" }
+		{ static_cast<uint32_t>(ExtraTypeInfoType::GEO_TYPE_INFO), "GEO_TYPE_INFO" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
-	return StringUtil::EnumToString(GetExtraTypeInfoTypeValues(), 15, "ExtraTypeInfoType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtraTypeInfoTypeValues(), 14, "ExtraTypeInfoType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
-	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 15, "ExtraTypeInfoType", value));
+	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 14, "ExtraTypeInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
@@ -3195,20 +3234,19 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 		{ static_cast<uint32_t>(LogicalTypeId::LAMBDA), "LAMBDA" },
 		{ static_cast<uint32_t>(LogicalTypeId::UNION), "UNION" },
 		{ static_cast<uint32_t>(LogicalTypeId::ARRAY), "ARRAY" },
-		{ static_cast<uint32_t>(LogicalTypeId::VARIANT), "VARIANT" },
-		{ static_cast<uint32_t>(LogicalTypeId::AGGREGATE_STATE), "AGGREGATE_STATE" }
+		{ static_cast<uint32_t>(LogicalTypeId::VARIANT), "VARIANT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
-	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 54, "LogicalTypeId", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 53, "LogicalTypeId", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
-	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 54, "LogicalTypeId", value));
+	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 53, "LogicalTypeId", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLookupResultTypeValues() {
@@ -3866,6 +3904,7 @@ const StringUtil::EnumStringLiteral *GetParseResultTypeValues() {
 		{ static_cast<uint32_t>(ParseResultType::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(ParseResultType::NUMBER), "NUMBER" },
 		{ static_cast<uint32_t>(ParseResultType::STRING), "STRING" },
+		{ static_cast<uint32_t>(ParseResultType::END_OF_INPUT), "END_OF_INPUT" },
 		{ static_cast<uint32_t>(ParseResultType::INVALID), "INVALID" }
 	};
 	return values;
@@ -3873,12 +3912,12 @@ const StringUtil::EnumStringLiteral *GetParseResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value) {
-	return StringUtil::EnumToString(GetParseResultTypeValues(), 13, "ParseResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetParseResultTypeValues(), 14, "ParseResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 ParseResultType EnumUtil::FromString<ParseResultType>(const char *value) {
-	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 13, "ParseResultType", value));
+	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 14, "ParseResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {

@@ -14,7 +14,7 @@ namespace duckdb {
 string GetColumnsStringValue(ParsedExpression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
-		return colref.GetColumnName();
+		return colref.GetColumnName().GetIdentifierName();
 	} else {
 		return expr.ToString();
 	}
@@ -185,7 +185,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "ilike_escape",
 	                                     "not_ilike_escape",
 	                                     "like_escape"};
-	if (supported_ops.count(function.FunctionName()) == 0) {
+	if (supported_ops.count(function.FunctionName().GetIdentifierName()) == 0) {
 		// unsupported op for * expression
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.FunctionName());
 	}
@@ -307,7 +307,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 					continue;
 				}
 				auto &colref = child_expr->Cast<ColumnRefExpression>();
-				if (!RE2::PartialMatch(colref.GetColumnName(), *regex)) {
+				if (!RE2::PartialMatch(colref.GetColumnName().GetIdentifierName(), *regex)) {
 					continue;
 				}
 				new_list.push_back(std::move(expanded_expr));
@@ -320,7 +320,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 						continue;
 					}
 					auto &colref = child_expr->Cast<ColumnRefExpression>();
-					candidates.push_back(colref.GetColumnName());
+					candidates.emplace_back(colref.GetColumnName());
 				}
 				string candidate_str;
 				if (!candidates.empty()) {
@@ -396,7 +396,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				if (new_expr->GetAlias().empty()) {
 					new_expr->SetAlias(colref.GetColumnName());
 				} else {
-					new_expr->SetAlias(ReplaceColumnsAlias(new_expr->GetAlias(), colref.GetColumnName(), regex.get()));
+					new_expr->SetAlias(
+					    Identifier(ReplaceColumnsAlias(new_expr->GetAlias().GetIdentifierName(),
+					                                   colref.GetColumnName().GetIdentifierName(), regex.get())));
 				}
 			}
 		}

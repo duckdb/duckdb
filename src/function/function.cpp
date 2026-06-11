@@ -45,16 +45,16 @@ bool FunctionData::SupportStatementCache() const {
 	return true;
 }
 
-Function::Function(string name_p) : name(std::move(name_p)) {
+Function::Function(Identifier name_p) : name(std::move(name_p)) {
 }
 Function::~Function() {
 }
 
-SimpleFunction::SimpleFunction(string name_p, FunctionSignature signature_p)
+SimpleFunction::SimpleFunction(Identifier name_p, FunctionSignature signature_p)
     : Function(std::move(name_p)), signature(std::move(signature_p)) {
 }
 
-SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
+SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
     : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
 }
@@ -62,9 +62,9 @@ SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, L
 SimpleFunction::~SimpleFunction() {
 }
 
-static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
-	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
-	       schema_name != DEFAULT_SCHEMA;
+static bool RequiresCatalogAndSchemaNamePrefix(const Identifier &catalog_name, const Identifier &schema_name) {
+	return !catalog_name.empty() && catalog_name != Identifier::SystemCatalog() && !schema_name.empty() &&
+	       schema_name != Identifier::DefaultSchema();
 }
 
 string FunctionParameter::ToString() const {
@@ -97,7 +97,7 @@ string SimpleFunction::ToString() const {
 	return name + signature.ToString();
 }
 
-SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
+SimpleNamedParameterFunction::SimpleNamedParameterFunction(Identifier name_p, vector<LogicalType> arguments_p,
                                                            LogicalType varargs_p)
     : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
 }
@@ -145,9 +145,10 @@ hash_t SimpleFunction::Hash() const {
 	return signature.Hash();
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments,
-                              const vector<pair<string, LogicalType>> &named_arguments, const LogicalType &varargs) {
+                              const vector<pair<Identifier, LogicalType>> &named_arguments,
+                              const LogicalType &varargs) {
 	string result;
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		result += catalog_name + "." + schema_name + ".";
@@ -169,16 +170,16 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	return result + ")";
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
 	string result =
-	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<string, LogicalType>> {}, varargs);
+	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<Identifier, LogicalType>> {}, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }
 
-string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
+string Function::CallToString(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &name,
                               const vector<LogicalType> &arguments,
                               const named_parameter_type_map_t &named_parameters) {
 	vector<string> input_arguments;
@@ -220,7 +221,7 @@ string BoundSimpleFunction::ToString() const {
 }
 
 bool FunctionParameter::operator==(const FunctionParameter &other) const {
-	return type == other.type && StringUtil::CIEquals(name, other.name);
+	return type == other.type && name == other.name;
 }
 
 bool FunctionParameter::operator!=(const FunctionParameter &other) const {

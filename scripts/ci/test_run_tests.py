@@ -33,6 +33,43 @@ def strip_ansi_lines(lines: list[str]) -> list[str]:
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_highlight_stack_trace_lines_colors_frame_index_and_function_name(self):
+        lines = run_tests.highlight_stack_trace_lines(
+            [
+                "INTERNAL Error: something bad happened",
+                "Stack Trace:",
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType) + 288",
+                "1        duckdb::TaskScheduler::ExecuteForever(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868",
+                "2        Catch::RunContext::invokeActiveTestCase() + 144",
+                "3        main(int, char**) + 32",
+            ]
+        )
+
+        self.assertEqual(
+            lines[2],
+            (
+                f"{run_tests.ANSI_DARK_GRAY}0{run_tests.ANSI_RESET}        "
+                f"{run_tests.ANSI_TEAL}duckdb::Exception::Exception{run_tests.ANSI_RESET}"
+                "(duckdb::ExceptionType) + 288"
+            ),
+        )
+        self.assertEqual(
+            lines[3],
+            (
+                f"{run_tests.ANSI_DARK_GRAY}1{run_tests.ANSI_RESET}        "
+                f"{run_tests.ANSI_TEAL}duckdb::TaskScheduler::ExecuteForever{run_tests.ANSI_RESET}"
+                "(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868"
+            ),
+        )
+        self.assertEqual(
+            strip_ansi_lines(lines[2:]),
+            [
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType) + 288",
+                "1        duckdb::TaskScheduler::ExecuteForever(std::__1::atomic<bool>*, duckdb::TaskSchedulerType) + 868",
+            ],
+        )
+        self.assertEqual(len(lines), 4)
+
     def test_wrapper_builds_sibling_unittest_argv(self):
         argv = test_runner_wrapper.build_run_tests_argv(["[slow]", "test/sql/a.test"], "build/release/test/run")
         self.assertEqual(
@@ -1313,7 +1350,7 @@ assertions: 359 | 358 passed | 1 failed
             [
                 "error: FAIL Test Progress Bar Fast",
                 "",
-                "    70          if (std::getenv(\"FORCE_ASYNC_SINK_SOURCE\") != nullptr) {",
+                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
                 "    71              return;",
                 "    72          }",
                 "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
@@ -1326,6 +1363,93 @@ assertions: 359 | 358 passed | 1 failed
                 "20000 (0x4e20) == 100020002 (0x5f62f22)",
             ],
         )
+
+    def test_msvc_catch_assertion_location_is_parsed(self):
+        # MSVC builds of Catch print source locations as "path(line):" instead of "path:line:"
+        progress_bar_path = REPO_ROOT / "test" / "api" / "test_progress_bar.cpp"
+        batch = [
+            "Test Progress Bar Fast",
+            "Test UUID API",
+        ]
+        stdout = """
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unittest is a Catch v2.13.7 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+Test Progress Bar Fast
+-------------------------------------------------------------------------------
+{progress_bar_path}(91)
+...............................................................................
+
+{progress_bar_path}(73): FAILED:
+  REQUIRE( cur_rows_read == total_cardinality )
+with expansion:
+  20000 (0x4e20) == 100020002 (0x5f62f22)
+
+[2/2] (100%): Test UUID API took 0.079s
+===============================================================================
+test cases:  2 |   1 passed | 1 failed
+assertions: 359 | 358 passed | 1 failed
+""".format(
+            progress_bar_path=progress_bar_path
+        )
+        stderr = ""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(reproduce_batch, ["Test Progress Bar Fast"])
+        self.assertEqual(
+            strip_ansi_lines(lines)[1:],
+            [
+                "error: FAIL Test Progress Bar Fast",
+                "",
+                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
+                "    71              return;",
+                "    72          }",
+                "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
+                "    74      }",
+                "    75  }",
+                "    76  void Start() {",
+                "",
+                "FAILED: REQUIRE( cur_rows_read == total_cardinality )",
+                "  with expansion:",
+                "20000 (0x4e20) == 100020002 (0x5f62f22)",
+            ],
+        )
+
+    def test_unparsable_batch_failure_dumps_raw_output(self):
+        # when we cannot extract a useful failure description, the raw unittest output should be dumped
+        # so that CI logs contain everything needed to diagnose the failure
+        batch = ["/tmp/a.test", "/tmp/b.test"]
+        stdout = """
+[0/2] (0%): /tmp/a.test
+[1/2] (50%): /tmp/a.test took 0.1s
+[1/2] (50%): /tmp/b.test
+===============================================================================
+test cases:  2 |   1 passed | 1 failed
+assertions: 16 | 15 passed | 1 failed
+"""
+        stderr = ""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch, returncode=1)
+        stripped_lines = strip_ansi_lines(lines)
+        self.assertIn("--- raw unittest stdout ---", stripped_lines)
+        self.assertIn("--- raw unittest stderr: empty ---", stripped_lines)
+        self.assertIn("assertions: 16 | 15 passed | 1 failed", stripped_lines)
+        self.assertEqual(reproduce_batch, ["/tmp/a.test", "/tmp/b.test"])
+
+    def test_informative_failures_do_not_dump_raw_output(self):
+        batch = ["/tmp/fail.test"]
+        stderr = """
+================================================================
+FAIL: /tmp/fail.test
+================================================================
+Wrong result in query! (/tmp/fail.test:25)!
+================================================================
+Mismatch on row 1, column 1
+[3, 1, 2] <> [1, 2, 3]
+"""
+        lines, _ = run_tests.summarize_failure_output(None, "", stderr, batch)
+        stripped_lines = strip_ansi_lines(lines)
+        self.assertFalse(any(line.startswith("--- raw unittest") for line in stripped_lines))
 
     def test_generic_failure_merges_query_diagnostics_with_assertion_failure(self):
         remote_optimizer_path = REPO_ROOT / "test" / "extension" / "test_remote_optimizer.cpp"
@@ -1382,7 +1506,7 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
                 "    150  if (kill(pid, SIGKILL) != 0) {",
                 "    151      FAIL();",
                 "",
-                "Query failed with message: INTERNAL Error: Failed to read \"8\" bytes from socket - read 0 instead",
+                'Query failed with message: INTERNAL Error: Failed to read "8" bytes from socket - read 0 instead',
                 "Stack Trace:",
                 "0        _ZN6duckdb9Exception6ToJSONENS_13ExceptionTypeERKNSt3__112basic_stringIcNS2_11char_traitsIcEENS2_9allocatorIcEEEE + 48",
                 "1        _ZN6duckdb17InternalExceptionC1ERKNSt3__112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEE + 32",
@@ -1391,6 +1515,74 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
                 "FAILED: REQUIRE( NO_FAIL((con1.Query( \"SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name\"))) )",
                 "  with expansion:",
                 "false",
+            ],
+        )
+
+    def test_generic_failure_extracts_sqllogictest_assertion_details(self):
+        batch = ["test/sql/copy/partitioned/partitioned_order_by_flush_race.test"]
+        stdout = """
+Filters: test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+[0/1] (0%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+unittest is a Catch v2.13.7 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test
+-------------------------------------------------------------------------------
+/Users/sander/dev/duckdb/duckdb/test/sqlite/test_sqllogictest.cpp:41
+...............................................................................
+
+test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27: FAILED:
+explicitly with message:
+  0
+
+[1/1] (100%): test/sql/copy/partitioned/partitioned_order_by_flush_race.test took 1.086s
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 8 | 7 passed | 1 failed
+"""
+        stderr = """
+1. test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27
+================================================================================
+
+::error::Query unexpectedly failed! (test/sql/copy/partitioned/partitioned_order_by_flush_race.test:27)!
+================================================================================
+COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
+TO 'duckdb_unittest_tempdir/11276/large_ordered_partitioned_1'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);
+================================================================================
+INTERNAL Error: Assertion triggered in file "/Users/sander/dev/duckdb/duckdb/src/execution/operator/persistent/physical_copy_to_file.cpp" on line 1335: batch_state.mode == PartitionedCopyBatchMode::PREPARING
+
+Stack Trace:
+
+0        duckdb::Exception::Exception(duckdb::ExceptionType, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) + 288
+1        duckdb::InternalException::InternalException<char const*&, int&, char const*&>(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, char const*&, int&, char const*&) + 396
+2        duckdb::DuckDBAssertInternal(bool, char const*, char const*, int) + 480
+3        duckdb::PartitionedCopyHashGroup::Prepare(duckdb::ExecutionContext&, duckdb::InterruptState&, duckdb::PartitionedCopyTask const&) + 660
+
+This error signals an assertion failure within DuckDB. This usually occurs due to unexpected conditions or errors in the program's logic.
+For more information, see https://duckdb.org/docs/current/dev/internal_errors
+"""
+        lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
+        self.assertEqual(reproduce_batch, batch)
+        self.assertEqual(
+            strip_ansi_lines(lines)[1:],
+            [
+                "error: FAIL test/sql/copy/partitioned/partitioned_order_by_flush_race.test",
+                "",
+                "  > 27  statement ok",
+                "    28  COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)",
+                "    29  TO '{TEST_DIR}/large_ordered_partitioned_{i}'",
+                "    30  (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);",
+                "",
+                ""
+                'INTERNAL Error: Assertion triggered in file "/Users/sander/dev/duckdb/duckdb/src/execution/operator/persistent/physical_copy_to_file.cpp" on line 1335: batch_state.mode == PartitionedCopyBatchMode::PREPARING',
+                "Stack Trace:",
+                "0        duckdb::Exception::Exception(duckdb::ExceptionType, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) + 288",
+                "1        duckdb::InternalException::InternalException<char const*&, int&, char const*&>(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, char const*&, int&, char const*&) + 396",
+                "2        duckdb::DuckDBAssertInternal(bool, char const*, char const*, int) + 480",
+                "3        duckdb::PartitionedCopyHashGroup::Prepare(duckdb::ExecutionContext&, duckdb::InterruptState&, duckdb::PartitionedCopyTask const&) + 660",
             ],
         )
 

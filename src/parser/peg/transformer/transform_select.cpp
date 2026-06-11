@@ -192,11 +192,11 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
 		for (auto &window_func : window_functions) {
 			D_ASSERT(!window_func->GetAlias().empty());
-			string window_name(window_func->GetAlias());
+			auto window_name = window_func->GetAlias();
 			window_func->ClearAlias();
 			auto it = transformer.window_clauses.find(window_name);
 			if (it != transformer.window_clauses.end()) {
-				throw ParserException("window \"%s\" is already defined", window_name);
+				throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
 			}
 			auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
 			transformer.window_clauses[window_name] = std::move(window_function);
@@ -234,7 +234,8 @@ FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGT
 	return FunctionArgument(std::move(expression));
 }
 
-MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer, const string &type_func_name,
+MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
+                                                              const Identifier &type_func_name,
                                                               const optional<LogicalType> &type,
                                                               unique_ptr<ParsedExpression> expression) {
 	MacroParameter parameter;
@@ -257,17 +258,19 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransf
 	return transformer.Transform<unique_ptr<BaseTableRef>>(choice_result);
 }
 
-string PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &transformer, const string &schema_name) {
+Identifier PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &transformer,
+                                                               const Identifier &schema_name) {
 	return schema_name;
 }
 
-string PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &transformer, const string &catalog_name) {
+Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &transformer,
+                                                                const Identifier &catalog_name) {
 	return catalog_name;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
-    PEGTransformer &transformer, const string &catalog_qualification, const string &reserved_schema_qualification,
-    const string &reserved_identifier_or_string_literal) {
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
 	QualifiedName result;
 	result.catalog = catalog_qualification;
 	result.schema = reserved_schema_qualification;
@@ -276,8 +279,8 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
-    PEGTransformer &transformer, const string &schema_qualification,
-    const string &reserved_identifier_or_string_literal) {
+    PEGTransformer &transformer, const Identifier &schema_qualification,
+    const Identifier &reserved_identifier_or_string_literal) {
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = schema_qualification;
@@ -364,7 +367,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGT
                                                                             const vector<string> &unpivot_header,
                                                                             vector<PivotColumn> unpivot_value_list) {
 	auto result = make_uniq<PivotRef>();
-	result->unpivot_names = unpivot_header;
+	result->unpivot_names = StringsToIdentifiers(unpivot_header);
 	result->pivots = std::move(unpivot_value_list);
 	if (result->pivots.size() > 1) {
 		throw ParserException("UNPIVOT requires a single pivot element");
@@ -457,7 +460,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClauseBody(
 	result->aggregates = std::move(target_list);
 	result->pivots = std::move(pivot_value_list);
 	if (pivot_group_by_list) {
-		result->groups = *pivot_group_by_list;
+		result->groups = StringsToIdentifiers(*pivot_group_by_list);
 	}
 	return std::move(result);
 }
@@ -585,7 +588,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
-    PEGTransformer &transformer, const string &table_alias_colon, const QualifiedName &qualified_table_function,
+    PEGTransformer &transformer, const Identifier &table_alias_colon, const QualifiedName &qualified_table_function,
     vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
     optional<unique_ptr<SampleOptions>> sample_clause) {
 	auto result = make_uniq<TableFunctionRef>();
@@ -845,7 +848,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 
 	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
 		auto with_entry =
-		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
+		    transformer.Transform<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
 
 		if (is_recursive) {
 			auto &query_node = with_entry.second->query_node;
@@ -861,27 +864,27 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
 			                            with_entry.second->key_targets);
 		}
-		auto cte_name = string(with_entry.first);
+		auto &cte_name = with_entry.first;
 
 		auto it = result.map.find(cte_name);
 		if (it != result.map.end()) {
 			// can't have two CTEs with same name
-			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
+			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
 	return result;
 }
 
-pair<string, unique_ptr<CommonTableExpressionInfo>>
-PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const string &col_id_or_string,
+pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
+PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
                                               const optional<vector<string>> &insert_column_list,
                                               optional<vector<unique_ptr<ParsedExpression>>> using_key,
                                               const optional<bool> &materialized, unique_ptr<TableRef> cte_body) {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	auto cte_name = col_id_or_string;
 	if (insert_column_list) {
-		result->aliases = *insert_column_list;
+		result->aliases = StringsToIdentifiers(*insert_column_list);
 	}
 	if (using_key) {
 		result->key_targets = std::move(*using_key);
@@ -1085,8 +1088,8 @@ PEGTransformerFactory::TransformTargetList(PEGTransformer &transformer,
 }
 
 vector<string> PEGTransformerFactory::TransformColumnAliases(PEGTransformer &transformer,
-                                                             const vector<string> &col_id_or_string) {
-	return col_id_or_string;
+                                                             const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
 }
 
 DistinctClause PEGTransformerFactory::TransformDistinctAll(PEGTransformer &transformer) {
@@ -1124,7 +1127,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer,
-                                                                  const optional<string> &table_alias_colon,
+                                                                  const optional<Identifier> &table_alias_colon,
                                                                   unique_ptr<BaseTableRef> base_table_name,
                                                                   const optional<TableAlias> &table_alias,
                                                                   optional<unique_ptr<AtClause>> at_clause,
@@ -1148,7 +1151,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer
 	return std::move(base_table_name);
 }
 
-string PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer, const string &col_id_or_string) {
+Identifier PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer,
+                                                           const Identifier &col_id_or_string) {
 	return col_id_or_string;
 }
 
@@ -1164,7 +1168,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &t
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransformer &transformer,
-                                                                    const optional<string> &table_alias_colon,
+                                                                    const optional<Identifier> &table_alias_colon,
                                                                     unique_ptr<TableRef> table_ref,
                                                                     const optional<TableAlias> &table_alias,
                                                                     optional<unique_ptr<SampleOptions>> sample_clause) {
@@ -1194,8 +1198,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 }
 
 vector<string> PEGTransformerFactory::TransformPivotGroupByList(PEGTransformer &transformer,
-                                                                const vector<string> &col_id_or_string) {
-	return col_id_or_string;
+                                                                const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPivotHeader(PEGTransformer &transformer,
@@ -1207,7 +1211,7 @@ PivotColumn PEGTransformerFactory::TransformUnpivotValueList(PEGTransformer &tra
                                                              const vector<string> &unpivot_header,
                                                              vector<PivotColumnEntry> unpivot_target_list) {
 	PivotColumn result;
-	result.unpivot_names = unpivot_header;
+	result.unpivot_names = StringsToIdentifiers(unpivot_header);
 	if (result.unpivot_names.size() != 1) {
 		throw ParserException("UNPIVOT requires a single column name for the PIVOT IN clause");
 	}
@@ -1245,24 +1249,24 @@ PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEGTransformer &transformer,
-                                                                             const string &schema_qualification,
-                                                                             const string &reserved_table_name) {
+                                                                             const Identifier &schema_qualification,
+                                                                             const Identifier &reserved_table_name) {
 	const auto description = TableDescription(INVALID_CATALOG, schema_qualification, reserved_table_name);
 	return make_uniq<BaseTableRef>(description);
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTable(
-    PEGTransformer &transformer, const string &catalog_qualification, const string &reserved_schema_qualification,
-    const string &reserved_table_name) {
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
 	const auto description =
 	    TableDescription(catalog_qualification, reserved_schema_qualification, reserved_table_name);
 	return make_uniq<BaseTableRef>(description);
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
-                                                                     const optional<string> &catalog_qualification,
-                                                                     const optional<string> &schema_qualification,
-                                                                     const string &table_function_name) {
+                                                                     const optional<Identifier> &catalog_qualification,
+                                                                     const optional<Identifier> &schema_qualification,
+                                                                     const Identifier &table_function_name) {
 	QualifiedName result;
 	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
 	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
@@ -1289,17 +1293,17 @@ TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transfor
 	TableAlias result;
 	result.name = identifier_or_string_literal.name;
 	if (column_aliases) {
-		result.column_name_alias = *column_aliases;
+		result.column_name_alias = StringsToIdentifiers(*column_aliases);
 	}
 	return result;
 }
 
-TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer, const string &identifier,
+TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer, const Identifier &identifier,
                                                                const optional<vector<string>> &column_aliases) {
 	TableAlias result;
 	result.name = identifier;
 	if (column_aliases) {
-		result.column_name_alias = *column_aliases;
+		result.column_name_alias = StringsToIdentifiers(*column_aliases);
 	}
 	return result;
 }
@@ -1332,7 +1336,7 @@ JoinQualifier PEGTransformerFactory::TransformOnClause(PEGTransformer &transform
 }
 
 JoinQualifier PEGTransformerFactory::TransformUsingClause(PEGTransformer &transformer,
-                                                          const vector<string> &column_name) {
+                                                          const vector<Identifier> &column_name) {
 	JoinQualifier result;
 	for (auto &col_identifier : column_name) {
 		if (col_identifier.empty()) {
@@ -1411,14 +1415,15 @@ PEGTransformerFactory::TransformWindowClause(PEGTransformer &transformer,
 	return window_definition;
 }
 
-SampleMethod PEGTransformerFactory::TransformSampleFunction(PEGTransformer &transformer, const string &col_id) {
-	return EnumUtil::FromString<SampleMethod>(col_id);
+SampleMethod PEGTransformerFactory::TransformSampleFunction(PEGTransformer &transformer, const Identifier &col_id) {
+	return EnumUtil::FromString<SampleMethod>(col_id.GetIdentifierName());
 }
 
 pair<SampleMethod, optional_idx>
-PEGTransformerFactory::TransformSampleProperties(PEGTransformer &transformer, const string &col_id,
+PEGTransformerFactory::TransformSampleProperties(PEGTransformer &transformer, const Identifier &col_id,
                                                  const optional<optional_idx> &sample_seed) {
-	return make_pair(EnumUtil::FromString<SampleMethod>(col_id), sample_seed ? *sample_seed : optional_idx());
+	return make_pair(EnumUtil::FromString<SampleMethod>(col_id.GetIdentifierName()),
+	                 sample_seed ? *sample_seed : optional_idx());
 }
 
 optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &transformer,
@@ -1537,20 +1542,20 @@ LimitPercentResult PEGTransformerFactory::TransformLimitLiteralPercent(PEGTransf
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColIdExpression(PEGTransformer &transformer,
-                                                                             const string &col_id,
+                                                                             const Identifier &col_id,
                                                                              unique_ptr<ParsedExpression> expression) {
 	expression->SetAlias(col_id);
 	return expression;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAsCollabel(
-    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const string &col_label_or_string) {
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const Identifier &col_label_or_string) {
 	expression->SetAlias(col_label_or_string);
 	return expression;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionOptIdentifier(
-    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const optional<string> &identifier) {
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> expression, const optional<Identifier> &identifier) {
 	if (identifier) {
 		expression->SetAlias(*identifier);
 	}

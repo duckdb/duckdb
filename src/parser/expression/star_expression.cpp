@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-StarExpression::StarExpression(string relation_name_p)
+StarExpression::StarExpression(Identifier relation_name_p)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)) {
 }
 
@@ -92,11 +92,11 @@ bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
 }
 
 unique_ptr<ParsedExpression>
-StarExpression::DeserializeStarExpression(string &&relation_name, const case_insensitive_set_t &exclude_list,
-                                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list,
-                                          bool columns, unique_ptr<ParsedExpression> expr, bool unpacked,
+StarExpression::DeserializeStarExpression(Identifier &&relation_name, const identifier_set_t &exclude_list,
+                                          identifier_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
+                                          unique_ptr<ParsedExpression> expr, bool unpacked,
                                           const qualified_column_set_t &qualified_exclude_list,
-                                          qualified_column_map_t<string> &&rename_list) {
+                                          qualified_column_map_t<Identifier> &&rename_list) {
 	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
 	result->relation_name = std::move(relation_name);
 	result->replace_list = std::move(replace_list);
@@ -113,16 +113,16 @@ StarExpression::DeserializeStarExpression(string &&relation_name, const case_ins
 	return std::move(result);
 }
 
-StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
+StarExpression::StarExpression(const identifier_set_t &exclude_list_p, qualified_column_set_t qualified_set)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
 	for (auto &entry : exclude_list_p) {
-		exclude_list.insert(QualifiedColumnName(entry));
+		exclude_list.insert(QualifiedColumnName(Identifier(entry)));
 	}
 }
 
-case_insensitive_set_t StarExpression::SerializedExcludeList() const {
+identifier_set_t StarExpression::SerializedExcludeList() const {
 	// we serialize non-qualified elements in a separate list of only column names for backwards compatibility
-	case_insensitive_set_t result;
+	identifier_set_t result;
 	for (auto &entry : exclude_list) {
 		if (!entry.IsQualified()) {
 			result.insert(entry.column);

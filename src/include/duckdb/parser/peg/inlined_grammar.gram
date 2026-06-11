@@ -1,4 +1,6 @@
-Program <- Statement? (';'+ Statement)* ';'*
+Program <- TopLevelStatement*
+
+TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	CreateStatement /
@@ -1762,7 +1764,7 @@ CommentColumn <- 'COLUMN'
 CommentValue <- NullLiteral / StringLiteral
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ReferencingClause? ForEachClause? TriggerBody
 
-TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement / MergeIntoStatement
 TriggerName <- Identifier
 
 ReferencingClause <- 'REFERENCING' ReferencingItem ReferencingItem?

@@ -33,7 +33,7 @@
 namespace duckdb {
 
 void Binder::CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
-                                            const string &tname) {
+                                            const Identifier &tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
 		                                                  : "Column name/value mismatch for insert on %s: "
@@ -94,10 +94,10 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<unordered_set<string>> &lambda_params);
+                        vector<identifier_set_t> &lambda_params);
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
-                                vector<unordered_set<string>> &lambda_params) {
+                                vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
@@ -138,7 +138,7 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 }
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<unordered_set<string>> &lambda_params) {
+                        vector<identifier_set_t> &lambda_params) {
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
@@ -153,7 +153,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 		}
 
 		// Qualify the column reference.
-		expr = make_uniq<ColumnRefExpression>(col_ref.GetColumnName(), table_name);
+		expr = make_uniq<ColumnRefExpression>(col_ref.GetColumnName(), Identifier(table_name));
 		return;
 	}
 	case ExpressionClass::FUNCTION: {
@@ -199,7 +199,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
-			columns.push_back(column.Name());
+			columns.emplace_back(column.Name());
 		}
 	} else {
 		// a list of columns was explicitly supplied, only update those
@@ -220,14 +220,14 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	return set_info;
 }
 
-void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,
                                   vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
                                   IndexVector<idx_t, PhysicalIndex> &column_index_map) {
 	if (!columns.empty() || default_values) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		case_insensitive_map_t<idx_t> column_name_map;
+		identifier_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < columns.size(); i++) {
 			auto entry = column_name_map.insert(make_pair(columns[i], i));
 			if (!entry.second) {
@@ -264,7 +264,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &colu
 	}
 }
 
-static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
+static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
 	unordered_set<column_t> conflict_column_ids;
 	for (auto &index : storage_info.index_info) {
 		if (!index.is_unique) {
@@ -274,7 +274,7 @@ static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &stor
 			conflict_column_ids.insert(col_id);
 		}
 	}
-	unordered_set<string> conflict_column_names;
+	identifier_set_t conflict_column_names;
 	for (auto &col : table.GetColumns().Physical()) {
 		if (conflict_column_ids.count(col.Physical().index)) {
 			conflict_column_names.insert(col.Name());
@@ -289,13 +289,14 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	auto &on_conflict_info = *node.on_conflict_info;
 	auto merge_into = make_uniq<MergeIntoStatement>();
 	// set up the target table
-	string table_name = !node.table_ref->alias.empty() ? node.table_ref->alias : node.table;
+	string table_name =
+	    !node.table_ref->alias.empty() ? node.table_ref->alias.GetIdentifierName() : node.table.GetIdentifierName();
 	merge_into->node->target = std::move(node.table_ref);
 
 	auto storage_info = table.GetStorageInfo(context);
 	auto &columns = table.GetColumns();
 	// set up the columns on which to join
-	vector<vector<string>> all_distinct_on_columns;
+	vector<vector<Identifier>> all_distinct_on_columns;
 	if (on_conflict_info.indexed_columns.empty()) {
 		// When omitting the conflict target, we derive the join columns from the primary key/unique constraints
 		// traverse the primary key/unique constraints
@@ -310,17 +311,17 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 
 			vector<unique_ptr<ParsedExpression>> and_children;
 			auto &indexed_columns = index.column_set;
-			vector<string> distinct_on_columns;
+			vector<Identifier> distinct_on_columns;
 			for (auto &column : columns.Physical()) {
 				if (!indexed_columns.count(column.Physical().index)) {
 					continue;
 				}
-				auto lhs = make_uniq<ColumnRefExpression>(column.Name(), table_name);
+				auto lhs = make_uniq<ColumnRefExpression>(column.Name(), Identifier(table_name));
 				auto rhs = make_uniq<ColumnRefExpression>(column.Name(), "excluded");
 				auto new_condition =
 				    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lhs), std::move(rhs));
 				and_children.push_back(std::move(new_condition));
-				distinct_on_columns.push_back(column.Name());
+				distinct_on_columns.emplace_back(column.Name());
 			}
 			all_distinct_on_columns.push_back(std::move(distinct_on_columns));
 			if (and_children.empty()) {
@@ -360,7 +361,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	} else {
 		// when on conflict columns are explicitly provided - use them directly
 		// first figure out if there is an index on the columns or not
-		case_insensitive_map_t<idx_t> specified_columns;
+		identifier_map_t<idx_t> specified_columns;
 		for (idx_t i = 0; i < on_conflict_info.indexed_columns.size(); i++) {
 			specified_columns[on_conflict_info.indexed_columns[i]] = i;
 			auto column_index = table.GetColumnIndex(on_conflict_info.indexed_columns[i]);
@@ -397,8 +398,8 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
 			                      "CONSTRAINT or INDEX");
 		}
-		all_distinct_on_columns.push_back(on_conflict_info.indexed_columns);
-		merge_into->node->using_columns = std::move(on_conflict_info.indexed_columns);
+		all_distinct_on_columns.emplace_back(on_conflict_info.indexed_columns);
+		merge_into->node->using_columns = on_conflict_info.indexed_columns;
 	}
 
 	// expand any default values
@@ -434,7 +435,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			// now push another subquery that adds the default columns
 			auto select_stmt = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
-			case_insensitive_set_t set_columns;
+			identifier_set_t set_columns;
 			for (auto &set_col : node.columns) {
 				set_columns.insert(set_col);
 			}
@@ -462,7 +463,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		}
 		// push all columns of the table as an alias
 		for (auto &column : columns.Physical()) {
-			source->column_name_alias.push_back(column.Name());
+			source->column_name_alias.emplace_back(column.Name());
 		}
 	}
 	// push DISTINCT ON(unique_columns)
@@ -511,11 +512,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		update_action->column_order = node.column_order;
 		if (on_conflict_info.set_info) {
 			for (auto &col : on_conflict_info.set_info->expressions) {
-				vector<unordered_set<string>> lambda_params;
+				vector<identifier_set_t> lambda_params;
 				DoUpdateSetQualify(col, table_name, lambda_params);
 			}
 			if (on_conflict_info.set_info->condition) {
-				vector<unordered_set<string>> lambda_params;
+				vector<identifier_set_t> lambda_params;
 				DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
 				update_action->condition = std::move(on_conflict_info.set_info->condition);
 			}
@@ -542,7 +543,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
 
-	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
 	}
 
@@ -592,7 +593,8 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name);
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
 	insert->bound_constraints = BindConstraints(table);
 	if (!node.select_statement && !node.default_values) {
 		result.plan = std::move(insert);
@@ -625,8 +627,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(std::move(node.returning_list), table, node.table_ref ? node.table_ref->alias : string(),
-		                     insert_table_index, std::move(index_as_logicaloperator));
+		return BindReturning(std::move(node.returning_list), table,
+		                     node.table_ref ? node.table_ref->alias : Identifier(), insert_table_index,
+		                     std::move(index_as_logicaloperator));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());

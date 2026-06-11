@@ -7,9 +7,9 @@ namespace duckdb {
 LogicalRecursiveCTE::LogicalRecursiveCTE() : LogicalCTE(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 }
 
-LogicalRecursiveCTE::LogicalRecursiveCTE(string ctename_p, TableIndex table_index, idx_t column_count, bool union_all,
-                                         vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
-                                         unique_ptr<LogicalOperator> bottom)
+LogicalRecursiveCTE::LogicalRecursiveCTE(Identifier ctename_p, TableIndex table_index, idx_t column_count,
+                                         bool union_all, vector<unique_ptr<Expression>> key_targets,
+                                         unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
     : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
                  LogicalOperatorType::LOGICAL_RECURSIVE_CTE),
       union_all(union_all), key_targets(std::move(key_targets)) {
@@ -17,7 +17,7 @@ LogicalRecursiveCTE::LogicalRecursiveCTE(string ctename_p, TableIndex table_inde
 
 InsertionOrderPreservingMap<string> LogicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["CTE Name"] = ctename;
+	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetParamsEstimatedCardinality(result);
 	return result;

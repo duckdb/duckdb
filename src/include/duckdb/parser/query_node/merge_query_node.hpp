@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -35,7 +36,7 @@ public:
 	//! The join condition (ON clause) - or NULL if a USING column list is used
 	unique_ptr<ParsedExpression> join_condition;
 	//! The columns used in the USING clause (if join_condition is NULL)
-	vector<string> using_columns;
+	vector<Identifier> using_columns;
 	//! The merge actions, grouped by their condition
 	map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> actions;
 	//! keep track of optional returningList if statement contains a RETURNING keyword

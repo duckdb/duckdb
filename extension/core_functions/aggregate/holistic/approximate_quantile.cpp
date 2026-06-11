@@ -103,12 +103,6 @@ struct ApproximateQuantileBindData : public FunctionData {
 struct ApproxQuantileOperation {
 	using SAVE_TYPE = duckdb_tdigest::Value;
 
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.pos = 0;
-		state.h = nullptr;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -273,7 +267,7 @@ unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
 
 AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	auto function = GetApproximateQuantileDecimalAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;
@@ -394,7 +388,7 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 
 AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	auto function = GetApproxQuantileListAggregateFunction(type);
-	function.name = "approx_quantile";
+	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	return function;

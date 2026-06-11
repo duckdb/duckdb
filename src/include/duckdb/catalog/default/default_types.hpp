@@ -21,11 +21,11 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	DUCKDB_API static LogicalTypeId GetDefaultType(const string &name);
+	DUCKDB_API static LogicalTypeId GetDefaultType(const Identifier &name);
 	DUCKDB_API static LogicalType TryDefaultBind(const string &name, const vector<pair<string, Value>> &params);
 
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
+	vector<Identifier> GetDefaultEntries() override;
 };
 
 } // namespace duckdb
