@@ -1649,17 +1649,6 @@ struct ProduceArrowStringViewSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct ProfileOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "profile_output";
-	static constexpr const char *Description =
-	    "The file to which profile output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct ProfilingCoverageSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_coverage";
@@ -1673,8 +1662,18 @@ struct ProfilingCoverageSetting {
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "Enables the profiler (detailed profiling information is always "
-	                                           "collected - DETAILED is a deprecated alias of STANDARD)";
+	static constexpr const char *Description = "DEPRECATED: Sets the profiling mode";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingOutputSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "profiling_output";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
