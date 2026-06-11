@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/gathered_metrics.hpp
+// duckdb/main/profiler/gathered_metrics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,14 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/set.hpp"
-#include "duckdb/main/metrics.hpp"
+#include "duckdb/main/profiler/metrics.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
