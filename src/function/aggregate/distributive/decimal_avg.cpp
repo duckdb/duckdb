@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -80,19 +81,26 @@ struct DecimalAvgOperation {
 		}
 
 		bool negative = state.sum.upper < 0;
-		hugeint_t abssum = negative ? -state.sum : state.sum;
+		uhugeint_t abs_sum(UnsafeNumericCast<uint64_t>(state.sum.upper), state.sum.lower);
+		if (negative) {
+			abs_sum = -abs_sum;
+		}
 
-		uint64_t r64;
-		hugeint_t q = Hugeint::DivModPositive(abssum, state.count, r64);
+		uhugeint_t remainder;
+		uhugeint_t q = Uhugeint::DivMod(abs_sum, uhugeint_t(state.count), remainder);
+		auto r64 = remainder.lower;
 
 		// Banker's rounding (round-half-to-even).
 		uint64_t dist = state.count - r64;
 		bool round_up = (dist < r64) | ((dist == r64) & static_cast<bool>(q.lower & 1));
 		if (round_up) {
-			q = q + hugeint_t(1);
+			q = q + uhugeint_t(1);
 		}
 
-		hugeint_t signed_q = negative ? -q : q;
+		auto signed_q = hugeint_t(q);
+		if (negative) {
+			signed_q = hugeint_t(-q);
+		}
 		AssignResult(target, signed_q);
 	}
 };
