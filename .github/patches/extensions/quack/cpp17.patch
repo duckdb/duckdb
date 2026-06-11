@@ -1,0 +1,29 @@
+diff --git a/src/quack_server.cpp b/src/quack_server.cpp
+index 0a4987e..f3c2d17 100644
+--- a/src/quack_server.cpp
++++ b/src/quack_server.cpp
+@@ -38,7 +38,8 @@ QuackServer::~QuackServer() {
+ vector<QuackConnectionSnapshot> QuackServer::GetActiveConnectionSnap() {
+ 	vector<QuackConnectionSnapshot> result;
+ 	std::lock_guard<std::mutex> lock(active_connections_mutex);
+-	for (auto &[id, conn] : active_connections) {
++	for (auto &conn_kv : active_connections) {
++		auto &conn = conn_kv.second;
+ 		QuackConnectionSnapshot snapshot;
+ 		snapshot.session_id = conn->session_id;
+ 		snapshot.sql_query = conn->sql_query;
+diff --git a/src/quack_storage.cpp b/src/quack_storage.cpp
+index fe67a98..e628df8 100644
+--- a/src/quack_storage.cpp
++++ b/src/quack_storage.cpp
+@@ -53,7 +53,9 @@ vector<QuackStorageExtensionInfo::ServerSnapshot> QuackStorageExtensionInfo::Lis
+ vector<QuackConnectionSnapshot> QuackStorageExtensionInfo::GetActiveConnectionSnaps() {
+ 	vector<QuackConnectionSnapshot> result;
+ 	std::lock_guard<std::mutex> lock(servers_mutex);
+-	for (auto &[uri, server] : servers) {
++	for (auto &server_kv : servers) {
++		auto &uri = server_kv.first;
++		auto &server = server_kv.second;
+ 		for (auto &snapshot : server->GetActiveConnectionSnap()) {
+ 			snapshot.server_id = uri;
+ 			result.push_back(std::move(snapshot));
