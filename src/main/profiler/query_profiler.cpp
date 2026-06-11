@@ -297,8 +297,8 @@ MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
 	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
-string QueryProfiler::ToString(const ProfilerPrintFormat &explain_format) const {
-	auto renderer = GetRenderer(explain_format);
+string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
+	auto renderer = GetRenderer(format);
 	return RenderProfilerOutput(renderer.get());
 }
 

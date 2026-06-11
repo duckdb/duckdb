@@ -25,11 +25,8 @@ string TreeRenderer::RenderProfilerDisabled() {
 }
 
 //===--------------------------------------------------------------------===//
-// Print format registry
+// Built-in print format registry
 //===--------------------------------------------------------------------===//
-// Single source of truth mapping a print format name to the TreeRenderer that renders it. The EXPLAIN parser
-// (ProfilerPrintFormat::FromString), the query profiler, and the TreeRenderer factory all resolve formats through this
-// table.
 template <class T>
 static unique_ptr<TreeRenderer> MakeRenderer() {
 	return make_uniq<T>();

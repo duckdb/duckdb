@@ -98,9 +98,8 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Query(const Identifier &name, const string &sql);
 
 	//! Explain the query plan of this relation
-	DUCKDB_API unique_ptr<QueryResult>
-	Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
-	        const ProfilerPrintFormat &explain_format = ProfilerPrintFormat::DEFAULT());
+	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
+	                                           const ProfilerPrintFormat &format = ProfilerPrintFormat::DEFAULT());
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {

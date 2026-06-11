@@ -19,7 +19,7 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
                                                  unique_ptr<SQLStatement> explainable_statements) {
 	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
-	auto explain_format = ProfilerPrintFormat::DEFAULT();
+	auto format = ProfilerPrintFormat::DEFAULT();
 	if (!explain_option_list.empty()) {
 		for (auto option : explain_option_list) {
 			auto option_name = StringUtil::Lower(option.name.GetIdentifierName());
@@ -27,7 +27,7 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				explain_format = ParseProfilerPrintFormat(option.children[0]);
+				format = ParseProfilerPrintFormat(option.children[0]);
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
@@ -37,7 +37,7 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 		}
 	}
 	auto statement = std::move(explainable_statements);
-	return make_uniq<ExplainStatement>(std::move(statement), explain_type, explain_format);
+	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
 }
 
 bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer) {

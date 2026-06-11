@@ -3,9 +3,8 @@
 namespace duckdb {
 
 LogicalExplain::LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type,
-                               const ProfilerPrintFormat &explain_format)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type),
-      explain_format(explain_format) {
+                               const ProfilerPrintFormat &format)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type), format(format) {
 	children.push_back(std::move(plan));
 }
 
