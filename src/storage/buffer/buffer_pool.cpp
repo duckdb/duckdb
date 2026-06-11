@@ -506,7 +506,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
 		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
-			// The block was used/re-queued after this node was enqueued, so this node was already counted as dead.
+			// something changed in the mean-time, bail out
 			DecrementDeadNodes();
 			continue;
 		}
