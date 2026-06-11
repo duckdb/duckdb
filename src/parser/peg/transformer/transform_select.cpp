@@ -23,14 +23,14 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
+                                                unique_ptr<SelectStatement> select_statement_internal) {
+	return std::move(select_statement_internal);
 }
 
-unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transformer,
-                                                                                    ParseResult &parse_result) {
+unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInternalRule(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	CommonTableExpressionMap cte_map;
 	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, cte_map);

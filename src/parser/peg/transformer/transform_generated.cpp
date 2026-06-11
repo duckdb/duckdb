@@ -4890,6 +4890,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeListInterna
 	return make_uniq<TypedTransformResult<vector<LogicalType>>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	auto result = TransformSelectStatement(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSelectSetOpChainInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -7543,6 +7551,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PragmaParameters", &PEGTransformerFactory::TransformPragmaParametersInternal},
 	    {"PrepareStatement", &PEGTransformerFactory::TransformPrepareStatementInternal},
 	    {"TypeList", &PEGTransformerFactory::TransformTypeListInternal},
+	    {"SelectStatement", &PEGTransformerFactory::TransformSelectStatementInternal},
 	    {"SelectSetOpChain", &PEGTransformerFactory::TransformSelectSetOpChainInternal},
 	    {"SelectSetOpChainTail", &PEGTransformerFactory::TransformSelectSetOpChainTailInternal},
 	    {"IntersectChain", &PEGTransformerFactory::TransformIntersectChainInternal},

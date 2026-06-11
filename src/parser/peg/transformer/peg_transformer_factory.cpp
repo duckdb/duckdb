@@ -368,8 +368,7 @@ void PEGTransformerFactory::RegisterPivot() {
 
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram rules that remain manual after generated wrappers are registered.
-	REGISTER_TRANSFORM(TransformSelectStatement);
-	REGISTER_TRANSFORM(TransformSelectStatementInternal);
+	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
 	REGISTER_TRANSFORM(TransformSimpleSelect);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
 	REGISTER_TRANSFORM(TransformDistinctKeyword);

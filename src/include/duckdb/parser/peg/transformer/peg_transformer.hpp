@@ -606,9 +606,8 @@ private:
 	                                                             ParseResult &parse_result);
 
 	// select.gram
-	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SelectStatement> TransformSelectStatementInternal(PEGTransformer &transformer,
-	                                                                    ParseResult &parse_result);
+	static unique_ptr<SelectStatement> TransformSelectStatementInternalRule(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
 	static bool TransformDistinctOrAll(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformDistinctKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformAllKeyword(PEGTransformer &transformer, ParseResult &parse_result);
@@ -2268,6 +2267,10 @@ private:
 	static unique_ptr<TransformResultValue> TransformTypeListInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static vector<LogicalType> TransformTypeList(PEGTransformer &transformer, const vector<LogicalType> &type);
+	static unique_ptr<TransformResultValue> TransformSelectStatementInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer,
+	                                                         unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformSelectSetOpChainInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformSelectSetOpChain(
