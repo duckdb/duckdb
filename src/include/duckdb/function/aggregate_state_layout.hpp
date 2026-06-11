@@ -218,6 +218,10 @@ struct AggregateStateField {
 	//! Physical byte size of the data described by this field (including nested struct members).
 	//! For OPTIONAL_VALUE: includes is_set bool (field_offset + sizeof(bool)).
 	idx_t field_size = 0;
+	//! The C++ alignment (alignof) of the field's data - the offsets in the real state structs depend on it,
+	//! and it is platform-dependent (e.g. string_t is 8-byte aligned on 64-bit platforms but 4-byte aligned on
+	//! 32-bit Windows), so it must be recorded from the actual C++ types rather than derived from the field size
+	idx_t field_alignment = 0;
 	AggregateFieldKind kind = AggregateFieldKind::PRIMITIVE;
 	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
 	vector<AggregateStateField> children;
@@ -231,6 +235,9 @@ struct AggregateStateField {
 		if (kind == AggregateFieldKind::OPTIONAL_VALUE) {
 			D_ASSERT(children.size() == 1);
 			return children[0].GetAlignment();
+		}
+		if (field_alignment != 0) {
+			return field_alignment;
 		}
 		return MinValue<idx_t>(field_size, 8);
 	}
@@ -277,11 +284,43 @@ struct AggregateStateField {
 		}
 		idx_t size = 0;
 		for (const auto &child : StructType::GetChildTypes(type)) {
-			idx_t child_size = GetPhysicalSize(child.second);
-			size = AlignValue(size, MinValue<idx_t>(child_size, 8));
-			size += child_size;
+			size = AlignValue(size, GetPhysicalAlignment(child.second));
+			size += GetPhysicalSize(child.second);
 		}
 		return size;
+	}
+
+	//! The C++ alignment of a state member described by a logical type, mirroring alignof of the corresponding
+	//! member in the actual state struct. The alignment is platform-dependent (e.g. string_t is 8-byte aligned on
+	//! 64-bit platforms but only 4-byte aligned on 32-bit Windows), so it must come from the actual C++ types.
+	static idx_t GetPhysicalAlignment(const LogicalType &type) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			idx_t alignment = 1;
+			for (const auto &child : StructType::GetChildTypes(type)) {
+				alignment = MaxValue<idx_t>(alignment, GetPhysicalAlignment(child.second));
+			}
+			return alignment;
+		}
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR:
+			return alignof(string_t);
+		case PhysicalType::INT64:
+		case PhysicalType::UINT64:
+			return alignof(int64_t);
+		case PhysicalType::DOUBLE:
+			return alignof(double);
+		case PhysicalType::INT128:
+			return alignof(hugeint_t);
+		case PhysicalType::UINT128:
+			return alignof(uhugeint_t);
+		case PhysicalType::INTERVAL:
+			return alignof(interval_t);
+		case PhysicalType::LIST:
+			return alignof(list_entry_t);
+		default:
+			// the remaining primitive types are at most 4 bytes - their alignment equals their size
+			return MinValue<idx_t>(GetTypeIdSize(type.InternalType()), 8);
+		}
 	}
 
 	static void PopulateChildren(const LogicalType &type, AggregateStateField &field) {
@@ -292,10 +331,11 @@ struct AggregateStateField {
 		idx_t offset = 0;
 		for (auto &[name, child_type] : StructType::GetChildTypes(type)) {
 			idx_t child_size = GetPhysicalSize(child_type);
-			offset = AlignValue(offset, MinValue<idx_t>(child_size, 8));
+			offset = AlignValue(offset, GetPhysicalAlignment(child_type));
 			AggregateStateField child_field;
 			child_field.field_offset = offset;
 			child_field.field_size = child_size;
+			child_field.field_alignment = GetPhysicalAlignment(child_type);
 			child_field.kind =
 			    (child_type.id() == LogicalTypeId::STRUCT) ? AggregateFieldKind::STRUCT : AggregateFieldKind::PRIMITIVE;
 			PopulateChildren(child_type, child_field);
@@ -370,27 +410,35 @@ AggregateStateField BuildStateField() {
 		field.kind = AggregateFieldKind::SORT_KEY;
 		field.sort_key_order = T::order_type;
 		field.field_size = sizeof(string_t);
+		field.field_alignment = alignof(string_t);
 	} else if constexpr (IsStateTypedValueType<T>::value) {
 		// stored as a plain value - only the logical type is resolved at bind time
 		field.field_size = sizeof(typename T::PHYSICAL_TYPE);
+		field.field_alignment = alignof(typename T::PHYSICAL_TYPE);
 	} else if constexpr (IsStateListType<T>::value) {
 		field.kind = AggregateFieldKind::LIST;
 		field.field_size = sizeof(LinkedList);
+		field.field_alignment = alignof(LinkedList);
 	} else if constexpr (IsStructStateType<T>::value) {
 		// T is StructStateType<Ts...> — the phantom descriptor type itself
 		field.kind = AggregateFieldKind::STRUCT;
 		idx_t offset = 0;
 		T::AppendChildren(field, offset);
 		field.field_size = offset; // total physical size of all members
+		for (auto &child : field.children) {
+			field.field_alignment = MaxValue<idx_t>(field.field_alignment, child.GetAlignment());
+		}
 	} else if constexpr (HasStructStateType<T>::value) {
 		// T is a concrete C++ struct that declares STATE_TYPE = StructStateType<...>
 		field.kind = AggregateFieldKind::STRUCT;
 		idx_t offset = 0;
 		T::STATE_TYPE::AppendChildren(field, offset);
 		field.field_size = sizeof(T);
+		field.field_alignment = alignof(T);
 	} else {
 		// PRIMITIVE
 		field.field_size = sizeof(T);
+		field.field_alignment = alignof(T);
 	}
 	return field;
 }
