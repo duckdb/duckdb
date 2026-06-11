@@ -17,6 +17,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -24,6 +26,28 @@
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+}
+
+// Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
+// FlattenDependentJoins machinery can decorrelate the trigger body.
+static void RewriteTriggersToDependent(LogicalOperator &op) {
+	for (auto &child : op.children) {
+		if (child) {
+			RewriteTriggersToDependent(*child);
+		}
+	}
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		if (!op.children[i] || op.children[i]->type != LogicalOperatorType::LOGICAL_TRIGGER) {
+			continue;
+		}
+		auto &trig = op.children[i]->Cast<LogicalTrigger>();
+		auto dep_join = make_uniq<LogicalDependentJoin>(JoinType::INNER);
+		dep_join->correlated_columns = std::move(trig.correlated_columns);
+		dep_join->perform_delim = true;
+		dep_join->children.push_back(std::move(trig.children[0]));
+		dep_join->children.push_back(std::move(trig.children[1]));
+		op.children[i] = std::move(dep_join);
+	}
 }
 
 static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
@@ -96,6 +120,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
+		RewriteTriggersToDependent(*this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();

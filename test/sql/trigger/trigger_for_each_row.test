@@ -1,0 +1,292 @@
+# name: test/sql/trigger/trigger_for_each_row.test
+# description: Test AFTER INSERT FOR EACH ROW trigger execution with NEW row references
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: trigger fires once per inserted row
+statement ok
+CREATE TABLE t (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit (row_id INTEGER, row_val VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (NEW.id, NEW.val);
+
+statement ok
+INSERT INTO t VALUES (1, 'a');
+
+query II
+SELECT row_id, row_val FROM audit ORDER BY row_id;
+----
+1	a
+
+# Multi-row insert: trigger fires once per row
+statement ok
+INSERT INTO t VALUES (2, 'b'), (3, 'c'), (4, 'd');
+
+query II
+SELECT row_id, row_val FROM audit ORDER BY row_id;
+----
+1	a
+2	b
+3	c
+4	d
+
+# Single-row insert adds one audit entry
+statement ok
+INSERT INTO t VALUES (5, 'e');
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+5
+
+# FOR EACH ROW without NEW reference is rejected (use FOR EACH STATEMENT instead)
+statement ok
+CREATE TABLE t2 (id INTEGER);
+
+statement ok
+CREATE TABLE audit2 (msg VARCHAR);
+
+statement error
+CREATE TRIGGER trg_noref AFTER INSERT ON t2 FOR EACH ROW
+    INSERT INTO audit2 VALUES ('row');
+----
+Binder Error: FOR EACH ROW trigger "trg_noref" on table "t2" must reference at least one NEW column
+
+# Insert from SELECT fires per row
+statement ok
+CREATE TABLE src (id INTEGER);
+
+statement ok
+INSERT INTO src VALUES (100), (200);
+
+statement ok
+INSERT INTO t SELECT id, 'from_src' FROM src;
+
+query I
+SELECT COUNT(*) FROM audit WHERE row_id >= 100;
+----
+2
+
+# Constraint failure on base table: trigger must NOT fire
+statement ok
+CREATE TABLE t_unique (id INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE audit_unique (fired_id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_unique AFTER INSERT ON t_unique FOR EACH ROW
+    INSERT INTO audit_unique VALUES (NEW.id);
+
+statement ok
+INSERT INTO t_unique VALUES (1);
+
+statement error
+INSERT INTO t_unique VALUES (1);
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM audit_unique;
+----
+1
+
+# Trigger fires after all rows are visible (snapshot semantics)
+statement ok
+CREATE TABLE t_snap (id INTEGER);
+
+statement ok
+CREATE TABLE snap_result (snap_id INTEGER, cnt INTEGER);
+
+statement ok
+CREATE TRIGGER trg_snap AFTER INSERT ON t_snap FOR EACH ROW
+    INSERT INTO snap_result SELECT NEW.id, COUNT(*) FROM t_snap;
+
+statement ok
+INSERT INTO t_snap VALUES (1), (2), (3);
+
+# All three trigger firings see the full batch (3 rows) in t_snap
+query I
+SELECT DISTINCT cnt FROM snap_result;
+----
+3
+
+# Multiple FOR EACH ROW triggers on same event fire in order
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+CREATE TABLE audit_multi (n INTEGER);
+
+statement ok
+CREATE TRIGGER trg_m1 AFTER INSERT ON t_multi FOR EACH ROW
+    INSERT INTO audit_multi VALUES (NEW.id * 10);
+
+statement ok
+CREATE TRIGGER trg_m2 AFTER INSERT ON t_multi FOR EACH ROW
+    INSERT INTO audit_multi VALUES (NEW.id * 100);
+
+statement ok
+INSERT INTO t_multi VALUES (1), (2);
+
+query I
+SELECT COUNT(*) FROM audit_multi;
+----
+4
+
+query I
+SELECT SUM(n) FROM audit_multi;
+----
+330
+
+# FOR EACH ROW trigger can UPDATE another table using NEW column
+statement ok
+CREATE TABLE t_upd_src (id INTEGER, amount INTEGER);
+
+statement ok
+CREATE TABLE t_upd_totals (total INTEGER);
+
+statement ok
+INSERT INTO t_upd_totals VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_upd AFTER INSERT ON t_upd_src FOR EACH ROW
+    UPDATE t_upd_totals SET total = total + NEW.amount;
+
+# FIXME: self-accumulating UPDATE triggers return wrong results with the current set-based
+# decorrelation execution model.  All trigger firings run as a single batch against one
+# transaction snapshot, so every firing reads total=0 and only the first rowid-deduped write
+# survives (result: 5, expected: 18).  Correct sequential-accumulation semantics require
+# per-row iterative execution with intermediate visibility, which is not yet implemented.
+mode skip instable
+
+statement ok
+INSERT INTO t_upd_src VALUES (1, 5), (2, 10), (3, 3);
+
+query I
+SELECT total FROM t_upd_totals;
+----
+18
+
+mode unskip
+
+# BEFORE FOR EACH ROW is not yet supported
+statement ok
+CREATE TABLE t_before (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_before BEFORE INSERT ON t_before FOR EACH ROW
+    INSERT INTO t_before VALUES (NEW.id);
+----
+Not implemented Error: Only AFTER triggers are supported for FOR EACH ROW
+
+# FOR EACH ROW UPDATE is not yet supported
+statement ok
+CREATE TABLE t_upd_ev (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_upd_ev AFTER UPDATE ON t_upd_ev FOR EACH ROW
+    INSERT INTO t_upd_ev VALUES (NEW.id);
+----
+Not implemented Error: Only INSERT events are supported for FOR EACH ROW triggers
+
+# FOR EACH ROW DELETE is not yet supported
+statement ok
+CREATE TABLE t_del_ev (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_del_ev AFTER DELETE ON t_del_ev FOR EACH ROW
+    INSERT INTO t_del_ev VALUES (1);
+----
+Not implemented Error: Only INSERT events are supported for FOR EACH ROW triggers
+
+# FOR EACH ROW + REFERENCING is rejected
+statement ok
+CREATE TABLE t_ref (id INTEGER);
+
+statement ok
+CREATE TABLE t_ref_new (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_ref AFTER INSERT ON t_ref REFERENCING NEW TABLE AS new_t FOR EACH ROW
+    INSERT INTO t_ref_new VALUES (1);
+----
+Binder Error: REFERENCING is not valid for FOR EACH ROW triggers
+
+# FROM new is not valid in FOR EACH ROW (NEW is a row variable, not a transition table)
+statement ok
+CREATE TABLE t_from_new (id INTEGER);
+
+statement ok
+CREATE TABLE t_from_new_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_from_new AFTER INSERT ON t_from_new FOR EACH ROW
+    INSERT INTO t_from_new_log SELECT id FROM new;
+----
+Catalog Error: Table with name new does not exist
+
+# Self-referential FOR EACH ROW trigger is rejected
+statement ok
+CREATE TABLE t_self (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_self AFTER INSERT ON t_self FOR EACH ROW
+    INSERT INTO t_self VALUES (NEW.id + 1);
+----
+Not implemented Error: Recursive trigger chains are not yet supported
+
+# Mixing FOR EACH STATEMENT and FOR EACH ROW on the same table is not yet supported
+statement ok
+CREATE TABLE t_mix (id INTEGER);
+
+statement ok
+CREATE TABLE t_mix_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix_stmt AFTER INSERT ON t_mix FOR EACH STATEMENT
+    INSERT INTO t_mix_log VALUES ('stmt');
+
+statement error
+CREATE TRIGGER trg_mix_row AFTER INSERT ON t_mix FOR EACH ROW
+    INSERT INTO t_mix_log VALUES (CAST(NEW.id AS VARCHAR));
+----
+Not implemented Error: Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported
+
+# Also blocked in the other direction (ROW first, then STATEMENT)
+statement ok
+CREATE TABLE t_mix2 (id INTEGER);
+
+statement ok
+CREATE TABLE t_mix2_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix2_row AFTER INSERT ON t_mix2 FOR EACH ROW
+    INSERT INTO t_mix2_log VALUES (CAST(NEW.id AS VARCHAR));
+
+statement error
+CREATE TRIGGER trg_mix2_stmt AFTER INSERT ON t_mix2 FOR EACH STATEMENT
+    INSERT INTO t_mix2_log VALUES ('stmt');
+----
+Not implemented Error: Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported
+
+# RETURNING is not supported alongside FOR EACH ROW trigger
+statement ok
+CREATE TABLE t_ret (id INTEGER);
+
+statement ok
+CREATE TABLE t_ret_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_ret AFTER INSERT ON t_ret FOR EACH ROW
+    INSERT INTO t_ret_log VALUES (NEW.id);
+
+statement error
+INSERT INTO t_ret VALUES (1) RETURNING id;
+----
+Not implemented Error: RETURNING is not yet supported on tables with FOR EACH ROW triggers

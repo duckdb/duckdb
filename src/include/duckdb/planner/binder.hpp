@@ -463,6 +463,12 @@ private:
 	                                                  TableCatalogEntry &table, TriggerEventType event_type);
 	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	unique_ptr<BoundStatement> TryExpandRowTriggers(QueryNode &node,
+	                                                vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                 const TableCatalogEntry &table,
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);

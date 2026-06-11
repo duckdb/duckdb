@@ -148,9 +148,10 @@ public:
 	//! Scan all triggers on this table (default: no-op - non-DuckDB tables have no triggers)
 	virtual void ScanTriggers(CatalogTransaction transaction,
 	                          const std::function<void(CatalogEntry &)> &callback) const;
-	//! Collect triggers matching the given timing and event type
-	vector<const_reference<TriggerCatalogEntry>>
-	GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type) const;
+	//! Collect triggers matching the given timing, event type, and for_each granularity
+	vector<const_reference<TriggerCatalogEntry>> GetTriggersForEvent(CatalogTransaction transaction,
+	                                                                 TriggerTiming timing, TriggerEventType event_type,
+	                                                                 TriggerForEach for_each) const;
 
 protected:
 	//! A list of columns that are part of this table
