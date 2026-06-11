@@ -441,6 +441,13 @@ int ArrowSchemaDeepCopy(struct ArrowSchema *schema, struct ArrowSchema *schema_o
 		return result;
 	}
 
+	// ArrowSchemaInit hard-codes flags to ARROW_FLAG_NULLABLE; preserve the source
+	// flags instead so a deep copy is semantically identical to its source. DuckDB
+	// sets non-default flags (root struct non-nullable, map keys/entries
+	// non-nullable) in ArrowConverter::ToArrowSchema, and the Arrow spec requires
+	// map keys to be non-nullable -- dropping these produces an invalid schema.
+	schema_out->flags = schema->flags;
+
 	result = ArrowSchemaAllocateChildren(schema_out, schema->n_children);
 	if (result != NANOARROW_OK) {
 		schema_out->release(schema_out);

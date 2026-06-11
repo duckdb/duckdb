@@ -109,3 +109,51 @@ TEST_CASE("Arrow schema for GEOMETRY with CRS survives transaction commit (#475)
 		copied.release(&copied);
 	}
 }
+
+// Regression test for the flag-preservation half of the cached-schema fix.
+//
+// GetSchema() hands consumers a deep copy of the cached schema. ArrowSchemaDeepCopy
+// initializes every node as ARROW_FLAG_NULLABLE; if it does not also copy the
+// source flags, the copy silently diverges from the schema DuckDB built. For a MAP
+// column this is not cosmetic: ArrowConverter::ToArrowSchema marks the root struct,
+// the map 'entries' field, and the map 'key' field as non-nullable (flags == 0),
+// and the Arrow spec *requires* map keys to be non-nullable. A copy that flips them
+// back to nullable is an invalid Arrow schema.
+TEST_CASE("Cached Arrow schema preserves non-nullable flags for MAP (#475)", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+	ForceArrowCollector(con);
+
+	auto result = con.context->Query("SELECT MAP {'a': 1, 'b': 2} AS m", false);
+	REQUIRE(result);
+	REQUIRE(!result->HasError());
+	REQUIRE(result->type == QueryResultType::ARROW_RESULT);
+	auto &arrow = result->Cast<ArrowQueryResult>();
+	REQUIRE(arrow.HasCachedSchema());
+
+	ArrowSchema copied;
+	copied.release = nullptr;
+	arrow.GetSchema(copied);
+	REQUIRE(copied.release != nullptr);
+
+	// Root struct is non-nullable.
+	REQUIRE((copied.flags & ARROW_FLAG_NULLABLE) == 0);
+
+	// child[0] is the map column itself (format "+m"), which is nullable.
+	REQUIRE(copied.n_children == 1);
+	auto &map = *copied.children[0];
+	REQUIRE(std::string(map.format) == "+m");
+	REQUIRE(map.n_children == 1);
+
+	// The map's single child is the non-nullable 'entries' struct (format "+s").
+	auto &entries = *map.children[0];
+	REQUIRE(std::string(entries.format) == "+s");
+	REQUIRE((entries.flags & ARROW_FLAG_NULLABLE) == 0);
+
+	// 'entries' has key (non-nullable) and value children.
+	REQUIRE(entries.n_children == 2);
+	auto &key = *entries.children[0];
+	REQUIRE((key.flags & ARROW_FLAG_NULLABLE) == 0);
+
+	copied.release(&copied);
+}
