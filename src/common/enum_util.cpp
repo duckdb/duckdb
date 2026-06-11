@@ -92,7 +92,6 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -805,24 +804,6 @@ const char* EnumUtil::ToChars<BaseColumnPrunerMode>(BaseColumnPrunerMode value) 
 template<>
 BaseColumnPrunerMode EnumUtil::FromString<BaseColumnPrunerMode>(const char *value) {
 	return static_cast<BaseColumnPrunerMode>(StringUtil::StringToEnum(GetBaseColumnPrunerModeValues(), 2, "BaseColumnPrunerMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetBatchDrainModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BatchDrainMode::PRESERVE_BATCH), "PRESERVE_BATCH" },
-		{ static_cast<uint32_t>(BatchDrainMode::FORCE_CLOSE_BATCH), "FORCE_CLOSE_BATCH" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<BatchDrainMode>(BatchDrainMode value) {
-	return StringUtil::EnumToString(GetBatchDrainModeValues(), 2, "BatchDrainMode", static_cast<uint32_t>(value));
-}
-
-template<>
-BatchDrainMode EnumUtil::FromString<BatchDrainMode>(const char *value) {
-	return static_cast<BatchDrainMode>(StringUtil::StringToEnum(GetBatchDrainModeValues(), 2, "BatchDrainMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
@@ -1829,24 +1810,6 @@ const char* EnumUtil::ToChars<DistinctType>(DistinctType value) {
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	return static_cast<DistinctType>(StringUtil::StringToEnum(GetDistinctTypeValues(), 2, "DistinctType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetDrainModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(DrainMode::SEQUENTIAL), "SEQUENTIAL" },
-		{ static_cast<uint32_t>(DrainMode::POSITIONAL), "POSITIONAL" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<DrainMode>(DrainMode value) {
-	return StringUtil::EnumToString(GetDrainModeValues(), 2, "DrainMode", static_cast<uint32_t>(value));
-}
-
-template<>
-DrainMode EnumUtil::FromString<DrainMode>(const char *value) {
-	return static_cast<DrainMode>(StringUtil::StringToEnum(GetDrainModeValues(), 2, "DrainMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetErrorTypeValues() {
@@ -3378,24 +3341,6 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 17, "MemoryTag", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMemoryUpdateModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MemoryUpdateMode::COARSE), "COARSE" },
-		{ static_cast<uint32_t>(MemoryUpdateMode::FORCE), "FORCE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MemoryUpdateMode>(MemoryUpdateMode value) {
-	return StringUtil::EnumToString(GetMemoryUpdateModeValues(), 2, "MemoryUpdateMode", static_cast<uint32_t>(value));
-}
-
-template<>
-MemoryUpdateMode EnumUtil::FromString<MemoryUpdateMode>(const char *value) {
-	return static_cast<MemoryUpdateMode>(StringUtil::StringToEnum(GetMemoryUpdateModeValues(), 2, "MemoryUpdateMode", value));
-}
-
 const StringUtil::EnumStringLiteral *GetMergeActionConditionValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MergeActionCondition::WHEN_MATCHED), "WHEN_MATCHED" },
@@ -4051,24 +3996,6 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value) {
 	return static_cast<PendingExecutionResult>(StringUtil::StringToEnum(GetPendingExecutionResultValues(), 6, "PendingExecutionResult", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPendingTaskCountModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PendingTaskCountMode::FULL_BUDGET_ONLY), "FULL_BUDGET_ONLY" },
-		{ static_cast<uint32_t>(PendingTaskCountMode::INCLUDE_TAIL), "INCLUDE_TAIL" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PendingTaskCountMode>(PendingTaskCountMode value) {
-	return StringUtil::EnumToString(GetPendingTaskCountModeValues(), 2, "PendingTaskCountMode", static_cast<uint32_t>(value));
-}
-
-template<>
-PendingTaskCountMode EnumUtil::FromString<PendingTaskCountMode>(const char *value) {
-	return static_cast<PendingTaskCountMode>(StringUtil::StringToEnum(GetPendingTaskCountModeValues(), 2, "PendingTaskCountMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
@@ -4762,42 +4689,6 @@ const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value) {
 	return static_cast<ScanType>(StringUtil::StringToEnum(GetScanTypeValues(), 3, "ScanType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetScheduleModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ScheduleMode::ALLOW), "ALLOW" },
-		{ static_cast<uint32_t>(ScheduleMode::DEFER), "DEFER" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ScheduleMode>(ScheduleMode value) {
-	return StringUtil::EnumToString(GetScheduleModeValues(), 2, "ScheduleMode", static_cast<uint32_t>(value));
-}
-
-template<>
-ScheduleMode EnumUtil::FromString<ScheduleMode>(const char *value) {
-	return static_cast<ScheduleMode>(StringUtil::StringToEnum(GetScheduleModeValues(), 2, "ScheduleMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetSchedulePolicyValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SchedulePolicy::THRESHOLD), "THRESHOLD" },
-		{ static_cast<uint32_t>(SchedulePolicy::FORCE), "FORCE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<SchedulePolicy>(SchedulePolicy value) {
-	return StringUtil::EnumToString(GetSchedulePolicyValues(), 2, "SchedulePolicy", static_cast<uint32_t>(value));
-}
-
-template<>
-SchedulePolicy EnumUtil::FromString<SchedulePolicy>(const char *value) {
-	return static_cast<SchedulePolicy>(StringUtil::StringToEnum(GetSchedulePolicyValues(), 2, "SchedulePolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSecretDisplayTypeValues() {
