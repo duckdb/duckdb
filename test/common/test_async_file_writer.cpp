@@ -651,6 +651,36 @@ TEST_CASE("AsyncFileWriter schedules extra remote drain tasks only after a full 
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one large write", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 4);
+	BlockingWriteFileSystem fs(true, false);
+	auto path = TestCreatePath("async_file_writer_remote_large_then_tiny.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string large(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
+	string tail = "tail";
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+		batch_guard.Finish();
+	}
+
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(fs.BlockedWrites() == 1);
+
+	fs.ReleaseWrites();
+	writer.Close();
+	REQUIRE(ReadFile(path) == large + tail);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter falls back to one drain task without positional writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);

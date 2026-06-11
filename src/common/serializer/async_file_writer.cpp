@@ -52,11 +52,6 @@ static ClientContext &RequireClientContext(QueryContext context) {
 	return *client_context;
 }
 
-static idx_t CeilDiv(idx_t value, idx_t divisor) {
-	D_ASSERT(divisor > 0);
-	return value == 0 ? 0 : 1 + (value - 1) / divisor;
-}
-
 AsyncFileWriter::PendingWrite::PendingWrite(unique_ptr<AsyncWriteBuffer> buffer_p, idx_t offset_p)
     : buffer(std::move(buffer_p)), offset(offset_p) {
 }
@@ -464,16 +459,53 @@ idx_t AsyncFileWriter::TotalPendingBytes() const {
 	return pending_bytes + in_flight_bytes;
 }
 
-idx_t AsyncFileWriter::UnscheduledPendingBytes() const {
-	if (pending_drain_tasks == 0 || pending_bytes == 0) {
-		return pending_bytes;
-	}
+idx_t AsyncFileWriter::SelectPendingWriteEnd(idx_t start, idx_t &selected_bytes) const {
+	D_ASSERT(start < pending_writes.size());
 	auto byte_budget = DrainTaskByteBudget();
-	auto covered_tasks = CeilDiv(pending_bytes, byte_budget);
-	if (pending_drain_tasks >= covered_tasks) {
-		return 0;
+	selected_bytes = 0;
+	idx_t end = start;
+	while (end < pending_writes.size()) {
+		auto write_size = pending_writes[end].Size();
+		if (selected_bytes > 0 && selected_bytes + write_size > byte_budget) {
+			break;
+		}
+		selected_bytes += write_size;
+		end++;
+		if (selected_bytes >= byte_budget) {
+			break;
+		}
 	}
-	return pending_bytes - pending_drain_tasks * byte_budget;
+	D_ASSERT(end > start);
+	return end;
+}
+
+idx_t AsyncFileWriter::FirstUnscheduledPendingWrite(idx_t &scheduled_bytes) const {
+	idx_t write_idx = 0;
+	scheduled_bytes = 0;
+	for (idx_t task_idx = 0; task_idx < pending_drain_tasks && write_idx < pending_writes.size(); task_idx++) {
+		idx_t selected_bytes;
+		write_idx = SelectPendingWriteEnd(write_idx, selected_bytes);
+		scheduled_bytes += selected_bytes;
+	}
+	D_ASSERT(scheduled_bytes <= pending_bytes);
+	return write_idx;
+}
+
+idx_t AsyncFileWriter::CountPendingWriteTasks(idx_t start_write, idx_t available_slots,
+                                              PendingTaskCountMode mode) const {
+	idx_t task_count = 0;
+	auto byte_budget = DrainTaskByteBudget();
+	while (available_slots > 0 && start_write < pending_writes.size()) {
+		idx_t selected_bytes;
+		auto next_write = SelectPendingWriteEnd(start_write, selected_bytes);
+		if (mode == PendingTaskCountMode::FULL_BUDGET_ONLY && selected_bytes < byte_budget) {
+			break;
+		}
+		task_count++;
+		available_slots--;
+		start_write = next_write;
+	}
+	return task_count;
 }
 
 idx_t AsyncFileWriter::FirstTaskScheduleThreshold() const {
@@ -494,17 +526,18 @@ idx_t AsyncFileWriter::EstimateScheduleCount(idx_t available_slots, SchedulePoli
 	if (available_slots == 0 || pending_writes.empty()) {
 		return 0;
 	}
-	auto unscheduled_bytes = UnscheduledPendingBytes();
-	if (unscheduled_bytes == 0) {
+	auto original_available_slots = available_slots;
+	idx_t scheduled_bytes;
+	auto start_write = FirstUnscheduledPendingWrite(scheduled_bytes);
+	if (start_write >= pending_writes.size()) {
 		return 0;
 	}
-	auto byte_budget = DrainTaskByteBudget();
 	if (policy == SchedulePolicy::FORCE) {
-		auto schedule_count = CeilDiv(unscheduled_bytes, byte_budget);
-		return MinValue(schedule_count, available_slots);
+		return CountPendingWriteTasks(start_write, available_slots, PendingTaskCountMode::INCLUDE_TAIL);
 	}
 
 	if (active_drain_tasks == 0) {
+		auto unscheduled_bytes = pending_bytes - scheduled_bytes;
 		if (unscheduled_bytes < FirstTaskScheduleThreshold()) {
 			return 0;
 		}
@@ -512,17 +545,18 @@ idx_t AsyncFileWriter::EstimateScheduleCount(idx_t available_slots, SchedulePoli
 			return 1;
 		}
 		idx_t schedule_count = 1;
-		unscheduled_bytes = unscheduled_bytes > byte_budget ? unscheduled_bytes - byte_budget : 0;
-		schedule_count += unscheduled_bytes / byte_budget;
-		return MinValue(schedule_count, available_slots);
+		idx_t selected_bytes;
+		start_write = SelectPendingWriteEnd(start_write, selected_bytes);
+		available_slots--;
+		schedule_count += CountPendingWriteTasks(start_write, available_slots, PendingTaskCountMode::FULL_BUDGET_ONLY);
+		return MinValue(schedule_count, original_available_slots);
 	}
 
 	if (drain_mode == DrainMode::SEQUENTIAL) {
 		return 0;
 	}
 
-	auto schedule_count = unscheduled_bytes / byte_budget;
-	return MinValue(schedule_count, available_slots);
+	return CountPendingWriteTasks(start_write, available_slots, PendingTaskCountMode::FULL_BUDGET_ONLY);
 }
 
 void AsyncFileWriter::StartDrainTask() {
@@ -537,20 +571,8 @@ idx_t AsyncFileWriter::TakePendingWrites(vector<PendingWrite> &writes) {
 		return 0;
 	}
 
-	auto byte_budget = DrainTaskByteBudget();
 	idx_t selected_bytes = 0;
-	idx_t end = 0;
-	while (end < pending_writes.size()) {
-		auto write_size = pending_writes[end].Size();
-		if (selected_bytes > 0 && selected_bytes + write_size > byte_budget) {
-			break;
-		}
-		selected_bytes += write_size;
-		end++;
-		if (selected_bytes >= byte_budget) {
-			break;
-		}
-	}
+	auto end = SelectPendingWriteEnd(0, selected_bytes);
 
 	writes.reserve(end);
 	for (idx_t write_idx = 0; write_idx < end; write_idx++) {
@@ -724,6 +746,17 @@ void AsyncFileWriter::RethrowTaskError() {
 	}
 }
 
+void AsyncFileWriter::WorkOnSingleTask() {
+	shared_ptr<Task> task;
+	if (!executor->GetTask(task)) {
+		TaskScheduler::YieldThread();
+		return;
+	}
+	auto result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+	D_ASSERT(result != TaskExecutionResult::TASK_BLOCKED);
+	task.reset();
+}
+
 void AsyncFileWriter::Flush() {
 	WaitAll();
 }
@@ -752,7 +785,7 @@ void AsyncFileWriter::ApplyBackpressure() {
 			return;
 		}
 		SchedulePendingWrites(SchedulePolicy::FORCE);
-		executor->WorkOnTasks();
+		WorkOnSingleTask();
 		RethrowTaskError();
 	}
 }

@@ -121,6 +121,8 @@ private:
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
+	//! Whether task estimation should include the final under-budget tail.
+	enum class PendingTaskCountMode : uint8_t { FULL_BUDGET_ONLY, INCLUDE_TAIL };
 
 	//! Owned write data with the logical file offset assigned at registration.
 	struct PendingWrite {
@@ -161,8 +163,12 @@ private:
 	idx_t DrainTaskByteBudget() const;
 	//! Return queued/in-flight bytes that have not reached the file handle yet. Caller must hold lock.
 	idx_t TotalPendingBytes() const;
-	//! Return pending bytes that are not already covered by scheduled-but-not-started drain task capacity.
-	idx_t UnscheduledPendingBytes() const;
+	//! Select the pending write range one drain task would claim. Caller must hold lock.
+	idx_t SelectPendingWriteEnd(idx_t start, idx_t &selected_bytes) const;
+	//! Skip ranges already covered by scheduled-but-not-started drain tasks. Caller must hold lock.
+	idx_t FirstUnscheduledPendingWrite(idx_t &scheduled_bytes) const;
+	//! Count how many useful drain tasks remain after start_write. Caller must hold lock.
+	idx_t CountPendingWriteTasks(idx_t start_write, idx_t available_slots, PendingTaskCountMode mode) const;
 	//! Minimum pending bytes before threshold scheduling starts the first task.
 	idx_t FirstTaskScheduleThreshold() const;
 	//! Probe whether the file system supports independent positional writes.
@@ -188,6 +194,8 @@ private:
 	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
 	//! Surface an error thrown by an async drain task.
 	void RethrowTaskError();
+	//! Execute one queued drain task owned by this writer, or yield if the tasks are already running.
+	void WorkOnSingleTask();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	void WaitAllInternal(BatchDrainMode batch_drain_mode);
 	//! Release the writer's TemporaryMemoryState reservation.
