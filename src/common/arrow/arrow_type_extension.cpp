@@ -10,6 +10,8 @@
 
 #include "yyjson.hpp"
 
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
 
 ArrowTypeExtension::ArrowTypeExtension(string extension_name, string arrow_format,
@@ -546,6 +548,46 @@ struct ArrowGeometry {
 	}
 };
 
+struct ArrowEnum {
+	static unique_ptr<ArrowType> GetType(ClientContext &context, const ArrowSchema &schema,
+	                                     const ArrowSchemaMetadata &schema_metadata) {
+		// Parse enum values from JSON array in extension metadata
+		auto metadata_str = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_METADATA_KEY);
+		if (metadata_str.empty()) {
+			throw InvalidInputException("arrow.duckdb.enum extension missing metadata");
+		}
+		unique_ptr<yyjson_doc, void (*)(yyjson_doc *)> doc(
+		    yyjson_read(metadata_str.data(), metadata_str.size(), YYJSON_READ_NOFLAG), yyjson_doc_free);
+		if (!doc) {
+			throw InvalidInputException("arrow.duckdb.enum: invalid JSON metadata");
+		}
+		auto *root = yyjson_doc_get_root(doc.get());
+		if (!yyjson_is_arr(root)) {
+			throw InvalidInputException("arrow.duckdb.enum: metadata must be a JSON array");
+		}
+		auto enum_count = yyjson_arr_size(root);
+		Vector enum_values(LogicalType::VARCHAR, enum_count);
+		auto enum_data = FlatVector::GetData<string_t>(enum_values);
+		idx_t idx = 0;
+		yyjson_val *val;
+		yyjson_arr_iter iter;
+		yyjson_arr_iter_init(root, &iter);
+		while ((val = yyjson_arr_iter_next(&iter))) {
+			if (!yyjson_is_str(val)) {
+				throw InvalidInputException("arrow.duckdb.enum: enum values must be strings");
+			}
+			auto str = yyjson_get_str(val);
+			enum_data[idx] = StringVector::AddStringOrBlob(enum_values, str);
+			idx++;
+		}
+		auto enum_type = LogicalType::ENUM(enum_values, enum_count);
+		return make_uniq<ArrowType>(enum_type);
+	}
+
+	// Note: PopulateSchema is not needed — the ENUM export path in SetArrowFormat (arrow_converter.cpp)
+	// handles schema setup and metadata directly. Only GetType is used on the import path.
+};
+
 void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	// Types that are 1:1
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowTypeExtensionData>(LogicalType::UUID)});
@@ -575,5 +617,14 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 
 	config.RegisterArrowExtension({"DuckDB", "bignum", &ArrowBignum::PopulateSchema, &ArrowBignum::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIGNUM), nullptr, nullptr});
+
+	// ENUM: parameterized type — the dummy ENUM is only used for TypeInfo lookup so
+	// HasArrowExtension(ENUM) matches. The actual ENUM type is constructed per-field in GetType.
+	// PopulateSchema is nullptr because the export path in SetArrowFormat handles ENUM inline.
+	Vector dummy_enum_values(LogicalType::VARCHAR, 1);
+	FlatVector::GetData<string_t>(dummy_enum_values)[0] = StringVector::AddString(dummy_enum_values, "dummy");
+	auto dummy_enum_type = LogicalType::ENUM(dummy_enum_values, 1);
+	config.RegisterArrowExtension(
+	    {"arrow.duckdb.enum", nullptr, &ArrowEnum::GetType, make_shared_ptr<ArrowTypeExtensionData>(dummy_enum_type)});
 }
 } // namespace duckdb
