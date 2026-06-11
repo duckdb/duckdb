@@ -503,7 +503,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 			continue;
 		}
 
-		// We might be able to free this block: grab the mutex and re-check whether this queue entry is stale.
+		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
 		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
 			// The block was used/re-queued after this node was enqueued, so this node was already counted as dead.
