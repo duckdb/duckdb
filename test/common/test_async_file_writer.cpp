@@ -327,12 +327,12 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
 
 	REQUIRE(writer.GetTotalWritten() == 4);
-	REQUIRE(fs.write_sizes.size() == 2);
-	REQUIRE(fs.write_sizes[0] == 2);
-	REQUIRE(fs.write_sizes[1] == 2);
+	REQUIRE(fs.write_sizes.empty());
 
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcd");
+	REQUIRE(fs.write_sizes.size() == 1);
+	REQUIRE(fs.write_sizes[0] == 4);
 	fs.RemoveFile(path);
 }
 

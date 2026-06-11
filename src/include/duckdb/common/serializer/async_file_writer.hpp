@@ -134,6 +134,8 @@ private:
 	                         ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 	//! Add a buffer with its assigned file offset to the configured sync/async write path.
 	void RegisterWriteInternal(unique_ptr<AsyncWriteBuffer> buffer, idx_t offset, ScheduleMode schedule_mode);
+	//! Write caller-owned bytes through the local staging buffer when async draining is disabled.
+	void WriteDataSynchronously(data_ptr_t buffer, idx_t write_size);
 	//! Move any staged copied bytes into the pending write queue.
 	void SealCopiedBuffer(ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 

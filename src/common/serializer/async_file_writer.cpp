@@ -228,6 +228,14 @@ void AsyncFileWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 	if (!buffer || buffer->Size() == 0) {
 		return;
 	}
+	RethrowTaskError();
+	if (closed) {
+		throw IOException("Cannot write to closed file \"%s\"", path);
+	}
+	if (!executor) {
+		WriteDataSynchronously(buffer->Ptr(), buffer->Size());
+		return;
+	}
 	SealCopiedBuffer(ScheduleMode::DEFER);
 	RegisterWrite(std::move(buffer));
 }
@@ -269,6 +277,48 @@ void AsyncFileWriter::RegisterWriteInternal(unique_ptr<AsyncWriteBuffer> buffer,
 	UpdateMemoryState();
 	if (schedule_mode == ScheduleMode::ALLOW) {
 		SchedulePendingWrites();
+	}
+}
+
+void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size) {
+	auto copied_size = copied_buffer ? copied_buffer->Size() : 0;
+	if (write_size >= 2 * DEFAULT_COPIED_BUFFER_CAPACITY - copied_size) {
+		idx_t copied_prefix = 0;
+		if (copied_size > 0) {
+			copied_prefix = copied_buffer->Remaining();
+			D_ASSERT(copied_prefix <= write_size);
+			copied_buffer->Append(buffer, copied_prefix);
+			total_written += copied_prefix;
+			SealCopiedBuffer(ScheduleMode::DEFER);
+		}
+		auto remaining_size = write_size - copied_prefix;
+		if (remaining_size > 0) {
+			auto offset = total_written;
+			total_written += remaining_size;
+			WriteBuffer(buffer + copied_prefix, remaining_size, offset);
+		}
+		return;
+	}
+
+	idx_t input_offset = 0;
+	while (input_offset < write_size) {
+		unique_ptr<CopiedAsyncWriteBuffer> sealed_buffer;
+		idx_t sealed_buffer_offset = 0;
+		if (!copied_buffer) {
+			copied_buffer_offset = total_written;
+			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
+		}
+		auto append_size = MinValue(write_size - input_offset, copied_buffer->Remaining());
+		copied_buffer->Append(buffer + input_offset, append_size);
+		total_written += append_size;
+		input_offset += append_size;
+		if (copied_buffer->Remaining() == 0) {
+			sealed_buffer_offset = copied_buffer_offset;
+			sealed_buffer = std::move(copied_buffer);
+		}
+		if (sealed_buffer) {
+			RegisterStagedWrite(std::move(sealed_buffer), sealed_buffer_offset);
+		}
 	}
 }
 
