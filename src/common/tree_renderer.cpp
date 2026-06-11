@@ -8,7 +8,7 @@
 #include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/profiler/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 

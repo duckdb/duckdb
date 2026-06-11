@@ -1,4 +1,4 @@
-#include "duckdb/main/profiler/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/fstream.hpp"

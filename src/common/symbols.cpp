@@ -13,7 +13,7 @@
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/main/profiler/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/stream_query_result.hpp"

@@ -1,7 +1,7 @@
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
 #include "duckdb/common/pair.hpp"
-#include "duckdb/main/profiler/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"

@@ -49,6 +49,7 @@ add_library_unity(
   prepared_statement.cpp
   prepared_statement_data.cpp
   relation.cpp
+  query_profiler.cpp
   query_result.cpp
   result_set_manager.cpp
   stream_query_result.cpp
