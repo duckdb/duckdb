@@ -795,8 +795,14 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 			result.identifier = Value::INTEGER(parent_column_schema.field_id);
 		}
 	}
-	for (auto &child : element.children) {
-		result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+	// A GEOMETRY column is a leaf at the logical level - it only wraps an inner BLOB child internally so that the
+	// reader can validate/transform the WKB. Exposing that child here would make the column definition diverge from
+	// the (childless) global GEOMETRY column, breaking trivial column mapping and disabling row group pruning for
+	// spatial predicates. Treat it as a leaf.
+	if (element.schema_type != ParquetColumnSchemaType::GEOMETRY) {
+		for (auto &child : element.children) {
+			result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+		}
 	}
 	return result;
 }
@@ -894,11 +900,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        encryption_util, footer_size);
 		} else {
-			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
+			metadata = ObjectCache::GetObjectCache(context_p).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 				                        encryption_util, footer_size);
-				ObjectCache::GetObjectCache(context_p).Put(file.path, metadata);
+				ObjectCache::GetObjectCache(context_p).PutWithTypePrefix<ParquetFileMetadataCache>(file.path, metadata);
 			}
 		}
 	} else {
@@ -915,7 +921,7 @@ bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
                                                                           const OpenFileInfo &file) {
-	return ObjectCache::GetObjectCache(context).Get<ParquetFileMetadataCache>(file.path);
+	return ObjectCache::GetObjectCache(context).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 }
 
 ParquetUnionData::~ParquetUnionData() {
@@ -1421,9 +1427,14 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		}
 
 		auto &group = GetGroup(state);
+		const bool row_group_pruned = state.offset_in_group == (idx_t)group.num_rows;
+		if (!row_group_pruned) {
+			// the row group survived filter pruning and will actually be read
+			state.row_groups_scanned++;
+		}
 		if (state.op) {
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
-			           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
+			           row_group_pruned ? "SkipRowGroup" : "ReadRowGroup",
 			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
 		}
 

@@ -13,6 +13,7 @@
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -149,6 +150,30 @@ public:
 		lru_cache.Delete(key);
 	}
 
+	//! Type-prefixed variants of the methods above. These namespace the caller-provided key with the entry's
+	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
+	//! cache key themselves.
+	template <class T>
+	shared_ptr<T> GetWithTypePrefix(const string &key) {
+		return Get<T>(MakeCacheKey<T>(key));
+	}
+
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+		return GetOrCreate<T>(MakeCacheKey<T>(key), std::forward<ARGS>(args)...);
+	}
+
+	template <class T>
+	void PutWithTypePrefix(const string &key,
+	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
+		Put(MakeCacheKey<T>(key), std::move(value));
+	}
+
+	template <class T>
+	void DeleteWithTypePrefix(const string &key) {
+		Delete(MakeCacheKey<T>(key));
+	}
+
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
 
 	idx_t GetMaxMemory() const {
@@ -171,6 +196,14 @@ public:
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.EvictToReduceAtLeast(target_bytes);
+	}
+
+private:
+	//! Build the internal cache key for a typed entry by namespacing the caller-provided key with the entry's
+	//! ObjectType.
+	template <class T>
+	static string MakeCacheKey(const string &key) {
+		return StringUtil::Format("%s-%s", T::ObjectType(), key);
 	}
 
 private:

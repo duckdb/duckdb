@@ -880,7 +880,7 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
@@ -890,13 +890,13 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	if (handle_type == FILE_TYPE_CHAR) {
 		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
 		file_metadata.file_size = 0;
-		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		file_metadata.last_modification_time = Timestamp::FromEpochSeconds(0);
 		return file_metadata;
 	}
 	if (handle_type == FILE_TYPE_PIPE) {
 		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
 		file_metadata.file_size = 0;
-		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		file_metadata.last_modification_time = Timestamp::FromEpochSeconds(0);
 		return file_metadata;
 	}
 

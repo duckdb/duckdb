@@ -91,6 +91,24 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		}
 	}
 
+	// File logging requires a path. Reject switching to file storage without one before mutating any
+	// state, so the active storage is preserved instead of becoming a path-less storage that throws
+	// on every later flush (end-of-query and shutdown included).
+	if (StringUtil::Lower(result->config.storage) == LogConfig::FILE_STORAGE_NAME) {
+		auto current_storage = StringUtil::Lower(context.db->GetLogManager().GetConfig().storage);
+		// Already-active file storage keeps its existing path; only guard a fresh switch.
+		if (current_storage != LogConfig::FILE_STORAGE_NAME) {
+			auto path_entry = result->storage_config.find("path");
+			bool has_usable_path = path_entry != result->storage_config.end() && !path_entry->second.IsNull() &&
+			                       !path_entry->second.ToString().empty();
+			if (!has_usable_path) {
+				throw InvalidInputException(
+				    "Cannot enable 'file' log storage without a valid path. Provide one via storage_path, "
+				    "e.g. CALL enable_logging(storage='file', storage_path='mylog.csv');");
+			}
+		}
+	}
+
 	// Process positional params
 	if (!input.inputs.empty()) {
 		if (input.inputs[0].type() == LogicalType::VARCHAR) {

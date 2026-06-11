@@ -21,7 +21,8 @@ static const DefaultMacro JSON_MACROS[] = {
      "json_group_object",
      {"n", "v", nullptr},
      {{nullptr, nullptr}},
-     "CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, "
+     "CAST('{' || string_agg(CASE WHEN n IS NULL THEN error('json_group_object key cannot be NULL') ELSE "
+     "to_json(n::VARCHAR) END || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, "
      "',') || '}' AS JSON)"},
     {DEFAULT_SCHEMA,
      "json_group_structure",
