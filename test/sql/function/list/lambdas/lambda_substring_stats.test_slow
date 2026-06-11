@@ -1,0 +1,34 @@
+# name: test/sql/function/list/lambdas/lambda_substring_stats.test_slow
+# description: performance-regression guard for issue #23229 - list_transform + substring chunking a large captured string must stay linear (O(n^2) if statistics do not reach the lambda)
+# group: [lambdas]
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# This is a correctness-on-large-data test that doubles as a performance tripwire; the fix's speedup does not
+# depend on the thread count (the lambda body runs single-threaded), so we use the default settings. We do not
+# enable_verification here - it would run the 64 MB query several times for no additional coverage.
+
+# A 64 MB single-row ASCII string chunked into 65536-byte pieces at growing offsets, via the exact
+# unnest(list_transform(...)) shape from the issue. With statistics reaching the lambda body, substring
+# takes its O(1) ASCII fast path and this is linear (~0.2s). Without the fix it is O(n^2) (~13s here, and
+# super-linear as the string grows), so a regression makes this test conspicuously slow.
+
+statement ok
+CREATE TABLE big AS SELECT repeat('x', 64 * 1024 * 1024) AS s;
+
+# 64 MB / 65536 = 1024 chunks
+query I
+SELECT count(*) FROM (
+    SELECT unnest(list_transform(range(0, length(s) // 65536), lambda i: substring(s, i * 65536 + 1, 65536))) AS x
+    FROM big);
+----
+1024
+
+# every chunk is exactly 65536 bytes and the chunks reconstruct the original length
+query II
+SELECT min(len)::BIGINT, sum(len)::BIGINT FROM (
+    SELECT length(unnest(list_transform(range(0, length(s) // 65536), lambda i: substring(s, i * 65536 + 1, 65536)))) AS len
+    FROM big);
+----
+65536	67108864

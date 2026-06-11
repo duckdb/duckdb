@@ -55,6 +55,7 @@ class Binder;
 class BoundFunctionExpression;
 class BoundScalarFunction;
 class ScalarFunctionCatalogEntry;
+class StatisticsPropagator;
 
 struct StatementProperties;
 
@@ -69,14 +70,18 @@ struct FunctionStatisticsPruneInput {
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
-	                        vector<BaseStatistics> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
-	    : expr(expr_p), bind_data(bind_data_p), child_stats(child_stats_p), expr_ptr(expr_ptr_p) {
+	                        vector<BaseStatistics> &child_stats_p, unique_ptr<Expression> *expr_ptr_p,
+	                        optional_ptr<StatisticsPropagator> propagator_p = nullptr)
+	    : expr(expr_p), bind_data(bind_data_p), child_stats(child_stats_p), expr_ptr(expr_ptr_p),
+	      propagator(propagator_p) {
 	}
 
 	BoundFunctionExpression &expr;
 	optional_ptr<FunctionData> bind_data;
 	vector<BaseStatistics> &child_stats;
 	unique_ptr<Expression> *expr_ptr;
+	//! The statistics propagator running this pass (used to propagate stats into e.g. lambda bodies)
+	optional_ptr<StatisticsPropagator> propagator;
 };
 
 struct FunctionModifiedDatabasesInput {
