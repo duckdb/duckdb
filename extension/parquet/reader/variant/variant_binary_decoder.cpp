@@ -269,8 +269,8 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
-		//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to Base64
-		//! happens now in VariantValue::ToJSON.
+		//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to
+		//! Base64 happens now in VariantValue::ToJSON.
 		if (data_offset + sizeof(uint32_t) > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
