@@ -92,6 +92,8 @@ enum class AsyncResultsExecutionMode : uint8_t;
 
 enum class BaseColumnPrunerMode : uint8_t;
 
+enum class BatchDrainMode : uint8_t;
+
 enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -187,6 +189,8 @@ enum class DestroyBufferUpon : uint8_t;
 enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
+
+enum class DrainMode : uint8_t;
 
 enum class ErrorType : uint16_t;
 
@@ -306,6 +310,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MemoryUpdateMode : uint8_t;
+
 enum class MergeActionCondition : uint8_t;
 
 enum class MergeActionType : uint8_t;
@@ -366,6 +372,8 @@ enum class PartitionedTupleDataType : uint8_t;
 
 enum class PendingExecutionResult : uint8_t;
 
+enum class PendingTaskCountMode : uint8_t;
+
 enum class PhysicalOperatorType : uint8_t;
 
 enum class PhysicalTableScanExecutionStrategy : uint8_t;
@@ -423,6 +431,10 @@ enum class SampleType : uint8_t;
 enum class SamplingState : uint8_t;
 
 enum class ScanType : uint8_t;
+
+enum class ScheduleMode : uint8_t;
+
+enum class SchedulePolicy : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
 
@@ -650,6 +662,9 @@ template<>
 const char* EnumUtil::ToChars<BaseColumnPrunerMode>(BaseColumnPrunerMode value);
 
 template<>
+const char* EnumUtil::ToChars<BatchDrainMode>(BatchDrainMode value);
+
+template<>
 const char* EnumUtil::ToChars<BinderType>(BinderType value);
 
 template<>
@@ -792,6 +807,9 @@ const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
+
+template<>
+const char* EnumUtil::ToChars<DrainMode>(DrainMode value);
 
 template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
@@ -971,6 +989,9 @@ template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
+const char* EnumUtil::ToChars<MemoryUpdateMode>(MemoryUpdateMode value);
+
+template<>
 const char* EnumUtil::ToChars<MergeActionCondition>(MergeActionCondition value);
 
 template<>
@@ -1061,6 +1082,9 @@ template<>
 const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
 
 template<>
+const char* EnumUtil::ToChars<PendingTaskCountMode>(PendingTaskCountMode value);
+
+template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
@@ -1146,6 +1170,12 @@ const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
 
 template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
+
+template<>
+const char* EnumUtil::ToChars<ScheduleMode>(ScheduleMode value);
+
+template<>
+const char* EnumUtil::ToChars<SchedulePolicy>(SchedulePolicy value);
 
 template<>
 const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
@@ -1440,6 +1470,9 @@ template<>
 BaseColumnPrunerMode EnumUtil::FromString<BaseColumnPrunerMode>(const char *value);
 
 template<>
+BatchDrainMode EnumUtil::FromString<BatchDrainMode>(const char *value);
+
+template<>
 BinderType EnumUtil::FromString<BinderType>(const char *value);
 
 template<>
@@ -1582,6 +1615,9 @@ DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value)
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
+
+template<>
+DrainMode EnumUtil::FromString<DrainMode>(const char *value);
 
 template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);
@@ -1761,6 +1797,9 @@ template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
+MemoryUpdateMode EnumUtil::FromString<MemoryUpdateMode>(const char *value);
+
+template<>
 MergeActionCondition EnumUtil::FromString<MergeActionCondition>(const char *value);
 
 template<>
@@ -1851,6 +1890,9 @@ template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);
 
 template<>
+PendingTaskCountMode EnumUtil::FromString<PendingTaskCountMode>(const char *value);
+
+template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
@@ -1936,6 +1978,12 @@ SamplingState EnumUtil::FromString<SamplingState>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
+
+template<>
+ScheduleMode EnumUtil::FromString<ScheduleMode>(const char *value);
+
+template<>
+SchedulePolicy EnumUtil::FromString<SchedulePolicy>(const char *value);
 
 template<>
 SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
