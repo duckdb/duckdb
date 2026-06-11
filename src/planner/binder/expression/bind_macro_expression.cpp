@@ -136,7 +136,11 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	window_expr.children = std::move(agg_fn_expr.children);
 	window_expr.distinct = agg_fn_expr.distinct;
 	window_expr.filter_expr = std::move(agg_fn_expr.filter);
-	// TODO: transfer order_bys when window functions support them
+	// Transfer argument ORDER BYs to the window's argument ordering
+	if (agg_fn_expr.order_bys) {
+		auto clone = agg_fn_expr.order_bys->Copy();
+		window_expr.arg_orders = std::move(clone->Cast<OrderModifier>().orders);
+	}
 
 	// Replace the aggregate expression with the new window expression
 	agg_expr_ref = std::move(expr);

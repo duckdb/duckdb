@@ -28,3 +28,17 @@ query II
 SELECT DISTINCT tinyint_min(x) OVER (), max_plus_one(x) OVER () FROM test;
 ----
 0	1000
+
+# Argument ORDER BYs transfer to the window's argument ordering
+statement ok
+CREATE MACRO csv_desc(a) as '<' || string_agg(a, ',' ORDER BY a DESC) || '>';
+
+query I
+SELECT csv_desc(x) FROM (VALUES (1), (2), (3)) t(x);
+----
+<3,2,1>
+
+query I
+SELECT DISTINCT csv_desc(x) OVER () FROM (VALUES (1), (2), (3)) t(x);
+----
+<3,2,1>
