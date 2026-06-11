@@ -179,7 +179,7 @@ struct SortedAggregateFunction {
 		if (!count) {
 			return;
 		}
-		//	Pack the buffered columns into a single struct vector and append the rows through the list update
+		// Pack the buffered columns into a single struct vector and append the rows through the list update
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		Vector packed(order_bind.buffered_struct_type, count);
 		auto &entries = StructVector::GetEntries(packed);
