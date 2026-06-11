@@ -42,6 +42,7 @@ public:
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
 	virtual CheckpointOptions GetCheckpointOptions() const = 0;
+	virtual bool CheckpointIndexes() const = 0;
 	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
 	optional_idx GetRowGroupCount() {
@@ -98,6 +99,7 @@ public:
 	unique_ptr<TableIndexWriter> GetTableIndexWriter(IndexSerializationInfo &info) override;
 
 	CheckpointOptions GetCheckpointOptions() const override;
+	bool CheckpointIndexes() const override;
 	void FlushPartialBlocks() override;
 	MetadataManager &GetMetadataManager() override;
 

@@ -55,6 +55,7 @@ public:
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	unique_ptr<TableIndexWriter> GetTableIndexWriter(IndexSerializationInfo &info) override;
+	bool CheckpointIndexes() const override;
 	void FlushPartialBlocks() override;
 	CheckpointOptions GetCheckpointOptions() const override;
 	MetadataManager &GetMetadataManager() override;

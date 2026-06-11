@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info) : partial_block_manager(partial_block_manager), info(info) {
+TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info)
+    : partial_block_manager(partial_block_manager), info(info) {
 }
 
 TableIndexWriter::~TableIndexWriter() {
@@ -20,7 +21,17 @@ void TableIndexWriter::AddBoundIndex(IndexStorageInfo storage_info, unique_ptr<B
 	indexes.push_back(std::move(index));
 }
 
-SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info): TableIndexWriter(partial_block_manager, info) {
+SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info)
+    : TableIndexWriter(partial_block_manager, info) {
+}
+
+void SingleFileIndexWriter::FlushPartialBlocks() {
+	partial_block_manager.FlushPartialBlocks();
+}
+
+IndexSerializationFormat SingleFileIndexWriter::GetTargetFormat() const {
+	// TODO: implement
+	return IndexSerializationFormat::CURRENT;
 }
 
 } // namespace duckdb

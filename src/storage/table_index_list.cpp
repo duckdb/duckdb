@@ -350,7 +350,9 @@ void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 		entry->index->Checkpoint(writer);
 	}
 
-	const auto it = writer.GetBoundIndexes();
+	writer.FlushPartialBlocks();
+
+	idx_t bound_index_idx = 0;
 	for (const auto &entry : index_entries) {
 		lock_guard<mutex> guard(entry->lock);
 
@@ -358,7 +360,7 @@ void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 			continue;
 		}
 
-		entry->index = std::move(*std::next(it));
+		entry->index = writer.TakeBoundIndex(bound_index_idx++);
 	}
 }
 

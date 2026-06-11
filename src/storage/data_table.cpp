@@ -1838,23 +1838,36 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		timer.EndTimer();
 	}
 	// checkpoint all indexes
-	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
-	StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
+	if (!writer.CheckpointIndexes()) {
+		writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
+		row_groups->SetStats(global_stats);
+		return;
+	}
+
+	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(
+			StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
 	IndexSerializationInfo serialization_info;
-	if (!v1_0_0_storage) {
-		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
+	if (v1_0_0_storage) {
+		serialization_info.format = IndexSerializationFormat::V1_0_0;
+	} else {
+		serialization_info.format = IndexSerializationFormat::CURRENT;
 	}
 	serialization_info.checkpoint_id = writer.GetCheckpointOptions().transaction_id;
+
 	const auto index_writer = writer.GetTableIndexWriter(serialization_info);
 	info->GetIndexes().CheckPoint(*index_writer);
+
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer
 	//   index data
+
+	// this is a no-op for indexes when in-memory checkpointing
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 	// todo: this is a bit scary, we should look for a structure where this ordering is less hard to mess up.
+	// this will also cause a bug for in-memory checkpointing
 	TableIndexList::Serialize(index_writer->GetResult(), serializer);
 	row_groups->SetStats(global_stats);
 }

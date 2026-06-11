@@ -1081,23 +1081,24 @@ void ART::Checkpoint(TableIndexWriter &writer) {
 	}
 
 	// todo: possibly wrap this in a method for the writer
-	// auto v1_0_0_option = options.find("v1_0_0_storage");
-	// bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	// auto info = PrepareSerialize(options, v1_0_0_storage);
+	// auto v1_0_0_option = info.options.find("v1_0_0_storage");
+	// bool v1_0_0_storage = v1_0_0_option == info.options.end() || v1_0_0_option->second != Value(false);
+	// auto n_info = PrepareSerialize(info.options, v1_0_0_storage);
 	// auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 
-	auto new_allocators =
-		make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>();
+	const auto target_format = writer.GetTargetFormat();
+
+	auto new_allocators = make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>();
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		(*new_allocators)[i] = (*allocators)[i]->Checkpoint(partial_block_manager);
+		auto &new_allocator = (*new_allocators)[i];
+
+		new_allocator = (*allocators)[i]->Checkpoint(partial_block_manager);
+		storage_info.allocator_infos.push_back(new_allocator->GetInfo());
 	}
 
-	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		storage_info.allocator_infos.push_back((*new_allocators)[i]->GetInfo());
-	}
-
-	auto new_art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db, new_allocators);
+	auto new_art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db,
+	                              new_allocators);
 	new_art->tree = tree;
 	new_art->storage_version = storage_version;
 

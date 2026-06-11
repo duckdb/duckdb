@@ -307,9 +307,12 @@ void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_man
 unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Checkpoint(PartialBlockManager &partial_block_manager) {
 	auto result = make_unsafe_uniq<FixedSizeAllocator>(segment_size, block_manager, memory_tag);
 
+	D_ASSERT(result->available_segments_per_buffer == available_segments_per_buffer);
+	D_ASSERT(result->bitmask_count == bitmask_count);
+	D_ASSERT(result->bitmask_offset == bitmask_offset);
+
 	result->total_segment_count = total_segment_count;
-	result->available_segments_per_buffer = available_segments_per_buffer;
-	result->bitmask_offset = bitmask_offset;
+	result->buffers_with_free_space = buffers_with_free_space;
 	result->buffer_with_free_space = buffer_with_free_space;
 
 	for (auto &entry : buffers) {

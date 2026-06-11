@@ -92,6 +92,10 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 	existing_rows = total_rows;
 }
 
+bool SingleFileTableDataWriter::CheckpointIndexes() const {
+	return true;
+}
+
 void SingleFileTableDataWriter::FlushPartialBlocks() {
 	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
 }

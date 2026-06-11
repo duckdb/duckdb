@@ -108,6 +108,10 @@ unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(IndexS
 	throw InternalException("Unsupported method GetTableIndexWriter for InMemoryTableDataWriter");
 }
 
+bool InMemoryTableDataWriter::CheckpointIndexes() const {
+	return false;
+}
+
 void InMemoryTableDataWriter::FlushPartialBlocks() {
 }
 
