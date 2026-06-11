@@ -143,6 +143,59 @@
 		"type": "scalar_function"
 	},
 	{
+		"name": "variant_type",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns TODO the root level of the object.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns TODO of the specified path.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a list of TODO of each specified path.",
+				"example": "variant_type({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_typeof",
 		"parameters": "input_variant",
 		"description": "Returns the internal type of the `input_variant`.",
