@@ -2,7 +2,6 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
@@ -119,8 +119,11 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
     {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
     {"lance", "Adds support for querying Lance datasets", false},
+    {"avro", "Adds support for reading Avro files", false},
+    {"unity_catalog", "Adds support for connecting to Unity Catalog", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {

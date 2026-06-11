@@ -72,8 +72,8 @@ public:
 private:
 	ClientContext &context;
 	bool auto_commit;
-	TransactionInvalidationPolicy invalidation_policy;
-	bool auto_rollback;
+	TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
+	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

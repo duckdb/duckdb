@@ -1743,6 +1743,24 @@ string Value::ToSQLString() const {
 		ret += "]";
 		return ret;
 	}
+	case LogicalTypeId::MAP: {
+		// A bare `MAP {...}` literal infers its element types from the entries
+		// (and `MAP {}` infers MAP(INTEGER, INTEGER)), so it does not faithfully
+		// round-trip on its own. Append an explicit cast to the real type
+		auto &entries = MapValue::GetChildren(*this);
+		string ret = "MAP {";
+		for (idx_t i = 0; i < entries.size(); i++) {
+			auto &kv = StructValue::GetChildren(entries[i]);
+			if (i > 0) {
+				ret += ", ";
+			}
+			ret += kv[0].ToSQLString();
+			ret += ": ";
+			ret += kv[1].ToSQLString();
+		}
+		ret += "}::" + type_.ToString();
+		return ret;
+	}
 	case LogicalTypeId::UNION: {
 		string ret = "union_value(";
 		auto union_tag = UnionValue::GetTag(*this);

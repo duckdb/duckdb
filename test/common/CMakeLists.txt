@@ -5,6 +5,7 @@ add_library_unity(
   test_checksum.cpp
   test_file_system.cpp
   test_caching_file_system_wrapper.cpp
+  test_external_file_cache.cpp
   test_hyperlog.cpp
   test_lru_cache.cpp
   test_numeric_cast.cpp
@@ -14,7 +15,8 @@ add_library_unity(
   test_allocator_debug_info.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
-  test_string_util.cpp)
+  test_string_util.cpp
+  test_value_to_sql_string.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>

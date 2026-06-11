@@ -91,6 +91,12 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 			// No min/max statistics availabe
 			return false;
 		}
+		// String statistics store at most an 8-byte prefix of the min/max values.
+		// If the actual maximum string length exceeds that prefix, the stored prefix is not the true min/max
+		if (!StringStats::HasMaxStringLength(*column_stats) ||
+		    StringStats::MaxStringLength(*column_stats) > StringStatsData::MAX_STRING_MINMAX_SIZE) {
+			return false;
+		}
 	}
 	result = comparator.GetVal(*column_stats);
 	return true;

@@ -19,6 +19,8 @@ struct OptimisticWriteCollection {
 
 	shared_ptr<RowGroupCollection> collection;
 	set<idx_t> unflushed_row_groups;
+	idx_t unflushed_data_size = 0;
+	idx_t prev_allocated_size = 0;
 	idx_t complete_row_groups = 0;
 	vector<unique_ptr<PartialBlockManager>> partial_block_managers;
 

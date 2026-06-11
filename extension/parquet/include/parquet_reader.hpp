@@ -82,6 +82,10 @@ struct ParquetReaderScanState {
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
+
+	//! Number of row groups actually scanned (i.e. not pruned by filters) by this scan state.
+	//! Accumulates across all files processed by the owning (per-thread) local state.
+	idx_t row_groups_scanned = 0;
 };
 
 struct ParquetColumnDefinition {
@@ -156,7 +160,7 @@ public:
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! How many rows have been read from this file
-	atomic<idx_t> rows_read;
+	atomic<idx_t> rows_read {0};
 
 public:
 	string GetReaderType() const override {

@@ -272,11 +272,11 @@
                 }
             ],
             "comment": {
-                "description": "Creates a DECIMAL value from a duckdb_decimal\n\n",
+                "description": "Creates a DECIMAL value from a duckdb_decimal\n\nThe width must be between 1 and 38, and the scale must not exceed the width.\n\n",
                 "param_comments": {
                     "input": "The duckdb_decimal value"
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The value, or `nullptr` if the width or scale are out of range. This must be destroyed with `duckdb_destroy_value`."
             }
         },
         {

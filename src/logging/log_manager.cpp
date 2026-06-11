@@ -157,6 +157,15 @@ void LogManager::SetDisabledLogTypes(optional_ptr<unordered_set<string>> disable
 
 void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name) {
 	unique_lock<mutex> lck(lock);
+	// 'SET logging_storage' cannot supply the path that file storage requires, so reject the switch
+	// here (active storage preserved) and point users at enable_logging instead of installing a
+	// path-less storage that throws on every later flush.
+	auto storage_name_to_lower = StringUtil::Lower(storage_name);
+	if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME && config.storage != storage_name_to_lower) {
+		throw InvalidConfigurationException(
+		    "Cannot select 'file' log storage via 'SET logging_storage' because it requires a path. "
+		    "Use CALL enable_logging(storage='file', storage_path='...') instead.");
+	}
 	SetLogStorageInternal(db, storage_name);
 }
 

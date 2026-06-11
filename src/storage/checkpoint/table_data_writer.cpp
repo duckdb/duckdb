@@ -96,6 +96,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	idx_t total_rows;
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
+		auto supports_per_column_writes = collection.SupportsPerColumnWrites();
 		// write the metadata
 		// store the current position in the metadata writer
 		// this is where the row groups for this table start
@@ -121,7 +122,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			// Each RowGroup is its own unit
 			BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
 			row_group_serializer.Begin();
-			RowGroup::Serialize(row_group_pointer, row_group_serializer);
+			RowGroup::Serialize(row_group_pointer, row_group_serializer, supports_per_column_writes);
 			row_group_serializer.End();
 		}
 		table_data_writer.SetWrittenPointers(nullptr);

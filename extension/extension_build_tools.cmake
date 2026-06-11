@@ -525,6 +525,11 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
     if("${EXT}" STREQUAL "jemalloc")
         message(WARNING "The 'jemalloc' allocator is no longer provided as an extension, use 'ENABLE_JEMALLOC=ON' to include jemalloc instead")
         set(ENABLE_JEMALLOC ON CACHE BOOL "Use jemalloc as the memory allocator for DuckDB" FORCE)
+        # Backward-compat shim: downstream consumers call target_link_libraries(... ${ext}_extension).
+        # We provide an empty INTERFACE target to make sure that doesn't fail.
+        if(NOT TARGET jemalloc_extension)
+            add_library(jemalloc_extension INTERFACE)
+        endif()
         continue()
     endif()
 

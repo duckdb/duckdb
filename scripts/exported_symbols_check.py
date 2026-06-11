@@ -14,6 +14,7 @@ culprits = []
 
 whitelist = [
     '@GLIBC',
+    '@GCC',
     '@CXXABI',
     '__gnu_cxx::',
     'std::',

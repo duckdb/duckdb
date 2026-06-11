@@ -97,6 +97,8 @@ public:
 	idx_t GetMaxIndex() const;
 	//! Whether there are free blocks available within the file
 	bool HasFreeBlocks() const;
+	//! Get the count of blocks currently holding data
+	idx_t GetUsedBlockCount() const;
 
 private:
 	//! Get/set max block index

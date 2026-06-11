@@ -90,10 +90,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 void RowGroupPruner::GetLimitAndOffset(const LogicalLimit &logical_limit, optional_idx &row_limit,
                                        optional_idx &row_offset) const {
+	// UNSET = no LIMIT = unbounded; leave row_limit invalid.
 	if (logical_limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		row_limit = logical_limit.limit_val.GetConstantValue();
-	} else if (logical_limit.limit_val.Type() == LimitNodeType::UNSET) {
-		row_limit = 0;
 	}
 
 	if (logical_limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
@@ -132,7 +131,7 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	const auto &primary_order = logical_order.orders[0];
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
-	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding}};
+	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding, colref.return_type}};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
 	                                                      pushdown_targets);

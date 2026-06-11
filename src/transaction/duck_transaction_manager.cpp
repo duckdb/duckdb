@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-void DuckCleanupInfo::Cleanup() noexcept {
+void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
 			transaction->Cleanup(lowest_start_time);
