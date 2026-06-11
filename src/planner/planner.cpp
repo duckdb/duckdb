@@ -30,10 +30,10 @@ Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context))
 
 // Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
 // FlattenDependentJoins machinery can decorrelate the trigger body.
-static void RewriteTriggersToDependent(LogicalOperator &op) {
+static void RewriteTriggersToDependent(Binder &binder, LogicalOperator &op) {
 	for (auto &child : op.children) {
 		if (child) {
-			RewriteTriggersToDependent(*child);
+			RewriteTriggersToDependent(binder, *child);
 		}
 	}
 	for (idx_t i = 0; i < op.children.size(); i++) {
@@ -43,7 +43,14 @@ static void RewriteTriggersToDependent(LogicalOperator &op) {
 		auto &trig = op.children[i]->Cast<LogicalTrigger>();
 		auto dep_join = make_uniq<LogicalDependentJoin>(JoinType::INNER);
 		dep_join->correlated_columns = std::move(trig.correlated_columns);
-		dep_join->perform_delim = true;
+		// Trigger bodies have side effects and must fire once per row. Dedup on a synthetic per-row
+		// row_number() key instead of the NEW columns (mirrors PerformDuplicateElimination's
+		// perform_delim=false path). otherwise rows with identical NEW values would underfire.
+		auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
+		CorrelatedColumnInfo info(binding, LogicalType::BIGINT, "delim_index", 0);
+		dep_join->correlated_columns.AddColumn(std::move(info));
+		dep_join->correlated_columns.SetDelimIndexToZero();
+		dep_join->perform_delim = false;
 		dep_join->children.push_back(std::move(trig.children[0]));
 		dep_join->children.push_back(std::move(trig.children[1]));
 		op.children[i] = std::move(dep_join);
@@ -120,7 +127,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
-		RewriteTriggersToDependent(*this->plan);
+		RewriteTriggersToDependent(*this->binder, *this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();

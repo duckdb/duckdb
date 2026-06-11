@@ -44,6 +44,59 @@ SELECT COUNT(*) FROM audit;
 ----
 5
 
+# Duplicate NEW values: trigger must still fire once per row (not deduplicated).
+statement ok
+CREATE TABLE t_dup (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit_dup (row_id INTEGER);
+
+# Body references only NEW.id; all four rows share id = 5
+statement ok
+CREATE TRIGGER trg_dup AFTER INSERT ON t_dup FOR EACH ROW
+    INSERT INTO audit_dup VALUES (NEW.id);
+
+statement ok
+INSERT INTO t_dup VALUES (5, 'a'), (5, 'b'), (5, 'c'), (5, 'd');
+
+query I
+SELECT COUNT(*) FROM audit_dup;
+----
+4
+
+query II
+SELECT row_id, COUNT(*) FROM audit_dup GROUP BY row_id;
+----
+5	4
+
+# Mixed duplicates across a second insert: 2 with id 7, 1 with id 8
+statement ok
+INSERT INTO t_dup VALUES (7, 'x'), (7, 'y'), (8, 'z');
+
+query I
+SELECT COUNT(*) FROM audit_dup;
+----
+7
+
+# Fully identical rows (all columns equal) still fire once per row
+statement ok
+CREATE TABLE t_dup_all (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit_dup_all (row_id INTEGER, row_val VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_dup_all AFTER INSERT ON t_dup_all FOR EACH ROW
+    INSERT INTO audit_dup_all VALUES (NEW.id, NEW.val);
+
+statement ok
+INSERT INTO t_dup_all VALUES (1, 'same'), (1, 'same'), (1, 'same');
+
+query I
+SELECT COUNT(*) FROM audit_dup_all;
+----
+3
+
 # FOR EACH ROW without NEW reference is rejected (use FOR EACH STATEMENT instead)
 statement ok
 CREATE TABLE t2 (id INTEGER);
