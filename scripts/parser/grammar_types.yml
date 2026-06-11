@@ -442,10 +442,6 @@ Expression:
     - QualifyClause
     - WindowDefinition
     - SampleValue
-    - GroupByExpression
-    - EmptyGroupingItem
-    - CubeOrRollupClause
-    - GroupingSetsClause
     - PivotHeader
     - ZoneValue
     - ZoneIntervalWithInterval
@@ -592,6 +588,16 @@ FunctionArgument:
   by_value: true
   rules:
     - FunctionArgument
+
+GroupByExpressionInfo:
+  type: "GroupByExpressionInfo"
+  by_value: true
+  rules:
+    - GroupByExpression
+    - GroupByBaseExpression
+    - EmptyGroupingItem
+    - CubeOrRollupClause
+    - GroupingSetsClause
 
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
@@ -1025,6 +1031,9 @@ Bool:
     - DistinctOrAll
     - DistinctKeyword
     - AllKeyword
+    - Lateral
+    - WithOrdinality
+    - Asof
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1546,12 +1555,10 @@ excluded_rules:
   - AtTimeZoneOperator
   - Generated
   - AlwaysOrByDefault
-  - Lateral
   - ConstraintNameClause
   - UsingSample
   - TableSample
   - NamedParameterAssignment
-  - WithOrdinality
   - ByName
   - CollateOperator
   - ExportClause
@@ -1564,8 +1571,6 @@ excluded_rules:
   - SelectStatement
   - SelectStatementInternal
   - SimpleSelect
-  - SetIntersectClause
-  - SetopClause
   - TableRef
   - BaseTableName
   - FunctionArgument
@@ -1574,13 +1579,5 @@ excluded_rules:
   - CTEBody
   - WithStatement
   - CTEBodyContent
-  - Materialized
-  - TableFunctionLateralOpt
-  - RegularJoinClause
   - WindowDefinition
-  - GroupByList
-  - GroupByExpression
-  - EmptyGroupingItem
-  - CubeOrRollupClause
-  - GroupingSetsClause
   - SingleArrowPair

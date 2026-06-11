@@ -371,8 +371,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSelectStatement);
 	REGISTER_TRANSFORM(TransformSelectStatementInternal);
 	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformSetopClause);
-	REGISTER_TRANSFORM(TransformSetIntersectClause);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
 	REGISTER_TRANSFORM(TransformDistinctKeyword);
 	REGISTER_TRANSFORM(TransformAllKeyword);
@@ -383,15 +381,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWithStatement);
 	REGISTER_TRANSFORM(TransformCTEBody);
-	REGISTER_TRANSFORM(TransformMaterialized);
-	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
-	REGISTER_TRANSFORM(TransformRegularJoinClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
-	REGISTER_TRANSFORM(TransformGroupByList);
-	REGISTER_TRANSFORM(TransformGroupByExpression);
-	REGISTER_TRANSFORM(TransformEmptyGroupingItem);
-	REGISTER_TRANSFORM(TransformCubeOrRollupClause);
-	REGISTER_TRANSFORM(TransformGroupingSetsClause);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {

@@ -1404,7 +1404,8 @@ VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
+RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
@@ -1451,13 +1452,14 @@ SampleRows <- 'ROWS'
 GroupByExpressions <- GroupByList / GroupByAll
 GroupByAll <- 'ALL'
 GroupByList <- List(GroupByExpression)
-GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / GroupByBaseExpression
+GroupByBaseExpression <- Expression
 EmptyGroupingItem <- '(' ')'
 CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
 CubeOrRollup <- CubeKeyword / RollupKeyword
 CubeKeyword <- 'CUBE'
 RollupKeyword <- 'ROLLUP'
-GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
+GroupingSetsClause <- 'GROUPING' 'SETS' Parens(List(GroupByExpression))
 
 SubqueryReference <- Parens(SelectStatementInternal)
 

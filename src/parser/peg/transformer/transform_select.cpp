@@ -125,28 +125,25 @@ PEGTransformerFactory::TransformIntersectChainTail(PEGTransformer &transformer,
 }
 
 unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetIntersectClause(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                                const optional<bool> &distinct_or_all) {
 	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = SetOperationType::INTERSECT;
-	auto &is_distinct_opt = list_pr.Child<OptionalParseResult>(1);
-	if (is_distinct_opt.HasResult()) {
-		result->setop_all = !transformer.Transform<bool>(is_distinct_opt.GetResult());
+	if (distinct_or_all) {
+		result->setop_all = !*distinct_or_all;
 	}
 	return result;
 }
 
 unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                         const SetOperationType &setop_type,
+                                                                         const optional<bool> &distinct_or_all,
+                                                                         const bool &has_result) {
 	auto result = make_uniq<SetOperationNode>();
-	result->setop_type = transformer.Transform<SetOperationType>(list_pr.Child<ListParseResult>(0));
-	auto &is_distinct_opt = list_pr.Child<OptionalParseResult>(1);
-	if (is_distinct_opt.HasResult()) {
-		result->setop_all = !transformer.Transform<bool>(is_distinct_opt.GetResult());
+	result->setop_type = setop_type;
+	if (distinct_or_all) {
+		result->setop_all = !*distinct_or_all;
 	}
-	auto &by_name = list_pr.Child<OptionalParseResult>(2);
-	if (by_name.HasResult()) {
+	if (has_result) {
 		if (result->setop_type == SetOperationType::UNION) {
 			result->setop_type = SetOperationType::UNION_BY_NAME;
 		} else {
@@ -176,6 +173,14 @@ bool PEGTransformerFactory::TransformDistinctKeyword(PEGTransformer &transformer
 
 bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	return false;
+}
+
+bool PEGTransformerFactory::TransformLateral(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformWithOrdinality(PEGTransformer &transformer) {
+	return true;
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTransformer &transformer,
@@ -514,18 +519,16 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                       const optional<bool> &asof,
+                                                                       const optional<JoinType> &join_type,
+                                                                       unique_ptr<TableRef> table_ref,
+                                                                       JoinQualifier join_qualifier) {
 	auto result = make_uniq<JoinRef>();
-	auto asof = list_pr.Child<OptionalParseResult>(0).HasResult();
-	if (asof) {
+	if (asof.value_or(false)) {
 		result->ref_type = JoinRefType::ASOF;
 	}
-	auto join_type = JoinType::INNER;
-	transformer.TransformOptional<JoinType>(list_pr, 1, join_type);
-	result->type = join_type;
-	result->right = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(3));
-	auto join_qualifier = transformer.Transform<JoinQualifier>(list_pr.Child<ListParseResult>(4));
+	result->type = join_type.value_or(JoinType::INNER);
+	result->right = std::move(table_ref);
 	if (join_qualifier.on_clause) {
 		result->condition = std::move(join_qualifier.on_clause);
 	} else if (!join_qualifier.using_columns.empty()) {
@@ -534,6 +537,10 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 		throw InternalException("Invalid join qualifier found.");
 	}
 	return std::move(result);
+}
+
+bool PEGTransformerFactory::TransformAsof(PEGTransformer &transformer) {
+	return true;
 }
 
 JoinType PEGTransformerFactory::TransformFullJoin(PEGTransformer &transformer, const bool &has_result) {
@@ -560,34 +567,31 @@ JoinType PEGTransformerFactory::TransformInnerJoin(PEGTransformer &transformer) 
 	return JoinType::INNER;
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-
+unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
+    PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
+    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
+    const optional<TableAlias> &table_alias) {
 	auto result = make_uniq<TableFunctionRef>();
 
-	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
-	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
-	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
+	result->with_ordinality =
+	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
-	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(4);
-	if (table_alias_opt.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
-		result->alias = table_alias.name;
-		result->column_name_alias = table_alias.column_name_alias;
+	if (table_alias) {
+		result->alias = table_alias->name;
+		result->column_name_alias = table_alias->column_name_alias;
 	}
 	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
     PEGTransformer &transformer, const string &table_alias_colon, const QualifiedName &qualified_table_function,
-    vector<FunctionArgument> table_function_arguments, const bool &has_result,
+    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality,
     optional<unique_ptr<SampleOptions>> sample_clause) {
 	auto result = make_uniq<TableFunctionRef>();
-	result->with_ordinality = has_result ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->with_ordinality =
+	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
@@ -711,42 +715,30 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &cub
 	}
 }
 
-vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransformer &transformer,
-                                                                      ParseResult &group_by_expr,
+vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
                                                                       GroupingExpressionMap &map, GroupByNode &result) {
 	vector<GroupingSet> result_sets;
-	if (StringUtil::CIEquals(group_by_expr.name, "EmptyGroupingItem")) {
+	if (group_by_expr.type == GroupByExpressionInfoType::EMPTY) {
 		result_sets.emplace_back();
 
-	} else if (StringUtil::CIEquals(group_by_expr.name, "Expression")) {
+	} else if (group_by_expr.type == GroupByExpressionInfoType::EXPRESSION) {
 		vector<ProjectionIndex> indexes;
-		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
-		AddGroupByExpression(std::move(expr), map, result, indexes);
+		AddGroupByExpression(std::move(group_by_expr.expression), map, result, indexes);
 		result_sets.push_back(VectorToGroupingSet(indexes));
-	} else if (StringUtil::CIEquals(group_by_expr.name, "GroupingSetsClause")) {
-		auto &grouping_set_list = group_by_expr.Cast<ListParseResult>();
-		auto &inner_group_by_list = ExtractResultFromParens(grouping_set_list.Child<ListParseResult>(2));
-		auto &list_pr = inner_group_by_list.Cast<ListParseResult>();
-		auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-		for (auto &child_wrapper : group_by_list) {
-			auto &child_list_pr = child_wrapper.get().Cast<ListParseResult>();
-			auto &child_expr = child_list_pr.Child<ChoiceParseResult>(0).GetResult();
-			auto child_sets = GroupByExpressionUnfolding(transformer, child_expr, map, result);
+	} else if (group_by_expr.type == GroupByExpressionInfoType::GROUPING_SETS) {
+		for (auto &child_expr : group_by_expr.children) {
+			auto child_sets = GroupByExpressionUnfolding(child_expr, map, result);
 			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
 		}
-	} else if (StringUtil::CIEquals(group_by_expr.name, "CubeOrRollupClause")) {
-		auto &group_by_list = group_by_expr.Cast<ListParseResult>();
-		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
-		auto &extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
-		if (!extract_parens.Cast<OptionalParseResult>().HasResult()) {
+	} else if (group_by_expr.type == GroupByExpressionInfoType::CUBE ||
+	           group_by_expr.type == GroupByExpressionInfoType::ROLLUP) {
+		if (group_by_expr.expressions.empty()) {
 			throw ParserException("CUBE or ROLLUP column list cannot be empty");
 		}
-		auto expr_list = ExtractParseResultsFromList(extract_parens.Cast<OptionalParseResult>().GetResult());
 
 		vector<GroupingSet> unfolding_sets;
-		for (auto &expr_node : expr_list) {
+		for (auto &expr : group_by_expr.expressions) {
 			vector<ProjectionIndex> indexes;
-			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_node);
 			AddGroupByExpression(std::move(expr), map, result, indexes);
 
 			GroupingSet s;
@@ -756,11 +748,11 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 			unfolding_sets.push_back(std::move(s));
 		}
 
-		if (StringUtil::CIEquals(type_str, "CUBE")) {
+		if (group_by_expr.type == GroupByExpressionInfoType::CUBE) {
 			CheckGroupingSetCubes(result_sets.size(), unfolding_sets.size());
 			GroupingSet current_set;
 			AddCubeSets(current_set, unfolding_sets, result_sets, 0);
-		} else if (StringUtil::CIEquals(type_str, "ROLLUP")) {
+		} else {
 			GroupingSet current_set;
 			result_sets.push_back(current_set);
 			for (idx_t i = 0; i < unfolding_sets.size(); i++) {
@@ -780,18 +772,13 @@ string PEGTransformerFactory::TransformRollupKeyword(PEGTransformer &transformer
 	return "ROLLUP";
 }
 
-GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-
+GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer,
+                                                        vector<GroupByExpressionInfo> group_by_expression) {
 	GroupByNode result;
 	GroupingExpressionMap map;
 
-	for (auto group_by_child : group_by_list) {
-		auto &group_by_expr_child_list = group_by_child.get().Cast<ListParseResult>();
-		auto &group_by_expr = group_by_expr_child_list.Child<ChoiceParseResult>(0).GetResult();
-
-		vector<GroupingSet> next_sets = GroupByExpressionUnfolding(transformer, group_by_expr, map, result);
+	for (auto &group_by_expr : group_by_expression) {
+		vector<GroupingSet> next_sets = GroupByExpressionUnfolding(group_by_expr, map, result);
 
 		if (result.grouping_sets.empty()) {
 			result.grouping_sets = std::move(next_sets);
@@ -815,25 +802,39 @@ GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transfor
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupByExpression(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+GroupByExpressionInfo PEGTransformerFactory::TransformGroupByBaseExpression(PEGTransformer &transformer,
+                                                                            unique_ptr<ParsedExpression> expression) {
+	GroupByExpressionInfo result;
+	result.type = GroupByExpressionInfoType::EXPRESSION;
+	result.expression = std::move(expression);
+	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEmptyGroupingItem(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	throw NotImplementedException("Rule 'EmptyGroupingItem' has not been implemented yet");
+GroupByExpressionInfo PEGTransformerFactory::TransformEmptyGroupingItem(PEGTransformer &transformer) {
+	GroupByExpressionInfo result;
+	result.type = GroupByExpressionInfoType::EMPTY;
+	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCubeOrRollupClause(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	throw NotImplementedException("Rule 'CubeOrRollupClause' has not been implemented yet");
+GroupByExpressionInfo
+PEGTransformerFactory::TransformCubeOrRollupClause(PEGTransformer &transformer, const string &cube_or_rollup,
+                                                   optional<vector<unique_ptr<ParsedExpression>>> expression) {
+	GroupByExpressionInfo result;
+	result.type = StringUtil::CIEquals(cube_or_rollup, "CUBE") ? GroupByExpressionInfoType::CUBE
+	                                                           : GroupByExpressionInfoType::ROLLUP;
+	if (expression) {
+		result.expressions = std::move(*expression);
+	}
+	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	throw NotImplementedException("Rule 'GroupingSetsClause' has not been implemented yet");
+GroupByExpressionInfo
+PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer,
+                                                   vector<GroupByExpressionInfo> group_by_expression) {
+	GroupByExpressionInfo result;
+	result.type = GroupByExpressionInfoType::GROUPING_SETS;
+	result.children = std::move(group_by_expression);
+	return result;
 }
 
 CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransformer &transformer,
@@ -929,10 +930,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformCTEBody(PEGTransformer &tra
 	return make_uniq<SubqueryRef>(std::move(select_statement));
 }
 
-bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &not_opt = list_pr.Child<OptionalParseResult>(0);
-	return not_opt.HasResult();
+bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, const bool &has_result) {
+	return has_result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PEGTransformer &transformer,
@@ -1116,7 +1115,8 @@ PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer,
 	return expression;
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer, const bool &has_result,
+unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
+                                                                   const optional<bool> &lateral,
                                                                    unique_ptr<TableRef> subquery_reference,
                                                                    const optional<TableAlias> &table_alias) {
 	if (table_alias) {
