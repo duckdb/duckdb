@@ -1,0 +1,44 @@
+# name: test/sql/function/generic/assert_true.test
+# description: Test assert_true function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+# like Spark's assert_true, returns NULL when the assertion holds
+query I
+SELECT assert_true(true)
+----
+NULL
+
+query I
+SELECT assert_true(1 = 1, 'never shown')
+----
+NULL
+
+statement error
+SELECT assert_true(false)
+----
+Assertion failed
+
+statement error
+SELECT assert_true(NULL)
+----
+Assertion failed
+
+statement error
+SELECT assert_true(false, 'my custom message')
+----
+Assertion: my custom message
+
+statement error
+SELECT assert_true(i < 3, 'row ' || i || ' is too large') FROM range(5) t(i)
+----
+Assertion: row 3 is too large
+
+query I
+SELECT assert_true(i < 10) FROM range(3) t(i)
+----
+NULL
+NULL
+NULL
