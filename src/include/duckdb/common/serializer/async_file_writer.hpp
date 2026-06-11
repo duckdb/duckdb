@@ -67,8 +67,12 @@ public:
 	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum queued async bytes retained per regular execution thread.
 	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	//! Minimum async write reservation requested per regular execution thread.
+	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
 	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
+	//! Local buffered writes rarely benefit from many concurrent pwrite calls to one file.
+	static constexpr idx_t DEFAULT_LOCAL_REGULAR_THREADS_PER_DRAIN_TASK = 16;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
@@ -104,8 +108,10 @@ public:
 private:
 	//! Whether registering a buffer may schedule an async drain task immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
-	//! Whether to force a TemporaryMemoryState update or apply coarse update filtering.
+	//! Whether to force a TemporaryMemoryState growth check while a registration batch is open.
 	enum class MemoryUpdateMode : uint8_t { COARSE, FORCE };
+	//! Whether to schedule only enough task capacity for normal overlap, or force all pending bytes to drain.
+	enum class SchedulePolicy : uint8_t { THRESHOLD, FORCE };
 	//! Whether async drain tasks can write independent file ranges concurrently.
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
@@ -132,15 +138,15 @@ private:
 	void SealCopiedBuffer(ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 
 	//! Seal copied bytes, then schedule as many drain tasks as the pending queue allows.
-	void SchedulePendingWrites();
+	void SchedulePendingWrites(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
 	//! Schedule drain tasks from already registered pending writes. Safe to call from async drain tasks.
-	void SchedulePendingWritesInternal();
+	void SchedulePendingWritesInternal(SchedulePolicy policy = SchedulePolicy::THRESHOLD);
 	//! Enter a registration batch, delaying async draining until EndBatch.
 	void BeginBatch();
 	//! Leave a registration batch and schedule pending writes when the outermost batch closes.
 	void EndBatch();
 
-	//! Report queued bytes to TemporaryMemoryState, avoiding per-write updates in the common path.
+	//! Grow the TemporaryMemoryState reservation coarsely; it is released only when the writer closes.
 	void UpdateMemoryState(MemoryUpdateMode mode = MemoryUpdateMode::COARSE);
 	//! Return the current async backlog budget after applying the fixed writer cap.
 	idx_t BackpressureBudget();
@@ -148,10 +154,16 @@ private:
 	idx_t DrainTaskByteBudget() const;
 	//! Return queued/in-flight bytes that have not reached the file handle yet. Caller must hold lock.
 	idx_t TotalPendingBytes() const;
+	//! Return pending bytes that are not already covered by scheduled-but-not-started drain task capacity.
+	idx_t UnscheduledPendingBytes() const;
+	//! Minimum pending bytes before threshold scheduling starts the first task.
+	idx_t FirstTaskScheduleThreshold() const;
 	//! Probe whether the file system supports independent positional writes.
 	bool SupportsPositionalWrites();
 	//! Estimate how many drain tasks are useful for the currently queued writes. Caller must hold lock.
-	idx_t EstimateScheduleCount(idx_t available_slots) const;
+	idx_t EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const;
+	//! Mark that a scheduled drain task has started and will claim its byte budget.
+	void StartDrainTask();
 	//! Move one byte-budgeted prefix of pending writes into a drain task.
 	idx_t TakePendingWrites(vector<PendingWrite> &writes);
 	//! Release one scheduled/running drain task slot and its in-flight byte accounting.
@@ -171,6 +183,8 @@ private:
 	void RethrowTaskError();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	void WaitAllInternal(BatchDrainMode batch_drain_mode);
+	//! Release the writer's TemporaryMemoryState reservation.
+	void ReleaseMemoryReservation();
 	//! Resolve constants that depend on the file system and scheduler state.
 	void ResolveWriteSettings();
 
@@ -195,8 +209,14 @@ private:
 
 	//! Drain-time coalescing threshold, resolved once from the file system type.
 	idx_t coalesce_threshold = 0;
+	//! Minimum pending bytes requested from TemporaryMemoryManager while writes are outstanding.
+	idx_t min_pending_bytes = 0;
 	//! Hard cap over the TemporaryMemoryState reservation.
 	idx_t max_pending_bytes = 0;
+	//! Last remaining-size request sent to TemporaryMemoryManager. Grows monotonically until close.
+	idx_t memory_request_bytes = 0;
+	//! Whether this writer targets a local file handle.
+	bool local_file = false;
 	//! Whether async tasks may drain independent ranges concurrently using positional writes.
 	DrainMode drain_mode = DrainMode::SEQUENTIAL;
 	//! Maximum number of scheduled/running drain tasks for this writer.
@@ -210,12 +230,12 @@ private:
 	idx_t pending_bytes = 0;
 	//! Bytes owned by drain tasks that have not reached the file handle yet.
 	idx_t in_flight_bytes = 0;
-	//! Last queued/in-flight byte count reported to TemporaryMemoryState.
-	idx_t memory_state_pending_bytes = 0;
 	//! Nested batch depth. While non-zero, async draining and backpressure are delayed.
 	idx_t batch_depth = 0;
 	//! Scheduled or running drain tasks for this writer.
 	idx_t active_drain_tasks = 0;
+	//! Scheduled drain tasks that have not yet claimed pending bytes.
+	idx_t pending_drain_tasks = 0;
 
 	//! Async task executor. If absent, writes are performed synchronously on registration.
 	//! Keep this after task-accounting fields so queued task destructors can still release slots.

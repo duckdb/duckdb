@@ -16,8 +16,19 @@ namespace {
 
 class TrackingWriteFileSystem : public LocalFileSystem {
 public:
+	explicit TrackingWriteFileSystem(bool local_file_p = true) : local_file(local_file_p) {
+	}
+
 	string GetName() const override {
 		return "TrackingWriteFileSystem";
+	}
+
+	bool IsLocalFileSystem() const override {
+		return local_file;
+	}
+
+	bool OnDiskFile(FileHandle &) override {
+		return local_file;
 	}
 
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -52,11 +63,15 @@ public:
 	vector<idx_t> write_sizes;
 	vector<idx_t> write_offsets;
 	bool fail_writes = false;
+
+private:
+	bool local_file;
 };
 
 class BlockingWriteFileSystem : public TrackingWriteFileSystem {
 public:
-	explicit BlockingWriteFileSystem(bool positional_supported_p) : positional_supported(positional_supported_p) {
+	explicit BlockingWriteFileSystem(bool positional_supported_p, bool local_file_p = true)
+	    : TrackingWriteFileSystem(local_file_p), positional_supported(positional_supported_p) {
 	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -97,6 +112,11 @@ public:
 	bool WaitForBlockedWrites(idx_t count) {
 		unique_lock<mutex> guard(block_lock);
 		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return blocked_writes >= count; });
+	}
+
+	idx_t BlockedWrites() {
+		lock_guard<mutex> guard(block_lock);
+		return blocked_writes;
 	}
 
 	void ReleaseWrites() {
@@ -149,6 +169,9 @@ private:
 
 class FailingBlockedWriteFileSystem : public TrackingWriteFileSystem {
 public:
+	FailingBlockedWriteFileSystem() : TrackingWriteFileSystem(false) {
+	}
+
 	string GetName() const override {
 		return "FailingBlockedWriteFileSystem";
 	}
@@ -234,6 +257,13 @@ static string ReadFile(const string &path) {
 
 static unique_ptr<Connection> CreateConnectionWithAsyncThreads(DuckDB &db, idx_t async_threads = 1) {
 	auto con = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
+	return con;
+}
+
+static unique_ptr<Connection> CreateConnectionWithThreads(DuckDB &db, idx_t regular_threads, idx_t async_threads) {
+	auto con = make_uniq<Connection>(db);
+	REQUIRE_NO_FAIL(con->Query("SET threads=" + to_string(regular_threads)));
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
 	return con;
 }
@@ -457,7 +487,7 @@ TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[asyn
 TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(true);
+	BlockingWriteFileSystem fs(true, false);
 	auto path = TestCreatePath("async_file_writer_parallel_positional.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
@@ -495,6 +525,121 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 	}
 	REQUIRE(saw_first_offset);
 	REQUIRE(saw_second_offset);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter caps local positional draining", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithThreads(db, 10, 8);
+	BlockingWriteFileSystem fs(true);
+	auto path = TestCreatePath("async_file_writer_local_positional_cap.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	}
+
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(fs.BlockedWrites() == 1);
+	REQUIRE(fs.MaxActiveWrites() == 1);
+
+	fs.ReleaseWrites();
+	writer.Close();
+	REQUIRE(ReadFile(path) == first + second);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drain", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(true, false);
+	auto path = TestCreatePath("async_file_writer_remote_coalesce_start.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD / 2, 'a');
+	string second(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD / 2, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(fs.BlockedWrites() == 0);
+
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == first + second);
+	REQUIRE(fs.write_sizes.size() == 1);
+	REQUIRE(fs.write_sizes[0] == AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter avoids sub-threshold remote writes when selected bytes allow coalescing",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	TrackingWriteFileSystem fs(false);
+	auto path = TestCreatePath("async_file_writer_remote_coalesce_small_run.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(5ULL * 1024ULL * 1024ULL, 'a');
+	string second(1ULL * 1024ULL * 1024ULL, 'b');
+	string third(3ULL * 1024ULL * 1024ULL, 'c');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(third));
+	}
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == first + second + third);
+	REQUIRE(fs.write_sizes.size() == 1);
+	REQUIRE(fs.write_sizes[0] == first.size() + second.size() + third.size());
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter schedules extra remote drain tasks only after a full budget", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 4);
+	BlockingWriteFileSystem fs(true, false);
+	auto path = TestCreatePath("async_file_writer_remote_extra_task_threshold.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string chunk(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD * 2, 'x');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(fs.BlockedWrites() == 1);
+
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
+	REQUIRE(fs.WaitForBlockedWrites(2));
+
+	fs.ReleaseWrites();
+	writer.Close();
+	REQUIRE(ReadFile(path) == chunk + chunk + chunk);
 	fs.RemoveFile(path);
 }
 

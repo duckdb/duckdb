@@ -52,11 +52,9 @@ static ClientContext &RequireClientContext(QueryContext context) {
 	return *client_context;
 }
 
-static idx_t MemoryStateUpdateGranularity(idx_t max_pending_bytes, idx_t coalesce_threshold) {
-	constexpr idx_t MINIMUM_UPDATE_GRANULARITY = 1024ULL * 1024ULL;
-	auto threshold = max_pending_bytes / 16;
-	threshold = MaxValue(threshold, coalesce_threshold);
-	return MaxValue(threshold, MINIMUM_UPDATE_GRANULARITY);
+static idx_t CeilDiv(idx_t value, idx_t divisor) {
+	D_ASSERT(divisor > 0);
+	return value == 0 ? 0 : 1 + (value - 1) / divisor;
 }
 
 AsyncFileWriter::PendingWrite::PendingWrite(unique_ptr<AsyncWriteBuffer> buffer_p, idx_t offset_p)
@@ -104,6 +102,7 @@ public:
 
 	void ExecuteTask() override {
 		started = true;
+		writer.StartDrainTask();
 		writer.DrainPendingWrites();
 	}
 
@@ -118,13 +117,21 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 	ResolveWriteSettings();
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	if (scheduler.NumberOfAsyncThreads() > 0) {
+	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	if (async_threads > 0) {
 		if (SupportsPositionalWrites()) {
 			drain_mode = DrainMode::POSITIONAL;
-			max_active_drain_tasks = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfAsyncThreads()), 1);
+			max_active_drain_tasks = async_threads;
+			if (local_file) {
+				auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+				auto local_task_limit =
+				    MaxValue<idx_t>(regular_threads / DEFAULT_LOCAL_REGULAR_THREADS_PER_DRAIN_TASK, 1);
+				max_active_drain_tasks = MinValue(max_active_drain_tasks, local_task_limit);
+			}
 		}
 		executor = make_uniq<TaskExecutor>(client_context, TaskSchedulerType::ASYNC);
 		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
+		memory_state->SetMinimumReservation(min_pending_bytes);
 		memory_state->SetZero();
 	}
 }
@@ -153,7 +160,7 @@ AsyncFileWriter::BatchGuard::~BatchGuard() {
 }
 
 void AsyncFileWriter::ResolveWriteSettings() {
-	bool local_file = fs.IsLocalFileSystem();
+	local_file = fs.IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {
 			local_file = handle->OnDiskFile();
@@ -167,6 +174,7 @@ void AsyncFileWriter::ResolveWriteSettings() {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
 	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
+	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 }
 
 idx_t AsyncFileWriter::GetFileSize() {
@@ -277,15 +285,15 @@ AsyncFileWriter::BatchGuard AsyncFileWriter::StartBatch() {
 	return BatchGuard(*this);
 }
 
-void AsyncFileWriter::SchedulePendingWrites() {
+void AsyncFileWriter::SchedulePendingWrites(SchedulePolicy policy) {
 	if (!executor) {
 		return;
 	}
 	SealCopiedBuffer(ScheduleMode::DEFER);
-	SchedulePendingWritesInternal();
+	SchedulePendingWritesInternal(policy);
 }
 
-void AsyncFileWriter::SchedulePendingWritesInternal() {
+void AsyncFileWriter::SchedulePendingWritesInternal(SchedulePolicy policy) {
 	if (!executor) {
 		return;
 	}
@@ -294,8 +302,9 @@ void AsyncFileWriter::SchedulePendingWritesInternal() {
 		lock_guard<mutex> guard(lock);
 		if (batch_depth == 0 && !pending_writes.empty() && active_drain_tasks < max_active_drain_tasks) {
 			auto available_slots = max_active_drain_tasks - active_drain_tasks;
-			schedule_count = EstimateScheduleCount(available_slots);
+			schedule_count = EstimateScheduleCount(available_slots, policy);
 			active_drain_tasks += schedule_count;
+			pending_drain_tasks += schedule_count;
 		}
 	}
 	for (idx_t task_idx = 0; task_idx < schedule_count; task_idx++) {
@@ -322,29 +331,41 @@ void AsyncFileWriter::UpdateMemoryState(MemoryUpdateMode mode) {
 	}
 
 	auto force = mode == MemoryUpdateMode::FORCE;
-	// TMM is shared state; report coarse backlog changes instead of touching it for every registered write.
 	idx_t current_pending_bytes;
-	bool should_update;
 	{
 		lock_guard<mutex> guard(lock);
 		if (batch_depth > 0 && !force) {
 			return;
 		}
 		current_pending_bytes = TotalPendingBytes();
-		auto update_granularity = MemoryStateUpdateGranularity(max_pending_bytes, coalesce_threshold);
-		auto grew_enough = current_pending_bytes > memory_state_pending_bytes &&
-		                   current_pending_bytes - memory_state_pending_bytes >= update_granularity;
-		should_update = force || current_pending_bytes == 0 || memory_state_pending_bytes == 0 || grew_enough ||
-		                current_pending_bytes <= memory_state_pending_bytes / 2;
-		if (!should_update) {
-			return;
-		}
-		memory_state_pending_bytes = current_pending_bytes;
 	}
 	if (current_pending_bytes == 0) {
-		memory_state->SetZero();
-	} else {
-		memory_state->SetRemainingSizeAndUpdateReservation(client_context, current_pending_bytes);
+		return;
+	}
+
+	auto current_reservation = memory_state->GetReservation();
+	while (current_pending_bytes > MinValue(current_reservation, max_pending_bytes) &&
+	       memory_request_bytes < max_pending_bytes) {
+		idx_t next_request;
+		if (memory_request_bytes == 0) {
+			next_request = min_pending_bytes;
+		} else if (memory_request_bytes > max_pending_bytes / 2) {
+			next_request = max_pending_bytes;
+		} else {
+			next_request = memory_request_bytes * 2;
+		}
+		next_request = MinValue(MaxValue(next_request, min_pending_bytes), max_pending_bytes);
+		if (next_request <= memory_request_bytes) {
+			return;
+		}
+
+		auto previous_reservation = current_reservation;
+		memory_state->SetRemainingSizeAndUpdateReservation(client_context, next_request);
+		memory_request_bytes = next_request;
+		current_reservation = memory_state->GetReservation();
+		if (current_reservation <= previous_reservation) {
+			return;
+		}
 	}
 }
 
@@ -363,6 +384,22 @@ idx_t AsyncFileWriter::TotalPendingBytes() const {
 	return pending_bytes + in_flight_bytes;
 }
 
+idx_t AsyncFileWriter::UnscheduledPendingBytes() const {
+	if (pending_drain_tasks == 0 || pending_bytes == 0) {
+		return pending_bytes;
+	}
+	auto byte_budget = DrainTaskByteBudget();
+	auto covered_tasks = CeilDiv(pending_bytes, byte_budget);
+	if (pending_drain_tasks >= covered_tasks) {
+		return 0;
+	}
+	return pending_bytes - pending_drain_tasks * byte_budget;
+}
+
+idx_t AsyncFileWriter::FirstTaskScheduleThreshold() const {
+	return local_file ? 1 : coalesce_threshold;
+}
+
 bool AsyncFileWriter::SupportsPositionalWrites() {
 	uint8_t empty = 0;
 	try {
@@ -373,39 +410,45 @@ bool AsyncFileWriter::SupportsPositionalWrites() {
 	}
 }
 
-idx_t AsyncFileWriter::EstimateScheduleCount(idx_t available_slots) const {
+idx_t AsyncFileWriter::EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const {
 	if (available_slots == 0 || pending_writes.empty()) {
 		return 0;
 	}
-	if (drain_mode == DrainMode::SEQUENTIAL) {
-		return 1;
+	auto unscheduled_bytes = UnscheduledPendingBytes();
+	if (unscheduled_bytes == 0) {
+		return 0;
+	}
+	auto byte_budget = DrainTaskByteBudget();
+	if (policy == SchedulePolicy::FORCE) {
+		auto schedule_count = CeilDiv(unscheduled_bytes, byte_budget);
+		return MinValue(schedule_count, available_slots);
 	}
 
-	auto byte_budget = DrainTaskByteBudget();
-	idx_t schedule_count = 0;
-	idx_t task_bytes = 0;
-	for (auto &write : pending_writes) {
-		auto write_size = write.Size();
-		if (task_bytes == 0) {
-			if (schedule_count == available_slots) {
-				break;
-			}
-			schedule_count++;
-			task_bytes = write_size;
-		} else if (task_bytes + write_size > byte_budget) {
-			if (schedule_count == available_slots) {
-				break;
-			}
-			schedule_count++;
-			task_bytes = write_size;
-		} else {
-			task_bytes += write_size;
+	if (active_drain_tasks == 0) {
+		if (unscheduled_bytes < FirstTaskScheduleThreshold()) {
+			return 0;
 		}
-		if (task_bytes >= byte_budget) {
-			task_bytes = 0;
+		if (drain_mode == DrainMode::SEQUENTIAL) {
+			return 1;
 		}
+		idx_t schedule_count = 1;
+		unscheduled_bytes = unscheduled_bytes > byte_budget ? unscheduled_bytes - byte_budget : 0;
+		schedule_count += unscheduled_bytes / byte_budget;
+		return MinValue(schedule_count, available_slots);
 	}
-	return schedule_count;
+
+	if (drain_mode == DrainMode::SEQUENTIAL) {
+		return 0;
+	}
+
+	auto schedule_count = unscheduled_bytes / byte_budget;
+	return MinValue(schedule_count, available_slots);
+}
+
+void AsyncFileWriter::StartDrainTask() {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(pending_drain_tasks > 0);
+	pending_drain_tasks--;
 }
 
 idx_t AsyncFileWriter::TakePendingWrites(vector<PendingWrite> &writes) {
@@ -458,7 +501,9 @@ void AsyncFileWriter::CancelScheduledDrainTasks(idx_t task_count) {
 	}
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(active_drain_tasks >= task_count);
+	D_ASSERT(pending_drain_tasks >= task_count);
 	active_drain_tasks -= task_count;
+	pending_drain_tasks -= task_count;
 }
 
 void AsyncFileWriter::DrainPendingWrites() {
@@ -467,14 +512,12 @@ void AsyncFileWriter::DrainPendingWrites() {
 	AsyncFileWriterDrainTaskGuard guard(*this, in_flight_task_bytes);
 	if (writes.empty()) {
 		guard.Finish();
-		UpdateMemoryState();
 		return;
 	}
 
 	auto drained_bytes = WritePendingWrites(writes);
 	D_ASSERT(drained_bytes == in_flight_task_bytes);
 	guard.Finish();
-	UpdateMemoryState();
 	SchedulePendingWritesInternal();
 }
 
@@ -508,51 +551,84 @@ void AsyncFileWriter::EndBatch() {
 idx_t AsyncFileWriter::WritePendingWrites(vector<PendingWrite> &writes) {
 	idx_t drained_bytes = 0;
 	idx_t i = 0;
+	auto write_range = [&](idx_t start, idx_t end, idx_t size) {
+		D_ASSERT(end > start);
+		auto write_offset = writes[start].offset;
+		if (end == start + 1) {
+			auto &single_write = *writes[start].buffer;
+			D_ASSERT(size == single_write.Size());
+			WriteBuffer(single_write.Ptr(), size, write_offset);
+			writes[start].buffer.reset();
+			return size;
+		}
+
+		auto coalesced = BufferAllocator::Get(client_context).Allocate(size);
+		idx_t offset = 0;
+		for (idx_t write_idx = start; write_idx < end; write_idx++) {
+			auto &current = writes[write_idx];
+			auto current_size = current.Size();
+			D_ASSERT(current.offset == write_offset + offset);
+			memcpy(coalesced.get() + offset, current.buffer->Ptr(), current_size);
+			offset += current_size;
+			// The coalesced buffer owns these bytes now; release the sources before the physical write.
+			current.buffer.reset();
+		}
+		D_ASSERT(offset == size);
+		WriteBuffer(coalesced.get(), size, write_offset);
+		return size;
+	};
+
 	while (i < writes.size()) {
 		auto &pending_write = writes[i];
 		auto &write = *pending_write.buffer;
 		auto write_size = write.Size();
 		if (write_size >= coalesce_threshold) {
-			WriteBuffer(write.Ptr(), write_size, pending_write.offset);
-			drained_bytes += write_size;
-			writes[i].buffer.reset();
+			drained_bytes += write_range(i, i + 1, write_size);
 			i++;
 			continue;
 		}
 
 		idx_t coalesced_size = 0;
 		idx_t end = i;
-		while (end < writes.size()) {
-			auto next_size = writes[end].Size();
-			if (next_size >= coalesce_threshold || coalesced_size + next_size > coalesce_threshold) {
-				break;
+		if (local_file) {
+			while (end < writes.size()) {
+				auto next_size = writes[end].Size();
+				if (next_size >= coalesce_threshold || coalesced_size + next_size > coalesce_threshold) {
+					break;
+				}
+				D_ASSERT(writes[end].offset == pending_write.offset + coalesced_size);
+				coalesced_size += next_size;
+				end++;
 			}
-			D_ASSERT(writes[end].offset == pending_write.offset + coalesced_size);
-			coalesced_size += next_size;
-			end++;
-		}
-		if (end == i + 1) {
-			WriteBuffer(write.Ptr(), write_size, pending_write.offset);
-			drained_bytes += write_size;
-			writes[i].buffer.reset();
-			i++;
+			drained_bytes += write_range(i, end, coalesced_size);
+			i = end;
 			continue;
 		}
 
-		auto coalesced = BufferAllocator::Get(client_context).Allocate(coalesced_size);
-		idx_t offset = 0;
-		for (idx_t write_idx = i; write_idx < end; write_idx++) {
-			auto &current = writes[write_idx];
-			auto current_size = current.Size();
-			D_ASSERT(current.offset == pending_write.offset + offset);
-			memcpy(coalesced.get() + offset, current.buffer->Ptr(), current_size);
-			offset += current_size;
-			// The coalesced buffer owns these bytes now; release the sources before the physical write.
-			current.buffer.reset();
+		while (end < writes.size() && writes[end].Size() < coalesce_threshold) {
+			D_ASSERT(writes[end].offset == pending_write.offset + coalesced_size);
+			coalesced_size += writes[end].Size();
+			end++;
 		}
-		D_ASSERT(offset == coalesced_size);
-		WriteBuffer(coalesced.get(), coalesced_size, pending_write.offset);
-		drained_bytes += coalesced_size;
+		idx_t remaining_size = coalesced_size;
+		idx_t chunk_start = i;
+		while (chunk_start < end) {
+			idx_t chunk_size = 0;
+			idx_t chunk_end = chunk_start;
+			while (chunk_end < end) {
+				auto next_size = writes[chunk_end].Size();
+				chunk_size += next_size;
+				chunk_end++;
+				auto remaining_after_next = remaining_size - chunk_size;
+				if (chunk_size >= coalesce_threshold &&
+				    (remaining_after_next == 0 || remaining_after_next >= coalesce_threshold)) {
+					break;
+				}
+			}
+			drained_bytes += write_range(chunk_start, chunk_end, chunk_size);
+			remaining_size -= chunk_size;
+			chunk_start = chunk_end;
+		}
 		i = end;
 	}
 	return drained_bytes;
@@ -588,6 +664,7 @@ void AsyncFileWriter::ApplyBackpressure() {
 		return;
 	}
 	SealCopiedBuffer(ScheduleMode::DEFER);
+	UpdateMemoryState(MemoryUpdateMode::FORCE);
 	while (true) {
 		idx_t current_pending_bytes;
 		{
@@ -600,7 +677,7 @@ void AsyncFileWriter::ApplyBackpressure() {
 		if (current_pending_bytes <= BackpressureBudget()) {
 			return;
 		}
-		SchedulePendingWrites();
+		SchedulePendingWrites(SchedulePolicy::FORCE);
 		executor->WorkOnTasks();
 		RethrowTaskError();
 	}
@@ -645,7 +722,7 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 		open_batch_for_drain();
 		UpdateMemoryState(MemoryUpdateMode::FORCE);
 		if (!executor->HasError()) {
-			SchedulePendingWritesInternal();
+			SchedulePendingWritesInternal(SchedulePolicy::FORCE);
 		}
 		executor->WorkOnTasks();
 	} catch (...) {
@@ -662,14 +739,28 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 	RethrowTaskError();
 }
 
+void AsyncFileWriter::ReleaseMemoryReservation() {
+	if (!memory_state || memory_request_bytes == 0) {
+		return;
+	}
+	memory_state->SetZero();
+	memory_request_bytes = 0;
+}
+
 void AsyncFileWriter::Close() {
 	if (closed) {
 		return;
 	}
-	WaitAllInternal(BatchDrainMode::FORCE_CLOSE_BATCH);
-	handle->Close();
-	handle.reset();
-	closed = true;
+	try {
+		WaitAllInternal(BatchDrainMode::FORCE_CLOSE_BATCH);
+		ReleaseMemoryReservation();
+		handle->Close();
+		handle.reset();
+		closed = true;
+	} catch (...) {
+		ReleaseMemoryReservation();
+		throw;
+	}
 }
 
 void AsyncFileWriter::Sync() {
@@ -681,9 +772,6 @@ void AsyncFileWriter::Truncate(idx_t size) {
 	WaitAll();
 	handle->Truncate(NumericCast<int64_t>(size));
 	total_written = size;
-	if (executor) {
-		UpdateMemoryState(MemoryUpdateMode::FORCE);
-	}
 	if (handle->CanSeek() && handle->SeekPosition() > size) {
 		handle->Seek(size);
 	}
