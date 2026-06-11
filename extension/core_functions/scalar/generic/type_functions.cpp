@@ -83,7 +83,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 	// Evaluate all arguments to constant values
 	for (auto &child : input.children) {
-		string name = child->GetAlias();
+		string name = child->GetAlias().GetIdentifierName();
 		if (!child->IsFoldable()) {
 			throw BinderException("make_type function arguments must be constant expressions");
 		}
@@ -103,7 +103,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto &arg = args[i];
 		auto result = make_uniq<ConstantExpression>(arg.second);
-		result->SetAlias(arg.first);
+		result->SetAlias(Identifier(arg.first));
 
 		type_args.push_back(std::move(result));
 	}

@@ -527,7 +527,7 @@ string LogicalType::ToString() const {
 // LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
-	auto type = DefaultTypeGenerator::GetDefaultType(str);
+	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));
 	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -1093,7 +1093,7 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 
 	// Create a super-set of the STRUCT fields.
 	// First, create a name->index map of the right children.
-	InsertionOrderPreservingMap<idx_t> right_children_map;
+	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> right_children_map;
 	for (idx_t i = 0; i < right_children.size(); i++) {
 		auto &name = right_children[i].first;
 		right_children_map[name] = i;
@@ -1433,7 +1433,7 @@ void LogicalType::Verify() const {
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
-		case_insensitive_set_t child_names;
+		identifier_set_t child_names;
 		bool all_empty = true;
 		for (auto &entry : StructType::GetChildTypes(*this)) {
 			if (entry.first.empty()) {
@@ -1684,7 +1684,7 @@ const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index
 	return child_types[index].second;
 }
 
-const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
+const Identifier &StructType::GetChildName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	return child_types[index].first;
@@ -1693,7 +1693,7 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &name) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		if (StringUtil::CIEquals(child_types[i].first, name)) {
+		if (child_types[i].first == name) {
 			return i;
 		}
 	}
@@ -1777,7 +1777,7 @@ const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index
 	return child_types[index + 1].second;
 }
 
-const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
+const Identifier &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	// skip the "tag" field
@@ -2128,7 +2128,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 	}
 
 	// Try to bind as far as we can
-	auto result = DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+	auto result = DefaultTypeGenerator::TryDefaultBind(name.GetIdentifierName(), bound_args);
 	if (result.id() != LogicalTypeId::INVALID) {
 		return result;
 	}

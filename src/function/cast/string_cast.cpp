@@ -197,7 +197,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	vector<reference<ValidityMask>> child_masks;
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
 		if (!is_unnamed) {
-			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
+			child_names.insert({StructType::GetChildName(result.GetType(), child_idx).GetIdentifierName(), child_idx});
 		}
 		child_masks.emplace_back(FlatVector::ValidityMutable(child_vectors[child_idx]));
 		child_masks[child_idx].get().SetAllInvalid(count);

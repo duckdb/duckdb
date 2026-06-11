@@ -21,8 +21,8 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
+	vector<Identifier> GetDefaultEntries() override;
 };
 
 } // namespace duckdb

@@ -60,7 +60,7 @@ struct MaxValueComp : public ValueComparator {
 };
 
 template <typename StatsType>
-unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name) {
 	if (fun_name == "min") {
 		return make_uniq<MinValueComp<StatsType>>();
 	}
@@ -68,7 +68,7 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 	return make_uniq<MaxValueComp<StatsType>>();
 }
 
-unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalType &type) {
+unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name, const LogicalType &type) {
 	if (type == LogicalType::VARCHAR) {
 		return GetComparator<StringStats>(fun_name);
 	} else if (type.IsNumeric() || type.IsTemporal()) {
@@ -149,7 +149,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate is in state export mode - cannot replace with a constant
 			return;
 		}
-		const string &fun_name = aggr_expr.Function().GetName();
+		auto &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.GetChildren().size() != 1 ||
 			    aggr_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -338,7 +338,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		vector<unique_ptr<Expression>> proj_expressions;
 		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			const string &fun_name = aggr_expr.Function().GetName();
+			auto &fun_name = aggr_expr.Function().GetName();
 
 			// Reference to the aggregate output column
 			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
@@ -354,7 +354,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
 				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
 				auto &pre_val_expr = agg_results[i];
-				string merge_func = (fun_name == "min") ? "least" : "greatest";
+				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
 				auto coalesce =
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());

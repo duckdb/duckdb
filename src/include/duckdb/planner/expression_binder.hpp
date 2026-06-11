@@ -44,7 +44,7 @@ struct DummyBinding;
 struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
-	string name;
+	Identifier name;
 	optional_idx query_location;
 };
 
@@ -122,11 +122,11 @@ public:
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
-	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
+	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name);
 
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
@@ -155,17 +155,17 @@ public:
 
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
-	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params);
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
-	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 
 	//! Returns true if the function name is an alias for the UNNEST function
-	static bool IsUnnestFunction(const string &function_name);
+	static bool IsUnnestFunction(const Identifier &function_name);
 
 private:
 	//! Current stack depth
@@ -207,7 +207,7 @@ protected:
 	                          const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                          const vector<LogicalType> &function_child_types);
 
-	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
@@ -234,7 +234,7 @@ protected:
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();
 	virtual string UnsupportedUnnestMessage();
-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	Binder &binder;

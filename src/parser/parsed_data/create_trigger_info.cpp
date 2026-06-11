@@ -5,7 +5,7 @@
 namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
-    : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
+    : CreateInfo(CatalogType::TRIGGER_ENTRY, Identifier::InvalidSchema()), timing(TriggerTiming::AFTER),
       event_type(TriggerEventType::INSERT_EVENT), for_each(TriggerForEach::STATEMENT) {
 }
 

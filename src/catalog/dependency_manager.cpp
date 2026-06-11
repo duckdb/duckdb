@@ -35,19 +35,19 @@ MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + name;
-	AssertMangledName(this->name, 2);
+	this->name = Identifier(CatalogTypeToString(type) + '\0' + schema + '\0' + name);
+	AssertMangledName(this->name.GetIdentifierName(), 2);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
-	this->name = from.name + '\0' + to.name;
-	AssertMangledName(this->name, 5);
+	this->name = Identifier(from.name + '\0' + to.name);
+	AssertMangledName(this->name.GetIdentifierName(), 5);
 }
 
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
 }
 
-string DependencyManager::GetSchema(const CatalogEntry &entry) {
+Identifier DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
 		return entry.name;
 	}
@@ -66,7 +66,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	auto type = entry.type;
 	auto schema = GetSchema(entry);
 	auto name = entry.name;
-	CatalogEntryInfo info {type, schema, name};
+	CatalogEntryInfo info {type, Identifier(schema), name};
 
 	return MangleName(info);
 }
@@ -311,7 +311,7 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 		auto schema = DependencyManager::GetSchema(entry);
 		auto &name = entry.name;
 		auto &type = entry.type;
-		return CatalogEntryInfo {type, schema, name};
+		return CatalogEntryInfo {type, Identifier(schema), name};
 	}
 }
 
@@ -697,7 +697,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name, new_obj.name)) {
+	if (has_new_dependencies || !(old_obj.name == new_obj.name)) {
 		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
 		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);
@@ -796,7 +796,7 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 }
 
 static string FormatString(const MangledEntryName &mangled) {
-	auto input = mangled.name;
+	auto input = mangled.name.GetIdentifierName();
 	for (size_t i = 0; i < input.size(); i++) {
 		if (input[i] == '\0') {
 			input[i] = '_';

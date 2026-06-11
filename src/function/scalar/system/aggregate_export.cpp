@@ -367,8 +367,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 // looks up the aggregate function with the given name in the catalog and binds it with the given argument types
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
                                                           const vector<LogicalType> &argument_types) {
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
-	                                                                                        function_name);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context, Identifier::DefaultSchema(), Identifier(function_name));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", function_name);
 	}

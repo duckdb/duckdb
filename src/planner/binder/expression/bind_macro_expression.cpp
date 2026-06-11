@@ -16,7 +16,7 @@
 namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
-                                                      vector<unordered_set<string>> &lambda_params) {
+                                                      vector<identifier_set_t> &lambda_params) {
 	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			ReplaceMacroParameters(child.GetExpressionMutable(), lambda_params);
@@ -51,7 +51,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 }
 
 void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr,
-                                              vector<unordered_set<string>> &lambda_params) {
+                                              vector<identifier_set_t> &lambda_params) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
@@ -62,7 +62,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 		bool bind_macro_parameter = false;
 		if (col_ref.IsQualified()) {
-			if (col_ref.GetTableName().find(DummyBinding::DUMMY_NAME) != string::npos) {
+			if (col_ref.GetTableName().GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos) {
 				bind_macro_parameter = true;
 			}
 		} else {
@@ -167,7 +167,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
                                              unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
-	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>, Identifier, identifier_map_t<idx_t>> named_arguments;
 	binder.lambda_bindings = lambda_bindings;
 	auto bind_result = MacroFunction::BindMacroFunction(binder, macro_func.macros, macro_func.name, function,
 	                                                    positional_arguments, named_arguments, depth);
@@ -194,7 +194,7 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	ExpressionBinder::QualifyColumnNames(*dummy_binder, expr);
 
 	// now replace the parameters
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
 }
 

@@ -171,7 +171,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		context = QueryErrorContext(position);
 	}
 	// generate a new (combined) error
-	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
+	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
 	return true;
 }
 
@@ -391,7 +391,7 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 	return BindResult(BinderException::Unsupported(expr, message));
 }
 
-bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
+bool ExpressionBinder::IsUnnestFunction(const Identifier &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
@@ -401,7 +401,7 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 		return true;
 	}
 	if (colref.ColumnNames().size() == 2) {
-		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+		return colref.GetTableName() == "alias";
 	}
 	return false;
 }

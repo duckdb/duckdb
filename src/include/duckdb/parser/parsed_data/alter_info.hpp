@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
@@ -33,14 +34,14 @@ enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
+	AlterEntryData(Identifier catalog_p, Identifier schema_p, Identifier name_p, OnEntryNotFound if_not_found)
 	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
 	      if_not_found(if_not_found) {
 	}
 
-	string catalog;
-	string schema;
-	string name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier name;
 	OnEntryNotFound if_not_found;
 };
 
@@ -49,18 +50,18 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
-	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
 	OnEntryNotFound if_not_found;
 	//! Catalog name to alter
-	string catalog;
+	Identifier catalog;
 	//! Schema name to alter
-	string schema;
+	Identifier schema;
 	//! Entry name to alter
-	string name;
+	Identifier name;
 	//! Allow altering internal entries
 	bool allow_internal;
 	//! Determine whether to skip Bind
@@ -76,8 +77,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 
-	virtual string GetColumnName() const {
-		return "";
+	virtual Identifier GetColumnName() const {
+		return Identifier();
 	};
 
 	AlterEntryData GetAlterEntryData() const;

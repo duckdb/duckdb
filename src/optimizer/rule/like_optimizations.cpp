@@ -17,7 +17,7 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
-	func->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
+	func->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {Identifier("!~~"), Identifier("~~")});
 	root = std::move(func);
 }
 

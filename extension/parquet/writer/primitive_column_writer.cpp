@@ -53,7 +53,7 @@ private:
 };
 
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
-                                             vector<string> schema_path)
+                                             vector<Identifier> schema_path)
     : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 }
 
@@ -67,7 +67,7 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	duckdb_parquet::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
-	column_chunk.meta_data.path_in_schema = schema_path;
+	column_chunk.meta_data.path_in_schema = IdentifiersToStrings(schema_path);
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
 	row_group.columns.push_back(std::move(column_chunk));

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -20,14 +21,14 @@ namespace duckdb {
 class FunctionArgument {
 public:
 	// NOLINTNEXTLINE (allow implicit conversions)
-	FunctionArgument(unique_ptr<ParsedExpression> expression_p) : name(""), expression(std::move(expression_p)) {
+	FunctionArgument(unique_ptr<ParsedExpression> expression_p) : expression(std::move(expression_p)) {
 	}
 
-	FunctionArgument(string name_p, unique_ptr<ParsedExpression> expression_p)
+	FunctionArgument(Identifier name_p, unique_ptr<ParsedExpression> expression_p)
 	    : name(std::move(name_p)), expression(std::move(expression_p)) {
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
 
@@ -69,7 +70,7 @@ public:
 	static FunctionArgument Deserialize(Deserializer &deserializer);
 
 private:
-	string name;
+	Identifier name;
 	unique_ptr<ParsedExpression> expression;
 };
 
@@ -79,42 +80,45 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
-	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
+	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
+	DUCKDB_API FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
+	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
 	                              vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(const string &function_name, vector<FunctionArgument> children,
+	DUCKDB_API FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
 
 public:
-	const string &Catalog() const {
+	const Identifier &Catalog() const {
 		return catalog;
 	}
-	string &CatalogMutable() {
+	Identifier &CatalogMutable() {
 		return catalog;
 	}
-	const string &Schema() const {
+	const Identifier &Schema() const {
 		return schema;
 	}
-	string &SchemaMutable() {
+	Identifier &SchemaMutable() {
 		return schema;
 	}
-	const string &FunctionName() const {
+	const Identifier &FunctionName() const {
 		return function_name;
 	}
-	string &FunctionNameMutable() {
+	Identifier &FunctionNameMutable() {
 		return function_name;
+	}
+	void SetFunctionName(string function_name_p) {
+		function_name = Identifier(std::move(function_name_p));
 	}
 	bool IsOperator() const {
 		return is_operator;
@@ -175,11 +179,11 @@ public:
 
 private:
 	//! Catalog of the function
-	string catalog;
+	Identifier catalog;
 	//! Schema of the function
-	string schema;
+	Identifier schema;
 	//! Function name
-	string function_name;
+	Identifier function_name;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! List of arguments to the function

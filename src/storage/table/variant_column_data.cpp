@@ -81,7 +81,7 @@ bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const Base
 	auto &object_children = StructType::GetChildTypes(typed_value.type);
 	optional_idx opt_index;
 	for (idx_t i = 0; i < object_children.size(); i++) {
-		if (StringUtil::CIEquals(field_name, object_children[i].first)) {
+		if (field_name == object_children[i].first) {
 			opt_index = i;
 			break;
 		}

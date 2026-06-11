@@ -152,7 +152,7 @@ InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString()
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Name"] = function.name;
+		result["Name"] = function.name.GetIdentifierName();
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
