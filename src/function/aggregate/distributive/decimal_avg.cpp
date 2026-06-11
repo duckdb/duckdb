@@ -81,7 +81,7 @@ struct DecimalAvgOperation {
 		}
 
 		bool negative = state.sum.upper < 0;
-		uhugeint_t abs_sum(UnsafeNumericCast<uint64_t>(state.sum.upper), state.sum.lower);
+		uhugeint_t abs_sum(static_cast<uint64_t>(state.sum.upper), state.sum.lower);
 		if (negative) {
 			abs_sum = -abs_sum;
 		}
