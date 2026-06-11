@@ -588,6 +588,8 @@ FunctionArgument:
   by_value: true
   rules:
     - FunctionArgument
+    - NamedFunctionArgument
+    - PositionalFunctionArgument
 
 GroupByExpressionInfo:
   type: "GroupByExpressionInfo"
@@ -1572,12 +1574,8 @@ excluded_rules:
   - SelectStatementInternal
   - SimpleSelect
   - TableRef
-  - BaseTableName
-  - FunctionArgument
-  - NamedParameter
   - WithClause
   - CTEBody
-  - WithStatement
   - CTEBodyContent
   - WindowDefinition
   - SingleArrowPair

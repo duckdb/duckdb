@@ -375,11 +375,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformDistinctKeyword);
 	REGISTER_TRANSFORM(TransformAllKeyword);
 	REGISTER_TRANSFORM(TransformTableRef);
-	REGISTER_TRANSFORM(TransformBaseTableName);
-	REGISTER_TRANSFORM(TransformFunctionArgument);
-	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformWithStatement);
 	REGISTER_TRANSFORM(TransformCTEBody);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
 }

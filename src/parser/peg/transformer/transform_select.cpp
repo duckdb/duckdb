@@ -223,39 +223,38 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	return select_statement;
 }
 
-FunctionArgument PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	if (choice_pr.name == "NamedParameter") {
-		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
-		parameter.expression->SetAlias(parameter.name);
-		return FunctionArgument(parameter.name, std::move(parameter.expression));
-	}
-
-	return FunctionArgument(transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr));
+FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
+                                                                       MacroParameter named_parameter) {
+	named_parameter.expression->SetAlias(named_parameter.name);
+	return FunctionArgument(named_parameter.name, std::move(named_parameter.expression));
 }
 
-MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGTransformer &transformer,
+                                                                            unique_ptr<ParsedExpression> expression) {
+	return FunctionArgument(std::move(expression));
+}
+
+MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer, const string &type_func_name,
+                                                              const optional<LogicalType> &type,
+                                                              unique_ptr<ParsedExpression> expression) {
 	MacroParameter parameter;
-	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
-	parameter.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	parameter.expression = std::move(expression);
+	parameter.name = type_func_name;
 	parameter.is_default = true;
-	transformer.TransformOptional<LogicalType>(list_pr, 1, parameter.type);
+	if (type) {
+		parameter.type = *type;
+	}
 	return parameter;
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
-		auto table_name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+                                                                       ParseResult &choice_result) {
+	if (choice_result.type == ParseResultType::IDENTIFIER) {
+		auto table_name = choice_result.Cast<IdentifierParseResult>().identifier;
 		const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
 		return make_uniq<BaseTableRef>(description);
 	}
-	return transformer.Transform<unique_ptr<BaseTableRef>>(choice_pr.GetResult());
+	return transformer.Transform<unique_ptr<BaseTableRef>>(choice_result);
 }
 
 string PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &transformer, const string &schema_name) {
@@ -875,25 +874,28 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 }
 
 pair<string, unique_ptr<CommonTableExpressionInfo>>
-PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const string &col_id_or_string,
+                                              const optional<vector<string>> &insert_column_list,
+                                              optional<vector<unique_ptr<ParsedExpression>>> using_key,
+                                              const optional<bool> &materialized, unique_ptr<TableRef> cte_body) {
 	auto result = make_uniq<CommonTableExpressionInfo>();
-	auto cte_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<vector<string>>(list_pr, 1, result->aliases);
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 2, result->key_targets);
-	auto &materialized_opt = list_pr.Child<OptionalParseResult>(4);
-	if (materialized_opt.HasResult()) {
+	auto cte_name = col_id_or_string;
+	if (insert_column_list) {
+		result->aliases = *insert_column_list;
+	}
+	if (using_key) {
+		result->key_targets = std::move(*using_key);
+	}
+	if (materialized) {
 		// If this has a result, we know it is either NEVER or ALWAYS
-		bool not_materialized = transformer.Transform<bool>(materialized_opt.GetResult());
-		if (not_materialized) {
+		if (*materialized) {
 			result->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 		} else {
 			result->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 		}
 	}
-	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(5));
-	D_ASSERT(table_ref->type == TableReferenceType::SUBQUERY);
-	auto subquery_ref = unique_ptr_cast<TableRef, SubqueryRef>(std::move(table_ref));
+	D_ASSERT(cte_body->type == TableReferenceType::SUBQUERY);
+	auto subquery_ref = unique_ptr_cast<TableRef, SubqueryRef>(std::move(cte_body));
 	result->query_node = std::move(subquery_ref->subquery->node);
 	return make_pair(cte_name, std::move(result));
 }

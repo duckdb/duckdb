@@ -613,15 +613,10 @@ private:
 	static bool TransformDistinctKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformAllKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformSimpleSelect(PEGTransformer &transformer, ParseResult &parse_result);
-	static FunctionArgument TransformFunctionArgument(PEGTransformer &transformer, ParseResult &parse_result);
-	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result);
 
-	static unique_ptr<BaseTableRef> TransformBaseTableName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformTableRef(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static pair<string, unique_ptr<CommonTableExpressionInfo>> TransformWithStatement(PEGTransformer &transformer,
-	                                                                                  ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformCTEBody(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformWindowDefinition(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
@@ -2358,6 +2353,13 @@ private:
 	static unique_ptr<SelectNode> TransformFromSelectClause(PEGTransformer &transformer,
 	                                                        unique_ptr<TableRef> from_clause,
 	                                                        optional<unique_ptr<SelectNode>> select_clause);
+	static unique_ptr<TransformResultValue> TransformWithStatementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static pair<string, unique_ptr<CommonTableExpressionInfo>>
+	TransformWithStatement(PEGTransformer &transformer, const string &col_id_or_string,
+	                       const optional<vector<string>> &insert_column_list,
+	                       optional<vector<unique_ptr<ParsedExpression>>> using_key, const optional<bool> &materialized,
+	                       unique_ptr<TableRef> cte_body);
 	static unique_ptr<TransformResultValue> TransformUsingKeyInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformUsingKey(PEGTransformer &transformer,
@@ -2472,6 +2474,9 @@ private:
 	static unique_ptr<TransformResultValue> TransformLateralInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static bool TransformLateral(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformBaseTableNameInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<BaseTableRef> TransformBaseTableName(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedTableInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<BaseTableRef> TransformSchemaReservedTable(PEGTransformer &transformer,
@@ -2514,6 +2519,20 @@ private:
 	                                                                                ParseResult &parse_result);
 	static vector<FunctionArgument>
 	TransformTableFunctionArguments(PEGTransformer &transformer, optional<vector<FunctionArgument>> function_argument);
+	static unique_ptr<TransformResultValue> TransformFunctionArgumentInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNamedFunctionArgumentInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static FunctionArgument TransformNamedFunctionArgument(PEGTransformer &transformer, MacroParameter named_parameter);
+	static unique_ptr<TransformResultValue> TransformPositionalFunctionArgumentInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static FunctionArgument TransformPositionalFunctionArgument(PEGTransformer &transformer,
+	                                                            unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformNamedParameterInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, const string &type_func_name,
+	                                              const optional<LogicalType> &type,
+	                                              unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformTableAliasInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTableAliasAsInternal(PEGTransformer &transformer,

@@ -1389,7 +1389,9 @@ TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionA
 WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
-FunctionArgument <- NamedParameter / Expression
+FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
+NamedFunctionArgument <- NamedParameter
+PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
