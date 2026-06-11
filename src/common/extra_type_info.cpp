@@ -109,6 +109,13 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::DeepCopy() const {
 	return Copy();
 }
 
+void ExtraTypeInfo::CopyBaseInfo(ExtraTypeInfo &target) const {
+	target.alias = alias;
+	if (extension_info) {
+		target.extension_info = make_uniq<ExtensionTypeInfo>(*extension_info);
+	}
+}
+
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
 	    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
@@ -209,7 +216,9 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::Copy() const {
 }
 
 shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
-	return make_shared_ptr<ListTypeInfo>(child_type.DeepCopy());
+	auto result = make_shared_ptr<ListTypeInfo>(child_type.DeepCopy());
+	CopyBaseInfo(*result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -240,7 +249,9 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
 	for (const auto &child_type : child_types) {
 		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
 	}
-	return make_shared_ptr<StructTypeInfo>(std::move(copied_child_types));
+	auto result = make_shared_ptr<StructTypeInfo>(type, std::move(copied_child_types));
+	CopyBaseInfo(*result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -357,25 +368,22 @@ const idx_t &EnumTypeInfo::GetDictSize() const {
 	return dict_size;
 }
 
-LogicalType EnumTypeInfo::CreateType(const Vector &ordered_data, idx_t size) {
-	// Generate EnumTypeInfo
-	shared_ptr<ExtraTypeInfo> info;
+shared_ptr<ExtraTypeInfo> EnumTypeInfo::CreateTypeInfo(const Vector &ordered_data, idx_t size) {
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		info = make_shared_ptr<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
-		break;
+		return make_shared_ptr<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
 	case PhysicalType::UINT16:
-		info = make_shared_ptr<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
-		break;
+		return make_shared_ptr<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
 	case PhysicalType::UINT32:
-		info = make_shared_ptr<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
-		break;
+		return make_shared_ptr<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}
-	// Generate Actual Enum Type
-	return LogicalType(LogicalTypeId::ENUM, info);
+}
+
+LogicalType EnumTypeInfo::CreateType(const Vector &ordered_data, idx_t size) {
+	return LogicalType(LogicalTypeId::ENUM, CreateTypeInfo(ordered_data, size));
 }
 
 template <class T>
@@ -455,8 +463,10 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
-	Vector values_insert_order_copy(Vector::Ref(values_insert_order));
-	return make_shared_ptr<EnumTypeInfo>(values_insert_order_copy, dict_size);
+	// create a templated copy so that the value lookup map is rebuilt - the dictionary itself is shared
+	auto result = CreateTypeInfo(values_insert_order, dict_size);
+	CopyBaseInfo(*result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -477,7 +487,9 @@ shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Copy() const {
 }
 
 shared_ptr<ExtraTypeInfo> ArrayTypeInfo::DeepCopy() const {
-	return make_shared_ptr<ArrayTypeInfo>(child_type.DeepCopy(), size);
+	auto result = make_shared_ptr<ArrayTypeInfo>(child_type.DeepCopy(), size);
+	CopyBaseInfo(*result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -500,7 +512,9 @@ shared_ptr<ExtraTypeInfo> AnyTypeInfo::Copy() const {
 }
 
 shared_ptr<ExtraTypeInfo> AnyTypeInfo::DeepCopy() const {
-	return make_shared_ptr<AnyTypeInfo>(target_type.DeepCopy(), cast_score);
+	auto result = make_shared_ptr<AnyTypeInfo>(target_type.DeepCopy(), cast_score);
+	CopyBaseInfo(*result);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

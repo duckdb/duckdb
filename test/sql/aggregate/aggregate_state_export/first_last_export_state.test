@@ -1,0 +1,169 @@
+# name: test/sql/aggregate/aggregate_state_export/first_last_export_state.test
+# description: Test EXPORT_STATE for first/last/any_value - states are nullable on two levels
+# group: [aggregate_state_export]
+
+# first/last are only deterministic single-threaded - with multiple threads the combine order of the
+# thread-local states is arbitrary (relevant for small vector sizes, where even small inputs span many chunks)
+statement ok
+SET threads=1;
+
+# empty input exports a NULL state
+query I
+SELECT first(i) EXPORT_STATE FROM (SELECT 1 AS i WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(first(i) EXPORT_STATE) FROM (SELECT 1 AS i WHERE false) t;
+----
+NULL
+
+# a NULL value is recorded in the state as {'value': NULL}
+query I
+SELECT (first(NULL::INTEGER) EXPORT_STATE)::STRUCT(value INTEGER);
+----
+{'value': NULL}
+
+query I
+SELECT finalize(first(NULL::INTEGER) EXPORT_STATE);
+----
+NULL
+
+# a regular value is recorded as {'value': <value>}
+query I
+SELECT (first(42) EXPORT_STATE)::STRUCT(value INTEGER);
+----
+{'value': 42}
+
+query I
+SELECT finalize(first(42) EXPORT_STATE);
+----
+42
+
+# any_value skips NULL values - the state remains unset
+query I
+SELECT any_value(NULL::INTEGER) EXPORT_STATE;
+----
+NULL
+
+# values are exported with the aggregate's return type (e.g. DATE instead of the physical type)
+query I
+SELECT (any_value(DATE '2000-01-01') EXPORT_STATE)::STRUCT(value DATE);
+----
+{'value': 2000-01-01}
+
+query I
+SELECT (last(d) EXPORT_STATE)::STRUCT(value DECIMAL(4,1)) FROM (VALUES (1.5), (4.2)) t(d);
+----
+{'value': 4.2}
+
+# basic roundtrips for first/last/any_value
+query III
+SELECT finalize(first(i) EXPORT_STATE), finalize(last(i) EXPORT_STATE), finalize(any_value(i) EXPORT_STATE)
+FROM (VALUES (NULL), (1), (2), (3)) t(i);
+----
+NULL	3	1
+
+# strings - both inlined and non-inlined
+query II
+SELECT finalize(first(v) EXPORT_STATE), finalize(last(v) EXPORT_STATE)
+FROM (VALUES ('this-is-a-very-long-string-that-is-not-inlined'), ('apple'), ('this-is-another-very-long-string')) t(v);
+----
+this-is-a-very-long-string-that-is-not-inlined	this-is-another-very-long-string
+
+query I
+SELECT (first('a-string-that-is-not-inlined-either') EXPORT_STATE)::STRUCT(value VARCHAR);
+----
+{'value': a-string-that-is-not-inlined-either}
+
+# last over many strings - the state allocation is re-used while overwriting
+query I
+SELECT finalize(last(r::VARCHAR || '-padding-to-make-it-long') EXPORT_STATE) FROM range(1000) t(r);
+----
+999-padding-to-make-it-long
+
+# complex types go through the sort key state
+query II
+SELECT finalize(first(s) EXPORT_STATE), finalize(last(s) EXPORT_STATE)
+FROM (VALUES ({'a': 1, 'b': 'x'}), (NULL), ({'a': 2, 'b': NULL})) t(s);
+----
+{'a': 1, 'b': x}	{'a': 2, 'b': NULL}
+
+query I
+SELECT (first([1, 2, 3]) EXPORT_STATE)::STRUCT(value INTEGER[]);
+----
+{'value': [1, 2, 3]}
+
+query I
+SELECT (first(NULL::INTEGER[]) EXPORT_STATE)::STRUCT(value INTEGER[]);
+----
+{'value': NULL}
+
+query I
+SELECT finalize(first(l) EXPORT_STATE) FROM (VALUES ([['a'], ['bb', NULL]]), ([[]])) t(l);
+----
+[[a], [bb, NULL]]
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, range d FROM range(100);
+
+query IIII nosort grouped_first
+SELECT g, first(d), last(d), any_value(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIII nosort grouped_first
+SELECT g, finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(any_value(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE first_state AS SELECT g, first(d) EXPORT_STATE f, last(d) EXPORT_STATE l FROM dummy GROUP BY g;
+
+query III nosort grouped_first2
+SELECT g, first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort grouped_first2
+SELECT g, finalize(f), finalize(l) FROM first_state ORDER BY g;
+----
+
+# combine: an unset state does not overwrite a set state
+query I
+SELECT finalize(combine(first(i) EXPORT_STATE, (SELECT first(j) EXPORT_STATE FROM (SELECT 1 j WHERE false) s))) FROM (VALUES (42)) t(i);
+----
+42
+
+# combine_aggr across groups
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT first(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)
+    UNION ALL
+    SELECT first(v) EXPORT_STATE AS s FROM (SELECT NULL::INTEGER AS v WHERE false) t
+) t;
+----
+1
+
+# to_aggregate_state with all three state shapes: NULL, {'value': NULL} and {'value': 42}
+query I
+SELECT finalize(to_aggregate_state(NULL::STRUCT(value INTEGER), 'first', ['INTEGER']));
+----
+NULL
+
+query I
+SELECT finalize(to_aggregate_state({'value': NULL}::STRUCT(value INTEGER), 'first', ['INTEGER']));
+----
+NULL
+
+query I
+SELECT finalize(to_aggregate_state({'value': 42}::STRUCT(value INTEGER), 'first', ['INTEGER']));
+----
+42
+
+# a set state with a NULL value is kept when combined with an unset state
+query I
+SELECT finalize(combine(
+    to_aggregate_state({'value': NULL}::STRUCT(value INTEGER), 'first', ['INTEGER']),
+    to_aggregate_state(NULL::STRUCT(value INTEGER), 'first', ['INTEGER'])));
+----
+NULL
