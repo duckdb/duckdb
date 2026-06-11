@@ -1122,13 +1122,13 @@
         "default_value": "false"
     },
     {
-        "name": "profile_output",
+        "name": "profiling_output",
         "description": "The file to which profile output should be saved, or empty to print to the terminal",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true,
         "aliases": [
-            "profiling_output"
+            "profile_output"
         ]
     },
     {
@@ -1140,7 +1140,7 @@
     },
     {
         "name": "profiling_mode",
-        "description": "Enables the profiler (detailed profiling information is always collected - DETAILED is a deprecated alias of STANDARD)",
+        "description": "DEPRECATED: Sets the profiling mode",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true

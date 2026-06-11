@@ -1284,8 +1284,10 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	auto parameter = StringUtil::Lower(input.ToString());
 	auto &config = ClientConfig::GetConfig(context);
 	if (parameter == "standard" || parameter == "detailed" || parameter == "all") {
-		// detailed profiling information is always gathered - "detailed" and "all" are kept for backwards
-		// compatibility and behave the same as "standard"
+		// the profiling_mode setting is deprecated - detailed profiling information is always gathered, and all
+		// modes behave the same
+		DUCKDB_LOG_WARNING(context, "the profiling_mode setting is deprecated: detailed profiling information is "
+		                            "always collected - use \"PRAGMA enable_profiling\" to enable profiling instead");
 		config.enable_profiler = true;
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
