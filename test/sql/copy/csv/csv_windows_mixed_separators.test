@@ -2,7 +2,8 @@
 # description: Test mixed separators on Windows
 # group: [csv]
 
-require windows
+statement skip_test_on_error
+SELECT assert_true(platform LIKE 'windows_%', 'requires a windows platform') FROM pragma_platform()
 
 # \  and / are interchangeable on Windows
 query I

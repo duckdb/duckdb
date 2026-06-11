@@ -40,7 +40,8 @@ SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/nullpadding_commas.csv', sep=',', 
 ----
 2492
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', buffer_size=55)

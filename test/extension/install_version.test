@@ -6,7 +6,8 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok

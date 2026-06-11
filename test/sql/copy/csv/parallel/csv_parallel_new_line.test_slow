@@ -94,7 +94,8 @@ select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', s
 
 # These are basically checkers that assume our files have the set newlines, some robot is rewriting my newlines to
 # \r\n on windows, hence some of these pass when they should fail on windows.
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # Test read_csv with user defined variable
 query IIII

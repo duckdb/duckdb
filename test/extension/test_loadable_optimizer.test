@@ -4,7 +4,8 @@
 
 require skip_reload
 
-require notmingw
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE '%_mingw', 'requires a non-mingw platform') FROM pragma_platform()
 
 mode skip instable
 
