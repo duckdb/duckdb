@@ -85,8 +85,6 @@ struct AggregateFinalizeData {
 	AggregateInputData &input;
 	idx_t result_idx;
 	idx_t result_count;
-	//! Local state that finalize callbacks can use to cache allocations across the states finalized into the same
-	//! result chunk - initialized lazily by the finalize callback itself
 	unique_ptr<FunctionLocalState> local_state;
 
 	inline void ReturnNull() {
