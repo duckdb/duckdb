@@ -344,11 +344,15 @@ void AsyncFileWriter::UpdateMemoryState(MemoryUpdateMode mode) {
 	}
 
 	auto current_reservation = memory_state->GetReservation();
-	while (current_pending_bytes > MinValue(current_reservation, max_pending_bytes) &&
-	       memory_request_bytes < max_pending_bytes) {
+	while (current_pending_bytes > MinValue(current_reservation, max_pending_bytes)) {
 		idx_t next_request;
-		if (memory_request_bytes == 0) {
+		if (memory_request_bytes > current_reservation) {
+			// TMM did not fully grant the previous request. Keep retrying it on later growth checks.
+			next_request = memory_request_bytes;
+		} else if (memory_request_bytes == 0) {
 			next_request = min_pending_bytes;
+		} else if (memory_request_bytes >= max_pending_bytes) {
+			return;
 		} else if (memory_request_bytes > max_pending_bytes / 2) {
 			next_request = max_pending_bytes;
 		} else {
@@ -364,6 +368,9 @@ void AsyncFileWriter::UpdateMemoryState(MemoryUpdateMode mode) {
 		memory_request_bytes = next_request;
 		current_reservation = memory_state->GetReservation();
 		if (current_reservation <= previous_reservation) {
+			return;
+		}
+		if (current_reservation < next_request) {
 			return;
 		}
 	}
