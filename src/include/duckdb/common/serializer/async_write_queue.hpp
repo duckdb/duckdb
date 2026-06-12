@@ -72,6 +72,8 @@ public:
 	struct Options {
 		//! Maximum scheduled/running write tasks for this queue.
 		idx_t max_active_tasks = 1;
+		//! Maximum bytes a single async task should drain. Zero keeps one request per task.
+		idx_t task_byte_budget = 0;
 	};
 
 public:
@@ -113,18 +115,22 @@ private:
 
 private:
 	//! Schedule pending requests until max_active_tasks is reached.
-	void ScheduleTasksInternal();
-	//! Move one pending request into a write task. Caller owns a scheduled task slot.
-	bool TakeRequest(PendingRequest &request);
+	void ScheduleTasksInternal(bool force = false);
+	//! Return the byte budget for one task; zero means one request per task.
+	idx_t TaskByteBudget() const;
+	//! Return how many bytes one task should reserve after skipping already scheduled bytes.
+	idx_t SelectPendingRequestBytes(idx_t skip_bytes) const;
+	//! Move one reserved prefix of pending requests into a write task. Caller owns a scheduled task slot.
+	idx_t TakeRequests(deque<PendingRequest> &requests);
 	//! Release one scheduled/running task slot and its in-flight byte accounting.
-	void FinishTask(idx_t request_size);
+	void FinishTask(idx_t task_size);
 	//! Release a task slot for a scheduled task that never entered the queue because another task failed.
 	void CancelScheduledTask();
 	//! Release multiple reserved task slots that were never scheduled.
 	void CancelScheduledTasks(idx_t task_count);
 
-	//! Async task entry point that drains one positional request.
-	void DrainRequest();
+	//! Async task entry point that drains a bounded batch of positional requests.
+	void DrainRequests();
 	//! Write request bytes to the target and invoke its completion callback.
 	void WriteRequest(AsyncWriteRequest request);
 	//! Invoke a completion callback outside the queue lock.
@@ -151,10 +157,14 @@ private:
 	idx_t pending_bytes = 0;
 	//! Bytes owned by write tasks that have not reached the target yet.
 	idx_t in_flight_bytes = 0;
+	//! Bytes in pending_requests already reserved by scheduled-but-not-started tasks.
+	idx_t scheduled_pending_bytes = 0;
 	//! Scheduled or running write tasks for this queue.
 	idx_t active_tasks = 0;
 	//! Scheduled write tasks that have not yet claimed a request.
 	idx_t pending_tasks = 0;
+	//! Per-task byte reservations for scheduled tasks that have not yet claimed their requests.
+	deque<idx_t> pending_task_bytes;
 	//! Set after Close() has drained the queue. Further submissions are rejected.
 	bool closed = false;
 
@@ -210,8 +220,6 @@ public:
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
-	//! Whether task estimation should include the final under-budget tail.
-	enum class PendingTaskCountMode : uint8_t { FULL_BUDGET_ONLY, INCLUDE_TAIL };
 
 public:
 	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target, Options options,
@@ -274,17 +282,15 @@ private:
 	idx_t DrainTaskByteBudget() const;
 	//! Return queued/submitted bytes that have not reached the target yet. Caller must hold lock.
 	idx_t TotalPendingBytes() const;
-	//! Select the pending write range one drain request would claim. Caller must hold lock.
+	//! Select the pending write range one primitive task would claim. Caller must hold lock.
 	idx_t SelectPendingWriteEnd(idx_t start, idx_t &selected_bytes) const;
 	//! Select the pending write range for the next physical write request. Caller must hold lock.
 	idx_t SelectPhysicalWriteEnd(idx_t start, idx_t &selected_bytes) const;
-	//! Count how many useful drain requests are pending. Caller must hold lock.
-	idx_t CountPendingWriteTasks(idx_t start_write, idx_t available_slots, PendingTaskCountMode mode) const;
-	//! Estimate how many drain requests are useful for the currently queued writes. Caller must hold lock.
-	idx_t EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const;
+	//! Return how many physical bytes can be submitted to the low-level queue before refilling should pause.
+	idx_t SubmittedByteWindow() const;
 
 	//! Move one byte-budgeted prefix of pending writes into a physical async request.
-	bool TakePendingWriteRequest(AsyncWriteRequest &request);
+	bool TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy);
 	//! Convert one or more contiguous pending writes into a lazily materialized payload.
 	unique_ptr<AsyncWritePayload> CreatePayload(deque<PendingWrite> writes, idx_t size);
 	//! Release byte accounting for one submitted physical request.
