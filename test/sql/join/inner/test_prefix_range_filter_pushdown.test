@@ -15,6 +15,36 @@ CREATE OR REPLACE TABLE build AS
 SELECT (i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
 FROM range(0, 30000) t(i);
 
+statement ok
+CREATE OR REPLACE TABLE probe_perfect_hash AS
+SELECT i::INTEGER AS k
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_perfect_hash AS
+SELECT i::INTEGER AS k
+FROM range(1000, 2000) t(i);
+
+# The build-side keys are unique, integral, and span a small range, so this join can use
+# a perfect hash join while still pushing an exact PRF into the probe-side scan.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_perfect_hash p
+JOIN build_perfect_hash b
+  ON p.k = b.k;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_perfect_hash p
+JOIN build_perfect_hash b
+  ON p.k = b.k;
+----
+analyzed_plan	<!REGEX>:.*IN BF\(k\).*
+
 query II
 EXPLAIN ANALYZE
 SELECT count(*)
@@ -366,4 +396,3 @@ ORDER BY ALL;
 -2	NULL
 5	5
 6	6
-

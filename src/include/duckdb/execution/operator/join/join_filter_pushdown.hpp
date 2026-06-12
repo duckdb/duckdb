@@ -100,7 +100,8 @@ public:
 	unique_ptr<DataChunk> FinalizeMinMax(JoinFilterGlobalState &gstate) const;
 	unique_ptr<DataChunk> FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
 	                                      unique_ptr<DataChunk> final_min_max,
-	                                      optional_ptr<JoinHashTable> ht = nullptr) const;
+	                                      optional_ptr<JoinHashTable> ht = nullptr,
+	                                      bool allow_bloom_filters = true) const;
 
 private:
 	bool PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,

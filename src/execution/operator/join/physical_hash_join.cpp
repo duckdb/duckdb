@@ -1364,7 +1364,8 @@ static idx_t BloomFilterBitBudget(idx_t ht_count) {
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
                                                               unique_ptr<DataChunk> final_min_max,
-                                                              optional_ptr<JoinHashTable> ht) const {
+                                                              optional_ptr<JoinHashTable> ht,
+                                                              bool allow_bloom_filters) const {
 	if (probe_info.empty()) {
 		return final_min_max; // There are no table sources in which we can push down filters
 	}
@@ -1444,7 +1445,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 				if (can_use_in_filter) {
 					bool pushed_filter = pushed_in_filter;
-					if (can_emit_runtime_filters && CanUseBloomFilter(context, op, cmp, ht)) {
+					if (allow_bloom_filters && can_emit_runtime_filters && CanUseBloomFilter(context, op, cmp, ht)) {
 						PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 						pushed_filter = true;
 					}
@@ -1463,7 +1464,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				}
 
 				CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, false);
-				if (can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
+				if (allow_bloom_filters && can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 				}
 			}
@@ -1476,7 +1477,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
                                                        const PhysicalComparisonJoin &op,
                                                        optional_ptr<JoinHashTable> ht) const {
 	auto final_min_max = FinalizeMinMax(gstate);
-	return FinalizeFilters(context, op, std::move(final_min_max), ht);
+	return FinalizeFilters(context, op, std::move(final_min_max), ht, true);
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -1575,8 +1576,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// check for possible perfect hash table
 	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, min, max);
 	if (use_perfect_hash) {
-		D_ASSERT(ht.equality_types.size() == 1);
-		auto key_type = ht.equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable();
 	}
 
@@ -1585,7 +1584,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	if (filter_min_max) {
-		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht);
+		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, !use_perfect_hash);
+		if (use_perfect_hash) {
+			ht.BuildPrefixRangeFilter();
+		}
 	}
 
 	// In case of a large build side or duplicates, use regular hash join
