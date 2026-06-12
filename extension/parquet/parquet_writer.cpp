@@ -408,9 +408,9 @@ unique_ptr<AsyncWriteBuffer> ParquetWriter::PrepareWriteData(unique_ptr<AsyncWri
 		return buffer;
 	}
 
-	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), buffer->Size() + ParquetCrypto::LENGTH_BYTES +
-	                                                                         ParquetCrypto::NONCE_BYTES +
-	                                                                         ParquetCrypto::TAG_BYTES);
+	auto required_capacity =
+	    buffer->Size() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), NextPowerOfTwo(required_capacity));
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	auto stream_protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*stream));
 	ParquetCrypto::WriteData(*stream_protocol, buffer->Ptr(), NumericCast<uint32_t>(buffer->Size()),
