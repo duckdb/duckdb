@@ -68,6 +68,10 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (!expr.Function().HasGetStateTypeCallback()) {
 		return false;
 	}
+	if (expr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		// pushing down a partial aggregate changes the order in which values are combined
+		return false;
+	}
 	return true;
 }
 

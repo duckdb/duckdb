@@ -2,6 +2,8 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -110,8 +112,8 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	}
 }
 
-static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr) {
-	return aggr.GetStateTypeCallback()(aggr);
+static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data) {
+	return aggr.GetStateTypeCallback()(aggr, bind_data);
 }
 
 // Load rows from input_vec into the packed binary state buffer. Skips null rows.
@@ -283,7 +285,7 @@ struct CombineState : public FunctionLocalState {
 	ArenaAllocator allocator;
 
 	explicit CombineState(const ExportAggregateBindData &bind_data)
-	    : layout(GetLayout(bind_data.aggr)),
+	    : layout(GetLayout(bind_data.aggr, bind_data.bind_data.get())),
 	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
@@ -306,7 +308,7 @@ struct FinalizeState : public FunctionLocalState {
 	ArenaAllocator allocator;
 
 	explicit FinalizeState(const ExportAggregateBindData &bind_data)
-	    : layout(GetLayout(bind_data.aggr)),
+	    : layout(GetLayout(bind_data.aggr, bind_data.bind_data.get())),
 	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * layout.total_state_size)),
 	      addresses(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
@@ -400,8 +402,11 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 }
 
 // looks up the aggregate function with the given name in the catalog and binds it with the given argument types
+// constant_parameters holds the values of arguments that must be re-bound with a specific constant
+// (e.g. string_agg's separator), keyed by argument index - all other arguments are bound with a NULL value
 unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context, const string &function_name,
-                                                          const vector<LogicalType> &argument_types) {
+                                                          const vector<LogicalType> &argument_types,
+                                                          const map<idx_t, Value> &constant_parameters) {
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
 	    context, Identifier::DefaultSchema(), Identifier(function_name));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
@@ -421,18 +426,68 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
 	vector<unique_ptr<Expression>> args;
 	args.reserve(argument_types.size());
-	for (auto &arg_type : argument_types) {
-		args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
+	for (idx_t arg_idx = 0; arg_idx < argument_types.size(); arg_idx++) {
+		auto constant_entry = constant_parameters.find(arg_idx);
+		if (constant_entry != constant_parameters.end()) {
+			args.push_back(make_uniq<BoundConstantExpression>(constant_entry->second));
+		} else {
+			args.push_back(make_uniq<BoundConstantExpression>(Value(argument_types[arg_idx])));
+		}
 	}
 
 	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
 
-	if (bound_aggr.GetArguments() != argument_types) {
+	// the bind callback can erase constant arguments (e.g. string_agg's separator) - in that case the original
+	// argument list holds the pre-erase arguments that the exported signature refers to
+	const auto &bound_args =
+	    bound_aggr.GetOriginalArguments().empty() ? bound_aggr.GetArguments() : bound_aggr.GetOriginalArguments();
+	if (bound_args != argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", function_name);
 	}
 
 	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
 	                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
+}
+
+// converts a VARIANT value back to a plain Value
+Value VariantToValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+}
+
+// parses the "parameters" property of an AGGREGATE_STATE type
+// each parameter is either a plain type, or a (type, value) pair for parameters that were bound to a constant
+// (e.g. string_agg's separator) - the latter are returned in constant_parameters, keyed by argument index
+void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument_types,
+                          map<idx_t, Value> &constant_parameters) {
+	for (auto &val : ListValue::GetChildren(parameters)) {
+		const idx_t arg_idx = argument_types.size();
+		if (!val.IsNull() && val.type().id() == LogicalTypeId::TYPE) {
+			// plain type
+			argument_types.push_back(TypeValue::GetType(val));
+			continue;
+		}
+		if (!val.IsNull() && val.type().id() == LogicalTypeId::STRUCT) {
+			// (type, value) pair
+			auto &children = StructValue::GetChildren(val);
+			if (children.size() != 2 || children[0].IsNull() || children[0].type().id() != LogicalTypeId::TYPE ||
+			    children[1].type().id() != LogicalTypeId::VARIANT) {
+				throw InternalException("Aggregate state parameter entry should be a (type, value) pair");
+			}
+			argument_types.push_back(TypeValue::GetType(children[0]));
+			if (!children[1].IsNull()) {
+				// the parameter is bound to a constant - decode it and cast it back to the declared argument type
+				constant_parameters.emplace(arg_idx, VariantToValue(children[1]).DefaultCastAs(argument_types.back()));
+			}
+			continue;
+		}
+		throw InternalException(
+		    "Aggregate state object should have a property called parameters that is a list of types");
+	}
 }
 
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, BoundSimpleFunction &function,
@@ -458,15 +513,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		    "Aggregate state object should have a property called parameters that is a list of types");
 	}
 	vector<LogicalType> argument_types;
-	for (auto &val : ListValue::GetChildren(entry->second)) {
-		if (val.IsNull() || val.type().id() != LogicalTypeId::TYPE) {
-			throw InternalException(
-			    "Aggregate state object should have a property called parameters that is a list of types");
-		}
-		argument_types.push_back(TypeValue::GetType(val));
-	}
+	map<idx_t, Value> constant_parameters;
+	ParseStateParameters(entry->second, argument_types, constant_parameters);
 
-	return BindExportedAggregate(context, function_name, argument_types);
+	return BindExportedAggregate(context, function_name, argument_types, constant_parameters);
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -477,8 +527,28 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 
 	// combine - both arguments must be aggregate states of the same function with the same signature
 	if (arguments.size() == 2 && arguments[0]->GetReturnType() != arguments[1]->GetReturnType()) {
+		auto &left_type = arguments[0]->GetReturnType();
+		auto &right_type = arguments[1]->GetReturnType();
+		if (left_type.IsAggregateState() && right_type.IsAggregateState()) {
+			// both are aggregate states but they are not equal - if the function and signature match, the states
+			// were bound with different constant parameters (e.g. string_agg states with different separators)
+			auto &left_props = left_type.GetExtensionInfo()->properties;
+			auto &right_props = right_type.GetExtensionInfo()->properties;
+			auto left_name = left_props.find("function_name");
+			auto right_name = right_props.find("function_name");
+			if (left_name != left_props.end() && right_name != right_props.end() &&
+			    left_name->second == right_name->second) {
+				auto left_params = left_props.find("parameters");
+				auto right_params = right_props.find("parameters");
+				throw BinderException(
+				    "Cannot COMBINE aggregate states of \"%s\" that were created with different parameters: %s <> %s",
+				    StringValue::Get(left_name->second),
+				    left_params == left_props.end() ? "?" : left_params->second.ToString(),
+				    right_params == right_props.end() ? "?" : right_params->second.ToString());
+			}
+		}
 		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
-		                      arguments[0]->GetReturnType().ToString(), arguments[1]->GetReturnType().ToString());
+		                      left_type.ToString(), right_type.ToString());
 	}
 
 	if (bound_function.GetName() == "finalize") {
@@ -504,7 +574,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 	}
 
-	auto layout = GetLayout(aggr_input_data.function);
+	auto layout = GetLayout(aggr_input_data.function, aggr_input_data.bind_data);
 
 	result.Flatten();
 	SerializeState(layout, result, count, addresses_ptrs);
@@ -543,7 +613,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 
-	auto layout = GetLayout(underlying_aggr);
+	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
 	auto aligned_size = layout.total_state_size;
 	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
@@ -588,7 +658,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 		addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 	}
 
-	auto layout = GetLayout(underlying_aggr);
+	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
 	result.Flatten();
 	SerializeState(layout, result, count, addresses_ptrs);
@@ -597,19 +667,41 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 // constructs the AGGREGATE_STATE type for the given bound aggregate function
 // the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
 // extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
-LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function) {
+LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
+                                     optional_ptr<FunctionData> bind_data) {
+	auto layout = bound_function.GetStateType(bind_data);
 	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
 	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = bound_function.GetStateType().type.DeepCopy();
+	LogicalType state_layout = layout.type.DeepCopy();
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	ext_info->properties.emplace("function_name", bound_function.GetName());
+	auto &original_arguments = bound_function.GetOriginalArguments().empty() ? bound_function.GetArguments()
+	                                                                         : bound_function.GetOriginalArguments();
 	vector<Value> arguments;
-	for (auto &arg : bound_function.GetOriginalArguments().empty() ? bound_function.GetArguments()
-	                                                               : bound_function.GetOriginalArguments()) {
-		arguments.push_back(Value::TYPE(arg));
+	if (layout.constant_parameters.empty()) {
+		// all parameters are plain types - store the parameters as a list of types
+		for (auto &arg : original_arguments) {
+			arguments.push_back(Value::TYPE(arg));
+		}
+		ext_info->properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
+	} else {
+		// some parameters were bound to a constant (e.g. string_agg's separator) - store the parameters as a list of
+		// (type, value) pairs, where the value holds the constant the parameter must be re-bound with
+		for (idx_t arg_idx = 0; arg_idx < original_arguments.size(); arg_idx++) {
+			child_list_t<Value> children;
+			children.emplace_back("type", Value::TYPE(original_arguments[arg_idx]));
+			auto constant_entry = layout.constant_parameters.find(arg_idx);
+			if (constant_entry == layout.constant_parameters.end()) {
+				children.emplace_back("value", Value(LogicalType::VARIANT()));
+			} else {
+				children.emplace_back("value", constant_entry->second.DefaultCastAs(LogicalType::VARIANT()));
+			}
+			arguments.push_back(Value::STRUCT(std::move(children)));
+		}
+		auto entry_type = LogicalType::STRUCT({{"type", LogicalType::TYPE()}, {"value", LogicalType::VARIANT()}});
+		ext_info->properties.emplace("parameters", Value::LIST(entry_type, std::move(arguments)));
 	}
-	ext_info->properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
 	state_layout.SetExtensionInfo(std::move(ext_info));
 	return state_layout;
 }
@@ -650,16 +742,16 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		}
 	}
 
-	auto bind_data = BindExportedAggregate(context, function_name, argument_types);
+	auto bind_data = BindExportedAggregate(context, function_name, argument_types, map<idx_t, Value>());
 	auto &aggr = bind_data->aggr;
 	if (!aggr.HasGetStateTypeCallback()) {
 		throw BinderException(
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot convert to its state",
 		    function_name);
 	}
-	auto state_layout = aggr.GetStateType().type;
+	auto state_layout = aggr.GetStateType(bind_data->bind_data.get()).type;
 	bound_function.GetArguments()[0] = state_layout;
-	bound_function.SetReturnType(CreateAggregateStateType(aggr));
+	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
 	return std::move(bind_data);
 }
 
@@ -701,7 +793,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
 		    bound_function.GetName());
 	}
-	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function));
+	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get()));
 	return child_aggregate;
 }
 

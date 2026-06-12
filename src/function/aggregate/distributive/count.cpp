@@ -256,7 +256,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-AggregateStateLayout GetCountStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout GetCountStateType(const BoundAggregateFunction &function, optional_ptr<FunctionData>) {
 	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
 }
 

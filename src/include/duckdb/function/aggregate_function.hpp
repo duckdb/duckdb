@@ -126,7 +126,8 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
 
-typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function);
+typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function,
+                                                           optional_ptr<FunctionData> bind_data);
 
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
@@ -694,9 +695,9 @@ public:
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
-	AggregateStateLayout GetStateType() const {
+	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
-		return callbacks.get_state_type(*this);
+		return callbacks.get_state_type(*this, bind_data);
 	}
 };
 
@@ -705,7 +706,7 @@ template <class STATE>
 inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 	if constexpr (HasStructStateType<STATE>::value) {
 		using ST = typename STATE::STATE_TYPE;
-		result.SetStructStateExport([](const BoundAggregateFunction &bound) {
+		result.SetStructStateExport([](const BoundAggregateFunction &bound, optional_ptr<FunctionData>) {
 			AggregateStateLayout layout;
 			if (bound.GetReturnType().IsAggregateState()) {
 				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
@@ -720,7 +721,7 @@ inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
 			return layout;
 		});
 	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
-		result.SetStructStateExport([](const BoundAggregateFunction &) {
+		result.SetStructStateExport([](const BoundAggregateFunction &, optional_ptr<FunctionData>) {
 			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
 		});
 	}

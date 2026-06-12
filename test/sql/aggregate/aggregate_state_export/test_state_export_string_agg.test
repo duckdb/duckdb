@@ -1,0 +1,96 @@
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_string_agg.test
+# description: Test the state export functionality for string_agg
+# group: [aggregate_state_export]
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# ungrouped aggr
+query I nosort res0
+SELECT string_agg(d, '|') FROM dummy;
+----
+
+query I nosort res0
+SELECT finalize(string_agg(d, '|') EXPORT_STATE) FROM dummy;
+----
+
+# unary variant (default comma separator)
+query I nosort res1
+SELECT string_agg(d) FROM dummy;
+----
+
+query I nosort res1
+SELECT finalize(string_agg(d) EXPORT_STATE) FROM dummy;
+----
+
+# grouped aggr
+query II nosort res2
+SELECT g, string_agg(d, '-') FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res2
+SELECT g, finalize(string_agg(d, '-') EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# empty group
+query I nosort res3
+SELECT string_agg(d, '|') FROM dummy WHERE FALSE;
+----
+
+query I nosort res3
+SELECT finalize(string_agg(d, '|') EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# combining a state with an empty state keeps the value
+query I
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE FALSE)))
+----
+0|1|2
+
+# combining two states with the same separator
+query I
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d >= 3 AND d < 6)))
+----
+3|4|5|0|1|2
+
+# combining two states with different separators is an error
+statement error
+SELECT finalize(combine(
+	(SELECT string_agg(d, '|') EXPORT_STATE FROM dummy WHERE d < 3),
+	(SELECT string_agg(d, '-') EXPORT_STATE FROM dummy WHERE d >= 3 AND d < 6)))
+----
+different parameters
+
+# separator with special characters, supplied as a foldable expression rather than a literal
+query I nosort res4
+SELECT string_agg(d, '''' || chr(10) || '🦆') FROM dummy;
+----
+
+query I nosort res4
+SELECT finalize(string_agg(d, '''' || chr(10) || '🦆') EXPORT_STATE) FROM dummy;
+----
+
+# NULL separator
+query I
+SELECT finalize(string_agg(d, NULL) EXPORT_STATE) IS NULL FROM dummy;
+----
+true
+
+# the state (including the separator) can be persisted - finalize re-binds from the stored type
+load {TEST_DIR}/test_string_agg_state.db readwrite latest
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+statement ok
+CREATE TABLE state_tbl AS SELECT g, string_agg(d, '-') EXPORT_STATE s FROM dummy GROUP BY g;
+
+restart
+
+query II nosort res2
+SELECT g, finalize(s) FROM state_tbl ORDER BY g;
+----
