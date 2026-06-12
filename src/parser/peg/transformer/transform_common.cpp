@@ -355,8 +355,9 @@ pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTrans
 	return make_pair(Identifier(col_id), type);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(PEGTransformer &transformer,
-                                                                     vector<unique_ptr<ParsedExpression>> expression) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(
+    PEGTransformer &transformer,
+    vector<unique_ptr<ParsedExpression>> expression) { // NOLINT(performance-unnecessary-value-param)
 	return make_uniq<TypeExpression>(Identifier("BIT"), vector<unique_ptr<ParsedExpression>> {});
 }
 
