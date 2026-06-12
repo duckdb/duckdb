@@ -173,14 +173,11 @@ struct VertexExtractBindData final : public FunctionData {
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
 	auto &arguments = input.GetArguments();
 
-	if (arguments[1]->GetReturnType().id() != LogicalTypeId::VARCHAR) {
-		return nullptr;
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("vertex_extract: vertex argument must be constant!");
-	}
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
 	}
 	const auto vertex_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[1]);
 	if (vertex_val.IsNull()) {

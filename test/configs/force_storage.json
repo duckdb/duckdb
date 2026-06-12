@@ -56,6 +56,7 @@
         "test/sql/storage/types/variant/update.test",
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_vertex_extract.test",
         "test/sql/sample/can_sample_from_ingested_files.test"
       ]
     },

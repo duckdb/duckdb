@@ -50,8 +50,8 @@
   },
   {
     "name": "vertex_extract",
-    "parameters": "geom,ordinate",
-    "description": "Extracts the specified ordinate (X, Y, Z, M) from a point geometry",
+    "parameters": "geom,coordinate",
+    "description": "Extracts the specified coordinate (X, Y, Z, M) from a point geometry",
     "example": "vertex_extract('POINT(1 2 3)', 'Z')",
     "categories": ["geometry"],
     "type": "scalar_function"

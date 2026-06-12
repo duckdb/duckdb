@@ -95,8 +95,8 @@ struct StSetcrsFun {
 
 struct VertexExtractFun {
 	static constexpr const char *Name = "vertex_extract";
-	static constexpr const char *Parameters = "geom,ordinate";
-	static constexpr const char *Description = "Extracts the specified ordinate (X, Y, Z, M) from a point geometry";
+	static constexpr const char *Parameters = "geom,coordinate";
+	static constexpr const char *Description = "Extracts the specified coordinate (X, Y, Z, M) from a point geometry";
 	static constexpr const char *Example = "vertex_extract('POINT(1 2 3)', 'Z')";
 	static constexpr const char *Categories = "geometry";
 
