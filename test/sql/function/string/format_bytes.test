@@ -126,3 +126,74 @@ query I
 SELECT formatReadableSize(500*1000*1000);
 ----
 476.8 MiB
+
+# HUGEINT overload (issue #17413)
+query I
+SELECT format_bytes(0::HUGEINT);
+----
+0 bytes
+
+query I
+SELECT format_bytes(1::HUGEINT);
+----
+1 byte
+
+query I
+SELECT format_bytes(1024::HUGEINT);
+----
+1.0 KiB
+
+query I
+SELECT format_bytes(1099511627776::HUGEINT);
+----
+1.0 TiB
+
+query I
+SELECT format_bytes((-1)::HUGEINT);
+----
+-1 byte
+
+query I
+SELECT format_bytes(NULL::HUGEINT);
+----
+NULL
+
+# At INT64_MAX the HUGEINT path defers to the BIGINT formatter, so output matches.
+query I
+SELECT format_bytes(9223372036854775807::HUGEINT);
+----
+8191.9 PiB
+
+# 1 ZiB = 2^70 = 1180591620717411303424 (past UINT64_MAX, exercises the HUGEINT-only path)
+query I
+SELECT format_bytes(1180591620717411303424::HUGEINT);
+----
+1.0 ZiB
+
+# 1 YiB = 2^80 = 1208925819614629174706176
+query I
+SELECT format_bytes(1208925819614629174706176::HUGEINT);
+----
+1.0 YiB
+
+# Negative HUGEINT past UINT64_MAX
+query I
+SELECT format_bytes(-1180591620717411303424::HUGEINT);
+----
+-1.0 ZiB
+
+query I
+SELECT formatReadableSize(1099511627776::HUGEINT);
+----
+1.0 TiB
+
+query I
+SELECT formatReadableDecimalSize(1000000000000::HUGEINT);
+----
+1.0 TB
+
+# Decimal formatter past UINT64_MAX: 1e21 = 1 ZB
+query I
+SELECT formatReadableDecimalSize(1000000000000000000000::HUGEINT);
+----
+1.0 ZB
