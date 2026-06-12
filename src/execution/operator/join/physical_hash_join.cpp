@@ -1163,31 +1163,14 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 
 bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
                                                      optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const {
-	if (!ht) {
-		return false;
-	}
-	if (ht->Count() == 0) {
+	if (!CanUseBloomFilter(context, op, cmp, ht)) {
 		return false;
 	}
 	if (cmp != ExpressionType::COMPARE_EQUAL) {
 		return false;
 	}
-
 	if (ht->NullValuesAreEqual(0)) {
 		// TODO: Support "A is B" type joins
-		return false;
-	}
-
-	idx_t equality_column_count = 0;
-	for (auto &cond : ht->conditions) {
-		if (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
-			equality_column_count++;
-		}
-	}
-	if (equality_column_count != 1) {
-		return false;
-	}
-	if (!CanUseBloomFilter(context, op, cmp, ht)) {
 		return false;
 	}
 
@@ -1351,19 +1334,8 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 	}
 }
 
-static bool SpanFitsInBitBudget(const uhugeint_t &span, idx_t max_bits) {
-	return span < Uhugeint::Convert(max_bits);
-}
-
 static idx_t BloomFilterBitBudget(idx_t ht_count) {
-	static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
-	static constexpr idx_t MIN_NUM_BITS = 512;
-	const auto max_count = NumericLimits<idx_t>::Maximum() / MIN_NUM_BITS_PER_KEY;
-	if (ht_count > max_count) {
-		return NumericLimits<idx_t>::Maximum();
-	}
-	const auto min_bits = MaxValue<idx_t>(MIN_NUM_BITS, ht_count * MIN_NUM_BITS_PER_KEY);
-	return NextPowerOfTwo(min_bits);
+	return BloomFilter::GetNumberOfSectors(ht_count) * 64;
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
@@ -1434,42 +1406,31 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				const auto can_emit_prf =
 				    can_emit_runtime_filters && CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
 
-				const auto can_use_in_filter = ht && CanUseInFilter(context, ht, cmp);
 				bool pushed_in_filter = false;
-				bool pushed_bloom_filter = false;
-				if (can_use_in_filter) {
+				if (CanUseInFilter(context, ht, cmp)) {
 					pushed_in_filter = PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 				}
 
 				static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
-				if (can_emit_prf && SpanFitsInBitBudget(span, SMALL_EXACT_PRF_BITS) &&
+				if (can_emit_prf && span < SMALL_EXACT_PRF_BITS &&
 				    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
 				                                 min_val_before_cast, max_val_before_cast, SMALL_EXACT_PRF_BITS)) {
 					continue;
 				}
 
-				if (can_use_in_filter) {
-					if (allow_bloom_filters && can_emit_runtime_filters && CanUseBloomFilter(context, op, cmp, ht)) {
-						PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
-						pushed_bloom_filter = true;
-					}
-					if (pushed_in_filter) {
-						continue;
-					}
-				}
-
 				if (can_emit_prf) {
 					const auto bloom_filter_bits = BloomFilterBitBudget(ht->Count());
-					if (SpanFitsInBitBudget(span, bloom_filter_bits) &&
+					if (span <= bloom_filter_bits &&
 					    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
 					                                 min_val_before_cast, max_val_before_cast, bloom_filter_bits)) {
 						continue;
 					}
 				}
 
-				CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, false);
-				if (!pushed_bloom_filter && allow_bloom_filters && can_emit_runtime_filters && ht &&
-				    CanUseBloomFilter(context, op, cmp, ht)) {
+				if (!pushed_in_filter) {
+					CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, false);
+				}
+				if (allow_bloom_filters && can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 				}
 			}

@@ -61,7 +61,6 @@ template <typename U>
 class PrefixRangeBitmap {
 public:
 	void Initialize(ClientContext &context, U min_p, U span_p, idx_t max_bits) {
-		D_ASSERT(max_bits > 0);
 		min = min_p;
 		span = span_p;
 		shift = 0;

@@ -99,6 +99,8 @@ public:
 		return initialized;
 	}
 
+	static idx_t GetNumberOfSectors(idx_t number_of_rows);
+
 private:
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
