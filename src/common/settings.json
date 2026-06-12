@@ -762,6 +762,13 @@
         ]
     },
     {
+        "name": "force_file_cache",
+        "description": "Forces the external file cache to also cache local files",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "force_mbedtls_unsafe",
         "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
         "type": "BOOLEAN",

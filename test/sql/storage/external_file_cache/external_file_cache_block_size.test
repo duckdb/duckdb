@@ -4,6 +4,10 @@
 
 require parquet
 
+# the cache skips local files unless forced, these tests exercise it with local files
+statement ok
+set force_file_cache=true;
+
 statement ok
 set enable_external_file_cache=true;
 

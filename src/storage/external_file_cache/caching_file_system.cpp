@@ -256,7 +256,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	if (!external_file_cache.IsEnabled()) {
+	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
@@ -376,6 +377,10 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
+	if (!external_file_cache.ShouldCacheFile(path.path)) {
+		// uncached files have no stale state to serve, so their metadata must always be read fresh
+		return true;
+	}
 	switch (validate) {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;

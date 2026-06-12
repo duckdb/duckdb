@@ -1137,6 +1137,16 @@ struct ForceCompressionSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ForceFileCacheSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_file_cache";
+	static constexpr const char *Description = "Forces the external file cache to also cache local files";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ForceMbedtlsUnsafeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "force_mbedtls_unsafe";
