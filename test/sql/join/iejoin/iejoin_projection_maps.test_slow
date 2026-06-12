@@ -1,4 +1,4 @@
-# name: test/sql/join/iejoin/iejoin_projection_maps.test
+# name: test/sql/join/iejoin/iejoin_projection_maps.test_slow
 # description: Test IEJoin projection mapping
 # group: [iejoin]
 
