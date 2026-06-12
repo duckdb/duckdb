@@ -216,7 +216,7 @@ public:
 public:
 	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target, Options options,
 	                                  idx_t async_threads);
-	DUCKDB_API ~ManagedAsyncWriteQueue();
+	DUCKDB_API ~ManagedAsyncWriteQueue() override;
 
 	ManagedAsyncWriteQueue(const ManagedAsyncWriteQueue &) = delete;
 	ManagedAsyncWriteQueue &operator=(const ManagedAsyncWriteQueue &) = delete;
