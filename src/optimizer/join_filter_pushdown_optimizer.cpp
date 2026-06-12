@@ -29,17 +29,20 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		// interval is not supported for pushdown
 		return false;
 	}
+	if (filter.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !filter.runtime_filter_type.IsValid()) {
+		filter.runtime_filter_type = expr.GetReturnType();
+	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		// column-ref - pass through the new column binding
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		filter.probe_column_index = colref.binding;
+		filter.probe_column_index = colref.Binding();
 		return true;
 	}
 	case ExpressionClass::BOUND_CAST: {
 		// We allow pushing through integral down/upcasts, as long as source/target are (u)bigint or smaller
 		const auto &bound_cast = expr.Cast<BoundCastExpression>();
-		const auto &src = bound_cast.child->GetReturnType();
+		const auto &src = bound_cast.Child().GetReturnType();
 		const auto &tgt = bound_cast.GetReturnType();
 		if (!src.IsIntegral() || !tgt.IsIntegral()) {
 			return false;
@@ -48,7 +51,20 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		    GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(PhysicalType::INT64)) {
 			return false; // Only do this for (u)bigint and smaller
 		}
-		return JoinFilterPushdownUtil::PushdownJoinFilterExpression(*bound_cast.child, filter);
+		if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(bound_cast.Child(), filter)) {
+			return false;
+		}
+		const bool widening_signed_cast =
+		    src.IsSigned() == tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) >= GetTypeIdSize(src.InternalType());
+		const bool widening_unsigned_to_signed_cast =
+		    !src.IsSigned() && tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(src.InternalType());
+		if (widening_signed_cast || widening_unsigned_to_signed_cast) {
+			filter.runtime_filter_type = expr.GetReturnType();
+		} else {
+			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+			filter.runtime_filter_type = LogicalType::INVALID;
+		}
+		return true;
 	}
 	default:
 		return false;
@@ -79,9 +95,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+		// LIMIT/TOP_N determines which rows are part of the probe side before the join.
+		// Pushing a join filter below it can change which rows survive the limit/offset.
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_TOP_N:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
@@ -119,7 +138,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			auto child_bindings = child->GetColumnBindings();
 			child_columns.reserve(columns.size());
 			for (auto &child_column : columns) {
-				JoinFilterPushdownColumn new_col;
+				auto new_col = child_column;
 				new_col.probe_column_index = child_bindings[child_column.probe_column_index.column_index];
 				child_columns.push_back(new_col);
 			}
@@ -300,7 +319,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			aggr_children.push_back(join.conditions[join_condition].GetRHS().Copy());
 			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
-			if (aggr_expr->children.size() != 1) {
+			if (aggr_expr->GetChildren().size() != 1) {
 				// min/max with collation - not supported
 				return;
 			}

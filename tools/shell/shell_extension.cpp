@@ -9,8 +9,12 @@
 #include "shell_state.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "shell_renderer.hpp"
+#ifdef HAVE_LINENOISE
+#include "history.hpp"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
 
 #ifndef DUCKDB_API_CLI
 #define DUCKDB_API_CLI "cli"
@@ -49,7 +53,7 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
+	return make_uniq<ColumnDataRef>(state.last_result->Collection(), StringsToIdentifiers(state.last_result->names));
 }
 
 // Runs after the binder has finished. Releases the previous last_result early if it's
@@ -63,10 +67,62 @@ void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	state.last_result.reset();
 }
 
+//===--------------------------------------------------------------------===//
+// shell_history table function
+//===--------------------------------------------------------------------===//
+struct ShellHistoryData : public GlobalTableFunctionState {
+	ShellHistoryData() : offset(0) {
+#ifdef HAVE_LINENOISE
+		count = History::GetLength();
+#else
+		count = 0;
+#endif
+	}
+
+	idx_t count;
+	idx_t offset;
+};
+
+static unique_ptr<FunctionData> ShellHistoryBind(ClientContext &context, TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("id");
+	return_types.emplace_back(LogicalType::BIGINT);
+	names.emplace_back("sql");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	return nullptr;
+}
+
+static unique_ptr<GlobalTableFunctionState> ShellHistoryInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<ShellHistoryData>();
+}
+
+static void ShellHistoryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.global_state->Cast<ShellHistoryData>();
+	idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, data.count - data.offset);
+	auto &id_vec = output.data[0];
+	auto &sql_vec = output.data[1];
+	for (idx_t i = 0; i < chunk_count; i++) {
+		idx_t history_index = data.offset + i;
+#ifdef HAVE_LINENOISE
+		string entry = History::GetEntry(history_index);
+		// multi-line history entries are stored with \r\n separators - normalize to \n
+		entry = StringUtil::Replace(entry, "\r\n", "\n");
+#else
+		string entry;
+#endif
+		id_vec.Append(Value::BIGINT(NumericCast<int64_t>(history_index + 1)));
+		sql_vec.Append(Value(std::move(entry)));
+	}
+	data.offset += chunk_count;
+}
+
 void ShellExtension::Load(ExtensionLoader &loader) {
 	loader.SetDescription("Adds CLI-specific support and functionalities");
 	loader.RegisterFunction(
 	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
+
+	TableFunction shell_history("shell_history", {}, ShellHistoryFunction, ShellHistoryBind, ShellHistoryInit);
+	loader.RegisterFunction(shell_history);
 
 	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
 	config.SetOptionByName("duckdb_api", DUCKDB_API_CLI);

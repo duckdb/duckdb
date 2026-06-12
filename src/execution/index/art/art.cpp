@@ -27,6 +27,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -45,7 +46,7 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
-ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db,
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
@@ -117,12 +118,12 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	auto it = info.options.find("storage_version");
 	if (it != info.options.end()) {
 		// If this is an existing index with a saved storage version, use it.
-		storage_version = it->second.GetValue<idx_t>();
+		storage_version = static_cast<StorageVersion>(it->second.GetValue<uint64_t>());
 	} else {
 		// Otherwise, this must be an existing index without a saved storage version.
 		// We started saving the storage version in v1.5.0, so if it is not present,
 		// we can not make any general assumptions about the exact storage version.
-		storage_version = optional_idx::Invalid();
+		storage_version = StorageVersion::INVALID;
 	}
 }
 
@@ -174,7 +175,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[1] = the index expression
 		// 		bindings[2] = the constant
 		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
-		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().GetValue();
 		auto comparison_type = comparison.GetExpressionType();
 
 		auto &left = BoundComparisonExpression::Left(comparison);
@@ -214,10 +215,10 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 
 		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
 		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
-		low_value = lower_bound.Cast<BoundConstantExpression>().value;
+		low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
 		low_comparison_type =
 		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (upper_bound.Cast<BoundConstantExpression>()).value;
+		high_value = (upper_bound.Cast<BoundConstantExpression>()).GetValue();
 		high_comparison_type =
 		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
@@ -417,10 +418,10 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
-static bool KeyInputNeedConversion(const vector<LogicalType> &types, optional_idx storage_version) {
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, StorageVersion storage_version) {
 	// We only started tracking the storage version of the index in v1.5.0.
 	// Old GEOMETRY columns (pre v1.5.0) had a different internal representation.
-	if (!storage_version.IsValid() || (storage_version.GetIndex() < 7)) {
+	if (storage_version == StorageVersion::INVALID || (storage_version < StorageVersion::V1_5_0)) {
 		for (auto &type : types) {
 			// ART does not support nested types, so we only need to check the top-level type.
 			if (type.id() == LogicalTypeId::GEOMETRY) {
@@ -454,8 +455,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 			result.data[i].Reference(input.data[i]);
 		}
 	}
-
-	result.SetCardinality(input.size());
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
@@ -475,7 +474,6 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const 
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
 	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 
@@ -1020,8 +1018,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
-	if (storage_version.IsValid()) {
-		info.options["storage_version"] = Value::UBIGINT(storage_version.GetIndex());
+	if (storage_version != StorageVersion::INVALID) {
+		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
 	for (auto &allocator : *allocators) {

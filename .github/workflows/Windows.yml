@@ -10,7 +10,7 @@ on:
         type: boolean
       run_all:
         type: boolean
-      runner_windows_2022_x64:
+      runners:
         type: string
   workflow_dispatch:
     inputs:
@@ -24,8 +24,11 @@ on:
       run_all:
         type: boolean
         default: true
-      runner_windows_2022_x64:
+      runners:
+        description: 'JSON object with runner labels, e.g. {"windows_2022_x64":"windows-2022","linux_slim":"ubuntu-latest"}'
         type: string
+        required: false
+        default: '{}'
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -42,7 +45,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
     steps:
@@ -77,7 +80,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
@@ -85,7 +88,7 @@ jobs:
       run: |
         python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
         rm ./test/msvcp140.dll
 
     - name: Tools Test
@@ -112,6 +115,15 @@ jobs:
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
 
+    - name: CLI check
+      shell: bash
+      run: |
+        ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./duckdb.exe -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
+
     - name: Deploy
       shell: bash
       env:
@@ -134,18 +146,12 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
 
-    - name: Set up MSVC environment for export check (x64)
-      uses: ./.github/actions/setup-msvc-env
-    - name: Duckdb.dll export symbols with C++ on Windows
-      shell: bash
-      run: cl /std:c++17 -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
-
  win-release-32:
     name: Windows (32 Bit)
     needs:
       - win-release-64
     if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
-    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
 
@@ -173,7 +179,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: python scripts/ci/run_tests.py test/unittest.exe
+      run: python test/run.py
 
     - name: Tools Test
       shell: bash
@@ -186,7 +192,7 @@ jobs:
    needs:
     - win-release-64
    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
-   runs-on: windows-latest
+   runs-on: windows-2025-vs2026
    env:
      GEN: ninja
 
@@ -256,7 +262,7 @@ jobs:
      needs:
       - win-release-64
      if: ${{ !inputs.skip_tests }}
-     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
        ENABLE_EXTENSION_AUTOLOADING: 1
@@ -328,10 +334,10 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
-         run: make unittest_release SKIP_BUILD=1
+         run: python build/release/test/run.py
 
  win-packaged-upload:
-   runs-on: windows-latest
+   runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
    needs:
      - win-release-64
      - win-release-arm64

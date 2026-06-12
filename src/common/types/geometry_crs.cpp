@@ -156,10 +156,10 @@ private:
 	bool TryMatchText(string &result) {
 		const auto start = pos;
 		// First character must be alphabetic or underscore
-		if (pos < end && (isalpha(*pos) || *pos == '_')) {
+		if (pos < end && (StringUtil::CharacterIsAlpha(*pos) || *pos == '_')) {
 			pos++;
 			// Subsequent characters can also include digits
-			while (pos < end && (isalnum(*pos) || *pos == '_')) {
+			while (pos < end && (StringUtil::CharacterIsAlphaNumeric(*pos) || *pos == '_')) {
 				pos++;
 			}
 		}
@@ -286,7 +286,7 @@ private:
 	}
 
 	void SkipWhitespace() {
-		while (pos < end && isspace(*pos)) {
+		while (pos < end && StringUtil::CharacterIsSpace(*pos)) {
 			pos++;
 		}
 	}
@@ -686,8 +686,8 @@ unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(Clie
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::COORDINATE_SYSTEM_ENTRY, DEFAULT_SCHEMA,
-	                              source_crs.GetIdentifier(), OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog.GetEntry(context, CatalogType::COORDINATE_SYSTEM_ENTRY, Identifier::DefaultSchema(),
+	                              Identifier(source_crs.GetIdentifier()), OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return nullptr;
 	}
@@ -702,7 +702,7 @@ unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(Clie
 		return make_uniq<CoordinateReferenceSystem>(crs_entry.authority + ":" + crs_entry.code);
 	}
 	case CoordinateReferenceSystemType::SRID: {
-		return make_uniq<CoordinateReferenceSystem>(crs_entry.name);
+		return make_uniq<CoordinateReferenceSystem>(crs_entry.name.GetIdentifierName());
 	}
 	case CoordinateReferenceSystemType::PROJJSON: {
 		if (crs_entry.projjson_definition.empty()) {

@@ -53,7 +53,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// clause
 			if (filters[i]->filter->GetExpressionType() == ExpressionType::OPERATOR_NOT) {
 				auto &op_expr = filters[i]->filter->Cast<BoundOperatorExpression>();
-				if (op_expr.children[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				if (op_expr.GetChildren()[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
 					for (auto &cond : comp_join.conditions) {

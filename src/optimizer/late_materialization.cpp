@@ -122,7 +122,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, Table
 void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    bound_column_ref.binding.table_index = new_table_index;
+		    bound_column_ref.BindingMutable().table_index = new_table_index;
 	    });
 }
 
@@ -134,7 +134,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -151,7 +151,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+		    expr = GetExpression(next_op, bound_column_ref.Binding().column_index);
 	    });
 }
 

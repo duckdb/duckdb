@@ -6,6 +6,9 @@ require no_alternative_verify
 
 load {TEST_DIR}/full_table_metadata_reuse_v7.test.db readwrite v1.5.0
 
+statement ok
+SET force_column_metadata_reuse=true
+
 # create a table with several columns
 statement ok
 CREATE TABLE tbl AS SELECT
@@ -17,7 +20,7 @@ restart
 
 # verify no columns are loaded after restart (all lazy)
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 
@@ -26,7 +29,7 @@ restart
 
 # verify still no columns are loaded after a second restart
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 
@@ -48,7 +51,7 @@ CHECKPOINT
 
 # verify tbl still has no columns loaded
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 
@@ -60,7 +63,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 

@@ -502,7 +502,7 @@ PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression 
 static idx_t PrefixRangeSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                                optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &func_data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
+	auto &func_data = func_expr.BindInfo()->Cast<PrefixRangeFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
 
@@ -548,19 +548,30 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (input.stats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+	switch (input.stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS: {
+		if (!NumericStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		const auto min = NumericStats::Min(input.stats);
+		const auto max = NumericStats::Max(input.stats);
+		if (min > max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return data.filter->LookupRange(min, max);
+	}
+	case StatisticsType::STRING_STATS: {
+		if (!StringStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
+		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
+		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(input.stats)),
+		                                Value::BLOB_RAW(StringStats::Max(input.stats)));
+	}
+	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!NumericStats::HasMinMax(input.stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::Min(input.stats);
-	const auto max = NumericStats::Max(input.stats);
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return data.filter->LookupRange(min, max);
 }
 
 ScalarFunction TableFilterPrefixRangeFun::GetFunction() {

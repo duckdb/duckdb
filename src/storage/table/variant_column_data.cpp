@@ -81,7 +81,7 @@ bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const Base
 	auto &object_children = StructType::GetChildTypes(typed_value.type);
 	optional_idx opt_index;
 	for (idx_t i = 0; i < object_children.size(); i++) {
-		if (StringUtil::CIEquals(field_name, object_children[i].first)) {
+		if (field_name == object_children[i].first) {
 			opt_index = i;
 			break;
 		}
@@ -289,7 +289,6 @@ idx_t VariantColumnData::ScanWithCallback(
 			input.Reset();
 			target.Reset();
 			input.data[0].Reference(extract_intermediate);
-			input.SetCardinality(scan_count);
 			executor.Execute(input, target);
 			result.Reference(target.data[0]);
 		} else {
@@ -431,75 +430,79 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                 const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
+void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                  const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                  idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (storage_index.IsPushdownExtract() && IsShredded()) {
 		StorageIndex struct_extract;
 		if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
 			//! Shredded field exists and is fully shredded,
 			//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
-			sub_columns[1]->FetchRow(transaction, state, struct_extract, row_id, result, result_idx);
+			sub_columns[1]->FetchRows(transaction, state, struct_extract, offsets, sel, fetch_count, result,
+			                          result_offset);
 			return;
 		}
 	}
-	Vector variant_vec(LogicalType::VARIANT(), result_idx + 1);
-	validity->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
-	if (IsShredded()) {
-		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
-		auto &child_vectors = StructVector::GetEntries(intermediate);
-		// fetch the validity state
-		// fetch the sub-column states
-		StorageIndex empty(0);
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, state, empty, row_id, child_vectors[i], result_idx);
+
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		const idx_t offset = offsets[sel.get_index(idx)];
+		const idx_t result_idx = result_offset + idx;
+		Vector variant_vec(LogicalType::VARIANT(), 1);
+		validity->FetchRowsAtSegmentLevel(transaction, state, &offset, *FlatVector::IncrementalSelectionVector(),
+		                                  /*count=*/1, variant_vec, 0);
+		if (IsShredded()) {
+			auto intermediate = CreateUnshreddingIntermediate(1);
+			auto &child_vectors = StructVector::GetEntries(intermediate);
+			// fetch the validity state
+			// fetch the sub-column states
+			StorageIndex empty(0);
+			for (idx_t i = 0; i < sub_columns.size(); i++) {
+				sub_columns[i]->FetchRows(transaction, state, empty, &offset, *FlatVector::IncrementalSelectionVector(),
+				                          /*count=*/1, child_vectors[i], 0);
+			}
+
+			//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
+			Vector unshredded(variant_vec.GetType(), 1);
+			VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
+			variant_vec.SetValue(0, unshredded.GetValue(0));
+		} else {
+			sub_columns[0]->FetchRows(transaction, state, storage_index, &offset,
+			                          *FlatVector::IncrementalSelectionVector(), /*count=*/1, variant_vec, 0);
 		}
-		if (result_idx) {
-			intermediate.SetValue(0, intermediate.GetValue(result_idx));
+
+		if (!storage_index.IsPushdownExtract()) {
+			//! No extract required
+			D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
+			result.SetValue(result_idx, variant_vec.GetValue(0));
+			continue;
 		}
 
-		//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
-		Vector unshredded(variant_vec.GetType(), 1);
-		VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
-		variant_vec.SetValue(0, unshredded.GetValue(0));
-	} else {
-		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
-		if (result_idx) {
-			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
+		Vector extracted_variant(variant_vec.GetType(), 1);
+		vector<VariantPathComponent> components;
+		reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
 		}
-	}
+		VariantUtils::VariantExtract(variant_vec, components, extracted_variant, 1);
 
-	if (!storage_index.IsPushdownExtract()) {
-		//! No extract required
-		D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
-		result.SetValue(result_idx, variant_vec.GetValue(0));
-		return;
-	}
-
-	Vector extracted_variant(variant_vec.GetType(), 1);
-	vector<VariantPathComponent> components;
-	reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
-
-	while (true) {
-		auto &current = path_iter.get();
-		auto &field_name = current.GetFieldName();
-		components.emplace_back(field_name);
-		if (!current.HasChildren()) {
-			break;
+		if (result.GetType().id() == LogicalTypeId::VARIANT) {
+			//! No cast required
+			result.SetValue(result_idx, extracted_variant.GetValue(0));
+			continue;
 		}
-		path_iter = current.GetChildIndex(0);
-	}
-	VariantUtils::VariantExtract(variant_vec, components, extracted_variant, 1);
 
-	if (result.GetType().id() == LogicalTypeId::VARIANT) {
-		//! No cast required
-		result.SetValue(result_idx, extracted_variant.GetValue(0));
-		return;
+		//! Need to perform the cast here as well
+		auto context = transaction.transaction->context.lock();
+		auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
+		result.SetValue(result_idx, fetched_row);
 	}
-
-	//! Need to perform the cast here as well
-	auto context = transaction.transaction->context.lock();
-	auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
-	result.SetValue(result_idx, fetched_row);
 }
 
 void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -845,12 +848,13 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 }
 
 void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                             vector<ColumnSegmentInfo> &result) {
+                                             vector<ColumnSegmentInfo> &result,
+                                             const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	}
 }
 

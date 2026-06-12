@@ -7,90 +7,74 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                       const Identifier &col_id_or_string,
+                                                                       const Identifier &extension_alias) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	info->load_type = LoadType::LOAD;
 	info->repo_is_alias = false;
-	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
-
-	// get the alias if it's there
-	auto &optional_alias = list_pr.Child<OptionalParseResult>(2);
-	if (optional_alias.HasResult()) {
-		auto &alias_list = optional_alias.GetResult().Cast<ListParseResult>();
-		info->alias = alias_list.Child<IdentifierParseResult>(1).identifier;
+	info->filename = col_id_or_string.GetIdentifierName();
+	if (!extension_alias.empty()) {
+		info->alias = extension_alias;
 		info->load_type = LoadType::LOAD_AS;
 	} else {
 		info->load_type = LoadType::LOAD;
 	}
-
 	result->info = std::move(info);
 	return std::move(result);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+Identifier PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transformer, const Identifier &identifier) {
+	return identifier;
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
+    PEGTransformer &transformer, const QualifiedName &identifier_or_string_literal,
+    const ExtensionRepositoryInfo &from_source, const string &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	auto opt_force = list_pr.Child<OptionalParseResult>(0).HasResult();
-	info->load_type = opt_force ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
-	auto extension_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
-	info->filename = extension_name.name;
+	info->load_type = LoadType::INSTALL;
+	info->filename = identifier_or_string_literal.name.GetIdentifierName();
 	info->repo_is_alias = false;
-	auto &from_source_opt = list_pr.Child<OptionalParseResult>(3);
-	if (from_source_opt.HasResult()) {
-		auto repository_info = transformer.Transform<ExtensionRepositoryInfo>(from_source_opt.GetResult());
-		info->repository = repository_info.name;
-		info->repo_is_alias = repository_info.repository_is_alias;
+	if (!from_source.name.empty()) {
+		info->repository = from_source.name.GetIdentifierName();
+		info->repo_is_alias = from_source.repository_is_alias;
 	}
-	transformer.TransformOptional<string>(list_pr, 4, info->version);
+	if (!version_number.empty()) {
+		info->version = version_number;
+	}
 	result->info = std::move(info);
 	return std::move(result);
 }
 
-ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSource(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &sub_list_pr = list_pr.Child<ListParseResult>(1);
-	auto &string_or_identifier = sub_list_pr.Child<ChoiceParseResult>(0);
+ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceIdentifier(PEGTransformer &transformer,
+                                                                             const Identifier &identifier) {
 	ExtensionRepositoryInfo result;
-	if (string_or_identifier.GetResult().type == ParseResultType::STRING) {
-		result.name = transformer.Transform<string>(string_or_identifier.GetResult());
-		result.repository_is_alias = false;
-	} else {
-		result.name = string_or_identifier.GetResult().Cast<IdentifierParseResult>().identifier;
-		result.repository_is_alias = true;
-	}
+	result.name = identifier;
+	result.repository_is_alias = true;
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
-                                                                                   ParseResult &parse_result) {
-	// UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
-	// child 0: 'UPDATE', child 1: 'EXTENSIONS', child 2: optional Parens(List(Identifier))
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceString(PEGTransformer &transformer,
+                                                                         const string &string_literal) {
+	ExtensionRepositoryInfo result;
+	result.name = Identifier(string_literal);
+	result.repository_is_alias = false;
+	return result;
+}
+
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
+                                                          const vector<Identifier> &identifier) {
 	auto result = make_uniq<UpdateExtensionsStatement>();
 	auto info = make_uniq<UpdateExtensionsInfo>();
-
-	auto &opt = list_pr.Child<OptionalParseResult>(2);
-	if (opt.HasResult()) {
-		auto &inner = ExtractResultFromParens(opt.GetResult());
-		auto ext_list = ExtractParseResultsFromList(inner);
-		for (auto ext : ext_list) {
-			info->extensions_to_update.emplace_back(ext.get().Cast<IdentifierParseResult>().identifier);
-		}
-	}
-
+	info->extensions_to_update = identifier;
 	result->info = std::move(info);
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto version = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	return version.name;
+string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
+                                                     const QualifiedName &identifier_or_string_literal) {
+	return identifier_or_string_literal.name.GetIdentifierName();
 }
 
 } // namespace duckdb

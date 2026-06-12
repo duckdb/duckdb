@@ -14,7 +14,7 @@ namespace duckdb {
 static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef DEBUG
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariableReturnBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariableReturnBindData>();
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
@@ -42,7 +42,7 @@ template <bool IS_STRUCT_PACK>
 static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
@@ -56,13 +56,13 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->GetAlias();
-			if (name_collision_set.find(alias) != name_collision_set.end()) {
+			alias = child->GetAlias().GetIdentifierName();
+			if (name_collision_set.find(Identifier(alias)) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}
-			name_collision_set.insert(alias);
+			name_collision_set.insert(Identifier(alias));
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
+		struct_children.emplace_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons
@@ -86,6 +86,10 @@ static ScalarFunction GetStructPackFunction() {
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// struct_pack/row derive their (struct field) names from argument aliases, so the binder must capture argument
+	// expression aliases as named-argument names. This also preserves the legacy behavior of allowing positional
+	// arguments after named ones (the positional arguments simply take their expression's name as the field name).
+	fun.SetCaptureArgumentAliases(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

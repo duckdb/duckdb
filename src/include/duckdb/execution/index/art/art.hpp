@@ -47,7 +47,7 @@ public:
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 
 public:
-	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
@@ -69,7 +69,7 @@ public:
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! Storage version that the ART was created in, used for backwards compatible key generation
-	optional_idx storage_version;
+	StorageVersion storage_version;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.

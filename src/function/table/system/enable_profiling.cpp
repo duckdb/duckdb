@@ -21,7 +21,6 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 
 	auto &client_config = ClientConfig::GetConfig(context);
 	client_config.enable_profiler = true;
-	client_config.emit_profiler_output = true;
 
 	if (!bind_data.format.IsNull() && !bind_data.save_location.IsNull()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -32,7 +31,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 		}
 
 		EnableProfilingSetting::ResetLocal(context);
-		ProfileOutputSetting::ResetLocal(context);
+		ProfilingOutputSetting::ResetLocal(context);
 	}
 
 	if (!bind_data.format.IsNull()) {
@@ -44,7 +43,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.save_location.IsNull()) {
-		ProfileOutputSetting::SetLocal(context, bind_data.save_location);
+		ProfilingOutputSetting::SetLocal(context, bind_data.save_location);
 	}
 
 	if (!bind_data.mode.IsNull()) {
@@ -52,7 +51,11 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
+		Value metrics_value = bind_data.metrics;
+		if (metrics_value.type().id() == LogicalTypeId::VARCHAR) {
+			metrics_value = Value::LIST(LogicalType::VARCHAR, {metrics_value});
+		}
+		TrackedMetricsSetting::SetLocal(context, metrics_value);
 	}
 }
 
@@ -67,7 +70,7 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 	bool metrics_set = false;
 
 	for (const auto &named_param : input.named_parameters) {
-		const auto key = EnumUtil::FromString<ProfilingParameterNames>(named_param.first);
+		const auto key = EnumUtil::FromString<ProfilingParameterNames>(named_param.first.GetIdentifierName());
 		switch (key) {
 		case ProfilingParameterNames::FORMAT:
 			bind_data->format = StringUtil::Lower(named_param.second.ToString());
@@ -83,9 +86,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			break;
 		case ProfilingParameterNames::METRICS: {
 			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-			    named_param.second.type().id() != LogicalTypeId::STRUCT &&
 			    named_param.second.type() != LogicalType::VARCHAR) {
-				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 			}
 
 			bind_data->metrics = named_param.second;
@@ -100,8 +102,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			throw InvalidInputException("EnableProfiling: cannot specify both metrics and positional parameters");
 		}
 		if (input.inputs[0].type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-		    input.inputs[0].type().id() != LogicalTypeId::STRUCT && input.inputs[0].type() != LogicalType::VARCHAR) {
-			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+		    input.inputs[0].type() != LogicalType::VARCHAR) {
+			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 		}
 
 		bind_data->metrics = input.inputs[0];
@@ -116,7 +118,6 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 static void DisableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	client_config.enable_profiler = false;
-	client_config.emit_profiler_output = false;
 }
 
 static unique_ptr<FunctionData> BindDisableProfiling(ClientContext &context, TableFunctionBindInput &input,

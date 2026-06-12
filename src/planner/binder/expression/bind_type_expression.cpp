@@ -30,7 +30,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	// Required for WAL lookup to work
 	if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
 		// Look in the system catalog if no catalog was specified
-		entry = binder.entry_retriever.GetEntry(SYSTEM_CATALOG, type_schema, type_lookup);
+		entry = binder.entry_retriever.GetEntry(Identifier::SystemCatalog(), type_schema, type_lookup);
 	} else {
 		// Try to search from most specific to least specific
 		// The search path should already have been set to the correct catalog/schema,
@@ -43,16 +43,16 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 				entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup,
 				                                        OnEntryNotFound::THROW_EXCEPTION);
 			}
-			entry = binder.entry_retriever.GetEntry(type_catalog, INVALID_SCHEMA, type_lookup,
+			entry = binder.entry_retriever.GetEntry(type_catalog, Identifier::InvalidSchema(), type_lookup,
 			                                        OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
-			                                        OnEntryNotFound::RETURN_NULL);
+			entry = binder.entry_retriever.GetEntry(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                                        type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(SYSTEM_CATALOG, DEFAULT_SCHEMA, type_lookup,
-			                                        OnEntryNotFound::THROW_EXCEPTION);
+			entry = binder.entry_retriever.GetEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(),
+			                                        type_lookup, OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 
@@ -92,13 +92,13 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 		// Shortcut for constant expressions
 		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetAlias(), const_expr.value);
+			bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), const_expr.GetValue());
 			continue;
 		}
 
 		// Otherwise we need to evaluate the expression
 		auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-		bound_parameters.emplace_back(param->GetAlias(), bound_param);
+		bound_parameters.emplace_back(param->GetAlias().GetIdentifierName(), bound_param);
 	};
 
 	// Call the bind function

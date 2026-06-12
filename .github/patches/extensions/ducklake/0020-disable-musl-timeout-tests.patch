@@ -1,0 +1,45 @@
+diff --git a/test/sql/alter/many_schema_versions_low_memory.test_slow b/test/sql/alter/many_schema_versions_low_memory.test_slow
+index e4ab7fd2..859d8614 100644
+--- a/test/sql/alter/many_schema_versions_low_memory.test_slow
++++ b/test/sql/alter/many_schema_versions_low_memory.test_slow
+@@ -2,8 +2,10 @@
+ # description: test that many DDL operations work under a low memory limit with schema cache eviction
+ # group: [alter]
+ 
+ require ducklake
++
++require notmusl
+ 
+ require parquet
+ 
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+diff --git a/test/sql/deletion_inlining/test_multiple_files_flush.test_slow b/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
+index 147b9cf6..76bca20f 100644
+--- a/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
++++ b/test/sql/deletion_inlining/test_multiple_files_flush.test_slow
+@@ -2,8 +2,10 @@
+ # description: test ducklake flushing deletion on inserted inline, but the flush produces multiple files
+ # group: [deletion_inlining]
+ 
+ require ducklake
++
++require notmusl
+ 
+ require parquet
+ 
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+diff --git a/test/sql/insert/insert_wide_table_low_memory.test_slow b/test/sql/insert/insert_wide_table_low_memory.test_slow
+index 8f742392..735278e6 100644
+--- a/test/sql/insert/insert_wide_table_low_memory.test_slow
++++ b/test/sql/insert/insert_wide_table_low_memory.test_slow
+@@ -2,8 +2,10 @@
+ # description: test that many small inserts into a wide table work under low memory limit
+ # group: [insert]
+ 
+ require ducklake
++
++require notmusl
+ 
+ require parquet
+ 
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db

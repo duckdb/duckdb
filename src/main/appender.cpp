@@ -24,6 +24,7 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
@@ -79,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetCardinality(chunk.size() + 1);
+	chunk.SetChildCardinality(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -368,7 +369,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
 	cast_chunk.Initialize(allocator, appender_types);
-	cast_chunk.SetCardinality(size);
+	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
 		if (chunk_p.data[i].GetType() == appender_types[i]) {
@@ -412,7 +413,14 @@ void BaseAppender::Flush() {
 		return;
 	}
 
-	FlushInternal(*collection);
+	try {
+		FlushInternal(*collection);
+	} catch (...) {
+		// Reset so the destructor does not re-attempt flushing the same data,
+		// which would hit assertions in the storage layer if it is inconsistent.
+		collection->Reset();
+		throw;
+	}
 	collection->Reset();
 	column = 0;
 }
@@ -425,7 +433,7 @@ void BaseAppender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
 	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
 }
 
-void BaseAppender::AddColumn(const string &name) {
+void BaseAppender::AddColumn(const Identifier &name) {
 	throw NotImplementedException("AddColumn is only supported when directly appending to a table");
 }
 
@@ -433,8 +441,8 @@ void BaseAppender::ClearColumns() {
 	throw NotImplementedException("ClearColumns is only supported when directly appending to a table");
 }
 
-unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
-                                                         const vector<string> &expected_names) {
+unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const Identifier &table_name,
+                                                         const vector<Identifier> &expected_names) {
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
 	column_data_ref->alias = table_name.empty() ? "appended_data" : table_name;
 	;
@@ -451,7 +459,7 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	case StatementType::UPDATE_STATEMENT:
 		return statement.Cast<UpdateStatement>().node->cte_map;
 	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
+		return statement.Cast<MergeIntoStatement>().node->cte_map;
 	default:
 		throw InvalidInputException(
 		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
@@ -486,7 +494,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 	// Add the appender data as a CTE to the CTE map of the statement.
 	string alias = table_name.empty() ? "appended_data" : table_name;
 	auto &cte_map = GetCTEMap(*parser.statements[0]);
-	cte_map.map.insert(alias, std::move(cte_info));
+	cte_map.map.insert(Identifier(alias), std::move(cte_info));
 
 	return std::move(parser.statements[0]);
 }
@@ -494,8 +502,8 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 //===--------------------------------------------------------------------===//
 // Table Appender
 //===--------------------------------------------------------------------===//
-Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
-                   const idx_t flush_memory_threshold_p)
+Appender::Appender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+                   const Identifier &table_name, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
 	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
 	                             ? optional_idx::Invalid()
@@ -556,30 +564,30 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name,
+Appender::Appender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
                    const idx_t flush_memory_threshold_p)
-    : Appender(con, INVALID_CATALOG, schema_name, table_name, flush_memory_threshold_p) {
+    : Appender(con, Identifier::InvalidCatalog(), schema_name, table_name, flush_memory_threshold_p) {
 }
 
-Appender::Appender(Connection &con, const string &table_name, const idx_t flush_memory_threshold_p)
-    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, flush_memory_threshold_p) {
+Appender::Appender(Connection &con, const Identifier &table_name, const idx_t flush_memory_threshold_p)
+    : Appender(con, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name, flush_memory_threshold_p) {
 }
 
 Appender::~Appender() {
 	Destructor();
 }
 
-vector<string> Appender::GetExpectedNames() {
-	vector<string> expected_names;
+vector<Identifier> Appender::GetExpectedNames() {
+	vector<Identifier> expected_names;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto &col_name = description->columns[column_ids[i].index].Name();
-		expected_names.push_back(col_name);
+		expected_names.emplace_back(col_name);
 	}
 	return expected_names;
 }
 
-string Appender::ConstructQuery(TableDescription &description_p, const string &table_name,
-                                const vector<string> &expected_names) {
+string Appender::ConstructQuery(TableDescription &description_p, const Identifier &table_name,
+                                const vector<Identifier> &expected_names) {
 	string query = "INSERT INTO ";
 	if (!description_p.database.empty()) {
 		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
@@ -609,12 +617,12 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
 	}
 
-	string table_name = "__duckdb_internal_appended_data";
+	Identifier table_name("__duckdb_internal_appended_data");
 	auto expected_names = GetExpectedNames();
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(stmt));
 }
 
@@ -647,7 +655,7 @@ Value Appender::GetDefaultValue(idx_t column) {
 	return it->second;
 }
 
-void Appender::AddColumn(const string &name) {
+void Appender::AddColumn(const Identifier &name) {
 	Flush();
 
 	auto exists = false;
@@ -694,8 +702,8 @@ void Appender::ClearColumns() {
 //===--------------------------------------------------------------------===//
 // Query Appender
 //===--------------------------------------------------------------------===//
-QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<string> names_p,
-                             string table_name_p, const idx_t flush_memory_threshold_p)
+QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<Identifier> names_p,
+                             Identifier table_name_p, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
       query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
 	types = std::move(types_p);
@@ -715,7 +723,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
 	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
-	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
+	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
 }
 

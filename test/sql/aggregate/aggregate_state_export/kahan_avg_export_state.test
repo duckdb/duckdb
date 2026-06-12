@@ -1,0 +1,24 @@
+# name: test/sql/aggregate/aggregate_state_export/kahan_avg_export_state.test
+# description: Test kahan avg export state
+# group: [aggregate_state_export]
+
+# Test that Kahan avg preserves precision in exported states combine operations, should fail if we miss the `err` value in the state export
+statement ok
+CREATE TABLE kahan_context1 AS
+SELECT unnest([9007199254740992.0, 1.0, 1.0, 1.0, 1.0]) as val;
+
+statement ok
+CREATE TABLE kahan_context2 AS
+SELECT unnest([9007199254740990.0, 2.0, 2.0, 2.0, 2.0]) as val;
+
+query R
+  SELECT
+      finalize(combine(
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context1),
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context2)
+      )) -
+      (SELECT favg(val) FROM (
+          SELECT val FROM kahan_context1 UNION ALL SELECT val FROM kahan_context2
+      ));
+----
+0

@@ -17,21 +17,22 @@ bool IsPrepareableStatement(StatementType type) {
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformPrepareStatement(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                          const Identifier &identifier,
+                                                                          const vector<LogicalType> &type_list,
+                                                                          unique_ptr<SQLStatement> statement) {
 	auto result = make_uniq<PrepareStatement>();
-	result->name = list_pr.Child<IdentifierParseResult>(1).identifier;
-	auto &type_list_opt = list_pr.Child<OptionalParseResult>(2);
-	if (type_list_opt.HasResult()) {
-		throw NotImplementedException("TypeList for prepared statement has not been implemented.");
+	result->name = identifier;
+	if (!IsPrepareableStatement(statement->type)) {
+		throw ParserException("%s is not a preparable statement", EnumUtil::ToString(statement->type));
 	}
-	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(4));
-	if (!IsPrepareableStatement(stmt->type)) {
-		throw ParserException("%s is not a preparable statement", EnumUtil::ToString(stmt->type));
-	}
-	result->statement = std::move(stmt);
+	result->statement = std::move(statement);
 	transformer.ClearParameters();
 	return std::move(result);
+}
+
+vector<LogicalType> PEGTransformerFactory::TransformTypeList(PEGTransformer &transformer,
+                                                             const vector<LogicalType> &type) {
+	throw NotImplementedException("TypeList for prepared statement has not been implemented.");
 }
 
 } // namespace duckdb

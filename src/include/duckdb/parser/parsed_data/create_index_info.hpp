@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateIndexInfo : public CreateInfo {
@@ -22,9 +23,9 @@ struct CreateIndexInfo : public CreateInfo {
 	CreateIndexInfo(const CreateIndexInfo &info);
 
 	//! The table name of the underlying table
-	string table;
+	Identifier table;
 	//! The name of the index
-	string index_name;
+	Identifier index_name;
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;
@@ -42,7 +43,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The types of the logical columns (necessary for scanning the table during CREATE INDEX)
 	vector<LogicalType> scan_types;
 	//! The names of the logical columns (necessary for scanning the table during CREATE INDEX)
-	vector<string> names;
+	vector<Identifier> names;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

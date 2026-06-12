@@ -6,13 +6,133 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 #include <math.h>
 
 namespace duckdb {
+
+bool ExpressionBinding::FoundExpression() const {
+	return expression;
+}
+
+bool ExpressionBinding::FoundColumnRef() const {
+	if (!FoundExpression()) {
+		return false;
+	}
+	return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+}
+
+RelationStats::RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+}
+
+DistinctCount::DistinctCount(idx_t distinct_count, DistinctCountSource source)
+    : distinct_count(distinct_count), source(source) {
+}
+
+static idx_t CapMinMaxDistinctCount(uint64_t distinct_count, idx_t base_table_cardinality) {
+	if (base_table_cardinality == 0) {
+		return 0;
+	}
+	if (distinct_count == 0) {
+		return 0;
+	}
+	auto capped_distinct_count = MinValue<idx_t>(distinct_count, base_table_cardinality);
+	return capped_distinct_count == NumericLimits<idx_t>::Maximum() ? 0 : capped_distinct_count;
+}
+
+static idx_t GetMinMaxSpanDistinctCount(uint64_t span, idx_t base_table_cardinality) {
+	uint64_t distinct_count;
+	if (!TryAddOperator::Operation<uint64_t, uint64_t, uint64_t>(span, 1, distinct_count)) {
+		return 0;
+	}
+	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
+}
+
+template <class T>
+static idx_t GetSignedMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<T>();
+	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<T>();
+	if (max_value < min_value) {
+		return 0;
+	}
+	hugeint_t span;
+	if (!TrySubtractOperator::Operation(hugeint_t(static_cast<int64_t>(max_value)),
+	                                    hugeint_t(static_cast<int64_t>(min_value)), span)) {
+		return 0;
+	}
+	uint64_t unsigned_span;
+	if (!Hugeint::TryCast(span, unsigned_span)) {
+		return 0;
+	}
+	return GetMinMaxSpanDistinctCount(unsigned_span, base_table_cardinality);
+}
+
+template <class T>
+static idx_t GetUnsignedMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<T>();
+	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<T>();
+	T span;
+	if (!TrySubtractOperator::Operation(max_value, min_value, span)) {
+		return 0;
+	}
+	return GetMinMaxSpanDistinctCount(static_cast<uint64_t>(span), base_table_cardinality);
+}
+
+static idx_t GetBooleanMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	auto min_value = NumericStats::Min(base_stats).GetValueUnsafe<bool>();
+	auto max_value = NumericStats::Max(base_stats).GetValueUnsafe<bool>();
+	auto distinct_count = min_value == max_value ? 1 : 2;
+	return CapMinMaxDistinctCount(distinct_count, base_table_cardinality);
+}
+
+static idx_t GetMinMaxDistinctCount(const BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	if (base_table_cardinality == 0 || base_stats.GetStatsType() != StatisticsType::NUMERIC_STATS ||
+	    !NumericStats::HasMinMax(base_stats)) {
+		return 0;
+	}
+
+	switch (base_stats.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		return GetBooleanMinMaxDistinctCount(base_stats, base_table_cardinality);
+	case PhysicalType::INT8:
+		return GetSignedMinMaxDistinctCount<int8_t>(base_stats, base_table_cardinality);
+	case PhysicalType::INT16:
+		return GetSignedMinMaxDistinctCount<int16_t>(base_stats, base_table_cardinality);
+	case PhysicalType::INT32:
+		return GetSignedMinMaxDistinctCount<int32_t>(base_stats, base_table_cardinality);
+	case PhysicalType::INT64:
+		return GetSignedMinMaxDistinctCount<int64_t>(base_stats, base_table_cardinality);
+	case PhysicalType::UINT8:
+		return GetUnsignedMinMaxDistinctCount<uint8_t>(base_stats, base_table_cardinality);
+	case PhysicalType::UINT16:
+		return GetUnsignedMinMaxDistinctCount<uint16_t>(base_stats, base_table_cardinality);
+	case PhysicalType::UINT32:
+		return GetUnsignedMinMaxDistinctCount<uint32_t>(base_stats, base_table_cardinality);
+	case PhysicalType::UINT64:
+		return GetUnsignedMinMaxDistinctCount<uint64_t>(base_stats, base_table_cardinality);
+	default:
+		return 0;
+	}
+}
+
+static DistinctCount GetDistinctCountFromStats(BaseStatistics &base_stats, idx_t base_table_cardinality) {
+	auto distinct_count = base_stats.GetDistinctCount();
+	if (distinct_count > 0) {
+		return DistinctCount(distinct_count, DistinctCountSource::HLL);
+	}
+	distinct_count = GetMinMaxDistinctCount(base_stats, base_table_cardinality);
+	if (distinct_count > 0) {
+		return DistinctCount(distinct_count, DistinctCountSource::MIN_MAX);
+	}
+	return DistinctCount(0, DistinctCountSource::CARDINALITY);
+}
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
@@ -21,7 +141,7 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
-		if (func.children.empty()) {
+		if (func.GetChildren().empty()) {
 			ret.expression = expr;
 			ret.expression_is_constant = true;
 			return ret;
@@ -31,7 +151,7 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		ret.expression = expr;
 		auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
-		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+		ret.child_binding = ColumnBinding(new_col_ref.Binding().table_index, new_col_ref.Binding().column_index);
 		return ret;
 	}
 	case ExpressionClass::BOUND_LAMBDA_REF:
@@ -60,24 +180,26 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	return ret;
 }
 
-idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
-                                                 const ColumnIndex &column_id) {
-	if (!get.function.statistics && !get.function.statistics_extended) {
-		return 0;
+unique_ptr<BaseStatistics> RelationStatisticsHelper::GetColumnStatistics(LogicalGet &get, ClientContext &context,
+                                                                         const ColumnIndex &column_id) {
+	if (!get.bind_data || (!get.function.statistics && !get.function.statistics_extended)) {
+		return nullptr;
 	}
-	unique_ptr<BaseStatistics> column_statistics;
 	if (get.function.statistics_extended) {
 		TableFunctionGetStatisticsInput input(get.bind_data.get(), column_id);
-		column_statistics = get.function.statistics_extended(context, input);
-	} else {
-		D_ASSERT(get.function.statistics);
-		column_statistics = get.function.statistics(context, get.bind_data.get(), column_id.GetPrimaryIndex());
+		return get.function.statistics_extended(context, input);
 	}
+	D_ASSERT(get.function.statistics);
+	return get.function.statistics(context, get.bind_data.get(), column_id.GetPrimaryIndex());
+}
+
+DistinctCount RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
+                                                         const ColumnIndex &column_id, idx_t base_table_cardinality) {
+	auto column_statistics = GetColumnStatistics(get, context, column_id);
 	if (!column_statistics) {
-		return 0;
+		return DistinctCount(0, DistinctCountSource::CARDINALITY);
 	}
-	auto distinct_count = column_statistics->GetDistinctCount();
-	return distinct_count;
+	return GetDistinctCountFromStats(*column_statistics, base_table_cardinality);
 }
 
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
@@ -89,48 +211,37 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
 	if (catalog_table) {
-		name = catalog_table->name;
-		return_stats.table_name = name;
+		name = catalog_table->name.GetIdentifierName();
+		return_stats.table_name = Identifier(name);
 	}
 
 	// first push back basic distinct counts for each column (if we have them).
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i].GetPrimaryIndex();
-		auto distinct_count = GetDistinctCount(get, context, column_ids[i]);
-		if (distinct_count > 0) {
-			auto column_distinct_count = DistinctCount({distinct_count, true});
-			return_stats.column_distinct_count.push_back(column_distinct_count);
-			return_stats.column_names.push_back(name + "." + get.names.at(column_id));
+		auto distinct_count = GetDistinctCount(get, context, column_ids[i], base_table_cardinality);
+		if (distinct_count.distinct_count > 0) {
+			return_stats.column_distinct_count.emplace_back(distinct_count.distinct_count, distinct_count.source);
+			return_stats.column_names.push_back(Identifier(name + "." + get.names.at(column_id)));
 		} else {
 			// treat the cardinality as the distinct count.
 			// the cardinality estimator will update these distinct counts based
 			// on the extra columns that are joined on.
-			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
-			return_stats.column_distinct_count.push_back(column_distinct_count);
+			return_stats.column_distinct_count.emplace_back(cardinality_after_filters,
+			                                                DistinctCountSource::CARDINALITY);
 			auto column_name = string("column");
 			if (column_id < get.names.size()) {
-				column_name = get.names.at(column_id);
+				column_name = get.names.at(column_id).GetIdentifierName();
 			}
-			return_stats.column_names.push_back(get.GetName() + "." + column_name);
+			return_stats.column_names.push_back(Identifier(get.GetName() + "." + column_name));
 		}
 	}
 
 	if (get.table_filters.HasFilters()) {
-		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
 		for (auto &entry : get.table_filters) {
 			auto &column_index = get.GetColumnIndex(entry.GetIndex());
-			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
-				if (get.function.statistics_extended) {
-					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
-					column_statistics = get.function.statistics_extended(context, input);
-				} else {
-					D_ASSERT(get.function.statistics);
-					column_statistics =
-					    get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
-				}
-			}
+			auto column_statistics = GetColumnStatistics(get, context, column_index);
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
@@ -154,6 +265,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			cardinality_after_filters = 0;
 		}
 	}
+
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.
 	// This is not updated during plan reconstruction.
@@ -166,13 +278,13 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context) {
 	RelationStats stats;
-	stats.table_name = delim_get.GetName();
+	stats.table_name = Identifier(delim_get.GetName());
 	idx_t card = delim_get.EstimateCardinality(context);
 	stats.cardinality = card;
 	stats.stats_initialized = true;
 	for (auto &binding : delim_get.GetColumnBindings()) {
-		stats.column_distinct_count.push_back(DistinctCount({1, false}));
-		stats.column_names.push_back("column" + to_string(binding.column_index));
+		stats.column_distinct_count.emplace_back(1, DistinctCountSource::CARDINALITY);
+		stats.column_names.push_back(Identifier("column" + to_string(binding.column_index)));
 	}
 	return stats;
 }
@@ -180,25 +292,26 @@ RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &de
 RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection &proj, RelationStats &child_stats) {
 	auto proj_stats = RelationStats();
 	proj_stats.cardinality = child_stats.cardinality;
-	proj_stats.table_name = proj.GetName();
+	proj_stats.table_name = Identifier(proj.GetName());
 	for (auto &expr : proj.expressions) {
-		proj_stats.column_names.push_back(expr->GetName());
+		proj_stats.column_names.emplace_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
 		D_ASSERT(res.FoundExpression());
 		if (res.expression_is_constant) {
-			proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
+			proj_stats.column_distinct_count.emplace_back(1, DistinctCountSource::EXACT);
 		} else {
 			auto column_index = res.child_binding.column_index;
 			if (column_index >= child_stats.column_distinct_count.size() && expr->ToString() == "count_star()") {
 				// only one value for a count star
-				proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
+				proj_stats.column_distinct_count.emplace_back(1, DistinctCountSource::EXACT);
 			} else {
 				// TODO: add this back in
 				//	D_ASSERT(column_index < stats.column_distinct_count.size());
 				if (column_index < child_stats.column_distinct_count.size()) {
 					proj_stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(column_index));
 				} else {
-					proj_stats.column_distinct_count.push_back(DistinctCount({proj_stats.cardinality, false}));
+					proj_stats.column_distinct_count.emplace_back(proj_stats.cardinality,
+					                                              DistinctCountSource::CARDINALITY);
 				}
 			}
 		}
@@ -212,7 +325,7 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 	idx_t card = dummy_scan.EstimateCardinality(context);
 	stats.cardinality = card;
 	for (idx_t i = 0; i < dummy_scan.GetColumnBindings().size(); i++) {
-		stats.column_distinct_count.push_back(DistinctCount({card, false}));
+		stats.column_distinct_count.emplace_back(card, DistinctCountSource::CARDINALITY);
 		stats.column_names.push_back("dummy_scan_column");
 	}
 	stats.stats_initialized = true;
@@ -237,7 +350,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 			stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 			stats.column_names.push_back(child_stats.column_names.at(i));
 		}
-		stats.table_name += "joined with " + child_stats.table_name;
+		stats.table_name = Identifier(stats.table_name + "joined with " + child_stats.table_name);
 		max_card = MaxValue(max_card, child_stats.cardinality);
 	}
 	stats.stats_initialized = true;
@@ -304,12 +417,12 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
-	ret.table_name = string();
+	ret.table_name = Identifier(string());
 	for (auto &stats : child_stats) {
 		if (!ret.table_name.empty()) {
-			ret.table_name += " joined with ";
+			ret.table_name = Identifier(ret.table_name + " joined with ");
 		}
-		ret.table_name += stats.table_name;
+		ret.table_name = Identifier(ret.table_name + stats.table_name);
 		// MARK joins are nonreorderable. They won't return initialized stats
 		// continue in this case.
 		if (!stats.stats_initialized) {
@@ -331,7 +444,7 @@ RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpress
 	idx_t card = expression_get.EstimateCardinality(context);
 	stats.cardinality = card;
 	for (idx_t i = 0; i < expression_get.GetColumnBindings().size(); i++) {
-		stats.column_distinct_count.push_back(DistinctCount({card, false}));
+		stats.column_distinct_count.emplace_back(card, DistinctCountSource::CARDINALITY);
 		stats.column_names.push_back("expression_get_column");
 	}
 	stats.stats_initialized = true;
@@ -349,7 +462,7 @@ RelationStats RelationStatisticsHelper::ExtractWindowStats(LogicalWindow &window
 
 	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns;
 	     column_index++) {
-		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
+		stats.column_distinct_count.emplace_back(child_stats.cardinality, DistinctCountSource::CARDINALITY);
 		stats.column_names.push_back("window");
 	}
 	return stats;
@@ -369,7 +482,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				continue;
 			}
 			auto &bound_col = group.Cast<BoundColumnRefExpression>();
-			auto col_index = bound_col.binding.column_index;
+			auto col_index = bound_col.Binding().column_index;
 			if (col_index >= child_stats.column_distinct_count.size()) {
 				// it is possible the column index of the grouping_set is not in the child stats.
 				// this can happen when delim joins are present, since delim scans are not currently
@@ -424,11 +537,11 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		const auto &binding = aggr_column_bindings[column_index];
 		if (binding.table_index == aggr.group_index && column_index < distinct_counts.size()) {
 			// Group column that we have the HLL of
-			stats.column_distinct_count.push_back(
-			    DistinctCount({LossyNumericCast<idx_t>(distinct_counts[column_index]), true}));
+			stats.column_distinct_count.emplace_back(LossyNumericCast<idx_t>(distinct_counts[column_index]),
+			                                         DistinctCountSource::HLL);
 		} else {
 			// Non-group column, or we don't have the HLL
-			stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
+			stats.column_distinct_count.emplace_back(child_stats.cardinality, DistinctCountSource::CARDINALITY);
 		}
 		stats.column_names.push_back("aggregate");
 	}
@@ -438,7 +551,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResult &empty) {
 	RelationStats stats;
 	for (idx_t i = 0; i < empty.GetColumnBindings().size(); i++) {
-		stats.column_distinct_count.push_back(DistinctCount({0, false}));
+		stats.column_distinct_count.emplace_back(0, DistinctCountSource::CARDINALITY);
 		stats.column_names.push_back("empty_result_column");
 	}
 	stats.stats_initialized = true;
@@ -452,7 +565,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	auto &expr = *expr_filter.expr;
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildren()) {
 			ExpressionFilter child_filter(child->Copy());
 			cardinality_after_filters =
 			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, child_filter, base_stats));
@@ -466,8 +579,8 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 		return cardinality_after_filters;
 	}
-	auto column_count = base_stats.GetDistinctCount();
-	// column_count = 0 when there is no column count (i.e parquet scans)
+	auto column_count = GetDistinctCountFromStats(base_stats, cardinality).distinct_count;
+	// column_count = 0 when there is no HLL and no usable min/max proxy.
 	if (column_count > 0) {
 		// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
 		cardinality_after_filters = (cardinality + column_count - 1) / column_count;

@@ -140,20 +140,22 @@ idx_t GeoColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result)
 	return fetch_count;
 }
 
-void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                             row_t row_id, Vector &result, idx_t result_idx) {
+void GeoColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                              const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                              idx_t result_offset) {
 	// Not a shredded column, so just emit the binary format immediately
 	if (storage_type == GeometryStorageType::WKB) {
-		return base_column->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+		return base_column->FetchRows(transaction, state, storage_index, offsets, sel, fetch_count, result,
+		                              result_offset);
 	}
 
 	// Otherwise, we need to fetch and reassemble
 	DataChunk chunk;
-	chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, 1);
+	chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, fetch_count);
 
-	base_column->FetchRow(transaction, state, storage_index, row_id, chunk.data[0], 0);
+	base_column->FetchRows(transaction, state, storage_index, offsets, sel, fetch_count, chunk.data[0], 0);
 
-	Reassemble(chunk.data[0], result, 1, storage_type, result_idx);
+	Reassemble(chunk.data[0], result, fetch_count, storage_type, result_offset);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -353,11 +355,30 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		checkpoint_state->inner_column = base_column;
 		checkpoint_state->inner_column_state =
 		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
+
+		if (base_column->GetType().id() == LogicalTypeId::GEOMETRY) {
+			// Get the stats from the base column.
+			checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
+		} else if (checkpoint_state->storage_type == GeometryStorageType::SPATIAL) {
+			// Legacy spatial storage - we cannot interpret the stats of the old format
+			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
+			checkpoint_state->global_stats = GeometryStats::CreateUnknown(type).ToUnique();
+			checkpoint_state->global_stats->CopyBase(*new_stats);
+		} else {
+			// Otherwise interpret stats from shredded column
+			const auto types = Geometry::GetSpecializedType(checkpoint_state->storage_type);
+			const auto gtype = types.first;
+			const auto vtype = types.second;
+
+			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
+			InterpretStats(*new_stats, *checkpoint_state->global_stats, gtype, vtype);
+		}
+
 		return std::move(checkpoint_state);
 	}
 
 	// Old storage version, write as old type
-	if (GetStorageManager().GetStorageVersion() < 7) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, GetStorageManager().GetStorageVersion())) {
 		auto legacy_type = Geometry::GetSpatialGeometryType();
 		auto new_column =
 		    CreateColumn(block_manager, this->info, base_column->column_index, legacy_type, GetDataType(), this);
@@ -385,13 +406,12 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
-			scan_chunk.SetCardinality(to_scan);
 
 			// Verify the scan chunk
 			scan_chunk.Verify(GetDatabase());
 
 			append_chunk.Reset();
-			append_chunk.SetCardinality(to_scan);
+			append_chunk.SetChildCardinality(to_scan);
 
 			// Make the split
 			Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, GeometryStorageType::SPATIAL);
@@ -482,13 +502,12 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
-		scan_chunk.SetCardinality(to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify(GetDatabase());
 
 		append_chunk.Reset();
-		append_chunk.SetCardinality(to_scan);
+		append_chunk.SetChildCardinality(to_scan);
 
 		// Make the split
 		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_storage_type);
@@ -582,8 +601,9 @@ idx_t GeoColumnData::GetMaxEntry() {
 }
 
 void GeoColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                         vector<ColumnSegmentInfo> &result) {
-	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                         vector<ColumnSegmentInfo> &result,
+                                         const ColumnSegmentInfoScanOptions &options) {
+	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 void GeoColumnData::Verify(RowGroup &parent) {
@@ -606,7 +626,7 @@ void GeoColumnData::Reassemble(const Vector &source, Vector &target, idx_t count
 	Geometry::FromVectorizedFormat(source, target, count, type, result_offset);
 }
 
-static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType geom_type) {
+static const BaseStatistics *GetVertexStats(const BaseStatistics &stats, GeometryType geom_type) {
 	switch (geom_type) {
 	case GeometryType::POINT: {
 		return StructStats::GetChildStats(stats);
@@ -641,7 +661,7 @@ static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType 
 	}
 }
 
-void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
+void GeoColumnData::InterpretStats(const BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
                                    VertexType vert_type) {
 	// Copy base stats
 	target.CopyBase(source);

@@ -2,6 +2,7 @@
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -14,20 +15,16 @@
 namespace duckdb {
 
 struct BoundCTEData {
-	string ctename;
+	Identifier ctename;
 	CTEMaterialize materialized;
 	TableIndex setop_index;
 	shared_ptr<Binder> child_binder;
 	shared_ptr<CTEBindState> cte_bind_state;
 };
 
-static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
-	if (!cte.query_node) {
-		return false;
-	}
-	auto t = cte.query_node->type;
+static bool IsDMLQueryNode(QueryNodeType t) {
 	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
-	       t == QueryNodeType::DELETE_QUERY_NODE;
+	       t == QueryNodeType::DELETE_QUERY_NODE || t == QueryNodeType::MERGE_QUERY_NODE;
 }
 
 BoundStatement Binder::BindNode(QueryNode &node) {
@@ -35,7 +32,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	vector<BoundCTEData> bound_ctes;
 	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
-		if (IsDMLQueryNode(*cte.second)) {
+		if (IsDMLQueryNode(cte.second->query_node->type)) {
 			if (parent && !cte.second->is_trigger_generated) {
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
@@ -68,6 +65,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	case QueryNodeType::INSERT_QUERY_NODE:
 		result = current_binder.get().BindNode(node.Cast<InsertQueryNode>());
 		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<MergeQueryNode>());
+		break;
 	default:
 		throw InternalException("Unsupported query node type");
 	}
@@ -90,7 +90,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	return result;
 }
 
-CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<string> &aliases_p)
+CTEBindState::CTEBindState(Binder &parent_binder_p, QueryNode &cte_def_p, const vector<Identifier> &aliases_p)
     : parent_binder(parent_binder_p), cte_def(cte_def_p), aliases(aliases_p),
       active_binder_count(parent_binder.GetActiveBinders().size()) {
 }
@@ -120,7 +120,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// add this CTE to the query binder on the RHS with "CANNOT_BE_REFERENCED" to detect recursive references to
 	// ourselves
-	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<string>(),
+	query_binder->bind_context.AddCTEBinding(binding.GetIndex(), binding.GetBindingAlias(), vector<Identifier>(),
 	                                         vector<LogicalType>(), CTEType::CANNOT_BE_REFERENCED);
 
 	// bind the actual CTE
@@ -143,7 +143,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	QueryResult::DeduplicateColumns(names);
 }
 
-BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement) {
+BoundCTEData Binder::PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement) {
 	BoundCTEData result;
 
 	// first recursively visit the materialized CTE operations
@@ -171,8 +171,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
 		auto node_type = bound_cte.cte_bind_state->cte_def.type;
-		bool is_dml = node_type == QueryNodeType::INSERT_QUERY_NODE || node_type == QueryNodeType::UPDATE_QUERY_NODE ||
-		              node_type == QueryNodeType::DELETE_QUERY_NODE;
+		bool is_dml = IsDMLQueryNode(node_type);
 		if (is_dml) {
 			// DML CTEs always execute even if not referenced - force bind now
 			auto dummy_binding =

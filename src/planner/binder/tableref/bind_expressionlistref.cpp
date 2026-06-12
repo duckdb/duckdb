@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 	result.names = expr.expected_names;
 
 	vector<vector<unique_ptr<Expression>>> values;
-	auto prev_can_contain_nulls = this->can_contain_nulls;
+	auto prev_can_contain_nulls = CanContainNulls();
 	// bind value list
 	InsertBinder binder(*this, context);
 	binder.target_type = LogicalType(LogicalTypeId::INVALID);
@@ -23,11 +23,11 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		if (result.names.empty()) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				result.names.push_back("col" + to_string(val_idx));
+				result.names.emplace_back("col" + to_string(val_idx));
 			}
 		}
 
-		this->can_contain_nulls = true;
+		SetCanContainNulls(true);
 		vector<unique_ptr<Expression>> list;
 		for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
 			if (!result.types.empty()) {
@@ -38,7 +38,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 			list.push_back(std::move(bound_expr));
 		}
 		values.push_back(std::move(list));
-		this->can_contain_nulls = prev_can_contain_nulls;
+		this->SetCanContainNulls(prev_can_contain_nulls);
 	}
 	if (result.types.empty() && !expr.values.empty()) {
 		// there are no types specified

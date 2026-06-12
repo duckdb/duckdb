@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.function_name)) {
+		if (IsUnnestFunction(function.FunctionName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
@@ -171,7 +171,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		context = QueryErrorContext(position);
 	}
 	// generate a new (combined) error
-	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
+	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
 	return true;
 }
 
@@ -221,7 +221,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-		if (bound_colref.depth > 0) {
+		if (bound_colref.Depth() > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}
 	}
@@ -325,7 +325,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
 	} else {
-		if (!binder.can_contain_nulls) {
+		if (!binder.CanContainNulls()) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->GetReturnType())) {
@@ -391,7 +391,7 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 	return BindResult(BinderException::Unsupported(expr, message));
 }
 
-bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
+bool ExpressionBinder::IsUnnestFunction(const Identifier &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
@@ -400,8 +400,8 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		return true;
 	}
-	if (colref.column_names.size() == 2) {
-		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+	if (colref.ColumnNames().size() == 2) {
+		return colref.GetTableName() == "alias";
 	}
 	return false;
 }

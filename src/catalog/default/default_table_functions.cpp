@@ -79,7 +79,7 @@ SELECT * EXCLUDE(input_type, scope, aliases)
       'profiling_coverage',
       'profiling_output',
       'profiling_mode',
-      'custom_profiling_settings'
+      'tracked_metrics'
   );
 )"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
@@ -103,13 +103,13 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 			throw InternalException("Expected a single expression");
 		}
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
-		function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
+		function->default_parameters.insert(Identifier(named_param.name), std::move(expr_list[0]));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
-	bind_info->schema = default_macro.schema;
-	bind_info->name = default_macro.name;
+	bind_info->schema = Identifier(default_macro.schema);
+	bind_info->name = Identifier(default_macro.name);
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->macros.push_back(std::move(function));
@@ -129,11 +129,10 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &input_schema, const string &input_name) {
-	auto schema = StringUtil::Lower(input_schema);
-	auto name = StringUtil::Lower(input_name);
+static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
+                                                              const Identifier &input_name) {
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
-		if (internal_table_macros[index].schema == schema && internal_table_macros[index].name == name) {
+		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
 			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index]);
 		}
 	}
@@ -141,7 +140,7 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &inpu
 }
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                           const string &entry_name) {
+                                                                           const Identifier &entry_name) {
 	auto info = GetDefaultTableFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
@@ -149,8 +148,8 @@ unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(Clien
 	return nullptr;
 }
 
-vector<string> DefaultTableFunctionGenerator::GetDefaultEntries() {
-	vector<string> result;
+vector<Identifier> DefaultTableFunctionGenerator::GetDefaultEntries() {
+	vector<Identifier> result;
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (StringUtil::Lower(internal_table_macros[index].name) != internal_table_macros[index].name) {
 			throw InternalException("Default macro name %s should be lowercase", internal_table_macros[index].name);

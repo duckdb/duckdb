@@ -17,7 +17,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
 
-	unordered_set<string> functions = {"prefix", "contains", "suffix"};
+	identifier_set_t functions = {"prefix", "contains", "suffix"};
 	func->function = make_uniq<ManyFunctionMatcher>(functions);
 	root = std::move(func);
 }
@@ -25,7 +25,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
-	D_ASSERT(root.children.size() == 2);
+	D_ASSERT(root.GetChildren().size() == 2);
 	auto &prefix_expr = bindings[2].get();
 
 	// the constant_expr is a scalar expression that we have to fold
@@ -50,7 +50,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	// PREFIX(NULL, '') is NULL
 	// so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 	if (needle_string.empty()) {
-		return ExpressionRewriter::ConstantOrNull(std::move(root.children[0]), Value::BOOLEAN(true));
+		return ExpressionRewriter::ConstantOrNull(std::move(root.GetChildrenMutable()[0]), Value::BOOLEAN(true));
 	}
 	return nullptr;
 }

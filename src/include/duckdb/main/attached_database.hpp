@@ -45,7 +45,8 @@ enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, SKIP_CHECKPOINT };
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
-	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path,
+	                   const Identifier &name);
 	~StoredDatabasePath();
 
 	DatabaseManager &db_manager;
@@ -79,6 +80,8 @@ struct AttachOptions {
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
+	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
+	optional_idx vacuum_rebuild_indexes_threshold;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -87,10 +90,10 @@ public:
 	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage.
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AttachOptions &options);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, Identifier name, string file_path, AttachOptions &options);
 	//! Create an attached database instance with the specified storage extension.
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
-	                 AttachInfo &info, AttachOptions &options);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context,
+	                 Identifier name, AttachInfo &info, AttachOptions &options);
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
@@ -114,10 +117,10 @@ public:
 		return storage_extension;
 	}
 
-	const string &GetName() const {
+	const Identifier &GetName() const {
 		return name;
 	}
-	void SetName(const string &new_name) {
+	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
 	bool IsSystem() const;
@@ -133,12 +136,15 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! vacuum_rebuild_indexes threshold for this attached database.
+	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
+	idx_t GetVacuumRebuildIndexThreshold() const;
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
 	string StoredPath() const;
-	static bool NameIsReserved(const string &name);
-	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	static bool NameIsReserved(const Identifier &name);
+	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
@@ -157,6 +163,7 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;
+	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 
 private:

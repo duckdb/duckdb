@@ -26,6 +26,9 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -51,7 +54,20 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const TableCatalogEntry &table) {
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_table_ref = make_uniq<BaseTableRef>();
+	alias_table_ref->table_name = table.name;
+	alias_table_ref->schema_name = table.schema.name;
+	alias_table_ref->catalog_name = table.catalog.GetName();
+	alias_select->from_table = std::move(alias_table_ref);
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	alias_cte->query_node = std::move(alias_select);
+	return alias_cte;
+}
+
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
 		return;
@@ -72,7 +88,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
-		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
@@ -81,24 +97,24 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 		}
 		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
-			    catalog_name, schema);
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
 		}
 	}
 	catalog = schema;
-	schema = string();
+	schema = Identifier();
 }
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema) {
 	CatalogEntryRetriever retriever(context);
 	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-const string Binder::BindCatalog(string &catalog) {
+Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
 	if (database) {
@@ -111,7 +127,7 @@ const string Binder::BindCatalog(string &catalog) {
 void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
-		info.catalog = TEMP_CATALOG;
+		info.catalog = Identifier::TempCatalog();
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
@@ -119,9 +135,9 @@ void Binder::SearchSchema(CreateInfo &info) {
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
 	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(context, info.catalog);
+		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
 	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = search_path->GetDefaultCatalog(info.schema);
+		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
 	}
 	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
@@ -129,11 +145,11 @@ void Binder::SearchSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.catalog == TEMP_CATALOG) {
-			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", std::string(TEMP_CATALOG));
+			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	} else {
 		if (info.catalog != TEMP_CATALOG) {
-			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", std::string(TEMP_CATALOG));
+			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
 }
@@ -163,9 +179,10 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+                      const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+                      vector<Identifier> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
@@ -178,7 +195,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 			dependencies->AddDependency(entry);
 		});
 	}
-	view_binder->can_contain_nulls = true;
+	view_binder->SetCanContainNulls(true);
 
 	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
@@ -255,7 +272,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	if (attached.HasStorageManager()) {
 		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		const auto since = StorageCompatibility::FromString("v1.4.0").storage_version;
 		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
 		              storage_manager.GetStorageVersion() >= since;
 	}
@@ -338,20 +355,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		vector<LogicalType> dummy_types;
-		vector<string> dummy_names;
+		vector<Identifier> dummy_names;
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
-			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
+			dummy_names.emplace_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
 
 		if (!type_overloads.insert(dummy_types).second) {
 			throw BinderException(
 			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
-			    base.name);
+			    base.name.GetIdentifierName());
 		}
 
-		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetIdentifierName());
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
@@ -431,7 +448,7 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 	// Shortcut for constant expressions
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		auto &const_expr = expr->Cast<BoundConstantExpression>();
-		return TypeValue::GetType(const_expr.value);
+		return TypeValue::GetType(const_expr.GetValue());
 	}
 
 	// Else, evaluate the type expression
@@ -487,7 +504,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		const auto since = StorageVersion::V2_0_0;
 		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
 		    storage_manager.GetStorageVersion() < since) {
 			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";
@@ -507,24 +524,41 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
-
-	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
-			auto &t = entry.Cast<TriggerCatalogEntry>();
-			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
-				throw NotImplementedException("Multiple triggers per table event are not yet supported");
-			}
-		});
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    create_trigger_info.timing != TriggerTiming::AFTER) {
+		throw BinderException("Transition tables can only be specified for AFTER triggers");
+	}
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    !create_trigger_info.columns.empty()) {
+		throw BinderException("UPDATE OF is not valid with transition tables");
+	}
+	if (!create_trigger_info.referencing_old_table.empty()) {
+		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
+			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
+		}
+		if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
+			throw NotImplementedException("REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers");
+		}
+	}
+	if (!create_trigger_info.referencing_new_table.empty() &&
+	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
+		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
 	}
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.
-	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
+
+	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
+		if (!alias.empty() && body_copy->cte_map.map.find(alias) == body_copy->cte_map.map.end()) {
+			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
+		}
+	}
 	validation_binder->Bind(*body_copy);
 
 	// Add table dependency
@@ -745,8 +779,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
-		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
+		CreateSecretInput create_secret_input {Identifier(type_string),
+		                                       Identifier(provider_string),
+		                                       Identifier(info.storage_type),
+		                                       info.name,
+		                                       scope_strings,
+		                                       bound_options,
+		                                       info.on_conflict,
+		                                       info.persist_type};
 
 		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 		break;

@@ -4,146 +4,141 @@
 
 namespace duckdb {
 
-// ResetStatement <- 'RESET' (SetVariable / SetSetting)
+// ResetStatement <- 'RESET' SetVariableOrSetting
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTransformer &transformer,
-                                                                        ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &child_pr = list_pr.Child<ListParseResult>(1);
-	auto &choice_pr = child_pr.Child<ChoiceParseResult>(0);
-
-	SettingInfo setting_info = transformer.Transform<SettingInfo>(choice_pr.GetResult());
-	if (setting_info.scope == SetScope::LOCAL) {
+                                                                        const SettingInfo &set_variable_or_setting) {
+	if (set_variable_or_setting.scope == SetScope::LOCAL) {
 		throw NotImplementedException("RESET LOCAL is not implemented.");
 	}
-	return make_uniq<ResetVariableStatement>(setting_info.name, setting_info.scope);
+	return make_uniq<ResetVariableStatement>(set_variable_or_setting.name, set_variable_or_setting.scope);
 }
 
 // SetAssignment <- VariableAssign VariableList
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
-                                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
+                                              vector<unique_ptr<ParsedExpression>> variable_list) {
+	return variable_list;
 }
 
 // SetSetting <- SettingScope? SettingName
-SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &optional_scope_pr = list_pr.Child<OptionalParseResult>(0);
-
+SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer, const SetScope &setting_scope,
+                                                       const Identifier &setting_name) {
 	SettingInfo result;
-	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
-	if (optional_scope_pr.HasResult()) {
-		auto &setting_scope = optional_scope_pr.GetResult().Cast<ListParseResult>();
-		auto &scope_value = setting_scope.Child<ChoiceParseResult>(0);
-		result.scope = transformer.TransformEnum<SetScope>(scope_value);
-	}
+	result.name = setting_name;
+	result.scope = setting_scope;
 	return result;
 }
 
-// SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &child_pr = list_pr.Child<ListParseResult>(1);
-	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).GetResult());
+// SetStatement <- 'SET' SetAssignmentOrTimeZone
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
+                                             unique_ptr<SetStatement> set_assignment_or_time_zone) {
+	return std::move(set_assignment_or_time_zone);
 }
 
-// ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	// child 0 = 'INTERVAL' keyword, child 1 = StringLiteral, child 2 = Interval?
-	auto &str_pr = list_pr.Child<StringLiteralParseResult>(1);
-	auto expr = make_uniq<ConstantExpression>(Value(str_pr.result));
-	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
-}
-
-// ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
-                                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	// child 0 = 'INTERVAL' keyword, child 1 = Parens(NumberLiteral), child 2 = StringLiteral
-	auto &str_pr = list_pr.Child<StringLiteralParseResult>(2);
-	auto expr = make_uniq<ConstantExpression>(Value(str_pr.result));
-	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
-}
-
-// ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / StringLiteral / Identifier / NumberLiteral /
-// 'DEFAULT' / 'LOCAL'
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneValue(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return make_uniq<ConstantExpression>(Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result));
-	}
-	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
-		return make_uniq<ConstantExpression>(Value(choice_pr.GetResult().Cast<IdentifierParseResult>().identifier));
-	}
-	const auto &name = choice_pr.GetResult().name;
-	if (name == "ZoneIntervalWithPrecision" || name == "ZoneIntervalWithInterval" || name == "NumberLiteral") {
-		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
-	}
+// ZoneLocal <- 'LOCAL'
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneLocal(PEGTransformer &transformer) {
 	return make_uniq<DefaultExpression>();
+}
+
+// ZoneDefault <- 'DEFAULT'
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneDefault(PEGTransformer &transformer) {
+	return make_uniq<DefaultExpression>();
+}
+
+// ZoneStringLiteral <- StringLiteral
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneStringLiteral(PEGTransformer &transformer,
+                                                                               const string &string_literal) {
+	return make_uniq<ConstantExpression>(Value(string_literal));
+}
+
+// ZoneIdentifier <- Identifier
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIdentifier(PEGTransformer &transformer,
+                                                                            const Identifier &identifier) {
+	return make_uniq<ConstantExpression>(Value(identifier));
 }
 
 // SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	if (expr->GetExpressionClass() == ExpressionClass::DEFAULT) {
+                                                                     unique_ptr<ParsedExpression> zone_value) {
+	if (zone_value->GetExpressionClass() == ExpressionClass::DEFAULT) {
 		return make_uniq<ResetVariableStatement>("timezone", SetScope::AUTOMATIC);
 	}
-	return make_uniq<SetVariableStatement>("timezone", std::move(expr), SetScope::AUTOMATIC);
+	return make_uniq<SetVariableStatement>("timezone", std::move(zone_value), SetScope::AUTOMATIC);
 }
 
 // SetVariable <- VariableScope Identifier
-SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-
+SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer, const SetScope &variable_scope,
+                                                        const Identifier &identifier) {
 	SettingInfo result;
-	result.scope = transformer.TransformEnum<SetScope>(list_pr.Child<ListParseResult>(0));
-	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	result.name = identifier;
+	result.scope = variable_scope;
 	return result;
 }
 
-// StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &first_sub_rule = list_pr.Child<ListParseResult>(0);
-
-	auto &setting_or_var_pr = first_sub_rule.Child<ChoiceParseResult>(0);
-	SettingInfo setting_info = transformer.Transform<SettingInfo>(setting_or_var_pr.GetResult());
-	if (setting_info.scope == SetScope::LOCAL) {
+// StandardAssignment <- SetVariableOrSetting SetAssignment
+unique_ptr<SetStatement>
+PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
+                                                   const SettingInfo &set_variable_or_setting,
+                                                   vector<unique_ptr<ParsedExpression>> set_assignment) {
+	if (set_variable_or_setting.scope == SetScope::LOCAL) {
 		throw NotImplementedException("SET LOCAL is not implemented.");
 	}
-	auto &set_assignment_pr = list_pr.Child<ListParseResult>(1);
-	auto values = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(set_assignment_pr);
-	if (values.size() > 1) {
+	if (set_assignment.size() > 1) {
 		throw ParserException("SET can only contain a single value");
 	}
-	auto value = std::move(values[0]);
+	auto value = std::move(set_assignment[0]);
 	if (value->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// SET value cannot be a column reference
 		auto &col_ref = value->Cast<ColumnRefExpression>();
 		value = make_uniq<ConstantExpression>(col_ref.GetColumnName());
 	} else if (value->GetExpressionClass() == ExpressionClass::DEFAULT) {
-		return make_uniq<ResetVariableStatement>(setting_info.name, setting_info.scope);
+		return make_uniq<ResetVariableStatement>(set_variable_or_setting.name, set_variable_or_setting.scope);
 	}
-	return make_uniq<SetVariableStatement>(setting_info.name, std::move(value), setting_info.scope);
+	return make_uniq<SetVariableStatement>(set_variable_or_setting.name, std::move(value),
+	                                       set_variable_or_setting.scope);
 }
 
 // VariableList <- List(Expression)
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
-                                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto &expr : expr_list) {
-		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
-	}
-	return expressions;
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
+                                             vector<unique_ptr<ParsedExpression>> expression) {
+	return expression;
 }
+
+// VariableScope <- 'VARIABLE'
+SetScope PEGTransformerFactory::TransformVariableScope(PEGTransformer &transformer) {
+	return SetScope::VARIABLE;
+}
+
+// LocalScope <- 'LOCAL'
+SetScope PEGTransformerFactory::TransformLocalScope(PEGTransformer &transformer) {
+	return SetScope::LOCAL;
+}
+
+// SessionScope <- 'SESSION'
+SetScope PEGTransformerFactory::TransformSessionScope(PEGTransformer &transformer) {
+	return SetScope::SESSION;
+}
+
+// GlobalScope <- 'GLOBAL'
+SetScope PEGTransformerFactory::TransformGlobalScope(PEGTransformer &transformer) {
+	return SetScope::GLOBAL;
+}
+
+// ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer, const string &string_literal,
+                                                         const DatePartSpecifier &interval) {
+	auto expr = make_uniq<ConstantExpression>(Value(string_literal));
+	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+}
+
+// ZoneIntervalWithPrecision <- 'INTERVAL' Parens(NumberLiteral) StringLiteral
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIntervalWithPrecision(
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> number_literal, const string &string_literal) {
+	auto expr = make_uniq<ConstantExpression>(Value(string_literal));
+	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+}
+
 } // namespace duckdb

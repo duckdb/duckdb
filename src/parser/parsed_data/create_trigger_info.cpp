@@ -5,7 +5,7 @@
 namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
-    : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
+    : CreateInfo(CatalogType::TRIGGER_ENTRY, Identifier::InvalidSchema()), timing(TriggerTiming::AFTER),
       event_type(TriggerEventType::INSERT_EVENT), for_each(TriggerForEach::STATEMENT) {
 }
 
@@ -18,6 +18,8 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
+	result->referencing_new_table = referencing_new_table;
+	result->referencing_old_table = referencing_old_table;
 	result->trigger_action = trigger_action->Copy();
 	return std::move(result);
 }
@@ -51,6 +53,15 @@ string CreateTriggerInfo::ToString() const {
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
+	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();
 	ss << ";";

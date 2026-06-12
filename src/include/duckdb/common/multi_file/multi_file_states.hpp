@@ -71,7 +71,7 @@ struct MultiFileBindData : public TableFunctionData {
 	MultiFileReaderBindData reader_bind;
 	MultiFileOptions file_options;
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 	virtual_column_map_t virtual_columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
@@ -155,6 +155,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
+	//! Number of files that were actually opened by the scan
+	atomic<idx_t> files_opened = 0;
 	//! Index of the lowest file we know we have completely read
 	mutable idx_t completed_file_index = 0;
 	//! The current set of readers
@@ -198,6 +200,8 @@ public:
 	DataChunk scan_chunk;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
+	//! Number of rows scanned by this thread (for profiling)
+	idx_t rows_scanned = 0;
 };
 
 } // namespace duckdb

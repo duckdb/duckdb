@@ -2,37 +2,47 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/execution/partition_info.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/common/enums/column_segment_info_scan_type.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
 struct PragmaStorageFunctionData : public TableFunctionData {
-	explicit PragmaStorageFunctionData(TableCatalogEntry &table_entry) : table_entry(table_entry) {
+	PragmaStorageFunctionData(TableCatalogEntry &table_entry, ColumnSegmentInfoScanOptions options)
+	    : table_entry(table_entry), options(options) {
 	}
 
 	TableCatalogEntry &table_entry;
-	ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL;
-	vector<ColumnSegmentInfo> column_segments_info;
+	ColumnSegmentInfoScanOptions options;
 };
 
-struct PragmaStorageOperatorData : public GlobalTableFunctionState {
-	PragmaStorageOperatorData() : offset(0) {
+struct PragmaStorageGlobalState : public GlobalTableFunctionState {
+	explicit PragmaStorageGlobalState(idx_t max_threads_p) : max_threads(max_threads_p) {
 	}
 
-	idx_t offset;
+	mutex lock;
+	idx_t max_threads;
+	ColumnSegmentInfoScanState scan_state;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
+};
+
+struct PragmaStorageLocalState : public LocalTableFunctionState {
+	//! Buffered column segment info for the row group this thread is currently emitting.
+	vector<ColumnSegmentInfo> buffer;
+	idx_t buffer_offset = 0;
+	//! Index of the row group currently being emitted; used as the batch index for partitioning.
+	idx_t batch_index = 0;
 };
 
 static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, TableFunctionBindInput &input,
@@ -79,8 +89,21 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("segment_info");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	ColumnSegmentInfoScanOptions options;
+	auto include_entry = input.named_parameters.find("include_segment_info");
+	if (include_entry != input.named_parameters.end()) {
+		options.include_segment_info = include_entry->second.GetValue<bool>();
+	}
+	auto loaded_only_entry = input.named_parameters.find("loaded_segments_only");
+	if (loaded_only_entry != input.named_parameters.end()) {
+		options.loaded_segments_only = loaded_only_entry->second.GetValue<bool>();
+	}
+
+	// segment_info is only emitted when the (expensive) per-segment info was actually collected.
+	if (options.include_segment_info) {
+		names.emplace_back("segment_info");
+		return_types.emplace_back(LogicalType::VARCHAR);
+	}
 
 	names.emplace_back("additional_block_ids");
 	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
@@ -90,18 +113,22 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-
-	auto scan_type_entry = input.named_parameters.find("scan_type");
-	if (scan_type_entry != input.named_parameters.end()) {
-		result->scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
-	}
-	result->column_segments_info = table_entry.GetColumnSegmentInfo(context, result->scan_type);
-	return std::move(result);
+	return make_uniq<PragmaStorageFunctionData>(table_entry, options);
 }
 
-unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<PragmaStorageOperatorData>();
+unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &context,
+                                                                 TableFunctionInitInput &input) {
+	auto &bind_data = input.bind_data->Cast<PragmaStorageFunctionData>();
+	auto max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	auto gstate = make_uniq<PragmaStorageGlobalState>(max_threads);
+	gstate->scan_state.options = bind_data.options;
+	bind_data.table_entry.InitializeColumnSegmentInfoScan(gstate->scan_state);
+	return std::move(gstate);
+}
+
+unique_ptr<LocalTableFunctionState> PragmaStorageInfoInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                               GlobalTableFunctionState *global_state) {
+	return make_uniq<PragmaStorageLocalState>();
 }
 
 static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
@@ -114,45 +141,57 @@ static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
 
 static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<PragmaStorageFunctionData>();
-	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
-	idx_t count = 0;
+	auto &gstate = data_p.global_state->Cast<PragmaStorageGlobalState>();
+	auto &lstate = data_p.local_state->Cast<PragmaStorageLocalState>();
 	auto &columns = bind_data.table_entry.GetColumns();
+	QueryContext query_context(context);
 
-	// row_group_id
-	auto &row_group_id = output.data[0];
-	// column_name
-	auto &column_name = output.data[1];
-	// column_id
-	auto &column_id = output.data[2];
-	// column_path
-	auto &column_path = output.data[3];
-	// segment_id
-	auto &segment_id = output.data[4];
-	// segment_type
-	auto &segment_type = output.data[5];
-	// start
-	auto &start = output.data[6];
-	// count
-	auto &count_col = output.data[7];
-	// compression
-	auto &compression = output.data[8];
-	// stats
-	auto &stats = output.data[9];
-	// has_updates
-	auto &has_updates = output.data[10];
-	// persistent
-	auto &persistent = output.data[11];
-	// block_id
-	auto &block_id = output.data[12];
-	// block_offset
-	auto &block_offset = output.data[13];
-	// segment_info
-	auto &segment_info = output.data[14];
-	// additional_block_ids
-	auto &additional_block_ids = output.data[15];
+	idx_t count = 0;
 
-	while (data.offset < bind_data.column_segments_info.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = bind_data.column_segments_info[data.offset++];
+	idx_t col_idx = 0;
+	auto &row_group_id = output.data[col_idx++];
+	auto &column_name = output.data[col_idx++];
+	auto &column_id = output.data[col_idx++];
+	auto &column_path = output.data[col_idx++];
+	auto &segment_id = output.data[col_idx++];
+	auto &segment_type = output.data[col_idx++];
+	auto &start = output.data[col_idx++];
+	auto &count_col = output.data[col_idx++];
+	auto &compression = output.data[col_idx++];
+	auto &stats = output.data[col_idx++];
+	auto &has_updates = output.data[col_idx++];
+	auto &persistent = output.data[col_idx++];
+	auto &block_id = output.data[col_idx++];
+	auto &block_offset = output.data[col_idx++];
+	optional_ptr<Vector> segment_info = bind_data.options.include_segment_info ? &output.data[col_idx++] : nullptr;
+	auto &additional_block_ids = output.data[col_idx++];
+
+	while (count < STANDARD_VECTOR_SIZE) {
+		if (lstate.buffer_offset >= lstate.buffer.size()) {
+			// drained the current buffer; pull the next row group under the global lock
+			lstate.buffer.clear();
+			lstate.buffer_offset = 0;
+			bool has_more;
+			{
+				lock_guard<mutex> guard(gstate.lock);
+				has_more = bind_data.table_entry.ScanColumnSegmentInfo(query_context, gstate.scan_state, lstate.buffer);
+			}
+			if (!has_more) {
+				break;
+			}
+			if (lstate.buffer.empty()) {
+				continue;
+			}
+		}
+
+		auto &entry = lstate.buffer[lstate.buffer_offset];
+		// keep each output chunk to a single row group so batch_index identifies its contents.
+		// merging is allowed when the next entry happens to belong to the same row group.
+		if (count > 0 && entry.row_group_index != lstate.batch_index) {
+			break;
+		}
+		lstate.buffer_offset++;
+		lstate.batch_index = entry.row_group_index;
 
 		row_group_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
 		auto &col = columns.GetColumn(PhysicalIndex(entry.column_id));
@@ -174,7 +213,9 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			block_id.Append(Value());
 			block_offset.Append(Value());
 		}
-		segment_info.Append(Value(entry.segment_info));
+		if (segment_info) {
+			segment_info->Append(Value(entry.segment_info));
+		}
 		if (entry.persistent) {
 			additional_block_ids.Append(ValueFromBlockIdList(entry.additional_blocks));
 		} else {
@@ -183,14 +224,21 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 
 		count++;
 	}
-	output.SetCardinality(count);
+}
+
+static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &context,
+                                                               TableFunctionGetPartitionInput &input) {
+	auto &lstate = input.local_state->Cast<PragmaStorageLocalState>();
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction func("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction, PragmaStorageInfoBind,
-	                   PragmaStorageInfoInit);
-	func.named_parameters["scan_type"] = LogicalType::VARCHAR;
-	set.AddFunction(func);
+	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
+	                           PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
+	storage_info.named_parameters["include_segment_info"] = LogicalType::BOOLEAN;
+	storage_info.named_parameters["loaded_segments_only"] = LogicalType::BOOLEAN;
+	set.AddFunction(std::move(storage_info));
 }
 
 } // namespace duckdb

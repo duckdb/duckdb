@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -18,18 +19,26 @@ class TypeExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::TYPE;
 
-	TypeExpression(string catalog, string schema, string type_name, vector<unique_ptr<ParsedExpression>> children);
-	TypeExpression(string type_name, vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
+	               vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
-	const string &GetTypeName() const {
+	const Identifier &GetTypeName() const {
 		return type_name;
 	}
-	const string &GetSchema() const {
+	const Identifier &GetSchema() const {
 		return schema;
 	}
-	const string &GetCatalog() const {
+	void SetSchema(Identifier new_schema) {
+		schema = std::move(new_schema);
+	}
+	const Identifier &GetCatalog() const {
 		return catalog;
+	}
+	void SetCatalog(Identifier new_catalog) {
+		catalog = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;
@@ -43,7 +52,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const TypeExpression &a, const TypeExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	void Serialize(Serializer &serializer) const override;
@@ -55,9 +64,9 @@ private:
 	TypeExpression();
 
 	//! Qualified name parts
-	string catalog;
-	string schema;
-	string type_name;
+	Identifier catalog;
+	Identifier schema;
+	Identifier type_name;
 
 	//! Children of the type expression (e.g. type parameters)
 	vector<unique_ptr<ParsedExpression>> children;

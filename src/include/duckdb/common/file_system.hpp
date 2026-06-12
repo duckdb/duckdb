@@ -39,6 +39,8 @@ class FileSystem;
 class Logger;
 class ClientContext;
 class QueryContext;
+class MemoryMappedFile;
+struct MMapOptions;
 class MultiFileList;
 
 enum class FileType {
@@ -69,6 +71,14 @@ struct FileMetadata {
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;
+};
+
+//! Measured network throughput for a (remote) file handle. Used to size prefetch coalescing gaps.
+struct NetworkThroughputEstimate {
+	//! Round-trip latency + request setup, in seconds
+	double latency_seconds = 0;
+	//! Single-stream throughput, in bytes per second
+	double bandwidth_bytes_per_s = 0;
 };
 
 struct FileHandle {
@@ -102,6 +112,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
+	//! Try to obtain a network throughput estimate (Local files return false).
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 	DUCKDB_API FileMetadata Stats();
@@ -145,12 +157,18 @@ public:
 public:
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
+	DUCKDB_API static FileSystem &GetLocal(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
 	                                           optional_ptr<FileOpener> opener = nullptr);
+
+	//! Open a memory-mapped view of [path]. Throws if not supported by this filesystem.
+	DUCKDB_API virtual unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                              const MMapOptions &options,
+	                                                              optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -294,12 +312,18 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
+	//! Try to obtain a measured network throughput estimate. Default: not supported (returns false).
+	//! Used for file systems
+	DUCKDB_API virtual bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
 
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
+
+	//! Whether this is a LocalFileSystem instance.
+	DUCKDB_API virtual bool IsLocalFileSystem() const;
 
 	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;

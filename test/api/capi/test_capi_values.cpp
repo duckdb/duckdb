@@ -343,6 +343,18 @@ TEST_CASE("Test DECIMAL value", "[capi]") {
 		REQUIRE(output.value.upper == input.value.upper);
 		duckdb_destroy_value(&value);
 	}
+	{
+		// invalid width/scale combinations return nullptr instead of throwing or returning a malformed value
+		duckdb::vector<std::pair<uint8_t, uint8_t>> invalid = {
+		    {0, 0},  // width below the minimum
+		    {39, 0}, // width above the maximum (MAX_WIDTH_DECIMAL == 38)
+		    {4, 5},  // scale greater than width
+		    {255, 255}};
+		for (auto &entry : invalid) {
+			duckdb_decimal input {entry.first, entry.second, {0, 0}};
+			REQUIRE(duckdb_create_decimal(input) == nullptr);
+		}
+	}
 }
 
 TEST_CASE("Test BIT value", "[capi]") {

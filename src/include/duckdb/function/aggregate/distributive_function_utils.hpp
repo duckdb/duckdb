@@ -41,7 +41,7 @@ template <class REDUCE_OP, class INIT_OP>
 struct EmptyValAggregate : public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
-		local.empty = false;
+		local.is_set = true;
 		using value_type = decltype(local.val);
 		local.val = REDUCE_OP::template Operation<value_type>(local.val, value_type(input));
 	}
@@ -56,19 +56,19 @@ struct EmptyValAggregate : public ClusteredStateCopy {
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = INIT_OP::template Value<decltype(state.val)>();
-		state.empty = true;
+		state.is_set = false;
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		using value_type = decltype(target.val);
 		target.val = REDUCE_OP::template Operation<value_type>(target.val, source.val);
-		target.empty = target.empty && source.empty;
+		target.is_set = target.is_set || source.is_set;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.empty) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 			return;
 		}

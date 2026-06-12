@@ -1,0 +1,22 @@
+# name: test/sql/pivot/pivot_query_text.test
+# description: PIVOT MultiStatement sub-statements should have their query field populated at construction
+# group: [pivot]
+
+statement ok
+CREATE TABLE t(c VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO t VALUES ('a', 1), ('b', 2);
+
+statement ok
+CREATE TABLE captured AS
+PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;
+
+query III
+SELECT v,
+       regexp_replace(a, '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS a,
+       regexp_replace(b, '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS b
+FROM captured ORDER BY v;
+----
+1	CREATE TABLE captured AS SELECT * FROM (SELECT c, v, current_query() AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v	NULL
+2	NULL	CREATE TABLE captured AS SELECT * FROM (SELECT c, v, current_query() AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v

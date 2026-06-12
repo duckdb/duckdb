@@ -100,8 +100,8 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	return result;
 }
 
-string QueryRelation::GetAlias() {
-	return alias;
+Identifier QueryRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 const vector<ColumnDefinition> &QueryRelation::Columns() {

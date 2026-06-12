@@ -29,7 +29,7 @@ unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, T
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto schema : schemas) {
 		schema.get().Scan(context, CatalogType::COLLATION_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.name); });
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.name.GetIdentifierName()); });
 	}
 	return std::move(result);
 }
@@ -41,7 +41,6 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 		return;
 	}
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
-	output.SetCardinality(next - data.offset);
 
 	// collname, VARCHAR
 	auto &collname = output.data[0];
@@ -49,7 +48,6 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 	for (idx_t i = data.offset; i < next; i++) {
 		collname.Append(Value(data.entries[i]));
 	}
-
 	data.offset = next;
 }
 

@@ -1,0 +1,66 @@
+# name: test/sql/aggregate/aggregate_state_export/product_export_state.test
+# description: Test product EXPORT_STATE
+# group: [aggregate_state_export]
+
+# empty input returns NULL
+query R
+SELECT product(v) EXPORT_STATE FROM (SELECT NULL::double AS v WHERE false) t;
+----
+NULL
+
+# all-null input returns NULL
+query R
+SELECT product(NULL::double) EXPORT_STATE;
+----
+NULL
+
+# basic product
+query R
+SELECT product(v) EXPORT_STATE FROM (VALUES (2.0), (3.0), (4.0)) t(v);
+----
+24.0
+
+# combine two states
+query R
+SELECT finalize(combine(product(2.0::double) EXPORT_STATE, product(3.0::double) EXPORT_STATE));
+----
+6.0
+
+# combine with NULL state (empty group)
+query R
+SELECT finalize(combine(
+    product(v) EXPORT_STATE,
+    product(v) EXPORT_STATE
+)) FROM (SELECT NULL::double AS v WHERE false) t;
+----
+NULL
+
+# combine_aggr across groups
+query R
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT product(v) EXPORT_STATE AS s FROM (VALUES (2.0), (3.0)) t(v)
+    UNION ALL
+    SELECT product(v) EXPORT_STATE AS s FROM (VALUES (4.0), (5.0)) t(v)
+) t;
+----
+120.0
+
+# combine_aggr with NULL state (empty group)
+query R
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT product(v) EXPORT_STATE AS s FROM (VALUES (2.0)) t(v)
+    UNION ALL
+    SELECT product(v) EXPORT_STATE AS s FROM (SELECT NULL::double AS v WHERE false) t
+) t;
+----
+2.0
+
+# combine_aggr all-NULL states
+query R
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT product(v) EXPORT_STATE AS s FROM (SELECT NULL::double AS v WHERE false) t
+    UNION ALL
+    SELECT product(v) EXPORT_STATE AS s FROM (SELECT NULL::double AS v WHERE false) t
+) t;
+----
+NULL

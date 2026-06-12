@@ -52,7 +52,7 @@ struct LeadFun {
 	static constexpr const char *Example = "LEAD(athlete, 1, NULL) OVER (PARTITION BY event ORDER BY points) AS victorious_over";
 	static constexpr const char *Categories = "";
 
-	static WindowFunctionSet GetFunctions();
+	static WindowFunction GetFunction();
 	static WindowFunction GetTypedFunction(const LogicalType &type, idx_t nargs);
 };
 
@@ -63,7 +63,7 @@ struct LagFun {
 	static constexpr const char *Example = "LAG(athlete, 1, NULL) OVER (PARTITION BY event ORDER BY points) AS defeated_by";
 	static constexpr const char *Categories = "";
 
-	static WindowFunctionSet GetFunctions();
+	static WindowFunction GetFunction();
 };
 
 struct FillFun {

@@ -60,13 +60,13 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		return;
 	}
 	auto &function = child->Cast<BoundFunctionExpression>();
-	if (function.function.GetName() != "row") {
+	if (function.Function().GetName() != "row") {
 		// not "ROW"
 		return;
 	}
 	// we found (a, b, ...) - we can extract all children of this function
 	// note that we don't always want to do this
-	if (types.size() == 1 && TypeIsUnnamedStruct(types[0]) && function.children.size() != types.size()) {
+	if (types.size() == 1 && TypeIsUnnamedStruct(types[0]) && function.GetChildrenMutable().size() != types.size()) {
 		// old case: we have an unnamed struct INSIDE the subquery as well
 		// i.e. (a, b) IN (SELECT (a, b) ...)
 		// unnesting the struct is guaranteed to throw an error - match the structs against each-other instead
@@ -83,7 +83,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		// For ordered comparisons, keep the struct intact
 		return;
 	}
-	for (auto &row_child : function.children) {
+	for (auto &row_child : function.GetChildrenMutable()) {
 		result.push_back(std::move(row_child));
 	}
 }
@@ -92,13 +92,14 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (inside_try) {
 		throw BinderException("TRY can not be used in combination with a scalar subquery");
 	}
-	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
+	if (expr.Subquery()->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, binder);
-		subquery_binder->can_contain_nulls = true;
+		subquery_binder->SetCanContainNulls(true);
+		subquery_binder->SetInsideSubquery();
 
 		subquery_binder->BeginSubqueryBind(binder, *this);
-		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
+		auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);
 		subquery_binder->FinishSubqueryBind();
 
 		// check the correlated columns of the subquery for correlated columns with depth > 1
@@ -111,29 +112,30 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 				binder.AddCorrelatedColumn(corr);
 			}
 		}
-		auto prior_subquery = std::move(expr.subquery);
-		expr.subquery = make_uniq<SelectStatement>();
-		expr.subquery->node =
+		auto prior_subquery = std::move(expr.SubqueryMutable());
+		expr.SubqueryMutable() = make_uniq<SelectStatement>();
+		expr.SubqueryMutable()->node =
 		    make_uniq<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node), std::move(prior_subquery));
 	}
 	// now bind the child node of the subquery
-	if (expr.child) {
+	if (expr.GetChild()) {
 		// first bind the children of the subquery, if any
-		auto error = Bind(expr.child, depth);
+		auto error = Bind(expr.GetChildMutable(), depth);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
 	}
-	auto &bound_subquery = expr.subquery->node->Cast<BoundSubqueryNode>();
+	auto &bound_subquery = expr.Subquery()->node->Cast<BoundSubqueryNode>();
 	vector<unique_ptr<Expression>> child_expressions;
-	if (expr.subquery_type != SubqueryType::EXISTS) {
+	if (expr.GetSubqueryType() != SubqueryType::EXISTS) {
 		idx_t expected_columns = 1;
 		bool has_unexpanded_struct = false;
-		if (expr.child) {
-			auto &child = BoundExpression::GetExpression(*expr.child);
+		if (expr.GetChild()) {
+			auto &child = BoundExpression::GetExpression(*expr.GetChildMutable());
 			// Check if child is an unexpanded struct before extraction
 			has_unexpanded_struct = TypeIsUnnamedStruct(child->GetReturnType());
-			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node.types, expr.comparison_type);
+			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node.types,
+			                        expr.GetComparisonType());
 			if (child_expressions.empty()) {
 				child_expressions.push_back(std::move(child));
 			}
@@ -145,7 +147,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// The child is a struct with N elements, and the subquery returns N columns
 			// This is allowed - the subquery columns will be matched against the struct during execution
-			expected_columns = bound_subquery.bound_node.types.size();
+			expected_columns = StructType::GetChildCount(child_expressions[0]->GetReturnType());
 		}
 		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
@@ -153,17 +155,17 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 	}
 	// both binding the child and binding the subquery was successful
-	D_ASSERT(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
+	D_ASSERT(expr.Subquery()->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
 	auto subquery_binder = std::move(bound_subquery.subquery_binder);
 	auto bound_node = std::move(bound_subquery.bound_node);
 	LogicalType return_type =
-	    expr.subquery_type == SubqueryType::SCALAR ? bound_node.types[0] : LogicalType(LogicalTypeId::BOOLEAN);
+	    expr.GetSubqueryType() == SubqueryType::SCALAR ? bound_node.types[0] : LogicalType(LogicalTypeId::BOOLEAN);
 	if (return_type.id() == LogicalTypeId::UNKNOWN) {
 		return_type = LogicalType::SQLNULL;
 	}
 
 	auto result = make_uniq<BoundSubqueryExpression>(return_type);
-	if (expr.subquery_type == SubqueryType::ANY) {
+	if (expr.GetSubqueryType() == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
 		// Special case: if we have a single struct child and multiple subquery types,
@@ -171,11 +173,11 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// Keep the struct as-is for proper lexicographic row comparison
-			result->children.push_back(std::move(child_expressions[0]));
+			result->GetChildrenMutable().push_back(std::move(child_expressions[0]));
 			// Store all the subquery types - they will be used to construct the RHS struct during planning
 			for (auto &subquery_type : bound_node.types) {
-				result->child_types.push_back(subquery_type);
-				result->child_targets.push_back(subquery_type);
+				result->ChildTypesMutable().push_back(subquery_type);
+				result->ChildTargetsMutable().push_back(subquery_type);
 			}
 		} else {
 			// Standard case: either no struct or struct was extracted into separate expressions
@@ -191,16 +193,16 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 					    child_type.ToString(), subquery_type);
 				}
 				child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
-				result->child_types.push_back(subquery_type);
-				result->child_targets.push_back(compare_type);
-				result->children.push_back(std::move(child));
+				result->ChildTypesMutable().push_back(subquery_type);
+				result->ChildTargetsMutable().push_back(compare_type);
+				result->GetChildrenMutable().push_back(std::move(child));
 			}
 		}
 	}
-	result->binder = std::move(subquery_binder);
-	result->subquery = std::move(bound_node);
-	result->subquery_type = expr.subquery_type;
-	result->comparison_type = expr.comparison_type;
+	result->GetBinderMutable() = std::move(subquery_binder);
+	result->SubqueryMutable() = std::move(bound_node);
+	result->SubqueryTypeMutable() = expr.GetSubqueryType();
+	result->ComparisonTypeMutable() = expr.GetComparisonType();
 
 	return BindResult(std::move(result));
 }

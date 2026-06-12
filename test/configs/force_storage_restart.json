@@ -35,7 +35,14 @@
         "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test",
+        "test/sql/parallelism/async_task_schedule_pool.test"
       ]
     },
     {
@@ -76,6 +83,14 @@
       "paths": [
         "test/sql/storage/total_string_length_repeated_insert.test",
         "test/sql/storage/extended_string_stats.test"
+      ]
+    },
+    {
+      "reason": "Test checks which columns are loaded",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
       ]
     },
     {

@@ -63,7 +63,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, count_t(count));
+			ConstantVector::SetNull(result, true);
 			return true;
 		}
 

@@ -5,24 +5,22 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto comment_on_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(2));
-	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
-	auto comment_value = transformer.Transform<Value>(list_pr.Child<ListParseResult>(5));
-
+                                                                          const CatalogType &comment_on_type,
+                                                                          const vector<string> &dotted_identifier,
+                                                                          const Value &comment_value) {
 	auto result = make_uniq<AlterStatement>();
 	unique_ptr<AlterInfo> info;
 
-	string column_name;
+	Identifier column_name;
 	if (comment_on_type == CatalogType::INVALID) {
 		// Column type returned
-		column_name = dotted_identifier.back();
-		dotted_identifier.pop_back();
-		if (dotted_identifier.empty()) {
-			throw ParserException("Invalid column reference: '%s'", column_name);
+		auto identifier = dotted_identifier;
+		column_name = Identifier(identifier.back());
+		identifier.pop_back();
+		if (identifier.empty()) {
+			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
 		}
-		auto qualified_name = StringToQualifiedName(dotted_identifier);
+		auto qualified_name = StringToQualifiedName(identifier);
 		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
 		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
@@ -41,19 +39,58 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 	return std::move(result);
 }
 
-CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+CatalogType PEGTransformerFactory::TransformCommentTable(PEGTransformer &transformer) {
+	return CatalogType::TABLE_ENTRY;
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result) {
-	// CommentValue <- 'NULL'i / StringLiteral
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+CatalogType PEGTransformerFactory::TransformCommentSequence(PEGTransformer &transformer) {
+	return CatalogType::SEQUENCE_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentFunction(PEGTransformer &transformer) {
+	return CatalogType::MACRO_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentMacroTable(PEGTransformer &transformer) {
+	return CatalogType::TABLE_MACRO_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentMacro(PEGTransformer &transformer) {
+	return CatalogType::MACRO_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentView(PEGTransformer &transformer) {
+	return CatalogType::VIEW_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentDatabase(PEGTransformer &transformer) {
+	return CatalogType::DATABASE_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentIndex(PEGTransformer &transformer) {
+	return CatalogType::INDEX_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentSchema(PEGTransformer &transformer) {
+	return CatalogType::SCHEMA_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentType(PEGTransformer &transformer) {
+	return CatalogType::TYPE_ENTRY;
+}
+
+CatalogType PEGTransformerFactory::TransformCommentColumn(PEGTransformer &transformer) {
+	return CatalogType::INVALID;
+}
+
+Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &choice_result) {
+	// CommentValue <- NullLiteral / StringLiteral
+	auto &list_pr = choice_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
 		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
 	}
-	return Value();
+	return transformer.Transform<Value>(choice_pr.GetResult());
 }
 
 } // namespace duckdb

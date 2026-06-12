@@ -3,6 +3,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -85,7 +86,7 @@ duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types_p
 		duckdb::child_list_t<duckdb::LogicalType> members;
 
 		for (idx_t i = 0; i < member_count; i++) {
-			members.push_back(make_pair(member_names[i], *member_types[i]));
+			members.emplace_back(make_pair(member_names[i], *member_types[i]));
 		}
 		duckdb::LogicalType *mtype = new duckdb::LogicalType(duckdb::LogicalType::UNION(members));
 		return reinterpret_cast<duckdb_logical_type>(mtype);
@@ -110,7 +111,7 @@ duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_
 		duckdb::child_list_t<duckdb::LogicalType> members;
 
 		for (idx_t i = 0; i < member_count; i++) {
-			members.push_back(make_pair(member_names[i], *member_types[i]));
+			members.emplace_back(make_pair(member_names[i], *member_types[i]));
 		}
 		duckdb::LogicalType *mtype = new duckdb::LogicalType(duckdb::LogicalType::STRUCT(members));
 		return reinterpret_cast<duckdb_logical_type>(mtype);
@@ -155,7 +156,15 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 }
 
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
-	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
+	if (!duckdb::Decimal::IsValidWidthScale(width, scale)) {
+		return nullptr;
+	}
+	try {
+		return reinterpret_cast<duckdb_logical_type>(
+		    new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale)));
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 duckdb_type duckdb_get_type_id(duckdb_logical_type type) {

@@ -302,6 +302,24 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	return success;
 }
 
+static bool TryOneFormat(const StrpTimeFormat &fmt, LogicalTypeId type_id, const string_t &input, Vector &result,
+                         idx_t i, string &error_message) {
+	if (type_id == LogicalTypeId::DATE) {
+		date_t val;
+		if (!TryParseDate::Operation<date_t>(fmt, input, val, error_message)) {
+			return false;
+		}
+		FlatVector::GetDataMutable<date_t>(result)[i] = val;
+	} else {
+		timestamp_t val;
+		if (!TryParseTimeStamp::Operation<timestamp_t>(fmt, input, val, error_message)) {
+			return false;
+		}
+		FlatVector::GetDataMutable<timestamp_t>(result)[i] = val;
+	}
+	return true;
+}
+
 template <class OP, class T>
 static bool TransformStringWithFormat(const Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
                                       Vector &result, JSONTransformOptions &options) {
@@ -334,22 +352,47 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 		success = false;
 	}
 
-	const auto &result_type = result.GetType().id();
-	auto &format = options.date_format_map->GetFormat(result_type);
+	const auto result_type_id = result.GetType().id();
+	D_ASSERT(result_type_id == LogicalTypeId::DATE || result_type_id == LogicalTypeId::TIMESTAMP);
+	const auto &formats = options.date_format_map->GetFormats(result_type_id);
+	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &source_validity = FlatVector::Validity(string_vector);
+	auto &target_validity = FlatVector::ValidityMutable(result);
 
-	switch (result_type) {
-	case LogicalTypeId::DATE:
-		if (!TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options)) {
-			success = false;
+	// Probe first non-null value to find the most-specific matching format for this vector
+	idx_t matched_idx = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < count && matched_idx == DConstants::INVALID_INDEX; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			continue;
 		}
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options)) {
-			success = false;
+		string error_message;
+		for (idx_t j = formats.size(); j > 0; j--) {
+			if (TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message)) {
+				matched_idx = j - 1;
+				break;
+			}
 		}
-		break;
-	default:
-		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
+	}
+
+	const idx_t parse_limit = (matched_idx != DConstants::INVALID_INDEX) ? matched_idx + 1 : formats.size();
+	for (idx_t i = 0; i < count; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			target_validity.SetInvalid(i);
+			continue;
+		}
+		bool parsed = false;
+		string error_message;
+		// Reverse iter formats, beginning at matched_idx until one parses
+		for (idx_t j = parse_limit; j > 0 && !parsed; j--) {
+			parsed = TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message);
+		}
+		if (!parsed) {
+			target_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.object_index = i;
+				success = false;
+			}
+		}
 	}
 	return success;
 }
@@ -515,7 +558,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -796,7 +839,7 @@ static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &
 	auto fields = UnionType::CopyMemberTypes(type);
 	vector<string> names;
 	for (const auto &field : fields) {
-		names.push_back(field.first);
+		names.emplace_back(field.first);
 	}
 
 	bool success = true;
@@ -919,7 +962,6 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			throw InternalException("Unimplemented physical type for decimal");
 		}
 	}
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:

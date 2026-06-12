@@ -11,14 +11,15 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateCollationInfo : public CreateInfo {
-	DUCKDB_API CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p,
+	DUCKDB_API CreateCollationInfo(Identifier name_p, ScalarFunction function_p, bool combinable_p,
 	                               bool not_required_for_equality_p);
 
 	//! The name of the collation
-	string name;
+	Identifier name;
 	//! The collation function to push in case collation is required
 	ScalarFunction function;
 	//! Whether or not the collation can be combined with other collations.

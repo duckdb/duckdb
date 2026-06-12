@@ -424,11 +424,6 @@ struct MinMaxFixedValueOrNull {
 // MinMaxN Operation (common for both ArgMinMaxN and MinMaxN)
 //------------------------------------------------------------------------------
 struct MinMaxNOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		new (&state) STATE();
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
 		if (!source.is_initialized) {

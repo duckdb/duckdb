@@ -1,8 +1,8 @@
-#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
-		auto &children = bound_function.children;
+		auto &children = bound_function.GetChildren();
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
 			if (child.IsFoldable()) {
@@ -106,7 +106,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
 			Vector output_intermediate(result.GetType());
-			expr.function.GetFunctionCallback()(input_chunk, state, output_intermediate);
+			expr.Function().GetFunctionCallback()(input_chunk, state, output_intermediate);
 			VectorOperations::Copy(output_intermediate, output_dictionary->data, count, 0, offset);
 		}
 	}
@@ -130,20 +130,22 @@ void ExecuteFunctionState::ResetDictionaryStates() {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		result->AddChild(*child);
 	}
 
 	result->Finalize();
-	if (expr.function.HasInitStateCallback()) {
-		result->local_state = expr.function.GetInitStateCallback()(*result, expr, expr.bind_info.get());
+	if (expr.Function().HasInitStateCallback()) {
+		result->local_state = expr.Function().GetInitStateCallback()(*result, expr, expr.BindInfo().get());
 	}
 	return std::move(result);
 }
 
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
-#ifdef DEBUG
-	if (args.data.empty() || expr.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_FUNCTIONS) {
+		return;
+	}
+	if (args.data.empty() || expr.Function().GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return;
 	}
 
@@ -165,53 +167,31 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	// Default is that if any of the arguments are NULL, the result is also NULL
 	auto result_validity = result.Validity();
 	for (idx_t i = 0; i < count; i++) {
-		if (!combined_mask.RowIsValid(i)) {
-			D_ASSERT(!result_validity.IsValid(i));
+		if (!combined_mask.RowIsValid(i) && result_validity.IsValid(i)) {
+			throw InternalException(
+			    "VerifyNullHandling failed for scalar function \"%s\": row %d has a NULL argument but the result is "
+			    "not NULL - functions with default NULL handling should return NULL for any NULL input",
+			    expr.Function().GetName(), i);
 		}
 	}
-#endif
 }
 
-static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
-                                  Vector &result) {
-	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
-		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.GetName(),
-		                            expr.GetReturnType().ToString());
-	}
-	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
-		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
-		                            "execution requires a scalar callback to produce NULL results",
-		                            expr.function.GetName());
-	}
+static idx_t SelectBooleanResult(Vector &result, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
+	return UnaryExecutor::Select<bool>(
+	    result, sel, count, [](bool value) { return value; }, true_sel, false_sel);
+}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto count = args.size();
-	auto result_data = FlatVector::GetDataMutable<bool>(result);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = false;
-	}
+static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+                                          Vector &result) {
+	D_ASSERT(args.size() == 1);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::Validity(result).SetAllValid(1);
 
-	auto &result_validity = FlatVector::ValidityMutable(result);
-	result_validity.SetAllValid(count);
-	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	for (const auto &arg : args.data) {
-		auto entries = arg.Validity();
-		if (!entries.CanHaveNull()) {
-			continue;
-		}
-		for (idx_t i = 0; i < count; i++) {
-			if (!entries.IsValid(i)) {
-				result_validity.SetInvalid(i);
-			}
-		}
-	}
-
-	SelectionVector true_sel(count);
-	auto true_count =
-	    expr.function.GetSelectCallback()(args, state, FlatVector::IncrementalSelectionVector(), &true_sel, nullptr);
-	for (idx_t i = 0; i < true_count; i++) {
-		result_data[true_sel.get_index(i)] = true;
-	}
+	SelectionVector true_sel(1);
+	SelectionVector false_sel(1);
+	auto true_count = expr.Function().GetSelectCallback()(args, state, nullptr, &true_sel, &false_sel);
+	*ConstantVector::GetData<bool>(result) = true_count == 1;
 }
 
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
@@ -220,15 +200,15 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto &arguments = state->intermediate_chunk;
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
-	if (expr.function.GetStability() == FunctionStability::VOLATILE) {
+	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
 		// we cannot optimize away constant vectors for volatile functions
 		all_constant = false;
 	}
-	auto default_null_handling = expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	auto default_null_handling = expr.Function().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	if (!state->types.empty()) {
-		for (idx_t i = 0; i < expr.children.size(); i++) {
-			D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
-			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
+			D_ASSERT(state->types[i] == expr.GetChildren()[i]->GetReturnType());
+			Execute(*expr.GetChildren()[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				all_constant = false;
 			} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
@@ -242,21 +222,20 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		// if all arguments are constant temporarily set the child cardinality to 1
 		arguments.SetChildCardinality(1ULL);
 	} else {
-		arguments.SetCardinality(count);
+		arguments.SetChildCardinality(count);
 	}
 	arguments.Verify(context);
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
+	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
-		if (expr.function.HasFunctionCallback()) {
-			expr.function.GetFunctionCallback()(arguments, *state, result);
-		} else if (expr.function.HasSelectCallback()) {
-			ExecuteSelectFunction(expr, arguments, *state, result);
+		if (expr.Function().HasFunctionCallback()) {
+			expr.Function().GetFunctionCallback()(arguments, *state, result);
+		} else if (all_constant && expr.Function().HasSelectCallback()) {
+			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		} else {
-			throw InternalException("Scalar function %s has neither an execution nor a select callback",
-			                        expr.function.GetName());
+			throw InternalException("Scalar function %s has no execution callback", expr.Function().GetName());
 		}
 	}
 	if (all_constant) {
@@ -266,11 +245,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 		arguments.SetChildCardinality(count);
 		// ensure the result type is constant
-		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
-		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten();
-		}
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.FlattenAndSetConstant();
 	}
 	FlatVector::SetSize(result, count_t(count));
 
@@ -281,19 +256,59 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
-	if (!expr.function.HasSelectCallback()) {
+	if (!expr.Function().HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-	// FIXME: push constant handling in here similar to Execute
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
-	for (idx_t i = 0; i < expr.children.size(); i++) {
-		D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
-		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+	bool all_constant = true;
+	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
+		all_constant = false;
 	}
-	arguments.SetCardinality(count);
+	auto default_null_handling = expr.Function().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
+		D_ASSERT(state->types[i] == expr.GetChildren()[i]->GetReturnType());
+		Execute(*expr.GetChildren()[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+		if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			all_constant = false;
+		} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
+			Vector result(LogicalType::BOOLEAN);
+			ConstantVector::SetNull(result, count_t(1));
+			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+		}
+	}
+	if (all_constant) {
+		// if all arguments are constant we only need to run the function on one value
+		arguments.SetChildCardinality(1ULL);
+	} else {
+		arguments.SetChildCardinality(count);
+	}
 	arguments.Verify(context);
-	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
+	if (all_constant) {
+		Vector result(LogicalType::BOOLEAN);
+		if (expr.Function().HasFunctionCallback()) {
+			expr.Function().GetFunctionCallback()(arguments, *state, result);
+			result.FlattenAndSetConstant();
+		} else {
+			ExecuteConstantSelectFunction(expr, arguments, *state, result);
+		}
+		// restore the input cardinality
+		for (auto &arg : arguments.data) {
+			arg.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		arguments.SetChildCardinality(count);
+		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+	}
+	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
+	if (expr.Function().HasFunctionCallback()) {
+		Vector result(LogicalType::BOOLEAN);
+		auto dictionary_executed =
+		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+		if (dictionary_executed) {
+			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+		}
+	}
+	return expr.Function().GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }
 
 } // namespace duckdb

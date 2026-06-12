@@ -132,7 +132,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto &patterns = args.data[1];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpMatchesBindData>();
 
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
@@ -187,7 +187,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpReplaceBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpReplaceBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -249,7 +249,7 @@ bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpExtractBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpExtractBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -385,8 +385,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(context, bound_function.GetName(), *arguments[2], constant_string, options,
-			                                constant_pattern, dummy_names, struct_children);
+			regexp_util::ParseGroupNameList(context, bound_function.GetName().GetIdentifierName(), *arguments[2],
+			                                constant_string, options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {
 			int32_t group_idx = group.GetValue<int32_t>();

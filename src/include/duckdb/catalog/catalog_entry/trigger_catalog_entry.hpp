@@ -23,9 +23,13 @@ public:
 	//! The event that fires the trigger (INSERT/DELETE/UPDATE)
 	TriggerEventType event_type;
 	//! Columns for UPDATE OF
-	vector<string> columns;
+	vector<Identifier> columns;
 	//! Whether this fires FOR EACH ROW or FOR EACH STATEMENT
 	TriggerForEach for_each;
+	//! Alias for the NEW TABLE transition table (empty if not specified)
+	Identifier referencing_new_table;
+	//! Alias for the OLD TABLE transition table (empty if not specified)
+	Identifier referencing_old_table;
 	//! The trigger action (INSERT/UPDATE/DELETE as QueryNode)
 	unique_ptr<QueryNode> trigger_action;
 

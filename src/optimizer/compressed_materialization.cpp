@@ -324,7 +324,7 @@ CompressedMaterialization::CompressedMaterialization(Optimizer &optimizer_p, Log
 void CompressedMaterialization::GetReferencedBindings(const Expression &root_expr,
                                                       column_binding_set_t &referenced_bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &col_ref) { referenced_bindings.insert(col_ref.binding); });
+	    root_expr, [&](const BoundColumnRefExpression &col_ref) { referenced_bindings.insert(col_ref.Binding()); });
 }
 
 void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding,
@@ -573,6 +573,9 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(unique_ptr<Expression> input,
                                                                                 const BaseStatistics &stats) {
 	const auto &type = input->GetReturnType();
+	if (type.IsAggregateState()) {
+		return nullptr;
+	}
 	if (type != stats.GetType()) { // LCOV_EXCL_START
 		return nullptr;
 	} // LCOV_EXCL_STOP

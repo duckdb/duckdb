@@ -79,7 +79,7 @@ BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	// Should we serialize as old extension geometry type for backwards compatibility?
 	// (in that case, write unknown string stats)
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		auto string_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
 		StringStats::Serialize(string_stats, serializer);
 		return;
@@ -273,12 +273,12 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	const auto &func = expr->Cast<BoundFunctionExpression>();
-	if (func.children.size() != 2) {
+	if (func.GetChildren().size() != 2) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
-	    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
+	if (func.GetChildren()[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
+	    func.GetChildren()[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
@@ -287,7 +287,7 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto found = false;
 	for (const auto &name : geometry_predicates) {
-		if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
+		if (func.Function().GetName() == name) {
 			found = true;
 			break;
 		}
@@ -297,8 +297,8 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	const auto lhs_kind = func.children[0]->GetExpressionType();
-	const auto rhs_kind = func.children[1]->GetExpressionType();
+	const auto lhs_kind = func.GetChildren()[0]->GetExpressionType();
+	const auto rhs_kind = func.GetChildren()[1]->GetExpressionType();
 	const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT && rhs_kind == ExpressionType::BOUND_REF;
 	const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT && lhs_kind == ExpressionType::BOUND_REF;
 
@@ -315,10 +315,10 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 	}
 
 	if (lhs_is_const) {
-		return CheckIntersectionFilter(data, func.children[0]->Cast<BoundConstantExpression>().value);
+		return CheckIntersectionFilter(data, func.GetChildren()[0]->Cast<BoundConstantExpression>().GetValue());
 	}
 	if (rhs_is_const) {
-		return CheckIntersectionFilter(data, func.children[1]->Cast<BoundConstantExpression>().value);
+		return CheckIntersectionFilter(data, func.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue());
 	}
 	// Else, no constant argument
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;

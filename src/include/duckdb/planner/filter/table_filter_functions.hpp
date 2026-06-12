@@ -76,7 +76,7 @@ unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterDat
 //! Bind function that prevents user access to internal tablefilter functions
 struct TableFilterFunctions {
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
-	static bool IsTableFilterFunction(const string &name);
+	static bool IsTableFilterFunction(const Identifier &name);
 	static bool IsTableFilterFunction(const BoundScalarFunction &function) {
 		return IsTableFilterFunction(function.GetName());
 	}
@@ -93,6 +93,8 @@ public:
 
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
+	void Merge(const BloomFilter &other);
+	void Reset();
 
 	bool IsInitialized() const {
 		return initialized;

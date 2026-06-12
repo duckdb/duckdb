@@ -105,4 +105,13 @@ digraph G {
 	ss << result;
 }
 
+string GRAPHVIZTreeRenderer::RenderProfilerDisabled() {
+	return R"(
+				digraph G {
+				    node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
+				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
+				}
+			)";
+}
+
 } // namespace duckdb

@@ -25,7 +25,7 @@ public:
 		this->extension_name = info.extension_name;
 	}
 
-	string alias_of;
+	Identifier alias_of;
 	vector<FunctionDescription> descriptions;
 };
 } // namespace duckdb

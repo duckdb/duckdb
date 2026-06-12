@@ -35,7 +35,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 				for (idx_t i = 0; i < op->expressions.size(); i++) {
 					if (op->expressions[i]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-						auto column_id = column_ids[col_ref.binding.column_index].GetPrimaryIndex();
+						auto column_id = column_ids[col_ref.Binding().column_index].GetPrimaryIndex();
 						if (new_column_types.find(column_id) != new_column_types.end()) {
 							// Only one reference per column is accepted
 							do_pushdown = false;
@@ -61,7 +61,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
-				string cur_alias = node->expressions[i]->GetAlias();
+				auto cur_alias = node->expressions[i]->GetAlias();
 				node->expressions[i] =
 				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
 				node->expressions[i]->SetAlias(cur_alias);

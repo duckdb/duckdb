@@ -20,26 +20,26 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
                                                         vector<unique_ptr<Expression>> &groups,
                                                         optional_ptr<vector<GroupingSet>> grouping_sets,
                                                         bool &changes_made) {
-	if (!aggr.order_bys) {
+	if (!aggr.GetOrderBys()) {
 		// no ORDER BYs defined
 		return nullptr;
 	}
-	if (aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+	if (aggr.Function().GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
 		// not an order dependent aggregate but we have an ORDER BY clause - remove it
-		aggr.order_bys.reset();
+		aggr.GetOrderBysMutable().reset();
 		changes_made = true;
 		return nullptr;
 	}
 
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
-	if (aggr.order_bys->Simplify(groups, grouping_sets)) {
-		aggr.order_bys.reset();
+	if (aggr.GetOrderBysMutable()->Simplify(groups, grouping_sets)) {
+		aggr.GetOrderBysMutable().reset();
 		changes_made = true;
 		return nullptr;
 	}
 
 	//	Rewrite first/last/arbitrary/any_value to use arg_xxx[_null] and create_sort_key
-	const auto &aggr_name = aggr.function.GetName();
+	const auto &aggr_name = aggr.Function().GetName();
 	string arg_xxx_name;
 	if (aggr_name == "last") {
 		arg_xxx_name = "arg_max_null";
@@ -53,25 +53,26 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 
 	FunctionBinder binder(context);
 	vector<unique_ptr<Expression>> sort_children;
-	for (auto &order : aggr.order_bys->orders) {
+	for (auto &order : aggr.GetOrderBysMutable()->orders) {
 		sort_children.emplace_back(std::move(order.expression));
 		sort_children.emplace_back(make_uniq<BoundConstantExpression>(Value(order.GetOrderModifier())));
 	}
-	aggr.order_bys.reset();
+	aggr.GetOrderBysMutable().reset();
 
 	ErrorData error;
-	auto sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(sort_children), error);
+	auto sort_key =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "create_sort_key", std::move(sort_children), error);
 	if (!sort_key) {
 		error.Throw();
 	}
 
-	auto &children = aggr.children;
+	auto &children = aggr.GetChildrenMutable();
 	children.emplace_back(std::move(sort_key));
 
 	//  Look up the arg_xxx_name function in the catalog
 	QueryErrorContext error_context;
-	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, arg_xxx_name,
-	                                                              error_context);
+	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(arg_xxx_name), error_context);
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	// bind the aggregate
@@ -85,7 +86,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	}
 	// found a matching function!
 	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
-	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.filter),
+	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.GetFilterMutable()),
 	                                    aggr.IsDistinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }
 
@@ -95,6 +96,10 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 
 	// only apply to LogicalAggregate nodes
 	if (op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return nullptr;
+	}
+	// don't rewrite state-export aggregates - the rewrite would lose the STATE_EXPORT mode
+	if (aggr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
 		return nullptr;
 	}
 

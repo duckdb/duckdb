@@ -146,6 +146,9 @@ private:
 		unique_ptr<Vector> dictionary_addresses;
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
+		//! Cumulative count of dict slots added to found_entry under the current id; the
+		//! unique-entries walk is skipped once it reaches dict_size.
+		idx_t resolved_count = 0;
 		//! For the clustered-aggregate fast path: track whether every state pointer added to this
 		//! dictionary shares the same high (64 - SLOT_GID_BITS) bits. The clustered path stores only
 		//! the low SLOT_GID_BITS of each pointer, so if any two pointers differ in their high bits
@@ -231,8 +234,10 @@ private:
 	//! Reinserts tuples (triggered by Resize)
 	void ReinsertTuples(PartitionedTupleData &data);
 
-	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid = true);
-	bool UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid);
+	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, idx_t count,
+	                      bool ht_offsets_valid = true);
+	bool UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter, idx_t count,
+	                               bool ht_offsets_valid);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,

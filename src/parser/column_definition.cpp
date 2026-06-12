@@ -7,11 +7,11 @@
 
 namespace duckdb {
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p)
     : name(std::move(name_p)), type(std::move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
                                    TableColumnType category)
     : name(std::move(name_p)), type(std::move(type_p)), category(category), expression(std::move(expression)) {
 }
@@ -64,10 +64,10 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 	this->type = type;
 }
 
-const string &ColumnDefinition::Name() const {
+const Identifier &ColumnDefinition::Name() const {
 	return name;
 }
-void ColumnDefinition::SetName(const string &name) {
+void ColumnDefinition::SetName(const Identifier &name) {
 	this->name = name;
 }
 
@@ -156,7 +156,7 @@ string ColumnDefinition::ToSQLString() const {
 			auto &expr = generated_expression.get();
 			D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
 			auto &cast_expr = expr.Cast<CastExpression>();
-			generated_expression = *cast_expr.child;
+			generated_expression = cast_expr.Child();
 		}
 		result += " GENERATED ALWAYS AS(" + generated_expression.get().ToString() + ")";
 	} else if (HasDefaultValue()) {
@@ -185,7 +185,7 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
-		dependencies.push_back(name);
+		dependencies.emplace_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		if (expr.GetExpressionType() == ExpressionType::LAMBDA) {
@@ -200,7 +200,7 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 	InnerGetListOfDependencies(*expression, dependencies);
 }
 
-string ColumnDefinition::GetName() const {
+Identifier ColumnDefinition::GetName() const {
 	return name;
 }
 

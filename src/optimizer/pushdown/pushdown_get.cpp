@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -78,11 +79,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// IN with enough values can benefit from a hash join is handled by InClauseRewriter
+		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown.
+		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
+			if (expr.CanThrow()) {
+				continue;
+			}
 			auto &in_expr = expr.Cast<BoundOperatorExpression>();
-			if (!in_expr.children.empty() &&
-			    in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			if (!in_expr.GetChildren().empty() &&
+			    in_expr.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    in_expr.GetChildren().size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
 				continue;
 			}
 		}

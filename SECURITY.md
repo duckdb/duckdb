@@ -15,7 +15,7 @@ Our team will investigate and get back to you. There are three major outcomes of
 1. The issue is a bug, but not really security related. For example, triggering an (internal) exception is generally not considered a security issue.
 1. The issue is neither.
 
-If the issue is determined to be an actual security issue, we will request a CVE. For the second case, our [general support policy](https://duckdblabs.com/community_support_policy/) will be followed.
+If the issue is determined to be an actual security issue, we will request a CVE. For the second case, our [general support policy](https://ducklabs.com/community_support_policy/) will be followed.
 
 
 ## Public Disclosure

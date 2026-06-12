@@ -31,7 +31,7 @@ constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
-                                             vector<string> schema_path)
+                                             vector<Identifier> schema_path)
     : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 }
 
@@ -45,7 +45,7 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	duckdb_parquet::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.GetCodec();
-	column_chunk.meta_data.path_in_schema = schema_path;
+	column_chunk.meta_data.path_in_schema = IdentifiersToStrings(schema_path);
 	column_chunk.meta_data.num_values = 0;
 	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
 	row_group.columns.push_back(std::move(column_chunk));
@@ -287,6 +287,29 @@ void PrimitiveColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, id
 
 void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &state,
                                                  duckdb_parquet::ColumnChunk &column_chunk) {
+	auto add_encoding = [&](duckdb_parquet::Encoding::type encoding) {
+		for (const auto &existing_encoding : column_chunk.meta_data.encodings) {
+			if (existing_encoding == encoding) {
+				return;
+			}
+		}
+		column_chunk.meta_data.encodings.push_back(encoding);
+	};
+
+	for (const auto &write_info : state.write_info) {
+		// only care about data page encodings, data_page_header.encoding is meaningless for dict
+		switch (write_info.page_header.type) {
+		case PageType::DATA_PAGE:
+			add_encoding(write_info.page_header.data_page_header.encoding);
+			break;
+		case PageType::DATA_PAGE_V2:
+			add_encoding(write_info.page_header.data_page_header_v2.encoding);
+			break;
+		default:
+			break;
+		}
+	}
+
 	if (!state.stats_state) {
 		return;
 	}
@@ -350,15 +373,6 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 			writer.GetGeoParquetData().AddGeoParquetStats(writer.GetContext(), column_schema.name, column_schema.type,
 			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
-	}
-
-	for (const auto &write_info : state.write_info) {
-		// only care about data page encodings, data_page_header.encoding is meaningless for dict
-		if (write_info.page_header.type != PageType::DATA_PAGE &&
-		    write_info.page_header.type != PageType::DATA_PAGE_V2) {
-			continue;
-		}
-		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
 	}
 }
 
