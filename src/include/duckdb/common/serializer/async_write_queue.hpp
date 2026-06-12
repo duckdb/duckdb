@@ -47,6 +47,7 @@ public:
 
 //! Shared async write scheduler for targets that register owned payloads with pre-assigned logical offsets.
 //! Callers are responsible for assigning offsets and externally serializing RegisterWrite calls.
+//! Close() must be called before destroying the queue unless the caller has already drained it explicitly.
 class AsyncWriteQueue {
 	friend class AsyncWriteQueueTask;
 	friend class AsyncWriteQueueDrainTaskGuard;
@@ -111,6 +112,8 @@ public:
 	DUCKDB_API void ApplyBackpressure();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	DUCKDB_API void WaitAll(BatchDrainMode batch_drain_mode = BatchDrainMode::PRESERVE_BATCH);
+	//! Drain all writes, close any open registration batch, and release the TemporaryMemoryState reservation.
+	DUCKDB_API void Close();
 	//! Reset the next expected offset after all registered writes have drained.
 	DUCKDB_API void ResetNextOffset(idx_t offset);
 	//! Release the queue's TemporaryMemoryState reservation.
@@ -166,6 +169,8 @@ private:
 	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
 	//! Validate a new registration against the contiguous offset contract.
 	idx_t ValidateRegistrationOffset(idx_t offset, idx_t write_size) const;
+	//! Throw if a mutating API is used after Close().
+	void VerifyOpen() const;
 	//! Validate a pending write before coalescing it with its predecessor.
 	void VerifyContiguousWrite(const PendingWrite &write, idx_t expected_offset) const;
 	//! Return offset + write_size, throwing if it overflows idx_t.
@@ -206,6 +211,8 @@ private:
 	idx_t pending_drain_tasks = 0;
 	//! Next logical offset expected by RegisterWrite. Enforces v1 contiguous-registration semantics.
 	idx_t next_registration_offset = 0;
+	//! Set after Close() has drained the queue. Further write registration is rejected.
+	bool closed = false;
 
 	//! Async task executor. If absent, writes are performed synchronously on registration.
 	//! Keep this after task-accounting fields so queued task destructors can still release slots.

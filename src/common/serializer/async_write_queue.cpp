@@ -102,12 +102,10 @@ AsyncWriteQueue::AsyncWriteQueue(QueryContext context_p, ClientContext &client_c
 
 AsyncWriteQueue::~AsyncWriteQueue() {
 	lock_guard<mutex> guard(lock);
-	D_ASSERT(batch_depth == 0);
-	D_ASSERT(pending_writes.empty());
-	D_ASSERT(pending_bytes == 0);
-	D_ASSERT(in_flight_bytes == 0);
-	D_ASSERT(active_drain_tasks == 0);
-	D_ASSERT(pending_drain_tasks == 0);
+	auto drained = batch_depth == 0 && pending_writes.empty() && pending_bytes == 0 && in_flight_bytes == 0 &&
+	               active_drain_tasks == 0 && pending_drain_tasks == 0;
+	D_ASSERT(closed || drained);
+	D_ASSERT(!closed || drained);
 }
 
 bool AsyncWriteQueue::IsAsync() const {
@@ -126,6 +124,7 @@ void AsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t
 
 	auto write_size = payload->Size();
 	if (!executor) {
+		VerifyOpen();
 		auto next_offset = ValidateRegistrationOffset(offset, write_size);
 		WriteBuffer(payload->Ptr(), write_size, offset);
 		next_registration_offset = next_offset;
@@ -134,6 +133,7 @@ void AsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t
 
 	{
 		lock_guard<mutex> guard(lock);
+		VerifyOpen();
 		auto next_offset = ValidateRegistrationOffset(offset, write_size);
 		pending_writes.emplace_back(std::move(payload), offset);
 		pending_bytes += write_size;
@@ -147,9 +147,11 @@ void AsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t
 
 void AsyncWriteQueue::BeginBatch() {
 	if (!executor) {
+		VerifyOpen();
 		return;
 	}
 	lock_guard<mutex> guard(lock);
+	VerifyOpen();
 	batch_depth++;
 }
 
@@ -174,6 +176,7 @@ bool AsyncWriteQueue::HasOpenBatch() {
 
 void AsyncWriteQueue::SchedulePendingWrites(SchedulePolicy policy) {
 	if (!executor) {
+		VerifyOpen();
 		return;
 	}
 	SchedulePendingWritesInternal(policy);
@@ -186,6 +189,7 @@ void AsyncWriteQueue::SchedulePendingWritesInternal(SchedulePolicy policy) {
 	idx_t schedule_count = 0;
 	{
 		lock_guard<mutex> guard(lock);
+		VerifyOpen();
 		if (batch_depth == 0 && !pending_writes.empty() && active_drain_tasks < max_active_drain_tasks) {
 			auto available_slots = max_active_drain_tasks - active_drain_tasks;
 			schedule_count = EstimateScheduleCount(available_slots, policy);
@@ -570,6 +574,7 @@ void AsyncWriteQueue::WorkOnSingleTask() {
 
 void AsyncWriteQueue::ApplyBackpressure() {
 	if (!executor) {
+		VerifyOpen();
 		return;
 	}
 	RethrowTaskError();
@@ -597,6 +602,12 @@ void AsyncWriteQueue::ApplyBackpressure() {
 }
 
 void AsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
+	{
+		lock_guard<mutex> guard(lock);
+		if (closed) {
+			return;
+		}
+	}
 	if (!executor) {
 		RethrowTaskError();
 		return;
@@ -649,15 +660,43 @@ void AsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 void AsyncWriteQueue::VerifyDrained() const {
 	if (batch_depth != 0 || !pending_writes.empty() || pending_bytes != 0 || in_flight_bytes != 0 ||
 	    active_drain_tasks != 0 || pending_drain_tasks != 0) {
-		throw InternalException("Cannot reset AsyncWriteQueue offset while writes are pending");
+		throw InternalException("AsyncWriteQueue still owns registered writes");
 	}
+}
+
+void AsyncWriteQueue::Close() {
+	{
+		lock_guard<mutex> guard(lock);
+		if (closed) {
+			return;
+		}
+	}
+
+	try {
+		WaitAll(BatchDrainMode::FORCE_CLOSE_BATCH);
+		ReleaseMemoryReservation();
+	} catch (...) {
+		ReleaseMemoryReservation();
+		throw;
+	}
+
+	lock_guard<mutex> guard(lock);
+	VerifyDrained();
+	closed = true;
 }
 
 void AsyncWriteQueue::ResetNextOffset(idx_t offset) {
 	RethrowTaskError();
 	lock_guard<mutex> guard(lock);
+	VerifyOpen();
 	VerifyDrained();
 	next_registration_offset = offset;
+}
+
+void AsyncWriteQueue::VerifyOpen() const {
+	if (closed) {
+		throw InternalException("Cannot use closed AsyncWriteQueue");
+	}
 }
 
 void AsyncWriteQueue::ReleaseMemoryReservation() {

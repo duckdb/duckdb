@@ -128,8 +128,6 @@ private:
 	void RethrowTaskError();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	void WaitAllInternal(BatchDrainMode batch_drain_mode);
-	//! Release the writer's TemporaryMemoryState reservation.
-	void ReleaseMemoryReservation();
 	//! Resolve constants that depend on the file system and scheduler state.
 	void ResolveWriteSettings();
 

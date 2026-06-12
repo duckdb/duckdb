@@ -348,22 +348,20 @@ void AsyncFileWriter::WaitAllInternal(BatchDrainMode batch_drain_mode) {
 	write_queue->WaitAll(batch_drain_mode);
 }
 
-void AsyncFileWriter::ReleaseMemoryReservation() {
-	write_queue->ReleaseMemoryReservation();
-}
-
 void AsyncFileWriter::Close() {
 	if (closed) {
 		return;
 	}
 	try {
-		WaitAllInternal(BatchDrainMode::FORCE_CLOSE_BATCH);
-		ReleaseMemoryReservation();
+		if (!write_queue->HasError()) {
+			SealCopiedBuffer(ScheduleMode::DEFER);
+		}
+		write_queue->Close();
 		handle->Close();
 		handle.reset();
 		closed = true;
 	} catch (...) {
-		ReleaseMemoryReservation();
+		write_queue->ReleaseMemoryReservation();
 		throw;
 	}
 }
