@@ -45,6 +45,15 @@
     "name": "st_setcrs",
     "parameters": "geom,crs",
     "description": "Sets the Coordinate Reference System (CRS) identifier of the geometry",
+    "categories": ["geometry"],
+    "type": "scalar_function"
+  },
+  {
+    "name": "vertex_extract",
+    "parameters": "geom,ordinate",
+    "description": "Extracts the specified ordinate (X, Y, Z, M) from a point geometry",
+    "example": "vertex_extract('POINT(1 2 3)', 'Z')",
+    "categories": ["geometry"],
     "type": "scalar_function"
   }
 ]

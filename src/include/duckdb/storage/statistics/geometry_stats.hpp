@@ -75,6 +75,23 @@ public:
 		}
 	}
 
+	bool Has(GeometryType geom_type) const {
+		const auto geom_idx = static_cast<uint8_t>(geom_type);
+		D_ASSERT(geom_idx < PART_TYPES);
+		for (idx_t i = 0; i < VERT_TYPES; i++) {
+			if (sets[i] & (1 << geom_idx)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool Has(VertexType vert_type) const {
+		const auto vert_idx = static_cast<uint8_t>(vert_type);
+		D_ASSERT(vert_idx < VERT_TYPES);
+		return sets[vert_idx] != 0;
+	}
+
 	//! Check if only the given geometry and vertex type is present
 	//! (all others are absent)
 	bool HasOnly(GeometryType geom_type, VertexType vert_type) const {
