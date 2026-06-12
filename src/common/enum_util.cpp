@@ -2601,24 +2601,23 @@ GeometryType EnumUtil::FromString<GeometryType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetGroupByExpressionInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    {static_cast<uint32_t>(GroupByExpressionInfoType::EXPRESSION), "EXPRESSION"},
-	    {static_cast<uint32_t>(GroupByExpressionInfoType::EMPTY), "EMPTY"},
-	    {static_cast<uint32_t>(GroupByExpressionInfoType::CUBE), "CUBE"},
-	    {static_cast<uint32_t>(GroupByExpressionInfoType::ROLLUP), "ROLLUP"},
-	    {static_cast<uint32_t>(GroupByExpressionInfoType::GROUPING_SETS), "GROUPING_SETS"}};
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::EXPRESSION), "EXPRESSION" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::CUBE), "CUBE" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::ROLLUP), "ROLLUP" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::GROUPING_SETS), "GROUPING_SETS" }
+	};
 	return values;
 }
 
-template <>
-const char *EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value) {
-	return StringUtil::EnumToString(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType",
-	                                static_cast<uint32_t>(value));
+template<>
+const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value) {
+	return StringUtil::EnumToString(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType", static_cast<uint32_t>(value));
 }
 
-template <>
+template<>
 GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value) {
-	return static_cast<GroupByExpressionInfoType>(
-	    StringUtil::StringToEnum(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType", value));
+	return static_cast<GroupByExpressionInfoType>(StringUtil::StringToEnum(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetHLLStorageTypeValues() {
@@ -6255,3 +6254,4 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
+
