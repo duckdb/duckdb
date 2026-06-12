@@ -23,7 +23,7 @@ class CopiedAsyncWriteBuffer;
 //! This is a logical stream writer: offsets are assigned when writes are registered via GetTotalWritten().
 //! Physical writes may complete out of order when positional writes are supported; WaitAll/Close complete the file.
 //! Calls into this writer must be externally serialized; internal locking only coordinates with async drain tasks.
-class AsyncFileWriter : public WriteStream, private ManagedAsyncWriteTarget {
+class AsyncFileWriter : public WriteStream, private ManagedAsyncWriteStreamTarget {
 public:
 	//! RAII handle that batches write registration. Finish() must be called on the normal path to leave the batch and
 	//! start draining; scope exit only leaves the batch as exception cleanup.
@@ -53,18 +53,20 @@ public:
 	//! Capacity of the staging buffer used for small transient WriteData inputs.
 	static constexpr idx_t DEFAULT_COPIED_BUFFER_CAPACITY = 4096;
 	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
-	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = ManagedAsyncWriteQueue::DEFAULT_LOCAL_COALESCE_THRESHOLD;
+	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD =
+	    ManagedAsyncWriteStreamQueue::DEFAULT_LOCAL_COALESCE_THRESHOLD;
 	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
 	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD =
-	    ManagedAsyncWriteQueue::DEFAULT_REMOTE_COALESCE_THRESHOLD;
+	    ManagedAsyncWriteStreamQueue::DEFAULT_REMOTE_COALESCE_THRESHOLD;
 	//! Maximum queued async bytes retained per regular execution thread.
 	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteQueue::DEFAULT_MAX_PENDING_BYTES_PER_THREAD;
+	    ManagedAsyncWriteStreamQueue::DEFAULT_MAX_PENDING_BYTES_PER_THREAD;
 	//! Minimum async write reservation requested per regular execution thread.
 	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteQueue::DEFAULT_MIN_PENDING_BYTES_PER_THREAD;
+	    ManagedAsyncWriteStreamQueue::DEFAULT_MIN_PENDING_BYTES_PER_THREAD;
 	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = ManagedAsyncWriteQueue::DEFAULT_DRAIN_TASK_BYTE_BUDGET;
+	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET =
+	    ManagedAsyncWriteStreamQueue::DEFAULT_DRAIN_TASK_BYTE_BUDGET;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
@@ -99,9 +101,9 @@ public:
 	DUCKDB_API idx_t GetTotalWritten() const;
 
 private:
-	using BatchDrainMode = ManagedAsyncWriteQueue::BatchDrainMode;
-	using ScheduleMode = ManagedAsyncWriteQueue::ScheduleMode;
-	using SchedulePolicy = ManagedAsyncWriteQueue::SchedulePolicy;
+	using BatchDrainMode = ManagedAsyncWriteStreamQueue::BatchDrainMode;
+	using ScheduleMode = ManagedAsyncWriteStreamQueue::ScheduleMode;
+	using SchedulePolicy = ManagedAsyncWriteStreamQueue::SchedulePolicy;
 
 	//! Register an owned buffer for writing, using the configured synchronous/asynchronous mode.
 	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, ScheduleMode schedule_mode = ScheduleMode::ALLOW);
@@ -141,7 +143,7 @@ private:
 	string path;
 	unique_ptr<FileHandle> handle;
 	//! Managed queue that owns stream scheduling, backpressure, and write coalescing.
-	unique_ptr<ManagedAsyncWriteQueue> write_queue;
+	unique_ptr<ManagedAsyncWriteStreamQueue> write_queue;
 
 	//! Copy staging buffer for small transient WriteData inputs. Only accessed by the registering thread.
 	unique_ptr<CopiedAsyncWriteBuffer> copied_buffer;

@@ -463,70 +463,22 @@ void AsyncWriteQueue::VerifyOpen() const {
 	}
 }
 
-ManagedAsyncWriteQueue::PendingWrite::PendingWrite(unique_ptr<AsyncWritePayload> payload_p, idx_t offset_p)
-    : payload(std::move(payload_p)), offset(offset_p) {
+ManagedAsyncWriteQueue::PendingWrite::PendingWrite(AsyncWriteRequest request_p)
+    : request(std::move(request_p)), size(request.Size()) {
 }
 
 idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
-	return payload->Size();
+	return size;
 }
 
-class ManagedAsyncWriteQueue::CoalescedWritePayload : public AsyncWritePayload {
-public:
-	CoalescedWritePayload(ClientContext &client_context_p, deque<PendingWrite> writes_p, idx_t size_p)
-	    : client_context(client_context_p), writes(std::move(writes_p)), size(size_p) {
-	}
-
-	data_ptr_t Ptr() override {
-		if (writes.size() == 1) {
-			return writes.front().payload->Ptr();
-		}
-		if (!coalesced.get()) {
-			coalesced = BufferAllocator::Get(client_context).Allocate(size);
-			idx_t offset = 0;
-			for (auto &write : writes) {
-				auto current_size = write.Size();
-				memcpy(coalesced.get() + offset, write.payload->Ptr(), current_size);
-				offset += current_size;
-				write.payload.reset();
-			}
-			D_ASSERT(offset == size);
-			writes.clear();
-		}
-		return coalesced.get();
-	}
-
-	idx_t Size() const override {
-		return size;
-	}
-
-private:
-	ClientContext &client_context;
-	deque<PendingWrite> writes;
-	AllocatedData coalesced;
-	idx_t size;
-};
-
-ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, ManagedAsyncWriteTarget &target_p)
+ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p) {
-	auto local_file = target.IsLocalFile();
-	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
-	first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
-	drain_task_byte_budget = MaxValue(DEFAULT_DRAIN_TASK_BYTE_BUDGET, coalesce_threshold);
-	limit_coalesced_write_size = local_file;
-
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
 	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
-
-	// Positional writes let multiple async requests drain one logical write queue concurrently.
-	// Otherwise the managed queue keeps one sequential request active so target ordering remains correct.
-	if (target.SupportsPositionalWrites()) {
-		drain_mode = DrainMode::POSITIONAL;
-		max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
-	}
 
 	AsyncWriteTarget &async_target = *this;
 	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target);
@@ -539,8 +491,8 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 
 ManagedAsyncWriteQueue::~ManagedAsyncWriteQueue() {
 	lock_guard<mutex> guard(lock);
-	auto drained = batch_depth == 0 && pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 &&
-	               submitted_requests == 0;
+	auto drained = pending_writes.empty() && pending_bytes == 0 && external_pending_bytes == 0 &&
+	               submitted_bytes == 0 && submitted_requests == 0;
 	D_ASSERT(closed || drained);
 	D_ASSERT(!closed || drained);
 }
@@ -558,59 +510,75 @@ void ManagedAsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload
 	if (!payload || payload->Size() == 0) {
 		return;
 	}
-	RethrowTaskError();
+	RegisterWrite(AsyncWriteRequest(std::move(payload), offset), schedule_mode);
+}
 
-	auto write_size = payload->Size();
-	if (!write_queue->IsAsync()) {
-		VerifyOpen();
-		auto next_offset = ValidateRegistrationOffset(offset, write_size);
-		AsyncWriteRequest request(std::move(payload), offset);
-		write_queue->Submit(std::move(request));
-		next_registration_offset = next_offset;
+void ManagedAsyncWriteQueue::RegisterWrite(AsyncWriteRequest request, ScheduleMode schedule_mode) {
+	RegisterWriteInternal(std::move(request), 0, schedule_mode);
+}
+
+void ManagedAsyncWriteQueue::RegisterAccountedWrite(AsyncWriteRequest request, ScheduleMode schedule_mode) {
+	auto request_size = request.Size();
+	RegisterWriteInternal(std::move(request), request_size, ScheduleMode::DEFER);
+	if (schedule_mode == ScheduleMode::ALLOW) {
+		SchedulePendingWrites(SchedulePolicy::FORCE);
+	}
+}
+
+void ManagedAsyncWriteQueue::AddExternalPendingBytes(idx_t bytes, bool update_memory) {
+	if (bytes == 0 || !write_queue->IsAsync()) {
 		return;
 	}
-
 	{
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
-		auto next_offset = ValidateRegistrationOffset(offset, write_size);
-		pending_writes.emplace_back(std::move(payload), offset);
-		pending_bytes += write_size;
-		next_registration_offset = next_offset;
+		external_pending_bytes += bytes;
+	}
+	if (update_memory) {
+		UpdateMemoryState();
+	}
+}
+
+void ManagedAsyncWriteQueue::DiscardExternalPendingBytes(idx_t bytes) noexcept {
+	if (bytes == 0 || !write_queue->IsAsync()) {
+		return;
+	}
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(external_pending_bytes >= bytes);
+	if (external_pending_bytes >= bytes) {
+		external_pending_bytes -= bytes;
+	}
+}
+
+void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, idx_t accounted_external_bytes,
+                                                   ScheduleMode schedule_mode) {
+	if (!request.payload || request.Size() == 0) {
+		return;
+	}
+	RethrowTaskError();
+
+	auto request_size = request.Size();
+	if (!write_queue->IsAsync()) {
+		VerifyOpen();
+		write_queue->Submit(std::move(request));
+		return;
+	}
+
+	AddCompletionAccounting(request);
+	{
+		lock_guard<mutex> guard(lock);
+		VerifyOpen();
+		if (accounted_external_bytes > 0) {
+			D_ASSERT(external_pending_bytes >= accounted_external_bytes);
+			external_pending_bytes -= accounted_external_bytes;
+		}
+		pending_writes.emplace_back(std::move(request));
+		pending_bytes += request_size;
 	}
 	UpdateMemoryState();
 	if (schedule_mode == ScheduleMode::ALLOW) {
 		SchedulePendingWrites();
 	}
-}
-
-void ManagedAsyncWriteQueue::BeginBatch() {
-	if (!write_queue->IsAsync()) {
-		VerifyOpen();
-		return;
-	}
-	lock_guard<mutex> guard(lock);
-	VerifyOpen();
-	batch_depth++;
-}
-
-void ManagedAsyncWriteQueue::LeaveBatch() noexcept {
-	if (!write_queue->IsAsync()) {
-		return;
-	}
-	lock_guard<mutex> guard(lock);
-	if (batch_depth == 0) {
-		return;
-	}
-	batch_depth--;
-}
-
-bool ManagedAsyncWriteQueue::HasOpenBatch() {
-	if (!write_queue->IsAsync()) {
-		return false;
-	}
-	lock_guard<mutex> guard(lock);
-	return batch_depth > 0;
 }
 
 void ManagedAsyncWriteQueue::SchedulePendingWrites(SchedulePolicy policy) {
@@ -636,17 +604,14 @@ void ManagedAsyncWriteQueue::SchedulePendingWritesInternal(SchedulePolicy policy
 }
 
 void ManagedAsyncWriteQueue::UpdateMemoryState(MemoryUpdateMode mode) {
+	(void)mode;
 	if (!memory_state) {
 		return;
 	}
 
-	auto force = mode == MemoryUpdateMode::FORCE;
 	idx_t current_pending_bytes;
 	{
 		lock_guard<mutex> guard(lock);
-		if (batch_depth > 0 && !force) {
-			return;
-		}
 		current_pending_bytes = TotalPendingBytes();
 	}
 	if (current_pending_bytes == 0) {
@@ -696,14 +661,396 @@ idx_t ManagedAsyncWriteQueue::BackpressureBudget() {
 }
 
 idx_t ManagedAsyncWriteQueue::DrainTaskByteBudget() const {
-	return MaxValue(drain_task_byte_budget, coalesce_threshold);
+	return drain_task_byte_budget;
 }
 
 idx_t ManagedAsyncWriteQueue::TotalPendingBytes() const {
+	return pending_bytes + external_pending_bytes + submitted_bytes;
+}
+
+idx_t ManagedAsyncWriteQueue::SubmittedByteWindow() const {
+	auto task_budget = DrainTaskByteBudget();
+	if (task_budget == 0) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	auto max_tasks = MaxValue<idx_t>(max_active_drain_tasks, 1);
+	if (max_tasks > NumericLimits<idx_t>::Maximum() / task_budget) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return max_tasks * task_budget;
+}
+
+bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy) {
+	lock_guard<mutex> guard(lock);
+	if (pending_writes.empty()) {
+		return false;
+	}
+	if (policy == SchedulePolicy::THRESHOLD) {
+		if (submitted_bytes >= SubmittedByteWindow()) {
+			return false;
+		}
+		if (submitted_requests > 0 && pending_bytes < DrainTaskByteBudget()) {
+			return false;
+		}
+	}
+
+	auto request_size = pending_writes.front().Size();
+	request = std::move(pending_writes.front().request);
+	pending_writes.pop_front();
+	D_ASSERT(pending_bytes >= request_size);
+	pending_bytes -= request_size;
+	submitted_bytes += request_size;
+	submitted_requests++;
+	return true;
+}
+
+void ManagedAsyncWriteQueue::AddCompletionAccounting(AsyncWriteRequest &request) {
+	auto user_completion = request.completion;
+	request.completion = [this, user_completion](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+		CompleteSubmittedWrite(offset, size, error);
+		if (user_completion) {
+			user_completion(offset, size, error);
+		}
+	};
+}
+
+void ManagedAsyncWriteQueue::CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+	(void)offset;
+	bool refill = false;
+	{
+		lock_guard<mutex> guard(lock);
+		D_ASSERT(submitted_requests > 0);
+		submitted_requests--;
+		D_ASSERT(submitted_bytes >= size);
+		submitted_bytes -= size;
+		refill = !error && !closed && !pending_writes.empty();
+	}
+	if (refill) {
+		SchedulePendingWritesInternal();
+	}
+}
+
+void ManagedAsyncWriteQueue::ApplyBackpressure() {
+	if (!write_queue->IsAsync()) {
+		VerifyOpen();
+		return;
+	}
+	RethrowTaskError();
+	UpdateMemoryState(MemoryUpdateMode::FORCE);
+	SchedulePendingWrites();
+	while (true) {
+		idx_t current_pending_bytes;
+		{
+			lock_guard<mutex> guard(lock);
+			D_ASSERT(external_pending_bytes == 0);
+			current_pending_bytes = TotalPendingBytes();
+		}
+		if (current_pending_bytes <= BackpressureBudget()) {
+			return;
+		}
+		SchedulePendingWrites(SchedulePolicy::FORCE);
+		write_queue->WorkOnPendingTask();
+		RethrowTaskError();
+	}
+}
+
+void ManagedAsyncWriteQueue::WaitAll() {
+	bool already_closed;
+	{
+		lock_guard<mutex> guard(lock);
+		already_closed = closed;
+	}
+	if (already_closed) {
+		RethrowTaskError();
+		return;
+	}
+	if (!write_queue->IsAsync()) {
+		RethrowTaskError();
+		return;
+	}
+
+	try {
+		UpdateMemoryState(MemoryUpdateMode::FORCE);
+		while (true) {
+			if (!write_queue->HasError()) {
+				SchedulePendingWritesInternal(SchedulePolicy::FORCE);
+			}
+			write_queue->Flush();
+			lock_guard<mutex> guard(lock);
+			if (pending_writes.empty() && pending_bytes == 0 && external_pending_bytes == 0 && submitted_bytes == 0 &&
+			    submitted_requests == 0) {
+				break;
+			}
+			if (pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 && submitted_requests == 0) {
+				throw InternalException("ManagedAsyncWriteQueue still tracks external pending writes");
+			}
+		}
+	} catch (...) {
+		try {
+			write_queue->Flush();
+		} catch (...) {
+		}
+		throw;
+	}
+
+	RethrowTaskError();
+}
+
+void ManagedAsyncWriteQueue::VerifyDrained() const {
+	if (!pending_writes.empty() || pending_bytes != 0 || external_pending_bytes != 0 || submitted_bytes != 0 ||
+	    submitted_requests != 0) {
+		throw InternalException("ManagedAsyncWriteQueue still owns registered writes");
+	}
+}
+
+void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure() noexcept {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(submitted_requests == 0);
+	D_ASSERT(submitted_bytes == 0);
+	if (submitted_requests != 0 || submitted_bytes != 0) {
+		return;
+	}
+
+	pending_writes.clear();
+	pending_bytes = 0;
+	external_pending_bytes = 0;
+	closed = true;
+}
+
+void ManagedAsyncWriteQueue::Close() {
+	bool already_closed;
+	{
+		lock_guard<mutex> guard(lock);
+		already_closed = closed;
+	}
+	if (already_closed) {
+		RethrowTaskError();
+		return;
+	}
+
+	try {
+		WaitAll();
+		write_queue->Close();
+		ReleaseMemoryReservation();
+	} catch (...) {
+		auto error = std::current_exception();
+		CancelPendingWritesAfterFailure();
+		try {
+			write_queue->Close();
+		} catch (...) {
+		}
+		try {
+			ReleaseMemoryReservation();
+		} catch (...) {
+		}
+		std::rethrow_exception(error);
+	}
+
+	lock_guard<mutex> guard(lock);
+	VerifyDrained();
+	closed = true;
+}
+
+void ManagedAsyncWriteQueue::ReleaseMemoryReservation() {
+	if (!memory_state || memory_request_bytes == 0) {
+		return;
+	}
+	memory_state->SetZero();
+	memory_request_bytes = 0;
+}
+
+void ManagedAsyncWriteQueue::RethrowTaskError() {
+	write_queue->RethrowTaskError();
+}
+
+void ManagedAsyncWriteQueue::VerifyOpen() const {
+	if (closed) {
+		throw InternalException("Cannot use closed ManagedAsyncWriteQueue");
+	}
+}
+
+void ManagedAsyncWriteQueue::Write(data_ptr_t buffer, idx_t size, idx_t offset) {
+	if (size == 0) {
+		return;
+	}
+	target.Write(buffer, size, offset);
+}
+
+ManagedAsyncWriteStreamQueue::PendingWrite::PendingWrite(unique_ptr<AsyncWritePayload> payload_p, idx_t offset_p)
+    : payload(std::move(payload_p)), offset(offset_p) {
+}
+
+idx_t ManagedAsyncWriteStreamQueue::PendingWrite::Size() const {
+	return payload->Size();
+}
+
+class ManagedAsyncWriteStreamQueue::CoalescedWritePayload : public AsyncWritePayload {
+public:
+	CoalescedWritePayload(ClientContext &client_context_p, deque<PendingWrite> writes_p, idx_t size_p)
+	    : client_context(client_context_p), writes(std::move(writes_p)), size(size_p) {
+	}
+
+	data_ptr_t Ptr() override {
+		if (writes.size() == 1) {
+			return writes.front().payload->Ptr();
+		}
+		if (!coalesced.get()) {
+			coalesced = BufferAllocator::Get(client_context).Allocate(size);
+			idx_t offset = 0;
+			for (auto &write : writes) {
+				auto current_size = write.Size();
+				memcpy(coalesced.get() + offset, write.payload->Ptr(), current_size);
+				offset += current_size;
+				write.payload.reset();
+			}
+			D_ASSERT(offset == size);
+			writes.clear();
+		}
+		return coalesced.get();
+	}
+
+	idx_t Size() const override {
+		return size;
+	}
+
+private:
+	ClientContext &client_context;
+	deque<PendingWrite> writes;
+	AllocatedData coalesced;
+	idx_t size;
+};
+
+ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client_context_p,
+                                                           ManagedAsyncWriteStreamTarget &target_p)
+    : client_context(client_context_p), target(target_p) {
+	auto local_file = target.IsLocalFile();
+	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
+	first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
+	drain_task_byte_budget = MaxValue(DEFAULT_DRAIN_TASK_BYTE_BUDGET, coalesce_threshold);
+	limit_coalesced_write_size = local_file;
+
+	auto &scheduler = TaskScheduler::GetScheduler(client_context);
+	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+
+	// Positional writes let multiple async requests drain one logical write queue concurrently.
+	// Otherwise the stream queue keeps one sequential request active so target ordering remains correct.
+	if (target.SupportsPositionalWrites()) {
+		drain_mode = DrainMode::POSITIONAL;
+		max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
+	}
+
+	AsyncWriteTarget &async_target = *this;
+	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, async_target);
+}
+
+ManagedAsyncWriteStreamQueue::~ManagedAsyncWriteStreamQueue() {
+	lock_guard<mutex> guard(lock);
+	auto drained = batch_depth == 0 && pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 &&
+	               submitted_requests == 0;
+	D_ASSERT(closed || drained);
+	D_ASSERT(!closed || drained);
+}
+
+bool ManagedAsyncWriteStreamQueue::IsAsync() const {
+	return write_queue->IsAsync();
+}
+
+bool ManagedAsyncWriteStreamQueue::HasError() {
+	return write_queue->HasError();
+}
+
+void ManagedAsyncWriteStreamQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t offset,
+                                                 ScheduleMode schedule_mode) {
+	if (!payload || payload->Size() == 0) {
+		return;
+	}
+	RethrowTaskError();
+
+	auto write_size = payload->Size();
+	if (!write_queue->IsAsync()) {
+		VerifyOpen();
+		auto next_offset = ValidateRegistrationOffset(offset, write_size);
+		Write(payload->Ptr(), write_size, offset);
+		next_registration_offset = next_offset;
+		return;
+	}
+
+	bool update_memory = true;
+	{
+		lock_guard<mutex> guard(lock);
+		VerifyOpen();
+		auto next_offset = ValidateRegistrationOffset(offset, write_size);
+		pending_writes.emplace_back(std::move(payload), offset);
+		pending_bytes += write_size;
+		next_registration_offset = next_offset;
+		update_memory = batch_depth == 0;
+	}
+	write_queue->AddExternalPendingBytes(write_size, update_memory);
+	if (schedule_mode == ScheduleMode::ALLOW) {
+		SchedulePendingWrites();
+	}
+}
+
+void ManagedAsyncWriteStreamQueue::BeginBatch() {
+	if (!write_queue->IsAsync()) {
+		VerifyOpen();
+		return;
+	}
+	lock_guard<mutex> guard(lock);
+	VerifyOpen();
+	batch_depth++;
+}
+
+void ManagedAsyncWriteStreamQueue::LeaveBatch() noexcept {
+	if (!write_queue->IsAsync()) {
+		return;
+	}
+	lock_guard<mutex> guard(lock);
+	if (batch_depth == 0) {
+		return;
+	}
+	batch_depth--;
+}
+
+bool ManagedAsyncWriteStreamQueue::HasOpenBatch() {
+	if (!write_queue->IsAsync()) {
+		return false;
+	}
+	lock_guard<mutex> guard(lock);
+	return batch_depth > 0;
+}
+
+void ManagedAsyncWriteStreamQueue::SchedulePendingWrites(SchedulePolicy policy) {
+	if (!write_queue->IsAsync()) {
+		VerifyOpen();
+		return;
+	}
+	SchedulePendingWritesInternal(policy);
+}
+
+void ManagedAsyncWriteStreamQueue::SchedulePendingWritesInternal(SchedulePolicy policy) {
+	if (!write_queue->IsAsync()) {
+		return;
+	}
+
+	while (true) {
+		AsyncWriteRequest request;
+		if (!TakePendingWriteRequest(request, policy)) {
+			return;
+		}
+		write_queue->RegisterAccountedWrite(std::move(request));
+	}
+}
+
+idx_t ManagedAsyncWriteStreamQueue::DrainTaskByteBudget() const {
+	return MaxValue(drain_task_byte_budget, coalesce_threshold);
+}
+
+idx_t ManagedAsyncWriteStreamQueue::TotalPendingBytes() const {
 	return pending_bytes + submitted_bytes;
 }
 
-idx_t ManagedAsyncWriteQueue::SelectPendingWriteEnd(idx_t start, idx_t &selected_bytes) const {
+idx_t ManagedAsyncWriteStreamQueue::SelectPendingWriteEnd(idx_t start, idx_t &selected_bytes) const {
 	D_ASSERT(start < pending_writes.size());
 	auto byte_budget = DrainTaskByteBudget();
 	selected_bytes = 0;
@@ -723,7 +1070,7 @@ idx_t ManagedAsyncWriteQueue::SelectPendingWriteEnd(idx_t start, idx_t &selected
 	return end;
 }
 
-idx_t ManagedAsyncWriteQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selected_bytes) const {
+idx_t ManagedAsyncWriteStreamQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selected_bytes) const {
 	D_ASSERT(start < pending_writes.size());
 	selected_bytes = 0;
 	if (coalesce_threshold == 0) {
@@ -778,7 +1125,7 @@ idx_t ManagedAsyncWriteQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selecte
 	return end;
 }
 
-idx_t ManagedAsyncWriteQueue::SubmittedByteWindow() const {
+idx_t ManagedAsyncWriteStreamQueue::SubmittedByteWindow() const {
 	auto task_budget = DrainTaskByteBudget();
 	if (task_budget == 0) {
 		return NumericLimits<idx_t>::Maximum();
@@ -790,7 +1137,7 @@ idx_t ManagedAsyncWriteQueue::SubmittedByteWindow() const {
 	return max_tasks * task_budget;
 }
 
-bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy) {
+bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy) {
 	AsyncWriteCompletionCallback completion = [this](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
 		CompleteSubmittedWrite(offset, size, error);
 	};
@@ -835,7 +1182,7 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 	return true;
 }
 
-unique_ptr<AsyncWritePayload> ManagedAsyncWriteQueue::CreatePayload(deque<PendingWrite> writes, idx_t size) {
+unique_ptr<AsyncWritePayload> ManagedAsyncWriteStreamQueue::CreatePayload(deque<PendingWrite> writes, idx_t size) {
 	D_ASSERT(!writes.empty());
 	auto expected_offset = writes.front().offset;
 	for (auto &write : writes) {
@@ -848,7 +1195,8 @@ unique_ptr<AsyncWritePayload> ManagedAsyncWriteQueue::CreatePayload(deque<Pendin
 	return make_uniq<CoalescedWritePayload>(client_context, std::move(writes), size);
 }
 
-void ManagedAsyncWriteQueue::CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t size,
+                                                          optional_ptr<const ErrorData> error) {
 	(void)offset;
 	bool refill = false;
 	{
@@ -864,7 +1212,7 @@ void ManagedAsyncWriteQueue::CompleteSubmittedWrite(idx_t offset, idx_t size, op
 	}
 }
 
-void ManagedAsyncWriteQueue::ApplyBackpressure() {
+void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
 	if (!write_queue->IsAsync()) {
 		VerifyOpen();
 		return;
@@ -873,7 +1221,7 @@ void ManagedAsyncWriteQueue::ApplyBackpressure() {
 	if (HasOpenBatch()) {
 		return;
 	}
-	UpdateMemoryState(MemoryUpdateMode::FORCE);
+	write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::FORCE);
 	SchedulePendingWrites();
 	while (true) {
 		idx_t current_pending_bytes;
@@ -884,16 +1232,16 @@ void ManagedAsyncWriteQueue::ApplyBackpressure() {
 			}
 			current_pending_bytes = TotalPendingBytes();
 		}
-		if (current_pending_bytes <= BackpressureBudget()) {
+		if (current_pending_bytes <= write_queue->BackpressureBudget()) {
 			return;
 		}
 		SchedulePendingWrites(SchedulePolicy::FORCE);
-		write_queue->WorkOnPendingTask();
+		write_queue->ApplyBackpressure();
 		RethrowTaskError();
 	}
 }
 
-void ManagedAsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
+void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 	bool already_closed;
 	{
 		lock_guard<mutex> guard(lock);
@@ -933,21 +1281,21 @@ void ManagedAsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 
 	try {
 		open_batch_for_drain();
-		UpdateMemoryState(MemoryUpdateMode::FORCE);
+		write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::FORCE);
 		while (true) {
 			if (!write_queue->HasError()) {
 				SchedulePendingWritesInternal(SchedulePolicy::FORCE);
 			}
-			write_queue->Flush();
+			write_queue->WaitAll();
 			lock_guard<mutex> guard(lock);
-			if (pending_writes.empty() && submitted_bytes == 0 && submitted_requests == 0) {
+			if (pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 && submitted_requests == 0) {
 				break;
 			}
 		}
 	} catch (...) {
 		try {
 			open_batch_for_drain();
-			write_queue->Flush();
+			write_queue->WaitAll();
 		} catch (...) {
 		}
 		restore_batch();
@@ -958,28 +1306,33 @@ void ManagedAsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 	RethrowTaskError();
 }
 
-void ManagedAsyncWriteQueue::VerifyDrained() const {
+void ManagedAsyncWriteStreamQueue::VerifyDrained() const {
 	if (batch_depth != 0 || !pending_writes.empty() || pending_bytes != 0 || submitted_bytes != 0 ||
 	    submitted_requests != 0) {
-		throw InternalException("ManagedAsyncWriteQueue still owns registered writes");
+		throw InternalException("ManagedAsyncWriteStreamQueue still owns registered writes");
 	}
 }
 
-void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure() noexcept {
-	lock_guard<mutex> guard(lock);
-	D_ASSERT(submitted_requests == 0);
-	D_ASSERT(submitted_bytes == 0);
-	if (submitted_requests != 0 || submitted_bytes != 0) {
-		return;
-	}
+void ManagedAsyncWriteStreamQueue::CancelPendingWritesAfterFailure() noexcept {
+	idx_t discarded_bytes;
+	{
+		lock_guard<mutex> guard(lock);
+		D_ASSERT(submitted_requests == 0);
+		D_ASSERT(submitted_bytes == 0);
+		if (submitted_requests != 0 || submitted_bytes != 0) {
+			return;
+		}
 
-	pending_writes.clear();
-	pending_bytes = 0;
-	batch_depth = 0;
-	closed = true;
+		discarded_bytes = pending_bytes;
+		pending_writes.clear();
+		pending_bytes = 0;
+		batch_depth = 0;
+		closed = true;
+	}
+	write_queue->DiscardExternalPendingBytes(discarded_bytes);
 }
 
-void ManagedAsyncWriteQueue::Close() {
+void ManagedAsyncWriteStreamQueue::Close() {
 	bool already_closed;
 	{
 		lock_guard<mutex> guard(lock);
@@ -993,7 +1346,6 @@ void ManagedAsyncWriteQueue::Close() {
 	try {
 		WaitAll(BatchDrainMode::FORCE_CLOSE_BATCH);
 		write_queue->Close();
-		ReleaseMemoryReservation();
 	} catch (...) {
 		auto error = std::current_exception();
 		CancelPendingWritesAfterFailure();
@@ -1013,7 +1365,7 @@ void ManagedAsyncWriteQueue::Close() {
 	closed = true;
 }
 
-void ManagedAsyncWriteQueue::ResetNextOffset(idx_t offset) {
+void ManagedAsyncWriteStreamQueue::ResetNextOffset(idx_t offset) {
 	RethrowTaskError();
 	lock_guard<mutex> guard(lock);
 	VerifyOpen();
@@ -1021,49 +1373,45 @@ void ManagedAsyncWriteQueue::ResetNextOffset(idx_t offset) {
 	next_registration_offset = offset;
 }
 
-void ManagedAsyncWriteQueue::ReleaseMemoryReservation() {
-	if (!memory_state || memory_request_bytes == 0) {
-		return;
-	}
-	memory_state->SetZero();
-	memory_request_bytes = 0;
+void ManagedAsyncWriteStreamQueue::ReleaseMemoryReservation() {
+	write_queue->ReleaseMemoryReservation();
 }
 
-void ManagedAsyncWriteQueue::RethrowTaskError() {
+void ManagedAsyncWriteStreamQueue::RethrowTaskError() {
 	write_queue->RethrowTaskError();
 }
 
-idx_t ManagedAsyncWriteQueue::ValidateRegistrationOffset(idx_t offset, idx_t write_size) const {
+idx_t ManagedAsyncWriteStreamQueue::ValidateRegistrationOffset(idx_t offset, idx_t write_size) const {
 	if (offset != next_registration_offset) {
 		throw InternalException(
-		    "ManagedAsyncWriteQueue only supports contiguous writes: expected offset %llu, got %llu",
+		    "ManagedAsyncWriteStreamQueue only supports contiguous writes: expected offset %llu, got %llu",
 		    next_registration_offset, offset);
 	}
 	return NextWriteOffset(offset, write_size);
 }
 
-void ManagedAsyncWriteQueue::VerifyOpen() const {
+void ManagedAsyncWriteStreamQueue::VerifyOpen() const {
 	if (closed) {
-		throw InternalException("Cannot use closed ManagedAsyncWriteQueue");
+		throw InternalException("Cannot use closed ManagedAsyncWriteStreamQueue");
 	}
 }
 
-void ManagedAsyncWriteQueue::VerifyContiguousWrite(const PendingWrite &write, idx_t expected_offset) const {
+void ManagedAsyncWriteStreamQueue::VerifyContiguousWrite(const PendingWrite &write, idx_t expected_offset) const {
 	if (write.offset != expected_offset) {
 		throw InternalException(
-		    "ManagedAsyncWriteQueue only supports contiguous writes: expected offset %llu, got %llu", expected_offset,
-		    write.offset);
+		    "ManagedAsyncWriteStreamQueue only supports contiguous writes: expected offset %llu, got %llu",
+		    expected_offset, write.offset);
 	}
 }
 
-idx_t ManagedAsyncWriteQueue::NextWriteOffset(idx_t offset, idx_t write_size) const {
+idx_t ManagedAsyncWriteStreamQueue::NextWriteOffset(idx_t offset, idx_t write_size) const {
 	if (write_size > NumericLimits<idx_t>::Maximum() - offset) {
-		throw InternalException("ManagedAsyncWriteQueue write offset overflow");
+		throw InternalException("ManagedAsyncWriteStreamQueue write offset overflow");
 	}
 	return offset + write_size;
 }
 
-void ManagedAsyncWriteQueue::Write(data_ptr_t buffer, idx_t size, idx_t offset) {
+void ManagedAsyncWriteStreamQueue::Write(data_ptr_t buffer, idx_t size, idx_t offset) {
 	if (size == 0) {
 		return;
 	}

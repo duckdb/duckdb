@@ -52,8 +52,8 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 
-	ManagedAsyncWriteTarget &target = *this;
-	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target);
+	ManagedAsyncWriteStreamTarget &target = *this;
+	write_queue = make_uniq<ManagedAsyncWriteStreamQueue>(client_context, target);
 }
 
 AsyncFileWriter::~AsyncFileWriter() {

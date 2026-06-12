@@ -499,6 +499,31 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 	REQUIRE(saw_second);
 }
 
+TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	TrackingAsyncWriteTarget target;
+	ManagedAsyncWriteQueue queue(*con->context, target);
+
+	queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("abc"), 32);
+	queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("de"), 0);
+	queue.Close();
+
+	REQUIRE(target.writes.size() == 2);
+	bool saw_first = false;
+	bool saw_second = false;
+	for (idx_t write_idx = 0; write_idx < target.writes.size(); write_idx++) {
+		if (target.offsets[write_idx] == 32 && target.writes[write_idx] == "abc") {
+			saw_first = true;
+		}
+		if (target.offsets[write_idx] == 0 && target.writes[write_idx] == "de") {
+			saw_second = true;
+		}
+	}
+	REQUIRE(saw_first);
+	REQUIRE(saw_second);
+}
+
 static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
