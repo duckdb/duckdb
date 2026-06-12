@@ -38,7 +38,7 @@ public:
 	                           Serializer &serializer) = 0;
 
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
-	virtual unique_ptr<TableIndexWriter> GetTableIndexWriter(IndexSerializationInfo &info) = 0;
+	virtual unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
 	virtual CheckpointOptions GetCheckpointOptions() const = 0;
@@ -96,7 +96,7 @@ public:
 	                   Serializer &serializer) override;
 
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
-	unique_ptr<TableIndexWriter> GetTableIndexWriter(IndexSerializationInfo &info) override;
+	unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) override;
 
 	CheckpointOptions GetCheckpointOptions() const override;
 	bool CheckpointIndexes() const override;

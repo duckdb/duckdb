@@ -12,6 +12,8 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
+#include <duckdb/storage/index_serialization_info.hpp>
+
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
@@ -47,10 +49,12 @@ public:
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 
 public:
+	using AllocatorArray = array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>;
+
+public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    AttachedDatabase &db,
-	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
+	    AttachedDatabase &db, const shared_ptr<AllocatorArray> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Create a index instance of this type.
@@ -60,12 +64,25 @@ public:
 		return std::move(art);
 	}
 
+	//! Create an index which is logically equivalent but backed by potentially (partially) different buffers.
+	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators, const IndexStorageInfo &info) {
+		auto art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager,
+		                          unbound_expressions, db, new_allocators, IndexStorageInfo());
+
+		art->SetPrefixCount(info);
+		art->owns_data = true;
+		art->tree.Set(info.root);
+		art->storage_version = storage_version;
+
+		return std::move(art);
+	}
+
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes.
-	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
+	shared_ptr<AllocatorArray> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! Storage version that the ART was created in, used for backwards compatible key generation
@@ -170,6 +187,8 @@ public:
 private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
+
+	static uint8_t GetAllocatorCount(IndexSerializationFormat format);
 
 	bool FullScan(idx_t max_count, set<row_t> &row_ids);
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);

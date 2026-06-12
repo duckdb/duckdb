@@ -346,6 +346,15 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 	lock_guard<mutex> lock(index_entries_lock);
 
+	idx_t bound_count = 0;
+	for (const auto &entry : index_entries) {
+		if (entry->index->IsBound()) {
+			bound_count++;
+		}
+	}
+
+	writer.ReserveBoundIndexes(bound_count);
+
 	for (const auto &entry : index_entries) {
 		entry->index->Checkpoint(writer);
 	}

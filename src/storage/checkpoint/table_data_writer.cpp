@@ -72,8 +72,8 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(IndexSerializationInfo &info) {
-	return make_uniq<SingleFileIndexWriter>(checkpoint_manager.partial_block_manager, info);
+unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
+	return make_uniq<SingleFileIndexWriter>(checkpoint_manager.partial_block_manager, version);
 }
 
 CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {

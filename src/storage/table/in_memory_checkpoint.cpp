@@ -104,7 +104,7 @@ unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &
 	                                         checkpoint_manager);
 }
 
-unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(IndexSerializationInfo &info) {
+unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(StorageVersion) {
 	throw InternalException("Unsupported method GetTableIndexWriter for InMemoryTableDataWriter");
 }
 

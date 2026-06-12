@@ -3,11 +3,16 @@
 
 namespace duckdb {
 
-TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info)
-    : partial_block_manager(partial_block_manager), info(info) {
+TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version)
+    : partial_block_manager(partial_block_manager), storage_version(version) {
 }
 
 TableIndexWriter::~TableIndexWriter() {
+}
+
+void TableIndexWriter::ReserveBoundIndexes(idx_t count) {
+	result.bound_infos.reserve(count);
+	indexes.reserve(count);
 }
 
 void TableIndexWriter::AddUnboundIndex(const IndexStorageInfo &storage_info) {
@@ -21,8 +26,8 @@ void TableIndexWriter::AddBoundIndex(IndexStorageInfo storage_info, unique_ptr<B
 	indexes.push_back(std::move(index));
 }
 
-SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, IndexSerializationInfo &info)
-    : TableIndexWriter(partial_block_manager, info) {
+SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version)
+    : TableIndexWriter(partial_block_manager, version) {
 }
 
 void SingleFileIndexWriter::FlushPartialBlocks() {
@@ -30,7 +35,11 @@ void SingleFileIndexWriter::FlushPartialBlocks() {
 }
 
 IndexSerializationFormat SingleFileIndexWriter::GetTargetFormat() const {
-	// TODO: implement
+	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
+	if (v1_0_0_storage) {
+		return IndexSerializationFormat::V1_0_0;
+	}
+
 	return IndexSerializationFormat::CURRENT;
 }
 

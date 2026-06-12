@@ -130,6 +130,14 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	}
 }
 
+uint8_t ART::GetAllocatorCount(const IndexSerializationFormat format) {
+	if (format == IndexSerializationFormat::V1_0_0) {
+		return DEPRECATED_ALLOCATOR_COUNT;
+	}
+
+	return ALLOCATOR_COUNT;
+}
+
 //===--------------------------------------------------------------------===//
 // Initialize Scans
 //===--------------------------------------------------------------------===//
@@ -1068,40 +1076,39 @@ IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensiti
 void ART::Checkpoint(TableIndexWriter &writer) {
 	lock_guard<mutex> guard(lock);
 
-	auto &info = writer.GetInfo();
-	auto &partial_block_manager = writer.GetPartialBlockManager();
+	const auto target_format = writer.GetTargetFormat();
+	if (target_format == IndexSerializationFormat::V1_0_0) {
+		TransformToDeprecated();
+	}
 
 	IndexStorageInfo storage_info(name);
 	storage_info.root = tree.Get();
-	storage_info.options = info.options;
 
 	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
 		storage_info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
-	// todo: possibly wrap this in a method for the writer
-	// auto v1_0_0_option = info.options.find("v1_0_0_storage");
-	// bool v1_0_0_storage = v1_0_0_option == info.options.end() || v1_0_0_option->second != Value(false);
-	// auto n_info = PrepareSerialize(info.options, v1_0_0_storage);
-	// auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+	for (const auto &allocator : *allocators) {
+		allocator->RemoveEmptyBuffers();
+	}
 
-	const auto target_format = writer.GetTargetFormat();
+	auto &partial_block_manager = writer.GetPartialBlockManager();
+	const auto new_allocators = make_shared_ptr<ART::AllocatorArray>();
+	const auto allocator_count = ART::GetAllocatorCount(target_format);
 
-	auto new_allocators = make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>();
-
+	// We allocate all allocators, but serialize in accordance with the target format.
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		auto &new_allocator = (*new_allocators)[i];
 
 		new_allocator = (*allocators)[i]->Checkpoint(partial_block_manager);
-		storage_info.allocator_infos.push_back(new_allocator->GetInfo());
+
+		if (i < allocator_count) {
+			storage_info.allocator_infos.push_back(new_allocator->GetInfo());
+		}
 	}
 
-	auto new_art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db,
-	                              new_allocators);
-	new_art->tree = tree;
-	new_art->storage_version = storage_version;
-
+	auto new_art = CreateShadow(new_allocators, storage_info);
 	writer.AddBoundIndex(std::move(storage_info), std::move(new_art));
 }
 
