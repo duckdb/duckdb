@@ -1,14 +1,13 @@
 # name: test/sql/types/geo/geometry_shred_deletes.test
 # group: [geo]
 
+load __TEST_DIR__/geo_crash.db readwrite v1.5.0
+
+statement ok
+set checkpoint_threshold='10gb'
+
 statement ok
 SET geometry_minimum_shredding_size = 0;
-
-statement ok
-ATTACH '__TEST_DIR__/geo.db' AS g (STORAGE_VERSION 'v1.5.0');
-
-statement ok
-USE g;
 
 statement ok
 CREATE TABLE t1(geom GEOMETRY);
@@ -17,22 +16,12 @@ statement ok
 INSERT INTO t1 SELECT 'POINT(1 2)'::GEOMETRY FROM range(3);
 
 statement ok
-CHECKPOINT g;
+CHECKPOINT;
 
-statement ok
-USE memory;
-
-statement ok
-DETACH g;
-
-statement ok
-ATTACH '__TEST_DIR__/geo.db' AS g;
-
-statement ok
-USE g;
+restart
 
 statement ok
 DELETE FROM t1 WHERE rowid = 0;
 
 statement ok
-CHECKPOINT g;
+CHECKPOINT;
