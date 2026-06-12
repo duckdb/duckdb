@@ -8,14 +8,58 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
+
+static bool IsSupportedUnnestTop(LogicalOperatorType type) {
+	return type == LogicalOperatorType::LOGICAL_PROJECTION || type == LogicalOperatorType::LOGICAL_WINDOW ||
+	       type == LogicalOperatorType::LOGICAL_FILTER || type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+	       type == LogicalOperatorType::LOGICAL_UNNEST;
+}
+
+static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
+	auto entry = std::find(bindings.begin(), bindings.end(), binding);
+	if (entry == bindings.end()) {
+		return optional_idx();
+	}
+	return NumericCast<idx_t>(entry - bindings.begin());
+}
+
+static idx_t CountCTERefs(LogicalOperator &op, TableIndex cte_index) {
+	idx_t result = 0;
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index) {
+		result++;
+	}
+	for (auto &child : op.children) {
+		result += CountCTERefs(*child, cte_index);
+	}
+	return result;
+}
+
+static bool IsCTERef(LogicalOperator &op, TableIndex cte_index) {
+	return op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index;
+}
+
+static optional_idx FindCTERefSide(LogicalComparisonJoin &join, TableIndex cte_index) {
+	if (IsCTERef(*join.children[0], cte_index)) {
+		return optional_idx(0);
+	}
+	if (IsCTERef(*join.children[1], cte_index)) {
+		return optional_idx(1);
+	}
+	return optional_idx();
+}
 
 void UnnestRewriterPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
@@ -58,6 +102,7 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 		}
 	}
 
+	RewriteCTECandidates(op, op, updater);
 	return op;
 }
 
@@ -181,13 +226,397 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	}
 }
 
+static bool ConvertCTETableInOutUnnest(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
+                                       TableIndex input_cte_index, bool require_input_cte_ref = true) {
+	if (op->type != LogicalOperatorType::LOGICAL_GET) {
+		return false;
+	}
+	auto &get = op->Cast<LogicalGet>();
+	if (!ExpressionBinder::IsUnnestFunction(get.function.name) || get.ordinality_idx.IsValid()) {
+		return false;
+	}
+	if (op->children.size() != 1 || op->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return false;
+	}
+	auto &proj = op->children[0]->Cast<LogicalProjection>();
+	if (proj.children.size() != 1) {
+		return false;
+	}
+	if (require_input_cte_ref && !IsCTERef(*proj.children[0], input_cte_index)) {
+		return false;
+	}
+
+	auto unnest_get_column = op->GetColumnBindings();
+	auto unnest_get_index = op->GetTableIndex()[0];
+	op->ResolveOperatorTypes();
+	for (idx_t i = 0; i < unnest_get_column.size(); i++) {
+		auto &col_bind = unnest_get_column[i];
+		if (col_bind.table_index != unnest_get_index) {
+			continue;
+		}
+		auto &expr = proj.GetExpression(col_bind.column_index);
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
+	}
+
+	auto unnest_get = std::move(op);
+	ColumnBindingReplacer replacer;
+	auto cte_ref = std::move(proj.children[0]);
+	auto unnest = make_uniq<LogicalUnnest>(unnest_get_index);
+	unnest->children.push_back(std::move(cte_ref));
+	op = std::move(unnest_get->children[0]);
+	for (idx_t i = 0; i < unnest_get_column.size(); i++) {
+		auto &col_bind = unnest_get_column[i];
+		D_ASSERT(col_bind.table_index == unnest_get_index || col_bind.table_index == proj.table_index);
+		if (col_bind.table_index != unnest_get_index) {
+			continue;
+		}
+		auto &bind_col = proj.expressions[col_bind.column_index]->Cast<BoundColumnRefExpression>();
+		auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
+		unnest_expr->ChildMutable() = proj.expressions[col_bind.column_index]->Copy();
+		bind_col.BindingMutable() = ColumnBinding(unnest_get_index, bind_col.Binding().column_index);
+		auto unnest_proj_idx = ColumnBinding::PushExpression(unnest->expressions, std::move(unnest_expr));
+		ColumnBinding new_column_ref(bind_col.Binding().table_index, unnest_proj_idx);
+		auto unnest_ref = make_uniq<BoundColumnRefExpression>(bind_col.GetAlias(), unnest_get->types[i], new_column_ref,
+		                                                      bind_col.Depth());
+		proj.expressions[col_bind.column_index] = std::move(unnest_ref);
+		proj.types[col_bind.column_index] = unnest_get->types[i];
+		replacer.replacement_bindings.push_back(
+		    ReplacementBinding(col_bind, ColumnBinding(proj.table_index, col_bind.column_index), unnest_get->types[i]));
+	}
+	proj.children[0] = std::move(unnest);
+	replacer.stop_operator = proj;
+	replacer.VisitOperator(*root);
+	return true;
+}
+
+static bool GetInlineDedupColumns(LogicalMaterializedCTE &domain_cte, LogicalOperator &dedup_op,
+                                  vector<ColumnBinding> &dedup_columns) {
+	// An earlier CTE inlining pass can remove the explicit dedup CTE. Trace the bindings emitted below UNNEST back
+	// through projections and the aggregate groups to recover the original delimiter columns from the domain producer.
+	domain_cte.children[0]->ResolveOperatorTypes();
+	auto source_bindings = domain_cte.children[0]->GetColumnBindings();
+	vector<ColumnBinding> traced_bindings = dedup_op.GetColumnBindings();
+
+	reference<LogicalOperator> current_op(dedup_op);
+	while (current_op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = current_op.get().Cast<LogicalProjection>();
+		if (projection.children.size() != 1) {
+			return false;
+		}
+		auto current_bindings = projection.GetColumnBindings();
+		for (auto &binding : traced_bindings) {
+			auto binding_idx = FindBindingIndex(current_bindings, binding);
+			if (!binding_idx.IsValid()) {
+				continue;
+			}
+			if (binding_idx.GetIndex() >= projection.expressions.size()) {
+				return false;
+			}
+			auto &expr = projection.GetExpression(ProjectionIndex(binding_idx.GetIndex()));
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return false;
+			}
+			auto &colref = expr.Cast<BoundColumnRefExpression>();
+			if (colref.Depth() != 0) {
+				return false;
+			}
+			binding = colref.Binding();
+		}
+		current_op = *projection.children[0];
+	}
+
+	if (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return false;
+	}
+	auto &aggregate = current_op.get().Cast<LogicalAggregate>();
+	if (aggregate.children.size() != 1 || !IsCTERef(*aggregate.children[0], domain_cte.table_index)) {
+		return false;
+	}
+	auto aggregate_bindings = aggregate.GetColumnBindings();
+	auto aggregate_child_bindings = aggregate.children[0]->GetColumnBindings();
+	for (auto &binding : traced_bindings) {
+		auto aggregate_idx = FindBindingIndex(aggregate_bindings, binding);
+		optional_idx source_idx;
+		if (!aggregate_idx.IsValid()) {
+			source_idx = FindBindingIndex(aggregate_child_bindings, binding);
+		} else {
+			if (aggregate_idx.GetIndex() >= aggregate.groups.size()) {
+				return false;
+			}
+			auto &group = aggregate.groups[aggregate_idx.GetIndex()];
+			if (group->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return false;
+			}
+			auto &colref = group->Cast<BoundColumnRefExpression>();
+			if (colref.Depth() != 0) {
+				return false;
+			}
+			source_idx = FindBindingIndex(aggregate_child_bindings, colref.Binding());
+		}
+		if (!source_idx.IsValid() || source_idx.GetIndex() >= source_bindings.size()) {
+			return false;
+		}
+		dedup_columns.push_back(source_bindings[source_idx.GetIndex()]);
+	}
+	return !dedup_columns.empty();
+}
+
+bool UnnestRewriter::RewriteCTECandidates(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
+                                          UnnestRewriterPlanUpdater &updater) {
+	bool changed = false;
+	for (auto &child : op->children) {
+		changed = RewriteCTECandidates(root, child, updater) || changed;
+	}
+	return RewriteCTECandidate(root, op, updater) || changed;
+}
+
+bool UnnestRewriter::RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> &root,
+                                                    unique_ptr<LogicalOperator> &candidate,
+                                                    UnnestRewriterPlanUpdater &updater) {
+	auto &domain_cte = candidate->Cast<LogicalMaterializedCTE>();
+	if (CountCTERefs(*candidate, domain_cte.table_index) != 2) {
+		return false;
+	}
+
+	idx_t topmost_depth = 0;
+	auto topmost_ptr = &domain_cte.children[1];
+	while (topmost_ptr->get()->type == LogicalOperatorType::LOGICAL_PROJECTION &&
+	       topmost_ptr->get()->children.size() == 1 &&
+	       topmost_ptr->get()->children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		topmost_ptr = &topmost_ptr->get()->children[0];
+		topmost_depth++;
+	}
+	auto &topmost_op = *topmost_ptr->get();
+	if (!IsSupportedUnnestTop(topmost_op.type) || topmost_op.children.size() != 1 ||
+	    topmost_op.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+
+	auto &join = topmost_op.children[0]->Cast<LogicalComparisonJoin>();
+	if (join.join_type != JoinType::INNER || join.conditions.size() != 1 || join.children.size() != 2) {
+		return false;
+	}
+
+	auto domain_side = FindCTERefSide(join, domain_cte.table_index);
+	if (!domain_side.IsValid()) {
+		return false;
+	}
+	idx_t other_side = 1 - domain_side.GetIndex();
+	auto domain_ref_bindings = join.children[domain_side.GetIndex()]->GetColumnBindings();
+	if (join.children[other_side]->type == LogicalOperatorType::LOGICAL_GET &&
+	    !ConvertCTETableInOutUnnest(root, join.children[other_side], domain_cte.table_index, false)) {
+		return false;
+	}
+
+	vector<reference<unique_ptr<LogicalOperator>>> path_to_unnest;
+	reference<unique_ptr<LogicalOperator>> current_op = join.children[other_side];
+	while (current_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		if (current_op.get()->children.size() != 1) {
+			return false;
+		}
+		path_to_unnest.push_back(current_op);
+		current_op = current_op.get()->children[0];
+	}
+	if (current_op.get()->type != LogicalOperatorType::LOGICAL_UNNEST) {
+		return false;
+	}
+	auto &unnest = current_op.get()->Cast<LogicalUnnest>();
+	if (unnest.children.size() != 1) {
+		return false;
+	}
+
+	vector<ColumnBinding> candidate_delim_columns;
+	if (!GetInlineDedupColumns(domain_cte, *unnest.children[0], candidate_delim_columns)) {
+		return false;
+	}
+	auto dedup_bindings = unnest.children[0]->GetColumnBindings();
+	if (dedup_bindings.size() != candidate_delim_columns.size()) {
+		return false;
+	}
+
+	delim_columns = std::move(candidate_delim_columns);
+	GetLHSExpressions(*domain_cte.children[0]);
+	if (domain_ref_bindings.size() != lhs_bindings.size()) {
+		delim_columns.clear();
+		lhs_bindings.clear();
+		return false;
+	}
+
+	// After replacing the CTE refs by the shared domain producer, expressions in the join subtree must read
+	// directly from the producer bindings. The dedup bindings are retargeted to their original delimiter columns.
+	ColumnBindingReplacer domain_ref_replacer;
+	for (idx_t binding_idx = 0; binding_idx < lhs_bindings.size(); binding_idx++) {
+		domain_ref_replacer.replacement_bindings.emplace_back(
+		    domain_ref_bindings[binding_idx], lhs_bindings[binding_idx].binding, lhs_bindings[binding_idx].type);
+	}
+	for (idx_t binding_idx = 0; binding_idx < dedup_bindings.size(); binding_idx++) {
+		domain_ref_replacer.replacement_bindings.emplace_back(dedup_bindings[binding_idx], delim_columns[binding_idx]);
+	}
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    topmost_op, [&](unique_ptr<Expression> *expr) { domain_ref_replacer.VisitExpression(expr); });
+	overwritten_tbl_idx = dedup_bindings[0].table_index;
+	distinct_unnest_count = dedup_bindings.size();
+
+	unnest.children[0] = std::move(domain_cte.children[0]);
+	if (path_to_unnest.empty()) {
+		updater.replace_bindings.clear();
+		for (idx_t binding_idx = 0; binding_idx < dedup_bindings.size(); binding_idx++) {
+			updater.replace_bindings.emplace_back(dedup_bindings[binding_idx], delim_columns[binding_idx]);
+		}
+		for (auto &unnest_expr : unnest.expressions) {
+			updater.VisitExpression(&unnest_expr);
+		}
+		updater.replace_bindings.clear();
+		topmost_op.children[0] = std::move(current_op.get());
+		candidate = std::move(domain_cte.children[1]);
+		delim_columns.clear();
+		lhs_bindings.clear();
+		return true;
+	}
+	topmost_op.children[0] = std::move(path_to_unnest.front().get());
+
+	candidate = std::move(domain_cte.children[1]);
+	reference<unique_ptr<LogicalOperator>> rewritten_topmost_ptr = candidate;
+	for (idx_t depth = 0; depth < topmost_depth; depth++) {
+		rewritten_topmost_ptr = rewritten_topmost_ptr.get()->children[0];
+	}
+
+	updater.overwritten_tbl_idx = overwritten_tbl_idx;
+	UpdateBoundUnnestBindings(updater, rewritten_topmost_ptr.get());
+	UpdateRHSBindings(root, rewritten_topmost_ptr.get(), updater);
+
+	delim_columns.clear();
+	lhs_bindings.clear();
+	return true;
+}
+
+bool UnnestRewriter::RewriteCTECandidate(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &candidate,
+                                         UnnestRewriterPlanUpdater &updater) {
+	if (candidate->type != LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		return false;
+	}
+	auto &domain_cte = candidate->Cast<LogicalMaterializedCTE>();
+	if (domain_cte.materialize != CTEMaterialize::CTE_MATERIALIZE_DEFAULT || domain_cte.children.size() != 2) {
+		return false;
+	}
+	if (RewriteInlineCTEDedupCandidate(root, candidate, updater)) {
+		return true;
+	}
+	if (domain_cte.children[1]->type != LogicalOperatorType::LOGICAL_PROJECTION ||
+	    domain_cte.children[1]->children.size() != 1 ||
+	    domain_cte.children[1]->children[0]->type != LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		return false;
+	}
+
+	auto &outer_projection = domain_cte.children[1]->Cast<LogicalProjection>();
+	auto &dedup_cte = outer_projection.children[0]->Cast<LogicalMaterializedCTE>();
+	if (dedup_cte.materialize != CTEMaterialize::CTE_MATERIALIZE_DEFAULT || dedup_cte.children.size() != 2) {
+		return false;
+	}
+	if (dedup_cte.children[0]->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return false;
+	}
+	auto &dedup = dedup_cte.children[0]->Cast<LogicalAggregate>();
+	if (dedup.children.size() != 1 || !IsCTERef(*dedup.children[0], domain_cte.table_index)) {
+		return false;
+	}
+
+	domain_cte.children[0]->ResolveOperatorTypes();
+	auto source_bindings = domain_cte.children[0]->GetColumnBindings();
+	auto dedup_child_bindings = dedup.children[0]->GetColumnBindings();
+	vector<ColumnBinding> candidate_delim_columns;
+	for (auto &group : dedup.groups) {
+		if (group->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &colref = group->Cast<BoundColumnRefExpression>();
+		if (colref.Depth() != 0) {
+			return false;
+		}
+		auto source_idx = FindBindingIndex(dedup_child_bindings, colref.Binding());
+		if (!source_idx.IsValid() || source_idx.GetIndex() >= source_bindings.size()) {
+			return false;
+		}
+		candidate_delim_columns.push_back(source_bindings[source_idx.GetIndex()]);
+	}
+	if (candidate_delim_columns.empty() || candidate_delim_columns.size() != dedup_cte.column_count) {
+		return false;
+	}
+
+	if (CountCTERefs(*candidate, domain_cte.table_index) != 2 || CountCTERefs(*candidate, dedup_cte.table_index) != 1) {
+		return false;
+	}
+
+	auto &topmost_op = *dedup_cte.children[1];
+	if (!IsSupportedUnnestTop(topmost_op.type) || topmost_op.children.size() != 1 ||
+	    topmost_op.children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = topmost_op.children[0]->Cast<LogicalComparisonJoin>();
+	if (join.join_type != JoinType::INNER || join.conditions.size() != 1 || join.children.size() != 2) {
+		return false;
+	}
+
+	auto domain_side = FindCTERefSide(join, domain_cte.table_index);
+	if (!domain_side.IsValid()) {
+		return false;
+	}
+	idx_t other_side = 1 - domain_side.GetIndex();
+
+	if (join.children[other_side]->type == LogicalOperatorType::LOGICAL_GET &&
+	    !ConvertCTETableInOutUnnest(root, join.children[other_side], dedup_cte.table_index)) {
+		return false;
+	}
+
+	vector<reference<unique_ptr<LogicalOperator>>> path_to_unnest;
+	reference<unique_ptr<LogicalOperator>> current_op = join.children[other_side];
+	while (current_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		if (current_op.get()->children.size() != 1) {
+			return false;
+		}
+		path_to_unnest.push_back(current_op);
+		current_op = current_op.get()->children[0];
+	}
+	if (path_to_unnest.empty() || current_op.get()->type != LogicalOperatorType::LOGICAL_UNNEST) {
+		return false;
+	}
+	auto &unnest = current_op.get()->Cast<LogicalUnnest>();
+	if (unnest.children.size() != 1 || !IsCTERef(*unnest.children[0], dedup_cte.table_index)) {
+		return false;
+	}
+	auto &dedup_ref = unnest.children[0]->Cast<LogicalCTERef>();
+	if (dedup_ref.chunk_types.size() != candidate_delim_columns.size()) {
+		return false;
+	}
+
+	delim_columns = std::move(candidate_delim_columns);
+	GetLHSExpressions(*domain_cte.children[0]);
+	overwritten_tbl_idx = dedup_ref.table_index;
+	distinct_unnest_count = dedup_ref.chunk_types.size();
+
+	unnest.children[0] = std::move(domain_cte.children[0]);
+	topmost_op.children[0] = std::move(path_to_unnest.front().get());
+
+	updater.overwritten_tbl_idx = overwritten_tbl_idx;
+	UpdateBoundUnnestBindings(updater, dedup_cte.children[1]);
+	UpdateRHSBindings(root, dedup_cte.children[1], updater);
+
+	auto replacement = std::move(domain_cte.children[1]);
+	auto &replacement_projection = replacement->Cast<LogicalProjection>();
+	auto &replacement_dedup_cte = replacement_projection.children[0]->Cast<LogicalMaterializedCTE>();
+	replacement_projection.children[0] = std::move(replacement_dedup_cte.children[1]);
+	candidate = std::move(replacement);
+
+	delim_columns.clear();
+	lhs_bindings.clear();
+	return true;
+}
+
 bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
 	auto &topmost_op = *candidate;
-	if (topmost_op.type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_WINDOW &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_FILTER &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_UNNEST) {
+	if (!IsSupportedUnnestTop(topmost_op.type)) {
 		return false;
 	}
 
@@ -208,17 +637,17 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
 
 	// find the LOGICAL_UNNEST
 	// and get the path down to the LOGICAL_UNNEST
-	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
-	auto curr_op = &delim_join.children[other_idx];
-	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+	vector<reference<unique_ptr<LogicalOperator>>> path_to_unnest;
+	reference<unique_ptr<LogicalOperator>> curr_op = delim_join.children[other_idx];
+	while (curr_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		path_to_unnest.push_back(curr_op);
-		curr_op = &curr_op->get()->children[0];
+		curr_op = curr_op.get()->children[0];
 	}
 
 	// store the table index of the child of the LOGICAL_UNNEST
 	// then update the plan by making the lhs_proj the child of the LOGICAL_UNNEST
-	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
+	D_ASSERT(curr_op.get()->type == LogicalOperatorType::LOGICAL_UNNEST);
+	auto &unnest = curr_op.get()->Cast<LogicalUnnest>();
 	D_ASSERT(unnest.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET);
 	overwritten_tbl_idx = unnest.children[0]->Cast<LogicalDelimGet>().table_index;
 
@@ -229,7 +658,7 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
 	unnest.children[0] = std::move(lhs_op);
 
 	// replace the LOGICAL_DELIM_JOIN with its RHS child operator
-	topmost_op.children[0] = std::move(*path_to_unnest.front());
+	topmost_op.children[0] = std::move(path_to_unnest.front().get());
 	return true;
 }
 
@@ -238,29 +667,50 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 	auto &topmost_op = *candidate;
 	idx_t shift = lhs_bindings.size();
 
-	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
-	auto curr_op = &topmost_op.children[0];
-	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+	vector<reference<unique_ptr<LogicalOperator>>> path_to_unnest;
+	reference<unique_ptr<LogicalOperator>> curr_op = topmost_op.children[0];
+	while (curr_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		path_to_unnest.push_back(curr_op);
-		D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		auto &proj = curr_op->get()->Cast<LogicalProjection>();
-
-		// pop the unnest columns and the delim index
+		D_ASSERT(curr_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
+		auto &proj = curr_op.get()->Cast<LogicalProjection>();
 		D_ASSERT(proj.expressions.size() > distinct_unnest_count);
-		for (idx_t i = 0; i < distinct_unnest_count; i++) {
-			proj.expressions.pop_back();
+		auto tbl_idx = proj.table_index;
+		auto payload_count = proj.expressions.size() - distinct_unnest_count;
+
+		// The trailing columns are duplicate-eliminated delimiter columns. References to those slots should
+		// point at the prepended LHS columns after the rewrite, not at shifted payload columns.
+		for (idx_t i = payload_count; i < proj.expressions.size(); i++) {
+			auto &expr = proj.expressions[i];
+			if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &colref = expr->Cast<BoundColumnRefExpression>();
+			auto removed_binding = colref.Binding();
+			if (removed_binding.table_index == overwritten_tbl_idx &&
+			    removed_binding.column_index.GetIndex() < delim_columns.size()) {
+				// CTE-based rewrites can still reference the deduplicated input here; translate it back to the
+				// corresponding domain producer column before finding the new LHS projection slot.
+				removed_binding = delim_columns[removed_binding.column_index.GetIndex()];
+			}
+			for (idx_t lhs_idx = 0; lhs_idx < lhs_bindings.size(); lhs_idx++) {
+				if (removed_binding == lhs_bindings[lhs_idx].binding) {
+					ColumnBinding source_binding(tbl_idx, ProjectionIndex(i));
+					ColumnBinding target_binding(tbl_idx, ProjectionIndex(lhs_idx));
+					updater.replace_bindings.emplace_back(source_binding, target_binding);
+					break;
+				}
+			}
 		}
+		proj.expressions.resize(payload_count);
 
 		// store all shifted current bindings
-		auto tbl_idx = proj.table_index;
 		for (idx_t i = 0; i < proj.expressions.size(); i++) {
 			ColumnBinding source_binding(tbl_idx, ProjectionIndex(i));
 			ColumnBinding target_binding(tbl_idx, ProjectionIndex(i + shift));
-			ReplaceBinding replace_binding(source_binding, target_binding);
-			updater.replace_bindings.push_back(replace_binding);
+			updater.replace_bindings.emplace_back(source_binding, target_binding);
 		}
 
-		curr_op = &curr_op->get()->children[0];
+		curr_op = curr_op.get()->children[0];
 	}
 
 	// update all bindings by shifting them
@@ -277,8 +727,8 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 	}
 
 	// temporarily remove the BOUND_UNNESTs and the child of the LOGICAL_UNNEST from the plan
-	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
+	D_ASSERT(curr_op.get()->type == LogicalOperatorType::LOGICAL_UNNEST);
+	auto &unnest = curr_op.get()->Cast<LogicalUnnest>();
 	vector<unique_ptr<Expression>> temp_bound_unnests;
 	for (auto &temp_bound_unnest : unnest.expressions) {
 		temp_bound_unnests.push_back(std::move(temp_bound_unnest));
@@ -298,15 +748,11 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 
 	// add the LHS expressions to each LOGICAL_PROJECTION
 	for (idx_t i = path_to_unnest.size(); i > 0; i--) {
-		D_ASSERT(path_to_unnest[i - 1]->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		auto &proj = path_to_unnest[i - 1]->get()->Cast<LogicalProjection>();
+		D_ASSERT(path_to_unnest[i - 1].get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
+		auto &proj = path_to_unnest[i - 1].get()->Cast<LogicalProjection>();
 
 		// temporarily store the existing expressions
-		vector<unique_ptr<Expression>> existing_expressions;
-		for (idx_t expr_idx = 0; expr_idx < proj.expressions.size(); expr_idx++) {
-			existing_expressions.push_back(std::move(proj.expressions[expr_idx]));
-		}
-
+		auto existing_expressions = std::move(proj.expressions);
 		proj.expressions.clear();
 
 		// add the new expressions
@@ -321,9 +767,11 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		}
 
 		// add the existing expressions again
-		for (idx_t expr_idx = 0; expr_idx < existing_expressions.size(); expr_idx++) {
-			proj.expressions.push_back(std::move(existing_expressions[expr_idx]));
+		for (auto &expr : existing_expressions) {
+			proj.expressions.push_back(std::move(expr));
 		}
+
+		proj.ResolveOperatorTypes();
 	}
 }
 
@@ -332,14 +780,14 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 	auto &topmost_op = *candidate;
 
 	// traverse LOGICAL_PROJECTION(s)
-	auto curr_op = &topmost_op.children[0];
-	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		curr_op = &curr_op->get()->children[0];
+	reference<unique_ptr<LogicalOperator>> curr_op = topmost_op.children[0];
+	while (curr_op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		curr_op = curr_op.get()->children[0];
 	}
 
 	// found the LOGICAL_UNNEST
-	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
+	D_ASSERT(curr_op.get()->type == LogicalOperatorType::LOGICAL_UNNEST);
+	auto &unnest = curr_op.get()->Cast<LogicalUnnest>();
 
 	D_ASSERT(unnest.children.size() == 1);
 	auto unnest_cols = unnest.children[0]->GetColumnBindings();
