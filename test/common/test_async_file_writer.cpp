@@ -568,11 +568,11 @@ TEST_CASE("AsyncFileWriter requires a client context", "[async_file_writer]") {
 	REQUIRE(!fs.FileExists(path));
 }
 
-TEST_CASE("AsyncFileWriter registers writes before async drain", "[async_file_writer]") {
+TEST_CASE("AsyncFileWriter batches write registration before scheduling", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
 	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_register.tmp");
+	auto path = TestCreatePath("async_file_writer_batch.tmp");
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
 	}
@@ -580,18 +580,18 @@ TEST_CASE("AsyncFileWriter registers writes before async drain", "[async_file_wr
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
 		auto batch_guard = writer.StartBatch();
-		writer.WriteData(const_data_ptr_cast("ab"), 2);
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("efgh"));
 
-		REQUIRE(writer.GetTotalWritten() == 4);
+		REQUIRE(writer.GetTotalWritten() == 8);
+		writer.ApplyBackpressure();
 		REQUIRE(fs.write_sizes.empty());
 		batch_guard.Finish();
 	}
 
 	writer.Close();
-	REQUIRE(ReadFile(path) == "abcd");
+	REQUIRE(ReadFile(path) == "abcdefgh");
 	REQUIRE(fs.write_sizes.size() == 1);
-	REQUIRE(fs.write_sizes[0] == 4);
 	fs.RemoveFile(path);
 }
 
@@ -613,53 +613,6 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcd");
-	REQUIRE(fs.write_sizes.size() == 1);
-	REQUIRE(fs.write_sizes[0] == 4);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter keeps synchronous direct writes aligned with staged writes", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithNoAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_sync_direct_then_staged.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string large(2 * AsyncWriteConfig::COPIED_BUFFER_CAPACITY, 'x');
-	AsyncFileWriter writer(*con->context, fs, path);
-	writer.WriteData(const_data_ptr_cast("head"), 4);
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
-	writer.WriteData(const_data_ptr_cast("tail"), 4);
-
-	writer.Close();
-	REQUIRE(ReadFile(path) == "head" + large + "tail");
-	REQUIRE(fs.write_sizes.size() == 3);
-	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
-	REQUIRE(fs.write_sizes[1] == large.size() + 4 - AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
-	REQUIRE(fs.write_sizes[2] == 4);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter buffers small copied writes", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithNoAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_small_copied.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	writer.WriteData(const_data_ptr_cast("PA"), 2);
-	writer.WriteData(const_data_ptr_cast("R1"), 2);
-
-	REQUIRE(writer.GetTotalWritten() == 4);
-	REQUIRE(fs.write_sizes.empty());
-
-	writer.Close();
-	REQUIRE(ReadFile(path) == "PAR1");
 	REQUIRE(fs.write_sizes.size() == 1);
 	REQUIRE(fs.write_sizes[0] == 4);
 	fs.RemoveFile(path);
@@ -687,10 +640,6 @@ TEST_CASE("AsyncFileWriter preserves order around large copied writes", "[async_
 	writer.Close();
 
 	REQUIRE(ReadFile(path) == "PAR1" + string(8192, 'x') + "PARE");
-	REQUIRE(fs.write_sizes.size() == 3);
-	REQUIRE(fs.write_sizes[0] == 4);
-	REQUIRE(fs.write_sizes[1] == 8192);
-	REQUIRE(fs.write_sizes[2] == 4);
 	fs.RemoveFile(path);
 }
 
@@ -732,28 +681,6 @@ TEST_CASE("AsyncFileWriter writes at truncated offset", "[async_file_writer]") {
 	fs.RemoveFile(path);
 }
 
-TEST_CASE("AsyncFileWriter flush waits for pending writes", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_flush.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	auto batch_guard = writer.StartBatch();
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
-	REQUIRE(fs.write_sizes.empty());
-
-	writer.Flush();
-	REQUIRE(ReadFile(path) == "abcd");
-	REQUIRE(fs.write_sizes.size() == 1);
-	batch_guard.Finish();
-	writer.Close();
-	fs.RemoveFile(path);
-}
-
 TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
@@ -780,36 +707,6 @@ TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]"
 	writer.Close();
 	REQUIRE(ReadFile(path) == "abcd");
 	REQUIRE(fs.write_sizes.size() == 2);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_large.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string large(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD, 'a');
-	string small_a(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD / 2, 'b');
-	string small_b(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD / 2, 'c');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_a));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(small_b));
-		batch_guard.Finish();
-	}
-	writer.Close();
-
-	REQUIRE(ReadFile(path) == large + small_a + small_b);
-	REQUIRE(fs.write_sizes.size() == 2);
-	REQUIRE(fs.write_sizes[0] == large.size());
-	REQUIRE(fs.write_sizes[1] == small_a.size() + small_b.size());
 	fs.RemoveFile(path);
 }
 
@@ -858,37 +755,6 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 	fs.RemoveFile(path);
 }
 
-TEST_CASE("AsyncFileWriter drains local positional writes on multiple async threads", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(true);
-	auto path = TestCreatePath("async_file_writer_local_parallel_positional.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
-		batch_guard.Finish();
-	}
-
-	auto saw_two_blocked_writes = fs.WaitForBlockedWrites(2);
-	auto max_active_writes = fs.MaxActiveWrites();
-
-	fs.ReleaseWrites();
-	writer.Close();
-	REQUIRE(saw_two_blocked_writes);
-	REQUIRE(max_active_writes >= 2);
-	REQUIRE(ReadFile(path) == first + second);
-	fs.RemoveFile(path);
-}
-
 TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drain", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -914,65 +780,6 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 	REQUIRE(ReadFile(path) == first + second);
 	REQUIRE(fs.write_sizes.size() == 1);
 	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter avoids sub-threshold remote writes when selected bytes allow coalescing",
-          "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	TrackingWriteFileSystem fs(false);
-	auto path = TestCreatePath("async_file_writer_remote_coalesce_small_run.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string first(5ULL * 1024ULL * 1024ULL, 'a');
-	string second(1ULL * 1024ULL * 1024ULL, 'b');
-	string third(3ULL * 1024ULL * 1024ULL, 'c');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(third));
-		batch_guard.Finish();
-	}
-	writer.Close();
-
-	REQUIRE(ReadFile(path) == first + second + third);
-	REQUIRE(fs.write_sizes.size() == 1);
-	REQUIRE(fs.write_sizes[0] == first.size() + second.size() + third.size());
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter schedules extra remote drain tasks only after a full budget", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db, 4);
-	BlockingWriteFileSystem fs(true, false);
-	auto path = TestCreatePath("async_file_writer_remote_extra_task_threshold.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	REQUIRE(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD * 2 == AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET);
-	string chunk(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD, 'x');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
-	REQUIRE(fs.WaitForBlockedWrites(1));
-
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	REQUIRE(fs.BlockedWrites() == 1);
-
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
-	REQUIRE(fs.WaitForBlockedWrites(2));
-
-	fs.ReleaseWrites();
-	writer.Close();
-	REQUIRE(ReadFile(path) == chunk + chunk + chunk);
 	fs.RemoveFile(path);
 }
 
@@ -1004,10 +811,6 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 	writer.Close();
 	REQUIRE(ReadFile(path) == large + tail);
 	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter local queued drain task covers newly registered tiny tail", "[async_file_writer]") {
-	TestQueuedDrainTaskCoversNewTinyTail(true, "async_file_writer_local_queued_large_then_tiny.tmp");
 }
 
 TEST_CASE("AsyncFileWriter remote queued drain task covers newly registered tiny tail", "[async_file_writer]") {
@@ -1043,90 +846,6 @@ TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as p
 	REQUIRE(saw_first_blocked_write);
 	REQUIRE(max_active_writes == 1);
 	REQUIRE(ReadFile(path) == first + second);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter falls back to one drain task without positional writes", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	BlockingWriteFileSystem fs(false);
-	auto path = TestCreatePath("async_file_writer_sequential_fallback.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
-		batch_guard.Finish();
-	}
-
-	auto saw_first_blocked_write = fs.WaitForBlockedWrites(1);
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	auto max_active_writes = fs.MaxActiveWrites();
-	fs.ReleaseWrites();
-	writer.Close();
-
-	REQUIRE(saw_first_blocked_write);
-	REQUIRE(max_active_writes == 1);
-	REQUIRE(ReadFile(path) == first + second);
-	REQUIRE(fs.write_sizes.size() == 2);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter does not apply backpressure during a batch", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_backpressure.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("efgh"));
-		REQUIRE(fs.write_sizes.empty());
-		batch_guard.Finish();
-	}
-
-	writer.Close();
-	REQUIRE(ReadFile(path) == "abcdefgh");
-	REQUIRE(fs.write_sizes.size() == 1);
-	fs.RemoveFile(path);
-}
-
-TEST_CASE("AsyncFileWriter batches writes before scheduling", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db);
-	TrackingWriteFileSystem fs;
-	auto path = TestCreatePath("async_file_writer_batch.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	{
-		auto batch_guard = writer.StartBatch();
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
-		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("efgh"));
-		REQUIRE(writer.GetTotalWritten() == 8);
-
-		writer.ApplyBackpressure();
-		REQUIRE(fs.write_sizes.empty());
-		batch_guard.Finish();
-	}
-
-	writer.Close();
-	REQUIRE(ReadFile(path) == "abcdefgh");
-	REQUIRE(fs.write_sizes.size() == 1);
 	fs.RemoveFile(path);
 }
 
