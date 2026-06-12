@@ -460,6 +460,30 @@ TEST_CASE("AsyncFileWriter writes synchronously without async threads", "[async_
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter keeps synchronous direct writes aligned with staged writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_sync_direct_then_staged.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string large(2 * AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY, 'x');
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(const_data_ptr_cast("head"), 4);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+	writer.WriteData(const_data_ptr_cast("tail"), 4);
+
+	writer.Close();
+	REQUIRE(ReadFile(path) == "head" + large + "tail");
+	REQUIRE(fs.write_sizes.size() == 3);
+	REQUIRE(fs.write_sizes[0] == AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY);
+	REQUIRE(fs.write_sizes[1] == large.size() + 4 - AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY);
+	REQUIRE(fs.write_sizes[2] == 4);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter buffers small copied writes", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithNoAsyncThreads(db);
@@ -528,6 +552,25 @@ TEST_CASE("AsyncFileWriter copies transient WriteData input", "[async_file_write
 	writer.Close();
 
 	REQUIRE(ReadFile(path) == "abcdef");
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter writes at truncated offset", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	TrackingWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_truncate_write.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
+	writer.Truncate(3);
+	writer.WriteData(const_data_ptr_cast("XYZ"), 3);
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == "abcXYZ");
 	fs.RemoveFile(path);
 }
 

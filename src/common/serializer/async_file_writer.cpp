@@ -228,8 +228,14 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 		}
 		auto remaining_size = write_size - copied_prefix;
 		if (remaining_size > 0) {
+			auto remaining_offset = total_written;
 			total_written += remaining_size;
-			Write(context, buffer + copied_prefix, remaining_size);
+			if (SupportsPositionalWrites()) {
+				Write(context, buffer + copied_prefix, remaining_size, remaining_offset);
+			} else {
+				Write(context, buffer + copied_prefix, remaining_size);
+			}
+			write_queue->ResetNextOffset(total_written);
 		}
 		return;
 	}
@@ -371,6 +377,7 @@ void AsyncFileWriter::Truncate(idx_t size) {
 	WaitAll();
 	handle->Truncate(NumericCast<int64_t>(size));
 	total_written = size;
+	write_queue->ResetNextOffset(total_written);
 	if (handle->CanSeek() && handle->SeekPosition() > size) {
 		handle->Seek(size);
 	}

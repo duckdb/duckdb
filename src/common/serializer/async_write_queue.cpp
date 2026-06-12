@@ -1,6 +1,7 @@
 #include "duckdb/common/serializer/async_write_queue.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -56,7 +57,6 @@ public:
 
 	void ExecuteTask() override {
 		started = true;
-		queue.StartDrainTask();
 		queue.DrainPendingWrites();
 	}
 
@@ -68,14 +68,13 @@ private:
 AsyncWriteQueue::AsyncWriteQueue(QueryContext context_p, ClientContext &client_context_p, AsyncWriteTarget &target_p,
                                  Options options_p, idx_t async_threads)
     : context(context_p), client_context(client_context_p), target(target_p), options(options_p) {
-	options.coalesce_threshold = MaxValue<idx_t>(options.coalesce_threshold, 1);
-	options.first_task_schedule_threshold = MaxValue<idx_t>(options.first_task_schedule_threshold, 1);
 	options.drain_task_byte_budget = MaxValue(options.drain_task_byte_budget, options.coalesce_threshold);
 	options.max_active_drain_tasks = MaxValue<idx_t>(options.max_active_drain_tasks, 1);
-	options.max_pending_bytes = MaxValue(options.max_pending_bytes, options.min_pending_bytes);
-
-	if (async_threads == 0) {
-		return;
+	if (options.max_pending_bytes > 0) {
+		options.max_pending_bytes = MaxValue(options.max_pending_bytes, options.min_pending_bytes);
+		options.min_pending_bytes = MinValue(options.max_pending_bytes, MaxValue<idx_t>(options.min_pending_bytes, 1));
+	} else {
+		options.min_pending_bytes = 0;
 	}
 
 	// Positional writes let multiple async tasks drain one logical write queue concurrently.
@@ -84,13 +83,28 @@ AsyncWriteQueue::AsyncWriteQueue(QueryContext context_p, ClientContext &client_c
 		drain_mode = DrainMode::POSITIONAL;
 		max_active_drain_tasks = options.max_active_drain_tasks;
 	}
+
+	if (async_threads == 0) {
+		return;
+	}
+
 	executor = make_uniq<TaskExecutor>(client_context, TaskSchedulerType::ASYNC);
-	memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
-	memory_state->SetMinimumReservation(options.min_pending_bytes);
-	memory_state->SetZero();
+	if (options.max_pending_bytes > 0) {
+		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
+		memory_state->SetMinimumReservation(options.min_pending_bytes);
+		memory_state->SetZero();
+	}
 }
 
-AsyncWriteQueue::~AsyncWriteQueue() = default;
+AsyncWriteQueue::~AsyncWriteQueue() {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(batch_depth == 0);
+	D_ASSERT(pending_writes.empty());
+	D_ASSERT(pending_bytes == 0);
+	D_ASSERT(in_flight_bytes == 0);
+	D_ASSERT(active_drain_tasks == 0);
+	D_ASSERT(pending_drain_tasks == 0);
+}
 
 bool AsyncWriteQueue::IsAsync() const {
 	return executor != nullptr;
@@ -108,14 +122,18 @@ void AsyncWriteQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t
 
 	auto write_size = payload->Size();
 	if (!executor) {
+		auto next_offset = ValidateRegistrationOffset(offset, write_size);
 		WriteBuffer(payload->Ptr(), write_size, offset);
+		next_registration_offset = next_offset;
 		return;
 	}
 
 	{
 		lock_guard<mutex> guard(lock);
+		auto next_offset = ValidateRegistrationOffset(offset, write_size);
 		pending_writes.emplace_back(std::move(payload), offset);
 		pending_bytes += write_size;
+		next_registration_offset = next_offset;
 	}
 	UpdateMemoryState();
 	if (schedule_mode == ScheduleMode::ALLOW) {
@@ -345,14 +363,11 @@ idx_t AsyncWriteQueue::EstimateScheduleCount(idx_t available_slots, SchedulePoli
 	return CountPendingWriteTasks(start_write, available_slots, PendingTaskCountMode::FULL_BUDGET_ONLY);
 }
 
-void AsyncWriteQueue::StartDrainTask() {
-	lock_guard<mutex> guard(lock);
-	D_ASSERT(pending_drain_tasks > 0);
-	pending_drain_tasks--;
-}
-
 idx_t AsyncWriteQueue::TakePendingWrites(vector<PendingWrite> &writes) {
 	lock_guard<mutex> guard(lock);
+	D_ASSERT(active_drain_tasks > 0);
+	D_ASSERT(pending_drain_tasks > 0);
+	pending_drain_tasks--;
 	if (pending_writes.empty() || batch_depth > 0) {
 		return 0;
 	}
@@ -429,7 +444,7 @@ idx_t AsyncWriteQueue::WritePendingWrites(vector<PendingWrite> &writes) {
 		for (idx_t write_idx = start; write_idx < end; write_idx++) {
 			auto &current = writes[write_idx];
 			auto current_size = current.Size();
-			D_ASSERT(current.offset == write_offset + offset);
+			VerifyContiguousWrite(current, write_offset + offset);
 			memcpy(coalesced.get() + offset, current.payload->Ptr(), current_size);
 			offset += current_size;
 			// The coalesced buffer owns these bytes now; release the sources before the physical write.
@@ -459,7 +474,7 @@ idx_t AsyncWriteQueue::WritePendingWrites(vector<PendingWrite> &writes) {
 				    coalesced_size + next_size > options.coalesce_threshold) {
 					break;
 				}
-				D_ASSERT(writes[end].offset == pending_write.offset + coalesced_size);
+				VerifyContiguousWrite(writes[end], pending_write.offset + coalesced_size);
 				coalesced_size += next_size;
 				end++;
 			}
@@ -469,7 +484,7 @@ idx_t AsyncWriteQueue::WritePendingWrites(vector<PendingWrite> &writes) {
 		}
 
 		while (end < writes.size() && writes[end].Size() < options.coalesce_threshold) {
-			D_ASSERT(writes[end].offset == pending_write.offset + coalesced_size);
+			VerifyContiguousWrite(writes[end], pending_write.offset + coalesced_size);
 			coalesced_size += writes[end].Size();
 			end++;
 		}
@@ -506,6 +521,28 @@ void AsyncWriteQueue::WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset) {
 	} else {
 		target.Write(context, buffer, size);
 	}
+}
+
+idx_t AsyncWriteQueue::ValidateRegistrationOffset(idx_t offset, idx_t write_size) const {
+	if (offset != next_registration_offset) {
+		throw InternalException("AsyncWriteQueue only supports contiguous writes: expected offset %llu, got %llu",
+		                        next_registration_offset, offset);
+	}
+	return NextWriteOffset(offset, write_size);
+}
+
+void AsyncWriteQueue::VerifyContiguousWrite(const PendingWrite &write, idx_t expected_offset) const {
+	if (write.offset != expected_offset) {
+		throw InternalException("AsyncWriteQueue only supports contiguous writes: expected offset %llu, got %llu",
+		                        expected_offset, write.offset);
+	}
+}
+
+idx_t AsyncWriteQueue::NextWriteOffset(idx_t offset, idx_t write_size) const {
+	if (write_size > NumericLimits<idx_t>::Maximum() - offset) {
+		throw InternalException("AsyncWriteQueue write offset overflow");
+	}
+	return offset + write_size;
 }
 
 void AsyncWriteQueue::RethrowTaskError() {
@@ -601,6 +638,20 @@ void AsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 
 	restore_batch();
 	RethrowTaskError();
+}
+
+void AsyncWriteQueue::VerifyDrained() const {
+	if (batch_depth != 0 || !pending_writes.empty() || pending_bytes != 0 || in_flight_bytes != 0 ||
+	    active_drain_tasks != 0 || pending_drain_tasks != 0) {
+		throw InternalException("Cannot reset AsyncWriteQueue offset while writes are pending");
+	}
+}
+
+void AsyncWriteQueue::ResetNextOffset(idx_t offset) {
+	RethrowTaskError();
+	lock_guard<mutex> guard(lock);
+	VerifyDrained();
+	next_registration_offset = offset;
 }
 
 void AsyncWriteQueue::ReleaseMemoryReservation() {

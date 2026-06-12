@@ -111,6 +111,8 @@ public:
 	DUCKDB_API void ApplyBackpressure();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	DUCKDB_API void WaitAll(BatchDrainMode batch_drain_mode = BatchDrainMode::PRESERVE_BATCH);
+	//! Reset the next expected offset after all registered writes have drained.
+	DUCKDB_API void ResetNextOffset(idx_t offset);
 	//! Release the queue's TemporaryMemoryState reservation.
 	DUCKDB_API void ReleaseMemoryReservation();
 	//! Surface an error thrown by an async drain task.
@@ -147,9 +149,7 @@ private:
 	//! Estimate how many drain tasks are useful for the currently queued writes. Caller must hold lock.
 	idx_t EstimateScheduleCount(idx_t available_slots, SchedulePolicy policy) const;
 
-	//! Mark that a scheduled drain task has started and will claim its byte budget.
-	void StartDrainTask();
-	//! Move one byte-budgeted prefix of pending writes into a drain task.
+	//! Move one byte-budgeted prefix of pending writes into a drain task. Caller owns a scheduled task slot.
 	idx_t TakePendingWrites(vector<PendingWrite> &writes);
 	//! Release one scheduled/running drain task slot and its in-flight byte accounting.
 	void FinishDrainTask(idx_t in_flight_task_bytes);
@@ -164,6 +164,14 @@ private:
 	idx_t WritePendingWrites(vector<PendingWrite> &writes);
 	//! Write bytes to the target at the assigned logical offset.
 	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
+	//! Validate a new registration against the contiguous offset contract.
+	idx_t ValidateRegistrationOffset(idx_t offset, idx_t write_size) const;
+	//! Validate a pending write before coalescing it with its predecessor.
+	void VerifyContiguousWrite(const PendingWrite &write, idx_t expected_offset) const;
+	//! Return offset + write_size, throwing if it overflows idx_t.
+	idx_t NextWriteOffset(idx_t offset, idx_t write_size) const;
+	//! Throw if the queue still owns registered or scheduled write work.
+	void VerifyDrained() const;
 	//! Execute one queued drain task owned by this queue, or yield if the tasks are already running.
 	void WorkOnSingleTask();
 
@@ -196,6 +204,8 @@ private:
 	idx_t active_drain_tasks = 0;
 	//! Scheduled drain tasks that have not yet claimed pending bytes.
 	idx_t pending_drain_tasks = 0;
+	//! Next logical offset expected by RegisterWrite. Enforces v1 contiguous-registration semantics.
+	idx_t next_registration_offset = 0;
 
 	//! Async task executor. If absent, writes are performed synchronously on registration.
 	//! Keep this after task-accounting fields so queued task destructors can still release slots.
