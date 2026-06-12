@@ -1148,11 +1148,7 @@ void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, Colum
 
 void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state) {
 	annotated_unique_lock<annotated_mutex> lock(append_lock);
-	// Wait if a standalone CREATE INDEX scan is in progress over this table.
-	// Once the scan finishes the guard destructor clears the flag and notifies.
-	// The predicate is always called while append_lock is held (condition_variable
-	// contract), so DUCKDB_REQUIRES silences the GUARDED_BY warning.
-	append_blocker_cv.wait(lock, [this]() DUCKDB_REQUIRES(append_lock) { return !index_build_in_progress; });
+	append_blocker_cv.wait(lock, [this]() DUCKDB_REQUIRES(append_lock) { return active_index_builds == 0; });
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
 		                           "a different transaction",
@@ -1180,7 +1176,7 @@ DataTable::IndexBuildAppendGuard::IndexBuildAppendGuard(DataTable &tbl) : table(
 		                           "%s by a different transaction",
 		                           tbl.GetTableName(), tbl.TableModification());
 	}
-	tbl.index_build_in_progress = true;
+	tbl.active_index_builds++;
 }
 
 DataTable::IndexBuildAppendGuard &DataTable::IndexBuildAppendGuard::operator=(IndexBuildAppendGuard &&other) noexcept {
@@ -1197,8 +1193,10 @@ DataTable::IndexBuildAppendGuard::~IndexBuildAppendGuard() {
 		return;
 	}
 	const annotated_lock_guard<annotated_mutex> lk(table->append_lock);
-	table->index_build_in_progress = false;
-	table->append_blocker_cv.notify_all();
+	D_ASSERT(table->active_index_builds > 0);
+	if (--table->active_index_builds == 0) {
+		table->append_blocker_cv.notify_all();
+	}
 }
 
 bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id) {

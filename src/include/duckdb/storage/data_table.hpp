@@ -366,10 +366,10 @@ private:
 	vector<ColumnDefinition> column_definitions;
 	//! Lock for appending entries to the table
 	annotated_mutex append_lock;
-	//! Notifies when an index build completes
+	//! Notifies when all index builds complete
 	std::condition_variable append_blocker_cv;
-	//! Indicates whether a standalone index creation is scanning this table
-	bool index_build_in_progress DUCKDB_GUARDED_BY(append_lock) = false;
+	//! The number of active index builds on the table
+	idx_t active_index_builds DUCKDB_GUARDED_BY(append_lock) = 0;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
