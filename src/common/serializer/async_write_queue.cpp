@@ -23,12 +23,16 @@ idx_t AsyncWriteQueue::PendingWrite::Size() const {
 
 class AsyncWriteQueueDrainTaskGuard {
 public:
-	AsyncWriteQueueDrainTaskGuard(AsyncWriteQueue &queue_p, idx_t in_flight_task_bytes_p)
-	    : queue(queue_p), in_flight_task_bytes(in_flight_task_bytes_p) {
+	explicit AsyncWriteQueueDrainTaskGuard(AsyncWriteQueue &queue_p) : queue(queue_p) {
 	}
 
 	~AsyncWriteQueueDrainTaskGuard() {
 		Finish();
+	}
+
+	void SetInFlightBytes(idx_t in_flight_task_bytes_p) {
+		D_ASSERT(!finished);
+		in_flight_task_bytes = in_flight_task_bytes_p;
 	}
 
 	void Finish() {
@@ -40,7 +44,7 @@ public:
 
 private:
 	AsyncWriteQueue &queue;
-	idx_t in_flight_task_bytes;
+	idx_t in_flight_task_bytes = 0;
 	bool finished = false;
 };
 
@@ -412,8 +416,10 @@ void AsyncWriteQueue::CancelScheduledDrainTasks(idx_t task_count) {
 
 void AsyncWriteQueue::DrainPendingWrites() {
 	vector<PendingWrite> writes;
+	// Claiming writes can allocate. Once a scheduled task has started, always release its active slot.
+	AsyncWriteQueueDrainTaskGuard guard(*this);
 	auto in_flight_task_bytes = TakePendingWrites(writes);
-	AsyncWriteQueueDrainTaskGuard guard(*this, in_flight_task_bytes);
+	guard.SetInFlightBytes(in_flight_task_bytes);
 	if (writes.empty()) {
 		guard.Finish();
 		return;
