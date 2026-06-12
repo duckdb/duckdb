@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 
