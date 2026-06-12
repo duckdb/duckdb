@@ -759,6 +759,17 @@ struct DefaultTransactionInvalidationPolicySetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DelimJoinAsCteSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "delim_join_as_cte";
+	static constexpr const char *Description =
+	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DeprecatedUsingKeySyntaxSetting {
 	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";
@@ -898,16 +909,6 @@ struct EnableFSSTVectorsSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct EnableHTTPLoggingSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableHTTPMetadataCacheSetting {
@@ -1188,17 +1189,6 @@ struct HomeDirectorySetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct HTTPLoggingOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "http_logging_output";
-	static constexpr const char *Description =
-	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct HTTPProxySetting {
@@ -1659,17 +1649,6 @@ struct ProduceArrowStringViewSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct ProfileOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "profile_output";
-	static constexpr const char *Description =
-	    "The file to which profile output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct ProfilingCoverageSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_coverage";
@@ -1683,8 +1662,31 @@ struct ProfilingCoverageSetting {
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
+	static constexpr const char *Description = "DEPRECATED: Sets the profiling mode";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingOutputSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "profiling_output";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingRendererSettingsSetting {
+	using RETURN_TYPE = unordered_map<string, string>;
+	static constexpr const char *Name = "profiling_renderer_settings";
+	static constexpr const char *Description =
+	    "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings "
+	    "not recognized by the active renderer are ignored";
+	static constexpr const char *InputType = "MAP(VARCHAR, VARCHAR)";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);

@@ -156,8 +156,12 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString(ExplainFormat format) const {
+string LogicalOperator::ToString(const ProfilerPrintFormat &format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
+	if (!renderer) {
+		// formats without output (e.g. "no_output") render nothing
+		return string();
+	}
 	duckdb::stringstream ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);

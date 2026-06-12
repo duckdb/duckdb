@@ -386,6 +386,150 @@ void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &link
 	segment->count++;
 }
 
+void ListSegmentFunctions::AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list,
+                                           RecursiveUnifiedVectorFormat &child_data,
+                                           const list_entry_t &list_entry) const {
+	for (idx_t child_idx = list_entry.offset; child_idx < list_entry.offset + list_entry.length; child_idx++) {
+		allocator.AlignNext();
+		AppendRow(allocator, linked_list, child_data, child_idx);
+	}
+}
+
+template <class T>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const T &value) {
+	ListSegmentFunctions functions;
+	functions.create_segment = CreatePrimitiveSegment<T>;
+	allocator.AlignNext();
+	auto segment = GetSegment(functions, allocator, linked_list);
+	GetNullMask(segment)[segment->count] = false;
+	Store<T>(value, data_ptr_cast(GetPrimitiveData<T>(segment) + segment->count));
+	segment->count++;
+	linked_list.total_capacity++;
+}
+
+template <>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const string_t &value) {
+	ListSegmentFunctions functions;
+	functions.create_segment = CreateListSegment;
+	allocator.AlignNext();
+	auto segment = GetSegment(functions, allocator, linked_list);
+	GetNullMask(segment)[segment->count] = false;
+
+	// set the length of this string
+	const idx_t str_size = value.GetSize();
+	auto str_length_data = GetListLengthData(segment);
+	Store<uint64_t>(str_size, data_ptr_cast(str_length_data + segment->count));
+
+	// write the characters to the linked list of child segments
+	ListSegmentFunctions child_function;
+	child_function.create_segment = CreateVarcharDataSegment;
+	child_function.initial_capacity = 16;
+
+	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
+	auto str_data = value.GetData();
+	idx_t current_offset = 0;
+	while (current_offset < str_size) {
+		auto child_segment = GetSegment(child_function, allocator, child_segments);
+		auto data = GetStringData(child_segment);
+		idx_t copy_count = MinValue<idx_t>(str_size - current_offset, child_segment->capacity - child_segment->count);
+		memcpy(data + child_segment->count, str_data + current_offset, copy_count);
+		current_offset += copy_count;
+		child_segment->count += copy_count;
+	}
+	child_segments.total_capacity += str_size;
+	// store the updated linked list
+	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
+
+	segment->count++;
+	linked_list.total_capacity++;
+}
+
+template <class T>
+void ListSegmentCopy(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target) {
+	for (auto segment = source.first_segment; segment; segment = segment->next) {
+		auto null_mask = GetNullMask(segment);
+		auto data = GetPrimitiveData<T>(segment);
+		for (idx_t i = 0; i < segment->count; i++) {
+			D_ASSERT(!null_mask[i]);
+			(void)null_mask;
+			ListSegmentAppendValue<T>(allocator, target, Load<T>(data_ptr_cast(data + i)));
+		}
+	}
+}
+
+template <>
+void ListSegmentCopy<string_t>(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target) {
+	vector<char> buffer;
+	for (auto segment = source.first_segment; segment; segment = segment->next) {
+		auto null_mask = GetNullMask(segment);
+		auto str_length_data = GetListLengthData(segment);
+		auto child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+		auto child_segment = child_list.first_segment;
+		idx_t child_offset = 0;
+		for (idx_t i = 0; i < segment->count; i++) {
+			D_ASSERT(!null_mask[i]);
+			(void)null_mask;
+			// re-assemble the string from the child segments
+			const auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
+			buffer.resize(MaxValue<idx_t>(str_length, 1));
+			idx_t current_offset = 0;
+			while (current_offset < str_length) {
+				if (!child_segment) {
+					throw InternalException("Insufficient data to read string");
+				}
+				auto child_data = GetStringData(child_segment);
+				idx_t copy_count = MinValue<idx_t>(str_length - current_offset, child_segment->capacity - child_offset);
+				memcpy(buffer.data() + current_offset, child_data + child_offset, copy_count);
+				current_offset += copy_count;
+				child_offset += copy_count;
+				if (child_offset >= child_segment->capacity) {
+					D_ASSERT(child_offset == child_segment->capacity);
+					child_segment = child_segment->next;
+					child_offset = 0;
+				}
+			}
+			ListSegmentAppendValue<string_t>(allocator, target,
+			                                 string_t(buffer.data(), UnsafeNumericCast<uint32_t>(str_length)));
+		}
+	}
+}
+
+template void ListSegmentCopy<bool>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int8_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int16_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int32_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<int64_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint8_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint16_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint32_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uint64_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<hugeint_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<uhugeint_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<float>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<double>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<interval_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<date_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<dtime_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+template void ListSegmentCopy<timestamp_t>(ArenaAllocator &, const LinkedList &, LinkedList &);
+
+template void ListSegmentAppendValue<bool>(ArenaAllocator &, LinkedList &, const bool &);
+template void ListSegmentAppendValue<int8_t>(ArenaAllocator &, LinkedList &, const int8_t &);
+template void ListSegmentAppendValue<int16_t>(ArenaAllocator &, LinkedList &, const int16_t &);
+template void ListSegmentAppendValue<int32_t>(ArenaAllocator &, LinkedList &, const int32_t &);
+template void ListSegmentAppendValue<int64_t>(ArenaAllocator &, LinkedList &, const int64_t &);
+template void ListSegmentAppendValue<uint8_t>(ArenaAllocator &, LinkedList &, const uint8_t &);
+template void ListSegmentAppendValue<uint16_t>(ArenaAllocator &, LinkedList &, const uint16_t &);
+template void ListSegmentAppendValue<uint32_t>(ArenaAllocator &, LinkedList &, const uint32_t &);
+template void ListSegmentAppendValue<uint64_t>(ArenaAllocator &, LinkedList &, const uint64_t &);
+template void ListSegmentAppendValue<hugeint_t>(ArenaAllocator &, LinkedList &, const hugeint_t &);
+template void ListSegmentAppendValue<uhugeint_t>(ArenaAllocator &, LinkedList &, const uhugeint_t &);
+template void ListSegmentAppendValue<float>(ArenaAllocator &, LinkedList &, const float &);
+template void ListSegmentAppendValue<double>(ArenaAllocator &, LinkedList &, const double &);
+template void ListSegmentAppendValue<interval_t>(ArenaAllocator &, LinkedList &, const interval_t &);
+template void ListSegmentAppendValue<date_t>(ArenaAllocator &, LinkedList &, const date_t &);
+template void ListSegmentAppendValue<dtime_t>(ArenaAllocator &, LinkedList &, const dtime_t &);
+template void ListSegmentAppendValue<timestamp_t>(ArenaAllocator &, LinkedList &, const timestamp_t &);
+
 //===--------------------------------------------------------------------===//
 // Read
 //===--------------------------------------------------------------------===//
@@ -554,6 +698,44 @@ void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector
 		total_count += segment->count;
 		segment = segment->next;
 	}
+}
+
+void ListSegmentFunctions::BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	const idx_t count = linked_lists.size();
+
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
+	idx_t total_len = ListVector::GetListSize(result);
+
+	// first iterate over all entries and set up the list entries, and get the newly required total length
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		const auto rid = offset + i;
+		result_data[rid].offset = total_len;
+		if (linked_list.total_capacity == 0) {
+			// empty linked list - set the result row to NULL
+			mask.SetInvalid(rid);
+			result_data[rid].length = 0;
+			continue;
+		}
+		result_data[rid].length = linked_list.total_capacity;
+		total_len += linked_list.total_capacity;
+	}
+
+	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
+	ListVector::Reserve(result, total_len);
+	auto &result_child = ListVector::GetChildMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		if (linked_list.total_capacity == 0) {
+			continue;
+		}
+		BuildListVector(linked_list, result_child, result_data[offset + i].offset);
+	}
+
+	ListVector::SetListSize(result, total_len);
+	FlatVector::SetSize(result, offset + count);
 }
 
 //===--------------------------------------------------------------------===//

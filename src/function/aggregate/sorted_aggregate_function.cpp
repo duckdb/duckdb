@@ -536,7 +536,7 @@ struct SortedAggregateFunction {
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
-		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
+		AggregateInputData aggr_bind_info(aggr, bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
 		auto initialize = aggr.GetCallbacks().GetStateInitCallback();

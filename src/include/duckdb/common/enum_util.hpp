@@ -52,6 +52,8 @@ enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
 
+enum class AggregateStateExportMode : uint8_t;
+
 enum class AggregateType : uint8_t;
 
 enum class AllowParserOverride : uint8_t;
@@ -182,6 +184,8 @@ enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
 
+enum class DistinctCountSource : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -189,8 +193,6 @@ enum class ErrorType : uint16_t;
 enum class ExceptionFormatValueType : uint8_t;
 
 enum class ExceptionType : uint8_t;
-
-enum class ExplainFormat : uint8_t;
 
 enum class ExplainOutputType : uint8_t;
 
@@ -375,8 +377,6 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class PreserveOrderType : uint8_t;
-
-enum class ProfilerPrintFormat : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
 
@@ -586,6 +586,9 @@ template<>
 const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent value);
 
 template<>
+const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value);
+
+template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
 
 template<>
@@ -781,6 +784,9 @@ template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
 
 template<>
+const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
+
+template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
@@ -791,9 +797,6 @@ const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType
 
 template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
-
-template<>
-const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
@@ -1070,9 +1073,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
@@ -1370,6 +1370,9 @@ template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value);
 
 template<>
+AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value);
+
+template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
 
 template<>
@@ -1565,6 +1568,9 @@ template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
 
 template<>
+DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
+
+template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -1575,9 +1581,6 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 
 template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
-
-template<>
-ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value);
 
 template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
@@ -1854,9 +1857,6 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);
-
-template<>
-ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);

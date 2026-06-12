@@ -17,24 +17,26 @@ class BoundAtClause;
 
 struct EntryLookupInfo {
 public:
-	EntryLookupInfo(CatalogType catalog_type, const string &name,
-	                QueryErrorContext error_context = QueryErrorContext());
-	EntryLookupInfo(CatalogType catalog_type, const string &name, optional_ptr<BoundAtClause> at_clause,
+	EntryLookupInfo(CatalogType catalog_type, Identifier name, QueryErrorContext error_context = QueryErrorContext());
+	EntryLookupInfo(CatalogType catalog_type, Identifier name, optional_ptr<BoundAtClause> at_clause,
 	                QueryErrorContext error_context);
-	EntryLookupInfo(const EntryLookupInfo &parent, const string &name);
+	EntryLookupInfo(const EntryLookupInfo &parent, Identifier name);
 	EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause);
 
 public:
 	CatalogType GetCatalogType() const;
+	//! The identifier being looked up (the catalog stores/compares names case-insensitively).
+	const Identifier &GetEntryIdentifier() const;
+	//! The raw name of the identifier being looked up.
 	const string &GetEntryName() const;
 	const QueryErrorContext &GetErrorContext() const;
 	const optional_ptr<BoundAtClause> GetAtClause() const;
 
-	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, const string &schema_name);
+	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, Identifier schema_name);
 
 private:
 	CatalogType catalog_type;
-	const string &name;
+	Identifier name;
 	optional_ptr<BoundAtClause> at_clause;
 	QueryErrorContext error_context;
 };

@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	bool storage_isset = false;
 
 	for (const auto &param : input.named_parameters) {
-		auto key = StringUtil::Lower(param.first);
+		auto &key = param.first;
 		if (key == "level") {
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
 		} else if (key == "storage") {
@@ -67,7 +67,8 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 			}
 			auto &children = StructValue::GetChildren(param.second);
 			for (idx_t i = 0; i < children.size(); i++) {
-				result->storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
+				result->storage_config[StructType::GetChildName(param.second.type(), i).GetIdentifierName()] =
+				    children[i];
 			}
 		} else if (key == "storage_path") {
 			result->storage_config["path"] = param.second;

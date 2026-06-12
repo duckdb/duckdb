@@ -6,16 +6,16 @@ namespace duckdb {
 BoundStatement Binder::Bind(SubqueryRef &ref) {
 	auto binder = Binder::CreateBinder(context, this);
 	binder->SetCanContainNulls(true);
+	binder->SetInsideSubquery();
 	auto subquery = binder->BindNode(*ref.subquery->node);
 	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto bind_index = subquery.plan->GetRootIndex();
-	string subquery_alias;
+	Identifier subquery_alias;
 	if (ref.alias.empty()) {
 		auto index = unnamed_subquery_index++;
 		subquery_alias = "unnamed_subquery";
-		;
 		if (index > 1) {
-			subquery_alias += to_string(index);
+			subquery_alias = Identifier(subquery_alias + to_string(index));
 		}
 	} else {
 		subquery_alias = ref.alias;

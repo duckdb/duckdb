@@ -52,8 +52,33 @@ struct ListSegmentFunctions {
 
 	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &input_data,
 	               idx_t &entry_idx) const;
+	//! Append all rows of the given list entry (indexing into child_data) to the linked list
+	void AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &child_data,
+	                     const list_entry_t &list_entry) const;
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const;
+	//! Build a LIST result vector from a set of linked lists - one per row, written at rows [offset, offset + count).
+	//! Rows with an empty linked list (total_capacity == 0) are set to NULL.
+	void BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const;
 };
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type);
+
+//! Append a single non-NULL value to a linked list using the standard list segment layout.
+//! Values appended this way are interchangeable with values appended through ListSegmentFunctions::AppendRow.
+template <class T>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const T &value);
+
+//! Strings copy their characters into the child segments of the linked list.
+template <>
+void ListSegmentAppendValue(ArenaAllocator &allocator, LinkedList &linked_list, const string_t &value);
+
+//! Append all (non-NULL) values of the source linked list to the target linked list by traversing its segments.
+//! The values must have been appended through ListSegmentAppendValue / the standard list segment layout.
+template <class T>
+void ListSegmentCopy(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
+//! Strings re-assemble their characters from the child segments of the source linked list.
+template <>
+void ListSegmentCopy<string_t>(ArenaAllocator &allocator, const LinkedList &source, LinkedList &target);
+
 } // namespace duckdb

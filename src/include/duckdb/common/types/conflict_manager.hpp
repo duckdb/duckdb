@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -137,7 +138,7 @@ private:
 	//! Delete indexes matching the conflict target.
 	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
 	//! All matching indexes by their name (unique identifier).
-	case_insensitive_set_t index_names;
+	identifier_set_t index_names;
 
 	//! Registers all conflicting rows in a data chunk.
 	unordered_set<idx_t> conflict_rows;

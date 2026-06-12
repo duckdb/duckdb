@@ -29,7 +29,7 @@ public:
 	StatementProperties properties;
 	QueryResultMemoryType memory_type;
 	PhysicalOperator &plan;
-	vector<string> names;
+	vector<Identifier> names;
 
 public:
 	static unique_ptr<PhysicalOperator> GetResultCollector(ClientContext &context, PreparedStatementData &data);

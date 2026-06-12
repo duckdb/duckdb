@@ -178,3 +178,12 @@ select * from (values(1), (2)) t1(i) left join (values (2), (3)) t2(i) on t1.i=t
 ----
 1	NULL
 2	2
+
+query IIII
+SELECT pl.id, g.k, t.player_id, mo.player_id
+FROM (SELECT 1 AS id) pl
+CROSS JOIN (SELECT 1 AS k) g
+LEFT JOIN (SELECT 1 AS player_id) t ON pl.id = t.player_id
+LEFT JOIN (SELECT 1 AS player_id) mo ON pl.id = mo.player_id;
+----
+1	1	1	1

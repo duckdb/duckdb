@@ -5,14 +5,15 @@
 
 namespace duckdb {
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(Identifier alias_p, LogicalType type, ColumnBinding binding,
+                                                   idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),
       binding(binding), depth(depth) {
 	this->alias = std::move(alias_p);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), std::move(type), binding, depth) {
+    : BoundColumnRefExpression(Identifier(), std::move(type), binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() const {
@@ -34,10 +35,10 @@ bool BoundColumnRefExpression::Equals(const BaseExpression &other_p) const {
 	return other.binding == binding && other.depth == depth;
 }
 
-string BoundColumnRefExpression::GetName() const {
+Identifier BoundColumnRefExpression::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Format("%s (%s)", binding.ToString(), return_type.ToString());
+		return Identifier(StringUtil::Format("%s (%s)", binding.ToString(), return_type.ToString()));
 	}
 #endif
 	return Expression::GetName();
@@ -50,7 +51,7 @@ string BoundColumnRefExpression::ToString() const {
 	}
 #endif
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetIdentifierName();
 	}
 	return binding.ToString();
 }

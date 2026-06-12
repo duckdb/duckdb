@@ -113,14 +113,6 @@ struct VariantPathSelection {
 };
 
 struct VariantUtils {
-	using unary_path_function_t = void (*)(const Vector &, const vector<VariantPathComponent> &, Vector &, idx_t);
-	using many_path_function_t = void (*)(const Vector &, const vector<vector<VariantPathComponent>> &, Vector &,
-	                                      idx_t);
-
-	//! Generic dispatcher for function execution, used by functions that take an (optional) path(s)
-	DUCKDB_API static void ExecutePathFunction(DataChunk &input, const ExpressionState &state, Vector &result,
-	                                           const unary_path_function_t &unary_fn,
-	                                           const many_path_function_t &many_fn);
 	DUCKDB_API static bool IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index);
 	DUCKDB_API static VariantDecimalData DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                       uint32_t value_index);

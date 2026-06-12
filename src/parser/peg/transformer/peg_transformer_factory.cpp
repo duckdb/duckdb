@@ -53,95 +53,66 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 	return stmt;
 }
 
-vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-                                                                  Matcher &root_matcher) {
-	if (tokens.empty()) {
-		return {};
-	}
-	string token_stream;
-	for (auto &token : tokens) {
-		token_stream += token.text + " ";
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vector<MatcherToken> &tokens,
+                                                                           ParserOptions &options,
+                                                                           Matcher &root_matcher, idx_t &token_cursor) {
+	if (token_cursor >= tokens.size()) {
+		return nullptr;
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
-	auto &matcher = root_matcher;
-	auto match_result = matcher.MatchParseResult(state);
-	if (match_result == nullptr || state.token_index < state.tokens.size()) {
+	idx_t max_token_index = token_cursor;
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case,
+	                 token_cursor);
+	auto match_result = root_matcher.MatchParseResult(state);
+	if (match_result == nullptr) {
+		// syntax error — surface as a parser exception in the same shape as Transform()
+		string token_stream;
+		for (auto &token : tokens) {
+			token_stream += token.text + " ";
+		}
 		idx_t error_token_idx = state.GetMaxTokenIndex();
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
-		idx_t stmt_start = error_token_idx;
-		while (stmt_start > 0 && tokens[stmt_start - 1].text != ";") {
-			stmt_start--;
+		// Walk back past the EOI sentinel so the error message names a real token.
+		if (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
+		                            tokens[error_token_idx].type == TokenType::END_OF_INPUT_AUTOCOMPLETE)) {
+			error_token_idx--;
 		}
-		idx_t stmt_end = error_token_idx;
-		while (stmt_end < tokens.size() && tokens[stmt_end].text != ";") {
-			stmt_end++;
-		}
-		if (stmt_start < stmt_end && (stmt_start > 0 || stmt_end < tokens.size())) {
-			vector<MatcherToken> statement_tokens;
-			statement_tokens.reserve(stmt_end - stmt_start);
-			for (idx_t i = stmt_start; i < stmt_end; i++) {
-				statement_tokens.push_back(tokens[i]);
-			}
-			Transform(statement_tokens, options, root_matcher);
-		}
-
 		auto &error_token = tokens[error_token_idx];
 		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
-	match_result->name = "Program";
 
-	// Program <- Statement? (';'+ Statement)* ';'*
-	// Program[0] = optional first Statement
-	// Program[1] = optional repeat of groups: (';'+ Statement)
-	// Program[2] = optional repeat of trailing ';'
-	auto &prog = match_result->Cast<ListParseResult>();
+	// Advance the caller's cursor past the consumed tokens.
+	token_cursor = state.token_index;
+
+	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
+	//   child 0: Optional<Statement>
+	//   child 1: bracket-wrapper list around Choice<';'+ | EndOfInput>
+	auto &tls = match_result->Cast<ListParseResult>();
+	auto &stmt_opt = tls.Child<OptionalParseResult>(0);
+	if (!stmt_opt.HasResult()) {
+		// separator-only or EOI-only TopLevelStatement — no statement to yield
+		return nullptr;
+	}
+	auto &term_wrapper = tls.Child<ListParseResult>(1);
+	auto &term_inner = term_wrapper.Child<ChoiceParseResult>(0).GetResult();
+	optional_idx terminator_offset;
+	if (term_inner.type != ParseResultType::END_OF_INPUT) {
+		auto semi_children = term_inner.Cast<RepeatParseResult>().GetChildren();
+		if (!semi_children.empty()) {
+			terminator_offset = semi_children[0].get().offset;
+		}
+	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
 	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
 	                           enum_mappings, options);
 
-	vector<unique_ptr<SQLStatement>> result;
-	optional_ptr<ParseResult> current_stmt;
-	auto &first_stmt = prog.Child<OptionalParseResult>(0);
-	if (first_stmt.HasResult()) {
-		current_stmt = first_stmt.GetResult();
-	}
-
-	auto &statement_repeat = prog.Child<OptionalParseResult>(1);
-	if (statement_repeat.HasResult()) {
-		auto &repeat = statement_repeat.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat.GetChildren()) {
-			auto &child_list = child.get().Cast<ListParseResult>();
-			auto &separators = child_list.Child<RepeatParseResult>(0);
-			auto &next_stmt = child_list.GetChild(1);
-			if (current_stmt) {
-				auto separator_children = separators.GetChildren();
-				auto &separator_terminator = separator_children[0].get();
-				result.push_back(
-				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator.offset));
-			}
-			current_stmt = next_stmt;
-		}
-	}
-	if (current_stmt) {
-		optional_idx trailing_terminator;
-		auto &trailing_repeat = prog.Child<OptionalParseResult>(2);
-		if (trailing_repeat.HasResult()) {
-			auto trailing_children = trailing_repeat.GetResult().Cast<RepeatParseResult>().GetChildren();
-			if (!trailing_children.empty()) {
-				trailing_terminator = trailing_children[0].get().offset;
-			}
-		}
-		result.push_back(ExtractAndTransformStatement(transformer, tokens, *current_stmt, trailing_terminator));
-	}
-	return result;
+	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
@@ -630,17 +601,17 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
 	if (input.size() == 1) {
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = input[0];
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier::InvalidSchema();
+		result.name = Identifier(input[0]);
 	} else if (input.size() == 2) {
-		result.catalog = INVALID_CATALOG;
-		result.schema = input[0];
-		result.name = input[1];
+		result.catalog = Identifier::InvalidCatalog();
+		result.schema = Identifier(input[0]);
+		result.name = Identifier(input[1]);
 	} else if (input.size() == 3) {
-		result.catalog = input[0];
-		result.schema = input[1];
-		result.name = input[2];
+		result.catalog = Identifier(input[0]);
+		result.schema = Identifier(input[1]);
+		result.name = Identifier(input[2]);
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
@@ -676,12 +647,13 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.FunctionName() == "struct_pack") {
-			unordered_set<string> unique_names;
+			identifier_set_t unique_names;
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
 				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
+					throw BinderException("Duplicate struct entry name \"%s\"",
+					                      child.GetExpression().GetAlias().GetIdentifierName());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {

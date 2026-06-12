@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/optional.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 enum class SequenceInfo : uint8_t {
@@ -32,7 +33,7 @@ struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo();
 
 	//! Sequence name to create
-	string name;
+	Identifier name;
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

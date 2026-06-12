@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CTE;
 
 public:
-	PhysicalCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
+	PhysicalCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index, vector<LogicalType> types,
 	            PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
@@ -29,7 +29,7 @@ public:
 	shared_ptr<ColumnDataCollection> working_table;
 
 	TableIndex table_index;
-	string ctename;
+	Identifier ctename;
 	bool cte_body_is_dml = false;
 
 public:
@@ -54,6 +54,9 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                             const ProgressData source_progress) const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

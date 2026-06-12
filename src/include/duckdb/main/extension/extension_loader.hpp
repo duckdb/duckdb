@@ -11,7 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/main/metric_info.hpp"
+#include "duckdb/main/profiler/metric_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -28,10 +28,10 @@ struct CreateTableFunctionInfo;
 struct CreateWindowFunctionInfo;
 
 struct ExtensionLoaderInfo {
-	string extension_name;
-	string extension_alias;
+	Identifier extension_name;
+	Identifier extension_alias;
 	string extension_description;
-	string extension_schema = DEFAULT_SCHEMA;
+	Identifier extension_schema = Identifier::DefaultSchema();
 };
 
 class ExtensionLoader {
@@ -49,18 +49,18 @@ public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
 	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
-	DUCKDB_API void UseDedicatedSchemaForExtension(const string &extension_schema_name);
+	DUCKDB_API void UseDedicatedSchemaForExtension(const Identifier &extension_schema_name);
 	//! Explicitly sets, creates and registers all functions in the registered extension schema
 	DUCKDB_API void UseDedicatedSchemaForExtension();
 	//! Creates a schema in the catalog with the extension name
-	DUCKDB_API void CreateSchema(const string &extension_schema_name) const;
+	DUCKDB_API void CreateSchema(const Identifier &extension_schema_name) const;
 	//! Adds the created extension schema to the search path
-	DUCKDB_API void AddSchemaToSearchPath(const string &schema_name) const;
+	DUCKDB_API void AddSchemaToSearchPath(const Identifier &schema_name) const;
 	//! Sets the default extension schema for this extension
-	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
+	DUCKDB_API void UseDefaultSchema(const Identifier &name = DEFAULT_SCHEMA);
 	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
 	//! Gets registered extension name (or alias)
-	DUCKDB_API const string &GetRegisteredExtensionName() const {
+	DUCKDB_API const Identifier &GetRegisteredExtensionName() const {
 		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
 	}
 
@@ -106,10 +106,10 @@ public:
 	DUCKDB_API void RegisterCoordinateSystem(CreateCoordinateSystemInfo &info);
 
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
-	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const string &name);
-	DUCKDB_API TableFunctionCatalogEntry &GetTableFunction(const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> TryGetFunction(const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> TryGetTableFunction(const string &name);
+	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const Identifier &name);
+	DUCKDB_API TableFunctionCatalogEntry &GetTableFunction(const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> TryGetFunction(const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> TryGetTableFunction(const Identifier &name);
 
 	//! Add a function overload
 	DUCKDB_API void AddFunctionOverload(ScalarFunction function);

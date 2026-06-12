@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 

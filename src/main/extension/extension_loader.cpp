@@ -19,7 +19,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "re2/re2.h"
@@ -33,7 +33,7 @@ ExtensionLoader::ExtensionLoader(const ExtensionActiveLoad &load_info)
 }
 
 ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db) {
-	loader_info.extension_name = name;
+	loader_info.extension_name = Identifier(name);
 }
 
 DatabaseInstance &ExtensionLoader::GetDatabaseInstance() const {
@@ -44,7 +44,7 @@ void ExtensionLoader::SetDescription(const string &description) {
 	loader_info.extension_description = description;
 }
 
-void ExtensionLoader::UseDedicatedSchemaForExtension(const string &extension_schema_name) {
+void ExtensionLoader::UseDedicatedSchemaForExtension(const Identifier &extension_schema_name) {
 	CreateSchema(extension_schema_name);
 	UseDefaultSchema(extension_schema_name);
 	AddSchemaToSearchPath(extension_schema_name);
@@ -55,7 +55,7 @@ void ExtensionLoader::UseDedicatedSchemaForExtension() {
 	UseDedicatedSchemaForExtension(registered_ext_name);
 }
 
-void ExtensionLoader::CreateSchema(const string &name) const {
+void ExtensionLoader::CreateSchema(const Identifier &name) const {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -67,7 +67,7 @@ void ExtensionLoader::CreateSchema(const string &name) const {
 	system_catalog.CreateSchema(data, info);
 }
 
-void ExtensionLoader::UseDefaultSchema(const string &name) {
+void ExtensionLoader::UseDefaultSchema(const Identifier &name) {
 	if (loader_info.extension_schema != DEFAULT_SCHEMA && name != DEFAULT_SCHEMA &&
 	    loader_info.extension_schema != name) {
 		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
@@ -77,13 +77,13 @@ void ExtensionLoader::UseDefaultSchema(const string &name) {
 		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
 	}
 	if (name == DEFAULT_SCHEMA) {
-		loader_info.extension_schema = DEFAULT_SCHEMA;
+		loader_info.extension_schema = Identifier::DefaultSchema();
 		return;
 	}
 	loader_info.extension_schema = name;
 }
 
-void ExtensionLoader::AddSchemaToSearchPath(const string &schema_name) const {
+void ExtensionLoader::AddSchemaToSearchPath(const Identifier &schema_name) const {
 	// adds an explicitly set extension schema to the search path
 	if (loader_info.extension_schema != schema_name || schema_name == DEFAULT_SCHEMA ||
 	    loader_info.extension_schema == DEFAULT_SCHEMA) {
@@ -120,7 +120,7 @@ void ExtensionLoader::FinalizeLoad() {
 }
 
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
-	ScalarFunctionSet set(function.name);
+	ScalarFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -144,7 +144,7 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
-	AggregateFunctionSet set(function.name);
+	AggregateFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -168,7 +168,7 @@ void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunction function) {
-	WindowFunctionSet set(function.name);
+	WindowFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -198,7 +198,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(TableFunction function) {
-	TableFunctionSet set(function.name);
+	TableFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
@@ -224,15 +224,14 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {
 	D_ASSERT(!function.name.empty());
-	PragmaFunctionSet set(function.name);
+	PragmaFunctionSet set {function.name};
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));
 }
 
 void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
-	auto function_name = function.name;
-	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
+	CreatePragmaFunctionInfo info(std::move(function));
 	info.extension_name = GetRegisteredExtensionName();
 	info.schema = loader_info.extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -305,19 +304,19 @@ void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLIN
 	}
 }
 
-static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string &name, CatalogType type) {
+static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const Identifier &name, CatalogType type) {
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
 	return schema.GetEntry(data, type, name);
 }
 
-optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const string &name) {
+optional_ptr<CatalogEntry> ExtensionLoader::TryGetFunction(const Identifier &name) {
 	return TryGetEntry(db, name, CatalogType::SCALAR_FUNCTION_ENTRY);
 }
 
-ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const string &name) {
+ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const Identifier &name) {
 	auto catalog_entry = TryGetFunction(name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetFunction", name);
@@ -325,11 +324,11 @@ ScalarFunctionCatalogEntry &ExtensionLoader::GetFunction(const string &name) {
 	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
 }
 
-optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const string &name) {
+optional_ptr<CatalogEntry> ExtensionLoader::TryGetTableFunction(const Identifier &name) {
 	return TryGetEntry(db, name, CatalogType::TABLE_FUNCTION_ENTRY);
 }
 
-TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const string &name) {
+TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &name) {
 	auto catalog_entry = TryGetTableFunction(name);
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);

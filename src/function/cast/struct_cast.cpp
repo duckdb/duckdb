@@ -26,7 +26,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 
-	InsertionOrderPreservingMap<idx_t> target_children_map;
+	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> target_children_map;
 	if (!is_unnamed) {
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;
@@ -180,7 +180,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto &child_data = child_iterators[c];
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
-				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name, key_needs_quotes[c]);
+				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name.GetIdentifierName(),
+				                                                                       key_needs_quotes[c]);
 				string_length += NAME_SEP_LENGTH; // ": "
 			}
 			auto child_entry = child_data[r];
@@ -210,7 +211,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
 				// "{<name>: <value>}"
-				offset += VectorCastHelpers::WriteEscapedString<true>(dataptr + offset, name, key_needs_quotes[c]);
+				offset += VectorCastHelpers::WriteEscapedString<true>(dataptr + offset, name.GetIdentifierName(),
+				                                                      key_needs_quotes[c]);
 				dataptr[offset++] = ':';
 				dataptr[offset++] = ' ';
 			}
@@ -287,7 +289,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto key_data = FlatVector::Writer<string_t>(varchar_keys, field_count);
 	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
 		auto &field_name = field_types[field_idx].first;
-		key_data.WriteValue(field_name);
+		key_data.WriteValue(field_name.GetIdentifierName());
 	}
 
 	// Cast keys to result type

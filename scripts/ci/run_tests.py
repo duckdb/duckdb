@@ -32,6 +32,7 @@ STABILIZE_FAST_TOTAL_RUNS_LARGE = 3
 STABILIZE_CHANGED_TEST_THRESHOLD = 500
 STOP_REQUESTED = threading.Event()
 ANSI_RED = "\033[31m"
+ANSI_TEAL = "\033[36m"
 ANSI_DARK_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 FAILURE_MARKER = "================================================================"
@@ -397,6 +398,60 @@ def format_dark_gray(text: str):
     return f"{ANSI_DARK_GRAY}{text}{ANSI_RESET}"
 
 
+def highlight_stack_frame_line(line: str):
+    match = re.match(r"^(\d+)(\s+)(.+)$", line)
+    if not match:
+        return line
+
+    frame_idx, spacing, remainder = match.groups()
+    delimiters = [pos for pos in (remainder.find("("), remainder.find("<")) if pos != -1]
+    if delimiters:
+        split_idx = min(delimiters)
+        function_name = remainder[:split_idx]
+        suffix = remainder[split_idx:]
+    else:
+        function_name = remainder
+        suffix = ""
+
+    return f"{format_dark_gray(frame_idx)}{spacing}{ANSI_TEAL}{function_name}{ANSI_RESET}{suffix}"
+
+
+def should_filter_stack_frame_line(line: str):
+    match = re.match(r"^\d+\s+(.+)$", line)
+    if not match:
+        return False
+    remainder = match.group(1)
+    for marker in (
+        "invokeActiveTestCase",
+        "Catch::RunContext",
+        "Catch::Session::run",
+        "Catch::Session::runInternal",
+        "main(",
+    ):
+        if marker in remainder:
+            return True
+    return False
+
+
+def highlight_stack_trace_lines(lines: list[str]):
+    highlighted = []
+    in_stack_trace = False
+    for line in lines:
+        if line == "Stack Trace:":
+            in_stack_trace = True
+            highlighted.append(line)
+            continue
+        if in_stack_trace and re.match(r"^\d+\s+", line):
+            if should_filter_stack_frame_line(line):
+                continue
+            highlighted.append(highlight_stack_frame_line(line))
+            continue
+        if in_stack_trace:
+            in_stack_trace = False
+        highlighted.append(line)
+    return highlighted
+
+
 def render_test_snippet(test_name: str | None, line_number: int | None):
     if not test_name or line_number is None or line_number <= 0:
         return []
@@ -477,7 +532,8 @@ PROGRESS_TEST_START_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+)$")
 FATAL_ERROR_PATTERN = re.compile(r"^\s*due to a fatal error condition:\s*$")
 FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
-CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?):(\d+): FAILED:$")
+# Catch prints source locations as "path:line:" with GCC/Clang and as "path(line):" with MSVC
+CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?)(?::(\d+)|\((\d+)\)): FAILED:$")
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -622,7 +678,7 @@ def parse_stdout_assertion_failure(test_name: str | None, block: list[str]):
             continue
 
         source_path = match.group(1)
-        source_line = int(match.group(2))
+        source_line = int(match.group(2) or match.group(3))
         snippet_lines = render_context_snippet(source_path, source_line)
         detail_lines = []
 
@@ -691,10 +747,11 @@ def parse_stdout_failure_info(stdout_lines: list[str]):
 
 def extract_query_failure_diagnostics(stderr_lines: list[str]):
     for idx, line in enumerate(stderr_lines):
-        if not line.startswith("Query failed with message:"):
+        stripped = line.strip()
+        if not stripped.startswith("Query failed with message:") and not stripped.startswith("INTERNAL Error:"):
             continue
 
-        block = [line.strip()]
+        block = [stripped]
         seen_stack_trace = False
         for next_line in stderr_lines[idx + 1 :]:
             stripped = next_line.strip()
@@ -901,8 +958,8 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 
     detail_lines = []
     snippet_lines = []
-    if stderr_info.failing_summary_block:
-        detail_lines.extend(stderr_info.failing_summary_block)
+    if stderr_info.query_failure_lines:
+        detail_lines.extend(stderr_info.query_failure_lines)
 
     preferred_assertion = stdout_info.preferred_assertion
     if preferred_assertion is not None:
@@ -910,20 +967,20 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
         reproduce_batch = [test_name] if test_name else list(batch)
         line_number = preferred_assertion.line_number or line_number
         snippet_lines = preferred_assertion.snippet_lines
-        if not detail_lines and stderr_info.query_failure_lines:
-            detail_lines.extend(stderr_info.query_failure_lines)
         if preferred_assertion.detail_lines:
             if detail_lines:
                 detail_lines.append("")
             detail_lines.extend(preferred_assertion.detail_lines)
+    if not snippet_lines and test_name is not None and line_number is not None:
+        snippet_lines = render_test_snippet(test_name, line_number)
     if not detail_lines:
         if stdout_info.fallback_failure_block:
             stdout_failure_test_name, stdout_failure_block = stdout_info.fallback_failure_block
             test_name = stdout_failure_test_name or stdout_info.last_started_test or test_name
             reproduce_batch = [test_name] if test_name else list(batch)
             detail_lines.extend(stdout_failure_block)
-    if not detail_lines and stderr_info.query_failure_lines:
-        detail_lines.extend(stderr_info.query_failure_lines)
+    if not detail_lines and stderr_info.failing_summary_block:
+        detail_lines.extend(stderr_info.failing_summary_block)
     if not detail_lines:
         detail_lines.extend(extract_interesting_failure_block(stderr_lines))
     if not detail_lines:
@@ -991,7 +1048,44 @@ def render_failure_lines(failure: FailureInfo):
     if failure.snippet_lines:
         lines.extend(["", *failure.snippet_lines])
     if failure.detail_lines:
-        lines.extend(["", *failure.detail_lines])
+        lines.extend(["", *highlight_stack_trace_lines(failure.detail_lines)])
+    return lines
+
+
+RAW_OUTPUT_TAIL_LINE_COUNT = 100
+
+
+def is_low_information_failure(failure: FailureInfo):
+    # a generic failure where we could not even identify the failing test (or any detail at all) does not help
+    # debugging - in that case we dump the raw unittest output so CI logs contain everything needed to diagnose it
+    if failure.kind != "generic":
+        return False
+    if failure.snippet_lines:
+        return False
+    return failure.test_name is None or not failure.detail_lines
+
+
+def render_raw_output_tail(stdout: str, stderr: str):
+    lines = []
+    for stream_name, output in (("stdout", stdout), ("stderr", stderr)):
+        stream_lines = [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
+        while stream_lines and not stream_lines[-1].strip():
+            stream_lines.pop()
+        if not stream_lines:
+            lines.extend(["", f"--- raw unittest {stream_name}: empty ---"])
+            continue
+        tail = stream_lines[-RAW_OUTPUT_TAIL_LINE_COUNT:]
+        header = f"--- raw unittest {stream_name}"
+        if len(tail) < len(stream_lines):
+            header += f" (last {len(tail)} of {len(stream_lines)} lines)"
+        lines.extend(["", header + " ---", *tail])
+    return lines
+
+
+def render_failure_lines_with_diagnostics(failure: FailureInfo, stdout: str, stderr: str):
+    lines = render_failure_lines(failure)
+    if is_low_information_failure(failure):
+        lines = [*lines, *render_raw_output_tail(stdout, stderr)]
     return lines
 
 
@@ -1059,7 +1153,7 @@ def extract_test_runtimes(stdout: str, stderr: str):
 
 def summarize_failure_output(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
     failure = parse_failure_info(message, stdout, stderr, batch, returncode)
-    return render_failure_lines(failure), failure.reproduce_batch
+    return render_failure_lines_with_diagnostics(failure, stdout, stderr), failure.reproduce_batch
 
 
 def format_failed_test_retry_target(test_name: str | None, batch_info):
@@ -1140,6 +1234,9 @@ def run_batch(config: TestRunnerConfig, batch):
     message = None
     allow_retry = True
     peak_rss_bytes = 0
+    child_env = os.environ.copy()
+    # Omit printing "FAILURES SUMMARY" block at the end of each unittest process.
+    child_env["SUMMARIZE_FAILURES"] = "0"
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
     # is still open here, so keep it after close and unlink it ourselves.
@@ -1158,6 +1255,7 @@ def run_batch(config: TestRunnerConfig, batch):
             errors="backslashreplace",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=child_env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
 
@@ -1240,7 +1338,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         batch_info["batch"],
         result.get("returncode"),
     )
-    lines = render_failure_lines(failure)
+    lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
     reproduce_batch = failure.reproduce_batch
     ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch)
     retry_target = format_failed_test_retry_target(failure.test_name, batch_info)

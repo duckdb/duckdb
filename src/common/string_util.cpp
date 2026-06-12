@@ -258,6 +258,11 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 	return result;
 }
 
+string StringUtil::Join(const vector<Identifier> &input, const string &separator) {
+	return StringUtil::Join(input, input.size(), separator,
+	                        [](const Identifier &id) { return id.GetIdentifierName(); });
+}
+
 string StringUtil::Join(const vector<string> &input, const string &separator) {
 	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
@@ -485,6 +490,15 @@ bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	return (charmap[u1] - charmap[u2]) < 0;
 }
 
+idx_t StringUtil::CIFind(const vector<Identifier> &vector, const Identifier &search_string) {
+	for (idx_t i = 0; i < vector.size(); i++) {
+		if (vector[i] == search_string) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 	for (idx_t i = 0; i < vector.size(); i++) {
 		const auto &string = vector[i];
@@ -644,6 +658,10 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
 
+double StringUtil::SimilarityRating(const Identifier &s1, const Identifier &s2) {
+	return SimilarityRating(s1.GetIdentifierName(), s2.GetIdentifierName());
+}
+
 double StringUtil::SimilarityRating(const string &s1, const string &s2) {
 	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
 	                                                    s2.data() + s2.size());
@@ -661,6 +679,11 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 		}
 	}
 	return TopNStrings(scores, n, threshold);
+}
+
+vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const Identifier &target, idx_t n,
+                                           double threshold) {
+	return TopNJaroWinkler(strings, StringUtil::Lower(target.GetIdentifierName()), n, threshold);
 }
 
 vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,
@@ -1074,7 +1097,7 @@ uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enu
 	for (idx_t i = 0; i < enum_count; i++) {
 		candidates.push_back(enum_list[i].string);
 	}
-	auto closest_values = TopNJaroWinkler(candidates, str_value);
+	auto closest_values = TopNJaroWinkler(candidates, string(str_value));
 	auto message = CandidatesMessage(closest_values, "Candidates");
 	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name,
 	                              message);

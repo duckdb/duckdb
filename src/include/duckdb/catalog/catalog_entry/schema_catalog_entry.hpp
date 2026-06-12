@@ -99,7 +99,7 @@ public:
 	                                                       const EntryLookupInfo &lookup_info);
 
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type,
-	                                               const string &name);
+	                                               const Identifier &name);
 
 	//! Drops an entry from the schema
 	virtual void DropEntry(ClientContext &context, DropInfo &info) = 0;

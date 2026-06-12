@@ -117,6 +117,7 @@ bool HTTPResponse::ShouldRetry() const {
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
 	case HTTPStatusCode::InternalServerError_500:
+	case HTTPStatusCode::BadGateway_502:
 	case HTTPStatusCode::ServiceUnavailable_503:
 	case HTTPStatusCode::GatewayTimeout_504:
 		return true;
@@ -494,10 +495,7 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
-		auto &client_config = ClientConfig::GetConfig(*client_context);
-		if (client_config.enable_http_logging) {
-			logger = client_context->logger;
-		}
+		logger = client_context->logger;
 	}
 }
 

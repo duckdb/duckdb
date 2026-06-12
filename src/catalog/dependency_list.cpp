@@ -42,26 +42,26 @@ LogicalDependency::LogicalDependency() : entry(), catalog() {
 
 static string GetSchema(CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name;
+		return entry.name.GetIdentifierName();
 	}
-	return entry.ParentSchema().name;
+	return entry.ParentSchema().name.GetIdentifierName();
 }
 
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
-	catalog = INVALID_CATALOG;
+	catalog = Identifier::InvalidCatalog();
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		this->entry.schema = GetSchema(entry);
+		this->entry.schema = Identifier(GetSchema(entry));
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
 	}
 }
 
-LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, string catalog_str)
+LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, Identifier catalog_str)
     : entry(std::move(entry_p)), catalog(std::move(catalog_str)) {
 	if (catalog_p) {
 		catalog = catalog_p->GetName();
@@ -86,7 +86,7 @@ bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	return set.count(logical_entry);
 }
 
-void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
+void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const Identifier &name) {
 	for (auto &dep : set) {
 		if (dep.catalog != catalog.GetName()) {
 			throw DependencyException(

@@ -26,7 +26,7 @@ static SessionTargetCapture TransformSessionTarget(PEGTransformer &transformer, 
 		result.name_is_string_literal = true;
 		break;
 	case ParseResultType::IDENTIFIER:
-		result.name = inner.Cast<IdentifierParseResult>().identifier;
+		result.name = inner.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
 		break;
 	default:
 		throw InternalException("Unexpected SessionTarget alternative type: %s", ParseResultToString(inner.type));
@@ -42,7 +42,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformConnectStatement(PEGTra
 	auto &target_opt = list_pr.Child<OptionalParseResult>(1);
 	if (target_opt.HasResult()) {
 		auto captured = TransformSessionTarget(transformer, target_opt.GetResult());
-		info->name = std::move(captured.name);
+		info->name = Identifier(std::move(captured.name));
 		info->target_is_local = captured.target_is_local;
 		info->name_is_string_literal = captured.name_is_string_literal;
 	}
