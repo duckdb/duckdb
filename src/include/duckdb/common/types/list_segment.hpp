@@ -33,7 +33,13 @@ struct LinkedList {
 };
 
 struct ListSegmentScanState {
+	//! The current segment
 	const ListSegment *segment = nullptr;
+	//! The offset of the next row to be scanned within the current segment
+	idx_t offset = 0;
+	//! The scan states for the children of the current segment (if any)
+	//! These are (re-)initialized by the scan whenever it moves to a new segment
+	vector<ListSegmentScanState> children;
 };
 
 // forward declarations
@@ -43,18 +49,16 @@ typedef ListSegment *(*create_segment_t)(const ListSegmentFunctions &functions, 
 typedef void (*write_data_to_segment_t)(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
                                         idx_t &entry_idx);
-typedef void (*read_data_from_segment_t)(const ListSegmentFunctions &functions, const ListSegment *segment,
-                                         Vector &result, idx_t &total_count);
+//! Scans up to "count" rows from the state's current position into the result vector at result_offset,
+//! advancing the state - returns the number of rows scanned (less than "count" only if the scan is exhausted)
+typedef idx_t (*scan_data_t)(const ListSegmentFunctions &functions, ListSegmentScanState &state, idx_t count,
+                             Vector &result, idx_t result_offset);
 
 struct ListSegmentFunctions {
 	create_segment_t create_segment;
 	write_data_to_segment_t write_data;
-	read_data_from_segment_t read_data;
+	scan_data_t scan_data;
 	uint16_t initial_capacity = ListSegment::INITIAL_CAPACITY;
-	//! Row segments are capped at STANDARD_VECTOR_SIZE so that any segment can be scanned into a single vector
-	uint16_t maximum_capacity = uint16_t(MinValue<idx_t>(STANDARD_VECTOR_SIZE, DATA_SEGMENT_MAXIMUM_CAPACITY));
-
-	static constexpr idx_t DATA_SEGMENT_MAXIMUM_CAPACITY = 32768;
 
 	vector<ListSegmentFunctions> child_functions;
 
