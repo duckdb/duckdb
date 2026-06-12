@@ -48,6 +48,7 @@ public:
 //! V1 is a contiguous logical write queue: each RegisterWrite offset must match the next expected offset.
 //! Positional target writes are used only to drain contiguous registrations concurrently.
 //! Callers are responsible for assigning offsets and externally serializing RegisterWrite calls.
+//! The default Options are intentionally policy-free; high-throughput producers should configure memory limits.
 //! Close() must be called before destroying the queue unless the caller has already drained it explicitly.
 class AsyncWriteQueue {
 	friend class AsyncWriteQueueTask;
@@ -55,14 +56,15 @@ class AsyncWriteQueue {
 
 public:
 	//! Queue tuning derived by the caller from its target and workload.
+	//! Defaults are minimal: no coalescing, no TMM backpressure, immediate first-task scheduling.
 	struct Options {
-		//! Stream coalescing policy. Zero writes each payload directly, which suits block-sized callers.
+		//! Stream coalescing policy. Zero disables coalescing and writes each payload directly.
 		idx_t coalesce_threshold = 0;
 		//! Generic scheduling policy: minimum unscheduled bytes before threshold scheduling starts the first task.
 		idx_t first_task_schedule_threshold = 0;
 		//! Generic memory policy: minimum TemporaryMemoryManager reservation while writes are outstanding.
 		idx_t min_pending_bytes = 0;
-		//! Generic memory policy: hard cap over the TemporaryMemoryManager reservation.
+		//! Generic memory policy: hard cap over the TemporaryMemoryManager reservation. Zero disables backpressure.
 		idx_t max_pending_bytes = 0;
 		//! Generic scheduling policy: maximum bytes one drain task should take before yielding scheduler capacity.
 		idx_t drain_task_byte_budget = 0;
@@ -186,6 +188,8 @@ private:
 	idx_t NextWriteOffset(idx_t offset, idx_t write_size) const;
 	//! Throw if the queue still owns registered or scheduled write work.
 	void VerifyDrained() const;
+	//! Discard queued payloads after an async write failure once all scheduled drain tasks have stopped.
+	void CancelPendingWritesAfterFailure() noexcept;
 	//! Execute one queued drain task owned by this queue, or yield if the tasks are already running.
 	void WorkOnSingleTask();
 

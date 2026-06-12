@@ -11,6 +11,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 #include <cstring>
+#include <exception>
 
 namespace duckdb {
 
@@ -641,11 +642,14 @@ void AsyncWriteQueue::ApplyBackpressure() {
 }
 
 void AsyncWriteQueue::WaitAll(BatchDrainMode batch_drain_mode) {
+	bool already_closed;
 	{
 		lock_guard<mutex> guard(lock);
-		if (closed) {
-			return;
-		}
+		already_closed = closed;
+	}
+	if (already_closed) {
+		RethrowTaskError();
+		return;
 	}
 	if (!executor) {
 		RethrowTaskError();
@@ -703,20 +707,43 @@ void AsyncWriteQueue::VerifyDrained() const {
 	}
 }
 
+void AsyncWriteQueue::CancelPendingWritesAfterFailure() noexcept {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(active_drain_tasks == 0);
+	D_ASSERT(pending_drain_tasks == 0);
+	D_ASSERT(in_flight_bytes == 0);
+	if (active_drain_tasks != 0 || pending_drain_tasks != 0 || in_flight_bytes != 0) {
+		return;
+	}
+
+	pending_writes.clear();
+	pending_bytes = 0;
+	batch_depth = 0;
+	closed = true;
+}
+
 void AsyncWriteQueue::Close() {
+	bool already_closed;
 	{
 		lock_guard<mutex> guard(lock);
-		if (closed) {
-			return;
-		}
+		already_closed = closed;
+	}
+	if (already_closed) {
+		RethrowTaskError();
+		return;
 	}
 
 	try {
 		WaitAll(BatchDrainMode::FORCE_CLOSE_BATCH);
 		ReleaseMemoryReservation();
 	} catch (...) {
-		ReleaseMemoryReservation();
-		throw;
+		auto error = std::current_exception();
+		CancelPendingWritesAfterFailure();
+		try {
+			ReleaseMemoryReservation();
+		} catch (...) {
+		}
+		std::rethrow_exception(error);
 	}
 
 	lock_guard<mutex> guard(lock);

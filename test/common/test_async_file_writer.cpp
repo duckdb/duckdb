@@ -1073,3 +1073,34 @@ TEST_CASE("AsyncFileWriter close drains scheduled tasks after async write error"
 		fs.RemoveFile(path);
 	}
 }
+
+TEST_CASE("AsyncFileWriter close discards unscheduled writes after async write error", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 1);
+	FailingBlockedWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_error_unscheduled_tail.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+	REQUIRE(fs.WaitForEnteredWrites(1));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.FailFirstWrite();
+	try {
+		writer.Close();
+		FAIL("Expected async write failure");
+	} catch (const Exception &ex) {
+		string error = ex.what();
+		REQUIRE(error.find("Async write failed for range [offset=0, size=") != string::npos);
+		REQUIRE(error.find("Injected async write failure") != string::npos);
+	}
+
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
