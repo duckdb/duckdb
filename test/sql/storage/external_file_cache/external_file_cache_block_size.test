@@ -11,9 +11,6 @@ set force_file_cache=true;
 statement ok
 set enable_external_file_cache=true;
 
-statement ok
-set prefetch_all_parquet_files=true;
-
 # Create a test parquet file
 statement ok
 copy (select range i, range % 100 j from range(10000)) to '{TEST_DIR}/test_block_size.parquet';

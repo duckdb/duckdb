@@ -207,12 +207,9 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
 	Value disable_prefetch = false;
-	Value prefetch_all_files = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
-	context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
-	bool should_prefetch = !file_handle.OnDiskFile() || prefetch_all_files.GetValue<bool>();
-	bool can_prefetch = file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
-	return should_prefetch && can_prefetch;
+	// local files also prefetch by default, the async I/O overlaps with decoding
+	return file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
 }
 
 static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path, idx_t file_size,
@@ -1760,52 +1757,58 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 		if (to_scan_compressed_bytes > total_row_group_span) {
-			throw IOException(
-			    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
-			    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
-			    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
-			    GetFileName());
-		}
-		// We basically do eager fetch if we do a whole-group or column-wise prefetch, if we do filters we do it lazily
-		ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
-		if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
-			strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
-		} else {
-			bool filters_look_unselective = false;
-			if (filters) {
-				if (state.prefetch_metrics.row_groups_executed == 0) {
-					filters_look_unselective = true;
-				} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
-				               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
-				           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
-					filters_look_unselective = true;
-				}
+			if (!state.file_handle->OnDiskFile()) {
+				throw IOException(
+				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
+				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
+				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
+				    GetFileName());
 			}
-
-			if ((!filters || filters_look_unselective) &&
-			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			// broken page offsets cannot be prefetched, local files fall back to synchronous reads
+			state.prefetch_mode = false;
+		}
+		if (state.prefetch_mode) {
+			// whole group and column wise prefetch fetch eagerly, filter prefetch fetches lazily
+			ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
 				strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
-				strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+				bool filters_look_unselective = false;
+				if (filters) {
+					if (state.prefetch_metrics.row_groups_executed == 0) {
+						filters_look_unselective = true;
+					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
+						filters_look_unselective = true;
+					}
+				}
+
+				if ((!filters || filters_look_unselective) &&
+				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+					strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+				} else {
+					strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+				}
 			}
-		}
-		auto read_head_count = trans.GetReadHeads().size();
-		switch (strategy) {
-		case ParquetPrefetchStrategy::PREFETCH_FILTERS:
-			// schedule only the filter columns' I/O, they are last in our list
-			io_tasks =
-			    CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count, read_head_count);
-			break;
-		case ParquetPrefetchStrategy::WHOLE_GROUP:
-		case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
-			// schedule the I/O for all columns up front
-			io_tasks = CollectIOTasks(trans, state.file_handle, 0, read_head_count);
-			break;
-		default:
-			throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
-		}
-		if (log_prefetch) {
-			state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
+			auto read_head_count = trans.GetReadHeads().size();
+			switch (strategy) {
+			case ParquetPrefetchStrategy::PREFETCH_FILTERS:
+				// schedule only the filter columns' I/O, they are last in our list
+				io_tasks = CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count,
+				                          read_head_count);
+				break;
+			case ParquetPrefetchStrategy::WHOLE_GROUP:
+			case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
+				// schedule the I/O for all columns up front
+				io_tasks = CollectIOTasks(trans, state.file_handle, 0, read_head_count);
+				break;
+			default:
+				throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
+			}
+			if (log_prefetch) {
+				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
+			}
 		}
 	}
 	result.Reset();

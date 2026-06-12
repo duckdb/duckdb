@@ -27,9 +27,6 @@ CREATE VIEW {table} AS FROM '{TEST_DIR}/efc_tpch_sf1/{table}.parquet';
 endloop
 
 statement ok
-set prefetch_all_parquet_files=true;
-
-statement ok
 pragma tpch(9);
 
 statement ok

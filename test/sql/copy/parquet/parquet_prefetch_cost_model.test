@@ -8,9 +8,6 @@ statement ok
 SET threads=1
 
 statement ok
-SET prefetch_all_parquet_files=true
-
-statement ok
 COPY (
     SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE i END AS a,
         i + 1 AS b,

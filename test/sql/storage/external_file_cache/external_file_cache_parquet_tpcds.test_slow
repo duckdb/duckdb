@@ -10,10 +10,6 @@ require parquet
 statement ok
 set force_file_cache=true;
 
-# for now, caching is only triggered when prefetching (mainly used for remote files), so let's force it
-statement ok
-set prefetch_all_parquet_files=true;
-
 # generate TPC-H in a schema and export to Parquet before dropping the schema again
 statement ok
 CREATE SCHEMA tpcds;

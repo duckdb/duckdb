@@ -1,0 +1,50 @@
+# name: test/sql/copy/parquet/parquet_local_prefetch_default.test
+# description: Local on-disk parquet files prefetch with async I/O by default, disable_parquet_prefetching opts out
+# group: [parquet]
+
+require parquet
+
+# this test exercises the async I/O path, so override any forced synchronous execution strategy
+statement ok
+SET debug_physical_table_scan_execution_strategy=DEFAULT
+
+statement ok
+SET threads=1
+
+statement ok
+COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/local_prefetch_default.parquet' (ROW_GROUP_SIZE 10000)
+
+statement ok
+CALL enable_logging('AsyncTaskSchedule')
+
+# no prefetch setting is set: local files prefetch by default and route their eager I/O to the ASYNC pool
+statement ok
+SELECT sum(i) FROM '{TEST_DIR}/local_prefetch_default.parquet'
+
+query I
+SELECT DISTINCT pool FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+ASYNC
+
+query I
+SELECT sum(task_count) > 0 FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# disable_parquet_prefetching is the escape hatch: the scan runs synchronously, scheduling no async I/O tasks
+statement ok
+SET disable_parquet_prefetching=true
+
+statement ok
+SELECT sum(i) FROM '{TEST_DIR}/local_prefetch_default.parquet'
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('AsyncTaskSchedule')
+----
+0
+
+statement ok
+CALL truncate_duckdb_logs()

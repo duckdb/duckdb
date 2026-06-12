@@ -11,9 +11,6 @@ set force_file_cache=true;
 statement ok
 set enable_external_file_cache=true;
 
-statement ok
-set prefetch_all_parquet_files=true;
-
 # Create a single test file that will be used for all tests
 statement ok
 copy (select 1 as col1, 2 as col2 from range(100)) to '{TEST_DIR}/test_validate_cache.parquet';

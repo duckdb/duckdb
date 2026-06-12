@@ -20,10 +20,6 @@ set preserve_insertion_order=false
 statement ok
 copy (select hash(range) i from range(10_000_000)) to '{TEST_DIR}/efc_eviction_queue.parquet'
 
-# load it into a table with prefetching on (adds to file cache)
-statement ok
-set prefetch_all_parquet_files=true
-
 statement ok
 set memory_limit='80mb'
 
