@@ -147,7 +147,7 @@ public:
 	//! Returns all FixedSizeAllocator information for serialization
 	FixedSizeAllocatorInfo GetInfo() const;
 	//!
-	unsafe_unique_ptr<FixedSizeAllocator> Checkpoint(PartialBlockManager &partial_block_manager);
+	unsafe_unique_ptr<FixedSizeAllocator> Persist(PartialBlockManager &partial_block_manager);
 	//! Sets the allocation sizes and returns data to serialize each buffer
 	vector<IndexBufferInfo> InitSerializationToWAL();
 	//! Initialize a fixed-size allocator from allocator storage information

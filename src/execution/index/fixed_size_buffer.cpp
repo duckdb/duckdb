@@ -71,7 +71,7 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 	}
 }
 
-unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Checkpoint(PartialBlockManager &partial_block_manager,
+unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
                                                         const idx_t available_segments, const idx_t segment_size,
                                                         const idx_t bitmask_offset) {
 	// Early-out, if the block is already on disk and not in memory.

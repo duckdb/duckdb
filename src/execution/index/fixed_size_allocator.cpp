@@ -298,7 +298,7 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 	return info;
 }
 
-unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Checkpoint(PartialBlockManager &partial_block_manager) {
+unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockManager &partial_block_manager) {
 	auto result = make_unsafe_uniq<FixedSizeAllocator>(segment_size, block_manager, memory_tag);
 
 	D_ASSERT(result->available_segments_per_buffer == available_segments_per_buffer);
@@ -313,7 +313,7 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Checkpoint(PartialBloc
 		auto buffer_id = entry.first;
 		auto &buffer = *entry.second;
 
-		result->buffers[buffer_id] = buffer.Checkpoint(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		result->buffers[buffer_id] = buffer.Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}
 
 	return result;

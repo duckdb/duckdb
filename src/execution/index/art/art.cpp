@@ -1063,7 +1063,7 @@ void ART::Checkpoint(TableIndexWriter &writer) {
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		auto &new_allocator = (*new_allocators)[i];
 
-		new_allocator = (*allocators)[i]->Checkpoint(partial_block_manager);
+		new_allocator = (*allocators)[i]->Persist(partial_block_manager);
 
 		if (i < allocator_count) {
 			storage_info.allocator_infos.push_back(new_allocator->GetInfo());

@@ -75,7 +75,7 @@ private:
 	}
 
 	//!
-	unique_ptr<FixedSizeBuffer> Checkpoint(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
+	unique_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
 		       const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
