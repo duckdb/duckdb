@@ -538,6 +538,7 @@ BaseTableRef:
   by_value: true
   rules:
     - BaseTableName
+    - UnqualifiedBaseTableName
     - SchemaReservedTable
     - CatalogReservedSchemaTable
     - TargetOptAlias

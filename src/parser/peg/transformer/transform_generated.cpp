@@ -5591,7 +5591,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBaseTableNameIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = TransformBaseTableName(transformer, choice_pr.GetResult());
+	auto result = transformer.Transform<unique_ptr<BaseTableRef>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<BaseTableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformUnqualifiedBaseTableNameInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto table_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformUnqualifiedBaseTableName(transformer, table_name);
 	return make_uniq<TypedTransformResult<unique_ptr<BaseTableRef>>>(std::move(result));
 }
 
@@ -7644,6 +7653,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"UnpivotTargetList", &PEGTransformerFactory::TransformUnpivotTargetListInternal},
 	    {"Lateral", &PEGTransformerFactory::TransformLateralInternal},
 	    {"BaseTableName", &PEGTransformerFactory::TransformBaseTableNameInternal},
+	    {"UnqualifiedBaseTableName", &PEGTransformerFactory::TransformUnqualifiedBaseTableNameInternal},
 	    {"SchemaReservedTable", &PEGTransformerFactory::TransformSchemaReservedTableInternal},
 	    {"CatalogReservedSchemaTable", &PEGTransformerFactory::TransformCatalogReservedSchemaTableInternal},
 	    {"TableFunction", &PEGTransformerFactory::TransformTableFunctionInternal},

@@ -248,14 +248,10 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	return parameter;
 }
 
-unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransformer &transformer,
-                                                                       ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		auto table_name = choice_result.Cast<IdentifierParseResult>().identifier;
-		const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
-		return make_uniq<BaseTableRef>(description);
-	}
-	return transformer.Transform<unique_ptr<BaseTableRef>>(choice_result);
+unique_ptr<BaseTableRef> PEGTransformerFactory::TransformUnqualifiedBaseTableName(PEGTransformer &transformer,
+                                                                                  const Identifier &table_name) {
+	const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
+	return make_uniq<BaseTableRef>(description);
 }
 
 Identifier PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &transformer,

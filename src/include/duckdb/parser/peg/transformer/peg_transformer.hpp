@@ -2558,7 +2558,10 @@ private:
 	static bool TransformLateral(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformBaseTableNameInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static unique_ptr<BaseTableRef> TransformBaseTableName(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformUnqualifiedBaseTableNameInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<BaseTableRef> TransformUnqualifiedBaseTableName(PEGTransformer &transformer,
+	                                                                  const Identifier &table_name);
 	static unique_ptr<TransformResultValue> TransformSchemaReservedTableInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<BaseTableRef> TransformSchemaReservedTable(PEGTransformer &transformer,
