@@ -97,6 +97,10 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 	if (op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 		return nullptr;
 	}
+	// don't rewrite state-export aggregates - the rewrite would lose the STATE_EXPORT mode
+	if (aggr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return nullptr;
+	}
 
 	return Apply(rewriter.context, aggr, op.Cast<LogicalAggregate>().groups, op.Cast<LogicalAggregate>().grouping_sets,
 	             changes_made);

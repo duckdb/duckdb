@@ -45,6 +45,19 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 
 static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
 	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		if (type.IsAggregateState()) {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < StorageVersion::V2_0_0) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("Aggregate state columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+			return false;
+		}
 		switch (type.id()) {
 		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
@@ -462,11 +475,9 @@ struct StructMappingInfo {
 };
 
 unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
-	expr->SetAlias(std::move(name));
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(expr));
-	auto res = make_uniq<FunctionExpression>("struct_pack", std::move(children));
-	return std::move(res);
+	vector<FunctionArgument> children;
+	children.emplace_back(std::move(name), std::move(expr));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(children));
 }
 
 static child_list_t<LogicalType> GetChildList(const LogicalType &type) {
@@ -1384,6 +1395,11 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 		auto old_entry = triggers->GetEntry(transaction, entry_name);
 		if (old_entry) {
 			return nullptr;
+		}
+	} else if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
+		if (old_entry) {
+			triggers->DropEntry(transaction, entry_name, false);
 		}
 	}
 	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {

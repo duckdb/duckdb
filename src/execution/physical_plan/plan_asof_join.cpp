@@ -93,10 +93,10 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		ExpressionIterator::EnumerateExpression(predicate, [&](Expression &child) {
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 				auto &ref = child.Cast<BoundReferenceExpression>();
-				if (ref.index < lhs_width) {
-					ref.index = ref.index + rhs_width;
+				if (ref.Index() < lhs_width) {
+					ref.IndexMutable() = ref.Index() + rhs_width;
 				} else {
-					ref.index = ref.index - lhs_width;
+					ref.IndexMutable() = ref.Index() - lhs_width;
 				}
 			}
 		});
@@ -242,8 +242,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto pk = RowNumberFun::GetFunction().Bind(context);
 	D_ASSERT(pk->GetReturnType() == pk_type);
 
-	pk->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	pk->end = WindowBoundary::CURRENT_ROW_ROWS;
+	pk->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	pk->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	pk->SetAlias("row_number");
 	window_select.emplace_back(std::move(pk));
 
@@ -395,10 +395,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	D_ASSERT(asof_end->GetReturnType() == asof_type);
 
-	asof_end->partitions = std::move(partitions);
-	asof_end->orders = std::move(orders);
-	asof_end->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	asof_end->end = WindowBoundary::CURRENT_ROW_ROWS;
+	asof_end->PartitionsMutable() = std::move(partitions);
+	asof_end->OrderByMutable() = std::move(orders);
+	asof_end->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	asof_end->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 
 	vector<unique_ptr<Expression>> window_select;
 	window_select.emplace_back(std::move(asof_end));

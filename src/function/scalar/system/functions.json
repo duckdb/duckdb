@@ -4,14 +4,21 @@
         "parameters": "col0",
         "description": "",
         "example": "",
-        "type": "scalar_function_set"
+        "type": "scalar_function"
     },
     {
         "name": "combine",
         "parameters": "col0,col1",
         "description": "",
         "example": "",
-        "type": "scalar_function_set"
+        "type": "scalar_function"
+    },
+    {
+        "name": "to_aggregate_state",
+        "parameters": "data,name,signature",
+        "description": "Converts a value into the aggregate state of the aggregate function with the given name and signature. The type of the value must exactly match the state layout of the aggregate function.",
+        "example": "to_aggregate_state({'count': 1, 'value': 42.0}, 'avg', ['DOUBLE'])",
+        "type": "scalar_function"
     },
     {
         "name": "write_log",

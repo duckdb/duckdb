@@ -36,6 +36,12 @@
       ]
     },
     {
+      "reason": "Test relies on checkpoint/vacuum ordering.",
+      "paths": [
+        "test/sql/storage/rowid_gaps/alter_preserves_rowid_gaps.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [
         "test/fuzzer/pedro/index_generated_column.test",

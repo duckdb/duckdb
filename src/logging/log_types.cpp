@@ -21,6 +21,7 @@ constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 constexpr LogLevel ParquetPrefetchLogType::LEVEL;
+constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -299,13 +300,15 @@ LogicalType ParquetPrefetchLogType::GetLogType() {
 	    {"strategy", LogicalType::VARCHAR},
 	    {"prefetch_groups", LogicalType::LIST(LogicalType::LIST(LogicalType::VARCHAR))},
 	    {"minimal_filters", LogicalType::LIST(LogicalType::VARCHAR)},
+	    {"accepted_column_gap", LogicalType::UBIGINT},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
 string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
                                                    const char *strategy, const vector<vector<string>> &prefetch_groups,
-                                                   const vector<string> &minimal_filters) {
+                                                   const vector<string> &minimal_filters,
+                                                   uint64_t accepted_column_gap) {
 	vector<Value> outer;
 	outer.reserve(prefetch_groups.size());
 	for (auto &group : prefetch_groups) {
@@ -328,6 +331,29 @@ string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_
 	    {"strategy", strategy ? Value(strategy) : Value(LogicalType::VARCHAR)},
 	    {"prefetch_groups", Value::LIST(LogicalType::LIST(LogicalType::VARCHAR), std::move(outer))},
 	    {"minimal_filters", Value::LIST(LogicalType::VARCHAR, std::move(minimal))},
+	    {"accepted_column_gap", Value::UBIGINT(accepted_column_gap)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// AsyncTaskScheduleLogType
+//===--------------------------------------------------------------------===//
+AsyncTaskScheduleLogType::AsyncTaskScheduleLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType AsyncTaskScheduleLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"pool", LogicalType::VARCHAR},
+	    {"task_count", LogicalType::BIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string AsyncTaskScheduleLogType::ConstructLogMessage(const string &pool, idx_t task_count) {
+	child_list_t<Value> child_list = {
+	    {"pool", Value(pool)},
+	    {"task_count", Value::BIGINT(static_cast<int64_t>(task_count))},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

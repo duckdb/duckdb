@@ -1,5 +1,45 @@
 [
 	{
+		"name": "variant_exists",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns whether the specified path exists in the variant.",
+				"example": "variant_exists({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a boolean for each specified path, indicating whether that path exists in the variant.",
+				"example": "variant_exists({'a': 1, 'b': 2}::VARIANT, ['a', 'c'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_extract",
 		"variants": [
 			{

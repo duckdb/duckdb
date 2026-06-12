@@ -132,7 +132,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
-			intermediate.SetCardinality(1);
+			intermediate.SetChildCardinality(1);
 
 			// Make sure to clear any dictionary states in the child expression, so that it actually
 			// gets executed anew for every row

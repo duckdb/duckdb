@@ -1,0 +1,12 @@
+diff --git a/test/sql/slow/hnsw_reclaim_storage.test_slow b/test/sql/slow/hnsw_reclaim_storage.test_slow
+index 6ec3e8d7..551dc206 100644
+--- a/test/sql/slow/hnsw_reclaim_storage.test_slow
++++ b/test/sql/slow/hnsw_reclaim_storage.test_slow
+@@ -2,6 +2,8 @@
+ # group: [slow]
+ 
+ require vss
++
++require notmusl
+ 
+ load {TEST_DIR}/hnsw_reclaim_space.db

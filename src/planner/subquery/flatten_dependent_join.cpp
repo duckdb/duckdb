@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -223,11 +225,38 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 	}
 }
 
+static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
+                                                              const vector<ColumnBinding> &old_child_bindings);
+static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan);
+static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan);
+
+static void VerifyNoDelim(LogicalOperator &op) {
+	// Verify that there are no delim joins or delim scans in the plan, as these should have been rewritten to CTEs at
+	// this point.
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		throw InternalException("Found DELIM_JOIN after flattening dependent joins");
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		throw InternalException("Found DELIM_GET after flattening dependent joins");
+	}
+	for (auto &child : op.children) {
+		VerifyNoDelim(*child);
+	}
+}
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		bool filters_pushed;
+		do {
+			filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
+		} while (filters_pushed);
+		RewriteDelimJoinsToCTEs(binder, plan);
+		VerifyNoDelim(*plan);
+	}
 	return plan;
 }
 
@@ -293,10 +322,10 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	auto window = make_uniq<LogicalWindow>(table_index);
 
 	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
-	row_number->partitions = std::move(partitions);
-	row_number->orders = std::move(orders);
-	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	row_number->PartitionsMutable() = std::move(partitions);
+	row_number->OrderByMutable() = std::move(orders);
+	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	row_number->SetAlias("limit_rownum");
 
 	window->expressions.push_back(std::move(row_number));
@@ -421,6 +450,309 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 	}
 	plan = std::move(cross_product);
 	return state;
+}
+
+static vector<string> GenerateCTEColumnNames(idx_t column_count, const string &prefix) {
+	vector<string> result;
+	result.reserve(column_count);
+	for (idx_t i = 0; i < column_count; i++) {
+		result.push_back(prefix + to_string(i));
+	}
+	return result;
+}
+
+static void RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIndex delim_scan_index) {
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		if (!op->children.empty()) {
+			RewriteDelimScanReferences(op->children[0], delim_scan_index);
+		}
+		return;
+	}
+	for (auto &child : op->children) {
+		RewriteDelimScanReferences(child, delim_scan_index);
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		auto &delim_get = op->Cast<LogicalDelimGet>();
+		auto delim_scan_names = GenerateCTEColumnNames(delim_get.chunk_types.size(), "__duckdb_delim_scan_");
+		auto cte_scan =
+		    make_uniq<LogicalCTERef>(delim_get.table_index, delim_scan_index, delim_get.chunk_types, delim_scan_names);
+		op = std::move(cte_scan);
+	}
+}
+
+static vector<ReplacementBinding> CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                            const vector<ColumnBinding> &new_bindings) {
+	vector<ReplacementBinding> result;
+	auto count = MinValue(old_bindings.size(), new_bindings.size());
+	for (idx_t i = 0; i < count; i++) {
+		if (old_bindings[i] != new_bindings[i] &&
+		    std::find(new_bindings.begin(), new_bindings.end(), old_bindings[i]) == new_bindings.end()) {
+			result.emplace_back(old_bindings[i], new_bindings[i]);
+		}
+	}
+	return result;
+}
+
+static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
+                                                              const vector<ColumnBinding> &old_child_bindings) {
+	auto new_child_bindings = child.GetColumnBindings();
+	auto replacements = CreateBindingReplacements(old_child_bindings, new_child_bindings);
+	if (replacements.empty()) {
+		return replacements;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		auto &dependent_join = op.Cast<LogicalDependentJoin>();
+		for (auto &col : dependent_join.correlated_columns) {
+			for (const auto &replacement : replacements) {
+				if (col.binding == replacement.old_binding) {
+					col.binding = replacement.new_binding;
+					break;
+				}
+			}
+		}
+	}
+	ColumnBindingReplacer replacer;
+	replacer.replacement_bindings = replacements;
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && op.children[0].get() == &child) {
+		replacer.stop_operator = child;
+		replacer.VisitOperator(op);
+	} else {
+		LogicalOperatorVisitor::EnumerateExpressions(
+		    op, [&](unique_ptr<Expression> *expr) { replacer.VisitExpression(expr); });
+	}
+	return replacements;
+}
+
+static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
+	auto entry = std::find(bindings.begin(), bindings.end(), binding);
+	if (entry == bindings.end()) {
+		return optional_idx();
+	}
+	return NumericCast<idx_t>(entry - bindings.begin());
+}
+
+static void AddFilterToOperator(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> filter) {
+	if (child->type == LogicalOperatorType::LOGICAL_FILTER && !child->HasProjectionMap()) {
+		child->Cast<LogicalFilter>().expressions.push_back(std::move(filter));
+		return;
+	}
+
+	auto new_filter = make_uniq<LogicalFilter>();
+	new_filter->expressions.push_back(std::move(filter));
+	new_filter->children.push_back(std::move(child));
+	child = std::move(new_filter);
+}
+
+static bool GetExpressionColumnBindings(Expression &expr, column_binding_set_t &bindings) {
+	bool depth_zero = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		if (colref.Depth() == 0) {
+			bindings.insert(colref.Binding());
+		} else {
+			depth_zero = false;
+		}
+	});
+	return depth_zero;
+}
+
+static bool ChildContainsBindings(LogicalOperator &child, const column_binding_set_t &bindings) {
+	column_binding_set_t child_bindings;
+	for (auto &binding : child.GetColumnBindings()) {
+		child_bindings.insert(binding);
+	}
+	for (auto &binding : bindings) {
+		if (child_bindings.find(binding) == child_bindings.end()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool FilterReferencesDelimInput(LogicalComparisonJoin &delim_join, Expression &filter) {
+	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	column_binding_set_t filter_bindings;
+	if (!GetExpressionColumnBindings(filter, filter_bindings)) {
+		return false;
+	}
+	if (filter_bindings.empty()) {
+		return false;
+	}
+	return ChildContainsBindings(*delim_join.children[0], filter_bindings);
+}
+
+static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
+	auto &filter = plan->Cast<LogicalFilter>();
+	if (filter.HasProjectionMap()) {
+		return false;
+	}
+	if (filter.children[0]->type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return false;
+	}
+
+	bool changed = false;
+	auto &delim_join = filter.children[0]->Cast<LogicalComparisonJoin>();
+	vector<unique_ptr<Expression>> remaining_expressions;
+	auto expressions = std::move(filter.expressions);
+	LogicalFilter::SplitPredicates(expressions);
+	for (auto &expr : expressions) {
+		if (FilterReferencesDelimInput(delim_join, *expr)) {
+			AddFilterToOperator(delim_join.children[0], std::move(expr));
+			changed = true;
+			continue;
+		}
+		remaining_expressions.push_back(std::move(expr));
+	}
+
+	if (remaining_expressions.empty()) {
+		plan = std::move(filter.children[0]);
+	} else {
+		filter.expressions = std::move(remaining_expressions);
+	}
+	return changed;
+}
+
+static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
+	bool changed = false;
+	for (auto &child : plan->children) {
+		changed = PushEligibleFiltersIntoDelimJoinInputs(child) || changed;
+	}
+	if (plan->type == LogicalOperatorType::LOGICAL_FILTER) {
+		changed = PushEligibleFilterExpressionsIntoDelimJoinInputs(plan) || changed;
+	}
+	return changed;
+}
+
+static void MaterializeDelimJoinAsCTE(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+	auto &join = plan->Cast<LogicalComparisonJoin>();
+	if (join.delim_flipped) {
+		throw InternalException("Flatten dependent joins - flipped delim join CTE rewrite not supported");
+	}
+
+	plan->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+	if (join.join_type == JoinType::MARK) {
+		// Match the LOGICAL_DELIM_JOIN filter-pushdown semantics: the mark column can still be required above
+		// this join, so pushing NOT(mark) into the join must not drop it by rewriting to ANTI.
+		join.convert_mark_to_semi = false;
+	}
+
+	plan->children[0]->ResolveOperatorTypes();
+	auto left_bindings = plan->children[0]->GetColumnBindings();
+	auto left_types = plan->children[0]->types;
+	auto visible_left_column_count = left_bindings.size();
+
+	vector<idx_t> dedup_column_indices;
+	vector<LogicalType> dedup_types;
+	vector<string> dedup_names;
+	vector<unique_ptr<Expression>> extra_left_expressions;
+	dedup_column_indices.reserve(join.duplicate_eliminated_columns.size());
+	dedup_types.reserve(join.duplicate_eliminated_columns.size());
+	dedup_names.reserve(join.duplicate_eliminated_columns.size());
+	for (auto &expr : join.duplicate_eliminated_columns) {
+		optional_idx binding_index;
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &colref_expr = expr->Cast<BoundColumnRefExpression>();
+			binding_index = FindBindingIndex(left_bindings, colref_expr.Binding());
+		}
+		if (binding_index.IsValid()) {
+			dedup_column_indices.push_back(binding_index.GetIndex());
+		} else {
+			dedup_column_indices.push_back(left_bindings.size() + extra_left_expressions.size());
+			extra_left_expressions.push_back(expr->Copy());
+		}
+		dedup_types.push_back(expr->GetReturnType());
+		dedup_names.push_back(expr->GetName());
+	}
+
+	if (!extra_left_expressions.empty()) {
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(left_bindings.size() + extra_left_expressions.size());
+		for (idx_t i = 0; i < left_bindings.size(); i++) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
+		}
+		for (auto &expr : extra_left_expressions) {
+			expressions.push_back(std::move(expr));
+		}
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+		projection->children.push_back(std::move(plan->children[0]));
+		plan->children[0] = std::move(projection);
+		plan->children[0]->ResolveOperatorTypes();
+		left_bindings = plan->children[0]->GetColumnBindings();
+		left_types = plan->children[0]->types;
+		if (join.left_projection_map.empty()) {
+			join.left_projection_map.reserve(visible_left_column_count);
+			for (idx_t i = 0; i < visible_left_column_count; i++) {
+				join.left_projection_map.emplace_back(i);
+			}
+		}
+	}
+
+	auto left_column_count = left_bindings.size();
+	auto cte_source_bindings = left_bindings;
+	vector<unique_ptr<Expression>> cte_source_expressions;
+	cte_source_expressions.reserve(left_column_count);
+	for (idx_t i = 0; i < left_column_count; i++) {
+		cte_source_expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
+	}
+	auto cte_source = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(cte_source_expressions));
+	cte_source->children.push_back(std::move(plan->children[0]));
+	cte_source->ResolveOperatorTypes();
+	left_types = cte_source->types;
+
+	auto cte_index = binder.GenerateTableIndex();
+	auto cte_name = "__duckdb_delim_" + to_string(cte_index.index);
+
+	auto left_cte_ref_index = binder.GenerateTableIndex();
+	auto left_cte_ref = make_uniq<LogicalCTERef>(left_cte_ref_index, cte_index, left_types,
+	                                             GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
+	auto new_left_bindings = left_cte_ref->GetColumnBindings();
+	auto binding_replacements = CreateBindingReplacements(cte_source_bindings, new_left_bindings);
+
+	plan->children[0] = std::move(left_cte_ref);
+	ColumnBindingReplacer replacer;
+	replacer.replacement_bindings = binding_replacements;
+	replacer.stop_operator = plan->children[1];
+	replacer.VisitOperator(*plan);
+
+	auto dedup_cte_index = binder.GenerateTableIndex();
+	RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
+	join.duplicate_eliminated_columns.clear();
+
+	auto dedup_group_index = binder.GenerateTableIndex();
+	auto dedup_aggregate_index = binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> dedup_aggrs;
+	auto dedup = make_uniq<LogicalAggregate>(dedup_group_index, dedup_aggregate_index, std::move(dedup_aggrs));
+	auto dedup_child_index = binder.GenerateTableIndex();
+	auto dedup_child = make_uniq<LogicalCTERef>(dedup_child_index, cte_index, left_types,
+	                                            GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
+	auto dedup_child_bindings = dedup_child->GetColumnBindings();
+	for (idx_t i = 0; i < dedup_column_indices.size(); i++) {
+		auto colref = make_uniq<BoundColumnRefExpression>(dedup_names[i], dedup_types[i],
+		                                                  dedup_child_bindings[dedup_column_indices[i]]);
+		auto new_group_index = ColumnBinding::PushExpression(dedup->groups, std::move(colref));
+		for (auto &set : dedup->grouping_sets) {
+			set.insert(new_group_index);
+		}
+	}
+	dedup->children.push_back(std::move(dedup_child));
+
+	auto dedup_cte_name = "__duckdb_delim_dedup_" + to_string(dedup_cte_index.index);
+	auto dedup_cte =
+	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
+	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
+	                                             std::move(dedup_cte), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	plan = std::move(cte);
+}
+
+static void RewriteDelimJoinsToCTEs(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+	for (auto &child : plan->children) {
+		auto old_child_bindings = child->GetColumnBindings();
+		RewriteDelimJoinsToCTEs(binder, child);
+		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
+	}
+	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		MaterializeDelimJoinAsCTE(binder, plan);
+	}
 }
 
 vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan,
@@ -781,7 +1113,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOp
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
-		AppendCorrelatedColumns(w.partitions, state, false);
+		AppendCorrelatedColumns(w.PartitionsMutable(), state, false);
 	}
 	return state;
 }

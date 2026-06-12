@@ -173,6 +173,26 @@
     "pointer_type": "none"
   },
   {
+    "class": "FunctionArgument",
+    "includes": [
+      "duckdb/parser/expression/function_expression.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+          "id": 101,
+          "name": "expression",
+          "type": "unique_ptr<ParsedExpression>"
+      }
+    ],
+    "constructor": ["name", "expression"],
+    "pointer_type": "none"
+  },
+  {
     "class": "SampleOptions",
       "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"
@@ -589,6 +609,11 @@
         "name": "filename_column",
         "type": "string",
         "default": "MultiFileOptions::DEFAULT_FILENAME_COLUMN"
+      },
+      {
+        "id": 107,
+        "name": "allow_empty",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"

@@ -8,11 +8,6 @@ namespace duckdb {
 
 namespace {
 struct BaseCountFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state = 0;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target += source;
@@ -261,10 +256,8 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("count", LogicalType::BIGINT);
-	return LogicalType::STRUCT(std::move(children));
+AggregateStateLayout GetCountStateType(const BoundAggregateFunction &function) {
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -299,7 +292,6 @@ AggregateFunction CountStarFun::GetFunction() {
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
-	fun.SetStructStateExport(GetCountStateType);
 	return fun;
 }
 

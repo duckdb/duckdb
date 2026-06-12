@@ -450,6 +450,7 @@ private:
 	//! Whether or not to use a bloom filter will be determined by the operator
 	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
+	idx_t bloom_filter_init_count = 0;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
@@ -535,6 +536,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 	void PrepareBuildBloomFilter(idx_t estimated_row_count);
+	void PrepareBloomFilterForFinalize();
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;

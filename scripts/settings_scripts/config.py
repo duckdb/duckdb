@@ -164,6 +164,25 @@ class Setting:
 SettingsList: List[Setting] = []
 
 
+# strip git merge conflict markers, keeping the HEAD ("ours") version
+def strip_conflict_markers(source_code):
+    result = []
+    in_conflict = False
+    keep = True
+    for line in source_code.split('\n'):
+        if line.startswith('<<<<<<<'):
+            in_conflict = True
+            keep = True
+        elif in_conflict and line.startswith('======='):
+            keep = False
+        elif in_conflict and line.startswith('>>>>>>>'):
+            in_conflict = False
+            keep = True
+        elif keep:
+            result.append(line)
+    return '\n'.join(result)
+
+
 # global method that finds the indexes of a start and an end marker in a file
 def find_start_end_indexes(source_code, start_marker, end_marker, file_path):
     start_matches = list(re.finditer(start_marker, source_code))

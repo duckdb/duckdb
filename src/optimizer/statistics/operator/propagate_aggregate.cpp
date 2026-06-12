@@ -145,6 +145,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate has a filter - bail
 			return;
 		}
+		if (aggr_expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			// aggregate is in state export mode - cannot replace with a constant
+			return;
+		}
 		const string &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.GetChildren().size() != 1 ||

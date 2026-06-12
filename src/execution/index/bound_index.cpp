@@ -245,7 +245,6 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);
 				table_chunk.data[col_id].Slice(sel, rows_to_process);
 			}
-			table_chunk.SetCardinality(rows_to_process);
 			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
 
 			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {

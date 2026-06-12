@@ -16,6 +16,8 @@ namespace duckdb {
 
 class WindowSelfJoinOptimizer {
 public:
+	static bool CanOptimize(const LogicalOperator &op);
+
 	explicit WindowSelfJoinOptimizer(Optimizer &optimizer);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);

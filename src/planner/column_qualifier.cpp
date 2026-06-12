@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
@@ -18,29 +19,39 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-string GetSQLValueFunctionName(const string &column_name) {
-	auto lcase = StringUtil::Lower(column_name);
+static string GetSQLValueFunctionName(const string &column_name) {
+	const auto lcase = StringUtil::Lower(column_name);
 	if (lcase == "current_catalog") {
 		return "current_catalog";
-	} else if (lcase == "current_date") {
+	}
+	if (lcase == "current_date") {
 		return "current_date";
-	} else if (lcase == "current_schema") {
+	}
+	if (lcase == "current_schema") {
 		return "current_schema";
-	} else if (lcase == "current_role") {
+	}
+	if (lcase == "current_role") {
 		return "current_role";
-	} else if (lcase == "current_time") {
+	}
+	if (lcase == "current_time") {
 		return "get_current_time";
-	} else if (lcase == "current_timestamp") {
+	}
+	if (lcase == "current_timestamp") {
 		return "get_current_timestamp";
-	} else if (lcase == "current_user") {
+	}
+	if (lcase == "current_user") {
 		return "current_user";
-	} else if (lcase == "localtime") {
+	}
+	if (lcase == "localtime") {
 		return "current_localtime";
-	} else if (lcase == "localtimestamp") {
+	}
+	if (lcase == "localtimestamp") {
 		return "current_localtimestamp";
-	} else if (lcase == "session_user") {
+	}
+	if (lcase == "session_user") {
 		return "session_user";
-	} else if (lcase == "user") {
+	}
+	if (lcase == "user") {
 		return "user";
 	}
 	return string();
@@ -117,11 +128,12 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 
 	// We found the table, now create the struct_pack expression
 	auto &column_names = binding->GetColumnNames();
-	vector<unique_ptr<ParsedExpression>> child_expressions;
+	vector<FunctionArgument> child_expressions;
 	child_expressions.reserve(column_names.size());
 	for (const auto &column_name : column_names) {
-		child_expressions.push_back(binder.bind_context.CreateColumnReference(
-		    binding->GetBindingAlias(), column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+		auto ref = binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name,
+		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+		child_expressions.emplace_back(column_name, std::move(ref));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
@@ -286,7 +298,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	}
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
-	function.GetChildrenMutable().insert(function.GetChildrenMutable().begin(), std::move(new_colref));
+	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
 	function.CatalogMutable() = INVALID_CATALOG;
 	function.SchemaMutable() = INVALID_SCHEMA;
 	return func;
@@ -294,16 +306,16 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                  vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.GetChildrenMutable()) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
+	for (auto &child : function.GetArgumentsMutable()) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
-			QualifyColumnNames(child, lambda_params, true);
+			QualifyColumnNames(child.GetExpressionMutable(), lambda_params, true);
 			continue;
 		}
 
 		// special-handling for LHS lambda parameters
 		// we do not qualify them, and we add them to the lambda_params vector
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 

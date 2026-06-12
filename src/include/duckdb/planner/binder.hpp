@@ -331,7 +331,10 @@ public:
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
+	void SetInsideSubquery();
+	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -360,8 +363,10 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether or not the binder can contain NULLs as the root of expressions
-	bool can_contain_nulls = false;
+	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
+	bool legacy_can_contain_nulls = false;
+	//! Whether this binder is inside a subquery boundary
+	bool inside_subquery = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -382,8 +387,8 @@ private:
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
 	                       const string &catalog = "", const string &schema = "");
 	//! Bind a limit value (LIMIT or OFFSET)
-	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
-	                              bool is_offset);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
+	                              LimitValueType value_type, bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -391,8 +396,6 @@ private:
 	//! Tries to bind the table name with replacement scans
 	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
-	template <class T>
-	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt, CopyToType copy_to_type);
@@ -459,13 +462,14 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
-	unique_ptr<BoundStatement> TryExpandAfterTriggers(QueryNode &node,
-	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                                  TableCatalogEntry &table, TriggerEventType event_type);
-	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                             TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
+	BoundStatement BindNode(MergeQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -520,7 +524,6 @@ private:
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
-	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
@@ -579,13 +582,10 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, TableIndex proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names, MergeActionCondition condition,
-	                                                 const unordered_set<idx_t> &source_table_indices);
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
+	                const vector<BindingAlias> &source_aliases, const vector<string> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
@@ -596,6 +596,8 @@ private:
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
+
+	bool DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

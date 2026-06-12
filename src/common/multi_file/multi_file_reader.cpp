@@ -90,6 +90,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::ParsePaths(const Value &input) {
@@ -119,7 +120,7 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
 	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_input);
-	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
 	return std::move(res);
@@ -161,6 +162,11 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
+	} else if (loption == "allow_empty") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
+		options.allow_empty = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
@@ -414,7 +420,7 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 	auto &source_type = ref.GetReturnType();
 	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
-	auto local_col_id = reader.column_indexes[ref.index].GetPrimaryIndex();
+	auto local_col_id = reader.column_indexes[ref.Index()].GetPrimaryIndex();
 	auto &local_col = columns[local_col_id];
 
 	auto reader_type = reader.GetReaderType();
@@ -471,7 +477,6 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			                          first_message, original_error, extended_error);
 		}
 	}
-	output_chunk.SetCardinality(input_chunk.size());
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
@@ -696,6 +701,7 @@ void MultiFileOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
+	bind_info.InsertOption("allow_empty", Value::BOOLEAN(allow_empty));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
@@ -709,7 +715,7 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			auto compatible_type = LogicalType::ForceMaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
 			union_names_map[col_names[col]] = union_col_names.size();

@@ -54,6 +54,7 @@
         "test/sql/storage/compression/roaring/roaring_bool_compression_ratio.test_slow",
         "test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow",
         "test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow",
+        "test/sql/storage/vacuum/vacuum_deletes_cleanup_older_storage.test_slow",
         "test/sql/parallelism/interquery/concurrent_append_transactions.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_wal_optimistic_index.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_deletes_mix_index.test_slow",

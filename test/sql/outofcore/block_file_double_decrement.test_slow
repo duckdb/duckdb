@@ -39,7 +39,7 @@ CREATE TABLE r1 (id INT, s VARCHAR);
 loop b 0 5
 
 statement ok
-INSERT INTO r1 SELECT range + ${b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+INSERT INTO r1 SELECT range + {b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
 
 endloop
 

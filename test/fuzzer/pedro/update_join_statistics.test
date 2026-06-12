@@ -2,9 +2,6 @@
 # description: Base statistics assertion error
 # group: [pedro]
 
-#statement ok
-#PRAGMA enable_verification
-
 statement ok
 CREATE TABLE t1 (c0 INT, c2 BIGINT, PRIMARY KEY (c0));
 

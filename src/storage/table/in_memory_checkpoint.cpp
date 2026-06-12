@@ -91,11 +91,12 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
 }
 
 void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
-                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows) {
+                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows, idx_t next_row_id) {
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                            RowGroupCollection &collection, Serializer &serializer) {
+                                            RowGroupCollection &collection, IndexSerializationResult &result,
+                                            Serializer &serializer) {
 	// nop: no need to write anything
 }
 

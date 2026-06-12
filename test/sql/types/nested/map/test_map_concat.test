@@ -1,8 +1,6 @@
 # name: test/sql/types/nested/map/test_map_concat.test
 # group: [map]
 
-# NOTE: PRAGMA enable_verification significantly increases the duration of this test
-
 # Basic use, 2 maps, same type, no nulls
 query I
 select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));

@@ -64,6 +64,12 @@ public:
 	unique_ptr<BoundOrderModifier> &GetOrderBysMutable() {
 		return order_bys;
 	}
+	AggregateStateExportMode StateExportMode() const {
+		return state_export_mode;
+	}
+	AggregateStateExportMode &StateExportModeMutable() {
+		return state_export_mode;
+	}
 
 	bool IsAggregate() const override {
 		return true;
@@ -91,6 +97,8 @@ private:
 	unique_ptr<FunctionData> bind_info;
 	//! The aggregate type (distinct or non-distinct)
 	AggregateType aggr_type;
+	//! Whether or not we are exporting state in this aggregate
+	AggregateStateExportMode state_export_mode;
 
 	//! Filter for this aggregate
 	unique_ptr<Expression> filter;

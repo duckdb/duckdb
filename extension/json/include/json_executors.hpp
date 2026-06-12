@@ -80,7 +80,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						auto fun_result = fun(val, alc, result);
+						auto fun_result = fun(val, alc, child_entry);
 						if (fun_result.has_value()) {
 							child_vals[current_size + i] = fun_result.value();
 						} else {
