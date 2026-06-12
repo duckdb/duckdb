@@ -85,6 +85,7 @@ struct AggregateFinalizeData {
 	AggregateInputData &input;
 	idx_t result_idx;
 	idx_t result_count;
+	unique_ptr<FunctionLocalState> local_state;
 
 	inline void ReturnNull() {
 		switch (result.GetVectorType()) {

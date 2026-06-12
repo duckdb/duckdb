@@ -9,15 +9,64 @@ namespace duckdb {
 
 namespace {
 
+//! The aggregate state of first/last/any_value is nullable on two levels: the state itself is NULL when no row has
+//! been seen yet (is_set, the outer optional), and the recorded value can itself be NULL (value_is_valid, the inner
+//! optional). Valid exported states are e.g. NULL, {'value': NULL} and {'value': 42}.
 template <class T>
 struct FirstState {
-	static constexpr const char *STATE_NAMES[] = {"value", "is_set", "is_null"};
-	using STATE_TYPE = StructStateType<T, bool, bool>;
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	//! The value is exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateTypedValue<T, StateReturnType>>>>;
 
 	using VALUE_TYPE = T;
 	T value;
+	//! Whether the recorded value is valid (i.e. not NULL)
+	bool value_is_valid;
+	//! Whether the state has been set (i.e. we have seen a row)
 	bool is_set;
-	bool is_null;
+};
+
+//! String state variant: strings are stored in the arena allocator, re-using the previous allocation
+//! when overwriting the value (relevant for last, which overwrites the value for every row).
+struct FirstStringStateBase {
+	string_t value;
+	//! Whether the recorded value is valid (i.e. not NULL)
+	bool value_is_valid;
+	//! Whether the state has been set (i.e. we have seen a row)
+	bool is_set;
+	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
+	uint32_t alloc_size;
+
+	void Assign(string_t input, AggregateInputData &input_data) {
+		if (input.IsInlined()) {
+			value = input;
+			alloc_size = 0;
+		} else {
+			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			char *ptr;
+			if (alloc_size >= len) {
+				ptr = value.GetDataWriteable();
+			} else {
+				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
+			}
+			memcpy(ptr, input.GetData(), len);
+			value = string_t(ptr, len);
+		}
+	}
+};
+
+struct FirstStringState : FirstStringStateBase {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	//! The value is exported with the aggregate's return type - it can be e.g. a VARCHAR, BLOB or BIT value
+	using STATE_TYPE = OptionalStateType<StructStateType<OptionalStateType<StateString<StateReturnType>>>>;
+};
+
+//! State for arbitrary types - the value is stored as a binary sort key, exported as the aggregate's return type.
+struct FirstSortKeyState : FirstStringStateBase {
+	static constexpr const char *STATE_NAMES[] = {"value"};
+	using STATE_TYPE =
+	    OptionalStateType<StructStateType<OptionalStateType<StateSortKey<StateReturnType, OrderType::ASCENDING>>>>;
 };
 
 struct FirstFunctionBase {
@@ -51,11 +100,11 @@ struct FirstFunction : public FirstFunctionBase {
 			if (!unary_input.RowIsValid()) {
 				if (!SKIP_NULLS) {
 					state.is_set = true;
+					state.value_is_valid = false;
 				}
-				state.is_null = true;
 			} else {
 				state.is_set = true;
-				state.is_null = false;
+				state.value_is_valid = true;
 				state.value = input;
 			}
 		}
@@ -79,13 +128,13 @@ struct FirstFunction : public FirstFunctionBase {
 			auto idx = isel.get_index(sel ? sel[k] : k);
 			if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
 				state.is_set = true;
-				state.is_null = false;
+				state.value_is_valid = true;
 				state.value = vals[idx];
 				return true;
 			}
 			if (!SKIP_NULLS) {
 				state.is_set = true;
-				state.is_null = true;
+				state.value_is_valid = false;
 				return true;
 			}
 			return false;
@@ -111,7 +160,7 @@ struct FirstFunction : public FirstFunctionBase {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
@@ -121,45 +170,24 @@ struct FirstFunction : public FirstFunctionBase {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionStringBase : public FirstFunctionBase {
-	template <class STATE, bool COMBINE = false>
+	template <class STATE>
 	static void SetValue(STATE &state, AggregateInputData &input_data, string_t value, bool is_null) {
-		if (LAST && state.is_set) {
-			Destroy(state, input_data);
-		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
 				state.is_set = true;
-				state.is_null = true;
+				state.value_is_valid = false;
 			}
 		} else {
 			state.is_set = true;
-			state.is_null = false;
-			if ((COMBINE && !LAST) || value.IsInlined()) {
-				// We use the aggregate allocator for 'first', so the allocation is already done when combining
-				// Of course, if the value is inlined, we also don't need to allocate
-				state.value = value;
-			} else {
-				// non-inlined string, need to allocate space for it
-				auto len = value.GetSize();
-				auto ptr = LAST ? new char[len] : char_ptr_cast(input_data.allocator.Allocate(len));
-				memcpy(ptr, value.GetData(), len);
-
-				state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
-			}
+			state.value_is_valid = true;
+			state.Assign(value, input_data);
 		}
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
 		if (source.is_set && (LAST || !target.is_set)) {
-			SetValue<STATE, true>(target, input_data, source.value, source.is_null);
-		}
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &) {
-		if (state.is_set && !state.is_null && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
+			SetValue<STATE>(target, input_data, source.value, !source.value_is_valid);
 		}
 	}
 };
@@ -208,7 +236,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
@@ -218,7 +246,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
-	using STATE = FirstState<string_t>;
+	using STATE = FirstSortKeyState;
 
 	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
@@ -278,7 +306,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		if (!state.is_set || state.is_null) {
+		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
 		} else {
 			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx,
@@ -381,21 +409,16 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 	case PhysicalType::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::VARCHAR:
-		if (LAST) {
-			return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-			                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
-		} else {
-			return AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
-			                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
-		}
+		return AggregateFunction::UnaryAggregate<FirstStringState, string_t, string_t,
+		                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
 	default: {
 		using OP = FirstVectorFunction<LAST, SKIP_NULLS>;
-		using STATE = FirstState<string_t>;
+		using STATE = FirstSortKeyState;
 		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
-		    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind, nullptr,
+		    nullptr, nullptr);
 		AggregateFunction::WireStructStateType<STATE>(fun);
 		return fun;
 	}

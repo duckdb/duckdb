@@ -62,10 +62,6 @@ SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM d
 # you're holding it wrong:
 
 statement error
-SELECT list(d) EXPORT_STATE from dummy;
-----
-
-statement error
 SELECT string_agg(d, ',') EXPORT_STATE from dummy;
 ----
 

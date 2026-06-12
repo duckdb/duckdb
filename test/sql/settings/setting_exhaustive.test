@@ -47,7 +47,7 @@ endloop
 statement error
 SET enable_profiling='unknown';
 ----
-<REGEX>:Parser Error.*Unrecognized print format.*
+<REGEX>:Invalid Input Error.*is not a valid FORMAT argument.*
 
 # enable_progress_bar
 statement ok

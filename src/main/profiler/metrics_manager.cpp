@@ -1,5 +1,5 @@
-#include "duckdb/main/metrics_manager.hpp"
-#include "duckdb/main/metrics.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"

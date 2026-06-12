@@ -1537,7 +1537,8 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 LogicalType LogicalType::Copy() const {
 	LogicalType copy = *this;
 	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		// We copy (i.e., create new) type info, unless the type is an ENUM - enum type info is kept shared to avoid
+		// rebuilding the dictionary lookup map; use DeepCopy to force a copy
 		copy.type_info_ = type_info_->Copy();
 	}
 	return copy;
@@ -1545,8 +1546,7 @@ LogicalType LogicalType::Copy() const {
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+	if (type_info_) {
 		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;
@@ -2054,10 +2054,11 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
+		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
+		// type that was created without a CRS (SetAlias attaches a generic type info)
 		return false;
 	}
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
@@ -2066,11 +2067,9 @@ bool GeoType::HasCRS(const LogicalType &type) {
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
 		throw InternalException("Geometry type has no CRS information");
 	}
-	D_ASSERT(info);
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;

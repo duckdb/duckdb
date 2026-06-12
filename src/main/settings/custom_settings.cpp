@@ -11,6 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -862,8 +864,11 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+
+	// Validate the format name (throws on an unrecognized format).
+	QueryProfiler::Get(context).CreateProfiler(parameter);
+
 	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 
 	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -876,31 +881,13 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		}
 	}
 
-	if (parameter == "json") {
-		config.profiler_print_format = ProfilerPrintFormat::JSON;
-	} else if (parameter == "query_tree") {
-		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
-	} else if (parameter == "query_tree_optimizer") {
-		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-	} else if (parameter == "no_output") {
-		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
-		config.emit_profiler_output = false;
-	} else if (parameter == "html") {
-		config.profiler_print_format = ProfilerPrintFormat::HTML;
-	} else if (parameter == "graphviz") {
-		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
-	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, "
-		                      "query_tree_optimizer, no_output, html, graphviz]",
-		                      parameter);
-	}
+	config.profiler_print_format = parameter;
 }
 
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -908,22 +895,7 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 	if (!config.enable_profiler) {
 		return Value();
 	}
-	switch (config.profiler_print_format) {
-	case ProfilerPrintFormat::JSON:
-		return Value("json");
-	case ProfilerPrintFormat::QUERY_TREE:
-		return Value("query_tree");
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return Value("query_tree_optimizer");
-	case ProfilerPrintFormat::NO_OUTPUT:
-		return Value("no_output");
-	case ProfilerPrintFormat::HTML:
-		return Value("html");
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return Value("graphviz");
-	default:
-		throw InternalException("Unsupported profiler print format");
-	}
+	return Value(config.profiler_print_format);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1226,22 +1198,22 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 //===----------------------------------------------------------------------===//
 // Profile Output
 //===----------------------------------------------------------------------===//
-void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+void ProfilingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
 
-	if (!parameter.empty() && config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
+	if (!parameter.empty() && config.profiler_print_format != "no_output") {
 		auto &file_system = FileSystem::GetFileSystem(context);
 		const auto file_type = file_system.ExtractExtension(parameter);
 		if (file_type != "txt") {
 			try {
-				EnumUtil::FromString<ProfilerPrintFormat>(file_type);
+				QueryProfiler::Get(context).CreateProfiler(file_type);
 			} catch (std::exception &e) {
 				throw ParserException("Invalid output file type: %s", file_type);
 			}
 		}
 
-		const auto printer_format = StringUtil::Lower(EnumUtil::ToString(config.profiler_print_format));
+		const auto printer_format = config.profiler_print_format;
 		if (file_type != printer_format && file_type != "txt") {
 			throw ParserException("Profiler file type (%s) must either have the same file extension as the profiling "
 			                      "output type (%s), or be a '.txt' file. Set \"enable_profiling = \'%s\'\" first.",
@@ -1252,13 +1224,57 @@ void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 	config.profiler_save_location = parameter;
 }
 
-void ProfileOutputSetting::ResetLocal(ClientContext &context) {
+void ProfilingOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
 }
 
-Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
+Value ProfilingOutputSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.profiler_save_location);
+}
+
+//===----------------------------------------------------------------------===//
+// Profiler Renderer Settings
+//===----------------------------------------------------------------------===//
+void ProfilingRendererSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull() || input.type().id() != LogicalTypeId::MAP) {
+		throw InvalidInputException("Invalid profiling_renderer_settings type \"%s\", expected a map of settings "
+		                            "(e.g. {'maximum_render_width': 300})",
+		                            input.type().ToString());
+	}
+	unordered_map<string, Value> new_settings;
+	for (auto &entry : MapValue::GetChildren(input)) {
+		auto &key_value = StructValue::GetChildren(entry);
+		new_settings[StringUtil::Lower(key_value[0].ToString())] = key_value[1];
+	}
+	// eagerly configure the renderer of the current profiler format to validate the setting values
+	auto renderer = QueryProfiler::Get(context).GetRenderer();
+	if (renderer) {
+		renderer->Configure(new_settings);
+	}
+	config.profiling_renderer_settings = std::move(new_settings);
+}
+
+void ProfilingRendererSettingsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profiling_renderer_settings.clear();
+}
+
+Value ProfilingRendererSettingsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	// sort the settings by name so that the rendered value is deterministic
+	vector<string> setting_names;
+	for (auto &entry : config.profiling_renderer_settings) {
+		setting_names.push_back(entry.first);
+	}
+	std::sort(setting_names.begin(), setting_names.end());
+	vector<Value> keys;
+	vector<Value> values;
+	for (auto &name : setting_names) {
+		keys.emplace_back(name);
+		values.push_back(config.profiling_renderer_settings.at(name).DefaultCastAs(LogicalType::VARCHAR));
+	}
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1267,13 +1283,11 @@ Value ProfileOutputSetting::GetSetting(const ClientContext &context) {
 void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	auto &config = ClientConfig::GetConfig(context);
-	if (parameter == "standard") {
-		config.enable_profiler = true;
-		config.enable_detailed_profiling = false;
-	} else if (parameter == "detailed") {
-		config.enable_profiler = true;
-		config.enable_detailed_profiling = true;
-	} else if (parameter == "all") {
+	if (parameter == "standard" || parameter == "detailed" || parameter == "all") {
+		// the profiling_mode setting is deprecated - detailed profiling information is always gathered, and all
+		// modes behave the same
+		DUCKDB_LOG_WARNING(context, "the profiling_mode setting is deprecated: detailed profiling information is "
+		                            "always collected - use \"PRAGMA enable_profiling\" to enable profiling instead");
 		config.enable_profiler = true;
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
@@ -1284,8 +1298,6 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
-	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
@@ -1293,7 +1305,7 @@ Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 	if (!config.enable_profiler) {
 		return Value();
 	}
-	return Value(config.enable_detailed_profiling ? "detailed" : "standard");
+	return Value("standard");
 }
 
 //===----------------------------------------------------------------------===//
