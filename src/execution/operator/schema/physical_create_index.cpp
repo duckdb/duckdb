@@ -50,9 +50,7 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto gstate = make_uniq<CreateIndexGlobalSinkState>();
-	if (!alter_table_info) {
-		gstate->append_guard = table.GetStorage().LockAppendsForCreateIndex();
-	}
+	gstate->append_guard = table.GetStorage().LockAppendsForCreateIndex();
 
 	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
 	                                                   unbound_expressions, storage_ids};
