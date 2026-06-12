@@ -223,6 +223,44 @@ static auto VertexExtractStats(ClientContext &context, FunctionStatisticsInput &
 
 	new_stats.CopyValidity(child_stats[0]);
 
+	if (!types.HasOnly(GeometryType::POINT)) {
+		// If there are non-point geometries, we cannot guarantee that all rows will yield a valid value
+		new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+
+	// If there are empty geometries, we cannot guarantee that all rows will yield a valid value
+	if (flags.HasEmptyGeometry()) {
+		new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+
+	if (bind_data.vertex_index == 2) {
+		// Z is absent on XY and XYM points
+		if (types.Has(VertexType::XY) || types.Has(VertexType::XYM)) {
+			new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		if (!types.Has(VertexType::XYZ) && !types.Has(VertexType::XYZM)) {
+			// If there are no vertex types with Z, we can guarantee that all rows will yield NULL
+			*input.expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::DOUBLE));
+			new_stats.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+			new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			return new_stats.ToUnique();
+		}
+	}
+
+	if (bind_data.vertex_index == 3) {
+		// M is absent on XY and XYZ points
+		if (types.Has(VertexType::XY) || types.Has(VertexType::XYZ)) {
+			new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		if (!types.Has(VertexType::XYM) && !types.Has(VertexType::XYZM)) {
+			// If there are no vertex types with M, we can guarantee that all rows will yield NULL
+			*input.expr_ptr = make_uniq<BoundConstantExpression>(Value(LogicalType::DOUBLE));
+			new_stats.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+			new_stats.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			return new_stats.ToUnique();
+		}
+	}
+
 	if (bind_data.vertex_index == 0 && extent.HasXY()) { // X
 		NumericStats::SetMin(new_stats, extent.x_min);
 		NumericStats::SetMax(new_stats, extent.x_max);
@@ -251,70 +289,70 @@ static auto VertexExtractFunction(DataChunk &input, ExpressionState &state, Vect
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &bind_data = func_expr.BindInfo()->Cast<VertexExtractBindData>();
 
-	BinaryExecutor::Execute<string_t, string_t, double>(
-	    input.data[0], input.data[1], result, [&](const string_t &geom_str, const string_t &) {
-		    const auto data = const_data_ptr_cast(geom_str.GetData());
-		    const auto size = geom_str.GetSize();
-		    const auto meta = Load<uint32_t>(data + sizeof(uint8_t));
+	UnaryExecutor::Execute<string_t, double>(input.data[0], result, [&](const string_t &geom_str) {
+		const auto data = const_data_ptr_cast(geom_str.GetData());
+		const auto size = geom_str.GetSize();
+		const auto meta = Load<uint32_t>(data + sizeof(uint8_t));
 
-		    const auto type_id = (meta & 0x0000FFFF) % 1000;
-		    const auto flag_id = (meta & 0x0000FFFF) / 1000;
-		    const auto has_z = ((flag_id & 0x01) != 0);
-		    const auto has_m = ((flag_id & 0x02) != 0);
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
+		const auto has_z = ((flag_id & 0x01) != 0);
+		const auto has_m = ((flag_id & 0x02) != 0);
 
-		    if (type_id != 1) {
-			    return optional<double>();
-		    }
+		if (type_id != 1) {
+			return optional<double>();
+		}
 
-		    auto value = std::numeric_limits<double>::quiet_NaN();
+		auto value = std::numeric_limits<double>::quiet_NaN();
 
-		    if (bind_data.vertex_index == 0) { // X
-			    constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t);
-			    if (size < offset + sizeof(double)) {
-				    return optional<double>();
-			    }
-			    value = Load<double>(data + offset);
-		    } else if (bind_data.vertex_index == 1) { // Y
-			    constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(double);
-			    if (size < offset + sizeof(double)) {
-				    return optional<double>();
-			    }
-			    value = Load<double>(data + offset);
-		    } else if (bind_data.vertex_index == 2) { // Z
-			    if (!has_z) {
-				    return optional<double>();
-			    }
-			    constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t) + 2 * sizeof(double);
-			    if (size < offset + sizeof(double)) {
-				    return optional<double>();
-			    }
-			    value = Load<double>(data + offset);
-		    } else if (bind_data.vertex_index == 3) { // M
-			    if (!has_m) {
-				    return optional<double>();
-			    }
-			    const auto offset = sizeof(uint8_t) + sizeof(uint32_t) + (2 + has_z) * sizeof(double);
-			    if (size < offset + sizeof(double)) {
-				    return optional<double>();
-			    }
-			    value = Load<double>(data + offset);
-		    }
+		if (bind_data.vertex_index == 0) { // X
+			constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t);
+			if (size < offset + sizeof(double)) {
+				return optional<double>();
+			}
+			value = Load<double>(data + offset);
+		} else if (bind_data.vertex_index == 1) { // Y
+			constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(double);
+			if (size < offset + sizeof(double)) {
+				return optional<double>();
+			}
+			value = Load<double>(data + offset);
+		} else if (bind_data.vertex_index == 2) { // Z
+			if (!has_z) {
+				return optional<double>();
+			}
+			constexpr auto offset = sizeof(uint8_t) + sizeof(uint32_t) + 2 * sizeof(double);
+			if (size < offset + sizeof(double)) {
+				return optional<double>();
+			}
+			value = Load<double>(data + offset);
+		} else if (bind_data.vertex_index == 3) { // M
+			if (!has_m) {
+				return optional<double>();
+			}
+			const auto offset = sizeof(uint8_t) + sizeof(uint32_t) + (2 + has_z) * sizeof(double);
+			if (size < offset + sizeof(double)) {
+				return optional<double>();
+			}
+			value = Load<double>(data + offset);
+		}
 
-		    if (std::isnan(value)) {
-			    return optional<double>();
-		    }
+		if (std::isnan(value)) {
+			return optional<double>();
+		}
 
-		    return optional<double>(value);
-	    });
+		return optional<double>(value);
+	});
 }
 
 ScalarFunction VertexExtractFun::GetFunction() {
 	auto fun = ScalarFunction({}, LogicalTypeId::DOUBLE, VertexExtractFunction, VertexExtractBind, VertexExtractStats);
 	fun.GetSignature()
 	    .AddParameter("geom", LogicalType::GEOMETRY())
-	    .AddParameter("ordinate", LogicalTypeId::VARCHAR)
+	    .AddParameter("coordinate", LogicalTypeId::VARCHAR)
 	    .SetReturnType(LogicalType::DOUBLE);
 
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
