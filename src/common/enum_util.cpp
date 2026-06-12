@@ -1069,6 +1069,26 @@ CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *va
 	return static_cast<CatalogLookupBehavior>(StringUtil::StringToEnum(GetCatalogLookupBehaviorValues(), 3, "CatalogLookupBehavior", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCatalogModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CatalogMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(CatalogMode::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(CatalogMode::HIDDEN), "HIDDEN" },
+		{ static_cast<uint32_t>(CatalogMode::ENABLE), "ENABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CatalogMode>(CatalogMode value) {
+	return StringUtil::EnumToString(GetCatalogModeValues(), 4, "CatalogMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CatalogMode EnumUtil::FromString<CatalogMode>(const char *value) {
+	return static_cast<CatalogMode>(StringUtil::StringToEnum(GetCatalogModeValues(), 4, "CatalogMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CatalogType::INVALID), "INVALID" },
@@ -1371,6 +1391,25 @@ const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value) {
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value) {
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetConnectModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(ConnectMode::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ConnectMode::ENABLE), "ENABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectMode>(ConnectMode value) {
+	return StringUtil::EnumToString(GetConnectModeValues(), 3, "ConnectMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectMode EnumUtil::FromString<ConnectMode>(const char *value) {
+	return static_cast<ConnectMode>(StringUtil::StringToEnum(GetConnectModeValues(), 3, "ConnectMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {

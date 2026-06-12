@@ -118,6 +118,8 @@ enum class CachingMode : uint8_t;
 
 enum class CatalogLookupBehavior : uint8_t;
 
+enum class CatalogMode : uint8_t;
+
 enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
@@ -145,6 +147,8 @@ enum class CompressionType : uint8_t;
 enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
+
+enum class ConnectMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
@@ -685,6 +689,9 @@ template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
 
 template<>
+const char* EnumUtil::ToChars<CatalogMode>(CatalogMode value);
+
+template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value);
 
 template<>
@@ -725,6 +732,9 @@ const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
 
 template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
+
+template<>
+const char* EnumUtil::ToChars<ConnectMode>(ConnectMode value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
@@ -1469,6 +1479,9 @@ template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
 
 template<>
+CatalogMode EnumUtil::FromString<CatalogMode>(const char *value);
+
+template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value);
 
 template<>
@@ -1509,6 +1522,9 @@ CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value)
 
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
+
+template<>
+ConnectMode EnumUtil::FromString<ConnectMode>(const char *value);
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);

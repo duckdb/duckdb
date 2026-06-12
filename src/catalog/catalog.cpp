@@ -93,6 +93,11 @@ optional_ptr<Catalog> Catalog::GetCatalogEntry(CatalogEntryRetriever &retriever,
 	if (!entry) {
 		return nullptr;
 	}
+	if (entry->GetCatalogMode() == CatalogMode::NONE) {
+		// CATALOG_MODE NONE: catalog provides no tables and is unreachable from binding.
+		// Treat as if the catalog doesn't exist for lookup purposes (reads + writes both fail).
+		return nullptr;
+	}
 	return &entry->GetCatalog();
 }
 
@@ -1203,7 +1208,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto &database : databases) {
-		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+		if (database->IsHidden()) {
 			continue;
 		}
 		auto &catalog = database->GetCatalog();

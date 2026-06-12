@@ -1,0 +1,40 @@
+# name: test/sql/catalog/attach_connect_mode.test
+# description: CONNECT_MODE option on ATTACH. NONE disables; ENABLE asserts at attach time;
+# group: [catalog]
+
+#              AUTO defers to backend's Supports(CONNECT) declaration.
+
+# DuckDB-backed catalogs don't support CONNECT, so:
+#   AUTO   -> CONNECT errors at CONNECT time
+#   NONE   -> CONNECT errors at CONNECT time (same outcome, different reason)
+#   ENABLE -> ATTACH itself errors (early visibility)
+
+# AUTO is the default — no option needed.
+statement ok
+ATTACH ':memory:' AS m_auto;
+
+statement error
+CONNECT m_auto;
+----
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
+
+statement ok
+DETACH m_auto;
+
+# NONE: explicit opt-out. Same outcome as AUTO for DuckDB, but the intent is captured.
+statement ok
+ATTACH ':memory:' AS m_none (CONNECT_MODE NONE);
+
+statement error
+CONNECT m_none;
+----
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
+
+statement ok
+DETACH m_none;
+
+# ENABLE on a non-CONNECT backend fails at ATTACH time, not at CONNECT time.
+statement error
+ATTACH ':memory:' AS m_enable (CONNECT_MODE ENABLE);
+----
+<REGEX>:Invalid Input Error:.*CONNECT_MODE ENABLE.*does not support CONNECT.*

@@ -223,10 +223,9 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 
 void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
 	D_ASSERT(target);
-	// Pre-flight: Supports(RemoteCapability::CONNECT) is the capability declaration; catalogs that
-	// return true MUST implement RemoteExecute(string). Validation runs before mutation so a throw
-	// leaves the client unbound.
-	if (!target->GetCatalog().Supports(RemoteCapability::CONNECT)) {
+	// connect_mode is resolved at attach time (AUTO -> ENABLE/NONE based on backend's Supports()),
+	// so a single boolean check covers both the per-attachment policy and the backend capability.
+	if (target->GetConnectMode() != ConnectMode::ENABLE) {
 		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
 	}
 	connected_to_database = target;
