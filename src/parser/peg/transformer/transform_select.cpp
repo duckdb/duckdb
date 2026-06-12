@@ -847,8 +847,8 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 	CommonTableExpressionMap result;
 
 	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
-		auto with_entry =
-		    transformer.Transform<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
+		auto with_entry = transformer.Transform<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(
+		    with_statement_list[entry_idx]);
 
 		if (is_recursive) {
 			auto &query_node = with_entry.second->query_node;
@@ -1298,7 +1298,8 @@ TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transfor
 	return result;
 }
 
-TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer, const Identifier &identifier,
+TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer,
+                                                               const Identifier &identifier,
                                                                const optional<vector<string>> &column_aliases) {
 	TableAlias result;
 	result.name = identifier;

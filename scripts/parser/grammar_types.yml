@@ -26,7 +26,7 @@
 # the type entry takes precedence and their value IS extracted. Keep this list
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
-# Note: some entries (e.g. CTEBodyContent, SingleArrowPair, CommentValue,
+# Note: some entries (e.g. SingleArrowPair, CommentValue,
 # IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
@@ -530,7 +530,6 @@ TableRef:
     - BaseTableSet
     - BaseTableAliasSet
     - CTEBody
-    - CTEBodyContent
     - CTESelectBody
     - CTEDMLBody
 

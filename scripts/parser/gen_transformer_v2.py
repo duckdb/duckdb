@@ -488,9 +488,7 @@ class ExtractionPlan:
     identifier: bool = False
 
 
-def _plan_extraction(
-    node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
-):
+def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False):
     """Build a recursive extraction plan. Nested sequences must collapse to one semantic value."""
     if isinstance(node, LiteralNode):
         return ExtractionPlan(kind=ExtractionKind.SKIP)
