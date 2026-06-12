@@ -199,3 +199,23 @@ SELECT stats(WEEKOFYEAR(d)) FROM dates LIMIT 1;
 ----
 <REGEX>:.*1.*54.*
 
+statement ok
+CREATE TABLE t0(c0 DATE);
+
+statement ok
+INSERT INTO t0(c0) VALUES ('-Inf');
+
+query III
+SELECT (t0.c0), WEEKOFYEAR(t0.c0), WEEKOFYEAR(t0.c0) IS NULL FROM t0;
+----
+-infinity	NULL	true
+
+query III
+SELECT (t0.c0), WEEKDAY(t0.c0), WEEKDAY(t0.c0) IS NULL from t0;
+----
+-infinity	NULL	true
+
+query III
+SELECT (t0.c0), DAYOFMONTH(t0.c0), DAYOFMONTH(t0.c0) IS NULL from t0;
+----
+-infinity	NULL	true
