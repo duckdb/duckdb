@@ -80,10 +80,11 @@ private:
 	bool started = false;
 };
 
-AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p, Options options_p,
-                                 idx_t async_threads)
-    : client_context(client_context_p), target(target_p), options(options_p) {
-	options.max_active_tasks = MaxValue<idx_t>(options.max_active_tasks, 1);
+AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
+    : client_context(client_context_p), target(target_p) {
+	auto &scheduler = TaskScheduler::GetScheduler(client_context);
+	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	max_active_tasks = MaxValue<idx_t>(async_threads, 1);
 	if (async_threads == 0) {
 		return;
 	}
@@ -145,7 +146,7 @@ idx_t AsyncWriteQueue::PendingBytes() {
 }
 
 idx_t AsyncWriteQueue::TaskByteBudget() const {
-	return options.task_byte_budget;
+	return task_byte_budget;
 }
 
 idx_t AsyncWriteQueue::SelectPendingRequestBytes(idx_t skip_bytes) const {
@@ -153,6 +154,7 @@ idx_t AsyncWriteQueue::SelectPendingRequestBytes(idx_t skip_bytes) const {
 	idx_t skipped_bytes = 0;
 	idx_t selected_bytes = 0;
 	auto byte_budget = TaskByteBudget();
+	D_ASSERT(byte_budget > 0);
 
 	for (auto &request : pending_requests) {
 		auto request_size = request.Size();
@@ -161,11 +163,11 @@ idx_t AsyncWriteQueue::SelectPendingRequestBytes(idx_t skip_bytes) const {
 			continue;
 		}
 
-		if (selected_bytes > 0 && byte_budget > 0 && selected_bytes + request_size > byte_budget) {
+		if (selected_bytes > 0 && selected_bytes + request_size > byte_budget) {
 			break;
 		}
 		selected_bytes += request_size;
-		if (byte_budget == 0 || selected_bytes >= byte_budget) {
+		if (selected_bytes >= byte_budget) {
 			break;
 		}
 	}
@@ -186,11 +188,11 @@ void AsyncWriteQueue::ScheduleTasksInternal(bool force) {
 		VerifyOpen();
 		idx_t scheduled_bytes = 0;
 		while (scheduled_pending_bytes + scheduled_bytes < pending_bytes &&
-		       active_tasks + schedule_count < options.max_active_tasks) {
+		       active_tasks + schedule_count < max_active_tasks) {
 			auto selected_bytes = SelectPendingRequestBytes(scheduled_pending_bytes + scheduled_bytes);
 			auto task_budget = TaskByteBudget();
 			auto has_active_task = active_tasks + schedule_count > 0;
-			if (!force && has_active_task && task_budget > 0 && selected_bytes < task_budget) {
+			if (!force && has_active_task && selected_bytes < task_budget) {
 				break;
 			}
 			schedule_count++;
@@ -505,8 +507,7 @@ private:
 	idx_t size;
 };
 
-ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, ManagedAsyncWriteTarget &target_p,
-                                               idx_t async_threads)
+ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, ManagedAsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p) {
 	auto local_file = target.IsLocalFile();
 	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
@@ -516,6 +517,7 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
 	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
 	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 
@@ -526,11 +528,8 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 		max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	}
 
-	AsyncWriteQueue::Options queue_options;
-	queue_options.max_active_tasks = max_active_drain_tasks;
-	queue_options.task_byte_budget = DrainTaskByteBudget();
 	AsyncWriteTarget &async_target = *this;
-	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target, queue_options, async_threads);
+	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target);
 	if (write_queue->IsAsync() && max_pending_bytes > 0) {
 		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
 		memory_state->SetMinimumReservation(min_pending_bytes);
@@ -800,11 +799,17 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 	if (pending_writes.empty() || batch_depth > 0) {
 		return false;
 	}
+	if (drain_mode == DrainMode::SEQUENTIAL && submitted_requests > 0) {
+		return false;
+	}
 	if (policy == SchedulePolicy::THRESHOLD) {
 		if (pending_bytes < first_task_schedule_threshold && submitted_bytes == 0) {
 			return false;
 		}
 		if (submitted_bytes >= SubmittedByteWindow()) {
+			return false;
+		}
+		if (submitted_requests > 0 && pending_bytes < DrainTaskByteBudget()) {
 			return false;
 		}
 	}

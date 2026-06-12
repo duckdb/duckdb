@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstring>
@@ -53,10 +52,8 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 
-	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
 	ManagedAsyncWriteTarget &target = *this;
-	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target, async_threads);
+	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target);
 }
 
 AsyncFileWriter::~AsyncFileWriter() {

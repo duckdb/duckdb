@@ -282,13 +282,14 @@ public:
 class BlockingAsyncWriteTarget : public AsyncWriteTarget {
 public:
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
+		(void)buffer;
 		unique_lock<mutex> guard(lock);
 		active_writes++;
 		max_active_writes = MaxValue(max_active_writes, active_writes);
 		entered_writes++;
 		cv.notify_all();
 		cv.wait(guard, [&]() { return release_writes; });
-		writes.emplace_back(const_char_ptr_cast(buffer), UnsafeNumericCast<size_t>(size));
+		write_sizes.push_back(size);
 		offsets.push_back(offset);
 		active_writes--;
 		cv.notify_all();
@@ -314,7 +315,7 @@ public:
 
 	mutex lock;
 	std::condition_variable cv;
-	vector<string> writes;
+	vector<idx_t> write_sizes;
 	vector<idx_t> offsets;
 	idx_t entered_writes = 0;
 	idx_t active_writes = 0;
@@ -426,9 +427,7 @@ TEST_CASE("AsyncWriteQueue writes synchronously without async threads", "[async_
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithNoAsyncThreads(db);
 	TrackingAsyncWriteTarget target;
-	AsyncWriteQueue::Options options;
-	options.max_active_tasks = 2;
-	AsyncWriteQueue queue(*con->context, target, options, 0);
+	AsyncWriteQueue queue(*con->context, target);
 
 	mutex completion_lock;
 	vector<idx_t> completion_offsets;
@@ -458,9 +457,7 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
 	BlockingAsyncWriteTarget target;
-	AsyncWriteQueue::Options options;
-	options.max_active_tasks = 2;
-	AsyncWriteQueue queue(*con->context, target, options, 2);
+	AsyncWriteQueue queue(*con->context, target);
 
 	mutex completion_lock;
 	vector<idx_t> completion_offsets;
@@ -473,15 +470,18 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 		saw_error = saw_error || error;
 	};
 
-	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("abcd"), 0, completion));
-	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("efgh"), 4, completion));
+	auto write_size = AsyncWriteQueue::DEFAULT_TASK_BYTE_BUDGET + 1;
+	queue.Submit(AsyncWriteRequest(
+	    make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'a')), 0, completion));
+	queue.Submit(AsyncWriteRequest(
+	    make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'b')), write_size, completion));
 	REQUIRE(target.WaitForEnteredWrites(2));
 	REQUIRE(target.MaxActiveWrites() >= 2);
 
 	target.ReleaseWrites();
 	queue.Close();
 
-	REQUIRE(target.writes.size() == 2);
+	REQUIRE(target.write_sizes.size() == 2);
 	REQUIRE(completion_offsets.size() == 2);
 	REQUIRE(completion_sizes.size() == 2);
 	REQUIRE(!saw_error);
@@ -491,7 +491,7 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 		if (offset == 0) {
 			saw_first = true;
 		}
-		if (offset == 4) {
+		if (offset == write_size) {
 			saw_second = true;
 		}
 	}
@@ -931,7 +931,8 @@ TEST_CASE("AsyncFileWriter schedules extra remote drain tasks only after a full 
 		fs.RemoveFile(path);
 	}
 
-	string chunk(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD * 2, 'x');
+	REQUIRE(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD * 2 == AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET);
+	string chunk(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD, 'x');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));

@@ -69,16 +69,11 @@ class AsyncWriteQueue {
 	friend class AsyncWriteQueueTaskGuard;
 
 public:
-	struct Options {
-		//! Maximum scheduled/running write tasks for this queue.
-		idx_t max_active_tasks = 1;
-		//! Maximum bytes a single async task should drain. Zero keeps one request per task.
-		idx_t task_byte_budget = 0;
-	};
+	//! Maximum bytes a single async task should drain before yielding scheduler capacity.
+	static constexpr idx_t DEFAULT_TASK_BYTE_BUDGET = 4ULL * 1024ULL * 1024ULL;
 
 public:
-	DUCKDB_API AsyncWriteQueue(ClientContext &client_context, AsyncWriteTarget &target, Options options,
-	                           idx_t async_threads);
+	DUCKDB_API AsyncWriteQueue(ClientContext &client_context, AsyncWriteTarget &target);
 	DUCKDB_API ~AsyncWriteQueue();
 
 	AsyncWriteQueue(const AsyncWriteQueue &) = delete;
@@ -116,7 +111,7 @@ private:
 private:
 	//! Schedule pending requests until max_active_tasks is reached.
 	void ScheduleTasksInternal(bool force = false);
-	//! Return the byte budget for one task; zero means one request per task.
+	//! Return the byte budget for one task.
 	idx_t TaskByteBudget() const;
 	//! Return how many bytes one task should reserve after skipping already scheduled bytes.
 	idx_t SelectPendingRequestBytes(idx_t skip_bytes) const;
@@ -147,7 +142,10 @@ private:
 private:
 	ClientContext &client_context;
 	AsyncWriteTarget &target;
-	Options options;
+	//! Maximum scheduled/running write tasks for this queue.
+	idx_t max_active_tasks = 1;
+	//! Maximum bytes a single async task should drain.
+	idx_t task_byte_budget = DEFAULT_TASK_BYTE_BUDGET;
 
 	//! Protects state shared between the submitting thread and async write tasks.
 	mutex lock;
@@ -202,7 +200,7 @@ public:
 	//! Minimum async write reservation requested per regular execution thread.
 	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 16ULL * 1024ULL * 1024ULL;
 
 	//! Whether registering a payload may schedule an async drain request immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
@@ -216,8 +214,7 @@ public:
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
 
 public:
-	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target,
-	                                  idx_t async_threads);
+	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target);
 	DUCKDB_API ~ManagedAsyncWriteQueue() override;
 
 	ManagedAsyncWriteQueue(const ManagedAsyncWriteQueue &) = delete;
