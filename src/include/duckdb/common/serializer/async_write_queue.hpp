@@ -33,7 +33,7 @@ struct AsyncWriteConfig {
 	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
 	static constexpr idx_t REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t MAX_PENDING_BYTES_PER_THREAD = 64ULL * 1024ULL * 1024ULL;
 	//! Minimum async write reservation requested per regular execution thread.
 	static constexpr idx_t MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum bytes a single managed stream request should submit before yielding scheduler capacity.
