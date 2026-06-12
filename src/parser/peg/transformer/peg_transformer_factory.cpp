@@ -137,7 +137,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
 	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformIdentifier);
-	REGISTER_TRANSFORM(TransformCubeOrRollup);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -339,138 +338,15 @@ void PEGTransformerFactory::RegisterPivot() {
 }
 
 void PEGTransformerFactory::RegisterSelect() {
-	// select.gram
-	REGISTER_TRANSFORM(TransformSelectStatement);
-	REGISTER_TRANSFORM(TransformSelectStatementInternal);
-	REGISTER_TRANSFORM(TransformSelectSetOpChain);
-	REGISTER_TRANSFORM(TransformIntersectChain);
-	REGISTER_TRANSFORM(TransformSelectAtom);
-	REGISTER_TRANSFORM(TransformSetopClause);
-	REGISTER_TRANSFORM(TransformSetIntersectClause);
-	REGISTER_TRANSFORM(TransformSetopType);
-	REGISTER_TRANSFORM(TransformDistinctOrAll);
-	REGISTER_TRANSFORM(TransformSelectParens);
-	REGISTER_TRANSFORM(TransformSelectStatementType);
-	REGISTER_TRANSFORM(TransformOptionalParensSimpleSelect);
-	REGISTER_TRANSFORM(TransformSimpleSelectParens);
+	// select.gram rules that remain manual after generated wrappers are registered.
+	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
 	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformSelectFrom);
-	REGISTER_TRANSFORM(TransformSelectFromClause);
-	REGISTER_TRANSFORM(TransformFromSelectClause);
-	REGISTER_TRANSFORM(TransformFromClause);
-	REGISTER_TRANSFORM(TransformSelectClause);
-	REGISTER_TRANSFORM(TransformDistinctClause);
-	REGISTER_TRANSFORM(TransformDistinctOn);
-	REGISTER_TRANSFORM(TransformDistinctOnTargets);
-	REGISTER_TRANSFORM(TransformDistinctAll);
-	REGISTER_TRANSFORM(TransformFunctionArgument);
-	REGISTER_TRANSFORM(TransformBaseTableName);
-	REGISTER_TRANSFORM(TransformSchemaReservedTable);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTable);
-	REGISTER_TRANSFORM(TransformWhereClause);
-	REGISTER_TRANSFORM(TransformTableFunctionArguments);
-
-	REGISTER_TRANSFORM(TransformTargetList);
-	REGISTER_TRANSFORM(TransformAliasedExpression);
-	REGISTER_TRANSFORM(TransformExpressionAsCollabel);
-	REGISTER_TRANSFORM(TransformColIdExpression);
-	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
-	REGISTER_TRANSFORM(TransformTableAlias);
-	REGISTER_TRANSFORM(TransformTableAliasAs);
-	REGISTER_TRANSFORM(TransformTableAliasWithoutAs);
-	REGISTER_TRANSFORM(TransformColumnAliases);
-	REGISTER_TRANSFORM(TransformNamedParameter);
+	REGISTER_TRANSFORM(TransformDistinctOrAll);
+	REGISTER_TRANSFORM(TransformDistinctKeyword);
+	REGISTER_TRANSFORM(TransformAllKeyword);
 	REGISTER_TRANSFORM(TransformTableRef);
-
-	REGISTER_TRANSFORM(TransformOrderByClause);
-	REGISTER_TRANSFORM(TransformOrderByExpressions);
-	REGISTER_TRANSFORM(TransformOrderByExpressionList);
-	REGISTER_TRANSFORM(TransformOrderByAll);
-	REGISTER_TRANSFORM(TransformOrderByExpression);
-	REGISTER_TRANSFORM(TransformDescOrAsc);
-	REGISTER_TRANSFORM(TransformNullsFirstOrLast);
-
-	REGISTER_TRANSFORM(TransformJoinOrPivot);
-	REGISTER_TRANSFORM(TransformJoinClause);
-	REGISTER_TRANSFORM(TransformRegularJoinClause);
-	REGISTER_TRANSFORM(TransformJoinType);
-	REGISTER_TRANSFORM(TransformJoinQualifier);
-	REGISTER_TRANSFORM(TransformOnClause);
-	REGISTER_TRANSFORM(TransformUsingClause);
-	REGISTER_TRANSFORM(TransformJoinWithoutOnClause);
-	REGISTER_TRANSFORM(TransformJoinPrefix);
-	REGISTER_TRANSFORM(TransformCrossJoinPrefix);
-	REGISTER_TRANSFORM(TransformNaturalJoinPrefix);
-	REGISTER_TRANSFORM(TransformPositionalJoinPrefix);
-	REGISTER_TRANSFORM(TransformTableUnpivotClause);
-	REGISTER_TRANSFORM(TransformUnpivotValueList);
-	REGISTER_TRANSFORM(TransformUnpivotTargetList);
-
-	REGISTER_TRANSFORM(TransformTablePivotClause);
-	REGISTER_TRANSFORM(TransformPivotValueList);
-	REGISTER_TRANSFORM(TransformPivotHeader);
-	REGISTER_TRANSFORM(TransformPivotGroupByList);
-	REGISTER_TRANSFORM(TransformPivotTargetList);
-
-	REGISTER_TRANSFORM(TransformInnerTableRef);
-	REGISTER_TRANSFORM(TransformTableFunction);
-	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
-	REGISTER_TRANSFORM(TransformTableFunctionAliasColon);
-	REGISTER_TRANSFORM(TransformTableAliasColon);
-	REGISTER_TRANSFORM(TransformQualifiedTableFunction);
-	REGISTER_TRANSFORM(TransformTableSubquery);
-	REGISTER_TRANSFORM(TransformSubqueryReference);
-	REGISTER_TRANSFORM(TransformBaseTableRef);
-	REGISTER_TRANSFORM(TransformAtClause);
-	REGISTER_TRANSFORM(TransformAtSpecifier);
-	REGISTER_TRANSFORM(TransformAtUnit);
-	REGISTER_TRANSFORM(TransformValuesRef);
-	REGISTER_TRANSFORM(TransformValuesClause);
-	REGISTER_TRANSFORM(TransformValuesExpressions);
-	REGISTER_TRANSFORM(TransformTableStatement);
-	REGISTER_TRANSFORM(TransformParensTableRef);
-
-	REGISTER_TRANSFORM(TransformResultModifiers);
-	REGISTER_TRANSFORM(TransformLimitOffset);
-	REGISTER_TRANSFORM(TransformLimitOffsetClause);
-	REGISTER_TRANSFORM(TransformOffsetLimitClause);
-	REGISTER_TRANSFORM(TransformLimitClause);
-	REGISTER_TRANSFORM(TransformLimitValue);
-	REGISTER_TRANSFORM(TransformLimitAll);
-	REGISTER_TRANSFORM(TransformLimitLiteralPercent);
-	REGISTER_TRANSFORM(TransformLimitExpression);
-	REGISTER_TRANSFORM(TransformOffsetClause);
-	REGISTER_TRANSFORM(TransformGroupByClause);
-	REGISTER_TRANSFORM(TransformGroupByExpressions);
-	REGISTER_TRANSFORM(TransformGroupByAll);
-	REGISTER_TRANSFORM(TransformGroupByList);
-	REGISTER_TRANSFORM(TransformGroupByExpression);
-	REGISTER_TRANSFORM(TransformEmptyGroupingItem);
-	REGISTER_TRANSFORM(TransformCubeOrRollupClause);
-	REGISTER_TRANSFORM(TransformGroupingSetsClause);
-
 	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformWithStatement);
-	REGISTER_TRANSFORM(TransformCTEBody);
-	REGISTER_TRANSFORM(TransformMaterialized);
-	REGISTER_TRANSFORM(TransformHavingClause);
-	REGISTER_TRANSFORM(TransformOffsetValue);
-	REGISTER_TRANSFORM(TransformQualifyClause);
-	REGISTER_TRANSFORM(TransformWindowClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
-	REGISTER_TRANSFORM(TransformUsingKey);
-
-	REGISTER_TRANSFORM(TransformSampleClause);
-	REGISTER_TRANSFORM(TransformSampleEntry);
-	REGISTER_TRANSFORM(TransformSampleEntryFunction);
-	REGISTER_TRANSFORM(TransformSampleEntryCount);
-	REGISTER_TRANSFORM(TransformSampleCount);
-	REGISTER_TRANSFORM(TransformSampleValue);
-	REGISTER_TRANSFORM(TransformSampleUnit);
-	REGISTER_TRANSFORM(TransformSampleProperties);
-	REGISTER_TRANSFORM(TransformSampleSeed);
-	REGISTER_TRANSFORM(TransformSampleFunction);
-	REGISTER_TRANSFORM(TransformRepeatableSample);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
@@ -495,27 +371,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
 
-	RegisterEnum<OrderType>("DescendingOrder", OrderType::DESCENDING);
-	RegisterEnum<OrderType>("AscendingOrder", OrderType::ASCENDING);
-	RegisterEnum<OrderByNullType>("NullsFirst", OrderByNullType::NULLS_FIRST);
-	RegisterEnum<OrderByNullType>("NullsLast", OrderByNullType::NULLS_LAST);
-
-	RegisterEnum<JoinType>("FullJoin", JoinType::OUTER);
-	RegisterEnum<JoinType>("LeftJoin", JoinType::LEFT);
-	RegisterEnum<JoinType>("RightJoin", JoinType::RIGHT);
-	RegisterEnum<JoinType>("SemiJoin", JoinType::SEMI);
-	RegisterEnum<JoinType>("AntiJoin", JoinType::ANTI);
-	RegisterEnum<JoinType>("InnerJoin", JoinType::INNER);
-
 	RegisterEnum<ExpressionType>("OperatorEqual", ExpressionType::COMPARE_EQUAL);
 	RegisterEnum<ExpressionType>("OperatorNotEqual", ExpressionType::COMPARE_NOTEQUAL);
 	RegisterEnum<ExpressionType>("OperatorLessThan", ExpressionType::COMPARE_LESSTHAN);
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-
-	RegisterEnum<SetOperationType>("SetopUnion", SetOperationType::UNION);
-	RegisterEnum<SetOperationType>("SetopExcept", SetOperationType::EXCEPT);
 
 	RegisterEnum<string>("TrimBoth", "trim");
 	RegisterEnum<string>("TrimLeading", "ltrim");
@@ -533,9 +394,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
-
-	RegisterEnum<bool>("SamplePercentage", true);
-	RegisterEnum<bool>("SampleRows", false);
 
 	RegisterEnum<bool>("SubqueryAny", true);
 	RegisterEnum<bool>("SubqueryAll", false);
