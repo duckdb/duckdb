@@ -68,7 +68,8 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto table_indexes = op.GetTableIndex();
 	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	               op.Cast<LogicalComparisonJoin>().join_type == JoinType::MARK;
-	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
+	bool get_all_child_bindings =
+	    op.type == LogicalOperatorType::LOGICAL_UNNEST || op.type == LogicalOperatorType::LOGICAL_ROW_PRESENCE;
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		get_all_child_bindings = !op.children.empty();
 	}
@@ -117,6 +118,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_UNNEST:
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_WINDOW:
@@ -355,6 +357,12 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		// optimize children of unnest
+		RelationStats child_stats;
+		AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE: {
+		// optimize children of the row presence operator
 		RelationStats child_stats;
 		AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 		return true;

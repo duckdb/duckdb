@@ -43,6 +43,7 @@ class LogicalMergeInto;
 class LogicalOrder;
 class LogicalPivot;
 class LogicalPositionalJoin;
+class LogicalRowPresence;
 class LogicalPragma;
 class LogicalPrepare;
 class LogicalProjection;

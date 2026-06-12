@@ -166,6 +166,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_RESET:
 		result = LogicalReset::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE:
+		result = LogicalRowPresence::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		result = LogicalSample::Deserialize(deserializer);
 		break;
@@ -730,6 +733,17 @@ unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer
 	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto scope = deserializer.ReadProperty<SetScope>(201, "scope");
 	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(std::move(name), scope));
+	return std::move(result);
+}
+
+void LogicalRowPresence::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<TableIndex>(200, "presence_index", presence_index);
+}
+
+unique_ptr<LogicalOperator> LogicalRowPresence::Deserialize(Deserializer &deserializer) {
+	auto presence_index = deserializer.ReadPropertyWithDefault<TableIndex>(200, "presence_index");
+	auto result = duckdb::unique_ptr<LogicalRowPresence>(new LogicalRowPresence(presence_index));
 	return std::move(result);
 }
 

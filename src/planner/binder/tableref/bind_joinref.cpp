@@ -337,6 +337,34 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
 	auto left_bindings = left_binder.bind_context.GetBindingAliases();
 
+	// the NULL-producing side(s) of the join get a presence column: a LogicalRowPresence operator below
+	// the join emits a BOOLEAN that is true for real rows, while rows fabricated by the join (unmatched
+	// rows of an outer join, padding of a positional join) have it NULL like all other columns of that
+	// side - row variables use it to evaluate to NULL instead of a struct of NULL values
+	auto add_row_presence = [&](BindContext &side_context) {
+		auto presence_index = GenerateTableIndex();
+		auto presence_alias = Identifier("__internal_row_presence_" + to_string(presence_index.index));
+		side_context.SetPresenceColumn(BindingAlias(presence_alias), Identifier("row_is_present"));
+		// register a hidden binding so the presence column can be referenced by (qualified) name
+		side_context.AddGenericBinding(presence_index, presence_alias, {Identifier("row_is_present")},
+		                               {LogicalType::BOOLEAN});
+		ErrorData presence_error;
+		auto presence_binding = side_context.GetBinding(BindingAlias(presence_alias), presence_error);
+		D_ASSERT(presence_binding);
+		presence_binding->hidden = true;
+		return presence_index;
+	};
+	bool pad_left =
+	    result->type == JoinType::RIGHT || result->type == JoinType::OUTER || ref.ref_type == JoinRefType::POSITIONAL;
+	bool pad_right =
+	    result->type == JoinType::LEFT || result->type == JoinType::OUTER || ref.ref_type == JoinRefType::POSITIONAL;
+	if (pad_left) {
+		result->left_presence_index = add_row_presence(left_binder.bind_context);
+	}
+	if (pad_right) {
+		result->right_presence_index = add_row_presence(right_binder.bind_context);
+	}
+
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
 

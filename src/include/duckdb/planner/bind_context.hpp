@@ -167,6 +167,8 @@ public:
 
 	//! Get all bindings that match a specific binding alias - returns an error if none match
 	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
+	//! Set the presence column for all bindings in this context that do not have one yet
+	void SetPresenceColumn(const BindingAlias &presence_alias, const Identifier &presence_column);
 
 private:
 	void AddBinding(unique_ptr<Binding> binding);

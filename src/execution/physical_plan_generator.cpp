@@ -106,6 +106,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalComparisonJoin>());
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return CreatePlan(op.Cast<LogicalCrossProduct>());
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE:
+		return CreatePlan(op.Cast<LogicalRowPresence>());
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		return CreatePlan(op.Cast<LogicalPositionalJoin>());
 	case LogicalOperatorType::LOGICAL_UNION:

@@ -30,6 +30,7 @@ add_library_unity(
   plan_order.cpp
   plan_pivot.cpp
   plan_positional_join.cpp
+  plan_row_presence.cpp
   plan_pragma.cpp
   plan_prepare.cpp
   plan_projection.cpp

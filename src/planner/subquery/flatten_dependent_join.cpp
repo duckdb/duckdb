@@ -974,6 +974,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE:
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return PushDownChild(plan, propagate_null_values, std::move(state));
 	}

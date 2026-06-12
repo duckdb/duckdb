@@ -38,6 +38,14 @@ struct Binding {
 	        TableIndex index);
 	virtual ~Binding() = default;
 
+	//! Whether this binding is hidden from star expansion and unqualified column resolution
+	//! (used for internal bindings such as join presence columns)
+	bool hidden = false;
+	//! If set, the qualified column that is true for real rows of this binding and NULL for rows
+	//! fabricated by a NULL-padding join (e.g. the presence columns of a POSITIONAL JOIN)
+	BindingAlias presence_alias;
+	Identifier presence_column;
+
 public:
 	bool TryGetBindingIndex(const Identifier &column_name, column_t &column_index);
 	column_t GetBindingIndex(const Identifier &column_name);

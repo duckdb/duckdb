@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
+#include "duckdb/planner/operator/logical_row_presence.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 
@@ -370,6 +371,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = std::move(ref.left.plan);
 	auto right = std::move(ref.right.plan);
 	is_outside_flattened = old_is_outside_flattened;
+
+	// place the row presence operators below the NULL-paddable side(s) of the join
+	if (ref.left_presence_index.IsValid()) {
+		left = make_uniq<LogicalRowPresence>(ref.left_presence_index, std::move(left));
+	}
+	if (ref.right_presence_index.IsValid()) {
+		right = make_uniq<LogicalRowPresence>(ref.right_presence_index, std::move(right));
+	}
 
 	// For joins, depth of the bindings will be one higher on the right because of the lateral binder
 	// If the current join does not have correlations between left and right, then the right bindings

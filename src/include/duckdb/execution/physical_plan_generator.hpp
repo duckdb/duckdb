@@ -134,6 +134,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalOrder &op);
 	PhysicalOperator &CreatePlan(LogicalTopN &op);
 	PhysicalOperator &CreatePlan(LogicalPositionalJoin &op);
+	PhysicalOperator &CreatePlan(LogicalRowPresence &op);
 	PhysicalOperator &CreatePlan(LogicalProjection &op);
 	PhysicalOperator &CreatePlan(LogicalInsert &op);
 	PhysicalOperator &CreatePlan(LogicalCopyToFile &op);

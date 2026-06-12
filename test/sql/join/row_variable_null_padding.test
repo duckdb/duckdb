@@ -1,0 +1,141 @@
+# name: test/sql/join/row_variable_null_padding.test
+# description: Row variables of NULL-padded join sides evaluate to NULL, not a struct of NULL values
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(x INT, y INT); INSERT INTO a VALUES (1, 10), (NULL, 20), (NULL, NULL);
+
+statement ok
+CREATE TABLE b(x INT, y INT); INSERT INTO b VALUES (1, 10), (NULL, 20);
+
+# positional join: the padded side yields NULL row values;
+# a real row whose columns are all NULL stays a struct of NULL values
+query III
+SELECT a, b, b IS NULL FROM a POSITIONAL JOIN b;
+----
+{'x': 1, 'y': 10}	{'x': 1, 'y': 10}	false
+{'x': NULL, 'y': 20}	{'x': NULL, 'y': 20}	false
+{'x': NULL, 'y': NULL}	NULL	true
+
+# left join: unmatched rows yield NULL row values (matches Postgres whole-row variables)
+query II
+SELECT t.id, b FROM (VALUES (1), (2)) t(id) LEFT JOIN b ON t.id = b.x ORDER BY t.id;
+----
+1	{'x': 1, 'y': 10}
+2	NULL
+
+# right join: mirrored
+query II
+SELECT b, t.id FROM b RIGHT JOIN (VALUES (1), (2)) t(id) ON t.id = b.x ORDER BY t.id;
+----
+{'x': 1, 'y': 10}	1
+NULL	2
+
+# full outer join: both sides, subquery sources
+query II
+SELECT l, r
+FROM (SELECT * FROM a WHERE x = 1) l FULL JOIN (SELECT * FROM b WHERE x IS NULL) r ON l.x = r.x
+ORDER BY ALL;
+----
+{'x': 1, 'y': 10}	NULL
+NULL	{'x': NULL, 'y': 20}
+
+# the rule is uniform across source kinds: subqueries...
+query I
+SELECT s FROM (VALUES (1), (2), (3)) t(id) POSITIONAL JOIN (SELECT 5 AS z) s;
+----
+{'z': 5}
+NULL
+NULL
+
+# ...tables with a user column named rowid...
+statement ok
+CREATE TABLE shadowed(rowid INT); INSERT INTO shadowed VALUES (1);
+
+query I
+SELECT s FROM (VALUES (1), (2)) t(id) LEFT JOIN shadowed s ON t.id = s.rowid ORDER BY t.id NULLS LAST;
+----
+{'rowid': 1}
+NULL
+
+# ...table functions...
+query II
+SELECT t.id, r FROM (VALUES (1), (2)) t(id) LEFT JOIN range(1, 2) r ON t.id = r.range ORDER BY t.id;
+----
+1	{'range': 1}
+2	NULL
+
+# ...CTEs...
+query II
+WITH cte AS (SELECT 1 AS id, 42 AS v)
+SELECT t.id, cte FROM (VALUES (1), (2)) t(id) LEFT JOIN cte ON t.id = cte.id ORDER BY t.id;
+----
+1	{'id': 1, 'v': 42}
+2	NULL
+
+# ...and set operations
+query II
+SELECT t.id, u FROM (VALUES (1), (3)) t(id) LEFT JOIN (SELECT 1 AS id UNION ALL SELECT 2) u ON t.id = u.id
+ORDER BY t.id;
+----
+1	{'id': 1}
+3	NULL
+
+# row variables outside NULL-producing joins are unchanged
+query I
+SELECT a FROM a WHERE y = 20;
+----
+{'x': NULL, 'y': 20}
+
+query I
+SELECT a FROM a JOIN b USING (y) WHERE y = 20;
+----
+{'x': NULL, 'y': 20}
+
+# flag propagates through nested joins
+query I
+SELECT c FROM a INNER JOIN (b LEFT JOIN (SELECT 99 AS x) c ON b.x = c.x) ON a.x = b.x;
+----
+NULL
+
+# the presence column is internal: it does not appear in star expansion
+query IIII
+SELECT * FROM a POSITIONAL JOIN b LIMIT 1;
+----
+1	10	1	10
+
+# filtering on the NULL row value finds the padded rows
+query I
+SELECT t.id FROM (VALUES (1), (2), (3)) t(id) POSITIONAL JOIN (SELECT 5 AS z) s WHERE s IS NULL ORDER BY t.id;
+----
+2
+3
+
+# row variables work in correlated subqueries over padded sides
+query I
+SELECT (SELECT s.z FROM (VALUES (1)) v(q) LEFT JOIN (SELECT a.x AS z) s ON true) FROM a ORDER BY 1 NULLS LAST;
+----
+1
+NULL
+NULL
+
+mode skip
+
+# whole-table equality assertion: works when equal
+statement ok
+CREATE TABLE a2(x INT, y INT); INSERT INTO a2 VALUES (1, 10), (NULL, 20);
+
+statement ok
+SELECT assert_true(a2 = b, 'a2 and b differ') FROM a2 POSITIONAL JOIN b;
+
+# ...throws on length mismatch via the NULL row value
+statement ok
+INSERT INTO a2 VALUES (5, 50);
+
+statement error
+SELECT assert_true(a2 = b, 'a2 and b differ') FROM a2 POSITIONAL JOIN b;
+----
+Assertion: a2 and b differ

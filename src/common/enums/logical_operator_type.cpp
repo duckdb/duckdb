@@ -46,6 +46,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
+	case LogicalOperatorType::LOGICAL_ROW_PRESENCE:
+		return "ROW_PRESENCE";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:

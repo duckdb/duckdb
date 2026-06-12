@@ -38,6 +38,9 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const Identifier &column_n
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
+		if (binding.hidden) {
+			continue;
+		}
 		auto is_using_binding = GetUsingBinding(column_name, binding.GetBindingAlias());
 		if (is_using_binding) {
 			continue;
@@ -176,6 +179,9 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const Identifier &co
 	vector<reference<Binding>> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
+		if (binding.hidden) {
+			continue;
+		}
 		if (binding.HasMatchingBinding(column_name)) {
 			result.push_back(binding);
 		}
@@ -501,6 +507,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		reference_set_t<UsingColumnSet> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto &binding = *entry;
+			if (binding.hidden) {
+				continue;
+			}
 			auto &column_names = binding.GetColumnNames();
 			auto &binding_alias = binding.GetBindingAlias();
 			for (auto &column_name : column_names) {
@@ -645,6 +654,19 @@ void BindContext::GetTypesAndNames(vector<Identifier> &result_names, vector<Logi
 
 void BindContext::AddBinding(unique_ptr<Binding> binding) {
 	bindings_list.push_back(std::move(binding));
+}
+
+void BindContext::SetPresenceColumn(const BindingAlias &presence_alias, const Identifier &presence_column) {
+	for (auto &binding : bindings_list) {
+		if (binding->hidden) {
+			continue;
+		}
+		if (!binding->presence_alias.IsSet()) {
+			// only set if not set yet: a deeper join's presence column also covers padding by joins above it
+			binding->presence_alias = presence_alias;
+			binding->presence_column = presence_column;
+		}
+	}
 }
 
 void BindContext::AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,

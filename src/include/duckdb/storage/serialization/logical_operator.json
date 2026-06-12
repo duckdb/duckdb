@@ -527,6 +527,21 @@
     ]
   },
   {
+    "class": "LogicalRowPresence",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ROW_PRESENCE",
+    "members": [
+      {
+        "id": 200,
+        "name": "presence_index",
+        "type": "TableIndex"
+      }
+    ],
+    "constructor": [
+      "presence_index"
+    ]
+  },
+  {
     "class": "LogicalSetOperation",
     "base": "LogicalOperator",
     "enum": [

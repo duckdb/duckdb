@@ -1,6 +1,7 @@
 #include "duckdb/planner/column_qualifier.hpp"
 
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -134,7 +135,23 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 		child_expressions.emplace_back(column_name, std::move(ref));
 	}
-	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
+	auto struct_pack = make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
+	if (!binding->presence_alias.IsSet()) {
+		return std::move(struct_pack);
+	}
+	// the binding sits on a NULL-paddable join side: a LogicalRowPresence operator below the join emits
+	// a presence column that is true for real rows, while rows fabricated by the join (unmatched outer
+	// join rows, positional padding) have it NULL - those rows should produce a NULL row value rather
+	// than a struct of NULL values
+	auto row_is_present = binder.bind_context.CreateColumnReference(binding->presence_alias, binding->presence_column,
+	                                                                ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+	auto case_expr = make_uniq<CaseExpression>();
+	CaseCheck present_check;
+	present_check.when_expr = std::move(row_is_present);
+	present_check.then_expr = std::move(struct_pack);
+	case_expr->CaseChecksMutable().push_back(std::move(present_check));
+	case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	return std::move(case_expr);
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,
