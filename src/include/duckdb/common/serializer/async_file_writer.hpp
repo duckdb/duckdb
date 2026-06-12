@@ -23,7 +23,7 @@ class CopiedAsyncWriteBuffer;
 //! This is a logical stream writer: offsets are assigned when writes are registered via GetTotalWritten().
 //! Physical writes may complete out of order when positional writes are supported; WaitAll/Close complete the file.
 //! Calls into this writer must be externally serialized; internal locking only coordinates with async drain tasks.
-class AsyncFileWriter : public WriteStream, private AsyncWriteTarget {
+class AsyncFileWriter : public WriteStream, private ManagedAsyncWriteTarget {
 public:
 	//! RAII handle that batches write registration. Finish() must be called on the normal path to leave the batch and
 	//! start draining; scope exit only leaves the batch as exception cleanup.
@@ -96,9 +96,9 @@ public:
 	DUCKDB_API idx_t GetTotalWritten() const;
 
 private:
-	using BatchDrainMode = AsyncWriteQueue::BatchDrainMode;
-	using ScheduleMode = AsyncWriteQueue::ScheduleMode;
-	using SchedulePolicy = AsyncWriteQueue::SchedulePolicy;
+	using BatchDrainMode = ManagedAsyncWriteQueue::BatchDrainMode;
+	using ScheduleMode = ManagedAsyncWriteQueue::ScheduleMode;
+	using SchedulePolicy = ManagedAsyncWriteQueue::SchedulePolicy;
 
 	//! Register an owned buffer for writing, using the configured synchronous/asynchronous mode.
 	void RegisterWrite(unique_ptr<AsyncWriteBuffer> buffer, ScheduleMode schedule_mode = ScheduleMode::ALLOW);
@@ -137,8 +137,8 @@ private:
 	FileSystem &fs;
 	string path;
 	unique_ptr<FileHandle> handle;
-	//! Generic queue that owns async task scheduling, backpressure, and write coalescing.
-	unique_ptr<AsyncWriteQueue> write_queue;
+	//! Managed queue that owns stream scheduling, backpressure, and write coalescing.
+	unique_ptr<ManagedAsyncWriteQueue> write_queue;
 
 	//! Copy staging buffer for small transient WriteData inputs. Only accessed by the registering thread.
 	unique_ptr<CopiedAsyncWriteBuffer> copied_buffer;

@@ -56,7 +56,7 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
-	AsyncWriteQueue::Options options;
+	ManagedAsyncWriteQueue::Options options;
 	options.coalesce_threshold = coalesce_threshold;
 	options.first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
 	options.min_pending_bytes = min_pending_bytes;
@@ -64,8 +64,8 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 	options.drain_task_byte_budget = DEFAULT_DRAIN_TASK_BYTE_BUDGET;
 	options.max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	options.limit_coalesced_write_size = local_file;
-	AsyncWriteTarget &target = *this;
-	write_queue = make_uniq<AsyncWriteQueue>(client_context, target, options, async_threads);
+	ManagedAsyncWriteTarget &target = *this;
+	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target, options, async_threads);
 }
 
 AsyncFileWriter::~AsyncFileWriter() {

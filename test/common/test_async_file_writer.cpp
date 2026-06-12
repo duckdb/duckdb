@@ -266,6 +266,62 @@ private:
 	string data;
 };
 
+class TrackingAsyncWriteTarget : public AsyncWriteTarget {
+public:
+	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
+		lock_guard<mutex> guard(lock);
+		writes.emplace_back(const_char_ptr_cast(buffer), UnsafeNumericCast<size_t>(size));
+		offsets.push_back(offset);
+	}
+
+	mutex lock;
+	vector<string> writes;
+	vector<idx_t> offsets;
+};
+
+class BlockingAsyncWriteTarget : public AsyncWriteTarget {
+public:
+	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
+		unique_lock<mutex> guard(lock);
+		active_writes++;
+		max_active_writes = MaxValue(max_active_writes, active_writes);
+		entered_writes++;
+		cv.notify_all();
+		cv.wait(guard, [&]() { return release_writes; });
+		writes.emplace_back(const_char_ptr_cast(buffer), UnsafeNumericCast<size_t>(size));
+		offsets.push_back(offset);
+		active_writes--;
+		cv.notify_all();
+	}
+
+	bool WaitForEnteredWrites(idx_t count) {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return entered_writes >= count; });
+	}
+
+	void ReleaseWrites() {
+		{
+			lock_guard<mutex> guard(lock);
+			release_writes = true;
+		}
+		cv.notify_all();
+	}
+
+	idx_t MaxActiveWrites() {
+		lock_guard<mutex> guard(lock);
+		return max_active_writes;
+	}
+
+	mutex lock;
+	std::condition_variable cv;
+	vector<string> writes;
+	vector<idx_t> offsets;
+	idx_t entered_writes = 0;
+	idx_t active_writes = 0;
+	idx_t max_active_writes = 0;
+	bool release_writes = false;
+};
+
 class BlockingAsyncTaskState {
 public:
 	bool WaitForStarted(idx_t count) {
@@ -364,6 +420,83 @@ static unique_ptr<Connection> CreateConnectionWithNoAsyncThreads(DuckDB &db) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=0"));
 	return con;
+}
+
+TEST_CASE("AsyncWriteQueue writes synchronously without async threads", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithNoAsyncThreads(db);
+	TrackingAsyncWriteTarget target;
+	AsyncWriteQueue::Options options;
+	options.max_active_tasks = 2;
+	AsyncWriteQueue queue(*con->context, target, options, 0);
+
+	mutex completion_lock;
+	vector<idx_t> completion_offsets;
+	vector<idx_t> completion_sizes;
+	bool saw_error = false;
+	auto completion = [&](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+		lock_guard<mutex> guard(completion_lock);
+		completion_offsets.push_back(offset);
+		completion_sizes.push_back(size);
+		saw_error = saw_error || error;
+	};
+
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("abc"), 7, completion));
+	queue.Close();
+
+	REQUIRE(!queue.IsAsync());
+	REQUIRE(target.writes.size() == 1);
+	REQUIRE(target.writes[0] == "abc");
+	REQUIRE(target.offsets[0] == 7);
+	REQUIRE(completion_offsets.size() == 1);
+	REQUIRE(completion_offsets[0] == 7);
+	REQUIRE(completion_sizes[0] == 3);
+	REQUIRE(!saw_error);
+}
+
+TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingAsyncWriteTarget target;
+	AsyncWriteQueue::Options options;
+	options.max_active_tasks = 2;
+	AsyncWriteQueue queue(*con->context, target, options, 2);
+
+	mutex completion_lock;
+	vector<idx_t> completion_offsets;
+	vector<idx_t> completion_sizes;
+	bool saw_error = false;
+	auto completion = [&](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+		lock_guard<mutex> guard(completion_lock);
+		completion_offsets.push_back(offset);
+		completion_sizes.push_back(size);
+		saw_error = saw_error || error;
+	};
+
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("abcd"), 0, completion));
+	queue.Submit(AsyncWriteRequest(make_uniq<StringAsyncWriteBuffer>("efgh"), 4, completion));
+	REQUIRE(target.WaitForEnteredWrites(2));
+	REQUIRE(target.MaxActiveWrites() >= 2);
+
+	target.ReleaseWrites();
+	queue.Close();
+
+	REQUIRE(target.writes.size() == 2);
+	REQUIRE(completion_offsets.size() == 2);
+	REQUIRE(completion_sizes.size() == 2);
+	REQUIRE(!saw_error);
+	bool saw_first = false;
+	bool saw_second = false;
+	for (auto offset : completion_offsets) {
+		if (offset == 0) {
+			saw_first = true;
+		}
+		if (offset == 4) {
+			saw_second = true;
+		}
+	}
+	REQUIRE(saw_first);
+	REQUIRE(saw_second);
 }
 
 static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
