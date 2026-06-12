@@ -2566,6 +2566,16 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info
 
 	// partition_keys map(varchar, varchar)
 	chunk.data[5].Append(info.partition_keys);
+
+	// extra info map(varchar, variant)
+	vector<Value> extra_keys;
+	vector<Value> extra_values;
+	for (auto &entry : file_stats.extra_info) {
+		extra_keys.emplace_back(entry.first);
+		extra_values.push_back(entry.second.DefaultCastAs(LogicalType::VARIANT()));
+	}
+	chunk.data[6].Append(
+	    Value::MAP(LogicalType::VARCHAR, LogicalType::VARIANT(), std::move(extra_keys), std::move(extra_values)));
 }
 
 bool PhysicalCopyToFile::Rotate() const {

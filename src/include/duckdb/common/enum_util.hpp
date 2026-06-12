@@ -194,8 +194,6 @@ enum class ExceptionFormatValueType : uint8_t;
 
 enum class ExceptionType : uint8_t;
 
-enum class ExplainFormat : uint8_t;
-
 enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
@@ -381,8 +379,6 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class PreserveOrderType : uint8_t;
-
-enum class ProfilerPrintFormat : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
 
@@ -805,9 +801,6 @@ template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
 
 template<>
-const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value);
-
-template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
 
 template<>
@@ -1085,9 +1078,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
@@ -1598,9 +1588,6 @@ template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
 
 template<>
-ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value);
-
-template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
 
 template<>
@@ -1878,9 +1865,6 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);
-
-template<>
-ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);

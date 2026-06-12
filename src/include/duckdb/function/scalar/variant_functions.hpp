@@ -15,6 +15,16 @@
 
 namespace duckdb {
 
+struct VariantArrayLengthFun {
+	static constexpr const char *Name = "variant_array_length";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the number of elements in the variant, or `0` if not an array.\001Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.\001Returns the number of elements in the array for each specified path in the variant, or `0` if not an array.";
+	static constexpr const char *Example = "variant_array_length(['duck', 'goose']::VARIANT)\001variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')\001variant_array_length({'a': 1, 'b': ['duck', 'goose']}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantExistsFun {
 	static constexpr const char *Name = "variant_exists";
 	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
