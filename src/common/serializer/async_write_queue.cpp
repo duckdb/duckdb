@@ -477,8 +477,8 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
 	max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
-	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
-	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
+	max_pending_bytes = AsyncWriteConfig::MAX_PENDING_BYTES_PER_THREAD * regular_threads;
+	min_pending_bytes = MinValue(max_pending_bytes, AsyncWriteConfig::MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 
 	AsyncWriteTarget &async_target = *this;
 	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target);
@@ -924,9 +924,10 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
                                                            ManagedAsyncWriteStreamTarget &target_p)
     : client_context(client_context_p), target(target_p) {
 	auto local_file = target.IsLocalFile();
-	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
+	coalesce_threshold =
+	    local_file ? AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD : AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD;
 	first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
-	drain_task_byte_budget = MaxValue(DEFAULT_DRAIN_TASK_BYTE_BUDGET, coalesce_threshold);
+	drain_task_byte_budget = MaxValue(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET, coalesce_threshold);
 	limit_coalesced_write_size = local_file;
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);

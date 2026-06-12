@@ -22,6 +22,24 @@ class ClientContext;
 class TaskExecutor;
 class TemporaryMemoryState;
 
+//! Compile-time policy used by the async write layers.
+struct AsyncWriteConfig {
+	//! Capacity of the staging buffer used for small transient stream writes.
+	static constexpr idx_t COPIED_BUFFER_CAPACITY = 4096;
+	//! Maximum bytes a single low-level async task should drain before yielding scheduler capacity.
+	static constexpr idx_t TASK_BYTE_BUDGET = 4ULL * 1024ULL * 1024ULL;
+	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
+	static constexpr idx_t LOCAL_COALESCE_THRESHOLD = 4096;
+	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
+	static constexpr idx_t REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
+	//! Maximum queued async bytes retained per regular execution thread.
+	static constexpr idx_t MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	//! Minimum async write reservation requested per regular execution thread.
+	static constexpr idx_t MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
+	//! Maximum bytes a single managed stream request should submit before yielding scheduler capacity.
+	static constexpr idx_t DRAIN_TASK_BYTE_BUDGET = 16ULL * 1024ULL * 1024ULL;
+};
+
 //! Owned payload that can be handed to an async write queue.
 class AsyncWritePayload {
 public:
@@ -67,10 +85,6 @@ public:
 class AsyncWriteQueue {
 	friend class AsyncWriteQueueTask;
 	friend class AsyncWriteQueueTaskGuard;
-
-public:
-	//! Maximum bytes a single async task should drain before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_TASK_BYTE_BUDGET = 4ULL * 1024ULL * 1024ULL;
 
 public:
 	DUCKDB_API AsyncWriteQueue(ClientContext &client_context, AsyncWriteTarget &target);
@@ -145,7 +159,7 @@ private:
 	//! Maximum scheduled/running write tasks for this queue.
 	idx_t max_active_tasks = 1;
 	//! Maximum bytes a single async task should drain.
-	idx_t task_byte_budget = DEFAULT_TASK_BYTE_BUDGET;
+	idx_t task_byte_budget = AsyncWriteConfig::TASK_BYTE_BUDGET;
 
 	//! Protects state shared between the submitting thread and async write tasks.
 	mutex lock;
@@ -192,13 +206,6 @@ class ManagedAsyncWriteQueue : private AsyncWriteTarget {
 	friend class ManagedAsyncWriteStreamQueue;
 
 public:
-	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
-	//! Minimum async write reservation requested per regular execution thread.
-	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
-	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 16ULL * 1024ULL * 1024ULL;
-
 	//! Whether registering a payload may schedule an async drain request immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to force a TemporaryMemoryState growth check instead of relying on coarse growth.
@@ -303,7 +310,7 @@ private:
 	//! Hard cap over the TemporaryMemoryState reservation.
 	idx_t max_pending_bytes = 0;
 	//! Maximum bytes one managed async request should submit before yielding scheduler capacity.
-	idx_t drain_task_byte_budget = DEFAULT_DRAIN_TASK_BYTE_BUDGET;
+	idx_t drain_task_byte_budget = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET;
 
 	//! Protects state shared between registering threads and async completion callbacks.
 	mutex lock;
@@ -326,19 +333,6 @@ private:
 //! Callers are responsible for assigning offsets and externally serializing RegisterWrite calls.
 class ManagedAsyncWriteStreamQueue : private AsyncWriteTarget {
 public:
-	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
-	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = 4096;
-	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
-	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
-	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteQueue::DEFAULT_MAX_PENDING_BYTES_PER_THREAD;
-	//! Minimum async write reservation requested per regular execution thread.
-	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteQueue::DEFAULT_MIN_PENDING_BYTES_PER_THREAD;
-	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = ManagedAsyncWriteQueue::DEFAULT_DRAIN_TASK_BYTE_BUDGET;
-
 	//! Whether registering a payload may schedule an async drain request immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to schedule only enough request capacity for normal overlap, or force all pending bytes to drain.

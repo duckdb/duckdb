@@ -112,7 +112,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	}
 
 	// Caller-owned memory cannot outlive async scheduling, so even large const inputs are copied before registration.
-	if (write_size >= DEFAULT_COPIED_BUFFER_CAPACITY) {
+	if (write_size >= AsyncWriteConfig::COPIED_BUFFER_CAPACITY) {
 		SealCopiedBuffer(ScheduleMode::DEFER);
 		auto owned_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, write_size);
 		owned_buffer->Append(buffer, write_size);
@@ -126,7 +126,7 @@ void AsyncFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		idx_t sealed_buffer_offset = 0;
 		if (!copied_buffer) {
 			copied_buffer_offset = total_written;
-			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
+			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
 		}
 		auto append_size = MinValue(write_size - offset, copied_buffer->Remaining());
 		copied_buffer->Append(buffer + offset, append_size);
@@ -187,7 +187,7 @@ void AsyncFileWriter::RegisterWriteInternal(unique_ptr<AsyncWriteBuffer> buffer,
 
 void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size) {
 	auto copied_size = copied_buffer ? copied_buffer->Size() : 0;
-	if (write_size >= 2 * DEFAULT_COPIED_BUFFER_CAPACITY - copied_size) {
+	if (write_size >= 2 * AsyncWriteConfig::COPIED_BUFFER_CAPACITY - copied_size) {
 		idx_t copied_prefix = 0;
 		if (copied_size > 0) {
 			copied_prefix = copied_buffer->Remaining();
@@ -216,7 +216,7 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 		idx_t sealed_buffer_offset = 0;
 		if (!copied_buffer) {
 			copied_buffer_offset = total_written;
-			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, DEFAULT_COPIED_BUFFER_CAPACITY);
+			copied_buffer = make_uniq<CopiedAsyncWriteBuffer>(client_context, AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
 		}
 		auto append_size = MinValue(write_size - input_offset, copied_buffer->Remaining());
 		copied_buffer->Append(buffer + input_offset, append_size);

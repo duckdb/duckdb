@@ -470,7 +470,7 @@ TEST_CASE("AsyncWriteQueue drains positional requests on multiple async threads"
 		saw_error = saw_error || error;
 	};
 
-	auto write_size = AsyncWriteQueue::DEFAULT_TASK_BYTE_BUDGET + 1;
+	auto write_size = AsyncWriteConfig::TASK_BYTE_BUDGET + 1;
 	queue.Submit(AsyncWriteRequest(
 	    make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'a')), 0, completion));
 	queue.Submit(AsyncWriteRequest(
@@ -536,7 +536,7 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 		fs.RemoveFile(path);
 	}
 
-	string large(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
+	string large(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
 	string tail = "tail";
 
 	AsyncFileWriter writer(*con->context, fs, path);
@@ -627,7 +627,7 @@ TEST_CASE("AsyncFileWriter keeps synchronous direct writes aligned with staged w
 		fs.RemoveFile(path);
 	}
 
-	string large(2 * AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY, 'x');
+	string large(2 * AsyncWriteConfig::COPIED_BUFFER_CAPACITY, 'x');
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(const_data_ptr_cast("head"), 4);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
@@ -636,8 +636,8 @@ TEST_CASE("AsyncFileWriter keeps synchronous direct writes aligned with staged w
 	writer.Close();
 	REQUIRE(ReadFile(path) == "head" + large + "tail");
 	REQUIRE(fs.write_sizes.size() == 3);
-	REQUIRE(fs.write_sizes[0] == AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY);
-	REQUIRE(fs.write_sizes[1] == large.size() + 4 - AsyncFileWriter::DEFAULT_COPIED_BUFFER_CAPACITY);
+	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
+	REQUIRE(fs.write_sizes[1] == large.size() + 4 - AsyncWriteConfig::COPIED_BUFFER_CAPACITY);
 	REQUIRE(fs.write_sizes[2] == 4);
 	fs.RemoveFile(path);
 }
@@ -792,9 +792,9 @@ TEST_CASE("AsyncFileWriter keeps large owned buffers as separate writes", "[asyn
 		fs.RemoveFile(path);
 	}
 
-	string large(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD, 'a');
-	string small_a(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD / 2, 'b');
-	string small_b(AsyncFileWriter::DEFAULT_LOCAL_COALESCE_THRESHOLD / 2, 'c');
+	string large(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD, 'a');
+	string small_a(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD / 2, 'b');
+	string small_b(AsyncWriteConfig::LOCAL_COALESCE_THRESHOLD / 2, 'c');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -822,8 +822,8 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -867,8 +867,8 @@ TEST_CASE("AsyncFileWriter drains local positional writes on multiple async thre
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -898,8 +898,8 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD / 2, 'a');
-	string second(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD / 2, 'b');
+	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'a');
+	string second(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
@@ -913,7 +913,7 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 
 	REQUIRE(ReadFile(path) == first + second);
 	REQUIRE(fs.write_sizes.size() == 1);
-	REQUIRE(fs.write_sizes[0] == AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD);
+	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
 	fs.RemoveFile(path);
 }
 
@@ -956,8 +956,8 @@ TEST_CASE("AsyncFileWriter schedules extra remote drain tasks only after a full 
 		fs.RemoveFile(path);
 	}
 
-	REQUIRE(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD * 2 == AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET);
-	string chunk(AsyncFileWriter::DEFAULT_REMOTE_COALESCE_THRESHOLD, 'x');
+	REQUIRE(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD * 2 == AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET);
+	string chunk(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD, 'x');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(chunk));
@@ -985,7 +985,7 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 		fs.RemoveFile(path);
 	}
 
-	string large(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
+	string large(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET * 2 + 1, 'x');
 	string tail = "tail";
 
 	AsyncFileWriter writer(*con->context, fs, path);
@@ -1023,8 +1023,8 @@ TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as p
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -1055,8 +1055,8 @@ TEST_CASE("AsyncFileWriter falls back to one drain task without positional write
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -1188,8 +1188,8 @@ TEST_CASE("AsyncFileWriter close drains scheduled tasks after async write error"
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
-	string second(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	{
@@ -1242,7 +1242,7 @@ TEST_CASE("AsyncFileWriter close discards unscheduled writes after async write e
 		fs.RemoveFile(path);
 	}
 
-	string first(AsyncFileWriter::DEFAULT_DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
 
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));

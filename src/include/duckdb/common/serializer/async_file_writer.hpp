@@ -50,23 +50,6 @@ public:
 
 	//! Default file-open behavior for creating a write-locked output file.
 	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	//! Capacity of the staging buffer used for small transient WriteData inputs.
-	static constexpr idx_t DEFAULT_COPIED_BUFFER_CAPACITY = 4096;
-	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
-	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD =
-	    ManagedAsyncWriteStreamQueue::DEFAULT_LOCAL_COALESCE_THRESHOLD;
-	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
-	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD =
-	    ManagedAsyncWriteStreamQueue::DEFAULT_REMOTE_COALESCE_THRESHOLD;
-	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteStreamQueue::DEFAULT_MAX_PENDING_BYTES_PER_THREAD;
-	//! Minimum async write reservation requested per regular execution thread.
-	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD =
-	    ManagedAsyncWriteStreamQueue::DEFAULT_MIN_PENDING_BYTES_PER_THREAD;
-	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET =
-	    ManagedAsyncWriteStreamQueue::DEFAULT_DRAIN_TASK_BYTE_BUDGET;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
