@@ -2,7 +2,8 @@
 # description: parse path functions test
 # group: [string]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # all separators option
 query T

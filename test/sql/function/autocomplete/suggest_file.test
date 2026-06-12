@@ -2,7 +2,8 @@
 # description: Test sql_auto_complete
 # group: [autocomplete]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 require autocomplete
 

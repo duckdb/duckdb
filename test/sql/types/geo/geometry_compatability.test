@@ -7,7 +7,8 @@
 # and the execution engine. This test ensures that we can deal with the old geometry format without any issues.
 
 # These files were created with vector-size 2048
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 # Make a copy of the testing database so we can make modifications
 statement ok

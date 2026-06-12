@@ -4,7 +4,8 @@
 
 require no_latest_storage
 
-require vector_size 512
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 512, 'requires vector_size>=512')
 
 statement ok
 ATTACH '{TEST_DIR}/test_empty_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');

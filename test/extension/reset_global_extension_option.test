@@ -2,7 +2,8 @@
 # description: RESET (without explicit scope) on a GLOBAL-default extension option must reset GLOBAL
 # group: [extension]
 
-require notmingw
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE '%_mingw', 'requires a non-mingw platform') FROM pragma_platform()
 
 require skip_reload
 

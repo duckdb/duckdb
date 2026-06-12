@@ -67,7 +67,8 @@ statement ok
 insert into t4 select [range, range +1, range + 2, 2e50] from range(1000);
 
 # FIXME: this should not be required
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 query I
 select count(*) from t4 where a[1] < 1001 and list_kurtosis(a) is NOT NULL;

@@ -2,7 +2,8 @@
 # description: Test that auto-checkpoint correctly reports all checkpoint-related metrics via profiling.
 # group: [profiling]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 require json
 

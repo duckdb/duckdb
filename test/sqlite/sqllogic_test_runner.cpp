@@ -816,6 +816,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
 				command->expected_result = ExpectedResult::RESULT_SUCCESS;
+			} else if (token.parameters[0] == "skip_test_on_error") {
+				if (InLoop()) {
+					parser.Fail("statement skip_test_on_error cannot be called in a loop");
+				}
+				command->expected_result = ExpectedResult::RESULT_SUCCESS;
+				command->skip_on_failure = true;
 			} else if (token.parameters[0] == "error") {
 				command->expected_result = ExpectedResult::RESULT_ERROR;
 			} else if (token.parameters[0] == "maybe") {
@@ -828,7 +834,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				output_result_mode = true;
 				skip_level++;
 			} else {
-				parser.Fail("statement argument should be 'ok' or 'error");
+				parser.Fail("statement argument should be 'ok', 'error' or 'skip_test_on_error'");
 			}
 
 			command->file_name = script;

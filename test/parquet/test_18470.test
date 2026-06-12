@@ -4,7 +4,8 @@
 
 require parquet
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 set seed 0.42
 

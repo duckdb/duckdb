@@ -3,7 +3,8 @@
 # group: [bc]
 
 # The database is written with a vector size of 2048.
-require vector_size 2048
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 2048, 'requires vector_size>=2048')
 
 load data/storage/views_092.db readonly
 

@@ -4,7 +4,8 @@
 
 require parquet
 
-require vector_size 512
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 512, 'requires vector_size>=512')
 
 statement ok
 PRAGMA verify_parallelism;

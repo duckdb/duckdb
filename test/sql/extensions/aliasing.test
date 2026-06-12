@@ -12,7 +12,8 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-require notmingw
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE '%_mingw', 'requires a non-mingw platform') FROM pragma_platform()
 
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo

@@ -3,7 +3,8 @@
 # group: [csv]
 
 # requires notwindows for windows-style path backslash reasons
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 query IIII
 SELECT * FROM read_csv_auto('{DATA_DIR}/csv/bug_9005/teste*.csv',filename=true,union_by_name=True) where filename='{DATA_DIR}/csv/bug_9005/teste1.csv';

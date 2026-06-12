@@ -3,7 +3,8 @@
 # group: [csv]
 
 # We need to do some precise byte math here
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement error
 FROM read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', buffer_size=20, quote = '"')

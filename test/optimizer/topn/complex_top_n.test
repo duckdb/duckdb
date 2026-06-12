@@ -2,7 +2,8 @@
 # description: topN
 # group: [topn]
 
-require vector_size 1024
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 1024, 'requires vector_size>=1024')
 
 set seed 0.42
 

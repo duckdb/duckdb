@@ -2,7 +2,8 @@
 # description: Test file path roundtripping and concurrency
 # group: [attach]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement ok
 SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';

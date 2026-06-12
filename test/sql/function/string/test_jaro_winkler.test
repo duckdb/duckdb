@@ -196,7 +196,8 @@ create table test as select '0000' || range::varchar s from range(10000);
 # results should be the same regardless of the constant being first or second arg!
 # because of floating point arithmetic this is off slightly at smaller vector sizes
 
-require vector_size 1024
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 1024, 'requires vector_size>=1024')
 
 query T nosort q0
 select avg(jaro_winkler_similarity('00000000', s)) from test;
