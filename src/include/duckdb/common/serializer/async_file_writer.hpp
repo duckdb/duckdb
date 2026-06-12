@@ -121,9 +121,9 @@ private:
 	//! Return whether the file handle supports independent positional writes.
 	bool SupportsPositionalWrites() override;
 	//! Write bytes to the underlying file handle at the assigned logical stream offset.
-	void Write(QueryContext context, data_ptr_t buffer, idx_t size, idx_t offset) override;
+	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override;
 	//! Write bytes to the underlying file handle's current position.
-	void Write(QueryContext context, data_ptr_t buffer, idx_t size) override;
+	void Write(data_ptr_t buffer, idx_t size) override;
 	//! Surface an error thrown by an async drain task.
 	void RethrowTaskError();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.

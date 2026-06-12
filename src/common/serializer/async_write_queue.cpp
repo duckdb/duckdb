@@ -70,9 +70,9 @@ private:
 	bool started = false;
 };
 
-AsyncWriteQueue::AsyncWriteQueue(QueryContext context_p, ClientContext &client_context_p, AsyncWriteTarget &target_p,
-                                 Options options_p, idx_t async_threads)
-    : context(context_p), client_context(client_context_p), target(target_p), options(options_p) {
+AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p, Options options_p,
+                                 idx_t async_threads)
+    : client_context(client_context_p), target(target_p), options(options_p) {
 	options.drain_task_byte_budget = MaxValue(options.drain_task_byte_budget, options.coalesce_threshold);
 	options.max_active_drain_tasks = MaxValue<idx_t>(options.max_active_drain_tasks, 1);
 	if (options.max_pending_bytes > 0) {
@@ -560,9 +560,9 @@ void AsyncWriteQueue::WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset) {
 	}
 	try {
 		if (drain_mode == DrainMode::POSITIONAL) {
-			target.Write(context, buffer, size, offset);
+			target.Write(buffer, size, offset);
 		} else {
-			target.Write(context, buffer, size);
+			target.Write(buffer, size);
 		}
 	} catch (const IOException &ex) {
 		throw IOException("Async write failed for range [offset=%llu, size=%llu]: %s", offset, size, ex.what());

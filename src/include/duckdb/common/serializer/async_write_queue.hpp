@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/main/query_context.hpp"
 
 namespace duckdb {
 
@@ -40,9 +39,9 @@ public:
 	//! Whether contiguous registered writes can safely drain concurrently through positional writes.
 	virtual bool SupportsPositionalWrites() = 0;
 	//! Write a specific byte range using the target's positional write path.
-	virtual void Write(QueryContext context, data_ptr_t buffer, idx_t size, idx_t offset) = 0;
+	virtual void Write(data_ptr_t buffer, idx_t size, idx_t offset) = 0;
 	//! Write bytes using the target's sequential write path.
-	virtual void Write(QueryContext context, data_ptr_t buffer, idx_t size) = 0;
+	virtual void Write(data_ptr_t buffer, idx_t size) = 0;
 };
 
 //! Shared async write scheduler for targets that register owned payloads with pre-assigned logical offsets.
@@ -87,8 +86,8 @@ public:
 	enum class PendingTaskCountMode : uint8_t { FULL_BUDGET_ONLY, INCLUDE_TAIL };
 
 public:
-	DUCKDB_API AsyncWriteQueue(QueryContext context, ClientContext &client_context, AsyncWriteTarget &target,
-	                           Options options, idx_t async_threads);
+	DUCKDB_API AsyncWriteQueue(ClientContext &client_context, AsyncWriteTarget &target, Options options,
+	                           idx_t async_threads);
 	DUCKDB_API ~AsyncWriteQueue();
 
 	AsyncWriteQueue(const AsyncWriteQueue &) = delete;
@@ -191,7 +190,6 @@ private:
 	void WorkOnSingleTask();
 
 private:
-	QueryContext context;
 	ClientContext &client_context;
 	AsyncWriteTarget &target;
 	Options options;

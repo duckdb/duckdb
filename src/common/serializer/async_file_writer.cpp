@@ -65,7 +65,7 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
 	options.max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	options.limit_coalesced_write_size = local_file;
 	AsyncWriteTarget &target = *this;
-	write_queue = make_uniq<AsyncWriteQueue>(context, client_context, target, options, async_threads);
+	write_queue = make_uniq<AsyncWriteQueue>(client_context, target, options, async_threads);
 }
 
 AsyncFileWriter::~AsyncFileWriter() {
@@ -231,9 +231,9 @@ void AsyncFileWriter::WriteDataSynchronously(data_ptr_t buffer, idx_t write_size
 			auto remaining_offset = total_written;
 			total_written += remaining_size;
 			if (SupportsPositionalWrites()) {
-				Write(context, buffer + copied_prefix, remaining_size, remaining_offset);
+				Write(buffer + copied_prefix, remaining_size, remaining_offset);
 			} else {
-				Write(context, buffer + copied_prefix, remaining_size);
+				Write(buffer + copied_prefix, remaining_size);
 			}
 			write_queue->ResetNextOffset(total_written);
 		}
@@ -295,18 +295,18 @@ bool AsyncFileWriter::SupportsPositionalWrites() {
 	return handle->SupportsPositionalWrites();
 }
 
-void AsyncFileWriter::Write(QueryContext write_context, data_ptr_t buffer, idx_t size, idx_t offset) {
+void AsyncFileWriter::Write(data_ptr_t buffer, idx_t size, idx_t offset) {
 	if (size == 0) {
 		return;
 	}
-	handle->Write(write_context, buffer, size, offset);
+	handle->Write(context, buffer, size, offset);
 }
 
-void AsyncFileWriter::Write(QueryContext write_context, data_ptr_t buffer, idx_t size) {
+void AsyncFileWriter::Write(data_ptr_t buffer, idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	handle->Write(write_context, buffer, size);
+	handle->Write(context, buffer, size);
 }
 
 void AsyncFileWriter::RethrowTaskError() {
