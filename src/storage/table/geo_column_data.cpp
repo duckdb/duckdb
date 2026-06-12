@@ -336,8 +336,15 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto &partial_block_manager = info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 
-	auto &old_column_stats =
-	    base_column->GetType().id() == LogicalTypeId::GEOMETRY ? old_stats : base_column->GetStatisticsRef();
+	// When the inner column is unshredded, the geometry old_stats are already correct.
+	// When the inner column is shredded, the base_column has no stats of its own (it is parented to us).
+	// Shredded columns are always re-written from scratch, and the stats are recomputes, do the empty stats of the
+	// inner layout type is a correct default in these cases.
+	unique_ptr<BaseStatistics> shredded_stats;
+	if (base_column->GetType().id() != LogicalTypeId::GEOMETRY) {
+		shredded_stats = BaseStatistics::CreateEmpty(base_column->GetType()).ToUnique();
+	}
+	auto &old_column_stats = shredded_stats ? *shredded_stats : old_stats;
 
 	// Are there any changes?
 	if (!HasAnyChanges()) {
