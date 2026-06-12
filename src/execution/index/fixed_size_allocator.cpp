@@ -298,12 +298,6 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 	return info;
 }
 
-void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_manager) {
-	for (auto &buffer : buffers) {
-		buffer.second->Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
-	}
-}
-
 unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Checkpoint(PartialBlockManager &partial_block_manager) {
 	auto result = make_unsafe_uniq<FixedSizeAllocator>(segment_size, block_manager, memory_tag);
 

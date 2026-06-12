@@ -14,7 +14,6 @@
 namespace duckdb {
 class DuckTableEntry;
 class TableStatistics;
-class IndexSerializationInfo;
 class SingleFileCheckpointWriter;
 class TableIndexWriter;
 

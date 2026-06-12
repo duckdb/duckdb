@@ -189,11 +189,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	// prior: ser version 3
-
-
-	// auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
-
 	// if (debug_verify_blocks) {
 	// 	for (auto &entry : index_storage_infos.ordered_infos) {
 	// 		for (auto &allocator : entry.get().allocator_infos) {

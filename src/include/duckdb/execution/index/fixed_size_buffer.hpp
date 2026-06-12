@@ -74,9 +74,6 @@ private:
 		return block_pointer.IsValid();
 	}
 
-	//! Serializes a buffer, if dirty or not on disk.
-	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
-	               const idx_t bitmask_offset);
 	//!
 	unique_ptr<FixedSizeBuffer> Checkpoint(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
 		       const idx_t bitmask_offset);
