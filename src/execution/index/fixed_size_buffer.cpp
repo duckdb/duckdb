@@ -72,8 +72,8 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 }
 
 unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
-                                                        const idx_t available_segments, const idx_t segment_size,
-                                                        const idx_t bitmask_offset) {
+                                                     const idx_t available_segments, const idx_t segment_size,
+                                                     const idx_t bitmask_offset) {
 	// Early-out, if the block is already on disk and not in memory.
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {
@@ -106,13 +106,15 @@ unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 		D_ASSERT(!new_block_pointer.offset);
 		auto new_block_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 		memcpy(new_block_handle.GetDataMutable(), buffer_handle.Ptr(), new_allocation_size);
-		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, std::move(new_block_handle));
+		auto p_block_for_index =
+		    make_uniq<PartialBlockForIndex>(allocation.state, block_manager, std::move(new_block_handle));
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
 	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
-	return make_uniq<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);;
+	return make_uniq<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
+	;
 }
 
 void FixedSizeBuffer::LoadFromDisk() {

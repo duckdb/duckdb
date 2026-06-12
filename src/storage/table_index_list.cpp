@@ -387,9 +387,8 @@ void TableIndexList::Serialize(IndexSerializationResult &result, Serializer &ser
 	// write empty block pointers for forwards compatibility
 	const vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(
-		104, "index_storage_infos", result.ordered_infos.size(),
-		[&](Serializer::List &list, idx_t i) { list.WriteElement(result.ordered_infos[i].get()); });
+	serializer.WriteList(104, "index_storage_infos", result.ordered_infos.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(result.ordered_infos[i].get()); });
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

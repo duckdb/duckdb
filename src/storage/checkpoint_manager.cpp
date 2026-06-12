@@ -88,7 +88,8 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
                                                        BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), index_partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
+      index_partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {

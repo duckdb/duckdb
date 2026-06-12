@@ -66,8 +66,8 @@ public:
 
 	//! Create an index which is logically equivalent but backed by potentially (partially) different buffers.
 	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators, const IndexStorageInfo &info) {
-		auto art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager,
-		                          unbound_expressions, db, new_allocators, IndexStorageInfo());
+		auto art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db,
+		                          new_allocators, IndexStorageInfo());
 
 		art->SetPrefixCount(info);
 		art->owns_data = true;

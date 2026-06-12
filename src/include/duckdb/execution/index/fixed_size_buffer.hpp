@@ -20,8 +20,7 @@ class MetadataWriter;
 
 struct PartialBlockForIndex : public PartialBlock {
 public:
-	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
-	                     BufferHandle buffer_handle);
+	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager, BufferHandle buffer_handle);
 	~PartialBlockForIndex() override {};
 
 public:
@@ -75,8 +74,8 @@ private:
 	}
 
 	//!
-	unique_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
-		       const idx_t bitmask_offset);
+	unique_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments,
+	                                    const idx_t segment_size, const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();

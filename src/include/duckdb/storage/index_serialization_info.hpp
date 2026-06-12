@@ -14,10 +14,7 @@
 
 namespace duckdb {
 
-enum IndexSerializationFormat {
-	V1_0_0,
-	CURRENT
-};
+enum IndexSerializationFormat { V1_0_0, CURRENT };
 
 // When serializing indexes, new IndexStorageInfos are created upon BoundIndex serialization, whereas for
 // UnboundIndex, IndexStorageInfo already exists inside the UnboundIndex.

@@ -13,7 +13,6 @@
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
-
 namespace duckdb {
 
 class ColumnDataCollection;

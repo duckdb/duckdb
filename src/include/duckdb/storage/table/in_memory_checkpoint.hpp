@@ -51,8 +51,8 @@ public:
 public:
 	void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                         idx_t total_rows, idx_t next_row_id) override;
-	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection, IndexSerializationResult &result,
-	                   Serializer &serializer) override;
+	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
+	                   IndexSerializationResult &result, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) override;
 	bool CheckpointIndexes() const override;
