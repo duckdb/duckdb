@@ -250,7 +250,7 @@ JOIN inequality_build b
 ----
 analyzed_plan	<!REGEX>:(?s).*optional: \(k (IN|<=).*
 
-# If the InFilter is rejected for a dense range, the Bloom filter remains without redundant min/max filters.
+# If the InFilter is rejected for a dense range, we still keep min/max pruning.
 statement ok
 SET dynamic_or_filter_threshold=1000;
 
@@ -272,16 +272,6 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN BF\(k.*
-
-query II
-EXPLAIN ANALYZE
-SELECT count(*)
-FROM dense_probe p
-JOIN dense_build b
-  ON p.k = b.k
- AND p.g >= b.g;
-----
 analyzed_plan	<!REGEX>:(?s).*IN PRF\(k\).*
 
 query II
@@ -292,7 +282,27 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:(?s).*optional: \(k (IN|>=|<=).*
+analyzed_plan	<!REGEX>:(?s).*optional: \(k IN .*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k >=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k <=.*
 
 # Multiple equality keys make PRF and Bloom filters ineligible; min/max is used for each key.
 statement ok

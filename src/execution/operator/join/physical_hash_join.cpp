@@ -1161,7 +1161,8 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
-bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const {
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
+                                                     optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const {
 	if (!ht) {
 		return false;
 	}
@@ -1184,6 +1185,9 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(optional_ptr<JoinHashTable>
 		}
 	}
 	if (equality_column_count != 1) {
+		return false;
+	}
+	if (!CanUseBloomFilter(context, op, cmp, ht)) {
 		return false;
 	}
 
@@ -1428,10 +1432,11 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				const auto can_compute_span =
 				    PrefixRangeFilter::TryComputeSpan(min_val_before_cast, max_val_before_cast, span);
 				const auto can_emit_prf =
-				    can_emit_runtime_filters && CanUsePrefixRangeFilter(ht, cmp) && can_compute_span;
+				    can_emit_runtime_filters && CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
 
 				const auto can_use_in_filter = ht && CanUseInFilter(context, ht, cmp);
 				bool pushed_in_filter = false;
+				bool pushed_bloom_filter = false;
 				if (can_use_in_filter) {
 					pushed_in_filter = PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 				}
@@ -1444,12 +1449,11 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				}
 
 				if (can_use_in_filter) {
-					bool pushed_filter = pushed_in_filter;
 					if (allow_bloom_filters && can_emit_runtime_filters && CanUseBloomFilter(context, op, cmp, ht)) {
 						PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
-						pushed_filter = true;
+						pushed_bloom_filter = true;
 					}
-					if (pushed_filter) {
+					if (pushed_in_filter) {
 						continue;
 					}
 				}
@@ -1464,7 +1468,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				}
 
 				CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, false);
-				if (allow_bloom_filters && can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
+				if (!pushed_bloom_filter && allow_bloom_filters && can_emit_runtime_filters && ht &&
+				    CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 				}
 			}
@@ -1543,6 +1548,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
 				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht);
 			}
+			ht.PrepareBloomFilterForFinalize();
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
@@ -1592,6 +1598,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
+		ht.PrepareBloomFilterForFinalize();
 		sink.ScheduleFinalize(pipeline, event);
 	}
 	sink.finalized = true;
