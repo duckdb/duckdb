@@ -436,65 +436,96 @@ void AsyncWriteQueue::DrainPendingWrites() {
 }
 
 idx_t AsyncWriteQueue::WritePendingWrites(vector<PendingWrite> &writes) {
+	if (options.coalesce_threshold == 0) {
+		return WriteDirectPendingWrites(writes);
+	}
+	if (options.limit_coalesced_write_size) {
+		return WriteBoundedCoalescedPendingWrites(writes);
+	}
+	return WriteThresholdCoalescedPendingWrites(writes);
+}
+
+idx_t AsyncWriteQueue::WritePayloadRange(vector<PendingWrite> &writes, idx_t start, idx_t end, idx_t size) {
+	D_ASSERT(end > start);
+	auto write_offset = writes[start].offset;
+	if (end == start + 1) {
+		auto &single_write = *writes[start].payload;
+		D_ASSERT(size == single_write.Size());
+		WriteBuffer(single_write.Ptr(), size, write_offset);
+		writes[start].payload.reset();
+		return size;
+	}
+
+	auto coalesced = BufferAllocator::Get(client_context).Allocate(size);
+	idx_t offset = 0;
+	for (idx_t write_idx = start; write_idx < end; write_idx++) {
+		auto &current = writes[write_idx];
+		auto current_size = current.Size();
+		VerifyContiguousWrite(current, write_offset + offset);
+		memcpy(coalesced.get() + offset, current.payload->Ptr(), current_size);
+		offset += current_size;
+		// The coalesced buffer owns these bytes now; release the sources before the physical write.
+		current.payload.reset();
+	}
+	D_ASSERT(offset == size);
+	WriteBuffer(coalesced.get(), size, write_offset);
+	return size;
+}
+
+idx_t AsyncWriteQueue::WriteDirectPendingWrites(vector<PendingWrite> &writes) {
+	idx_t drained_bytes = 0;
+	for (idx_t write_idx = 0; write_idx < writes.size(); write_idx++) {
+		drained_bytes += WritePayloadRange(writes, write_idx, write_idx + 1, writes[write_idx].Size());
+	}
+	return drained_bytes;
+}
+
+idx_t AsyncWriteQueue::WriteBoundedCoalescedPendingWrites(vector<PendingWrite> &writes) {
 	idx_t drained_bytes = 0;
 	idx_t i = 0;
-	auto write_range = [&](idx_t start, idx_t end, idx_t size) {
-		D_ASSERT(end > start);
-		auto write_offset = writes[start].offset;
-		if (end == start + 1) {
-			auto &single_write = *writes[start].payload;
-			D_ASSERT(size == single_write.Size());
-			WriteBuffer(single_write.Ptr(), size, write_offset);
-			writes[start].payload.reset();
-			return size;
-		}
-
-		auto coalesced = BufferAllocator::Get(client_context).Allocate(size);
-		idx_t offset = 0;
-		for (idx_t write_idx = start; write_idx < end; write_idx++) {
-			auto &current = writes[write_idx];
-			auto current_size = current.Size();
-			VerifyContiguousWrite(current, write_offset + offset);
-			memcpy(coalesced.get() + offset, current.payload->Ptr(), current_size);
-			offset += current_size;
-			// The coalesced buffer owns these bytes now; release the sources before the physical write.
-			current.payload.reset();
-		}
-		D_ASSERT(offset == size);
-		WriteBuffer(coalesced.get(), size, write_offset);
-		return size;
-	};
-
 	while (i < writes.size()) {
-		auto &pending_write = writes[i];
-		auto &write = *pending_write.payload;
-		auto write_size = write.Size();
+		auto write_size = writes[i].Size();
 		if (write_size >= options.coalesce_threshold) {
-			drained_bytes += write_range(i, i + 1, write_size);
+			drained_bytes += WritePayloadRange(writes, i, i + 1, write_size);
 			i++;
 			continue;
 		}
 
+		auto write_offset = writes[i].offset;
 		idx_t coalesced_size = 0;
 		idx_t end = i;
-		if (options.limit_coalesced_write_size) {
-			while (end < writes.size()) {
-				auto next_size = writes[end].Size();
-				if (next_size >= options.coalesce_threshold ||
-				    coalesced_size + next_size > options.coalesce_threshold) {
-					break;
-				}
-				VerifyContiguousWrite(writes[end], pending_write.offset + coalesced_size);
-				coalesced_size += next_size;
-				end++;
+		while (end < writes.size()) {
+			auto next_size = writes[end].Size();
+			if (next_size >= options.coalesce_threshold ||
+			    coalesced_size + next_size > options.coalesce_threshold) {
+				break;
 			}
-			drained_bytes += write_range(i, end, coalesced_size);
-			i = end;
+			VerifyContiguousWrite(writes[end], write_offset + coalesced_size);
+			coalesced_size += next_size;
+			end++;
+		}
+		drained_bytes += WritePayloadRange(writes, i, end, coalesced_size);
+		i = end;
+	}
+	return drained_bytes;
+}
+
+idx_t AsyncWriteQueue::WriteThresholdCoalescedPendingWrites(vector<PendingWrite> &writes) {
+	idx_t drained_bytes = 0;
+	idx_t i = 0;
+	while (i < writes.size()) {
+		auto write_size = writes[i].Size();
+		if (write_size >= options.coalesce_threshold) {
+			drained_bytes += WritePayloadRange(writes, i, i + 1, write_size);
+			i++;
 			continue;
 		}
 
+		auto write_offset = writes[i].offset;
+		idx_t coalesced_size = 0;
+		idx_t end = i;
 		while (end < writes.size() && writes[end].Size() < options.coalesce_threshold) {
-			VerifyContiguousWrite(writes[end], pending_write.offset + coalesced_size);
+			VerifyContiguousWrite(writes[end], write_offset + coalesced_size);
 			coalesced_size += writes[end].Size();
 			end++;
 		}
@@ -513,7 +544,7 @@ idx_t AsyncWriteQueue::WritePendingWrites(vector<PendingWrite> &writes) {
 					break;
 				}
 			}
-			drained_bytes += write_range(chunk_start, chunk_end, chunk_size);
+			drained_bytes += WritePayloadRange(writes, chunk_start, chunk_end, chunk_size);
 			remaining_size -= chunk_size;
 			chunk_start = chunk_end;
 		}

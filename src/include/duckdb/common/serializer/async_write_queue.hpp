@@ -32,12 +32,12 @@ public:
 //! Compatibility name for existing stream-oriented callers.
 using AsyncWriteBuffer = AsyncWritePayload;
 
-//! Physical target used by AsyncWriteQueue after logical offsets have already been assigned by the caller.
+//! Physical target used by AsyncWriteQueue after contiguous logical offsets have been assigned by the caller.
 class AsyncWriteTarget {
 public:
 	virtual ~AsyncWriteTarget() = default;
 
-	//! Whether independent writes to different offsets can safely run concurrently.
+	//! Whether contiguous registered writes can safely drain concurrently through positional writes.
 	virtual bool SupportsPositionalWrites() = 0;
 	//! Write a specific byte range using the target's positional write path.
 	virtual void Write(QueryContext context, data_ptr_t buffer, idx_t size, idx_t offset) = 0;
@@ -46,6 +46,8 @@ public:
 };
 
 //! Shared async write scheduler for targets that register owned payloads with pre-assigned logical offsets.
+//! V1 is a contiguous logical write queue: each RegisterWrite offset must match the next expected offset.
+//! Positional target writes are used only to drain contiguous registrations concurrently.
 //! Callers are responsible for assigning offsets and externally serializing RegisterWrite calls.
 //! Close() must be called before destroying the queue unless the caller has already drained it explicitly.
 class AsyncWriteQueue {
@@ -55,19 +57,19 @@ class AsyncWriteQueue {
 public:
 	//! Queue tuning derived by the caller from its target and workload.
 	struct Options {
-		//! Maximum contiguous small-write range to merge into one physical write.
+		//! Stream coalescing policy. Zero writes each payload directly, which suits block-sized callers.
 		idx_t coalesce_threshold = 0;
-		//! Minimum unscheduled bytes before threshold scheduling starts the first async task.
+		//! Generic scheduling policy: minimum unscheduled bytes before threshold scheduling starts the first task.
 		idx_t first_task_schedule_threshold = 0;
-		//! Minimum TemporaryMemoryManager reservation while writes are outstanding.
+		//! Generic memory policy: minimum TemporaryMemoryManager reservation while writes are outstanding.
 		idx_t min_pending_bytes = 0;
-		//! Hard cap over the TemporaryMemoryManager reservation.
+		//! Generic memory policy: hard cap over the TemporaryMemoryManager reservation.
 		idx_t max_pending_bytes = 0;
-		//! Maximum bytes one async drain task should take before yielding scheduler capacity.
+		//! Generic scheduling policy: maximum bytes one drain task should take before yielding scheduler capacity.
 		idx_t drain_task_byte_budget = 0;
-		//! Maximum scheduled/running drain tasks when positional writes are supported.
+		//! Generic scheduling policy: maximum scheduled/running drain tasks when positional writes are supported.
 		idx_t max_active_drain_tasks = 1;
-		//! Stop each coalesced write at coalesce_threshold instead of building larger remote-style chunks.
+		//! Stream coalescing policy: stop each coalesced write at coalesce_threshold.
 		bool limit_coalesced_write_size = false;
 	};
 
@@ -97,7 +99,7 @@ public:
 	DUCKDB_API bool IsAsync() const;
 	//! Return whether the async task executor has captured an error.
 	DUCKDB_API bool HasError();
-	//! Add an owned payload with its assigned target offset to the configured sync/async write path.
+	//! Add an owned payload at the next contiguous logical offset to the configured sync/async write path.
 	DUCKDB_API void RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t offset,
 	                              ScheduleMode schedule_mode = ScheduleMode::ALLOW);
 	//! Enter a registration batch, delaying async draining until the batch is left.
@@ -114,7 +116,7 @@ public:
 	DUCKDB_API void WaitAll(BatchDrainMode batch_drain_mode = BatchDrainMode::PRESERVE_BATCH);
 	//! Drain all writes, close any open registration batch, and release the TemporaryMemoryState reservation.
 	DUCKDB_API void Close();
-	//! Reset the next expected offset after all registered writes have drained.
+	//! Reset the next expected contiguous offset after all registered writes have drained.
 	DUCKDB_API void ResetNextOffset(idx_t offset);
 	//! Release the queue's TemporaryMemoryState reservation.
 	DUCKDB_API void ReleaseMemoryReservation();
@@ -165,6 +167,14 @@ private:
 	void DrainPendingWrites();
 	//! Write pending payloads in registration order, coalescing adjacent small writes.
 	idx_t WritePendingWrites(vector<PendingWrite> &writes);
+	//! Write one contiguous pending range, copying only when the range spans multiple payloads.
+	idx_t WritePayloadRange(vector<PendingWrite> &writes, idx_t start, idx_t end, idx_t size);
+	//! Generic path for block-sized callers: write each payload directly without coalescing.
+	idx_t WriteDirectPendingWrites(vector<PendingWrite> &writes);
+	//! Local-file-style policy: coalesce adjacent small writes, bounded at coalesce_threshold.
+	idx_t WriteBoundedCoalescedPendingWrites(vector<PendingWrite> &writes);
+	//! Remote-file-style policy: coalesce adjacent small writes into threshold-sized chunks.
+	idx_t WriteThresholdCoalescedPendingWrites(vector<PendingWrite> &writes);
 	//! Write bytes to the target at the assigned logical offset.
 	void WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset);
 	//! Validate a new registration against the contiguous offset contract.
