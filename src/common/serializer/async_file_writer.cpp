@@ -52,20 +52,11 @@ AsyncFileWriter::AsyncFileWriter(QueryContext context_p, FileSystem &fs_p, const
                                  FileOpenFlags open_flags)
     : context(context_p), client_context(RequireClientContext(context_p)), fs(fs_p), path(path_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
-	ResolveWriteSettings();
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
-	ManagedAsyncWriteQueue::Options options;
-	options.coalesce_threshold = coalesce_threshold;
-	options.first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
-	options.min_pending_bytes = min_pending_bytes;
-	options.max_pending_bytes = max_pending_bytes;
-	options.drain_task_byte_budget = DEFAULT_DRAIN_TASK_BYTE_BUDGET;
-	options.max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
-	options.limit_coalesced_write_size = local_file;
 	ManagedAsyncWriteTarget &target = *this;
-	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target, options, async_threads);
+	write_queue = make_uniq<ManagedAsyncWriteQueue>(client_context, target, async_threads);
 }
 
 AsyncFileWriter::~AsyncFileWriter() {
@@ -104,24 +95,6 @@ void AsyncFileWriter::BatchGuard::Finish() {
 	if (apply_backpressure) {
 		writer_ref.ApplyBackpressure();
 	}
-}
-
-void AsyncFileWriter::ResolveWriteSettings() {
-	local_file = fs.IsLocalFileSystem();
-	if (!local_file && handle) {
-		try {
-			local_file = handle->OnDiskFile();
-		} catch (...) {
-			local_file = false;
-		}
-	}
-
-	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
-
-	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
-	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
-	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 }
 
 idx_t AsyncFileWriter::GetFileSize() {
@@ -293,6 +266,18 @@ void AsyncFileWriter::LeaveBatch() noexcept {
 
 bool AsyncFileWriter::SupportsPositionalWrites() {
 	return handle->SupportsPositionalWrites();
+}
+
+bool AsyncFileWriter::IsLocalFile() {
+	auto local_file = fs.IsLocalFileSystem();
+	if (!local_file && handle) {
+		try {
+			local_file = handle->OnDiskFile();
+		} catch (...) {
+			local_file = false;
+		}
+	}
+	return local_file;
 }
 
 void AsyncFileWriter::Write(data_ptr_t buffer, idx_t size, idx_t offset) {

@@ -53,15 +53,18 @@ public:
 	//! Capacity of the staging buffer used for small transient WriteData inputs.
 	static constexpr idx_t DEFAULT_COPIED_BUFFER_CAPACITY = 4096;
 	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
-	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = 4096;
+	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = ManagedAsyncWriteQueue::DEFAULT_LOCAL_COALESCE_THRESHOLD;
 	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
-	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD =
+	    ManagedAsyncWriteQueue::DEFAULT_REMOTE_COALESCE_THRESHOLD;
 	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD =
+	    ManagedAsyncWriteQueue::DEFAULT_MAX_PENDING_BYTES_PER_THREAD;
 	//! Minimum async write reservation requested per regular execution thread.
-	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD =
+	    ManagedAsyncWriteQueue::DEFAULT_MIN_PENDING_BYTES_PER_THREAD;
 	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
-	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
+	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = ManagedAsyncWriteQueue::DEFAULT_DRAIN_TASK_BYTE_BUDGET;
 
 public:
 	DUCKDB_API AsyncFileWriter(QueryContext context, FileSystem &fs, const string &path,
@@ -120,6 +123,8 @@ private:
 
 	//! Return whether the file handle supports independent positional writes.
 	bool SupportsPositionalWrites() override;
+	//! Return whether this writer targets a local file-like handle.
+	bool IsLocalFile() override;
 	//! Write bytes to the underlying file handle at the assigned logical stream offset.
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override;
 	//! Write bytes to the underlying file handle's current position.
@@ -128,8 +133,6 @@ private:
 	void RethrowTaskError();
 	//! Wait for scheduled writes, optionally restoring an active registration batch afterwards.
 	void WaitAllInternal(BatchDrainMode batch_drain_mode);
-	//! Resolve constants that depend on the file system and scheduler state.
-	void ResolveWriteSettings();
 
 private:
 	QueryContext context;
@@ -148,15 +151,6 @@ private:
 	idx_t total_written = 0;
 	//! Set once the handle has been closed or detached.
 	bool closed = false;
-
-	//! Drain-time coalescing threshold, resolved once from the file system type.
-	idx_t coalesce_threshold = 0;
-	//! Minimum pending bytes requested from TemporaryMemoryManager while writes are outstanding.
-	idx_t min_pending_bytes = 0;
-	//! Hard cap over the TemporaryMemoryState reservation.
-	idx_t max_pending_bytes = 0;
-	//! Whether this writer targets a local file handle.
-	bool local_file = false;
 };
 
 } // namespace duckdb

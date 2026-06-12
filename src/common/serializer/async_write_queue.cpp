@@ -506,22 +506,24 @@ private:
 };
 
 ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, ManagedAsyncWriteTarget &target_p,
-                                               Options options_p, idx_t async_threads)
-    : client_context(client_context_p), target(target_p), options(options_p) {
-	options.drain_task_byte_budget = MaxValue(options.drain_task_byte_budget, options.coalesce_threshold);
-	options.max_active_drain_tasks = MaxValue<idx_t>(options.max_active_drain_tasks, 1);
-	if (options.max_pending_bytes > 0) {
-		options.max_pending_bytes = MaxValue(options.max_pending_bytes, options.min_pending_bytes);
-		options.min_pending_bytes = MinValue(options.max_pending_bytes, MaxValue<idx_t>(options.min_pending_bytes, 1));
-	} else {
-		options.min_pending_bytes = 0;
-	}
+                                               idx_t async_threads)
+    : client_context(client_context_p), target(target_p) {
+	auto local_file = target.IsLocalFile();
+	coalesce_threshold = local_file ? DEFAULT_LOCAL_COALESCE_THRESHOLD : DEFAULT_REMOTE_COALESCE_THRESHOLD;
+	first_task_schedule_threshold = local_file ? 1 : coalesce_threshold;
+	drain_task_byte_budget = MaxValue(DEFAULT_DRAIN_TASK_BYTE_BUDGET, coalesce_threshold);
+	limit_coalesced_write_size = local_file;
+
+	auto &scheduler = TaskScheduler::GetScheduler(client_context);
+	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
+	max_pending_bytes = DEFAULT_MAX_PENDING_BYTES_PER_THREAD * regular_threads;
+	min_pending_bytes = MinValue(max_pending_bytes, DEFAULT_MIN_PENDING_BYTES_PER_THREAD * regular_threads);
 
 	// Positional writes let multiple async requests drain one logical write queue concurrently.
 	// Otherwise the managed queue keeps one sequential request active so target ordering remains correct.
 	if (target.SupportsPositionalWrites()) {
 		drain_mode = DrainMode::POSITIONAL;
-		max_active_drain_tasks = options.max_active_drain_tasks;
+		max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	}
 
 	AsyncWriteQueue::Options queue_options;
@@ -529,9 +531,9 @@ ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, 
 	queue_options.task_byte_budget = DrainTaskByteBudget();
 	AsyncWriteTarget &async_target = *this;
 	write_queue = make_uniq<AsyncWriteQueue>(client_context, async_target, queue_options, async_threads);
-	if (write_queue->IsAsync() && options.max_pending_bytes > 0) {
+	if (write_queue->IsAsync() && max_pending_bytes > 0) {
 		memory_state = TemporaryMemoryManager::Get(client_context).Register(client_context);
-		memory_state->SetMinimumReservation(options.min_pending_bytes);
+		memory_state->SetMinimumReservation(min_pending_bytes);
 		memory_state->SetZero();
 	}
 }
@@ -653,7 +655,7 @@ void ManagedAsyncWriteQueue::UpdateMemoryState(MemoryUpdateMode mode) {
 	}
 
 	auto current_reservation = memory_state->GetReservation();
-	while (current_pending_bytes > MinValue(current_reservation, options.max_pending_bytes)) {
+	while (current_pending_bytes > MinValue(current_reservation, max_pending_bytes)) {
 		idx_t next_request;
 		if (memory_request_bytes > current_reservation) {
 			// TMM did not fully grant the previous request. Keep retrying it on later growth checks.
@@ -661,15 +663,15 @@ void ManagedAsyncWriteQueue::UpdateMemoryState(MemoryUpdateMode mode) {
 		} else if (memory_request_bytes == 0) {
 			// Grow coarsely and only release on Close().
 			// Repeatedly shrinking here would touch shared TMM state on the write-registration hot path.
-			next_request = options.min_pending_bytes;
-		} else if (memory_request_bytes >= options.max_pending_bytes) {
+			next_request = min_pending_bytes;
+		} else if (memory_request_bytes >= max_pending_bytes) {
 			return;
-		} else if (memory_request_bytes > options.max_pending_bytes / 2) {
-			next_request = options.max_pending_bytes;
+		} else if (memory_request_bytes > max_pending_bytes / 2) {
+			next_request = max_pending_bytes;
 		} else {
 			next_request = memory_request_bytes * 2;
 		}
-		next_request = MinValue(MaxValue(next_request, options.min_pending_bytes), options.max_pending_bytes);
+		next_request = MinValue(MaxValue(next_request, min_pending_bytes), max_pending_bytes);
 		if (next_request <= memory_request_bytes) {
 			return;
 		}
@@ -691,11 +693,11 @@ idx_t ManagedAsyncWriteQueue::BackpressureBudget() {
 	if (!memory_state) {
 		return NumericLimits<idx_t>::Maximum();
 	}
-	return MinValue(memory_state->GetReservation(), options.max_pending_bytes);
+	return MinValue(memory_state->GetReservation(), max_pending_bytes);
 }
 
 idx_t ManagedAsyncWriteQueue::DrainTaskByteBudget() const {
-	return MaxValue(options.drain_task_byte_budget, options.coalesce_threshold);
+	return MaxValue(drain_task_byte_budget, coalesce_threshold);
 }
 
 idx_t ManagedAsyncWriteQueue::TotalPendingBytes() const {
@@ -725,23 +727,23 @@ idx_t ManagedAsyncWriteQueue::SelectPendingWriteEnd(idx_t start, idx_t &selected
 idx_t ManagedAsyncWriteQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selected_bytes) const {
 	D_ASSERT(start < pending_writes.size());
 	selected_bytes = 0;
-	if (options.coalesce_threshold == 0) {
+	if (coalesce_threshold == 0) {
 		selected_bytes = pending_writes[start].Size();
 		return start + 1;
 	}
 
 	auto write_size = pending_writes[start].Size();
-	if (write_size >= options.coalesce_threshold) {
+	if (write_size >= coalesce_threshold) {
 		selected_bytes = write_size;
 		return start + 1;
 	}
 
 	auto write_offset = pending_writes[start].offset;
-	if (options.limit_coalesced_write_size) {
+	if (limit_coalesced_write_size) {
 		idx_t end = start;
 		while (end < pending_writes.size()) {
 			auto next_size = pending_writes[end].Size();
-			if (next_size >= options.coalesce_threshold || selected_bytes + next_size > options.coalesce_threshold) {
+			if (next_size >= coalesce_threshold || selected_bytes + next_size > coalesce_threshold) {
 				break;
 			}
 			VerifyContiguousWrite(pending_writes[end], write_offset + selected_bytes);
@@ -756,7 +758,7 @@ idx_t ManagedAsyncWriteQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selecte
 	auto budget_end = SelectPendingWriteEnd(start, selected_budget_bytes);
 	idx_t small_run_size = 0;
 	idx_t small_run_end = start;
-	while (small_run_end < budget_end && pending_writes[small_run_end].Size() < options.coalesce_threshold) {
+	while (small_run_end < budget_end && pending_writes[small_run_end].Size() < coalesce_threshold) {
 		VerifyContiguousWrite(pending_writes[small_run_end], write_offset + small_run_size);
 		small_run_size += pending_writes[small_run_end].Size();
 		small_run_end++;
@@ -768,8 +770,8 @@ idx_t ManagedAsyncWriteQueue::SelectPhysicalWriteEnd(idx_t start, idx_t &selecte
 		selected_bytes += next_size;
 		end++;
 		auto remaining_after_next = small_run_size - selected_bytes;
-		if (selected_bytes >= options.coalesce_threshold &&
-		    (remaining_after_next == 0 || remaining_after_next >= options.coalesce_threshold)) {
+		if (selected_bytes >= coalesce_threshold &&
+		    (remaining_after_next == 0 || remaining_after_next >= coalesce_threshold)) {
 			break;
 		}
 	}
@@ -799,7 +801,7 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 		return false;
 	}
 	if (policy == SchedulePolicy::THRESHOLD) {
-		if (pending_bytes < options.first_task_schedule_threshold && submitted_bytes == 0) {
+		if (pending_bytes < first_task_schedule_threshold && submitted_bytes == 0) {
 			return false;
 		}
 		if (submitted_bytes >= SubmittedByteWindow()) {
@@ -809,7 +811,7 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 
 	idx_t selected_bytes = 0;
 	auto end = SelectPhysicalWriteEnd(0, selected_bytes);
-	if (policy == SchedulePolicy::THRESHOLD && selected_bytes < options.first_task_schedule_threshold) {
+	if (policy == SchedulePolicy::THRESHOLD && selected_bytes < first_task_schedule_threshold) {
 		return false;
 	}
 

@@ -180,6 +180,8 @@ public:
 
 	//! Whether contiguous registered writes can safely drain concurrently through positional writes.
 	virtual bool SupportsPositionalWrites() = 0;
+	//! Whether this target is a local file-like target. Remote targets use larger coalesced writes.
+	virtual bool IsLocalFile() = 0;
 	//! Write a specific byte range using the target's positional write path.
 	virtual void Write(data_ptr_t buffer, idx_t size, idx_t offset) = 0;
 	//! Write bytes using the target's sequential write path.
@@ -191,24 +193,16 @@ public:
 //! Callers are responsible for assigning offsets and externally serializing RegisterWrite calls.
 class ManagedAsyncWriteQueue : private AsyncWriteTarget {
 public:
-	//! Queue tuning derived by the caller from its target and workload.
-	//! Defaults are minimal: no coalescing, no TMM backpressure, immediate first-task scheduling.
-	struct Options {
-		//! Stream coalescing policy. Zero disables coalescing and writes each payload directly.
-		idx_t coalesce_threshold = 0;
-		//! Generic scheduling policy: minimum unscheduled bytes before threshold scheduling starts the first task.
-		idx_t first_task_schedule_threshold = 0;
-		//! Generic memory policy: minimum TemporaryMemoryManager reservation while writes are outstanding.
-		idx_t min_pending_bytes = 0;
-		//! Generic memory policy: hard cap over the TemporaryMemoryManager reservation. Zero disables backpressure.
-		idx_t max_pending_bytes = 0;
-		//! Generic scheduling policy: maximum bytes one managed drain request should take.
-		idx_t drain_task_byte_budget = 0;
-		//! Generic scheduling policy: maximum submitted/running requests when positional writes are supported.
-		idx_t max_active_drain_tasks = 1;
-		//! Stream coalescing policy: stop each coalesced write at coalesce_threshold.
-		bool limit_coalesced_write_size = false;
-	};
+	//! Local file systems are cheap to call, so only coalesce up to the buffered writer page size.
+	static constexpr idx_t DEFAULT_LOCAL_COALESCE_THRESHOLD = 4096;
+	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
+	static constexpr idx_t DEFAULT_REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
+	//! Maximum queued async bytes retained per regular execution thread.
+	static constexpr idx_t DEFAULT_MAX_PENDING_BYTES_PER_THREAD = 128ULL * 1024ULL * 1024ULL;
+	//! Minimum async write reservation requested per regular execution thread.
+	static constexpr idx_t DEFAULT_MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
+	//! Maximum bytes a single async drain task should take before yielding scheduler capacity.
+	static constexpr idx_t DEFAULT_DRAIN_TASK_BYTE_BUDGET = 32ULL * 1024ULL * 1024ULL;
 
 	//! Whether registering a payload may schedule an async drain request immediately.
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
@@ -222,7 +216,7 @@ public:
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
 
 public:
-	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target, Options options,
+	DUCKDB_API ManagedAsyncWriteQueue(ClientContext &client_context, ManagedAsyncWriteTarget &target,
 	                                  idx_t async_threads);
 	DUCKDB_API ~ManagedAsyncWriteQueue() override;
 
@@ -315,7 +309,6 @@ private:
 private:
 	ClientContext &client_context;
 	ManagedAsyncWriteTarget &target;
-	Options options;
 
 	//! Low-level positional request scheduler.
 	unique_ptr<AsyncWriteQueue> write_queue;
@@ -327,6 +320,18 @@ private:
 	DrainMode drain_mode = DrainMode::SEQUENTIAL;
 	//! Maximum number of submitted/running drain requests for this queue.
 	idx_t max_active_drain_tasks = 1;
+	//! Size below which adjacent writes are coalesced before reaching the target.
+	idx_t coalesce_threshold = 0;
+	//! Minimum queued bytes before threshold scheduling starts the first async task.
+	idx_t first_task_schedule_threshold = 0;
+	//! Minimum TemporaryMemoryManager reservation while writes are outstanding.
+	idx_t min_pending_bytes = 0;
+	//! Hard cap over the TemporaryMemoryState reservation.
+	idx_t max_pending_bytes = 0;
+	//! Maximum bytes one primitive async task should drain before yielding scheduler capacity.
+	idx_t drain_task_byte_budget = 0;
+	//! Stop each local coalesced write at coalesce_threshold.
+	bool limit_coalesced_write_size = false;
 
 	//! Protects state shared between the registering thread and async completion callbacks.
 	mutex lock;
