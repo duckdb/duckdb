@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -557,10 +558,17 @@ void AsyncWriteQueue::WriteBuffer(data_ptr_t buffer, idx_t size, idx_t offset) {
 	if (size == 0) {
 		return;
 	}
-	if (drain_mode == DrainMode::POSITIONAL) {
-		target.Write(context, buffer, size, offset);
-	} else {
-		target.Write(context, buffer, size);
+	try {
+		if (drain_mode == DrainMode::POSITIONAL) {
+			target.Write(context, buffer, size, offset);
+		} else {
+			target.Write(context, buffer, size);
+		}
+	} catch (const IOException &ex) {
+		throw IOException("Async write failed for range [offset=%llu, size=%llu]: %s", offset, size, ex.what());
+	} catch (const HTTPException &ex) {
+		throw HTTPException(Exception::ConstructMessage("Async write failed for range [offset=%llu, size=%llu]: %s",
+		                                                offset, size, ex.what()));
 	}
 }
 

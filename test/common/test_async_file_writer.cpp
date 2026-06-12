@@ -1006,7 +1006,14 @@ TEST_CASE("AsyncFileWriter rethrows asynchronous write errors on close", "[async
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("abcd"));
 		batch_guard.Finish();
 	}
-	REQUIRE_THROWS(writer.Close());
+	try {
+		writer.Close();
+		FAIL("Expected async write failure");
+	} catch (const Exception &ex) {
+		string error = ex.what();
+		REQUIRE(error.find("Async write failed for range [offset=0, size=4]") != string::npos);
+		REQUIRE(error.find("Injected async write failure") != string::npos);
+	}
 
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
