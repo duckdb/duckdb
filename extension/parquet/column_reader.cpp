@@ -351,10 +351,23 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
+	if (page_hdr.compressed_page_size < uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
+	}
 
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+
+	if (compressed_bytes == 0 && page_hdr.uncompressed_page_size > uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
+		    "declared value region",
+		    Reader().GetFileName());
+	}
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
