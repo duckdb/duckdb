@@ -16,6 +16,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/grouping_sets_optimizer.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_elimination.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
@@ -301,6 +302,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
 		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
+	});
+
+	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
+	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
+		GroupingSetsOptimizer grouping_sets_optimizer(*this);
+		grouping_sets_optimizer.VisitOperator(plan);
 	});
 
 	// then we extract common subexpressions inside the different operators
