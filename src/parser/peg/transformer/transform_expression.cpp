@@ -7,9 +7,12 @@
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -2462,23 +2465,70 @@ bool PEGTransformerFactory::TransformCastOrTryCast(PEGTransformer &transformer, 
 	return StringUtil::Lower(choice_pr.GetResult().Cast<KeywordParseResult>().keyword) == "try_cast";
 }
 
+static void CollectCaseBodyColumnNames(const ParsedExpression &expr, unordered_set<string> &column_names) {
+	ParsedExpressionIterator::VisitExpressionClass(
+	    expr, ExpressionClass::COLUMN_REF, [&](const ParsedExpression &child) {
+		    auto &column_ref = child.Cast<ColumnRefExpression>();
+		    column_names.insert(StringUtil::Lower(column_ref.GetColumnName()));
+	    });
+}
+
+static bool ExpressionContainsFunction(const ParsedExpression &expr, const string &function_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function_expr = expr.Cast<FunctionExpression>();
+		if (function_expr.FunctionName() == function_name) {
+			return true;
+		}
+	}
+	bool result = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		if (!result) {
+			result = ExpressionContainsFunction(child, function_name);
+		}
+	});
+	return result;
+}
+
+static bool CaseBodyPreventsInvoke(const ParsedExpression &expr) {
+	return expr.HasSubquery() || ExpressionContainsFunction(expr, "unnest");
+}
+
+static string SimpleCaseParameterName(const unordered_set<string> &column_names) {
+	constexpr const char *base_name = "__duckdb_simple_case_subject";
+	string result = base_name;
+	for (idx_t suffix = 0; column_names.find(StringUtil::Lower(result)) != column_names.end(); suffix++) {
+		result = StringUtil::Format("%s_%llu", base_name, suffix);
+	}
+	return result;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CaseExpression>();
 	unique_ptr<ParsedExpression> opt_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
+	auto has_case_expr = opt_expr != nullptr;
+	bool case_body_prevents_invoke = false;
+	unordered_set<string> case_body_column_names;
+	string simple_case_alias;
+	if (has_case_expr) {
+		simple_case_alias = "CASE " + opt_expr->ToString();
+	}
 
 	auto cases_pr = list_pr.Child<RepeatParseResult>(2).GetChildren();
 	for (auto &case_pr : cases_pr) {
 		auto case_expr = transformer.Transform<CaseCheck>(case_pr);
 		CaseCheck new_case;
-		if (opt_expr) {
-			new_case.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, opt_expr->Copy(),
-			                                                     std::move(case_expr.when_expr));
-		} else {
-			new_case.when_expr = std::move(case_expr.when_expr);
+		if (has_case_expr) {
+			simple_case_alias += " WHEN (" + case_expr.when_expr->ToString() + ")";
+			simple_case_alias += " THEN (" + case_expr.then_expr->ToString() + ")";
+			case_body_prevents_invoke |=
+			    CaseBodyPreventsInvoke(*case_expr.when_expr) || CaseBodyPreventsInvoke(*case_expr.then_expr);
+			CollectCaseBodyColumnNames(*case_expr.when_expr, case_body_column_names);
+			CollectCaseBodyColumnNames(*case_expr.then_expr, case_body_column_names);
 		}
+		new_case.when_expr = std::move(case_expr.when_expr);
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
@@ -2487,6 +2537,39 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		result->ElseMutable() = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
 	} else {
 		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	}
+	if (has_case_expr) {
+		case_body_prevents_invoke |= CaseBodyPreventsInvoke(result->Else());
+		CollectCaseBodyColumnNames(result->Else(), case_body_column_names);
+		simple_case_alias += " ELSE " + result->Else().ToString();
+		simple_case_alias += " END";
+		auto case_expr_name = SimpleCaseParameterName(case_body_column_names);
+
+		for (auto &case_check : result->CaseChecksMutable()) {
+			if (case_body_prevents_invoke) {
+				case_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, opt_expr->Copy(),
+				                                                       std::move(case_check.when_expr));
+			} else {
+				case_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                       make_uniq<ColumnRefExpression>(case_expr_name),
+				                                                       std::move(case_check.when_expr));
+			}
+		}
+		if (case_body_prevents_invoke) {
+			// Lambda expressions currently reject subqueries and UNNEST. Keep the legacy searched CASE rewrite
+			// for these cases instead of turning existing valid simple CASE expressions into errors.
+			return std::move(result);
+		}
+
+		vector<string> parameters;
+		parameters.push_back(std::move(case_expr_name));
+
+		vector<unique_ptr<ParsedExpression>> arguments;
+		arguments.push_back(make_uniq<LambdaExpression>(std::move(parameters), std::move(result)));
+		arguments.push_back(std::move(opt_expr));
+		auto invoke_expr = make_uniq<FunctionExpression>("invoke", std::move(arguments));
+		invoke_expr->SetAlias(std::move(simple_case_alias));
+		return std::move(invoke_expr);
 	}
 	return std::move(result);
 }
