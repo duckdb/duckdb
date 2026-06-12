@@ -1,0 +1,17 @@
+# name: test/parquet/variant/variant_corrupt_binary.test
+# description: Bounds checking when decoding the binary Variant encoding from a Parquet file
+# group: [variant]
+
+require parquet
+
+# the metadata dictionary_size points past the end of the metadata blob
+statement error
+SELECT v::VARCHAR FROM 'data/parquet-testing/variant/corrupt_variant_metadata.parquet';
+----
+Variant metadata dictionary size
+
+# an object field id points past the end of the metadata dictionary
+statement error
+SELECT v::VARCHAR FROM 'data/parquet-testing/variant/corrupt_variant_object_field_id.parquet';
+----
+Variant object field id

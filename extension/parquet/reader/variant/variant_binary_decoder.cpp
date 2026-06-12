@@ -72,17 +72,42 @@ VariantMetadataHeader VariantMetadataHeader::FromHeaderByte(uint8_t byte) {
 
 VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) {
 	auto metadata_data = metadata.GetData();
+	auto metadata_size = metadata.GetSize();
+	if (metadata_size < 1) {
+		throw InvalidInputException("Variant metadata is empty - corrupt file?");
+	}
 
 	header = VariantMetadataHeader::FromHeaderByte(metadata_data[0]);
 
 	const_data_ptr_t ptr = reinterpret_cast<const_data_ptr_t>(metadata_data + sizeof(uint8_t));
+	// the header byte and the dictionary_size field have to fit before we read the dictionary size
+	if (metadata_size < 1 + static_cast<idx_t>(header.offset_size)) {
+		throw InvalidInputException("Variant metadata is too small to hold the dictionary size - corrupt file?");
+	}
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+
+	// the (dictionary_size + 1) offset entries follow the header, all of it has to fit in the blob
+	// offset_size is at most 4, so this can not overflow
+	idx_t dictionary_bytes =
+	    1 + static_cast<idx_t>(header.offset_size) + (dictionary_size + 1) * static_cast<idx_t>(header.offset_size);
+	if (dictionary_bytes > metadata_size) {
+		throw InvalidInputException(
+		    "Variant metadata dictionary size (%llu) does not fit in the metadata blob (%llu bytes) - corrupt file?",
+		    dictionary_size, metadata_size);
+	}
 
 	auto offsets = ptr;
 	auto bytes = offsets + ((dictionary_size + 1) * header.offset_size);
+	idx_t bytes_size = metadata_size - dictionary_bytes;
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+	if (last_offset > bytes_size) {
+		throw InvalidInputException("Variant metadata string offset is out of range - corrupt file?");
+	}
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+		if (next_offset < last_offset || next_offset > bytes_size) {
+			throw InvalidInputException("Variant metadata string offset is out of range - corrupt file?");
+		}
 		strings.emplace_back(reinterpret_cast<const char *>(bytes + last_offset), next_offset - last_offset);
 		last_offset = next_offset;
 	}
@@ -299,6 +324,11 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {
 		auto field_id = ReadVariableLengthLittleEndian(field_id_size, field_ids);
+		if (field_id >= metadata.strings.size()) {
+			throw InvalidInputException(
+			    "Variant object field id (%llu) is out of range, metadata dictionary has %llu entries - corrupt file?",
+			    field_id, static_cast<idx_t>(metadata.strings.size()));
+		}
 		auto next_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 
 		auto value = Decode(metadata, values + last_offset);
