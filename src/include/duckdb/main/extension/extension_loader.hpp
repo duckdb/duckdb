@@ -129,6 +129,9 @@ public:
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
 
+	//! Registers a rule for combining two types in implicit type resolution (LogicalType::TryGetMaxLogicalType)
+	DUCKDB_API void RegisterCombineTypesRule(CombineTypesRule rule);
+
 	//! Registers a custom metric so it appears in duckdb_available_metrics.
 	DUCKDB_API void RegisterMetric(MetricInfo info);
 

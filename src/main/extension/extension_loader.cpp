@@ -367,6 +367,10 @@ void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const Logi
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
 }
 
+void ExtensionLoader::RegisterCombineTypesRule(CombineTypesRule rule) {
+	DBConfig::GetConfig(db).GetCastFunctions().RegisterCombineTypesRule(rule);
+}
+
 void ExtensionLoader::RegisterMetric(MetricInfo info) {
 	MetricsManager::Get(db).RegisterMetric(std::move(info));
 }
