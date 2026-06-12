@@ -624,8 +624,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 					auto expr_schema = make_uniq<ParquetColumnSchema>(
 					    ParquetColumnSchema::FromParentSchema(column_reader->Schema(), cast_expression->GetReturnType(),
 					                                          ParquetColumnSchemaType::EXPRESSION));
+
+					vector<unique_ptr<ColumnReader>> expression_children;
+					expression_children.push_back(std::move(column_reader));
 					auto expr_reader = make_uniq<ExpressionColumnReader>(
-					    context, std::move(column_reader), std::move(cast_expression), std::move(expr_schema));
+					    context, std::move(expression_children), std::move(cast_expression), std::move(expr_schema));
 					return std::move(expr_reader);
 				}
 				return column_reader;
@@ -1474,17 +1477,26 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
 		auto &index = column_indexes[i];
 		auto column_id = index.GetPrimaryIndex();
-		auto &schema = root_schema->children[column_id];
-		auto column_reader = CreateReaderRecursive(context, index, schema);
 		auto it = expression_map.find(column_id);
 		if (it != expression_map.end()) {
-			auto &expression = it->second;
+			auto &expression_data = it->second;
+			auto &expression = expression_data.expression;
+			auto &expression_column_indexes = expression_data.column_indexes;
+			D_ASSERT(!expression_column_indexes.empty());
+
+			vector<unique_ptr<ColumnReader>> child_readers;
+			for (auto &id : expression_column_indexes) {
+				auto &schema = root_schema->children[id.GetPrimaryIndex()];
+				child_readers.push_back(CreateReaderRecursive(context, id, schema));
+			}
 			auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
-			    column_reader->Schema(), expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
-			auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader), expression->Copy(),
+			    child_readers[0]->Schema(), expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
+			auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_readers), expression->Copy(),
 			                                                     std::move(expr_schema));
 			state.column_readers[i] = std::move(expr_reader);
 		} else {
+			auto &schema = root_schema->children[column_id];
+			auto column_reader = CreateReaderRecursive(context, index, schema);
 			state.column_readers[i] = std::move(column_reader);
 		}
 	}
