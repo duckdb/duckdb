@@ -34,6 +34,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
     json_functions/json_normalize.cpp
+    json_functions/json_set.cpp
     json_functions/json_deep_merge.cpp
     json_functions/json_merge_patch_diff.cpp
     json_functions/json_strip_nulls.cpp
