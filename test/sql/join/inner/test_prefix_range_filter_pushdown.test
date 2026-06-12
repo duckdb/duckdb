@@ -17,12 +17,12 @@ FROM range(0, 30000) t(i);
 
 statement ok
 CREATE OR REPLACE TABLE probe_perfect_hash AS
-SELECT i::INTEGER AS k
+SELECT (1000000000000 + i)::BIGINT AS k
 FROM range(0, 100000) t(i);
 
 statement ok
 CREATE OR REPLACE TABLE build_perfect_hash AS
-SELECT i::INTEGER AS k
+SELECT (1000000000000 + i)::BIGINT AS k
 FROM range(1000, 2000) t(i);
 
 # The build-side keys are unique, integral, and span a small range, so this join can use
