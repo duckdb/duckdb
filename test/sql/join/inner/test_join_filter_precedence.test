@@ -1,0 +1,354 @@
+# name: test/sql/join/inner/test_join_filter_precedence.test
+# description: Test join filter selection precedence and absence of redundant filters
+# group: [inner]
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
+
+# A single build-side value produces only an equality filter for the equality key.
+statement ok
+CREATE TABLE single_probe AS
+SELECT (1000000000000 + i)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE single_build AS
+SELECT 1000000000042::BIGINT AS k, i::INTEGER AS g
+FROM range(10) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM single_probe p
+JOIN single_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*\(k = 1000000000042\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM single_probe p
+JOIN single_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN (PRF|BF)\(k.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM single_probe p
+JOIN single_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k (IN|>=|<=).*
+
+# A small hash table with a small exact range produces an InFilter and PRF.
+statement ok
+SET dynamic_or_filter_threshold=1000;
+
+statement ok
+CREATE TABLE exact_prf_probe AS
+SELECT (1000000000000 + i)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE exact_prf_build AS
+SELECT (1000000000000 + i * 2)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(6) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM exact_prf_probe p
+JOIN exact_prf_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM exact_prf_probe p
+JOIN exact_prf_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*optional: \(k IN.*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM exact_prf_probe p
+JOIN exact_prf_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN BF\(k.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM exact_prf_probe p
+JOIN exact_prf_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k (>=|<=).*
+
+# A small sparse hash table with a large range produces an InFilter and Bloom filter.
+statement ok
+CREATE TABLE in_filter_probe AS
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE in_filter_build(k BIGINT, g INTEGER);
+
+statement ok
+INSERT INTO in_filter_build VALUES (-900000000000, 0), (0, 0), (900000000000, 0);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM in_filter_probe p
+JOIN in_filter_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:(?s).*optional: \(k IN \(.*IN BF\(k.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM in_filter_probe p
+JOIN in_filter_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM in_filter_probe p
+JOIN in_filter_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k (>=|<=).*
+
+# Above the InFilter threshold, a range too large for a PRF falls back to min/max and Bloom filters.
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+statement ok
+CREATE TABLE bloom_probe AS
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE bloom_build AS
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k, 0::INTEGER AS g
+FROM range(100) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bloom_probe p
+JOIN bloom_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k >=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bloom_probe p
+JOIN bloom_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k <=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bloom_probe p
+JOIN bloom_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN BF\(k.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bloom_probe p
+JOIN bloom_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bloom_probe p
+JOIN bloom_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k IN \(.*
+
+# Non-equality keys only receive the applicable selectivity-optional min/max filter.
+statement ok
+CREATE TABLE inequality_probe AS
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE inequality_build AS
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k, 0::INTEGER AS g
+FROM range(100) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM inequality_probe p
+JOIN inequality_build b
+  ON p.k >= b.k
+ AND p.g = b.g;
+----
+analyzed_plan	<REGEX>:(?s).*Dynamic Filters:.*optional: \(k >=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM inequality_probe p
+JOIN inequality_build b
+  ON p.k >= b.k
+ AND p.g = b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN (PRF|BF)\(k.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM inequality_probe p
+JOIN inequality_build b
+  ON p.k >= b.k
+ AND p.g = b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k (IN|<=).*
+
+# If the InFilter is rejected for a dense range, we still keep min/max pruning.
+statement ok
+SET dynamic_or_filter_threshold=1000;
+
+statement ok
+CREATE TABLE dense_probe AS
+SELECT (1000000000000 + i)::HUGEINT AS k, (i % 7)::INTEGER AS g
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE dense_build AS
+SELECT (1000000000000 + i)::HUGEINT AS k, 0::INTEGER AS g
+FROM range(10) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*IN PRF\(k\).*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:(?s).*optional: \(k IN .*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k >=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM dense_probe p
+JOIN dense_build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*optional: \(k <=.*
+
+# Multiple equality keys make PRF and Bloom filters ineligible; min/max is used for each key.
+statement ok
+SET dynamic_or_filter_threshold=0;
+
+statement ok
+CREATE TABLE multi_probe AS
+SELECT (-1000000000000 + i * 20000000)::BIGINT AS k1,
+       (-3000000000000 + i * 60000000)::BIGINT AS k2
+FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE multi_build AS
+SELECT (-1000000000000 + i * 20000000000)::BIGINT AS k1,
+       (-3000000000000 + i * 60000000000)::BIGINT AS k2
+FROM range(100) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM multi_probe p
+JOIN multi_build b
+  ON p.k1 = b.k1
+ AND p.k2 = b.k2;
+----
+analyzed_plan	<REGEX>:.*optional: \(k1 >=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM multi_probe p
+JOIN multi_build b
+  ON p.k1 = b.k1
+ AND p.k2 = b.k2;
+----
+analyzed_plan	<REGEX>:.*optional: \(k1 <=.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM multi_probe p
+JOIN multi_build b
+  ON p.k1 = b.k1
+ AND p.k2 = b.k2;
+----
+analyzed_plan	<!REGEX>:(?s).*IN (PRF|BF)\(k[12].*
+
+statement ok
+SET disabled_optimizers = '';

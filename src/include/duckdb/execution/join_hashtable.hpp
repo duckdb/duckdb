@@ -558,6 +558,7 @@ public:
 		return should_build_prefix_range_filter && prefix_range_filter;
 	}
 
+	void BuildPrefixRangeFilter();
 	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
 	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state);
 	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);

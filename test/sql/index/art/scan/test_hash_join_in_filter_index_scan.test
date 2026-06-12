@@ -41,3 +41,12 @@ SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
 ) ORDER BY ALL;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# The exact PRF supplements the InFilter without preventing the InFilter from selecting the ART index scan.
+query II
+EXPLAIN ANALYZE
+SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
+	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
+) ORDER BY ALL;
+----
+analyzed_plan	<REGEX>:(?s).*o_orderkey IN.*PRF\(#0\).*

@@ -21,9 +21,9 @@ unique_ptr<FunctionData> TableFilterFunctions::Bind(BindScalarFunctionInput &inp
 }
 
 bool TableFilterFunctions::IsTableFilterFunction(const Identifier &name) {
-	static const char *const TABLE_FILTER_FUNCTIONS[] = {
-	    BloomFilterScalarFun::NAME,     DynamicFilterScalarFun::NAME, OptionalFilterScalarFun::NAME,
-	    PerfectHashJoinScalarFun::NAME, PrefixRangeScalarFun::NAME,   SelectivityOptionalFilterScalarFun::NAME};
+	static const char *const TABLE_FILTER_FUNCTIONS[] = {BloomFilterScalarFun::NAME, DynamicFilterScalarFun::NAME,
+	                                                     OptionalFilterScalarFun::NAME, PrefixRangeScalarFun::NAME,
+	                                                     SelectivityOptionalFilterScalarFun::NAME};
 	for (auto function_name : TABLE_FILTER_FUNCTIONS) {
 		if (name == function_name) {
 			return true;
@@ -37,12 +37,10 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
                                    idx_t &n_vectors_to_check) {
 	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
 	static constexpr float BF_THRESHOLD = 0.5f;
-	static constexpr float PHJ_THRESHOLD = 0.3f;
 	static constexpr float PRF_THRESHOLD = 0.5f;
 
 	static constexpr idx_t MIN_MAX_CHECK_N = 6;
 	static constexpr idx_t BF_CHECK_N = 6;
-	static constexpr idx_t PHJ_CHECK_N = 6;
 	static constexpr idx_t PRF_CHECK_N = 6;
 
 	switch (type) {
@@ -53,10 +51,6 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	case SelectivityOptionalFilterType::BF:
 		selectivity_threshold = BF_THRESHOLD;
 		n_vectors_to_check = BF_CHECK_N;
-		return;
-	case SelectivityOptionalFilterType::PHJ:
-		selectivity_threshold = PHJ_THRESHOLD;
-		n_vectors_to_check = PHJ_CHECK_N;
 		return;
 	case SelectivityOptionalFilterType::PRF:
 		selectivity_threshold = PRF_THRESHOLD;
@@ -109,9 +103,6 @@ unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializ
 	auto key_type = function.GetArguments().empty() ? LogicalType::ANY : function.GetArguments()[0];
 	if (function.GetName() == BloomFilterScalarFun::NAME) {
 		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
-	}
-	if (function.GetName() == PerfectHashJoinScalarFun::NAME) {
-		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, idx_t(0));
 	}
 	if (function.GetName() == PrefixRangeScalarFun::NAME) {
 		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, idx_t(0));
