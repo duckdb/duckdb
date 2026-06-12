@@ -3,7 +3,7 @@
 # group: [inner]
 
 statement ok
-SET disabled_optimizers = 'join_order,build_side_probe_side';
+SET disabled_optimizers = 'join_order,build_side_probe_side,compressed_materialization';
 
 statement ok
 CREATE OR REPLACE TABLE probe AS
