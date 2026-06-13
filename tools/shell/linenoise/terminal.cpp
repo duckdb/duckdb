@@ -263,6 +263,16 @@ void Terminal::SetMultiLine(int ml) {
 	mlmode = ml;
 }
 
+static bool force_submit_on_enter = false;
+
+bool Terminal::ForceSubmitOnEnter() {
+	return force_submit_on_enter;
+}
+
+void Terminal::SetForceSubmitOnEnter(bool force) {
+	force_submit_on_enter = force;
+}
+
 static int parseInt(const char *s, int *offset = nullptr) {
 	int result = 0;
 	int idx;

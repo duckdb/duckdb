@@ -46,9 +46,17 @@ void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
 }
 
+linenoiseCompletionCallback *Linenoise::GetCompletionCallback() {
+	return completionCallback;
+}
+
 /* Register a callback function to be called to format the input before returning it to the shell. */
 void Linenoise::SetFormatCallback(linenoiseFormatCallback *fn) {
 	formatCallback = fn;
+}
+
+linenoiseFormatCallback *Linenoise::GetFormatCallback() {
+	return formatCallback;
 }
 
 void Linenoise::Format() {
@@ -1607,7 +1615,7 @@ int Linenoise::Edit() {
 				}
 			}
 #endif
-			if (Terminal::IsMultiline() && len > 0) {
+			if (Terminal::IsMultiline() && len > 0 && !Terminal::ForceSubmitOnEnter()) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
 				if (buf[0] != '.' && !AllWhitespace(buf) && !duckdb_shell::ShellState::SQLIsComplete(buf)) {
