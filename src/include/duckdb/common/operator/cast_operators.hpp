@@ -13,6 +13,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
@@ -480,7 +481,7 @@ DUCKDB_API bool TryCast::Operation(double input, double &result, bool strict);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
-static inline bool TryCastStringBool(const char *input_data, idx_t input_size, bool &result, bool strict) {
+static inline bool TryCastStringBoolCore(const char *input_data, idx_t input_size, bool &result, bool strict) {
 	switch (input_size) {
 	case 1: {
 		unsigned char c = static_cast<uint8_t>(std::tolower(*input_data));
@@ -538,6 +539,27 @@ static inline bool TryCastStringBool(const char *input_data, idx_t input_size, b
 	default:
 		return false;
 	}
+}
+
+static inline bool TryCastStringBool(const char *input_data, idx_t input_size, bool &result, bool strict) {
+	if (TryCastStringBoolCore(input_data, input_size, result, strict)) {
+		return true;
+	}
+	// Fallback: strip leading/trailing ASCII whitespace and retry. Fixes #22565:
+	// padded inputs like ' true ' should succeed just as CAST(' 1 ' AS INTEGER) does.
+	const char *trimmed = input_data;
+	idx_t trimmed_size = input_size;
+	while (trimmed_size > 0 && StringUtil::CharacterIsSpace(*trimmed)) {
+		trimmed++;
+		trimmed_size--;
+	}
+	while (trimmed_size > 0 && StringUtil::CharacterIsSpace(trimmed[trimmed_size - 1])) {
+		trimmed_size--;
+	}
+	if (trimmed_size == input_size) {
+		return false;
+	}
+	return TryCastStringBoolCore(trimmed, trimmed_size, result, strict);
 }
 
 template <>
