@@ -1,4 +1,4 @@
-# name: test/sql/join/test_hash_join_many_columns.test
+# name: test/sql/join/test_hash_join_many_columns.test_slow
 # description: Divide by 0 in GetPartitioningSpaceRequirement, inlined by PhysicalHashJoin::PrepareFinalize when running a query with 20k columns (PR #21271)
 # group: [join]
 
