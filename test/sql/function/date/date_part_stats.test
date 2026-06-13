@@ -199,3 +199,39 @@ SELECT stats(WEEKOFYEAR(d)) FROM dates LIMIT 1;
 ----
 <REGEX>:.*1.*54.*
 
+foreach type DATE TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+statement ok
+CREATE TABLE t0(c0 ${type});
+
+statement ok
+INSERT INTO t0(c0) VALUES ('-infinity'), ('infinity');
+
+query III
+SELECT (t0.c0), WEEKOFYEAR(t0.c0), WEEKOFYEAR(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query III
+SELECT (t0.c0), WEEKDAY(t0.c0), WEEKDAY(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query III
+SELECT (t0.c0), DAYOFMONTH(t0.c0), DAYOFMONTH(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query I
+SELECT WEEKOFYEAR(t0.c0) IS NOT NULL FROM t0;
+----
+false
+false
+
+statement ok
+DROP TABLE t0
+
+endloop
