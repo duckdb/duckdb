@@ -20,6 +20,39 @@ namespace duckdb {
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
+static bool DistinctHasUnsafeJoinPath(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return true;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_UNNEST:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		return DistinctHasUnsafeJoinPath(*op.children[0]);
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::INNER:
+		case JoinType::SEMI:
+		case JoinType::RIGHT_SEMI:
+			return DistinctHasUnsafeJoinPath(*op.children[0]);
+		default:
+			return true;
+		}
+	}
+	default:
+		return false;
+	}
+}
+
 bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
 	if (expr.return_type.IsNested()) {
 		// nested columns are not supported for pushdown
@@ -64,11 +97,18 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// does not affect probe side - recurse into left child
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		if (DistinctHasUnsafeJoinPath(*probe_child.children[0])) {
+			// DISTINCT can be generated from complex subtrees (e.g. joins), and pushing
+			// dynamic join filters below it can lead to incorrect results.
+			return;
+		}
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {

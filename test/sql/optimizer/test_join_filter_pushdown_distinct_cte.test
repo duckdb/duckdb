@@ -1,0 +1,48 @@
+# name: test/sql/optimizer/test_join_filter_pushdown_distinct_cte.test
+# description: Ensure DISTINCT CTE with LEFT JOIN and empty table is stable under parallel execution
+# group: [optimizer]
+
+statement ok
+SET threads=8;
+
+statement ok
+CREATE TABLE items (id VARCHAR, category VARCHAR);
+
+statement ok
+INSERT INTO items VALUES
+('5f9fa092-5f11-4796-8151-0d2e3c79fed0', 'A'),
+('d215a25f-a9b6-4ace-8b8a-35d0b3233b64', 'A'),
+('809cef32-2965-4df1-8330-7e8b217e9d92', 'B'),
+('51d28a95-0b11-4a53-800a-429454c4f732', 'B'),
+('67ce60eb-31a3-43f6-b4a2-380a49bee2fa', 'A');
+
+statement ok
+CREATE TABLE mappings (id VARCHAR, parent_id VARCHAR);
+
+statement ok
+INSERT INTO mappings VALUES ('51d28a95-0b11-4a53-800a-429454c4f732', '67ce60eb-31a3-43f6-b4a2-380a49bee2fa');
+
+statement ok
+CREATE TABLE groups (id VARCHAR, group_id VARCHAR);
+
+loop i 0 300
+
+query I
+WITH resolved AS (
+    SELECT DISTINCT i.id,
+           COALESCE(g.group_id, m.parent_id, i.id) AS resolved_id
+    FROM items i
+    LEFT JOIN mappings m ON i.id = m.id
+    LEFT JOIN groups g ON COALESCE(m.parent_id, i.id) = g.id
+)
+SELECT COUNT(*)
+FROM (
+    SELECT DISTINCT r.resolved_id
+    FROM items i
+    JOIN resolved r ON i.id = r.id
+    WHERE i.category = 'A'
+) result;
+----
+3
+
+endloop
