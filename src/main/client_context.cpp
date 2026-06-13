@@ -833,11 +833,11 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(std::move(plan));
 
+		plan->ResolveOperatorTypes();
+
 		ColumnBindingResolver resolver;
 		resolver.Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
-
-		plan->ResolveOperatorTypes();
 	});
 	return plan;
 }
