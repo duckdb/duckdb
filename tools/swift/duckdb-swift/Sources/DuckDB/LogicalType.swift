@@ -31,7 +31,7 @@ import Foundation
 
 public final class LogicalType {
   
-  private let ptr = UnsafeMutablePointer<duckdb_logical_type?>.allocate(capacity: 1)
+  let ptr = UnsafeMutablePointer<duckdb_logical_type?>.allocate(capacity: 1)
   
   init(_ body: () -> duckdb_logical_type?) {
     self.ptr.pointee = body()
@@ -146,6 +146,12 @@ public extension LogicalType {
   var listChildType: LogicalType? {
     guard dataType == .list else { return nil }
     return LogicalType { duckdb_list_type_child_type(ptr.pointee) }
+  }
+
+  /// Child type of an array type. For all other types, returns `nil`
+  var arrayChildType: LogicalType? {
+    guard dataType == .array else { return nil }
+    return LogicalType { duckdb_array_type_child_type(ptr.pointee) }
   }
 }
 

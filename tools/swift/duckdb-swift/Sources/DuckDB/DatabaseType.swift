@@ -102,8 +102,10 @@ public extension DatabaseType {
   static let timestampNS = DatabaseType(rawValue: DUCKDB_TYPE_TIMESTAMP_NS.rawValue)
   /// Enum type castable to suitable `Decodable` conforming types
   static let `enum` = DatabaseType(rawValue: DUCKDB_TYPE_ENUM.rawValue)
-  /// Array type castable to suitable `Decodable` conforming types
+  /// List type castable to suitable `Decodable` conforming types
   static let list = DatabaseType(rawValue: DUCKDB_TYPE_LIST.rawValue)
+  /// Array type castable to suitable `Decodable` conforming types
+  static let array = DatabaseType(rawValue: DUCKDB_TYPE_ARRAY.rawValue)
   /// Struct type castable to suitable `Decodable` conforming types
   static let `struct` = DatabaseType(rawValue: DUCKDB_TYPE_STRUCT.rawValue)
   /// Dictionary type castable to suitable `Decodable` conforming types
@@ -151,6 +153,7 @@ extension DatabaseType: CustomStringConvertible {
     case .timestampNS: return "\(Self.self).timestampNS"
     case .`enum`: return "\(Self.self).enum"
     case .list: return "\(Self.self).list"
+    case .array: return "\(Self.self).array"
     case .`struct`: return "\(Self.self).struct"
     case .map: return "\(Self.self).map"
     case .union: return "\(Self.self).union"

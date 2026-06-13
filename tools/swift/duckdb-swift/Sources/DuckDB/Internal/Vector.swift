@@ -302,11 +302,17 @@ extension Vector.Element {
   }
   
   var childVector: Vector? {
-    guard let child = duckdb_list_vector_get_child(vector.cvector) else { return nil }
-    let count = duckdb_list_vector_get_size(vector.cvector)
-    let info = vector.unsafelyUnwrapElement(as: duckdb_list_entry_t.self, at: vector.offset + index)
-    precondition(info.offset + info.length <= count)
-    return Vector(child, count: Int(info.length), offset: Int(info.offset))
+    if dataType == .array {
+      guard let child = duckdb_array_vector_get_child(vector.cvector) else { return nil }
+      let arraySize = Int(duckdb_array_type_array_size(vector.logicalType.ptr.pointee))
+      return Vector(child, count: arraySize, offset: arraySize * Int(index))
+    } else {
+      guard let child = duckdb_list_vector_get_child(vector.cvector) else { return nil }
+      let count = duckdb_list_vector_get_size(vector.cvector)
+      let info = vector.unsafelyUnwrapElement(as: duckdb_list_entry_t.self, at: vector.offset + index)
+      precondition(info.offset + info.length <= count)
+      return Vector(child, count: Int(info.length), offset: Int(info.offset))
+    }
   }
   
   var mapContents: MapContent? {

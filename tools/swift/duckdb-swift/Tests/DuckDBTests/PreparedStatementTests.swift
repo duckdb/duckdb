@@ -267,6 +267,174 @@ final class PreparedStatementTests: XCTestCase {
       cast: { $0.cast(to: Decimal.self) }
     )
   }
+
+  func test_float_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "FLOAT[3]",
+      expected: [
+        [Float(1.0), 2.0, 3.0],
+        [Float(-1.0), 0.0, 1.0],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Float].self) }
+    )
+  }
+
+  func test_int_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "INTEGER[3]",
+      expected: [
+        [Int32(1), 2, 3],
+        [Int32(-1), 0, 1],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Int32].self) }
+    )
+  }
+
+  func test_double_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "DOUBLE[2]",
+      expected: [
+        [Double(1.5), 2.5],
+        [Double(-1.5), 0.0],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Double].self) }
+    )
+  }
+
+  func test_bool_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "BOOLEAN[2]",
+      expected: [
+        [true, false],
+        [false, true],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Bool].self) }
+    )
+  }
+
+  func test_varchar_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "VARCHAR[2]",
+      expected: [
+        ["hello", "world"],
+        ["", "🦆"],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [String].self) }
+    )
+  }
+
+  func test_tinyint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "TINYINT[3]",
+      expected: [
+        [Int8.min, 0, Int8.max],
+        [Int8(-1), 0, 1],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Int8].self) }
+    )
+  }
+
+  func test_smallint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "SMALLINT[3]",
+      expected: [
+        [Int16.min, 0, Int16.max],
+        [Int16(-1), 0, 1],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Int16].self) }
+    )
+  }
+
+  func test_bigint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "BIGINT[3]",
+      expected: [
+        [Int64.min, 0, Int64.max],
+        [Int64(-1), 0, 1],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Int64].self) }
+    )
+  }
+
+  func test_utinyint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "UTINYINT[3]",
+      expected: [
+        [UInt8.min, 42, UInt8.max],
+        [UInt8(0), 1, 2],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [UInt8].self) }
+    )
+  }
+
+  func test_usmallint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "USMALLINT[3]",
+      expected: [
+        [UInt16.min, 42, UInt16.max],
+        [UInt16(0), 1, 2],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [UInt16].self) }
+    )
+  }
+
+  func test_uinteger_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "UINTEGER[3]",
+      expected: [
+        [UInt32.min, 42, UInt32.max],
+        [UInt32(0), 1, 2],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [UInt32].self) }
+    )
+  }
+
+  func test_uuid_round_trip() throws {
+    let u1 = UUID(uuidString: "00112233-4455-6677-8899-AABBCCDDEEFF")!
+    let u2 = UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!
+    let u3 = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    try roundTripTest(
+      dataType: "UUID",
+      expected: [u1, u2, u3, UUID(), nil],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: UUID.self) }
+    )
+  }
+
+  func test_ubigint_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "UBIGINT[3]",
+      expected: [
+        [UInt64.min, 42, UInt64.max],
+        [UInt64(0), 1, 2],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [UInt64].self) }
+    )
+  }
 }
 
 private extension PreparedStatementTests {
