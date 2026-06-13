@@ -10,6 +10,7 @@
 
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 
@@ -38,6 +39,8 @@ public:
 	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
 	optional_ptr<const DateFormatMap> date_format_map = nullptr;
+	//! Original JSON keys for auto-detected struct types with case-insensitive duplicate field names
+	optional_ptr<const type_map_t<vector<string>>> struct_json_key_names = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred

@@ -1,5 +1,6 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
+#include "json_common.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parallel/async_result.hpp"
 
@@ -316,21 +317,15 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
 	transform_options.date_format_map = json_data.date_format_map.get();
+	transform_options.struct_json_key_names = &json_data.struct_json_key_names;
 	transform_options.delay_error = true;
 
 	if (options.auto_detect) {
 		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
 		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
 		// because the JSON reader gets columns by exact name, not position
-		case_insensitive_map_t<idx_t> name_collision_count;
-		for (auto &col_name : names) {
-			// Taken from CSV header_detection.cpp
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
-			}
-			name_collision_count[col_name] = 0;
-		}
+		//
+		JSONCommon::RenameCaseInsensitiveDuplicates(names);
 	}
 	bool reuse_readers = true;
 	for (auto &union_reader : bind_data.union_readers) {

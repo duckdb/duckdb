@@ -4,6 +4,25 @@
 
 namespace duckdb {
 
+string JSONCommon::RenameCaseInsensitiveDuplicate(string name, case_insensitive_map_t<idx_t> &name_collision_count) {
+	auto entry = name_collision_count.find(name);
+	while (entry != name_collision_count.end()) {
+		entry->second += 1;
+		name = StringUtil::Format("%s_%d", name, entry->second);
+		entry = name_collision_count.find(name);
+	}
+	name_collision_count.emplace(name, 0);
+	return name;
+}
+
+void JSONCommon::RenameCaseInsensitiveDuplicates(vector<string> &names) {
+	case_insensitive_map_t<idx_t> name_collision_count;
+	name_collision_count.reserve(names.size());
+	for (auto &name : names) {
+		name = RenameCaseInsensitiveDuplicate(name, name_collision_count);
+	}
+}
+
 using JSONPathType = JSONCommon::JSONPathType;
 
 string JSONCommon::ValToString(yyjson_val *val, idx_t max_len) {

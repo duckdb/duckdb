@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
@@ -112,6 +113,11 @@ using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 //! Common JSON functionality for most JSON functions
 struct JSONCommon {
 public:
+	//! Rename a single name to avoid case-insensitive collisions (e.g. "X" -> "X_1")
+	static string RenameCaseInsensitiveDuplicate(string name, case_insensitive_map_t<idx_t> &name_collision_count);
+	//! Rename a list of names to avoid case-insensitive collisions
+	static void RenameCaseInsensitiveDuplicates(vector<string> &names);
+
 	//! Read/Write flags
 	static constexpr auto READ_FLAG =
 	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
