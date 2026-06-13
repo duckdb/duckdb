@@ -142,7 +142,7 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
 	auto &manager = ExtensionManager::Get(*instance);
-	auto load_info = manager.BeginLoad(name);
+	auto load_info = manager.BeginLoad({name});
 	if (!load_info) {
 		// already loaded
 		return;
