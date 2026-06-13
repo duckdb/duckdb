@@ -783,21 +783,58 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	auto lock = LockContext();
 	return ParseStatementsInternal(*lock, query);
 }
+
+StatementIterator ClientContext::ExtractStatements(const string &query, bool preprocess) {
+	// With preprocess=true (the default) the iterator yields ready-to-execute statements: PRAGMA
+	// reparse, MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API
+	// users expect. Callers that drive their own preprocessor (e.g. the shell, at execute time)
+	// pass false to avoid double work.
+	return StatementIterator(query, preprocess);
+}
+
+unique_ptr<SQLStatement> ClientContext::ParseStatementRaw(const string &query) {
+	auto lock = LockContext();
+	return ParseStatementRaw(*lock, query);
+}
+
+unique_ptr<SQLStatement> ClientContext::ParseStatementRaw(ClientContextLock &lock, const string &query) {
+	InitialCleanup(lock);
+	try {
+		StatementIterator iterator(query);
+		if (!iterator.Peek(*this)) {
+			throw InvalidInputException("Expected a single statement, got none");
+		}
+		auto stmt = iterator.GetStatement();
+		if (iterator.Peek(*this)) {
+			throw InvalidInputException("Expected a single statement, got more than one");
+		}
+		return stmt;
+	} catch (std::exception &ex) {
+		auto error = ErrorData(ex);
+		ProcessError(error, query);
+		error.Throw();
+	}
+}
+
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
-		Parser parser(GetParserOptions());
-		auto &profiler = QueryProfiler::Get(*this);
-		profiler.StartQuery(query);
-		auto parser_timer = profiler.StartTimer<MetricParserTotalTime>();
-		parser.ParseQuery(query);
+		QueryProfiler::Get(*this).StartQuery(query);
 
+		// Drain the lazy iterator into a vector for callers that want the eager shape.
+		StatementIterator iterator(query);
+		vector<unique_ptr<SQLStatement>> result;
 		StatementPreprocessor preprocessor(*this);
-
-		const CurrentTransactionState transaction_context_state =
-		    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-		preprocessor.Preprocess(lock, parser.statements, transaction_context_state);
-
-		return std::move(parser.statements);
+		while (iterator.Peek(*this)) {
+			vector<unique_ptr<SQLStatement>> expanded;
+			expanded.push_back(iterator.GetStatement());
+			const CurrentTransactionState transaction_context_state =
+			    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
+			preprocessor.Preprocess(lock, expanded, transaction_context_state);
+			for (auto &stmt : expanded) {
+				result.push_back(std::move(stmt));
+			}
+		}
+		return result;
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
 		ProcessError(error, query);
@@ -1102,13 +1139,37 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
-	vector<unique_ptr<SQLStatement>> statements;
+	// The lazy path bypasses ParseStatements → InitialCleanup, so clear leftover query state
+	// (interrupt flag, etc.) ourselves.
+	InitialCleanup(*lock);
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query);
+	// Constructor runs UTF-8 validation / Unicode-space strip and can throw — route through
+	// ErrorResult so the source location attaches the same way Peek failures do.
+	optional_ptr<StatementIterator> iterator_ptr;
+	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		statements = ParseStatements(*lock, query);
+		iterator_storage = make_uniq<StatementIterator>(query);
+		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 	}
-	if (statements.empty()) {
+	auto &iterator = *iterator_ptr;
+
+	auto peek_or_error = [&](bool &has_now) -> unique_ptr<QueryResult> {
+		try {
+			has_now = iterator.Peek(*this);
+			return nullptr;
+		} catch (const std::exception &ex) {
+			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
+		}
+	};
+
+	bool has_current = false;
+	if (auto error = peek_or_error(has_current)) {
+		return error;
+	}
+	if (!has_current) {
 		// no statements, return empty successful result
 		StatementProperties properties;
 		vector<string> names;
@@ -1120,47 +1181,72 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	unique_ptr<QueryResult> result;
 	optional_ptr<QueryResult> last_result;
 	bool last_had_result = false;
-	for (idx_t i = 0; i < statements.size(); i++) {
-		auto &statement = statements[i];
-		bool is_last_statement = i + 1 == statements.size();
-		PendingQueryParameters parameters;
-		parameters.query_parameters = query_parameters;
-		if (!is_last_statement) {
-			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	StatementPreprocessor preprocessor(*this);
+	while (has_current) {
+		auto statement = iterator.GetStatement();
+		// PRAGMA reparse / MULTI_STATEMENT unpacking expand into `expanded` one peel at a time.
+		vector<unique_ptr<SQLStatement>> expanded;
+		expanded.push_back(std::move(statement));
+		const CurrentTransactionState transaction_context_state =
+		    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
+		try {
+			preprocessor.Preprocess(*lock, expanded, transaction_context_state);
+		} catch (const std::exception &ex) {
+			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
-		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
-		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
-		unique_ptr<QueryResult> current_result;
-		if (pending_query->HasError()) {
-			current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
-		} else {
-			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
-		}
-		if (current_result->HasError()) {
-			if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
-				transaction.Rollback(current_result->GetErrorObject());
+
+		// Peek ahead; if the next statement fails to parse, defer the error until after we run
+		// what we've already peeled.
+		bool has_next = false;
+		unique_ptr<QueryResult> deferred_parse_error = peek_or_error(has_next);
+
+		for (idx_t i = 0; i < expanded.size(); i++) {
+			bool is_last_in_expansion = i + 1 == expanded.size();
+			bool is_last_overall = is_last_in_expansion && !has_next && !deferred_parse_error;
+			PendingQueryParameters parameters;
+			parameters.query_parameters = query_parameters;
+			if (!is_last_overall) {
+				parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 			}
-			// Reset the interrupted flag, this was set by the task that found the error
-			// Next statements should not be bothered by that interruption
-			interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
-			return current_result;
-		}
-		// now append the result to the list of results
-		if (!last_result || !last_had_result) {
-			// first result of the query
-			result = std::move(current_result);
-			last_result = result.get();
-			last_had_result = has_result;
-		} else {
-			// later results; attach to the result chain
-			// but only if there is a result
-			if (!has_result) {
-				continue;
+			auto pending_query = PendingQueryInternal(*lock, std::move(expanded[i]), parameters);
+			auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
+			unique_ptr<QueryResult> current_result;
+			if (pending_query->HasError()) {
+				current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
+			} else {
+				current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 			}
-			last_result->next = std::move(current_result);
-			last_result = last_result->next.get();
+			if (current_result->HasError()) {
+				if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+					transaction.Rollback(current_result->GetErrorObject());
+				}
+				// Reset the interrupted flag, this was set by the task that found the error
+				// Next statements should not be bothered by that interruption
+				interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+				return current_result;
+			}
+			// now append the result to the list of results
+			if (!last_result || !last_had_result) {
+				// first result of the query
+				result = std::move(current_result);
+				last_result = result.get();
+				last_had_result = has_result;
+			} else {
+				// later results; attach to the result chain
+				// but only if there is a result
+				if (!has_result) {
+					continue;
+				}
+				last_result->next = std::move(current_result);
+				last_result = last_result->next.get();
+			}
+			D_ASSERT(last_result);
 		}
-		D_ASSERT(last_result);
+
+		if (deferred_parse_error) {
+			return deferred_parse_error;
+		}
+		has_current = has_next;
 	}
 	return result;
 }
@@ -1422,6 +1508,9 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
 	auto lock = LockContext();
 
+	// Preprocess before binding so PRAGMA reparse / macro expansion happens up front — GetTableNames
+	// extracts names from the *underlying* query (e.g. `PRAGMA tpch(1)` -> the TPC-H SELECT, whose
+	// tables are what the caller wants). A raw, un-preprocessed PRAGMA would never surface them.
 	auto statements = ParseStatementsInternal(*lock, query);
 	if (statements.size() != 1) {
 		throw InvalidInputException("Expected a single statement");
