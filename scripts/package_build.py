@@ -476,6 +476,7 @@ def build_package(
                     # directly use the source files
                     new_source_files += [os.path.join(folder_name, file) for file in current_files]
             if unity_files:
+                unity_files.sort()
                 unity_base = dirname.replace(os.path.sep, '_')
                 unity_name = f'ub_{unity_base}.cpp'
                 new_source_files.append(generate_unity_build(unity_files, unity_name, linenumbers))
