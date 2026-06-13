@@ -50,6 +50,17 @@ struct AggregateInputData {
 	optional_ptr<const ClusteredAggr> clustered;
 };
 
+//! Input to the get_state_type callback - bundles the bound aggregate function with its bind data so that the
+//! callback can resolve the exported state layout (including any constant parameters stored in the bind data).
+struct AggregateLayoutInput {
+	AggregateLayoutInput(const BoundAggregateFunction &function_p, optional_ptr<FunctionData> bind_data_p)
+	    : function(function_p), bind_data(bind_data_p) {
+	}
+
+	const BoundAggregateFunction &function;
+	optional_ptr<FunctionData> bind_data;
+};
+
 struct AggregateUnaryInput {
 	AggregateUnaryInput(AggregateInputData &input_p, const ValidityMask &input_mask_p)
 	    : input(input_p), input_mask(input_mask_p), input_idx(0) {

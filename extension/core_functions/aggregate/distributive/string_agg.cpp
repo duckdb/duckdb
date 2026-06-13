@@ -160,7 +160,8 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundA
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
-AggregateStateLayout StringAggStateType(const BoundAggregateFunction &function, optional_ptr<FunctionData> bind_data) {
+AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
 	using ST = StringAggState::STATE_TYPE;
 	AggregateStateLayout layout;
 	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
@@ -168,7 +169,7 @@ AggregateStateLayout StringAggStateType(const BoundAggregateFunction &function, 
 	layout.field = BuildStateField<ST>();
 	if (function.GetOriginalArguments().size() == 2) {
 		// record the value of the separator if explicitly provided
-		layout.constant_parameters.emplace(1, Value(bind_data->Cast<StringAggBindData>().sep));
+		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
 	}
 	return layout;
 }

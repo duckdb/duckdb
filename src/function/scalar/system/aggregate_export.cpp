@@ -2,8 +2,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/types/variant.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -113,7 +112,7 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 }
 
 static AggregateStateLayout GetLayout(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data) {
-	return aggr.GetStateTypeCallback()(aggr, bind_data);
+	return aggr.GetStateType(bind_data);
 }
 
 // Load rows from input_vec into the packed binary state buffer. Skips null rows.
@@ -449,16 +448,6 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
-// converts a VARIANT value back to a plain Value
-Value VariantToValue(const Value &variant_val) {
-	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
-	Vector tmp(variant_val, count_t(1));
-	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(tmp, format);
-	UnifiedVariantVectorData vector_data(format);
-	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-}
-
 // parses the "parameters" property of an AGGREGATE_STATE type
 // each parameter is either a plain type, or a (type, value) pair for parameters that were bound to a constant
 // (e.g. string_agg's separator) - the latter are returned in constant_parameters, keyed by argument index
@@ -481,7 +470,8 @@ void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument
 			argument_types.push_back(TypeValue::GetType(children[0]));
 			if (!children[1].IsNull()) {
 				// the parameter is bound to a constant - decode it and cast it back to the declared argument type
-				constant_parameters.emplace(arg_idx, VariantToValue(children[1]).DefaultCastAs(argument_types.back()));
+				constant_parameters.emplace(arg_idx,
+				                            VariantValue::GetValue(children[1]).DefaultCastAs(argument_types.back()));
 			}
 			continue;
 		}
