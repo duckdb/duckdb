@@ -44,11 +44,13 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 //---------------------------------------------------------------------------------------------------------------------
 class CreateIndexGlobalSinkState : public GlobalSinkState {
 public:
+	DataTable::IndexBuildAppendGuard append_guard;
 	unique_ptr<IndexBuildGlobalState> gstate;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto gstate = make_uniq<CreateIndexGlobalSinkState>();
+	gstate->append_guard = table.GetStorage().LockAppendsForCreateIndex();
 
 	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
 	                                                   unbound_expressions, storage_ids};

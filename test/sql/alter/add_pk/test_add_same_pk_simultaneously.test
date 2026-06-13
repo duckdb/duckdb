@@ -19,7 +19,7 @@ BEGIN TRANSACTION
 statement error tran2
 ALTER TABLE test ADD PRIMARY KEY (j)
 ----
-<REGEX>:TransactionContext Error.*cannot add an index to a table that has been altered.*
+<REGEX>:.*TransactionContext Error.*attempting to add an index.*
 
 statement ok tran3
 BEGIN TRANSACTION
