@@ -480,8 +480,10 @@ void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument
 			}
 			argument_types.push_back(TypeValue::GetType(children[0]));
 			if (!children[1].IsNull()) {
-				// the parameter is bound to a constant - decode it and cast it back to the declared argument type
-				constant_parameters.emplace(arg_idx, VariantToValue(children[1]).DefaultCastAs(argument_types.back()));
+				// the parameter is bound to a constant - decode it as-is, without casting it to the declared
+				// argument type, so that re-binding sees the same (pre-cast) constant as the original bind
+				// (e.g. a DECIMAL quantile parameter must stay DECIMAL even though the signature says DOUBLE)
+				constant_parameters.emplace(arg_idx, VariantToValue(children[1]));
 			}
 			continue;
 		}
@@ -780,9 +782,9 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
-	if (bound_function.HasStateDestructorCallback()) {
-		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
-	}
+	// note: functions with custom destructors can be exported, but only when they provide a state type callback -
+	// the declared layout must fully describe the exportable state, and states deserialized from exported data are
+	// never destroyed, so all deserialized state memory must come from the provided arena allocator
 	// this should be required
 	D_ASSERT(bound_function.HasStateSizeCallback());
 	D_ASSERT(bound_function.HasStateFinalizeCallback());

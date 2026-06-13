@@ -548,6 +548,10 @@ public:
 	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
 		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
 		aggregate.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		// states with destructors are not exportable by default - the state can own memory that the export
+		// machinery cannot capture (deserialized states are never destroyed and must not own anything)
+		// functions whose layout fully describes the state can opt in by calling SetStructStateExport explicitly
+		aggregate.callbacks.get_state_type = nullptr;
 		return aggregate;
 	}
 

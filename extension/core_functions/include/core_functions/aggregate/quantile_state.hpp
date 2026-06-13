@@ -9,8 +9,10 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/operator/negate.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "SkipList.h"
 
 namespace duckdb {
@@ -363,5 +365,86 @@ struct QuantileState {
 		return *window_cursor;
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// Quantile State Export
+//===--------------------------------------------------------------------===//
+template <typename T>
+inline T QuantileNeg(const T &t) {
+	return NegateOperator::Operation<T, T>(t);
+}
+
+//! Restores the sign of a normalized quantile parameter (see QuantileAbs)
+template <>
+inline Value QuantileNeg(const Value &v) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileNeg<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileNeg<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileNeg<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileNeg<hugeint_t>(integral), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileNeg<double>(v.GetValue<double>()));
+	}
+}
+
+//! Reconstructs the quantile parameter (e.g. 0.5 or [0.25, 0.75]) from the bind data, so that it can be recorded
+//! in the AGGREGATE_STATE type - param_type is the declared type of the (erased) parameter argument
+inline Value QuantileParameterValue(const QuantileBindData &bind_data, const LogicalType &param_type) {
+	vector<Value> quantiles;
+	for (auto &q : bind_data.quantiles) {
+		// the bind data holds the normalized (absolute) quantiles - restore the sign of descending quantiles
+		quantiles.push_back(bind_data.desc ? QuantileNeg(q.val) : q.val);
+	}
+	if (param_type.id() != LogicalTypeId::LIST && param_type.id() != LogicalTypeId::ARRAY) {
+		D_ASSERT(quantiles.size() == 1);
+		return quantiles[0];
+	}
+	if (quantiles.empty()) {
+		return Value::LIST(LogicalType::DOUBLE, std::move(quantiles));
+	}
+	auto child_type = quantiles[0].type();
+	return Value::LIST(child_type, std::move(quantiles));
+}
+
+//! State type callback: the state's accumulated values (a linked list) are exported as a list of the input type.
+//! The window-only members of QuantileState are not exported - they are only set during window execution,
+//! which does not support state export.
+template <class STATE>
+AggregateStateLayout QuantileStateLayout(const BoundAggregateFunction &function,
+                                         optional_ptr<FunctionData> bind_data_p) {
+	AggregateStateLayout layout;
+	if (function.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = function.GetReturnType();
+	} else {
+		layout.type = LogicalType::LIST(function.GetArguments()[0]);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<StateListType<StateInputType<0>>>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	if (function.GetOriginalArguments().size() == 2) {
+		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -
+		// record its value so that re-binding the exported state can supply it
+		// median and mad have no parameter argument (their binds create the quantile themselves) and skip this
+		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
+		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetOriginalArguments()[1]));
+	}
+	return layout;
+}
 
 } // namespace duckdb

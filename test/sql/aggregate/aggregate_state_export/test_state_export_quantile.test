@@ -1,0 +1,144 @@
+# name: test/sql/aggregate/aggregate_state_export/test_state_export_quantile.test
+# description: Test the state export functionality for quantile_disc/quantile_cont/median
+# group: [aggregate_state_export]
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# ungrouped quantile_disc
+query I nosort disc0
+SELECT quantile_disc(d, 0.5) FROM dummy;
+----
+
+query I nosort disc0
+SELECT finalize(quantile_disc(d, 0.5) EXPORT_STATE) FROM dummy;
+----
+
+# ungrouped quantile_cont
+query I nosort cont0
+SELECT quantile_cont(d, 0.5) FROM dummy;
+----
+
+query I nosort cont0
+SELECT finalize(quantile_cont(d, 0.5) EXPORT_STATE) FROM dummy;
+----
+
+# median
+query I nosort med0
+SELECT median(d) FROM dummy;
+----
+
+query I nosort med0
+SELECT finalize(median(d) EXPORT_STATE) FROM dummy;
+----
+
+# list variants
+query I nosort disclist0
+SELECT quantile_disc(d, [0.25, 0.5, 0.75]) FROM dummy;
+----
+
+query I nosort disclist0
+SELECT finalize(quantile_disc(d, [0.25, 0.5, 0.75]) EXPORT_STATE) FROM dummy;
+----
+
+query I nosort contlist0
+SELECT quantile_cont(d, [0.25, 0.5, 0.75]) FROM dummy;
+----
+
+query I nosort contlist0
+SELECT finalize(quantile_cont(d, [0.25, 0.5, 0.75]) EXPORT_STATE) FROM dummy;
+----
+
+# negative (descending) quantiles
+query I nosort desc0
+SELECT quantile_disc(d, -0.25) FROM dummy;
+----
+
+query I nosort desc0
+SELECT finalize(quantile_disc(d, -0.25) EXPORT_STATE) FROM dummy;
+----
+
+# grouped
+query II nosort grouped0
+SELECT g, quantile_cont(d, 0.5) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped0
+SELECT g, finalize(quantile_cont(d, 0.5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# empty group
+query I nosort empty0
+SELECT quantile_disc(d, 0.5) FROM dummy WHERE FALSE;
+----
+
+query I nosort empty0
+SELECT finalize(quantile_disc(d, 0.5) EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# VARCHAR input
+query I nosort varchar0
+SELECT quantile_disc(d::VARCHAR, 0.5) FROM dummy;
+----
+
+query I nosort varchar0
+SELECT finalize(quantile_disc(d::VARCHAR, 0.5) EXPORT_STATE) FROM dummy;
+----
+
+# DECIMAL input
+query I nosort decimal0
+SELECT quantile_cont((d / 10)::DECIMAL(8, 3), 0.5) FROM dummy;
+----
+
+query I nosort decimal0
+SELECT finalize(quantile_cont((d / 10)::DECIMAL(8, 3), 0.5) EXPORT_STATE) FROM dummy;
+----
+
+# combining two states computes the quantile over the union of the values
+query I nosort combine0
+SELECT quantile_disc(d, 0.5) FROM dummy;
+----
+
+query I nosort combine0
+SELECT finalize(combine(
+	(SELECT quantile_disc(d, 0.5) EXPORT_STATE FROM dummy WHERE d < 50),
+	(SELECT quantile_disc(d, 0.5) EXPORT_STATE FROM dummy WHERE d >= 50)))
+----
+
+# combining a state with an empty state keeps the values
+query I nosort combine1
+SELECT quantile_disc(d, 0.5) FROM dummy WHERE d < 50;
+----
+
+query I nosort combine1
+SELECT finalize(combine(
+	(SELECT quantile_disc(d, 0.5) EXPORT_STATE FROM dummy WHERE d < 50),
+	(SELECT quantile_disc(d, 0.5) EXPORT_STATE FROM dummy WHERE FALSE)))
+----
+
+# combining two states with different quantiles is an error
+statement error
+SELECT finalize(combine(
+	(SELECT quantile_disc(d, 0.5) EXPORT_STATE FROM dummy WHERE d < 50),
+	(SELECT quantile_disc(d, 0.25) EXPORT_STATE FROM dummy WHERE d >= 50)))
+----
+different parameters
+
+# the state (including the quantile parameter) can be persisted - finalize re-binds from the stored type
+load {TEST_DIR}/test_quantile_state.db readwrite latest
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+statement ok
+CREATE TABLE state_tbl AS SELECT g, quantile_cont(d, [0.25, 0.75]) EXPORT_STATE s FROM dummy GROUP BY g;
+
+restart
+
+query II nosort persisted0
+SELECT g, finalize(s) FROM state_tbl ORDER BY g;
+----
+
+query II nosort persisted0
+SELECT g, quantile_cont(d, [0.25, 0.75]) FROM dummy GROUP BY g ORDER BY g;
+----
