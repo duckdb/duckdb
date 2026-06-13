@@ -42,25 +42,31 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 	// DuckDB-Wasm requires CUSTOM_PLATFORM to be defined
 	static_assert(0, "DUCKDB_WASM_VERSION should rely on CUSTOM_PLATFORM being provided");
 #endif
-	std::string os = "linux";
-#if INTPTR_MAX == INT64_MAX
+
+#if defined(__x86_64__) || defined(_M_X64)
 	std::string arch = "amd64";
-#elif INTPTR_MAX == INT32_MAX
+#elif defined(__i386__) || defined(_M_IX86)
 	std::string arch = "i686";
+#elif defined(__aarch64__)
+	std::string arch = "arm64";
+#elif defined(__loongarch64)
+	std::string arch = "loong64";
+#elif defined(__powerpc64__) && defined(__LITTLE_ENDIAN__)
+	std::string arch = "ppc64el";
+#elif defined(__riscv) && __riscv_xlen == 64
+	std::string arch = "riscv64";
 #else
-#error Unknown pointer size or missing size macros!
+	std::string arch = "unknown_arch";
 #endif
 	std::string postfix = "";
 
+	std::string os = "linux";
 #ifdef _WIN32
 	os = "windows";
 #elif defined(__APPLE__)
 	os = "osx";
 #elif defined(__FreeBSD__)
 	os = "freebsd";
-#endif
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-	arch = "arm64";
 #endif
 
 #if defined(__MUSL__)
