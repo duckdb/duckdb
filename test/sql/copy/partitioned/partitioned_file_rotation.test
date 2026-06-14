@@ -141,16 +141,16 @@ TO '{TEST_DIR}/partitioned_rotation_return_files'
 ----
 16384	<REGEX>:.*partitioned_rotation_return_files.*p=0.*data_0[.]parquet.*partitioned_rotation_return_files.*p=0.*data_1[.]parquet.*partitioned_rotation_return_files.*p=0.*data_2[.]parquet.*partitioned_rotation_return_files.*p=0.*data_3[.]parquet.*partitioned_rotation_return_files.*p=1.*data_0[.]parquet.*partitioned_rotation_return_files.*p=1.*data_1[.]parquet.*partitioned_rotation_return_files.*p=1.*data_2[.]parquet.*partitioned_rotation_return_files.*p=1.*data_3[.]parquet.*
 
-query IIIIII rowsort
+query IIIIIII rowsort
 COPY partitioned_rotation_metadata_source
 TO '{TEST_DIR}/partitioned_rotation_return_stats'
 (FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 1024, ROW_GROUPS_PER_FILE 1, RETURN_STATS);
 ----
-<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_0[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}
-<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_1[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}
-<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_2[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}
-<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_3[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}
-<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_0[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}
-<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_1[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}
-<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_2[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}
-<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_3[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_0[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_1[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_2[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=0.*data_3[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=0}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_0[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_1[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_2[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}	{row_group_count=1}
+<REGEX>:.*partitioned_rotation_return_stats.*p=1.*data_3[.]parquet	2048	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{p=1}	{row_group_count=1}

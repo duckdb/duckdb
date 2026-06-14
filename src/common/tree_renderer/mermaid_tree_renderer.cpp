@@ -130,4 +130,12 @@ void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	}
 }
 
+string MermaidTreeRenderer::RenderProfilerDisabled() {
+	return R"(flowchart TD
+    node_0_0["`**DISABLED**
+Query profiling is disabled.
+Use 'PRAGMA enable_profiling;' to enable profiling!`"]
+)";
+}
+
 } // namespace duckdb
