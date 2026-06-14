@@ -25,7 +25,8 @@
         "test/sql/types/hugeint/test_hugeint_conversion.test",
         "test/sql/types/uhugeint/test_uhugeint_conversion.test",
         "test/sql/types/decimal/large_decimal_constants.test",
-        "test/sql/cast/cast_error_location.test"
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/nested/map/map_error.test"
       ]
     },
     {
