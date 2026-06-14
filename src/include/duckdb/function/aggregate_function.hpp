@@ -538,16 +538,12 @@ public:
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
 		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
+		// automatically wire up the destructor if the operation defines a Destroy method
+		if constexpr (OperationHasDestroy<STATE, OP>::value) {
+			result.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		}
 		WireStructStateType<STATE>(result);
 		return result;
-	}
-
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
-	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
-	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
-		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
-		aggregate.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
-		return aggregate;
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
@@ -588,6 +584,14 @@ public:
 	template <class STATE, class OP>
 	struct OperationHasInitialize<STATE, OP, initialize_void_t<decltype(OP::Initialize(std::declval<STATE &>()))>>
 	    : std::true_type {};
+
+	//! Detects whether "OP" provides a "Destroy(STATE &, AggregateInputData &)" method
+	template <class STATE, class OP, class = void>
+	struct OperationHasDestroy : std::false_type {};
+	template <class STATE, class OP>
+	struct OperationHasDestroy<STATE, OP,
+	                           initialize_void_t<decltype(OP::template Destroy<STATE>(
+	                               std::declval<STATE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {

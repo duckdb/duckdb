@@ -413,7 +413,7 @@ struct ScalarDiscreteQuantile {
 	static AggregateFunction GetFunction(const LogicalType &type) {
 		using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
 		using OP = QuantileScalarOperation<true>;
-		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP,
+		auto fun = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, INPUT_TYPE, OP,
 		                                                       AggregateDestructorType::LEGACY>(type, type);
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.SetWindowBatchCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
@@ -545,7 +545,7 @@ struct ScalarContinuousQuantile {
 		using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 		using OP = QuantileScalarOperation<false>;
 		auto fun =
-		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+		    AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 		                                                AggregateDestructorType::LEGACY>(input_type, target_type);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY

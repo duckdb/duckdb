@@ -272,7 +272,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
                                                                    const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+	auto fun = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
 	fun.SetBindCallback(BindMAD);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);

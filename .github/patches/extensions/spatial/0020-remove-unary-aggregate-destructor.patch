@@ -1,0 +1,22 @@
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index dd74e23..e9d5a90 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -2466,7 +2466,7 @@ struct ST_MemUnion_Agg : GeosUnaryAggFunction {
+ 	}
+ 
+ 	static void Register(ExtensionLoader &loader) {
+-		auto agg = AggregateFunction::UnaryAggregateDestructor<GeosUnaryAggState, string_t, string_t, ST_MemUnion_Agg>(
++		auto agg = AggregateFunction::UnaryAggregate<GeosUnaryAggState, string_t, string_t, ST_MemUnion_Agg>(
+ 		    LogicalType::GEOMETRY(), LogicalType::GEOMETRY());
+ 
+ 		agg.SetBindCallback(GeoTypes::PropagateCRS);
+@@ -2494,7 +2494,7 @@ struct ST_Intersection_Agg : GeosUnaryAggFunction {
+ 
+ 	static void Register(ExtensionLoader &loader) {
+ 		auto agg =
+-		    AggregateFunction::UnaryAggregateDestructor<GeosUnaryAggState, string_t, string_t, ST_Intersection_Agg>(
++		    AggregateFunction::UnaryAggregate<GeosUnaryAggState, string_t, string_t, ST_Intersection_Agg>(
+ 		        LogicalType::GEOMETRY(), LogicalType::GEOMETRY());
+ 
+ 		agg.SetBindCallback(GeoTypes::PropagateCRS);
