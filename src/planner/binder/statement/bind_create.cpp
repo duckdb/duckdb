@@ -556,8 +556,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto opposite_for_each =
 	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
 	// Statement and row triggers use separate expansion paths that don't compose, so reject mixing them per event.
-	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
-	auto conflicting = table.GetTriggersForEvent(txn, create_trigger_info.event_type, opposite_for_each);
+	auto conflicting = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                             create_trigger_info.event_type, opposite_for_each);
 	if (!conflicting.empty()) {
 		throw NotImplementedException(
 		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
