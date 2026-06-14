@@ -15,6 +15,7 @@
 namespace duckdb {
 
 class String;
+class Identifier;
 
 // Helper class to support custom overloading
 // Optionally escaping " and quoting the value with " if required
@@ -22,6 +23,9 @@ class SQLIdentifier {
 public:
 	explicit SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
 	}
+	explicit SQLIdentifier(const char *raw_string) : raw_string(raw_string) {
+	}
+	explicit SQLIdentifier(const Identifier &id);
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);

@@ -3,9 +3,11 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -17,13 +19,15 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 		return unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(stmt->Cast<UpdateStatement>().node));
 	case StatementType::DELETE_STATEMENT:
 		return unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(stmt->Cast<DeleteStatement>().node));
+	case StatementType::MERGE_INTO_STATEMENT:
+		return unique_ptr_cast<MergeQueryNode, QueryNode>(std::move(stmt->Cast<MergeIntoStatement>().node));
 	default:
 		throw ParserException("Trigger body must be an INSERT, UPDATE, or DELETE statement");
 	}
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
-    PEGTransformer &transformer, const bool &if_not_exists, const string &trigger_name,
+    PEGTransformer &transformer, const bool &if_not_exists, const Identifier &trigger_name,
     const TriggerTiming &trigger_timing, const TriggerEventInfo &trigger_event,
     unique_ptr<BaseTableRef> base_table_name, const TriggerTableReferencingInfo &referencing_clause,
     const TriggerForEach &for_each_clause, unique_ptr<SQLStatement> trigger_body) {
@@ -43,7 +47,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
 	return result;
 }
 
-string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
@@ -96,26 +100,26 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransfo
                                                                       const vector<string> &trigger_column_list) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::UPDATE_EVENT;
-	result.columns = trigger_column_list;
+	result.columns = StringsToIdentifiers(trigger_column_list);
 	return result;
 }
 
 vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
-                                                                 const vector<string> &col_id) {
-	return col_id;
+                                                                 const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer,
-                                                                                  const string &col_id) {
+                                                                                  const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
-	info.new_table = col_id;
+	info.new_table = Identifier(col_id);
 	return info;
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingOldTableAs(PEGTransformer &transformer,
-                                                                                  const string &col_id) {
+                                                                                  const Identifier &col_id) {
 	TriggerTableReferencingInfo info;
-	info.old_table = col_id;
+	info.old_table = Identifier(col_id);
 	return info;
 }
 

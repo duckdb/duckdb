@@ -529,30 +529,27 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	physical_index_vector_t<idx_t> column_index_map;
+	vector<LogicalIndex> named_column_map;
+	vector<LogicalType> expected_types;
 	vector<string> expected_names;
-	if (!bound_insert.column_index_map.empty()) {
-		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table.GetColumns().Physical()) {
-			auto i = col.Physical();
-			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = col.Name();
-			}
-		}
-	} else {
-		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table.GetColumns().Physical()) {
-			expected_names.push_back(col.Name());
-		}
+	BindInsertColumnList(table, stmt.info->select_list, false, named_column_map, expected_types, column_index_map);
+	D_ASSERT(expected_types == bound_insert.expected_types);
+	expected_names.reserve(named_column_map.size());
+	for (auto &column_index : named_column_map) {
+		expected_names.push_back(table.GetColumn(column_index).Name().GetIdentifierName());
 	}
+
 	auto copy_from_function = function.copy_from_function;
 	CopyFromFunctionBindInput input(*stmt.info, copy_from_function);
-	auto function_data = function.copy_from_bind(context, input, expected_names, bound_insert.expected_types);
+	auto function_data = function.copy_from_bind(context, input, expected_names, expected_types);
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), std::move(copy_from_function), std::move(function_data),
-	                                 bound_insert.expected_types, expected_names);
-	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
+	                                 expected_types, StringsToIdentifiers(expected_names));
+	for (idx_t i = 0; i < expected_types.size(); i++) {
 		get->AddColumnId(i);
 	}
-	insert_statement.plan->children.push_back(std::move(get));
+	auto root = ResolveInputProjection(bound_insert, column_index_map, std::move(get), expected_types);
+	insert_statement.plan->children.push_back(std::move(root));
 	result.plan = std::move(insert_statement.plan);
 	return result;
 }
@@ -680,13 +677,15 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA,
-	                              {CatalogType::COPY_FUNCTION_ENTRY, stmt.info->format}, on_entry_do);
+	auto entry =
+	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, DEFAULT_SCHEMA, {CatalogType::COPY_FUNCTION_ENTRY, "csv"},
+		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

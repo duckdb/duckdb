@@ -65,19 +65,19 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 
 void CTENode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(200, "cte_name", ctename);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "aliases", aliases);
 	serializer.WritePropertyWithDefault<CTEMaterialize>(204, "materialized", materialized, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
 unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CTENode>(new CTENode());
-	deserializer.ReadPropertyWithDefault<string>(200, "cte_name", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "cte_name", result->ctename);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "child", result->child);
-	deserializer.ReadPropertyWithDefault<vector<string>>(203, "aliases", result->aliases);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "aliases", result->aliases);
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(204, "materialized", result->materialized, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
 }
@@ -102,10 +102,10 @@ unique_ptr<QueryNode> DeleteQueryNode::Deserialize(Deserializer &deserializer) {
 void InsertQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", select_statement);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "columns", columns);
-	serializer.WritePropertyWithDefault<string>(202, "table", table);
-	serializer.WritePropertyWithDefault<string>(203, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(204, "catalog", catalog);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(201, "columns", columns);
+	serializer.WritePropertyWithDefault<Identifier>(202, "table", table);
+	serializer.WritePropertyWithDefault<Identifier>(203, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(204, "catalog", catalog);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
 	serializer.WritePropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", on_conflict_info);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
@@ -116,10 +116,10 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(200, "select_statement", result->select_statement);
-	deserializer.ReadPropertyWithDefault<vector<string>>(201, "columns", result->columns);
-	deserializer.ReadPropertyWithDefault<string>(202, "table", result->table);
-	deserializer.ReadPropertyWithDefault<string>(203, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(204, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(201, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "table", result->table);
+	deserializer.ReadPropertyWithDefault<Identifier>(203, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(204, "catalog", result->catalog);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
 	deserializer.ReadPropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", result->on_conflict_info);
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
@@ -133,7 +133,7 @@ void MergeQueryNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "target", target);
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "source", source);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "join_condition", join_condition);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "using_columns", using_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "using_columns", using_columns);
 	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>>(204, "actions", actions);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
 }
@@ -143,7 +143,7 @@ unique_ptr<QueryNode> MergeQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "target", result->target);
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "source", result->source);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "join_condition", result->join_condition);
-	deserializer.ReadPropertyWithDefault<vector<string>>(203, "using_columns", result->using_columns);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "using_columns", result->using_columns);
 	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>>(204, "actions", result->actions);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
 	return std::move(result);
@@ -151,21 +151,21 @@ unique_ptr<QueryNode> MergeQueryNode::Deserialize(Deserializer &deserializer) {
 
 void RecursiveCTENode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(200, "cte_name", ctename);
 	serializer.WritePropertyWithDefault<bool>(201, "union_all", union_all, false);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "left", left);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(203, "right", right);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "aliases", aliases);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(204, "aliases", aliases);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "key_targets", key_targets);
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RecursiveCTENode>(new RecursiveCTENode());
-	deserializer.ReadPropertyWithDefault<string>(200, "cte_name", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "cte_name", result->ctename);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(201, "union_all", result->union_all, false);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(203, "right", result->right);
-	deserializer.ReadPropertyWithDefault<vector<string>>(204, "aliases", result->aliases);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(204, "aliases", result->aliases);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "key_targets", result->key_targets);
 	return std::move(result);
 }

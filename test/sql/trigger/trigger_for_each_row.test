@@ -328,6 +328,41 @@ CREATE TRIGGER trg_mix2_stmt AFTER INSERT ON t_mix2 FOR EACH STATEMENT
 ----
 Not implemented Error: Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported
 
+# Also blocked across timings: a BEFORE statement trigger and an AFTER row trigger for the same event.
+# The two expansion paths don't compose, so the combination must be rejected regardless of timing.
+statement ok
+CREATE TABLE t_mix3 (id INTEGER);
+
+statement ok
+CREATE TABLE t_mix3_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix3_before_stmt BEFORE INSERT ON t_mix3 FOR EACH STATEMENT
+    INSERT INTO t_mix3_log VALUES ('stmt');
+
+statement error
+CREATE TRIGGER trg_mix3_after_row AFTER INSERT ON t_mix3 FOR EACH ROW
+    INSERT INTO t_mix3_log VALUES (CAST(NEW.id AS VARCHAR));
+----
+Not implemented Error: Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported
+
+# And the reverse order: AFTER row trigger first, then BEFORE statement trigger.
+statement ok
+CREATE TABLE t_mix4 (id INTEGER);
+
+statement ok
+CREATE TABLE t_mix4_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix4_after_row AFTER INSERT ON t_mix4 FOR EACH ROW
+    INSERT INTO t_mix4_log VALUES (CAST(NEW.id AS VARCHAR));
+
+statement error
+CREATE TRIGGER trg_mix4_before_stmt BEFORE INSERT ON t_mix4 FOR EACH STATEMENT
+    INSERT INTO t_mix4_log VALUES ('stmt');
+----
+Not implemented Error: Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported
+
 # RETURNING is not supported alongside FOR EACH ROW trigger
 statement ok
 CREATE TABLE t_ret (id INTEGER);

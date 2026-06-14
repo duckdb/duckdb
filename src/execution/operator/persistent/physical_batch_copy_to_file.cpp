@@ -43,7 +43,7 @@ PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, ve
 
 InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["FORMAT"] = StringUtil::Upper(function.name);
+	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
 	return result;
 }
 

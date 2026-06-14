@@ -21,7 +21,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 
 public:
-	LogicalMaterializedCTE(string ctename_p, TableIndex table_index, idx_t column_count,
+	LogicalMaterializedCTE(Identifier ctename_p, TableIndex table_index, idx_t column_count,
 	                       unique_ptr<LogicalOperator> cte, unique_ptr<LogicalOperator> child,
 	                       CTEMaterialize materialize)
 	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(cte), std::move(child),

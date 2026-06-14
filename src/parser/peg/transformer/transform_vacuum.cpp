@@ -57,12 +57,8 @@ VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer
 	return options;
 }
 
-vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, const vector<string> &col_id) {
-	vector<string> result;
-	for (auto &colid : col_id) {
-		result.push_back(colid);
-	}
-	return result;
+vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
 string PEGTransformerFactory::TransformOptAnalyze(PEGTransformer &transformer) {

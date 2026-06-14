@@ -30,17 +30,17 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 204,
@@ -78,12 +78,12 @@
       {
         "id": 400,
         "name": "old_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -95,12 +95,12 @@
       {
         "id": 400,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 401,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -112,7 +112,7 @@
       {
         "id": 400,
         "name": "new_table_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -132,7 +132,9 @@
         "type": "bool"
       }
     ],
-    "constructor": ["new_column"]
+    "constructor": [
+      "new_column"
+    ]
   },
   {
     "class": "AddFieldInfo",
@@ -152,10 +154,12 @@
       {
         "id": 402,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
-    "constructor": ["new_field"]
+    "constructor": [
+      "new_field"
+    ]
   },
   {
     "class": "RemoveColumnInfo",
@@ -165,7 +169,7 @@
       {
         "id": 400,
         "name": "removed_column",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -187,7 +191,7 @@
       {
         "id": 400,
         "name": "column_path",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 401,
@@ -209,7 +213,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -231,7 +235,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
@@ -248,17 +252,17 @@
       {
         "id": 400,
         "name": "fk_table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 401,
         "name": "pk_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 402,
         "name": "fk_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 403,
@@ -286,7 +290,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -298,7 +302,7 @@
       {
         "id": 400,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -332,12 +336,12 @@
       {
         "id": 301,
         "name": "owner_schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 302,
         "name": "owner_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -345,7 +349,7 @@
     "class": "SetColumnCommentInfo",
     "base": "AlterInfo",
     "enum": "SET_COLUMN_COMMENT",
-    "includes" : [
+    "includes": [
       "duckdb/parser/parsed_data/comment_on_column_info.hpp"
     ],
     "members": [
@@ -362,7 +366,7 @@
       {
         "id": 302,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -387,7 +391,7 @@
       {
         "id": 400,
         "name": "new_view_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -415,7 +419,7 @@
       {
         "id": 400,
         "name": "new_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -430,7 +434,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -461,7 +465,7 @@
       {
         "id": 200,
         "name": "target_database",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -481,22 +485,22 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "select_list",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -541,7 +545,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -561,7 +565,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -600,17 +604,17 @@
       {
         "id": 201,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 204,
@@ -670,7 +674,7 @@
       {
         "id": 205,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -685,7 +689,7 @@
       {
         "id": 200,
         "name": "extensions_to_update",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   },
@@ -700,7 +704,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -736,7 +740,7 @@
         "id": 202,
         "name": "invalidation_policy",
         "type": "TransactionInvalidationPolicy",
-        "default" : "TransactionInvalidationPolicy::STANDARD_POLICY"
+        "default": "TransactionInvalidationPolicy::STANDARD_POLICY"
       },
       {
         "id": 203,
@@ -771,10 +775,12 @@
       {
         "id": 203,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ],
-    "constructor": ["options"]
+    "constructor": [
+      "options"
+    ]
   },
   {
     "class": "BoundExportData",
@@ -847,7 +853,8 @@
       {
         "id": 400,
         "name": "table_options",
-        "type": "case_insensitive_set_t"
+        "type": "identifier_set_t",
+        "required_until": "v2.0.0"
       }
     ]
   }

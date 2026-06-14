@@ -159,13 +159,13 @@ unique_ptr<TableFilter> LegacyOptionalFilter::Deserialize(Deserializer &deserial
 void LegacyStructFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "child_idx", child_idx);
-	serializer.WritePropertyWithDefault<string>(201, "child_name", child_name);
+	serializer.WritePropertyWithDefault<Identifier>(201, "child_name", child_name);
 	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter", child_filter);
 }
 
 unique_ptr<TableFilter> LegacyStructFilter::Deserialize(Deserializer &deserializer) {
 	auto child_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "child_idx");
-	auto child_name = deserializer.ReadPropertyWithDefault<string>(201, "child_name");
+	auto child_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "child_name");
 	auto child_filter = deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter");
 	auto result = duckdb::unique_ptr<LegacyStructFilter>(new LegacyStructFilter(child_idx, std::move(child_name), std::move(child_filter)));
 	return std::move(result);

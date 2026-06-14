@@ -1,7 +1,9 @@
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
-SelectSetOpChain <- IntersectChain (SetopClause IntersectChain)*
-IntersectChain <- SelectAtom (SetIntersectClause SelectAtom)*
+SelectSetOpChain <- IntersectChain SelectSetOpChainTail*
+SelectSetOpChainTail <- SetopClause IntersectChain
+IntersectChain <- SelectAtom IntersectChainTail*
+IntersectChainTail <- SetIntersectClause SelectAtom
 SetIntersectClause <- 'INTERSECT' DistinctOrAll?
 SelectAtom <- SelectParens / SelectStatementType
 
@@ -27,8 +29,9 @@ SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
-CTEBody <- Parens(CTEBodyContent)
-CTEBodyContent <- SelectStatementInternal / Statement
+CTEBody <- CTESelectBody / CTEDMLBody
+CTESelectBody <- Parens(SelectStatementInternal)
+CTEDMLBody <- Parens(Statement)
 UsingKey <- 'USING' 'KEY' Parens(TargetList)
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
@@ -53,19 +56,23 @@ ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
-TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
+TablePivotClause <- 'PIVOT' Parens(TablePivotClauseBody) TableAlias?
+TablePivotClauseBody <- TargetList 'FOR' PivotValueList+ PivotGroupByList?
 PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
-TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
+TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(TableUnpivotClauseBody) TableAlias?
+TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
-PivotValueList <- PivotHeader 'IN' (Identifier / PivotTargetList)
+PivotValueList <- PivotHeader 'IN' PivotValueTarget
+PivotValueTarget <- Identifier / PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 
-BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
+BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / UnqualifiedBaseTableName
+UnqualifiedBaseTableName <- TableName
 SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
@@ -75,7 +82,9 @@ TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionA
 WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
-FunctionArgument <- NamedParameter / Expression
+FunctionArgument <- NamedFunctionArgument / PositionalFunctionArgument
+NamedFunctionArgument <- NamedParameter
+PositionalFunctionArgument <- Expression
 NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
@@ -85,10 +94,13 @@ TableAliasWithoutAs <- Identifier ColumnAliases?
 
 AtClause <- 'AT' Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
-AtUnit <- 'VERSION' / 'TIMESTAMP'
+AtUnit <- VersionAtUnit / TimestampAtUnit
+VersionAtUnit <- 'VERSION'
+TimestampAtUnit <- 'TIMESTAMP'
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
+RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
@@ -135,11 +147,14 @@ SampleRows <- 'ROWS'
 GroupByExpressions <- GroupByList / GroupByAll
 GroupByAll <- 'ALL'
 GroupByList <- List(GroupByExpression)
-GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / GroupByBaseExpression
+GroupByBaseExpression <- Expression
 EmptyGroupingItem <- '(' ')'
 CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
-CubeOrRollup <- 'CUBE' / 'ROLLUP'
-GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
+CubeOrRollup <- CubeKeyword / RollupKeyword
+CubeKeyword <- 'CUBE'
+RollupKeyword <- 'ROLLUP'
+GroupingSetsClause <- 'GROUPING' 'SETS' Parens(List(GroupByExpression))
 
 SubqueryReference <- Parens(SelectStatementInternal)
 

@@ -332,7 +332,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
 	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
 	// overload.
-	vector<pair<string, unique_ptr<Expression>>> arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(function.GetArguments().size());
 	for (auto &arg : function.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
@@ -557,7 +557,7 @@ string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                              const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);

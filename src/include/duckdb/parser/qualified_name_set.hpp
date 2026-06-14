@@ -16,7 +16,7 @@ namespace duckdb {
 struct QualifiedColumnHashFunction {
 	uint64_t operator()(const QualifiedColumnName &a) const {
 		// hash only on the column name - since we match based on the shortest possible match
-		return StringUtil::CIHash(a.column);
+		return a.column.Hash();
 	}
 };
 
@@ -25,16 +25,16 @@ struct QualifiedColumnEquality {
 		// qualified column names follow a prefix comparison
 		// so "tbl.i"  and "i" are equivalent, as are "schema.tbl.i" and "i"
 		// but "tbl.i" and "tbl2.i" are not equivalent
-		if (!a.catalog.empty() && !b.catalog.empty() && !StringUtil::CIEquals(a.catalog, b.catalog)) {
+		if (!a.catalog.empty() && !b.catalog.empty() && a.catalog != b.catalog) {
 			return false;
 		}
-		if (!a.schema.empty() && !b.schema.empty() && !StringUtil::CIEquals(a.schema, b.schema)) {
+		if (!a.schema.empty() && !b.schema.empty() && a.schema != b.schema) {
 			return false;
 		}
-		if (!a.table.empty() && !b.table.empty() && !StringUtil::CIEquals(a.table, b.table)) {
+		if (!a.table.empty() && !b.table.empty() && a.table != b.table) {
 			return false;
 		}
-		return StringUtil::CIEquals(a.column, b.column);
+		return a.column == b.column;
 	}
 };
 

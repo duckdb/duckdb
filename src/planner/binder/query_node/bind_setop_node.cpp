@@ -21,7 +21,7 @@ public:
 	}
 
 	void GatherAliases(BoundStatement &stmt, const vector<idx_t> &reorder_idx);
-	void GatherSetOpAliases(SetOperationType setop_type, const vector<string> &names,
+	void GatherSetOpAliases(SetOperationType setop_type, const vector<Identifier> &names,
 	                        vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx);
 
 private:
@@ -70,13 +70,13 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	}
 }
 
-void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const vector<string> &stmt_names,
+void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const vector<Identifier> &stmt_names,
                                             vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx) {
 	// create new reorder index
 	if (setop_type == SetOperationType::UNION_BY_NAME) {
 		auto &setop_names = stmt_names;
 		// for UNION BY NAME - create a new re-order index
-		case_insensitive_map_t<idx_t> reorder_map;
+		identifier_map_t<idx_t> reorder_map;
 		for (idx_t col_idx = 0; col_idx < setop_names.size(); ++col_idx) {
 			reorder_map[setop_names[col_idx]] = reorder_idx[col_idx];
 		}
@@ -114,15 +114,15 @@ static void GatherAliases(BoundSetOperationNode &root, vector<BoundStatement> &c
 
 void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
-	vector<case_insensitive_map_t<ProjectionIndex>> node_name_maps;
-	case_insensitive_set_t global_name_set;
+	vector<identifier_map_t<ProjectionIndex>> node_name_maps;
+	identifier_set_t global_name_set;
 
 	// Build a name_map to use to check if a name exists
 	// We throw a binder exception if two same name in the SELECT list
 	D_ASSERT(result.names.empty());
 	for (auto &child : result.bound_children) {
 		auto &child_names = child.names;
-		case_insensitive_map_t<ProjectionIndex> node_name_map;
+		identifier_map_t<ProjectionIndex> node_name_map;
 		for (idx_t i = 0; i < child_names.size(); ++i) {
 			auto &col_name = child_names[i];
 			if (node_name_map.find(col_name) != node_name_map.end()) {
@@ -133,7 +133,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			}
 			if (global_name_set.find(col_name) == global_name_set.end()) {
 				// column is not yet present in the result
-				result.names.push_back(col_name);
+				result.names.emplace_back(col_name);
 				global_name_set.insert(col_name);
 			}
 			node_name_map[col_name] = ProjectionIndex(i);

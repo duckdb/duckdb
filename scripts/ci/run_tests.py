@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from io import StringIO
 from pathlib import Path
 
-DEFAULT_BATCH_SIZE = 30
+DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
 HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
 HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
@@ -532,7 +532,8 @@ PROGRESS_TEST_START_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+)$")
 FATAL_ERROR_PATTERN = re.compile(r"^\s*due to a fatal error condition:\s*$")
 FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
-CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?):(\d+): FAILED:$")
+# Catch prints source locations as "path:line:" with GCC/Clang and as "path(line):" with MSVC
+CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?)(?::(\d+)|\((\d+)\)): FAILED:$")
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -677,7 +678,7 @@ def parse_stdout_assertion_failure(test_name: str | None, block: list[str]):
             continue
 
         source_path = match.group(1)
-        source_line = int(match.group(2))
+        source_line = int(match.group(2) or match.group(3))
         snippet_lines = render_context_snippet(source_path, source_line)
         detail_lines = []
 
@@ -1051,6 +1052,43 @@ def render_failure_lines(failure: FailureInfo):
     return lines
 
 
+RAW_OUTPUT_TAIL_LINE_COUNT = 100
+
+
+def is_low_information_failure(failure: FailureInfo):
+    # a generic failure where we could not even identify the failing test (or any detail at all) does not help
+    # debugging - in that case we dump the raw unittest output so CI logs contain everything needed to diagnose it
+    if failure.kind != "generic":
+        return False
+    if failure.snippet_lines:
+        return False
+    return failure.test_name is None or not failure.detail_lines
+
+
+def render_raw_output_tail(stdout: str, stderr: str):
+    lines = []
+    for stream_name, output in (("stdout", stdout), ("stderr", stderr)):
+        stream_lines = [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
+        while stream_lines and not stream_lines[-1].strip():
+            stream_lines.pop()
+        if not stream_lines:
+            lines.extend(["", f"--- raw unittest {stream_name}: empty ---"])
+            continue
+        tail = stream_lines[-RAW_OUTPUT_TAIL_LINE_COUNT:]
+        header = f"--- raw unittest {stream_name}"
+        if len(tail) < len(stream_lines):
+            header += f" (last {len(tail)} of {len(stream_lines)} lines)"
+        lines.extend(["", header + " ---", *tail])
+    return lines
+
+
+def render_failure_lines_with_diagnostics(failure: FailureInfo, stdout: str, stderr: str):
+    lines = render_failure_lines(failure)
+    if is_low_information_failure(failure):
+        lines = [*lines, *render_raw_output_tail(stdout, stderr)]
+    return lines
+
+
 def format_batch_failure(batch, config: TestRunnerConfig, attempt_summaries, recovered: bool, retry_count: int):
     reproduce_batch = batch
     rerun_parts = [shlex.quote(format_unittest_bin_for_display(config.unittest_bin))]
@@ -1115,7 +1153,7 @@ def extract_test_runtimes(stdout: str, stderr: str):
 
 def summarize_failure_output(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
     failure = parse_failure_info(message, stdout, stderr, batch, returncode)
-    return render_failure_lines(failure), failure.reproduce_batch
+    return render_failure_lines_with_diagnostics(failure, stdout, stderr), failure.reproduce_batch
 
 
 def format_failed_test_retry_target(test_name: str | None, batch_info):
@@ -1300,7 +1338,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         batch_info["batch"],
         result.get("returncode"),
     )
-    lines = render_failure_lines(failure)
+    lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
     reproduce_batch = failure.reproduce_batch
     ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch)
     retry_target = format_failed_test_retry_target(failure.test_name, batch_info)

@@ -383,24 +383,12 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
-
-    - name: Clean
-      run: make clean
-
     - name: Install clangd-tidy
       run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-    - name: Tidy Check (clangd)
-      run: |
-        mkdir -p ~/.config/clangd
-        cat > ~/.config/clangd/config.yaml <<'EOF'
-        Diagnostics:
-          UnusedIncludes: None
-        EOF
-        make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Tidy Check Diff
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}

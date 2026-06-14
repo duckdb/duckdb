@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
@@ -27,11 +28,11 @@ public:
 	//! The catalog type to drop
 	CatalogType type;
 	//! Catalog name to drop from, if any
-	string catalog;
+	Identifier catalog;
 	//! Schema name to drop from, if any
-	string schema;
+	Identifier schema;
 	//! Element name to drop
-	string name;
+	Identifier name;
 	//! Ignore if the entry does not exist instead of failing
 	OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION;
 	//! Cascade drop (drop all dependents instead of throwing an error if there

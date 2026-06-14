@@ -264,4 +264,13 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	ss << result;
 }
 
+string HTMLTreeRenderer::RenderProfilerDisabled() {
+	return R"(
+				<!DOCTYPE html>
+                <html lang="en"><head/><body>
+                  Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!
+                </body></html>
+			)";
+}
+
 } // namespace duckdb

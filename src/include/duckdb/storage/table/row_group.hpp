@@ -158,11 +158,14 @@ public:
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
-	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
-	bool Fetch(TransactionData transaction, idx_t row);
-	//! Fetch a specific row from the row_group and insert it into the result at the specified index
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
-	              row_t row_id, DataChunk &result, idx_t result_idx);
+	//! Bulk visibility check. For each offset in [0, count), writes the input index into `visible_sel` if that row is
+	//! visible to the transaction. Returns the number of visible rows.
+	idx_t Fetch(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
+	//! Bulk row fetch. For each `i` in [0, visible_count), fetches the row at `offsets[visible_sel.get_index(i)]`
+	//! and writes every requested column into `result.data[col_idx][result_offset + i]`.
+	void FetchRows(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
+	               const idx_t *offsets, const SelectionVector &visible_sel, idx_t visible_count, DataChunk &result,
+	               idx_t result_offset);
 
 	//! Append count rows to the version info
 	void AppendVersionInfo(TransactionData transaction, idx_t count);

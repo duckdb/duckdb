@@ -21,7 +21,8 @@
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_database, const string &target_database_name) {
+unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_database,
+                                                           const Identifier &target_database_name) {
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 
@@ -46,7 +47,8 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 	return make_uniq<LogicalCopyDatabase>(std::move(info));
 }
 
-unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name) {
+unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog,
+                                                         const Identifier &target_database_name) {
 	auto source_schemas = source_catalog.GetSchemas(context);
 
 	// We can just use ExtractEntries here because the order doesn't matter

@@ -31,21 +31,21 @@ struct NextSequenceValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
+SequenceCatalogEntry &BindSequence(Binder &binder, Identifier &catalog, Identifier &schema, const Identifier &name) {
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
 	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
 	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
-SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,
-                                              const string &name) {
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, Identifier &catalog, Identifier &schema,
+                                              const Identifier &name) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, name);
 }
 
-SequenceCatalogEntry &BindSequence(Binder &binder, const string &name) {
-	auto qname = QualifiedName::Parse(name);
+SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {
+	auto qname = QualifiedName::Parse(name.GetIdentifierName());
 	return BindSequence(binder, qname.catalog, qname.schema, qname.name);
 }
 
@@ -107,7 +107,7 @@ unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	if (seqname.IsNull()) {
 		return nullptr;
 	}
-	auto &seq = BindSequence(binder, seqname.ToString());
+	auto &seq = BindSequence(binder, Identifier(seqname.ToString()));
 	return make_uniq<NextvalBindData>(seq);
 }
 

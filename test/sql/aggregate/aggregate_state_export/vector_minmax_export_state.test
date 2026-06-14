@@ -1,0 +1,119 @@
+# name: test/sql/aggregate/aggregate_state_export/vector_minmax_export_state.test
+# description: Test EXPORT_STATE for min/max of STRUCT, LIST, and ARRAY types (sort key states)
+# group: [aggregate_state_export]
+
+# empty input returns NULL
+query I
+SELECT finalize(min(v) EXPORT_STATE) FROM (SELECT NULL::struct(a int, b varchar) AS v WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(max(v) EXPORT_STATE) FROM (SELECT NULL::int[] AS v WHERE false) t;
+----
+NULL
+
+# all-null input returns NULL
+query I
+SELECT finalize(min(NULL::struct(a int)) EXPORT_STATE);
+----
+NULL
+
+# struct min/max - basic
+query I
+SELECT finalize(min({'a': v}) EXPORT_STATE) FROM (VALUES (3), (1), (5)) t(v);
+----
+{'a': 1}
+
+query I
+SELECT finalize(max({'a': v}) EXPORT_STATE) FROM (VALUES (3), (1), (5)) t(v);
+----
+{'a': 5}
+
+# multi-field struct
+query I
+SELECT finalize(min({'a': v, 'b': v::varchar}) EXPORT_STATE) FROM (VALUES (3), (1), (5)) t(v);
+----
+{'a': 1, 'b': 1}
+
+query I
+SELECT finalize(max({'a': v, 'b': v::varchar}) EXPORT_STATE) FROM (VALUES (3), (1), (5)) t(v);
+----
+{'a': 5, 'b': 5}
+
+# list min/max
+query I
+SELECT finalize(min(v) EXPORT_STATE) FROM (VALUES ([3, 2]), ([1, 5]), ([2, 0])) t(v);
+----
+[1, 5]
+
+query I
+SELECT finalize(max(v) EXPORT_STATE) FROM (VALUES ([3, 2]), ([1, 5]), ([2, 0])) t(v);
+----
+[3, 2]
+
+# combine two states
+query I
+SELECT finalize(combine(
+    min({'a': v}) EXPORT_STATE,
+    min({'a': v}) EXPORT_STATE
+)) FROM (SELECT v FROM (VALUES (3), (1)) t(v));
+----
+{'a': 1}
+
+query I
+SELECT finalize(combine(
+    max({'a': v}) EXPORT_STATE,
+    max({'a': v}) EXPORT_STATE
+)) FROM (SELECT v FROM (VALUES (3), (1)) t(v));
+----
+{'a': 3}
+
+# combine_aggr across groups - struct
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (VALUES (3), (4)) t(v)
+    UNION ALL
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (VALUES (5), (1)) t(v)
+) t;
+----
+{'a': 1}
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT max({'a': v}) EXPORT_STATE AS s FROM (VALUES (3), (4)) t(v)
+    UNION ALL
+    SELECT max({'a': v}) EXPORT_STATE AS s FROM (VALUES (5), (1)) t(v)
+) t;
+----
+{'a': 5}
+
+# combine_aggr with NULL state (empty group)
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (VALUES (3)) t(v)
+    UNION ALL
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (SELECT NULL::struct(a int) AS v WHERE false) t
+) t;
+----
+{'a': 3}
+
+# combine_aggr all-NULL states
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (SELECT NULL::struct(a int) AS v WHERE false) t
+    UNION ALL
+    SELECT min({'a': v}) EXPORT_STATE AS s FROM (SELECT NULL::struct(a int) AS v WHERE false) t
+) t;
+----
+NULL
+
+# combine_aggr across groups - list
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ([3, 1])) t(v)
+    UNION ALL
+    SELECT min(v) EXPORT_STATE AS s FROM (SELECT NULL::int[] AS v WHERE false) t
+) t;
+----
+[3, 1]

@@ -1,6 +1,7 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -25,6 +26,29 @@ public:
 };
 
 } // namespace
+
+static char GetSeparatorSetting(const string &name, const Value &value) {
+	auto separator = value.ToString();
+	if (separator.size() != 1) {
+		throw InvalidInputException("Renderer setting \"%s\" must be a single character, got \"%s\"", name, separator);
+	}
+	return separator[0];
+}
+
+void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
+	for (auto &entry : settings) {
+		auto name = StringUtil::Lower(entry.first);
+		auto &value = entry.second;
+		if (name == "max_extra_lines") {
+			config.max_extra_lines = value.DefaultCastAs(LogicalType::UBIGINT).GetValue<idx_t>();
+		} else if (name == "thousand_separator") {
+			config.thousand_separator = GetSeparatorSetting(name, value);
+		} else if (name == "decimal_separator") {
+			config.decimal_separator = GetSeparatorSetting(name, value);
+		}
+		// settings that are not recognized are ignored - they may be intended for a different renderer
+	}
+}
 
 void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
 	for (idx_t x = 0; x < root.width; x++) {
@@ -526,6 +550,11 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 
 string TextTreeRenderer::ExtraInfoSeparator() {
 	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
+}
+
+string TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+	// the text profiler output is the framed query tree (header, total time, phase timings, operator tree)
+	return profiler.QueryTreeToString();
 }
 
 } // namespace duckdb

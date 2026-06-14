@@ -92,6 +92,7 @@ public:
 
 public:
 	//! Deduplicate column names for interop with external libraries
+	static void DeduplicateColumns(vector<Identifier> &names);
 	static void DeduplicateColumns(vector<string> &names);
 
 public:

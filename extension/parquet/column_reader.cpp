@@ -160,7 +160,7 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {
-	if (!chunk) {
+	if (IsSkipped()) {
 		return 0;
 	}
 
@@ -171,8 +171,9 @@ uint64_t ColumnReader::TotalCompressedSize() {
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {
-	if (!chunk) {
-		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	if (IsSkipped()) {
+		//! This column reader is skipped
+		return 0;
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
@@ -466,7 +467,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
-			throw std::runtime_error("Page size mismatch");
+			throw InternalException("Page size mismatch");
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;

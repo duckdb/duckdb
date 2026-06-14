@@ -34,11 +34,6 @@ struct StringAggBindData : public FunctionData {
 };
 
 struct StringAggFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		memset(&state, 0, sizeof(STATE));
-	}
-
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {

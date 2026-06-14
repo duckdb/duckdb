@@ -27,7 +27,7 @@ public:
 struct CSVSchemaDiscovery {
 	static CSVSchema SchemaDiscovery(ClientContext &context, shared_ptr<CSVBufferManager> &buffer_manager,
 	                                 CSVReaderOptions &options, const MultiFileOptions &file_options,
-	                                 vector<LogicalType> &return_types, vector<string> &names,
+	                                 vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                 MultiFileList &multi_file_list);
 };
 
@@ -45,7 +45,7 @@ struct CSVMultiFileInfo : MultiFileReaderInterface {
 	                      const vector<LogicalType> &expected_types) override;
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	void FinalizeBindData(MultiFileBindData &multi_file_data) override;
 	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,

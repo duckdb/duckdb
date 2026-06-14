@@ -7,7 +7,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
@@ -459,32 +459,78 @@ RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// figure out which row_group to fetch from
+	if (fetch_count == 0) {
+		result.SetChildCardinality(0);
+		return;
+	}
+	ALWAYS_ASSERT(fetch_count <= STANDARD_VECTOR_SIZE);
+
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	idx_t count = 0;
 	auto row_groups = GetRowGroups();
-	for (idx_t i = 0; i < fetch_count; i++) {
-		auto row_id = row_ids[i];
+	idx_t count = 0;
+
+	// Stack-allocated scratch buffers reused across runs/iterations within this call.
+	//
+	// Row positions in the row group.
+	idx_t offsets[STANDARD_VECTOR_SIZE];
+	// Visible row positions in the row group.
+	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
+	// Filter selection vector.
+	SelectionVector filter_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
+
+	idx_t pos = 0;
+	while (pos < fetch_count) {
+		// 1. resolve the row group containing row_ids[pos]
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			idx_t segment_index;
 			auto l = row_groups->Lock();
-			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
-				// in parallel append scenarios it is possible for the row_id
+			if (!row_groups->TryGetSegmentIndex(l, NumericCast<idx_t>(row_ids[pos]), segment_index)) {
+				// row not yet visible, skip
+				pos++;
 				continue;
 			}
 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 		}
 		auto &current_row_group = row_group->GetNode();
-		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH &&
-		    !current_row_group.Fetch(transaction, offset_in_row_group)) {
+		const idx_t row_start = row_group->GetRowStart();
+		const idx_t row_end = row_start + current_row_group.count;
+
+		// 2. extend the run while consecutive row-ids stay in [row_start, row_end)
+		const idx_t run_start = pos;
+		offsets[0] = NumericCast<idx_t>(row_ids[pos]) - row_start;
+		pos++;
+		while (pos < fetch_count) {
+			const idx_t rid = NumericCast<idx_t>(row_ids[pos]);
+			if (rid < row_start || rid >= row_end) {
+				break;
+			}
+			offsets[pos - run_start] = rid - row_start;
+			pos++;
+		}
+		const idx_t run_count = pos - run_start;
+
+		// 3. bulk visibility check for the whole run.
+		idx_t visible_count = 0;
+		const_reference<SelectionVector> sel_for_fetch(*FlatVector::IncrementalSelectionVector());
+		if (state.fetch_type == FetchType::FORCE_FETCH) {
+			visible_count = run_count;
+		} else {
+			visible_count = current_row_group.Fetch(transaction, offsets, run_count, filter_sel);
+			if (visible_count != run_count) {
+				sel_for_fetch = filter_sel;
+			}
+		}
+
+		if (visible_count == 0) {
 			continue;
 		}
+
+		// 4. bulk per-column fetch
 		state.row_group = row_group;
-		current_row_group.FetchRow(transaction, state, column_ids, UnsafeNumericCast<row_t>(offset_in_row_group),
-		                           result, count);
-		count++;
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, sel_for_fetch.get(), visible_count, result,
+		                            count);
+		count += visible_count;
 	}
 	result.SetChildCardinality(count);
 }
@@ -502,7 +548,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 	}
 	auto &current_row_group = row_group->GetNode();
 	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-	return current_row_group.Fetch(transaction, offset_in_row_group);
+	SelectionVector visible_sel(1);
+	return current_row_group.Fetch(transaction, &offset_in_row_group, /*count=*/1, visible_sel) == 1;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1032,13 +1079,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
-	vector<StorageIndex> column_ids;
-	for (auto &col : indexed_column_id_set) {
-		column_ids.emplace_back(col);
-	}
+	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
+	column_types.reserve(column_ids.size());
 	for (auto &col : column_ids) {
 		column_types.push_back(types[col.GetPrimaryIndex()]);
 	}
@@ -1070,9 +1115,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		}
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
-
-	DataChunk remaining_result_chunk;
-	unique_ptr<Vector> remaining_row_ids;
 
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
