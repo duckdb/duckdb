@@ -335,7 +335,7 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 }
 
 template <class OP = HistogramGenericFunctor>
-void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+void ApproxTopKFinalize(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count, idx_t offset) {
 	auto states = state_vector.Values<ApproxTopKState *>();
 
 	auto old_len = ListVector::GetListSize(result);
