@@ -591,7 +591,8 @@ public:
 	template <class STATE, class OP>
 	struct OperationHasDestroy<STATE, OP,
 	                           initialize_void_t<decltype(OP::template Destroy<STATE>(
-	                               std::declval<STATE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {};
+	                               std::declval<STATE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {
+	};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {
