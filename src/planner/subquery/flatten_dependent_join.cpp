@@ -1020,8 +1020,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE: {
 		state = PushDownChild(plan, propagate_null_values, std::move(state));
-		if (plan->type == LogicalOperatorType::LOGICAL_INSERT ||
-		    plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
+		if (plan->type == LogicalOperatorType::LOGICAL_INSERT || plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
 			// PushDownChild appended the correlated columns to the child projection.
 			// PhysicalInsert requires an exact column count and PhysicalUpdate requires the row-id last,
 			// so remove the appended columns. The DELIM_GET below re-supplies them.

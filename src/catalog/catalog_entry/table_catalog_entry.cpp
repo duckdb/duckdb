@@ -391,7 +391,6 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 }
 
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
-                                                                                    TriggerTiming timing,
                                                                                     TriggerEventType event_type,
                                                                                     TriggerForEach for_each) const {
 	vector<const_reference<TriggerCatalogEntry>> result;
@@ -399,7 +398,21 @@ vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEv
 	// so ScanTriggers yields entries in alphabetical order by name
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
-		if (trigger.timing == timing && trigger.event_type == event_type && trigger.for_each == for_each) {
+		if (trigger.event_type == event_type && trigger.for_each == for_each) {
+			result.emplace_back(trigger);
+		}
+	});
+	return result;
+}
+
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type,
+                                                                                    TriggerForEach for_each) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.event_type == event_type && trigger.for_each == for_each && trigger.timing == timing) {
 			result.emplace_back(trigger);
 		}
 	});

@@ -556,14 +556,12 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto opposite_for_each =
 	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
 	// Statement and row triggers are expanded by separate paths that don't compose: a table with both for the same
-	// event would silently fire only one. Reject across all timings (not just the new trigger's) to keep them apart.
+	// event would silently fire only one. Reject regardless of timing to keep them apart.
 	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
-	for (auto timing : {TriggerTiming::BEFORE, TriggerTiming::AFTER}) {
-		auto conflicting = table.GetTriggersForEvent(txn, timing, create_trigger_info.event_type, opposite_for_each);
-		if (!conflicting.empty()) {
-			throw NotImplementedException(
-			    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
-		}
+	auto conflicting = table.GetTriggersForEvent(txn, create_trigger_info.event_type, opposite_for_each);
+	if (!conflicting.empty()) {
+		throw NotImplementedException(
+		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
 	}
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
