@@ -8,6 +8,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -440,8 +442,16 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	// argument list holds the pre-erase arguments that the exported signature refers to
 	const auto &bound_args =
 	    bound_aggr.GetOriginalArguments().empty() ? bound_aggr.GetArguments() : bound_aggr.GetOriginalArguments();
-	if (bound_args != argument_types) {
-		throw InternalException("Type mismatch for exported aggregate %s", function_name);
+	bool signature_matches = bound_args.size() == argument_types.size();
+	for (idx_t arg_idx = 0; signature_matches && arg_idx < bound_args.size(); arg_idx++) {
+		// an ANY argument in the function signature (e.g. string_agg's data argument) matches any requested type
+		if (bound_args[arg_idx].id() != LogicalTypeId::ANY && bound_args[arg_idx] != argument_types[arg_idx]) {
+			signature_matches = false;
+		}
+	}
+	if (!signature_matches) {
+		throw InternalException("Type mismatch for exported aggregate %s: bound=[%s] requested=[%s]", function_name,
+		                        StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
 	}
 
 	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
@@ -696,16 +706,65 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 	return state_layout;
 }
 
+// parses a single entry of the to_aggregate_state signature list - either a TYPE value (e.g. make_type('VARCHAR'))
+// or a string naming a type (e.g. 'VARCHAR')
+LogicalType ParseSignatureType(ClientContext &context, const Value &arg) {
+	if (arg.IsNull()) {
+		throw BinderException("to_aggregate_state: the signature cannot contain NULL values");
+	}
+	if (arg.type().id() == LogicalTypeId::TYPE) {
+		return TypeValue::GetType(arg);
+	}
+	if (arg.type().id() == LogicalTypeId::VARCHAR) {
+		return TransformStringToLogicalType(StringValue::Get(arg), context);
+	}
+	throw BinderException("to_aggregate_state: the signature must be a list of types");
+}
+
+// parses the optional fourth argument of to_aggregate_state: the constant values for arguments that must be bound to
+// a specific constant rather than a NULL value of the argument type (e.g. string_agg's separator). It is supplied as
+// a MAP or STRUCT keyed by the (0-based) argument index, e.g. {'1': ','} to bind argument 1 to the constant ','
+void ParseConstantParameters(const Value &constants, map<idx_t, Value> &constant_parameters) {
+	if (constants.IsNull()) {
+		return;
+	}
+	auto &type = constants.type();
+	vector<pair<string, Value>> entries;
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &children = StructValue::GetChildren(constants);
+		for (idx_t i = 0; i < children.size(); i++) {
+			entries.emplace_back(StructType::GetChildName(type, i), children[i]);
+		}
+	} else if (type.id() == LogicalTypeId::MAP) {
+		for (auto &entry : ListValue::GetChildren(constants)) {
+			auto &kv = StructValue::GetChildren(entry);
+			entries.emplace_back(kv[0].ToString(), kv[1]);
+		}
+	} else {
+		throw BinderException(
+		    "to_aggregate_state: the constant parameters must be a MAP or STRUCT keyed by argument index");
+	}
+	for (auto &entry : entries) {
+		idx_t arg_idx;
+		if (!TryCast::Operation<string_t, idx_t>(string_t(entry.first), arg_idx)) {
+			throw BinderException("to_aggregate_state: invalid constant parameter index \"%s\" - must be an integer",
+			                      entry.first);
+		}
+		constant_parameters[arg_idx] = entry.second;
+	}
+}
+
 unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &context = input.GetClientContext();
-	for (idx_t i = 1; i < 3; i++) {
+	for (idx_t i = 1; i < arguments.size(); i++) {
 		if (arguments[i]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
 		if (!arguments[i]->IsFoldable()) {
-			throw BinderException("to_aggregate_state: the aggregate name and signature must be constant");
+			throw BinderException("to_aggregate_state: the aggregate name, signature and constant parameters must be "
+			                      "constant");
 		}
 	}
 	auto function_name_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
@@ -718,21 +777,30 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	if (signature_val.IsNull()) {
 		throw BinderException("to_aggregate_state: the signature must be a list of types");
 	}
+	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
-		if (arg.IsNull()) {
-			throw BinderException("to_aggregate_state: the signature cannot contain NULL values");
-		}
-		if (arg.type().id() == LogicalTypeId::TYPE) {
-			argument_types.push_back(TypeValue::GetType(arg));
-		} else if (arg.type().id() == LogicalTypeId::VARCHAR) {
-			argument_types.push_back(TransformStringToLogicalType(StringValue::Get(arg), context));
-		} else {
-			throw BinderException("to_aggregate_state: the signature must be a list of types");
-		}
+		argument_types.push_back(ParseSignatureType(context, arg));
 	}
 
-	auto bind_data = BindExportedAggregate(context, function_name, argument_types, map<idx_t, Value>());
+	// constant_parameters holds the values of arguments that must be re-bound with a specific constant rather than a
+	// NULL value of the argument type (e.g. string_agg's separator), keyed by the argument's index
+	map<idx_t, Value> constant_parameters;
+	if (arguments.size() > 3) {
+		auto constants_val = ExpressionExecutor::EvaluateScalar(context, *arguments[3]);
+		ParseConstantParameters(constants_val, constant_parameters);
+	}
+	for (auto &entry : constant_parameters) {
+		if (entry.first >= argument_types.size()) {
+			throw BinderException("to_aggregate_state: constant parameter index %llu is out of range (the aggregate "
+			                      "has %llu arguments)",
+			                      entry.first, argument_types.size());
+		}
+		// cast each constant to the argument type declared in the signature
+		entry.second = entry.second.DefaultCastAs(argument_types[entry.first]);
+	}
+
+	auto bind_data = BindExportedAggregate(context, function_name, argument_types, constant_parameters);
 	auto &aggr = bind_data->aggr;
 	if (!aggr.HasGetStateTypeCallback()) {
 		throw BinderException(
@@ -816,12 +884,20 @@ ScalarFunction CombineFun::GetFunction() {
 	return function;
 }
 
-ScalarFunction ToAggregateStateFun::GetFunction() {
-	auto function = ScalarFunction("to_aggregate_state",
-	                               {LogicalTypeId::ANY, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::ANY)},
-	                               LogicalTypeId::ANY, ToAggregateStateFunction, ToAggregateStateBind);
-	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	return function;
+ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
+	ScalarFunctionSet set("to_aggregate_state");
+	vector<LogicalType> arguments {LogicalTypeId::ANY, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::ANY)};
+	for (idx_t constant_params = 0; constant_params < 2; constant_params++) {
+		if (constant_params) {
+			// optional fourth argument: constant parameter values keyed by argument index (e.g. {'1': ','})
+			arguments.emplace_back(LogicalTypeId::ANY);
+		}
+		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
+		                        ToAggregateStateBind);
+		function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+		set.AddFunction(std::move(function));
+	}
+	return set;
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {

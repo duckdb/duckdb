@@ -80,6 +80,58 @@ SELECT finalize(string_agg(d, NULL) EXPORT_STATE) IS NULL FROM dummy;
 ----
 true
 
+# to_aggregate_state can reconstruct a string_agg state - the signature lists all argument types, and the separator
+# is a constant parameter supplied in the optional fourth argument (a map/struct keyed by the 0-based argument index)
+query II nosort res2
+SELECT g, finalize(to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'1': '-'})) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# the constant parameters can also be passed as a MAP
+query II nosort res2
+SELECT g, finalize(to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], MAP {'1': '-'})) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# the types can also be passed as TYPE values via make_type
+query II nosort res2
+SELECT g, finalize(to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', [make_type('VARCHAR'), make_type('VARCHAR')], {'1': '-'})) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# the unary form (default comma separator) needs neither a separator nor the constant parameters argument
+query I nosort res1
+SELECT finalize(to_aggregate_state(string_agg(d) EXPORT_STATE, 'string_agg', ['VARCHAR'])) FROM dummy;
+----
+
+# a reconstructed state can be combined with a live exported state that uses the same separator
+query II nosort res_combine
+SELECT g, string_agg(d, '-') || '-' || string_agg(d, '-') FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_combine
+SELECT g, finalize(combine(string_agg(d, '-') EXPORT_STATE,
+                           to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'1': '-'})))
+FROM dummy GROUP BY g ORDER BY g;
+----
+
+# combining states reconstructed with different separators is an error
+statement error
+SELECT finalize(combine(
+	to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'1': '-'}),
+	string_agg(d, '|') EXPORT_STATE)) FROM dummy;
+----
+different parameters
+
+# a constant parameter index out of range is an error
+statement error
+SELECT to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'2': '-'}) FROM dummy;
+----
+out of range
+
+# a non-integer constant parameter index is an error
+statement error
+SELECT to_aggregate_state(string_agg(d, '-') EXPORT_STATE, 'string_agg', ['VARCHAR', 'VARCHAR'], {'sep': '-'}) FROM dummy;
+----
+must be an integer
+
 # the state (including the separator) can be persisted - finalize re-binds from the stored type
 load {TEST_DIR}/test_string_agg_state.db readwrite latest
 
