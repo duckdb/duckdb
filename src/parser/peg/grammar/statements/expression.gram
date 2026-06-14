@@ -8,7 +8,9 @@ FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunction
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
-DistinctOrAll <- 'DISTINCT' / 'ALL'
+DistinctOrAll <- DistinctKeyword / AllKeyword
+DistinctKeyword <- 'DISTINCT'
+AllKeyword <- 'ALL'
 ExportClause <- 'EXPORT_STATE'
 WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'? Expression)

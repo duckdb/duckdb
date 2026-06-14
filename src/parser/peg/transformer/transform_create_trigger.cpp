@@ -3,9 +3,11 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -17,6 +19,8 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 		return unique_ptr_cast<UpdateQueryNode, QueryNode>(std::move(stmt->Cast<UpdateStatement>().node));
 	case StatementType::DELETE_STATEMENT:
 		return unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(stmt->Cast<DeleteStatement>().node));
+	case StatementType::MERGE_INTO_STATEMENT:
+		return unique_ptr_cast<MergeQueryNode, QueryNode>(std::move(stmt->Cast<MergeIntoStatement>().node));
 	default:
 		throw ParserException("Trigger body must be an INSERT, UPDATE, or DELETE statement");
 	}

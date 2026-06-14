@@ -56,6 +56,9 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	virtual shared_ptr<ExtraTypeInfo> Copy() const;
 	virtual shared_ptr<ExtraTypeInfo> DeepCopy() const;
+	//! Copy the base fields (alias, extension info) into "target" - used by Copy/DeepCopy implementations that
+	//! reconstruct the type info instead of copy-constructing it
+	void CopyBaseInfo(ExtraTypeInfo &target) const;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -174,6 +177,7 @@ public:
 	static PhysicalType DictType(idx_t size);
 
 	static LogicalType CreateType(const Vector &ordered_data, idx_t size);
+	static shared_ptr<ExtraTypeInfo> CreateTypeInfo(const Vector &ordered_data, idx_t size);
 
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// duckdb/main/profiling_utils.hpp
+// duckdb/main/profiler/profiling_utils.hpp
 //
 //===----------------------------------------------------------------------===//
 
@@ -10,8 +10,8 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/gathered_metrics.hpp"
-#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
 
 namespace duckdb_yyjson {

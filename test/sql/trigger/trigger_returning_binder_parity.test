@@ -1,0 +1,161 @@
+# name: test/sql/trigger/trigger_returning_binder_parity.test
+# description: RETURNING on triggered tables must use ReturningBinder rules, matching the no-trigger path
+# group: [trigger]
+
+require noforcestorage
+
+# Aggregates are rejected on the no-trigger RETURNING path.
+statement ok
+CREATE TABLE returning_agg_target (a INTEGER);
+
+statement ok
+CREATE TABLE returning_agg_log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_agg_trg
+AFTER INSERT ON returning_agg_target
+FOR EACH STATEMENT
+    INSERT INTO returning_agg_log VALUES (1);
+
+statement error
+INSERT INTO returning_agg_target VALUES (1), (2) RETURNING sum(a);
+----
+<REGEX>:Binder Error.*[Aa]ggregate.*
+
+# Subqueries are rejected by ReturningBinder.
+statement ok
+CREATE TABLE returning_subquery_target (a INTEGER);
+
+statement ok
+CREATE TABLE returning_subquery_log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_subquery_trg
+AFTER INSERT ON returning_subquery_target
+FOR EACH STATEMENT
+    INSERT INTO returning_subquery_log VALUES (1);
+
+statement error
+INSERT INTO returning_subquery_target VALUES (1), (2)
+RETURNING a IN (SELECT a FROM returning_subquery_target);
+----
+<REGEX>:.*SUBQUERY is not supported.*
+
+# Window expressions must not become legal only because a trigger is present.
+statement ok
+CREATE TABLE returning_window_target (a INTEGER);
+
+statement ok
+CREATE TABLE returning_window_log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_window_trg
+AFTER INSERT ON returning_window_target
+FOR EACH STATEMENT
+    INSERT INTO returning_window_log VALUES (1);
+
+statement error
+INSERT INTO returning_window_target VALUES (1), (2)
+RETURNING row_number() OVER (ORDER BY a), a;
+----
+<REGEX>:.*WINDOW.*
+
+# Schema-qualified target columns bind the same way as the no-trigger path.
+statement ok
+CREATE SCHEMA returning_schema_qual;
+
+statement ok
+CREATE TABLE returning_schema_qual.target (a INTEGER);
+
+statement ok
+INSERT INTO returning_schema_qual.target VALUES (7);
+
+statement ok
+CREATE TABLE returning_schema_qual.log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_schema_qual_trg
+AFTER DELETE ON returning_schema_qual.target
+FOR EACH STATEMENT
+    INSERT INTO returning_schema_qual.log VALUES (1);
+
+query I
+DELETE FROM returning_schema_qual.target
+RETURNING returning_schema_qual.target.a;
+----
+7
+
+# For virtual columns, the qualifier must still match the actual binding. A wrong
+# schema should not be stripped and accepted as rowid.
+statement ok
+CREATE SCHEMA returning_wrong_schema;
+
+statement ok
+CREATE TABLE returning_wrong_schema.target (a INTEGER);
+
+statement ok
+INSERT INTO returning_wrong_schema.target VALUES (7);
+
+statement ok
+CREATE TABLE returning_wrong_schema.log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_wrong_schema_trg
+AFTER DELETE ON returning_wrong_schema.target
+FOR EACH STATEMENT
+    INSERT INTO returning_wrong_schema.log VALUES (1);
+
+statement error
+DELETE FROM returning_wrong_schema.target
+RETURNING not_returning_wrong_schema.target.rowid;
+----
+<REGEX>:.*not_returning_wrong_schema.*not found.*
+
+# A physical column named rowid shadows the virtual rowid. RETURNING *, rowid
+# should preserve the no-trigger column order and types.
+statement ok
+CREATE TABLE returning_physical_rowid_target (rowid INTEGER, id VARCHAR);
+
+statement ok
+INSERT INTO returning_physical_rowid_target VALUES (42, 'x');
+
+statement ok
+CREATE TABLE returning_physical_rowid_log (x INTEGER);
+
+statement ok
+CREATE TRIGGER returning_physical_rowid_trg
+AFTER DELETE ON returning_physical_rowid_target
+FOR EACH STATEMENT
+    INSERT INTO returning_physical_rowid_log VALUES (1);
+
+query ITI
+DELETE FROM returning_physical_rowid_target RETURNING *, rowid;
+----
+42	x	42
+
+# The physical rowid column must remain visible in REFERENCING OLD TABLE aliases.
+statement ok
+CREATE TABLE returning_physical_rowid_ref_target (rowid INTEGER, id VARCHAR);
+
+statement ok
+INSERT INTO returning_physical_rowid_ref_target VALUES (42, 'x');
+
+statement ok
+CREATE TABLE returning_physical_rowid_ref_cap (rowid INTEGER, id VARCHAR);
+
+statement ok
+CREATE TRIGGER returning_physical_rowid_ref_trg
+AFTER DELETE ON returning_physical_rowid_ref_target
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO returning_physical_rowid_ref_cap SELECT * FROM old_rows;
+
+query I
+DELETE FROM returning_physical_rowid_ref_target RETURNING rowid;
+----
+42
+
+query IT
+SELECT * FROM returning_physical_rowid_ref_cap;
+----
+42	x

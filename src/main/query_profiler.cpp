@@ -6,14 +6,15 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/main/gathered_metrics.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
+#include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
@@ -80,59 +81,28 @@ bool QueryProfiler::IsEnabled() const {
 	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
 }
 
-bool QueryProfiler::IsDetailedEnabled() const {
-	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
+unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
+	// formats are resolved through the renderer registry, which matches case-insensitively and throws on
+	// unrecognized formats - "no_output" has no renderer, for which CreateRenderer returns nullptr
+	auto renderer = TreeRenderer::CreateRenderer(name);
+	if (renderer) {
+		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
+	}
+	return renderer;
 }
 
-ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
-	auto print_format = ClientConfig::GetConfig(context).profiler_print_format;
-	switch (format) {
-	case ExplainFormat::DEFAULT:
-		if (print_format != ProfilerPrintFormat::NO_OUTPUT) {
-			return print_format;
-		}
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case ExplainFormat::TEXT:
-		return ProfilerPrintFormat::QUERY_TREE;
-	case ExplainFormat::JSON:
-		return ProfilerPrintFormat::JSON;
-	case ExplainFormat::HTML:
-		return ProfilerPrintFormat::HTML;
-	case ExplainFormat::GRAPHVIZ:
-		return ProfilerPrintFormat::GRAPHVIZ;
-	case ExplainFormat::MERMAID:
-		return ProfilerPrintFormat::MERMAID;
-	default:
-		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
-		                              EnumUtil::ToString(format));
+unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
+	if (format == ProfilerPrintFormat::Default()) {
+		// use the configured default profiler format; "no_output" still renders as a query tree when explicitly asked
+		// for output (e.g. EXPLAIN ANALYZE), so fall back to it here
+		auto name = ClientConfig::GetConfig(context).profiler_print_format;
+		return CreateProfiler(name == "no_output" ? "query_tree" : name);
 	}
-}
-
-ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const {
-	switch (format) {
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return ExplainFormat::TEXT;
-	case ProfilerPrintFormat::JSON:
-		return ExplainFormat::JSON;
-	case ProfilerPrintFormat::HTML:
-		return ExplainFormat::HTML;
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return ExplainFormat::GRAPHVIZ;
-	case ProfilerPrintFormat::MERMAID:
-		return ExplainFormat::MERMAID;
-	case ProfilerPrintFormat::NO_OUTPUT:
-		throw InternalException("Should not attempt to get ExplainFormat for ProfilerPrintFormat::NO_OUTPUT");
-	default:
-		throw NotImplementedException("No mapping from ProfilePrintFormat::%s to ExplainFormat",
-		                              EnumUtil::ToString(format));
-	}
+	// resolve the explain format name (text/json/html/...) and create the matching renderer
+	return CreateProfiler(format.ToString());
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	if (GetPrintFormat() == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER || IsDetailedEnabled()) {
-		return true;
-	}
 	if (metrics) {
 		return metrics->MetricIsTracked("optimizer.join_order");
 	}
@@ -253,8 +223,8 @@ void QueryProfiler::EndQuery() {
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
-	// EXPLAIN ANALYZE output is not written by the profiler.
-	if (IsEnabled() && !is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
+	// EXPLAIN ANALYZE output is not written by the profiler, and the "no_output" format emits no output.
+	if (!is_explain_analyze && ClientConfig::GetConfig(context).profiler_print_format != "no_output") {
 		emit_output = true;
 	}
 
@@ -327,39 +297,37 @@ MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
 	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
-string QueryProfiler::ToString(ExplainFormat explain_format) const {
-	return ToString(GetPrintFormat(explain_format));
+string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
+	auto renderer = GetRenderer(format);
+	return RenderProfilerOutput(renderer.get());
 }
 
-string QueryProfiler::ToString(ProfilerPrintFormat format) const {
-	if (!IsEnabled()) {
-		return RenderDisabledMessage(format);
-	}
-	switch (format) {
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return QueryTreeToString();
-	case ProfilerPrintFormat::JSON:
-		return ToJSON();
-	case ProfilerPrintFormat::NO_OUTPUT:
+string QueryProfiler::ToString(const string &profiler_format_name) const {
+	auto renderer = CreateProfiler(profiler_format_name);
+	return RenderProfilerOutput(renderer.get());
+}
+
+string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
 		return "";
-	case ProfilerPrintFormat::HTML:
-	case ProfilerPrintFormat::GRAPHVIZ:
-	case ProfilerPrintFormat::MERMAID: {
-		lock_guard<std::mutex> guard(lock);
-		// checking the tree to ensure the query is really empty
-		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_sql.empty() || !root) {
-			return "";
-		}
-		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
-		stringstream str;
-		renderer->Render(*root, str);
-		return str.str();
 	}
-	default:
-		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
+	if (!IsEnabled()) {
+		return renderer->RenderProfilerDisabled();
 	}
+	return renderer->RenderProfiler(*this);
+}
+
+string QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer) const {
+	lock_guard<std::mutex> guard(lock);
+	// checking the tree to ensure the query is really empty
+	// the query string is empty when a logical plan is deserialized
+	if (query_metrics.query_sql.empty() || !root) {
+		return "";
+	}
+	stringstream str;
+	renderer.Render(*root, str);
+	return str.str();
 }
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
@@ -1053,47 +1021,6 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	return node;
 }
 
-string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
-	switch (format) {
-	case ProfilerPrintFormat::NO_OUTPUT:
-		return "";
-	case ProfilerPrintFormat::QUERY_TREE:
-	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
-	case ProfilerPrintFormat::HTML:
-		return R"(
-				<!DOCTYPE html>
-                <html lang="en"><head/><body>
-                  Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!
-                </body></html>
-			)";
-	case ProfilerPrintFormat::GRAPHVIZ:
-		return R"(
-				digraph G {
-				    node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
-				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
-				}
-			)";
-	case ProfilerPrintFormat::MERMAID:
-		return R"(flowchart TD
-    node_0_0["`**DISABLED**
-Query profiling is disabled.
-Use 'PRAGMA enable_profiling;' to enable profiling!`"]
-)";
-	case ProfilerPrintFormat::JSON: {
-		ConvertedJSONHolder json_holder;
-		json_holder.doc = yyjson_mut_doc_new(nullptr);
-		auto result_obj = yyjson_mut_obj(json_holder.doc);
-		yyjson_mut_doc_set_root(json_holder.doc, result_obj);
-
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "disabled");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-	default:
-		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
-	}
-}
-
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
@@ -1114,11 +1041,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 
 void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
 	TextTreeRenderer renderer;
-	if (IsDetailedEnabled()) {
-		renderer.EnableDetailed();
-	} else {
-		renderer.EnableStandard();
-	}
+	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);
 }
 

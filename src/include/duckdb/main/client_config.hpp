@@ -12,7 +12,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -31,20 +30,18 @@ typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, Prepa
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
-	//! If detailed query profiling is enabled
-	bool enable_detailed_profiling = false;
 	//! The format to print query profiling information in (default: query_tree), if enabled.
-	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
+	//! This is the profiler format name passed to QueryProfiler::CreateProfiler.
+	string profiler_print_format = "query_tree";
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
 	//! Glob patterns for tracked_metrics (controls which metrics are gathered and displayed).
 	//! Default "*" means all metrics are tracked.
 	vector<string> tracked_metrics = {"*"};
-
-	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
-	//! to output anything
-	bool emit_profiler_output = true;
+	//! Settings that are passed to the renderer of the profiler output (e.g. 'maximum_render_width' for the text
+	//! renderer). Settings that are not recognized by the active renderer are ignored.
+	unordered_map<string, Value> profiling_renderer_settings;
 
 	//! system-wide progress bar disable.
 	const char *system_progress_bar_disable_reason = nullptr;

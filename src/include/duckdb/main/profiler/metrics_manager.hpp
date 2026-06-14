@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/metrics_manager.hpp
+// duckdb/main/profiler/metrics_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/metric_info.hpp"
+#include "duckdb/main/profiler/metric_info.hpp"
 
 namespace duckdb {
 

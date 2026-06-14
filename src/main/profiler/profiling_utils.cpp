@@ -1,4 +1,4 @@
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {

@@ -20,21 +20,6 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
-struct FunctionLocalState {
-	DUCKDB_API virtual ~FunctionLocalState();
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
