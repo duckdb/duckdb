@@ -27,7 +27,16 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				format = ParseProfilerPrintFormat(option.children[0]);
+				Value unparsed_explain_format;
+				if (option.children.empty()) {
+					if (!option.expression) {
+						throw InvalidInputException("Expected a string as argument to FORMAT");
+					}
+					unparsed_explain_format = option.expression->ToString();
+				} else {
+					unparsed_explain_format = option.children[0];
+				}
+				format = ParseProfilerPrintFormat(unparsed_explain_format);
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
@@ -60,7 +69,9 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
                                                                 const Identifier &explain_option_name,
                                                                 unique_ptr<ParsedExpression> expression) {
 	GenericCopyOption copy_option;
-	copy_option.name = Identifier(StringUtil::Lower(explain_option_name.GetIdentifierName()));
+	auto raw_option_name = explain_option_name.GetIdentifierName();
+	auto option_name = StringUtil::Lower(raw_option_name);
+	copy_option.name = Identifier(std::move(option_name));
 	if (!expression) {
 		return copy_option;
 	}
