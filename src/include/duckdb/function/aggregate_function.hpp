@@ -546,6 +546,17 @@ public:
 		return result;
 	}
 
+	//! Deprecated: use UnaryAggregate instead - the destructor is now automatically wired up when the operation
+	//! defines a Destroy method
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
+	[[deprecated("Use UnaryAggregate instead - the destructor is now wired up automatically")]] static AggregateFunction
+	UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
+		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
+		aggregate.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		return aggregate;
+	}
+
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
