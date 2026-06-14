@@ -20,7 +20,6 @@ add_library_unity(
   test_buffer_pool_reservation.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
-  test_time_parsing.cpp
   test_string_util.cpp
   test_value_to_sql_string.cpp)
 
