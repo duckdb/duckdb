@@ -161,7 +161,8 @@
         "test/sql/aggregate/aggregates/test_covar_export_state.test",
         "test/sql/aggregate/aggregates/test_combine_aggr.test",
         "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
-        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test"
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test",
+        "test/sql/types/struct/empty_struct.test"
       ]
     },
     {

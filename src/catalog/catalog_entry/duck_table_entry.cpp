@@ -62,6 +62,18 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
 		} break;
+		case LogicalTypeId::STRUCT: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < StorageVersion::V2_0_0 && StructType::GetChildCount(type) == 0) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("Empty STRUCT columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+		} break;
 		case LogicalTypeId::VARIANT: {
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
