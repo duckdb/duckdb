@@ -555,8 +555,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	auto opposite_for_each =
 	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
-	// Statement and row triggers are expanded by separate paths that don't compose: a table with both for the same
-	// event would silently fire only one. Reject regardless of timing to keep them apart.
+	// Statement and row triggers use separate expansion paths that don't compose, so reject mixing them per event.
 	auto txn = table.ParentCatalog().GetCatalogTransaction(context);
 	auto conflicting = table.GetTriggersForEvent(txn, create_trigger_info.event_type, opposite_for_each);
 	if (!conflicting.empty()) {
