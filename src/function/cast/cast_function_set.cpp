@@ -25,7 +25,7 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
     : function(function_p), info(std::move(info_p)) {
 }
 
-CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
+CastFunctionSet::CastFunctionSet() : combine_rules(DefaultCombineTypesRules()), map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
 }
 
@@ -234,6 +234,28 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 		bind_functions.emplace_back(MapCastFunction, std::move(info));
 	}
 	map_info->AddEntry(source, target, std::move(node));
+}
+
+void CastFunctionSet::RegisterCombineTypesRule(CombineTypesRule rule) {
+	combine_rules.insert(combine_rules.begin(), rule); // newest extension first, ahead of built-ins
+}
+
+bool CastFunctionSet::TryCombineTypes(const vector<CombineTypesRule> &rules, LogicalTypeResolver &resolver,
+                                      const LogicalType &left, const LogicalType &right, LogicalType &result,
+                                      bool &success) {
+	// first matching rule wins
+	for (auto &rule : rules) {
+		if (rule.matches(left, right)) {
+			success = rule.function(resolver, left, right, result);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CastFunctionSet::TryCombineTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
+                                      LogicalType &result, bool &success) {
+	return TryCombineTypes(combine_rules, resolver, left, right, result, success);
 }
 
 } // namespace duckdb

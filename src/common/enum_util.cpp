@@ -183,6 +183,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
@@ -2596,6 +2597,27 @@ const char* EnumUtil::ToChars<GeometryType>(GeometryType value) {
 template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value) {
 	return static_cast<GeometryType>(StringUtil::StringToEnum(GetGeometryTypeValues(), 8, "GeometryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetGroupByExpressionInfoTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::EXPRESSION), "EXPRESSION" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::CUBE), "CUBE" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::ROLLUP), "ROLLUP" },
+		{ static_cast<uint32_t>(GroupByExpressionInfoType::GROUPING_SETS), "GROUPING_SETS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value) {
+	return StringUtil::EnumToString(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType", static_cast<uint32_t>(value));
+}
+
+template<>
+GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value) {
+	return static_cast<GroupByExpressionInfoType>(StringUtil::StringToEnum(GetGroupByExpressionInfoTypeValues(), 5, "GroupByExpressionInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetHLLStorageTypeValues() {
