@@ -37,7 +37,7 @@ public:
 	}
 	MultiFileReaderVirtualColumnBinding(unique_ptr<Expression> &&expr, vector<idx_t> &&virtual_column_ids)
 	    : type(VirtualColumnBindingType::EXPRESSION), expression(std::move(expr)),
-	      local_virtual_column_ids(virtual_column_ids) {
+	      local_virtual_column_ids(std::move(virtual_column_ids)) {
 	}
 	explicit MultiFileReaderVirtualColumnBinding(const MultiFileColumnDefinition &column_ref)
 	    : type(VirtualColumnBindingType::COLUMN_REFERENCE), global_column_reference(column_ref) {
