@@ -525,11 +525,11 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("REFERENCING is not valid for FOR EACH ROW triggers");
 	}
 	if (create_trigger_info.for_each == TriggerForEach::ROW && create_trigger_info.timing != TriggerTiming::AFTER) {
-		throw NotImplementedException("Only AFTER triggers are supported for FOR EACH ROW");
+		throw NotImplementedException("BEFORE FOR EACH ROW triggers are not yet supported");
 	}
 	if (create_trigger_info.for_each == TriggerForEach::ROW &&
 	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
-		throw NotImplementedException("Only INSERT events are supported for FOR EACH ROW triggers");
+		throw NotImplementedException("UPDATE and DELETE FOR EACH ROW triggers are not yet supported");
 	}
 	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
 	    create_trigger_info.timing != TriggerTiming::AFTER) {

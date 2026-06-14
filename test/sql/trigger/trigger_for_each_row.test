@@ -236,7 +236,7 @@ statement error
 CREATE TRIGGER trg_before BEFORE INSERT ON t_before FOR EACH ROW
     INSERT INTO t_before VALUES (NEW.id);
 ----
-Not implemented Error: Only AFTER triggers are supported for FOR EACH ROW
+Not implemented Error: BEFORE FOR EACH ROW triggers are not yet supported
 
 # FOR EACH ROW UPDATE is not yet supported
 statement ok
@@ -246,7 +246,7 @@ statement error
 CREATE TRIGGER trg_upd_ev AFTER UPDATE ON t_upd_ev FOR EACH ROW
     INSERT INTO t_upd_ev VALUES (NEW.id);
 ----
-Not implemented Error: Only INSERT events are supported for FOR EACH ROW triggers
+Not implemented Error: UPDATE and DELETE FOR EACH ROW triggers are not yet supported
 
 # FOR EACH ROW DELETE is not yet supported
 statement ok
@@ -256,7 +256,7 @@ statement error
 CREATE TRIGGER trg_del_ev AFTER DELETE ON t_del_ev FOR EACH ROW
     INSERT INTO t_del_ev VALUES (1);
 ----
-Not implemented Error: Only INSERT events are supported for FOR EACH ROW triggers
+Not implemented Error: UPDATE and DELETE FOR EACH ROW triggers are not yet supported
 
 # FOR EACH ROW + REFERENCING is rejected
 statement ok
