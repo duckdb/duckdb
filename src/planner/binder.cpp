@@ -731,6 +731,11 @@ unique_ptr<BoundStatement> Binder::TryExpandRowTriggers(QueryNode &node,
 	if (triggers.empty()) {
 		return nullptr;
 	}
+	if (node.type == QueryNodeType::INSERT_QUERY_NODE && node.Cast<InsertQueryNode>().on_conflict_info) {
+		// Updated rows via ON CONFLICT currently appear in the INSERT affected-row set. This would fire INSERT triggers
+		// for those rows. Therefore, the combination is currently rejected.
+		throw NotImplementedException("ON CONFLICT is not yet supported on tables with FOR EACH ROW triggers");
+	}
 	if (!returning_list.empty()) {
 		throw NotImplementedException("RETURNING is not yet supported on tables with FOR EACH ROW triggers");
 	}

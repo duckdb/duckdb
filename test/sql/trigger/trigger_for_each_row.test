@@ -343,3 +343,27 @@ statement error
 INSERT INTO t_ret VALUES (1) RETURNING id;
 ----
 Not implemented Error: RETURNING is not yet supported on tables with FOR EACH ROW triggers
+
+# ON CONFLICT is not yet supported
+statement ok
+CREATE TABLE t_conflict (id INTEGER PRIMARY KEY, val VARCHAR);
+
+statement ok
+CREATE TABLE t_conflict_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_conflict AFTER INSERT ON t_conflict FOR EACH ROW
+    INSERT INTO t_conflict_log VALUES (NEW.id);
+
+statement ok
+INSERT INTO t_conflict VALUES (1, 'a');
+
+statement error
+INSERT INTO t_conflict VALUES (1, 'b') ON CONFLICT DO UPDATE SET val = excluded.val;
+----
+Not implemented Error: ON CONFLICT is not yet supported on tables with FOR EACH ROW triggers
+
+statement error
+INSERT INTO t_conflict VALUES (1, 'b') ON CONFLICT DO NOTHING;
+----
+Not implemented Error: ON CONFLICT is not yet supported on tables with FOR EACH ROW triggers
