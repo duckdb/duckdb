@@ -95,6 +95,8 @@ public:
 	DUCKDB_API static timestamp_t GetCurrentTimestamp();
 	//! Returns current monotonic timestamp in microseconds (for interval calculations only)
 	DUCKDB_API static timestamp_t GetMonotonicTimestamp();
+	//! Returns current monotonic time in nanoseconds (for interval calculations only)
+	DUCKDB_API static int64_t GetMonotonicNanoSeconds();
 
 	//! Convert the epoch (in sec) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochSecondsPossiblyInfinite(int64_t s);
