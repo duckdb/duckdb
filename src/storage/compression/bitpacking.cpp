@@ -798,10 +798,9 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
 		if (scan_state.current_group.mode == BitpackingMode::FOR && offset_in_compression_group == 0) {
-			auto remaining = MinValue<idx_t>(scan_count - scanned,
-			                                 BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
-			auto batch_count =
-			    remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+			auto remaining =
+			    MinValue<idx_t>(scan_count - scanned, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			auto batch_count = remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 			if (batch_count > 0) {
 				auto current_position_ptr =
 				    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;

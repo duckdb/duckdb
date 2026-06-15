@@ -395,8 +395,7 @@ inline void NarrowCmpToBitmap(const T *__restrict data, T constant, idx_t count,
 	const idx_t full = count / 8;
 	for (idx_t b = 0; b < full; b++) {
 		const auto c = cmp + b * 8;
-		out[b] = c[0] | (c[1] << 1) | (c[2] << 2) | (c[3] << 3) | (c[4] << 4) | (c[5] << 5) | (c[6] << 6) |
-		         (c[7] << 7);
+		out[b] = c[0] | (c[1] << 1) | (c[2] << 2) | (c[3] << 3) | (c[4] << 4) | (c[5] << 5) | (c[6] << 6) | (c[7] << 7);
 	}
 
 	const idx_t nwords = (count + 63) / 64;
