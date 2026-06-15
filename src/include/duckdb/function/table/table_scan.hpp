@@ -33,6 +33,9 @@ struct TableScanBindData : public TableFunctionData {
 	unique_ptr<RowGroupOrderOptions> order_options;
 	//! Subset of partition indices to scan, if null, scan all
 	unique_ptr<unordered_set<idx_t>> partitions_to_scan;
+	//! Display-only override for EXPLAIN output: a catalog delegating its
+	//! scan to a storage table sets the user-facing name here.
+	string display_name;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
@@ -47,6 +50,7 @@ public:
 		bind_data->order_options = order_options ? make_uniq<RowGroupOrderOptions>(*order_options) : nullptr;
 		bind_data->partitions_to_scan =
 		    partitions_to_scan ? make_uniq<unordered_set<idx_t>>(*partitions_to_scan) : nullptr;
+		bind_data->display_name = display_name;
 		return std::move(bind_data);
 	}
 };
