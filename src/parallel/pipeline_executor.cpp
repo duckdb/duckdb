@@ -303,6 +303,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 					return PipelineExecuteResult::INTERRUPTED;
 				}
 				if (source_result == SourceResultType::FINISHED) {
+					exhausted_source = true;
 					exhausted_pipeline = true;
 				}
 			}
@@ -451,6 +452,12 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	}
 
 	finalized = true;
+
+	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
+	if (!source_profiling_finalized && local_source_state) {
+		context.thread.profiler.FinishSource(*pipeline.source, *pipeline.source_state, *local_source_state);
+	}
+
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
 		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
@@ -606,6 +613,7 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	if (res == SourceResultType::FINISHED) {
 		// final call into the source - finish source execution
 		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
+		source_profiling_finalized = true;
 	}
 	EndOperator(*pipeline.source, &result);
 

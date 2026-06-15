@@ -94,10 +94,10 @@ struct StateVector {
 	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.HasStateDestructorCallback()) {
+		if (aggr.Function().HasStateDestructorCallback()) {
 			ArenaAllocator allocator(Allocator::DefaultAllocator());
-			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
-			aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, count);
+			AggregateInputData aggr_input_data(aggr, allocator);
+			aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, count);
 		}
 	}
 
@@ -214,13 +214,13 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// get the aggregate function
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();
-	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 
-	D_ASSERT(aggr.function.HasStateUpdateCallback());
+	D_ASSERT(aggr.Function().HasStateUpdateCallback());
 
 	auto &child_vector = ListVector::GetChildMutable(lists);
 	child_vector.Flatten();
@@ -233,7 +233,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr.function.GetStateSizeCallback()(aggr.function);
+	idx_t size = aggr.Function().GetStateSizeCallback()(aggr.Function());
 	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
@@ -252,7 +252,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
-		aggr.function.GetStateInitCallback()(aggr.function, states[i]);
+		aggr.Function().GetStateInitCallback()(aggr.Function(), states[i]);
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -273,7 +273,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 				// update the aggregate state(s)
 				Vector slice(child_vector, sel_vector, states_idx);
-				aggr.function.GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+				aggr.Function().GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -289,17 +289,17 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slice(child_vector, sel_vector, states_idx);
-		aggr.function.GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+		aggr.Function().GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
 	if (IS_AGGR) {
 		// finalize all the aggregate states
-		aggr.function.GetStateFinalizeCallback()(state_vector.state_vector, aggr_input_data, result, count, 0);
+		aggr.Function().GetStateFinalizeCallback()(state_vector.state_vector, aggr_input_data, result, count, 0);
 
 	} else {
 		// finalize manually to use the map
-		D_ASSERT(aggr.function.GetArguments().size() == 1);
-		auto key_type = aggr.function.GetArguments()[0];
+		D_ASSERT(aggr.Function().GetArguments().size() == 1);
+		auto key_type = aggr.Function().GetArguments()[0];
 
 		switch (key_type.InternalType()) {
 #ifndef DUCKDB_SMALLER_BINARY
@@ -396,13 +396,13 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 
 	FunctionBinder function_binder(context);
 	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, std::move(children));
-	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->function.GetArguments()[0]);
+	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->Function().GetArguments()[0]);
 
 	if (IS_AGGR) {
-		bound_function.SetReturnType(bound_aggr_function->function.GetReturnType());
+		bound_function.SetReturnType(bound_aggr_function->Function().GetReturnType());
 	}
 	// check if the aggregate function consumed all the extra input arguments
-	if (bound_aggr_function->children.size() > 1) {
+	if (bound_aggr_function->GetChildren().size() > 1) {
 		throw InvalidInputException(
 		    "Aggregate function %s is not supported for list_aggr: extra arguments were not removed during bind",
 		    bound_aggr_function->ToString());
@@ -445,8 +445,8 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// look up the aggregate function in the catalog
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
-	                                                                                        function_name);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context, Identifier::DefaultSchema(), Identifier(function_name));
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {

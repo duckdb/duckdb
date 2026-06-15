@@ -28,7 +28,7 @@ struct PreparedStatementVerification {
 	void ConvertConstants(QueryNode &node);
 	void ConvertConstants(unique_ptr<ParsedExpression> &child);
 
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> values;
+	identifier_map_t<unique_ptr<ParsedExpression>> values;
 };
 
 void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
@@ -43,8 +43,8 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 		expr->ClearAlias();
 		// check if the value already exists
 		idx_t index = values.size();
-		auto identifier = std::to_string(index + 1);
-		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+		auto identifier = Identifier(std::to_string(index + 1));
+		const auto predicate = [&](const std::pair<const Identifier, unique_ptr<ParsedExpression>> &pair) {
 			return pair.second->Equals(*expr.get());
 		};
 		auto result = std::find_if(values.begin(), values.end(), predicate);
@@ -57,7 +57,7 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
-		parameter->identifier = identifier;
+		parameter->IdentifierMutable() = identifier;
 		parameter->SetAlias(alias);
 		expr = std::move(parameter);
 		return;
@@ -112,7 +112,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		Allocator allocator;
 		MemoryStream stream(allocator);
 		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+		options.storage_compatibility = StorageCompatibility::FromString("latest");
 		optional_ptr<SelectStatement> to_serialize_stmt;
 		optional_ptr<QueryNode> to_serialize_node;
 		switch (statement->type) {
@@ -201,7 +201,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// create the PREPARE and EXECUTE statements
 		string name = "__duckdb_verification_prepared_statement_" + UUID::ToString(UUID::GenerateRandomUUID());
 		auto prepare = make_uniq<PrepareStatement>();
-		prepare->name = name;
+		prepare->name = Identifier(name);
 		prepare->statement = std::move(prepare_base);
 
 		// execute the PREPARE
@@ -225,7 +225,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		// create and return the EXECUTE statement
 		// i.e. EXECUTE p('hello', 42)
 		auto execute = make_uniq<ExecuteStatement>();
-		execute->name = name;
+		execute->name = Identifier(name);
 		execute->named_values = std::move(prep_verifier.values);
 
 		statement = std::move(execute);
@@ -244,6 +244,14 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		}
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
+		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
+		// (which would lose parser timing captured before StatementVerification was called) and from
+		// overwriting the profiling output file with the EXPLAIN's profiling data.
+		auto &client_config = ClientConfig::GetConfig(*this);
+		bool saved_profiler = client_config.enable_profiler;
+		ScopedConfigSetting suppress_profiling(
+		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

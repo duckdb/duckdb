@@ -486,6 +486,12 @@ public:
 	static inline void
 	ExecuteUnaryClusteredDispatch(const INPUT_TYPE *vals, const ClusteredAggr &clustered, const ValidityMask &validity,
 	                              const SelectionVector *isel = nullptr, const sel_t *cluster_iter = nullptr) {
+		if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+			if (!validity.CanHaveNull()) {
+				OP::template ExecuteFlatI64HugeintSum<STATE_TYPE, INPUT_TYPE>(vals, clustered, isel, cluster_iter);
+				return;
+			}
+		}
 		if (OP::IgnoreNull() && validity.CanHaveNull()) {
 			ExecuteUnaryClusteredOpt<true, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, isel, cluster_iter);
 		} else {
@@ -560,11 +566,18 @@ public:
 	}
 
 	// true if OP defines ClusteredOp (early-exit optimization for first/last/any_value).
-	template <class OP, class = void>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE, class = void>
 	struct HasClusteredOperation : std::false_type {};
-	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE>
+	struct HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE,
+	                             void_t_helper<decltype(&OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>)>>
 	    : std::true_type {};
+
+	template <class INPUT_TYPE, class OP, class = void>
+	struct HasI64HugeintSumFastPath : std::false_type {};
+	template <class INPUT_TYPE, class OP>
+	struct HasI64HugeintSumFastPath<INPUT_TYPE, OP, void_t_helper<decltype(OP::ClusteredI64HugeintSum)>>
+	    : std::integral_constant<bool, std::is_integral<INPUT_TYPE>::value && OP::ClusteredI64HugeintSum> {};
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClustConstantCustomState(Vector &input, AggregateInputData &aggr_input_data,
@@ -584,7 +597,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryNoClusteredOpt(Vector &input, AggregateInputData &aggr_input_data,
 	                                       const ClusteredAggr &clustered, idx_t count) {
-		static_assert(HasClusteredOperation<OP>::value, "Expected custom clustered operation");
+		static_assert(HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value, "Expected custom clustered operation");
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ExecuteUnaryClustConstantCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered);
 			return;
@@ -613,6 +626,15 @@ public:
 				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
+				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+					if (clustered.state) {
+						auto props = clustered.state->GetDictProps(input);
+						if (props && *props) {
+							OP::template ExecuteDictI64HugeintSum<STATE_TYPE>(input, clustered, props->get());
+							return;
+						}
+					}
+				}
 				auto *cluster_iter = clustered.ClusterIter(input, count);
 				if (cluster_iter) {
 					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
@@ -627,7 +649,7 @@ public:
 				return;
 			}
 		}
-		if constexpr (HasClusteredOperation<OP>::value) {
+		if constexpr (HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value) {
 			ExecuteUnaryNoClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
 		} else {
 			D_ASSERT(false);
@@ -765,7 +787,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -773,7 +795,7 @@ public:
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -781,7 +803,7 @@ public:
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
@@ -791,21 +813,21 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void VoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                         idx_t offset) {
+	static void VoidFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                         idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			FlatVector::SetSize(result, count);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<STATE_TYPE>(**sdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, finalize_input_data);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<STATE_TYPE>(*sdata[i], finalize_data);

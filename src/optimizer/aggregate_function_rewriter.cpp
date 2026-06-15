@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -74,10 +75,11 @@ public:
 		FunctionBinder function_binder(optimizer.context);
 
 		// Move the child out of AVG(x)
-		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().children[0]);
+		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
+		auto &sum_entry =
+		    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, Identifier::DefaultSchema(), "sum");
 		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
@@ -130,12 +132,12 @@ public:
 	                               vector<unique_ptr<Expression>> &additional_expressions) override {
 		auto &sum = bindings[0].get().Cast<BoundAggregateExpression>();
 		auto &addition = bindings[1].get().Cast<BoundFunctionExpression>();
-		idx_t const_idx = addition.children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
-		auto const_expr = std::move(addition.children[const_idx]);
-		auto main_expr = std::move(addition.children[1 - const_idx]);
+		idx_t const_idx = addition.GetChildren()[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
+		auto const_expr = std::move(addition.GetChildrenMutable()[const_idx]);
+		auto main_expr = std::move(addition.GetChildrenMutable()[1 - const_idx]);
 
 		// Turn SUM(x + C) into SUM(x)
-		sum.children[0] = main_expr->Copy();
+		sum.GetChildrenMutable()[0] = main_expr->Copy();
 
 		additional_expressions.push_back(std::move(const_expr));
 		return main_expr;
@@ -180,20 +182,20 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
-		if (!FunctionMatcher::Match(function, expr.function.GetName())) {
+		if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 			return false;
 		}
-		if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+		if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
 			return false;
 		}
-		if (!expr.order_bys && !order_bys.empty()) {
+		if (!expr.GetOrderBys() && !order_bys.empty()) {
 			return false;
 		}
-		if (order_bys.size() != expr.order_bys->orders.size()) {
+		if (order_bys.size() != expr.GetOrderBys()->orders.size()) {
 			return false;
 		}
 		for (idx_t i = 0; i < order_bys.size(); ++i) {
-			if (!order_bys[i]->Match(*expr.order_bys->orders[i].expression, bindings)) {
+			if (!order_bys[i]->Match(*expr.GetOrderBys()->orders[i].expression, bindings)) {
 				return false;
 			}
 		}
@@ -239,7 +241,7 @@ unique_ptr<Expression> ListRewriteRule::Rewrite(unique_ptr<Expression> &expr, ve
                                                 vector<unique_ptr<Expression>> &additional_expressions) {
 	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
 
-	auto &order_bys = aggr.order_bys;
+	auto &order_bys = aggr.GetOrderBysMutable();
 	auto &order_by = order_bys->orders[0];
 
 	auto sense = make_uniq<BoundConstantExpression>(EnumUtil::ToChars(order_by.type));
@@ -302,9 +304,9 @@ private:
 	}
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *) override {
-		const auto entry = aggregate_map.find(expr.binding);
+		const auto entry = aggregate_map.find(expr.Binding());
 		if (entry != aggregate_map.end()) {
-			expr.binding = entry->second;
+			expr.BindingMutable() = entry->second;
 		}
 		return nullptr;
 	}
@@ -329,7 +331,7 @@ private:
 
 			// Add COUNT([x]) to the aggregate list
 			FunctionBinder function_binder(optimizer.context);
-			const auto count_fun = CountFunctionBase::GetFunction();
+			const auto count_fun = count_arg ? CountFunctionBase::GetFunction() : CountStarFun::GetFunction();
 			vector<unique_ptr<Expression>> count_args;
 			if (count_arg) {
 				count_args.push_back(std::move(count_arg));

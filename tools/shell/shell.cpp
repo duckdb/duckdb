@@ -688,8 +688,6 @@ string ShellState::ModeToString(RenderMode mode) {
 		return "describe";
 	case RenderMode::ASCII:
 		return "ascii";
-	case RenderMode::PRETTY:
-		return "prettyprint";
 	case RenderMode::EQP:
 		return "eqp";
 	case RenderMode::JSON:
@@ -881,7 +879,7 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	}
 	for (auto &row : *result) {
 		auto zStr = row.GetValue<string>(0);
-		Print(zStr);
+		PrintSQL(zStr);
 		auto z = zStr.c_str();
 		if (!z) {
 			z = "";
@@ -1104,7 +1102,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 		auto zSql = row.GetValue<string>(2);
 
 		// print sql
-		Print(GetSchemaLine(zSql, ";\n"));
+		PrintSQL(GetSchemaLine(zSql, ";\n"));
 		if (zType == "table") {
 			// dump table contents
 			string sSelect;
@@ -1195,7 +1193,9 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
-		client_config.display_create_func = CreateProgressBar;
+		if (stdout_is_console) {
+			client_config.display_create_func = CreateProgressBar;
+		}
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
@@ -1752,7 +1752,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	if (needCommit) {
 		con.BeginTransaction();
 	}
-	auto table_info = con.TableInfo(table_name);
+	auto table_info = con.TableInfo(duckdb::Identifier(table_name));
 
 	string import_query;
 
@@ -2056,26 +2056,39 @@ bool ShellState::ReadFromFile(const string &file) {
 bool ShellState::DisplaySchemas(const vector<string> &args) {
 	const char *zName = nullptr;
 	bool bDebug = 0;
+	// statements are pretty-printed using the SQL formatter by default
+	bool bFormat = true;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
-		if (optionMatch(args[ii], "indent")) {
-			mode = RenderMode::PRETTY;
+		// --indent (and its alias --format) pretty-prints the statements using the SQL formatter (the default)
+		if (optionMatch(args[ii], "indent") || optionMatch(args[ii], "format")) {
+			bFormat = true;
+			// --no-indent (and its alias --no-format) prints the statements as they are stored
+		} else if (optionMatch(args[ii], "no-indent") || optionMatch(args[ii], "no-format")) {
+			bFormat = false;
 		} else if (optionMatch(args[ii], "debug")) {
 			bDebug = true;
+		} else if (!args[ii].empty() && args[ii][0] == '-') {
+			PrintF(PrintOutput::STDERR,
+			       "Error: unknown option \"%s\"\nUsage: .schema ?--indent|--no-indent? ?LIKE-PATTERN?\n",
+			       args[ii].c_str());
+			return false;
 		} else if (zName == 0) {
 			zName = args[ii].c_str();
 		} else {
-			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
+			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent|--no-indent? ?LIKE-PATTERN?\n");
 			return false;
 		}
 	}
-	auto renderer = GetRenderer(mode);
+	auto renderer = GetRenderer(RenderMode::SEMI);
 	renderer->show_header = false;
 
 	string sSelect;
-	sSelect += "SELECT sql FROM sqlite_master WHERE ";
+	// by default the stored SQL is pretty-printed through the duckdb_format_sql function
+	// (unless --no-indent/--no-format was passed)
+	sSelect +=
+	    bFormat ? "SELECT duckdb_format_sql(sql) FROM sqlite_master WHERE " : "SELECT sql FROM sqlite_master WHERE ";
 	if (zName) {
 		auto zQarg = StringUtil::Format("%s", SQLString(zName));
 		int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
@@ -2143,8 +2156,8 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
 		if (components.size() >= 2) {
 			// e.g : "schema.table" or "schema.%"
-			schema_filter = "%" + components[0] + "%";
-			table_filter = "%" + components[1] + "%";
+			schema_filter = "%" + components[0].GetIdentifierName() + "%";
+			table_filter = "%" + components[1].GetIdentifierName() + "%";
 		}
 	} catch (const duckdb::ParserException &) {
 		// If parsing fails, treat as a simple table pattern
@@ -2227,8 +2240,8 @@ MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type)
 		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
 		if (components.size() >= 2) {
 			// e.g : "schema.table" or "schema.%"
-			schema_filter = components[0];
-			table_filter = components[1];
+			schema_filter = components[0].GetIdentifierName();
+			table_filter = components[1].GetIdentifierName();
 			// e.g : "schema."
 			if (table_filter.empty()) {
 				table_filter = "%";
@@ -2776,6 +2789,14 @@ int ShellState::ProcessInput(InputMode mode) {
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
+			if (!in && stdin_is_interactive && conn && conn->context && conn->context->IsConnected()) {
+				// First Ctrl-D while CONNECT-ed: implicit DISCONNECT instead of exiting. A second
+				// Ctrl-D (now unbound) will exit normally.
+				printf("\n");
+				conn->Query("DISCONNECT");
+				nSql = 0;
+				continue;
+			}
 			if (!in && stdin_is_interactive) {
 				printf("\n");
 			}
@@ -2821,12 +2842,12 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			continue;
 		}
-		if (zLine && (zLine[0] == '.' || zLine[0] == '#') && nSql == 0) {
+		if ((zLine[0] == '.' || zLine[0] == '#') && nSql == 0) {
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zLine);
 			}
 			if (zLine[0] == '.') {
-				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
+				if (mode == InputMode::STANDARD && *zLine && *zLine != '\3') {
 					ShellAddHistory(zLine);
 				}
 				rc = DoMetaCommand(zLine);
@@ -2920,6 +2941,13 @@ void ShellState::HighlightSQL(string &sql) {
 	auto highlighted =
 	    duckdb::Highlighting::HighlightText(const_cast<char *>(sql.c_str()), sql.size(), 0, sql.size(), tokens);
 	sql = std::move(highlighted);
+}
+
+void ShellState::PrintSQL(const string &sql) {
+	string highlighted = sql;
+	// HighlightSQL is a no-op when highlighting is disabled or output is not a console
+	HighlightSQL(highlighted);
+	Print(highlighted);
 }
 
 string ShellState::ReadFileContents(FILE *f) {
@@ -3088,7 +3116,9 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:50}{highlight_element:prompt_connect}{setting:connect_name_prefix}{highlight_element:"
+	                 "prompt}{setting:current_database_and_schema}"
+	                 "{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");

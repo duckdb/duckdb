@@ -38,7 +38,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "CHECKPOINT_LATENCY": "true"}';
+SET tracked_metrics = ['storage.waiting_to_attach_latency', 'storage.attach_load_storage_latency', 'storage.attach_replay_wal_latency', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -54,7 +54,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.j
 
 query I
 SELECT
-	CASE WHEN checkpoint_latency >= 0 THEN 'true'
+	CASE WHEN storage.checkpoint_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -82,7 +82,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.j
 
 query I
 SELECT
-	CASE WHEN waiting_to_attach_latency >= 0 THEN 'true'
+	CASE WHEN storage.waiting_to_attach_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -90,7 +90,7 @@ true
 
 query I
 SELECT
-	CASE WHEN attach_load_storage_latency >= 0 THEN 'true'
+	CASE WHEN storage.attach_load_storage_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -98,7 +98,7 @@ true
 
 query I
 SELECT
-	CASE WHEN attach_replay_wal_latency >= 0 THEN 'true'
+	CASE WHEN storage.attach_replay_wal_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----

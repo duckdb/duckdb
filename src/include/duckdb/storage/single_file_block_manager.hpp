@@ -10,12 +10,15 @@
 
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/database_handle.hpp"
 
 namespace duckdb {
 
@@ -44,11 +47,13 @@ struct EncryptionOptions {
 
 struct StorageManagerOptions {
 	bool read_only = false;
-	bool use_direct_io = false;
+	FileIOMode io_mode = FileIOMode::BUFFERED_IO;
+	//! Reserve size for MMAP mode; empty uses the built-in default.
+	optional_idx mmap_reserve_size;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
-	optional_idx storage_version;
-	optional_idx version_number;
+	StorageVersion storage_version = StorageVersion::INVALID;
+	StorageVersion version_number = StorageVersion::INVALID;
 	optional_idx block_header_size;
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
@@ -65,7 +70,6 @@ public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
 	~SingleFileBlockManager() override;
 
-	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
 	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
@@ -131,13 +135,18 @@ public:
 		return iteration_count;
 	}
 	//! Return the version number of the file.
-	uint64_t GetVersionNumber() const;
+	StorageVersion GetVersionNumber() const;
 	//! Return the database identifier.
 	data_ptr_t GetDBIdentifier() {
 		return options.db_identifier;
 	}
 
 private:
+	//! Rewrites the main header
+	//! Usage should be avoided
+	//! Except for phasing-out the storage version
+	void RewriteMainHeader(QueryContext &context,
+	                       StorageVersion version_number = MainHeader::DEPRECATED_VERSION_NUMBER);
 	//! Loads the free list of the file.
 	void LoadFreeList(QueryContext context);
 
@@ -188,8 +197,8 @@ private:
 	uint8_t active_header;
 	//! The path where the file is stored
 	string path;
-	//! The file handle
-	unique_ptr<FileHandle> handle;
+	//! The database handle
+	unique_ptr<DatabaseHandle> handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently

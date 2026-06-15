@@ -18,6 +18,10 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override;
 
+	unique_ptr<MemoryMappedFile> MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                           const MMapOptions &options,
+	                                           optional_ptr<FileOpener> opener = nullptr) override;
+
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -87,6 +91,10 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	bool OnDiskFile(FileHandle &handle) override;
+
+	bool IsLocalFileSystem() const override {
+		return true;
+	}
 
 	std::string GetName() const override {
 		return "LocalFileSystem";

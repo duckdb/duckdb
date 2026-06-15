@@ -19,7 +19,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CTE_REF;
 
 public:
-	LogicalCTERef(TableIndex table_index, TableIndex cte_index, vector<LogicalType> types, vector<string> colnames,
+	LogicalCTERef(TableIndex table_index, TableIndex cte_index, vector<LogicalType> types, vector<Identifier> colnames,
 	              bool is_recurring = false)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index),
 	      correlated_columns(0), is_recurring(is_recurring) {
@@ -28,7 +28,7 @@ public:
 		bound_columns = std::move(colnames);
 	}
 
-	vector<string> bound_columns;
+	vector<Identifier> bound_columns;
 	//! The table index in the current bind context
 	TableIndex table_index;
 	//! CTE index

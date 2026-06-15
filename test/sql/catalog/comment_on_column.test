@@ -95,3 +95,31 @@ query TTI
 SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_comment_test'
 ----
 temp_comment_test	temp	true
+
+# test that COMMENT ON COLUMN works with view column aliases
+statement ok
+CREATE VIEW aliased_view(c1, c2) AS SELECT 1, 2;
+
+statement ok
+COMMENT ON COLUMN aliased_view.c1 IS 'comment on aliased column'
+
+query II
+SELECT column_name, comment FROM duckdb_columns() WHERE table_name='aliased_view' AND column_name='c1';
+----
+c1	comment on aliased column
+
+# also works with multiple aliases
+statement ok
+COMMENT ON COLUMN aliased_view.c2 IS 'second aliased column comment'
+
+query II
+SELECT column_name, comment FROM duckdb_columns() WHERE table_name='aliased_view' ORDER BY column_index;
+----
+c1	comment on aliased column
+c2	second aliased column comment
+
+# error on non-existent column with aliases
+statement error
+COMMENT ON COLUMN aliased_view.nonexistent IS 'bad'
+----
+View "aliased_view" does not have a column with name "nonexistent"

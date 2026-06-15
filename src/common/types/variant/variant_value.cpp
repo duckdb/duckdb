@@ -81,6 +81,15 @@ const vector<VariantValue> &VariantValue::ArrayItems() const {
 	return array_items;
 }
 
+Value VariantValue::GetValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+}
+
 static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
 	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
 	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
@@ -690,7 +699,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	analyze_offsets.Initialize(
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
-	analyze_offsets.SetCardinality(count);
+	analyze_offsets.SetChildCardinality(count);
 	variant::InitializeOffsets(analyze_offsets, count);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -713,7 +722,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	conversion_offsets.Initialize(
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
-	conversion_offsets.SetCardinality(count);
+	conversion_offsets.SetChildCardinality(count);
 	variant::InitializeOffsets(conversion_offsets, count);
 
 	VariantVectorData variant_data(result);

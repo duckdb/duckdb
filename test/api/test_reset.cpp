@@ -83,10 +83,12 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
+	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"merge_join_threshold", {73}},
@@ -104,7 +106,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
-	    {"profiling_mode", {"detailed"}},
+	    {"profiling_mode", {"standard"}},
 	    {"disabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
@@ -119,7 +121,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"enable_http_logging", {false}},
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
@@ -139,6 +140,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"checkpoint_on_detach", {"ENABLED"}},
 	    {"debug_verify_statement", {"copy_statement"}},
 	    {"enable_caching_operators", {false}},
+	    {"enable_optimizer", {false}},
 	    {"parallelize_sequential_sources", {false}},
 	    {"initial_column_segment_size", {4096}}};
 	// Every option that's not excluded has to be part of this map
@@ -201,7 +203,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "default_block_size",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
-	    "http_logging_output",
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
@@ -209,7 +210,11 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "profiling_renderer_settings",
+	    "worker_threads",
+	    "tracked_metrics",
 	    "debug_verification_mode",
+	    "standard_vector_size",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;

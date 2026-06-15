@@ -54,7 +54,7 @@ public:
 	LogicalInsert(TableCatalogEntry &table, TableIndex table_index);
 
 	vector<vector<unique_ptr<Expression>>> insert_values;
-	//! The insertion map ([table_index -> index in result, or DConstants::INVALID_INDEX if not specified])
+	//! Deprecated: The insertion map ([table_index -> index in result, or DConstants::INVALID_INDEX if not specified])
 	physical_index_vector_t<idx_t> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<LogicalType> expected_types;

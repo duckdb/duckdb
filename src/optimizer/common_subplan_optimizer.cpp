@@ -332,17 +332,17 @@ private:
 
 		// Replace column binding
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+			auto &col_ref = expr.Cast<BoundColumnRefExpression>();
 			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-			                            ? column_binding.table_index
-			                            : restore_original_table_index.at(column_binding.table_index);
+			                            ? col_ref.Binding().table_index
+			                            : restore_original_table_index.at(col_ref.Binding().table_index);
 			auto &table_map = table_index_map.at(lookup_idx);
 			if (!table_map.Empty<TYPE>()) {
 				// Replace column index
-				column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
+				col_ref.BindingMutable().column_index = table_map.Get<TYPE>(col_ref.Binding().column_index);
 			}
 			// Replace table index
-			column_binding.table_index = table_index_mapping.at(column_binding.table_index);
+			col_ref.BindingMutable().table_index = table_index_mapping.at(col_ref.Binding().table_index);
 		}
 
 		// Replace default fields
@@ -354,7 +354,7 @@ private:
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			auto &info = expression_info[info_idx++];
-			expr.SetAlias(std::move(info.first));
+			expr.SetAlias(Identifier(std::move(info.first)));
 			expr.SetQueryLocation(info.second);
 			break;
 		}
@@ -791,7 +791,7 @@ public:
 			// Get types and names
 			const auto &primary_subplan = subplan_info.subplans[0];
 			const auto &types = primary_subplan.op.get()->types;
-			vector<string> col_names;
+			vector<Identifier> col_names;
 			for (idx_t i = 0; i < types.size(); i++) {
 				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
@@ -867,7 +867,7 @@ public:
 			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
 			                                                            std::move(materialized_select_list));
 			materialized_projection->children.emplace_back(std::move(materialized_subplan));
-			auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, materialized_column_count,
+			auto cte = make_uniq<LogicalMaterializedCTE>(Identifier(cte_name), cte_index, materialized_column_count,
 			                                             std::move(materialized_projection), std::move(remainder),
 			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {

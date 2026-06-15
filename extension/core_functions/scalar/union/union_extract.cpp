@@ -10,7 +10,7 @@ namespace duckdb {
 namespace {
 
 struct UnionExtractBindData : public FunctionData {
-	UnionExtractBindData(string key, idx_t index, LogicalType type)
+	UnionExtractBindData(Identifier key, idx_t index, LogicalType type)
 	    : key(std::move(key)), index(index), type(std::move(type)) {
 	}
 
@@ -20,7 +20,7 @@ struct UnionExtractBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<UnionExtractBindData>(key, index, type);
+		return make_uniq<UnionExtractBindData>(Identifier(key), index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<UnionExtractBindData>();
@@ -30,7 +30,7 @@ public:
 
 void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<UnionExtractBindData>();
+	auto &info = func_expr.BindInfo()->Cast<UnionExtractBindData>();
 
 	// this should be guaranteed by the binder
 	const auto &vec = args.data[0];
@@ -73,7 +73,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	if (key_val.IsNull() || key_str.empty()) {
 		throw BinderException("Key name for union_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_str);
+	auto key = Identifier(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;
@@ -81,7 +81,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 
 	for (size_t i = 0; i < union_member_count; i++) {
 		auto &member_name = UnionType::GetMemberName(arguments[0]->GetReturnType(), i);
-		if (StringUtil::Lower(member_name) == key) {
+		if (member_name == key) {
 			found_key = true;
 			key_index = i;
 			return_type = UnionType::GetMemberType(arguments[0]->GetReturnType(), i);
@@ -93,11 +93,11 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 		vector<string> candidates;
 		candidates.reserve(union_member_count);
 		for (idx_t i = 0; i < union_member_count; i++) {
-			candidates.push_back(UnionType::GetMemberName(arguments[0]->GetReturnType(), i));
+			candidates.emplace_back(UnionType::GetMemberName(arguments[0]->GetReturnType(), i));
 		}
 		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
-		throw BinderException("Could not find key \"%s\" in union\n%s", key, message);
+		throw BinderException("Could not find key \"%s\" in union\n%s", key.GetIdentifierName(), message);
 	}
 
 	bound_function.SetReturnType(return_type);

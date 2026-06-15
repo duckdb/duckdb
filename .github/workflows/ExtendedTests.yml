@@ -7,14 +7,12 @@ on:
       - 'feature'
       - 'v*.*-*'
       - 'gh-readonly-queue/**'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/ExtendedTests.yml'
+    paths:
+      - '.github/workflows/ExtendedTests.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/ExtendedTests.yml'
+    paths:
+      - '.github/workflows/ExtendedTests.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -59,7 +57,7 @@ jobs:
     - name: Run Tests
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/${{ matrix.config }}.json ./build/reldebug/test/unittest "*"
+        ./build/reldebug/test/run --test-config=test/configs/${{ matrix.config }}.json "*"
 
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)

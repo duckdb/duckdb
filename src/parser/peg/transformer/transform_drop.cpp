@@ -5,81 +5,71 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropStatement(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto drop_entry = transformer.Transform<unique_ptr<DropStatement>>(list_pr.Child<ListParseResult>(1));
-	transformer.TransformOptional<bool>(list_pr, 2, drop_entry->info->cascade);
-	return std::move(drop_entry);
-}
-
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropEntries(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<DropStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+                                                                       unique_ptr<DropStatement> drop_entries,
+                                                                       const bool &drop_behavior) {
+	drop_entries->info->cascade = drop_behavior;
+	return std::move(drop_entries);
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                    const CatalogType &table_or_view,
+                                                                    const bool &if_exists,
+                                                                    vector<unique_ptr<BaseTableRef>> base_table_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	auto catalog_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(0));
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto base_table_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (base_table_list.size() > 1) {
+	if (base_table_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(base_table_list[0]);
+	auto base_table = std::move(base_table_name[0]);
 	info->catalog = base_table->catalog_name;
 	info->schema = base_table->schema_name;
 	info->name = base_table->table_name;
-	info->type = catalog_type;
+	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
 	return result;
 }
 
-CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	if (choice_pr.name == "MaterializedViewEntry") {
-		throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
-	}
-	return transformer.TransformEnum<CatalogType>(choice_pr);
+CatalogType PEGTransformerFactory::TransformMaterializedViewEntry(PEGTransformer &transformer) {
+	throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+bool PEGTransformerFactory::TransformFunctionTypeMacroKeyword(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformFunctionTypeFunction(PEGTransformer &transformer) {
+	return false;
+}
+
+unique_ptr<DropStatement>
+PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, const CatalogType &comment_macro_table,
+                                                  const bool &if_exists,
+                                                  const vector<Identifier> &table_function_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	auto catalog_type = transformer.TransformEnum<CatalogType>(list_pr.Child<ListParseResult>(0));
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto table_function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (table_function_list.size() > 1) {
+	if (table_function_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->name = table_function_list[0].get().Cast<IdentifierParseResult>().identifier;
+	info->name = table_function_name[0];
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
-	info->type = catalog_type;
+	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<DropStatement>
+PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
+                                             const bool &if_exists, const vector<QualifiedName> &function_identifier) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	auto catalog_type = CatalogType::MACRO_ENTRY;
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (function_list.size() > 1) {
+	if (function_identifier.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto function = transformer.Transform<QualifiedName>(function_list[0]);
+	const auto &function = function_identifier[0];
 	info->catalog = function.catalog.empty() ? INVALID_CATALOG : function.catalog;
 	info->schema = function.schema;
 	info->name = function.name;
@@ -89,17 +79,15 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransf
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<DropStatement>
+PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const bool &if_exists,
+                                           const vector<QualifiedName> &qualified_schema_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto schema_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (schema_list.size() > 1) {
+	if (qualified_schema_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto schema = transformer.Transform<QualifiedName>(schema_list[0]);
+	const auto &schema = qualified_schema_name[0];
 	info->catalog = schema.catalog;
 	info->name = schema.schema;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -108,28 +96,31 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransfor
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedSchemaName(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTransformer &transformer,
+                                                                        const Identifier &schema_name) {
 	QualifiedName result;
-	string catalog = INVALID_CATALOG;
-	transformer.TransformOptional<string>(list_pr, 0, catalog);
-	result.catalog = catalog;
-	result.schema = list_pr.Child<IdentifierParseResult>(1).identifier;
+	result.catalog = INVALID_CATALOG;
+	result.schema = schema_name;
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchema(PEGTransformer &transformer,
+                                                                    const Identifier &catalog_qualification,
+                                                                    const Identifier &reserved_schema_name) {
+	QualifiedName result;
+	result.catalog = catalog_qualification;
+	result.schema = reserved_schema_name;
+	return result;
+}
+
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransformer &transformer, const bool &if_exists,
+                                                                    const vector<QualifiedName> &qualified_index_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto index_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (index_list.size() > 1) {
+	if (qualified_index_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto index = transformer.Transform<QualifiedName>(index_list[0]);
+	const auto &index = qualified_index_name[0];
 	info->catalog = index.catalog;
 	info->schema = index.schema;
 	info->name = index.name;
@@ -139,29 +130,44 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer &transformer,
-                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransformer &transformer,
+                                                                       const Identifier &index_name) {
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = INVALID_SCHEMA;
-	transformer.TransformOptional<string>(list_pr, 0, result.catalog);
-	transformer.TransformOptional<string>(list_pr, 1, result.schema);
-	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	result.name = index_name;
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer &transformer,
+                                                                  const Identifier &schema_qualification,
+                                                                  const Identifier &reserved_index_name) {
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = schema_qualification;
+	result.name = reserved_index_name;
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(
+    PEGTransformer &transformer, const Identifier &catalog_qualification,
+    const Identifier &reserved_schema_qualification, const Identifier &reserved_index_name) {
+	QualifiedName result;
+	result.catalog = catalog_qualification;
+	result.schema = reserved_schema_qualification;
+	result.name = reserved_index_name;
+	return result;
+}
+
+unique_ptr<DropStatement>
+PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const bool &if_exists,
+                                             const vector<QualifiedName> &qualified_sequence_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto sequence_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (sequence_list.size() > 1) {
+	if (qualified_sequence_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto sequence = transformer.Transform<QualifiedName>(sequence_list[0]);
+	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.schema.empty()) {
 		info->schema = sequence.catalog;
 	} else {
@@ -175,24 +181,21 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransf
 	return result;
 }
 
-string PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier;
+Identifier PEGTransformerFactory::TransformCollationName(PEGTransformer &transformer, const Identifier &identifier) {
+	return identifier;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTransformer &transformer,
-                                                                        ParseResult &parse_result) {
+                                                                        const bool &if_exists,
+                                                                        const vector<Identifier> &collation_name) {
 	throw NotImplementedException("Cannot drop collation yet");
 	/*
-	 *auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto collation_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (collation_list.size() > 1) {
+	if (collation_name.size() > 1) {
 	    throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto collation = transformer.Transform<string>(collation_list[0]);
+	auto collation = collation_name[0];
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
 	info->name = collation;
@@ -203,17 +206,14 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTrans
 	*/
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransformer &transformer, const bool &if_exists,
+                                                                   const vector<QualifiedName> &qualified_type_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto type_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	if (type_list.size() > 1) {
+	if (qualified_type_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto type = transformer.Transform<QualifiedName>(type_list[0]);
+	const auto &type = qualified_type_name[0];
 	if (type.schema.empty()) {
 		info->schema = type.catalog;
 	} else {
@@ -227,55 +227,55 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	return result;
 }
 
-bool PEGTransformerFactory::TransformDropBehavior(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return StringUtil::CIEquals(choice_pr.Cast<KeywordParseResult>().keyword, "cascade");
+bool PEGTransformerFactory::TransformCascadeDropBehavior(PEGTransformer &transformer) {
+	return true;
 }
 
-bool PEGTransformerFactory::TransformIfExists(PEGTransformer &transformer, ParseResult &parse_result) {
+bool PEGTransformerFactory::TransformRestrictDropBehavior(PEGTransformer &transformer) {
+	return false;
+}
+
+bool PEGTransformerFactory::TransformIfExists(PEGTransformer &transformer) {
 	return true;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                     const SecretPersistType &temporary,
+                                                                     const bool &if_exists,
+                                                                     const Identifier &secret_name,
+                                                                     const Identifier &drop_secret_storage) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	info->type = CatalogType::SECRET_ENTRY;
 	auto extra_drop_info = make_uniq<ExtraDropSecretInfo>();
-	extra_drop_info->persist_mode = SecretPersistType::DEFAULT;
-	transformer.TransformOptional<SecretPersistType>(list_pr, 0, extra_drop_info->persist_mode);
+	extra_drop_info->persist_mode = temporary;
 
-	bool if_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	info->name = transformer.Transform<string>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<string>(list_pr, 4, extra_drop_info->secret_storage);
+	info->name = secret_name;
+	extra_drop_info->secret_storage = drop_secret_storage.GetIdentifierName();
 	info->extra_drop_info = std::move(extra_drop_info);
 	result->info = std::move(info);
 	return result;
 }
 
-string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(1).identifier;
+Identifier PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer,
+                                                             const Identifier &identifier) {
+	return identifier;
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	// DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                      const bool &if_exists,
+                                                                      const Identifier &trigger_name,
+                                                                      unique_ptr<BaseTableRef> base_table_name) {
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	info->type = CatalogType::TRIGGER_ENTRY;
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	info->name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
+	info->name = trigger_name;
 
-	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
 	auto extra_info = make_uniq<ExtraDropTriggerInfo>();
-	extra_info->base_table = std::move(base_table);
+	extra_info->base_table = std::move(base_table_name);
 	info->extra_drop_info = std::move(extra_info);
 
 	result->info = std::move(info);

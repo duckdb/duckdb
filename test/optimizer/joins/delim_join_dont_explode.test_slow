@@ -38,7 +38,7 @@ exists(
 		 FROM medium_2
 			 INNER JOIN medium_1
 				 ON ((medium_2.id = medium_1.fk_to_medium_2))
-		 WHERE  
+		 WHERE
 		   (medium_1.fk_to_big % 7 = bt.id % 7)
 ) order by bt.id
 ----
@@ -49,7 +49,7 @@ exists(
 # Now the DELIM_SCAN is joined with a SEQ_SCAN first, and then with the SEQ_SCAN
 # Now that we reorder semi joins the ordering of the sequential scans has also changed
 query II
-EXPLAIN 
+EXPLAIN
 SELECT *
 FROM big_table as bt
 WHERE
@@ -58,12 +58,12 @@ exists(
 	 FROM medium_2
 		 INNER JOIN medium_1
 			 ON ((medium_2.id = medium_1.fk_to_medium_2))
-	 WHERE  
+	 WHERE
 	   (medium_1.fk_to_big % 7 = bt.id % 7)
 )
 order by bt.id
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*DELIM_SCAN.*SEQ_SCAN.*
+physical_plan	<REGEX>:(.*HASH_JOIN.*DELIM_SCAN.*SEQ_SCAN.*)|(.*CTE Name:.*__duckdb_delim.*HASH_JOIN.*SEQ_SCAN.*CTE_SCAN.*)
 
 
 

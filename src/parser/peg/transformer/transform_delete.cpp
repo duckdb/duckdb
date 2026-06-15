@@ -4,47 +4,40 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(
+    PEGTransformer &transformer, CommonTableExpressionMap with_clause, unique_ptr<BaseTableRef> target_opt_alias,
+    vector<unique_ptr<TableRef>> delete_using_clause, unique_ptr<ParsedExpression> where_clause,
+    vector<unique_ptr<ParsedExpression>> returning_clause) {
 	auto result = make_uniq<DeleteStatement>();
 	auto &node = *result->node;
-	auto &with_opt = list_pr.Child<OptionalParseResult>(0);
-	if (with_opt.HasResult()) {
-		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.GetResult());
+	if (!with_clause.map.empty()) {
+		node.cte_map = std::move(with_clause);
 	}
-	node.table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<vector<unique_ptr<TableRef>>>(list_pr, 4, node.using_clauses);
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, node.condition);
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, node.returning_list);
+	node.table = std::move(target_opt_alias);
+	node.using_clauses = std::move(delete_using_clause);
+	node.condition = std::move(where_clause);
+	node.returning_list = std::move(returning_clause);
 	return std::move(result);
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformTargetOptAlias(PEGTransformer &transformer,
-                                                                        ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto table_ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<string>(list_pr, 2, table_ref->alias);
-	return table_ref;
+                                                                        unique_ptr<BaseTableRef> base_table_name,
+                                                                        const Identifier &col_id) {
+	if (!col_id.empty()) {
+		base_table_name->alias = Identifier(col_id);
+	}
+	return base_table_name;
 }
 
 vector<unique_ptr<TableRef>> PEGTransformerFactory::TransformDeleteUsingClause(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto table_ref_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(1));
-	vector<unique_ptr<TableRef>> result;
-	for (auto table_ref : table_ref_list) {
-		result.push_back(transformer.Transform<unique_ptr<TableRef>>(table_ref));
-	}
-	return result;
+                                                                               vector<unique_ptr<TableRef>> table_ref) {
+	return table_ref;
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTruncateStatement(PEGTransformer &transformer,
-                                                                           ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                           unique_ptr<BaseTableRef> base_table_name) {
 	auto result = make_uniq<DeleteStatement>();
-	result->node->table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
+	result->node->table = std::move(base_table_name);
 	return std::move(result);
 }
 

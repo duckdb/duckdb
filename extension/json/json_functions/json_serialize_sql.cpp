@@ -6,6 +6,7 @@
 #include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -89,7 +90,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JsonSerializeBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<JsonSerializeBindData>();
 
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
@@ -110,8 +111,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
-				options->serialization_compatibility =
-				    state.GetContext().db->config.options.serialization_compatibility;
+				options->storage_compatibility = state.GetContext().db->config.options.storage_compatibility;
 				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 
@@ -154,23 +154,18 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializeFunction,
-	                               JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	                               JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction func({}, LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
+	                    JSONFunctionLocalState::Init);
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
-	                               JSONFunctionLocalState::Init));
+	func.GetSignature()
+	    .AddParameter("sql", LogicalType::VARCHAR)
+	    .AddParameter("skip_null", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_default", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("format", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
-
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(std::move(func));
 
 	return set;
 }
@@ -215,6 +210,11 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 		if (!stmt->node) {
 			throw ParserException("Error parsing json: no select node found in json");
 		}
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(*stmt->node, [](unique_ptr<ParsedExpression> &child) {
+			if (!child) {
+				throw ParserException("Error parsing json: null expression found in json");
+			}
+		});
 		result.push_back(std::move(stmt));
 	}
 
@@ -247,8 +247,10 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
-	set.AddFunction(ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	auto function = ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
+	                               nullptr, JSONFunctionLocalState::Init);
+	function.SetFallible();
+	set.AddFunction(std::move(function));
 	return set;
 }
 

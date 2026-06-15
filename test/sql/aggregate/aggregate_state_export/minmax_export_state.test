@@ -1,0 +1,108 @@
+# name: test/sql/aggregate/aggregate_state_export/minmax_export_state.test
+# description: Test min/max EXPORT_STATE for string inputs
+# group: [aggregate_state_export]
+
+# empty input returns NULL
+query T
+SELECT min(v) EXPORT_STATE FROM (SELECT NULL::varchar AS v WHERE false) t;
+----
+NULL
+
+query T
+SELECT max(v) EXPORT_STATE FROM (SELECT NULL::varchar AS v WHERE false) t;
+----
+NULL
+
+# all-null input returns NULL
+query T
+SELECT min(NULL::varchar) EXPORT_STATE;
+----
+NULL
+
+# inlined strings (<=12 chars)
+query T
+SELECT min(v) EXPORT_STATE FROM (VALUES ('banana'), ('apple'), ('cherry')) t(v);
+----
+apple
+
+query T
+SELECT max(v) EXPORT_STATE FROM (VALUES ('banana'), ('apple'), ('cherry')) t(v);
+----
+cherry
+
+# non-inlined strings (>12 chars)
+query T
+SELECT min(v) EXPORT_STATE FROM (VALUES ('long-string-banana'), ('long-string-apple'), ('long-string-cherry')) t(v);
+----
+long-string-apple
+
+query T
+SELECT max(v) EXPORT_STATE FROM (VALUES ('long-string-banana'), ('long-string-apple'), ('long-string-cherry')) t(v);
+----
+long-string-cherry
+
+# combine two states
+query T
+SELECT finalize(combine(min('apple'::varchar) EXPORT_STATE, min('cherry'::varchar) EXPORT_STATE));
+----
+apple
+
+query T
+SELECT finalize(combine(max('apple'::varchar) EXPORT_STATE, max('cherry'::varchar) EXPORT_STATE));
+----
+cherry
+
+# combine_aggr across groups
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('banana'), ('apple')) t(v)
+    UNION ALL
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('cherry'), ('avocado')) t(v)
+) t;
+----
+apple
+
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT max(v) EXPORT_STATE AS s FROM (VALUES ('banana'), ('apple')) t(v)
+    UNION ALL
+    SELECT max(v) EXPORT_STATE AS s FROM (VALUES ('cherry'), ('avocado')) t(v)
+) t;
+----
+cherry
+
+# combine_aggr with NULL states (empty groups)
+query T
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT min(v) EXPORT_STATE AS s FROM (VALUES ('banana')) t(v)
+    UNION ALL
+    SELECT min(v) EXPORT_STATE AS s FROM (SELECT NULL::varchar AS v WHERE false) t
+) t;
+----
+banana
+
+# string values are exported with the aggregate's return type (e.g. BLOB instead of VARCHAR)
+query I
+SELECT typeof((min(v) EXPORT_STATE)::BLOB) FROM (VALUES ('\xAA\xBB'::BLOB)) t(v);
+----
+BLOB
+
+# values are exported with the aggregate's return type (e.g. DATE or UUID instead of the physical type)
+query I
+SELECT (min(d) EXPORT_STATE)::VARCHAR FROM (VALUES (DATE '2000-01-01'), (DATE '2010-01-01')) t(d);
+----
+2000-01-01
+
+query I
+SELECT (max(u) EXPORT_STATE)::VARCHAR FROM (VALUES (UUID '5ABF4945-15A5-4D27-8B25-1D9E0E9DDF0F')) t(u);
+----
+5abf4945-15a5-4d27-8b25-1d9e0e9ddf0f
+
+# stress test - min export/import roundtrips for all types
+statement ok
+SELECT min(COLUMNS(*)) EXPORT_STATE FROM test_all_types();
+
+query I
+SELECT list_bool_and([*COLUMNS(*)]) FROM (SELECT finalize(min(COLUMNS(*)) EXPORT_STATE) = min(COLUMNS(*)) FROM test_all_types());
+----
+true

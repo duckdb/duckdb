@@ -46,8 +46,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
 
-	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
+	idx_t row_groups_scanned = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -72,11 +72,15 @@ public:
 		D_ASSERT(bind_data_p);
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		max_threads = duck_table.GetStorage().MaxThreads(context);
+		auto &storage = duck_table.GetStorage();
+		max_threads = storage.MaxThreads(context);
+		total_row_groups_to_scan = storage.GetRowGroupCountWithLocalStorage(context);
 	}
 
 	//! The maximum number of threads for this table scan.
 	idx_t max_threads;
+	//! The total number of row groups available to this table scan.
+	idx_t total_row_groups_to_scan;
 	//! The projected columns of this table scan.
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
@@ -90,6 +94,7 @@ public:
 	virtual OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                        TableFunctionGetPartitionInput &input) = 0;
 	virtual idx_t TableScanRowsScanned(LocalTableFunctionState &state) = 0;
+	virtual idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) = 0;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -258,6 +263,10 @@ public:
 		auto &l_state = state.Cast<IndexScanLocalState>();
 		return l_state.rows_scanned;
 	}
+
+	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &) override {
+		return 0;
+	}
 };
 
 class DuckTableScanState : public TableScanGlobalState {
@@ -289,13 +298,18 @@ public:
 		}
 
 		if (bind_data.order_options) {
-			l_state->scan_state.table_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+			l_state->scan_state.table_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
+			l_state->scan_state.local_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
+		if (l_state->rows_in_current_row_group > 0) {
+			l_state->row_groups_scanned++;
+		}
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
@@ -322,9 +336,10 @@ public:
 				return;
 			}
 
-			// We have fully processed a row group. Add to scanned_rows
-			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (l_state.rows_in_current_row_group > 0) {
+				l_state.row_groups_scanned++;
+			}
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
@@ -375,8 +390,13 @@ public:
 	}
 
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
+		const auto &l_state = state.Cast<TableScanLocalState>();
+		return l_state.scan_state.table_state.rows_scanned + l_state.scan_state.local_state.rows_scanned;
+	}
+
+	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) override {
 		auto &l_state = state.Cast<TableScanLocalState>();
-		return l_state.rows_scanned;
+		return l_state.row_groups_scanned;
 	}
 };
 
@@ -390,8 +410,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
 	if (bind_data.order_options) {
-		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+		auto transaction = TransactionData(DuckTransaction::Get(context, storage.GetAttached()));
+		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
+		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
 	}
 	if (bind_data.partitions_to_scan) {
 		g_state->state.scan_state.partitions_to_scan = bind_data.partitions_to_scan.get();
@@ -478,14 +499,14 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		if (op.children.empty() || op.children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		if (op.GetChildren().empty() || op.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
 			return false;
 		}
-		for (idx_t i = 1; i < op.children.size(); i++) {
-			if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		for (idx_t i = 1; i < op.GetChildren().size(); i++) {
+			if (op.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 				return false;
 			}
-			auto &value = op.children[i]->Cast<BoundConstantExpression>().value;
+			auto &value = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
 			if (!value.IsNull()) {
 				in_values.insert(value);
 			}
@@ -500,9 +521,9 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		bool left_is_ref = left.GetExpressionClass() == ExpressionClass::BOUND_REF;
 		bool right_is_ref = right.GetExpressionClass() == ExpressionClass::BOUND_REF;
 		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
-			val = right.Cast<BoundConstantExpression>().value;
+			val = right.Cast<BoundConstantExpression>().GetValue();
 		} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
-			val = left.Cast<BoundConstantExpression>().value;
+			val = left.Cast<BoundConstantExpression>().GetValue();
 		} else {
 			return false;
 		}
@@ -518,7 +539,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildren()) {
 			if (!CollectValuesAndComparisonsFromExpression(*child, in_values, comparisons)) {
 				return false;
 			}
@@ -527,23 +548,23 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return true;
 			}
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
 			return !data.child_filter_expr ||
 			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return true;
 			}
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 			return !data.child_filter_expr ||
 			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
-		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
 		}
 	}
@@ -668,8 +689,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
+			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
+				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
 			}
 		});
 	}
@@ -784,8 +805,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
 	// <ART index, SegmentTree<RowGroup> pairing.
 	unique_ptr<StorageLockKey> vacuum_lock;
-	auto &db = DatabaseInstance::GetDatabase(context);
-	if (Settings::Get<VacuumRebuildIndexesSetting>(db) > 0) {
+	const auto &attached = storage.GetAttached();
+	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
 		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
 		vacuum_lock = transaction_manager.SharedVacuumLock();
 	}
@@ -881,9 +902,12 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
-idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
-	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
-	return gstate.TableScanRowsScanned(local_state);
+void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	auto &gstate = input.global_state->Cast<TableScanGlobalState>();
+	auto &local_state = *input.local_state;
+	input.operator_metrics.rows_scanned = gstate.TableScanRowsScanned(local_state);
+	input.operator_metrics.row_groups_scanned = gstate.TableScanRowGroupsScanned(local_state);
+	input.operator_metrics.total_row_groups_to_scan = gstate.total_row_groups_to_scan;
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
@@ -907,9 +931,9 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
-	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
-	auto schema = deserializer.ReadProperty<string>(101, "schema");
-	auto table = deserializer.ReadProperty<string>(102, "table");
+	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
+	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
+	auto table = deserializer.ReadProperty<Identifier>(102, "table");
 	auto &catalog_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
@@ -967,7 +991,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.statistics_extended = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
-	scan_function.rows_scanned = TableScanRowsScanned;
+	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;

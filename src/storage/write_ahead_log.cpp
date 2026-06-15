@@ -262,7 +262,8 @@ void WriteAheadLog::WriteHeader() {
 
 	auto &single_file_block_manager = database.GetStorageManager().GetBlockManager().Cast<SingleFileBlockManager>();
 	auto file_version_number = single_file_block_manager.GetVersionNumber();
-	if (file_version_number > 66) {
+	// double check
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_3_0, file_version_number)) {
 		auto db_identifier = single_file_block_manager.GetDBIdentifier();
 		serializer.WriteList(102, "db_identifier", MainHeader::DB_IDENTIFIER_LEN,
 		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(db_identifier[i]); });
@@ -336,7 +337,7 @@ void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	serializer.WriteProperty(103, "usage_count", val.usage_count);
 	serializer.WriteProperty(104, "counter", val.counter);
 	// we only support writing last_value from version 2.0.0 onwards
-	if (storage_manager.GetStorageVersion() >= 8) {
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
 		serializer.WriteProperty(105, "last_value", val.entry->GetData().last_value);
 	}
 	serializer.End();
@@ -376,10 +377,11 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
-                    const string &name) {
+                    const Identifier &name) {
 	case_insensitive_map_t<Value> options;
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
-	auto v1_0_0_storage = storage_version < 3;
+	// Before: serialization version 3
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
 	if (!v1_0_0_storage) {
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
@@ -481,7 +483,7 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 // DATA
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteSetTable(const string &schema, const string &table) {
+void WriteAheadLog::WriteSetTable(const Identifier &schema, const Identifier &table) {
 	WriteAheadLogSerializer serializer(*this, WALType::USE_TABLE);
 	serializer.WriteProperty(101, "schema", schema);
 	serializer.WriteProperty(102, "table", table);

@@ -49,6 +49,9 @@ public:
 		return VariantValue(Value(LogicalType::SQLNULL));
 	}
 
+	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
+	static Value GetValue(const Value &variant_val);
+
 public:
 	void AddChild(const string &key, VariantValue &&val);
 	void AddItem(VariantValue &&val);

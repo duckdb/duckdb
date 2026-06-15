@@ -1,9 +1,11 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -135,6 +137,10 @@ FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
 
+FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
+	return db.GetLocalFileSystem();
+}
+
 FileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
@@ -202,7 +208,7 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
+	info.name = Identifier(AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem()));
 	info.path = config.options.database_path;
 
 	Connection con(*this);
@@ -285,6 +291,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
+	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -294,6 +301,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
+
+	metrics_manager = make_uniq<MetricsManager>();
 
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
 	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
@@ -308,12 +317,12 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
+	// initialize the system catalog
+	db_manager->InitializeSystemCatalog();
+
 	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
-
-	// initialize the system catalog
-	db_manager->InitializeSystemCatalog();
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
@@ -334,6 +343,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(config.options.async_threads);
 	scheduler->RelaunchThreads();
 }
 
@@ -390,6 +400,32 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
+FileSystem &DatabaseInstance::GetLocalFileSystem() {
+	return *local_db_file_system;
+}
+
+static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
+	auto &default_fs = vfs.GetDefaultFileSystem();
+	if (default_fs.IsLocalFileSystem()) {
+		return default_fs;
+	}
+	owned = make_uniq<LocalFileSystem>();
+	return *owned;
+}
+
+LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+}
+
+FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
+	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
+	}
+	return local_fs;
+}
+
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
 }
@@ -440,6 +476,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetDefaultTempDirectory();
 	}
 
+	if (new_config.options.http_proxy.empty()) {
+		HTTPProxySetting::ResetGlobal(this, config);
+	}
+
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
@@ -465,6 +505,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	}
+	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
+		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
@@ -592,6 +635,10 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+MetricsManager &DatabaseInstance::GetMetricsManager() {
+	return *metrics_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

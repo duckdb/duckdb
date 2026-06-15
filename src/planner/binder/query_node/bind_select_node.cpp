@@ -47,9 +47,10 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
-                                      bool is_percentage, bool is_offset) {
+                                      LimitValueType value_type, bool is_offset) {
 	auto new_binder = Binder::CreateBinder(context, this);
 	ExpressionBinder expr_binder(*new_binder, context);
+	bool is_percentage = value_type == LimitValueType::PERCENTAGE;
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
 	expr_binder.target_type = target_type;
 	auto original_limit = limit_val->Copy();
@@ -108,21 +109,10 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 duckdb::unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
 	auto result = make_uniq<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), false, false);
+		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), limit_mod.limit_type, false);
 	}
 	if (limit_mod.offset) {
-		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
-	}
-	return std::move(result);
-}
-
-unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod) {
-	auto result = make_uniq<BoundLimitModifier>();
-	if (limit_mod.limit) {
-		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), true, false);
-	}
-	if (limit_mod.offset) {
-		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
+		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), LimitValueType::ROW_COUNT, true);
 	}
 	return std::move(result);
 }
@@ -178,7 +168,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
-				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
+				if (star.ExcludeList().empty() && star.ReplaceList().empty() && !star.Expression()) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = config.ResolveOrder(context, order.orders[0].type);
@@ -241,9 +231,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit(order_binder, mod->Cast<LimitModifier>());
 			break;
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
-			break;
 		default:
 			throw InternalException("Unsupported result modifier");
 		}
@@ -253,7 +240,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
+static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<Identifier> &names,
                                                     const vector<LogicalType> &sql_types, TableIndex table_index,
                                                     ProjectionIndex index) {
 	if (index >= sql_types.size()) {
@@ -268,14 +255,14 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 }
 
 static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, TableIndex table_index,
-                                                          const vector<string> &names,
+                                                          const vector<Identifier> &names,
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
-	switch (constant.value.type().id()) {
+	switch (constant.GetValue().type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
-		auto index = UBigIntValue::Get(constant.value);
+		auto index = UBigIntValue::Get(constant.GetValue());
 		return CreateOrderExpression(std::move(expr), names, sql_types, table_index, bind_state.GetFinalIndex(index));
 	}
 	case LogicalTypeId::VARCHAR: {
@@ -284,7 +271,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
-		auto &struct_values = StructValue::GetChildren(constant.value);
+		auto &struct_values = StructValue::GetChildren(constant.GetValue());
 		if (struct_values.size() > 2) {
 			throw InternalException("Expected one or two children: index and optional collation");
 		}
@@ -307,7 +294,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<string> &names,
+static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<Identifier> &names,
                              const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
@@ -319,10 +306,10 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.binding.column_index]);
+	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
+void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
                            const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
@@ -395,14 +382,14 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildrenMutable()) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
-		if (!star.columns) {
+		if (!star.IsColumns()) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
 	}
@@ -420,6 +407,13 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 		                                                 std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}
+}
+
+Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
+	if (!expr.GetAlias().empty()) {
+		return expr.GetAlias();
+	}
+	return expr.GetName();
 }
 
 BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
@@ -453,7 +447,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(expr->GetName());
+		result.names.emplace_back(GetExpressionName(*expr));
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
@@ -503,8 +497,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// the statement has a GROUP BY clause, bind it
 		GroupBinder group_binder(*this, context, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
-		auto prev_can_contain_nulls = this->can_contain_nulls;
-		this->can_contain_nulls = true;
+		auto prev_can_contain_nulls = CanContainNulls();
+		SetCanContainNulls(true);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
@@ -535,7 +529,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 		}
-		this->can_contain_nulls = prev_can_contain_nulls;
+		SetCanContainNulls(prev_can_contain_nulls);
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 
@@ -568,7 +562,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
 	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types
 	vector<idx_t> group_by_all_indexes;
-	vector<string> new_names;
+	vector<Identifier> new_names;
 	vector<LogicalType> internal_sql_types;
 
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
@@ -590,11 +584,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
-			auto &struct_expressions = expanded.expanded_expressions;
+			auto &struct_expressions = expanded.GetChildrenMutable();
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {
-				new_names.push_back(struct_expr->GetName());
+				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
 				internal_sql_types.push_back(struct_expr->GetReturnType());
 				result.select_list.push_back(std::move(struct_expr));

@@ -2,6 +2,7 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
+add_subdirectory(allocator)
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
@@ -14,6 +15,7 @@ add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
 add_subdirectory(types)
+add_subdirectory(util)
 add_subdirectory(value_operations)
 add_subdirectory(vector)
 add_subdirectory(vector_operations)
@@ -30,7 +32,6 @@ endif()
 add_library_unity(
   duckdb_common
   OBJECT
-  allocator.cpp
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp
@@ -57,9 +58,11 @@ add_library_unity(
   path.cpp
   fsst.cpp
   gzip_file_system.cpp
+  identifier.cpp
   hive_partitioning.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  memory_mapped_file.cpp
   error_data.cpp
   opener_file_system.cpp
   printer.cpp
@@ -69,7 +72,7 @@ add_library_unity(
   stacktrace.cpp
   string_util.cpp
   enum_util.cpp
-  serialization_compatibility.cpp
+  storage_compatibility.cpp
   symbols.cpp
   render_tree.cpp
   thread_util.cpp

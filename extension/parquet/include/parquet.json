@@ -109,6 +109,13 @@
         "type": "bool",
         "default": "false",
         "property": "parquet_options.can_have_nan"
+      },
+      {
+        "id": 108,
+        "name": "prefetch_strategy",
+        "type": "ParquetPrefetchStrategyOption",
+        "default": "ParquetPrefetchStrategyOption::AUTO",
+        "property": "parquet_options.prefetch_strategy"
       }
     ],
     "pointer_type": "none"
@@ -146,7 +153,7 @@
       {
         "id": 100,
         "name": "ids",
-        "type": "case_insensitive_map_t<FieldID>",
+        "type": "identifier_map_t<FieldID>",
         "serialize_property": "ids.operator*()",
         "deserialize_property": "ids.operator*()"
       }
@@ -186,7 +193,7 @@
       {
         "id": 100,
         "name": "types",
-        "type": "case_insensitive_map_t<ShreddingType>",
+        "type": "identifier_map_t<ShreddingType>",
         "serialize_property": "types.operator*()",
         "deserialize_property": "types.operator*()"
       }

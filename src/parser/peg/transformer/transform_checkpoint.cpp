@@ -6,15 +6,15 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCheckpointStatement(PEGTransformer &transformer,
                                                                              const bool &checkpoint_force,
-                                                                             const string &catalog_name) {
+                                                                             const Identifier &catalog_name) {
 	auto checkpoint_name = checkpoint_force ? "force_checkpoint" : "checkpoint";
 	auto result = make_uniq<CallStatement>();
 	vector<unique_ptr<ParsedExpression>> children;
 	auto function = make_uniq<FunctionExpression>(checkpoint_name, std::move(children));
-	function->catalog = SYSTEM_CATALOG;
-	function->schema = DEFAULT_SCHEMA;
+	function->CatalogMutable() = SYSTEM_CATALOG;
+	function->SchemaMutable() = DEFAULT_SCHEMA;
 	if (!catalog_name.empty()) {
-		function->children.push_back(make_uniq<ConstantExpression>(catalog_name));
+		function->GetArgumentsMutable().emplace_back(make_uniq<ConstantExpression>(catalog_name));
 	}
 	result->function = std::move(function);
 	return std::move(result);

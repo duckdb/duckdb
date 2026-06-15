@@ -10,6 +10,12 @@
       "paths": [
         "test/sql/storage/compression/rle/rle_constant.test"
       ]
+    },
+    {
+      "reason": "No stats",
+      "paths": [
+        "test/sql/types/geo/geometry_shred_types.test_slow"
+      ]
     }
   ]
 }

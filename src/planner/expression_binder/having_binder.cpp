@@ -17,9 +17,9 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 }
 
 BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -79,7 +79,7 @@ BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t dept
 
 void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
 	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, nullptr, having_binder);
-	vector<unordered_set<string>> lambda_params;
+	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 

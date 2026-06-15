@@ -192,11 +192,6 @@ struct ApproxTopKState {
 };
 
 struct ApproxTopKOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.state = nullptr;
-	}
-
 	template <class TYPE, class STATE>
 	static void Operation(STATE &aggr_state, const TYPE &input, AggregateInputData &aggr_input,
 	                      const Vector &top_k_vector, idx_t offset, idx_t count) {
@@ -340,7 +335,7 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 }
 
 template <class OP = HistogramGenericFunctor>
-void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+void ApproxTopKFinalize(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count, idx_t offset) {
 	auto states = state_vector.Values<ApproxTopKState *>();
 
 	auto old_len = ListVector::GetListSize(result);

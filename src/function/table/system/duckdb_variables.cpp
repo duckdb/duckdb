@@ -76,7 +76,6 @@ void DuckDBVariablesFunction(ClientContext &context, TableFunctionInput &data_p,
 		type.Append(Value(variable_entry.value.type().ToString()));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBVariablesFun::RegisterFunction(BuiltinFunctions &set) {

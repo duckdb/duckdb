@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -42,6 +43,17 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 	for (auto &child : children) {
 		child.SetVectorType(new_vector_type);
+	}
+}
+
+void VectorStructBuffer::PrepareChildrenForSetConstant() {
+	for (auto &child : children) {
+		if (child.GetVectorType() != VectorType::FLAT_VECTOR && child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			child.Flatten();
+		}
+		if (child.GetType().InternalType() == PhysicalType::STRUCT) {
+			child.BufferMutable().Cast<VectorStructBuffer>().PrepareChildrenForSetConstant();
+		}
 	}
 }
 
@@ -223,9 +235,6 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 		for (idx_t i = 0; i < children.size(); i++) {
 			child_values.push_back(children[i].GetValue(index));
 		}
-		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
-			return Value::AGGREGATE_STATE(type, std::move(child_values));
-		}
 		return Value::STRUCT(type, std::move(child_values));
 	}
 	}
@@ -279,8 +288,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 
 vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT ||
-	         vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE);
+	         vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");

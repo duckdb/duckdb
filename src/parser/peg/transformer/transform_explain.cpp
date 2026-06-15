@@ -5,45 +5,29 @@
 
 namespace duckdb {
 
-ExplainFormat ParseExplainFormat(const Value &val) {
+ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	auto format_val = val.GetValue<string>();
-	case_insensitive_map_t<ExplainFormat> format_mapping {
-	    {"default", ExplainFormat::DEFAULT}, {"text", ExplainFormat::TEXT},         {"json", ExplainFormat::JSON},
-	    {"html", ExplainFormat::HTML},       {"graphviz", ExplainFormat::GRAPHVIZ}, {"yaml", ExplainFormat::YAML},
-	    {"mermaid", ExplainFormat::MERMAID}};
-	auto it = format_mapping.find(format_val);
-	if (it != format_mapping.end()) {
-		return it->second;
-	}
-	vector<string> options_list;
-	for (auto &it : format_mapping) {
-		options_list.push_back(it.first);
-	}
-	auto allowed_options = StringUtil::Join(options_list, ", ");
-	throw InvalidInputException("\"%s\" is not a valid FORMAT argument, valid options are: %s", format_val,
-	                            allowed_options);
+	// resolve the format name through the shared explain format registry (see main/profiler/profiler_print_format.hpp)
+	return ProfilerPrintFormat::FromString(val.GetValue<string>());
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &explain_analyze = list_pr.Child<OptionalParseResult>(1);
-	auto explain_type = explain_analyze.HasResult() ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const bool &explain_analyze,
+                                                 const vector<GenericCopyOption> &explain_option_list,
+                                                 unique_ptr<SQLStatement> explainable_statements) {
+	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
-	auto explain_format = ExplainFormat::DEFAULT;
-	auto &explain_options_opt = list_pr.Child<OptionalParseResult>(2);
-	if (explain_options_opt.HasResult()) {
-		auto options = transformer.Transform<vector<GenericCopyOption>>(explain_options_opt.GetResult());
-		for (auto option : options) {
-			auto option_name = StringUtil::Lower(option.name);
+	auto format = ProfilerPrintFormat::Default();
+	if (!explain_option_list.empty()) {
+		for (auto option : explain_option_list) {
+			auto option_name = StringUtil::Lower(option.name.GetIdentifierName());
 			if (option_name == "format") {
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				explain_format = ParseExplainFormat(option.children[0]);
+				format = ParseProfilerPrintFormat(option.children[0]);
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
@@ -52,42 +36,34 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 			}
 		}
 	}
-	auto statement = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(3));
-	return make_uniq<ExplainStatement>(std::move(statement), explain_type, explain_format);
+	auto statement = std::move(explainable_statements);
+	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainableStatements(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	if (StringUtil::CIEquals(choice_pr.name, "SelectStatementInternal")) {
-		return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-	}
-	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer) {
+	return true;
 }
 
-vector<GenericCopyOption> PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	vector<GenericCopyOption> result;
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto option_list = ExtractParseResultsFromList(extract_parens);
-	for (auto &option : option_list) {
-		result.push_back(transformer.Transform<GenericCopyOption>(option));
-	}
-	return result;
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExplainSelectStatement(PEGTransformer &transformer,
+                                                       unique_ptr<SelectStatement> select_statement_internal) {
+	return std::move(select_statement_internal);
+}
+
+vector<GenericCopyOption>
+PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
+                                                  const vector<GenericCopyOption> &explain_option) {
+	return explain_option;
 }
 
 GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
+                                                                const Identifier &explain_option_name,
+                                                                unique_ptr<ParsedExpression> expression) {
 	GenericCopyOption copy_option;
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	copy_option.name = StringUtil::Lower(transformer.Transform<string>(list_pr.GetChild(0)));
-	auto &optional_expression = list_pr.Child<OptionalParseResult>(1);
-	if (!optional_expression.HasResult()) {
+	copy_option.name = Identifier(StringUtil::Lower(explain_option_name.GetIdentifierName()));
+	if (!expression) {
 		return copy_option;
 	}
-	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {

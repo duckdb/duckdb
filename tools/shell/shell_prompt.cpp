@@ -1,4 +1,5 @@
 #include "shell_prompt.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -211,9 +212,17 @@ duckdb::Connection &Prompt::GetConnection(ShellState &state) {
 }
 
 vector<string> Prompt::GetSupportedSettings() {
-	return vector<string> {"current_database", "current_schema", "current_database_and_schema",
-	                       "memory_limit",     "memory_usage",   "swap_usage",
-	                       "swap_max",         "bytes_written",  "bytes_read"};
+	return vector<string> {"current_database",
+	                       "current_schema",
+	                       "current_database_and_schema",
+	                       "connect_name_prefix",
+	                       "connect_display_prefix",
+	                       "memory_limit",
+	                       "memory_usage",
+	                       "swap_usage",
+	                       "swap_max",
+	                       "bytes_written",
+	                       "bytes_read"};
 }
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
@@ -249,17 +258,48 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		auto profiler = client_data.profiler;
 		return StringUtil::BytesToHumanReadableString(profiler->GetBytesWritten(), 1000);
 	}
-	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
+	// When CONNECT-ed the local catalog_search_path doesn't reflect where queries route, so route
+	// the setting query through the chokepoint to match what `SELECT current_database()` returns.
+	if (context.IsConnected()) {
+		if (component.literal == "current_database") {
+			return ExecuteSQL(state, "SELECT current_database()");
+		}
+		if (component.literal == "current_schema") {
+			return ExecuteSQL(state, "SELECT current_schema()");
+		}
+		if (component.literal == "current_database_and_schema") {
+			return ExecuteSQL(state, "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
+			                         "ELSE current_database() || '.' || current_schema() END");
+		}
+		if (component.literal == "connect_display_prefix") {
+			auto connected = context.TryGetConnectedCatalog();
+			if (connected) {
+				return connected->GetCatalog().GetConnectDisplay() + " ";
+			}
+			return string();
+		}
+		if (component.literal == "connect_name_prefix") {
+			auto connected = context.TryGetConnectedCatalog();
+			if (connected) {
+				return connected->GetCatalog().GetAttached().GetName() + " ";
+			}
+			return string();
+		}
+	}
+	if (component.literal == "connect_name_prefix" || component.literal == "connect_display_prefix") {
+		return string();
+	}
+	auto current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
-		return current_db;
+		return current_db.GetIdentifierName();
 	}
 	if (component.literal == "current_schema") {
-		return current_schema;
+		return current_schema.GetIdentifierName();
 	}
 	if (component.literal == "current_database_and_schema") {
 		if (current_schema == "main") {
-			return current_db;
+			return current_db.GetIdentifierName();
 		} else {
 			return current_db + "." + current_schema;
 		}
@@ -282,7 +322,10 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		length += render_length;
 		return text;
 	}
-	// length gets exceeded by this string - render whatever we can
+	// length gets exceeded by this string - render whatever we can, reserving room for "... D ".
+	constexpr idx_t TRUNCATION_SUFFIX_LENGTH = 6; // "... D "
+	const idx_t max = max_length.GetIndex();
+	const idx_t truncate_budget = max > TRUNCATION_SUFFIX_LENGTH ? max - TRUNCATION_SUFFIX_LENGTH : 0;
 	idx_t start_pos = 0;
 	string truncated_text;
 	for (idx_t i = 1; i <= text.size(); i++) {
@@ -293,7 +336,7 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		// this is a character - can we render the PREVIOUS character?
 		auto prev_character = text.substr(start_pos, i - start_pos);
 		auto char_length = state.RenderLength(prev_character);
-		if (length + char_length > max_length.GetIndex()) {
+		if (length + char_length > truncate_budget) {
 			// we cannot - we are done!
 			break;
 		}

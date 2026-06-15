@@ -16,8 +16,8 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 	for (auto &v : arg_values) {
 		children.push_back(make_uniq<BoundConstantExpression>(v));
 	}
-	auto bind_info_clone = func.bind_info ? func.bind_info->Copy() : nullptr;
-	BoundFunctionExpression clone(func.function, std::move(children), std::move(bind_info_clone), func.is_operator);
+	auto bind_info_clone = func.BindInfo() ? func.BindInfo()->Copy() : nullptr;
+	BoundFunctionExpression clone(func.Function(), std::move(children), std::move(bind_info_clone), func.IsOperator());
 	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
 }
 
@@ -25,10 +25,10 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 //! Decreasing args are swapped so f(lo_args) and f(hi_args) bracket the output range.
 static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &context, BoundFunctionExpression &func,
                                                              const vector<BaseStatistics> &child_stats) {
-	if (!func.function.HasArgProperties() || func.children.empty()) {
+	if (!func.Function().HasArgProperties() || func.GetChildren().empty()) {
 		return nullptr;
 	}
-	if (func.function.GetStability() != FunctionStability::CONSISTENT) {
+	if (func.Function().GetStability() != FunctionStability::CONSISTENT) {
 		return nullptr;
 	}
 	if (BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
@@ -36,15 +36,15 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 		return nullptr;
 	}
 
-	vector<Value> lo_args(func.children.size());
-	vector<Value> hi_args(func.children.size());
+	vector<Value> lo_args(func.GetChildren().size());
+	vector<Value> hi_args(func.GetChildren().size());
 	// SPECIAL_HANDLING means the function may produce nulls on non-null inputs (e.g. try_cast).
-	bool output_can_have_null = (func.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	bool output_can_have_null = (func.Function().GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
-	for (idx_t i = 0; i < func.children.size(); i++) {
-		auto &child = *func.children[i];
+	for (idx_t i = 0; i < func.GetChildren().size(); i++) {
+		auto &child = *func.GetChildren()[i];
 		auto &cs = child_stats[i];
-		auto &props = func.function.GetArgProperties(i);
+		auto &props = func.Function().GetArgProperties(i);
 
 		if (child.IsFoldable()) {
 			Value v;
@@ -111,7 +111,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.GetName());
+		                        func.Function().GetName());
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());
@@ -134,18 +134,18 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		return PropagateComparison(func, expr_ptr);
 	}
 	vector<BaseStatistics> stats;
-	stats.reserve(func.children.size());
-	for (idx_t i = 0; i < func.children.size(); i++) {
-		auto stat = PropagateExpression(func.children[i]);
+	stats.reserve(func.GetChildrenMutable().size());
+	for (idx_t i = 0; i < func.GetChildrenMutable().size(); i++) {
+		auto stat = PropagateExpression(func.GetChildrenMutable()[i]);
 		if (!stat) {
-			stats.push_back(BaseStatistics::CreateUnknown(func.children[i]->GetReturnType()));
+			stats.push_back(BaseStatistics::CreateUnknown(func.GetChildrenMutable()[i]->GetReturnType()));
 		} else {
 			stats.push_back(stat->Copy());
 		}
 	}
-	if (func.function.HasStatisticsCallback()) {
-		FunctionStatisticsInput input(func, func.bind_info.get(), stats, &expr_ptr);
-		return func.function.GetStatisticsCallback()(context, input);
+	if (func.Function().HasStatisticsCallback()) {
+		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
+		return func.Function().GetStatisticsCallback()(context, input);
 	}
 	return TryPropagateMonotoneBounds(context, func, stats);
 }

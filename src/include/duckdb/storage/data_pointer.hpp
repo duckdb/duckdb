@@ -18,6 +18,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 

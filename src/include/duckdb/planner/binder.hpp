@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
@@ -90,15 +91,15 @@ enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	LogicalType type;
-	string name;
+	Identifier name;
 	idx_t depth;
 
 	// NOLINTNEXTLINE - work-around bug in clang-tidy
-	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
+	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, Identifier name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
 	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : CorrelatedColumnInfo(expr.binding, expr.GetReturnType(), expr.GetName(), expr.depth) {
+	    : CorrelatedColumnInfo(expr.Binding(), expr.GetReturnType(), expr.GetName(), expr.Depth()) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -180,7 +181,7 @@ struct GlobalBinderState {
 	//! Table names extracted for BindingMode::EXTRACT_NAMES or BindingMode::EXTRACT_QUALIFIED_NAMES.
 	unordered_set<string> table_names;
 	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
-	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
+	identifier_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
@@ -190,7 +191,7 @@ struct GlobalBinderState {
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
-	string trigger_creation_name;
+	Identifier trigger_creation_name;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -216,7 +217,7 @@ public:
 	//! vector)
 	CorrelatedColumns correlated_columns;
 	//! The alias for the currently processing subquery, if it exists
-	string alias;
+	Identifier alias;
 	//! Macro parameter bindings (if any)
 	optional_ptr<DummyBinding> macro_binding;
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
@@ -239,25 +240,25 @@ public:
 
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,
-	                                                           const string &table_name, const ColumnList &columns);
+	                                                           const Identifier &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
-	                                                    const string &table_name, const ColumnList &columns);
+	                                                    const Identifier &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
-	                                                       const string &table_name, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const string &table,
+	                                                       const Identifier &table_name, const ColumnList &columns);
+	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const Identifier &table,
 	                                           const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
+	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
 	                                                 const ColumnList &columns);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
-	static void BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-	                     const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-	                     const vector<string> &aliases, vector<LogicalType> &result_types,
-	                     vector<string> &result_names);
+	static void BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+	                     const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+	                     const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -266,7 +267,7 @@ public:
 
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                                QueryErrorContext &error_context, string &func_name);
+	                                QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -274,7 +275,7 @@ public:
 	//! Generates an unused index for a table
 	TableIndex GenerateTableIndex();
 
-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
@@ -296,32 +297,36 @@ public:
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
+	                                          const vector<unique_ptr<Expression>> &bound_defaults,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+	                   const vector<unique_ptr<Expression>> &bound_defaults,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions,
 	                   bool prioritize_table_when_binding = false);
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
-	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
 
 	void BindLogicalType(LogicalType &type);
 
-	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
-	                                         const string &column_name, ErrorData &error);
-	optional_ptr<Binding> GetMatchingBinding(const string &catalog_name, const string &schema_name,
-	                                         const string &table_name, const string &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
+	                                         const Identifier &column_name, ErrorData &error);
+	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
+	                                         const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
-	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
+	void AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
-	case_insensitive_map_t<unique_ptr<TableRef>> &GetReplacementScans();
+	identifier_map_t<unique_ptr<TableRef>> &GetReplacementScans();
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}
@@ -331,7 +336,10 @@ public:
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
+	void SetInsideSubquery();
+	bool IsInsideSubquery() const;
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
@@ -340,10 +348,12 @@ public:
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
-	void SetSearchPath(Catalog &catalog, const string &schema);
+	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
+	Identifier GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)
@@ -358,8 +368,10 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether or not the binder can contain NULLs as the root of expressions
-	bool can_contain_nulls = false;
+	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
+	bool legacy_can_contain_nulls = false;
+	//! Whether this binder is inside a subquery boundary
+	bool inside_subquery = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -380,8 +392,8 @@ private:
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
 	                       const string &catalog = "", const string &schema = "");
 	//! Bind a limit value (LIMIT or OFFSET)
-	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
-	                              bool is_offset);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
+	                              LimitValueType value_type, bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -389,8 +401,6 @@ private:
 	//! Tries to bind the table name with replacement scans
 	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
-	template <class T>
-	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt, CopyToType copy_to_type);
@@ -443,13 +453,13 @@ private:
 	                            vector<unique_ptr<Expression>> &projection_expressions,
 	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-	                             const string &alias, TableIndex update_table_index,
+	                             const Identifier &alias, TableIndex update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
+	BoundStatement BindCTE(const Identifier &ctename, CommonTableExpressionInfo &info);
 
 	BoundStatement BindNode(SelectNode &node);
 	BoundStatement BindNode(SetOperationNode &node);
@@ -457,13 +467,14 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
-	unique_ptr<BoundStatement> TryExpandAfterTriggers(QueryNode &node,
-	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                                  TableCatalogEntry &table, TriggerEventType event_type);
-	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
+	                                             TriggerEventType event_type);
+	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
+	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
+	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
+	BoundStatement BindNode(MergeQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -491,7 +502,7 @@ private:
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	BoundStatement BindBoundPivot(PivotRef &expr);
 	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
-	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<Identifier> &result);
 
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
@@ -503,7 +514,8 @@ private:
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
 	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
 	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
-	                                         vector<LogicalType> input_table_types, vector<string> input_table_names,
+	                                         vector<LogicalType> input_table_types,
+	                                         vector<Identifier> input_table_names,
 	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
@@ -514,11 +526,10 @@ private:
 	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
+	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
-	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
@@ -534,12 +545,12 @@ private:
 	                                                       const vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
 
-	BindingAlias FindBinding(const string &using_column, const string &join_side);
-	bool TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result);
+	BindingAlias FindBinding(const Identifier &using_column, const string &join_side);
+	bool TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
 	BindingAlias RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-	                                  const string &column_name, const string &join_side);
+	                                  const Identifier &column_name, const string &join_side);
 
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
@@ -552,48 +563,53 @@ private:
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
-	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
-	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema);
-	const string BindCatalog(string &catalog_name);
+	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
 
 	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 
-	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
-	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const Identifier &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const Identifier &target_database_name);
 
 	BoundStatement BindShowQuery(ShowRef &ref);
 	BoundStatement BindShowTable(ShowRef &ref);
 	BoundStatement BindSummarize(ShowRef &ref);
 
-	void BindInsertColumnList(TableCatalogEntry &table, vector<string> &columns, bool default_values,
+	void BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
-	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, TableIndex proj_index,
-	                                                 vector<unique_ptr<Expression>> &expressions,
-	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names, MergeActionCondition condition,
-	                                                 const unordered_set<idx_t> &source_table_indices);
+
+	unique_ptr<LogicalOperator> ResolveInputProjection(LogicalInsert &insert,
+	                                                   const IndexVector<idx_t, PhysicalIndex> &column_index_map,
+	                                                   unique_ptr<LogicalOperator> root,
+	                                                   const vector<LogicalType> &source_types);
+
+	unique_ptr<BoundMergeIntoAction>
+	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
+	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,
+	                const vector<BindingAlias> &source_aliases, const vector<Identifier> &source_names);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
-	                                           const string &tname);
+	                                           const Identifier &tname);
 
-	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
+	BoundCTEData PrepareCTE(const Identifier &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
-	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
+	shared_ptr<Binder> CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name);
+
+	bool DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

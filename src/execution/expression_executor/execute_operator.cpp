@@ -7,7 +7,7 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		result->AddChild(*child);
 	}
 
@@ -21,13 +21,13 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 	// IN has n children
 	auto expression_type = expr.GetExpressionType();
 	if (expression_type == ExpressionType::COMPARE_IN || expression_type == ExpressionType::COMPARE_NOT_IN) {
-		if (expr.children.size() < 2) {
+		if (expr.GetChildren().size() < 2) {
 			throw InvalidInputException("IN needs at least two children");
 		}
 
-		Vector left(expr.children[0]->GetReturnType());
+		Vector left(expr.GetChildren()[0]->GetReturnType());
 		// eval left side
-		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
+		Execute(*expr.GetChildren()[0], state->child_states[0].get(), sel, count, left);
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
@@ -36,11 +36,11 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparison with the left
 		// to get the overall result.
-		for (idx_t child = 1; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->GetReturnType());
+		for (idx_t child = 1; child < expr.GetChildren().size(); child++) {
+			Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
 			Vector comp_res(LogicalType::BOOLEAN);
 
-			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
+			Execute(*expr.GetChildren()[child], state->child_states[child].get(), sel, count, vector_to_check);
 			VectorOperations::Equals(left, vector_to_check, comp_res);
 
 			if (child == 1) {
@@ -69,9 +69,9 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		const SelectionVector *current_sel = sel;
 		idx_t remaining_count = count;
 		idx_t next_count;
-		for (idx_t child = 0; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->GetReturnType());
-			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
+		for (idx_t child = 0; child < expr.GetChildren().size(); child++) {
+			Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
+			Execute(*expr.GetChildren()[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
 			auto entries = vector_to_check.Validity();
@@ -111,7 +111,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		auto &child_state = *state->child_states[0];
 		Vector try_result(result.GetType());
 		try {
-			Execute(*expr.children[0], &child_state, sel, count, try_result);
+			Execute(*expr.GetChildren()[0], &child_state, sel, count, try_result);
 			if (try_result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				result.Reference(try_result);
 				return;
@@ -132,7 +132,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
-			intermediate.SetCardinality(1);
+			intermediate.SetChildCardinality(1);
 
 			// Make sure to clear any dictionary states in the child expression, so that it actually
 			// gets executed anew for every row
@@ -141,7 +141,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
 			Value val(result.GetType());
 			try {
-				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate.data[0]);
+				Execute(*expr.GetChildren()[0], &child_state, &selvec, 1, intermediate.data[0]);
 				val = intermediate.GetValue(0, 0);
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
@@ -155,11 +155,11 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-	} else if (expr.children.size() == 1) {
+	} else if (expr.GetChildren().size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];
 
-		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
+		Execute(*expr.GetChildren()[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::OPERATOR_NOT: {
 			VectorOperations::Not(child, result);

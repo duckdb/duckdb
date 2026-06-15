@@ -394,7 +394,7 @@
       {
         "id": 203,
         "name": "bound_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -579,7 +579,7 @@
       {
         "id": 201,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
@@ -631,7 +631,7 @@
       {
         "id": 202,
         "name": "ctename",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
@@ -664,7 +664,9 @@
       {
         "id": 202,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 203,
@@ -924,7 +926,9 @@
       {
         "id": 204,
         "name": "column_index_map",
-        "type": "IndexVector<idx_t, PhysicalIndex>"
+        "type": "IndexVector<idx_t, PhysicalIndex>",
+        "default": "IndexVector<idx_t, PhysicalIndex>()",
+        "required_until": "v2.0.0"
       },
       {
         "id": 205,
@@ -1012,7 +1016,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -1039,7 +1043,7 @@
       {
         "id": 200,
         "name": "name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,

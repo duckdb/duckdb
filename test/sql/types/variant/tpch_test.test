@@ -1,12 +1,11 @@
 # name: test/sql/types/variant/tpch_test.test
 # group: [variant]
 
-require tpch
-
 require json
 
-statement ok
-call dbgen(sf=0.001)
+set variable sf 0.001
+
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 attach '{TEST_DIR}/tpch_sf0001_variant.db' as foo (STORAGE_VERSION 'v1.5.0');

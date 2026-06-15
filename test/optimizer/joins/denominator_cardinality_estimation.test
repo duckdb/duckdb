@@ -1,0 +1,243 @@
+# name: test/optimizer/joins/denominator_cardinality_estimation.test
+# description: Join cardinality denominator assembly and predicate grouping
+# group: [joins]
+
+statement ok
+set disabled_optimizers='statistics_propagation';
+
+# Two disconnected join components are merged by a cross product. The final
+# denominator must include selectivity from both joined pairs.
+
+statement ok
+create table dc_a as select range::integer k from range(1000);
+
+statement ok
+create table dc_b as select range::integer k from range(100);
+
+statement ok
+create table dc_c as select range::integer k from range(500);
+
+statement ok
+create table dc_d as select range::integer k from range(50);
+
+query II
+explain select *
+from dc_a
+join dc_b using (k),
+     dc_c
+join dc_d using (k);
+----
+physical_plan	<REGEX>:.*~[0-9]+.[0-9][0-9][0-9] rows.*CROSS_PRODUCT.*
+
+query I
+select count(*)
+from dc_a
+join dc_b using (k),
+     dc_c
+join dc_d using (k);
+----
+5000
+
+# Equality components can be discovered in an order that merges two existing
+# components. All equality edges must receive the final component id.
+
+statement ok
+create table te_a as select range::integer k from range(1000);
+
+statement ok
+create table te_b as select range::integer k from range(1000);
+
+statement ok
+create table te_c as select range::integer k from range(1000);
+
+statement ok
+create table te_d as select range::integer k from range(1000);
+
+query II
+explain select *
+from te_a, te_b, te_c, te_d
+where te_a.k = te_b.k
+  and te_c.k is not distinct from te_d.k
+  and te_b.k = te_c.k
+  and te_a.k = te_d.k;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[0-9]+.[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from te_a, te_b, te_c, te_d
+where te_a.k = te_b.k
+  and te_c.k is not distinct from te_d.k
+  and te_b.k = te_c.k
+  and te_a.k = te_d.k;
+----
+1000
+
+# Non-equality predicates get their own domain group. They should still add
+# selectivity, but they must not merge into equality domains.
+
+statement ok
+create table ne_a as select range::integer x from range(1000);
+
+statement ok
+create table ne_b as select range::integer x, (range % 8)::integer y from range(1000);
+
+statement ok
+create table ne_c as select (range % 8)::integer y from range(1000);
+
+query II
+explain select *
+from ne_a
+join ne_b on ne_a.x = ne_b.x
+join ne_c on ne_b.y < ne_c.y;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*~[0-9]+.[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from ne_a
+join ne_b on ne_a.x = ne_b.x
+join ne_c on ne_b.y < ne_c.y;
+----
+437500
+
+# A column can be part of an equality closure and a separate expression
+# selectivity predicate. Its distinct count must update both domain groups.
+# Otherwise the expression predicate keeps an infinite denominator, estimates
+# ~0 rows, and is chosen before the local equality joins.
+
+statement ok
+create table sg_wss as select (range % 100)::integer w from range(27455);
+
+statement ok
+create table sg_d1 as select (range % 100)::integer w from range(14609);
+
+statement ok
+create table sg_d2 as select (range % 100)::integer w from range(14609);
+
+query II
+explain select count(*)
+from
+  (select sg_wss.w w1 from sg_wss, sg_d1 where sg_d1.w = sg_wss.w) y,
+  (select sg_wss.w w2 from sg_wss, sg_d2 where sg_d2.w = sg_wss.w) x
+where w1 = w2 - 52;
+----
+physical_plan	<REGEX>:.*w1 = \(w2 - 52\).*~[1-9][0-9,]* rows.*
+
+# Expression equality predicates should remain graph/selectivity predicates,
+# but should not become transitive equality-closure predicates. The expression
+# edge still needs to participate in join ordering instead of being left as a
+# post-join filter or cross product.
+
+statement ok
+create table ee_a as select range::integer x from range(1000);
+
+statement ok
+create table ee_b as select range::integer y from range(1000);
+
+statement ok
+create table ee_c as select range::integer z from range(1000);
+
+query II
+explain select *
+from ee_a, ee_b, ee_c
+where ee_a.x + 1 = ee_b.y
+  and ee_b.y = ee_c.z;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*x \+ 1.*HASH_JOIN.*
+
+query I
+select count(*)
+from ee_a, ee_b, ee_c
+where ee_a.x + 1 = ee_b.y
+  and ee_b.y = ee_c.z;
+----
+999
+
+# A redundant edge in a transitive equality class must not be treated as an
+# additional composite-key condition. Otherwise the estimator can replace a
+# small domain with the full table cardinality and badly underestimate fanout.
+
+statement ok
+create table tr_customer as
+select range::integer c_id, (range % 25)::integer c_nationkey
+from range(1500);
+
+statement ok
+create table tr_supplier as
+select range::integer s_id, (range % 25)::integer s_nationkey
+from range(100);
+
+statement ok
+create table tr_nation as
+select range::integer n_nationkey, (range / 5)::integer n_regionkey
+from range(25);
+
+statement ok
+create table tr_region as
+select range::integer r_regionkey, case when range = 2 then 'ASIA' else 'OTHER' end r_name
+from range(5);
+
+query II
+explain select count(*)
+from tr_customer, tr_supplier, tr_nation, tr_region
+where c_nationkey = s_nationkey
+  and s_nationkey = n_nationkey
+  and n_regionkey = r_regionkey
+  and r_name = 'ASIA';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[1-9],[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from tr_customer, tr_supplier, tr_nation, tr_region
+where c_nationkey = s_nationkey
+  and s_nationkey = n_nationkey
+  and n_regionkey = r_regionkey
+  and r_name = 'ASIA';
+----
+1200
+
+# LEFT joins preserve the LHS rows, but they can still fan out through matches
+# on the RHS. The estimator should not keep the output at the tiny preserved
+# side cardinality when the matching inner join is much larger.
+
+statement ok
+create table lf_dim as select range::integer k from range(10);
+
+statement ok
+create table lf_fact as select (range % 10)::integer k from range(10000);
+
+query II
+explain select *
+from lf_dim
+left join lf_fact using (k);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[1-9][0-9,]*,[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from lf_dim
+left join lf_fact using (k);
+----
+10000
+
+# Empty joins can produce zero total-domain denominators. LEFT join fanout
+# estimation should handle that the same way as the final denominator result.
+
+statement ok
+create table empty_inner_a(i int);
+
+statement ok
+create table empty_inner_b(i int);
+
+statement ok
+create table empty_left_c(i int);
+
+query I
+select count(*)
+from empty_inner_a
+join empty_inner_b on empty_inner_a.i = empty_inner_b.i
+left join empty_left_c on empty_inner_a.i = empty_left_c.i;
+----
+0

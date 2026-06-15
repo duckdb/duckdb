@@ -43,6 +43,7 @@ struct DropNotNullInfo;
 struct SetColumnCommentInfo;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
+struct ColumnBinding;
 
 class TableFunction;
 struct FunctionData;
@@ -50,6 +51,7 @@ struct EntryLookupInfo;
 
 class Binder;
 struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanState;
 class TableStorageInfo;
 
 class LogicalGet;
@@ -72,10 +74,10 @@ public:
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const string &name) const;
+	DUCKDB_API bool ColumnExists(const Identifier &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
 	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
@@ -99,7 +101,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &name, bool if_exists = false) const;
 	DUCKDB_API StorageIndex GetStorageIndex(const ColumnIndex &column_index) const;
 
 	//! Returns the scan function that can be used to scan the given table
@@ -119,7 +121,12 @@ public:
 	//! Returns a list of segment information for this table, if exists
 	virtual vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
+	//! Initialize an incremental scan over the table's column segment info.
+	virtual void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
+	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
+	virtual bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                                   vector<ColumnSegmentInfo> &result);
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
@@ -131,6 +138,11 @@ public:
 	optional_ptr<Constraint> GetPrimaryKey() const;
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
+
+	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
+	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
+	                                                             const LogicalType &result_type, ColumnBinding binding,
+	                                                             const Expression &constant_value) const;
 
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;

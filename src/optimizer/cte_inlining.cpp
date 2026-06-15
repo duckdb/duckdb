@@ -103,6 +103,35 @@ static bool EndsInDummyScan(const LogicalOperator &op) {
 	return false;
 }
 
+static bool ContainsDelimGet(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDelimGet(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool HasCTEReferenceBelowDelimJoin(const LogicalOperator &op, TableIndex cte_index,
+                                          bool below_delim_join = false) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cteref = op.Cast<LogicalCTERef>();
+		if (cteref.cte_index == cte_index) {
+			return below_delim_join;
+		}
+	}
+	auto child_below_delim_join = below_delim_join || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN;
+	for (auto &child : op.children) {
+		if (HasCTEReferenceBelowDelimJoin(*child, cte_index, child_below_delim_join)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
@@ -134,6 +163,12 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// side reads the modified table.  With ref_count==1, inlining would merge
 			// the DML into the query pipeline so it no longer precedes the scan.
 			// With ref_count>1 and requires_copy, the DML would execute once per copy.
+			return;
+		}
+		if (ContainsDelimGet(*cte.children[0]) && HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
+			// Inlining a CTE that already contains a DELIM_GET stays safe while all matching CTE scans remain outside
+			// DELIM_JOIN subtrees, but once a scan is nested below another DELIM_JOIN the inlined DELIM_GETs can attach
+			// to the wrong duplicate-elimination source.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
@@ -264,7 +299,7 @@ void PreventInlining::VisitExpression(unique_ptr<Expression> *expression) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &bound_function = expr->Cast<BoundFunctionExpression>();
 		// if we encounter the ErrorFun function, we still want to inline
-		if (bound_function.function.GetName() == "error") {
+		if (bound_function.Function().GetName() == "error") {
 			return;
 		}
 

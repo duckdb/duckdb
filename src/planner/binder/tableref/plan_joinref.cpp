@@ -341,7 +341,7 @@ static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              if (colref.depth > 0) {
+		                                                              if (colref.Depth() > 0) {
 			                                                              has_correlated_columns = true;
 		                                                              }
 	                                                              });
@@ -379,7 +379,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer &&
 	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
@@ -416,7 +415,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
-
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));

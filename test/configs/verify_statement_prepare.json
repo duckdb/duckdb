@@ -34,6 +34,7 @@
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_context_ids.test",
         "test/sql/logging/logging_csv.test",
+        "test/sql/logging/logging_file_truncate_rewrite.test",
         "test/sql/logging/http_log_timing.test"
       ]
     },
@@ -42,6 +43,13 @@
       "paths": [
         "test/sql/pg_catalog/pg_prepared_statements.test",
         "test/sql/table_function/duckdb_prepared_statements.test"
+      ]
+    },
+    {
+      "reason": "EXECUTE does not emit parser/phase metrics; profiling output differs from direct SELECT",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
       ]
     }
   ]

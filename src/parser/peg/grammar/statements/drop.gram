@@ -16,10 +16,13 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
-DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
+DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
-QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
+QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / QualifiedIndexNameString
+QualifiedIndexNameString <- IndexName
+SchemaReservedIndex <- SchemaQualification ReservedIndexName
+CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
 DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
 DropCollation <- 'COLLATION' IfExists? List(CollationName)
 DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
@@ -27,11 +30,17 @@ DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
 TableOrView <- CommentTable / CommentView / MaterializedViewEntry
 MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
-FunctionType <- 'MACRO' / 'FUNCTION'
+FunctionTypeMacro <- FunctionTypeMacroKeyword / FunctionTypeFunction
+FunctionTypeMacroKeyword <- 'MACRO'
+FunctionTypeFunction <- 'FUNCTION'
 
-DropBehavior <- 'CASCADE' / 'RESTRICT'
+DropBehavior <- CascadeDropBehavior / RestrictDropBehavior
+CascadeDropBehavior <- 'CASCADE'
+RestrictDropBehavior <- 'RESTRICT'
 
 IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName <- CatalogQualification? SchemaName
+QualifiedSchemaName <- CatalogReservedSchema / QualifiedSchemaNameString
+QualifiedSchemaNameString <- SchemaName
+CatalogReservedSchema <- CatalogQualification ReservedSchemaName
 
 DropSecretStorage <- 'FROM' Identifier

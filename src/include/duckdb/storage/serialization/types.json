@@ -133,57 +133,22 @@
         "id": 200,
         "name": "function_name",
         "type": "string",
-        "property": "state_type.function_name"
+        "status": "deleted"
       },
       {
         "id": 201,
         "name": "return_type",
         "type": "LogicalType",
-        "property": "state_type.return_type"
+        "status": "deleted"
       },
       {
         "id": 202,
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
-        "property": "state_type.bound_argument_types"
-      }
-    ]
-  },
-  {
-    "class": "AggregateStateTypeInfo",
-    "base": "ExtraTypeInfo",
-    "enum": "AGGREGATE_STATE_TYPE_INFO",
-    "ignore_clang_tidy_rules": [
-      {
-        "name": "bugprone-parent-virtual-call",
-        "reason": "Multi-level inheritance is not supported in the generation tool"
+        "status": "deleted"
       }
     ],
-    "members": [
-      {
-        "id": 300,
-        "name": "function_name",
-        "type": "string",
-        "property": "state_type.function_name"
-      },
-      {
-        "id": 301,
-        "name": "return_type",
-        "type": "LogicalType",
-        "property": "state_type.return_type"
-      },
-      {
-        "id": 302,
-        "name": "bound_argument_types",
-        "type": "vector<LogicalType>",
-        "property": "state_type.bound_argument_types"
-      },
-      {
-        "id": 303,
-        "name": "child_types",
-        "type": "child_list_t<LogicalType>"
-      }
-    ]
+    "constructor_method": "LegacyAggregateStateTypeInfo::LegacyDeserialize"
   },
   {
     "class": "ArrayTypeInfo",

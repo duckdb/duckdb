@@ -14,6 +14,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/common/checked_integer.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -47,21 +48,21 @@ public:
 	//! Finalize starting up the system
 	void FinalizeStartup();
 	//! Get an attached database by its name
-	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
-	shared_ptr<AttachedDatabase> GetDatabase(const string &name);
+	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const Identifier &name);
+	shared_ptr<AttachedDatabase> GetDatabase(const Identifier &name);
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
 	//! Detach an existing database
-	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found);
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
-	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
+	shared_ptr<AttachedDatabase> DetachInternal(const Identifier &name);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
-	static const string &GetDefaultDatabase(ClientContext &context);
+	static Identifier GetDefaultDatabase(ClientContext &context);
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
 
 	//! Inserts a path to name mapping to the database paths map
@@ -79,6 +80,10 @@ public:
 	vector<shared_ptr<AttachedDatabase>> GetDatabases();
 	//! Returns the approximate count of attached databases.
 	idx_t ApproxDatabaseCount();
+	//! Returns the number of remote catalogs currently attached.
+	idx_t GetRemoteCatalogCount() const {
+		return remote_catalog_count.load();
+	}
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
 	void ResetDatabases();
@@ -104,7 +109,7 @@ public:
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
 
-	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
+	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const Identifier &name);
 
 private:
 	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
@@ -117,21 +122,23 @@ private:
 	//! Lock for databases
 	mutex databases_lock;
 	//! The set of attached databases
-	case_insensitive_map_t<shared_ptr<AttachedDatabase>> databases;
+	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number
 	atomic<transaction_t> current_query_number;
 	//! The current transaction number
 	atomic<transaction_t> current_transaction_id;
+	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
+	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
 	//! The current default database
-	string default_database;
+	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
 
 private:
 	//! Rename an existing database
-	void RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+	void RenameDatabase(ClientContext &context, const Identifier &old_name, const Identifier &new_name,
 	                    OnEntryNotFound if_not_found);
 };
 

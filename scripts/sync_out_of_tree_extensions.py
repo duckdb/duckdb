@@ -146,7 +146,13 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
-        run_cmd(['git', 'apply', '--index', str(patch_file)], cwd=ext_dir)
+        # Apply to the working tree (not --index): a patch may touch files inside a checked-out
+        # submodule (e.g. database-connector/...), and "git apply --index" cannot stage paths that
+        # live in a submodule ("does not exist in index"). We stage everything explicitly afterwards.
+        # --whitespace=nowarn: never rewrite patch content; --whitespace=fix corrupts
+        # patches that themselves add patch files containing trailing whitespace.
+        run_cmd(['git', 'apply', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        run_cmd(['git', 'add', '-A'], cwd=ext_dir)
         run_cmd(
             [
                 'git',
@@ -220,8 +226,12 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
 
     patch_dir.mkdir(parents=True, exist_ok=True)
     for commit_hash, msg in commits:
-        patch_content = run_cmd(['git', 'diff', f'{commit_hash}^', commit_hash], cwd=ext_dir).stdout
-        (patch_dir / msg).write_text(patch_content, encoding='utf-8')
+        # Capture raw bytes: text-mode capture would translate CRLF line endings
+        # in the diff to LF, corrupting patches that touch CRLF files.
+        diff_proc = subprocess.run(
+            ['git', 'diff', f'{commit_hash}^', commit_hash], cwd=ext_dir, capture_output=True, check=True
+        )
+        (patch_dir / msg).write_bytes(diff_proc.stdout)
         print(f"    Exported: {msg}")
 
     print(f"  {name}: wrote {len(commits)} patch(es) to .github/patches/extensions/{name}/")
@@ -304,7 +314,9 @@ def sync_extension(ext, external_dir, repo_root):
         run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches and not skip_patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)
@@ -353,7 +365,9 @@ def sync_extension(ext, external_dir, repo_root):
             run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)

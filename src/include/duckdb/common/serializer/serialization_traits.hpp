@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <atomic>
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -111,6 +112,7 @@ struct is_insertion_preserving_map : std::false_type {};
 template <typename... Args>
 struct is_insertion_preserving_map<typename duckdb::InsertionOrderPreservingMap<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type VALUE_TYPE;
+	typedef typename duckdb::InsertionOrderPreservingMap<Args...>::key_type KEY_TYPE;
 };
 
 template <typename T>
@@ -336,6 +338,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, Identifier>::value, T>::type &value) {
 		return value.empty();
 	}
 

@@ -3,19 +3,29 @@
 # group: [peg_parser]
 
 statement error
-SELECT (1 + (2 * 3);
+SELECT (1 + (2 * 3)
 ----
 Parser Error: syntax error at or near ")"
 
 statement error
+SELECT (1 + (2 * 3);
+----
+Parser Error: syntax error at or near ";"
+
+statement error
 SELECT 1 + 2 * ;
 ----
-Parser Error: syntax error at or near "*"
+Parser Error: syntax error at or near ";"
+
+statement error
+SELECT * FROM users JOIN orders
+----
+Parser Error: syntax error at or near "orders"
 
 statement error
 SELECT * FROM users JOIN orders;
 ----
-Parser Error: syntax error at or near "orders"
+Parser Error: syntax error at or near ";"
 
 statement error
 SELECT * FROM users WHERE id = 1 WHERE age > 20;
@@ -23,9 +33,14 @@ SELECT * FROM users WHERE id = 1 WHERE age > 20;
 Parser Error: syntax error at or near "WHERE"
 
 statement error
-SELECT (10).;
+SELECT (10).
 ----
 Parser Error: syntax error at or near "."
+
+statement error
+SELECT (10).;
+----
+Parser Error: syntax error at or near ";"
 
 statement error
 SELECT * FROM tbl WHERE id IN ();
@@ -43,7 +58,7 @@ SELECT users..id FROM users;
 Parser Error: syntax error at or near ".."
 
 statement error
-SELECT * FROM tbl WHERE x = (SELECT 1 FROM (SELECT 2);
+SELECT * FROM tbl WHERE x = (SELECT 1 FROM (SELECT 2)
 ----
 Parser Error: syntax error at or near ")"
 
@@ -55,7 +70,7 @@ Parser Error: syntax error at or near "FROM"
 statement error
 WITH cte AS (SELECT 1) SELECT * FROM cte WHERE (SELECT 1 FROM cte2;
 ----
-Parser Error: syntax error at or near "cte2"
+Parser Error: syntax error at or near ";"
 
 statement error
 SELECT id, SUM(amount) OVER (PARTITION BY ) FROM sales;
@@ -79,17 +94,17 @@ SELECT {'a': 1, 'b': };
 Parser Error: syntax error at or near "}"
 
 statement error
-SELECT CASE WHEN x > 10 THEN 'large' WHEN x < 5;
+SELECT CASE WHEN x > 10 THEN 'large' WHEN x < 5
 ----
 Parser Error: syntax error at or near "5"
 
 statement error
-SELECT '2023-01-01':: ;
+SELECT '2023-01-01'::
 ----
 Parser Error: syntax error at or near "::"
 
 statement error
-SELECT 1 INTERSECT;
+SELECT 1 INTERSECT
 ----
 Parser Error: syntax error at or near "INTERSECT"
 
@@ -115,3 +130,28 @@ query I
 SELECT ('abcd'::VARCHAR)[1:3];
 ----
 abc
+
+# Identifiers must not start with a digit
+statement error
+SELECT * FROM 1e5;
+----
+Parser Error: syntax error at or near "1e5"
+
+statement error
+CREATE TABLE 1 (id INTEGER);
+----
+Parser Error: syntax error at or near "1"
+
+statement error
+SELECT 1 AS 1col;
+----
+Parser Error: syntax error at or near "1"
+
+statement error
+SELECT 0 10;
+----
+Parser Error: syntax error at or near "10"
+
+# Quoted identifiers starting with a digit are allowed
+statement ok
+CREATE TABLE "1abc" (id INTEGER);

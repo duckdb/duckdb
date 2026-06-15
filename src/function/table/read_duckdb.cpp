@@ -27,7 +27,7 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
@@ -50,8 +50,8 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 
 class DuckDBFileReaderOptions : public BaseFileReaderOptions {
 public:
-	string schema_name;
-	string table_name;
+	Identifier schema_name;
+	Identifier table_name;
 
 	bool Matches(TableCatalogEntry &table) const;
 	bool HasSelection() const;
@@ -93,7 +93,7 @@ public:
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 	void AddVirtualColumn(column_t virtual_column_id) override;
 	string GetReaderType() const override {
 		return "duckdb";
@@ -110,8 +110,8 @@ private:
 	unique_ptr<GlobalTableFunctionState> global_state;
 	atomic<bool> finished;
 	idx_t column_count;
-	string schema_name;
-	string table_name;
+	Identifier schema_name;
+	Identifier table_name;
 };
 
 struct DuckDBReadGlobalState : GlobalTableFunctionState {};
@@ -125,7 +125,7 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 	if (tables.empty()) {
 		return string();
 	}
-	case_insensitive_map_t<idx_t> table_names;
+	identifier_map_t<idx_t> table_names;
 	for (auto &table : tables) {
 		table_names[table.get().name]++;
 	}
@@ -137,10 +137,10 @@ string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalo
 			auto &schema = table.ParentSchema();
 			candidate_list.push_back(schema.name + "." + table.name);
 		} else {
-			candidate_list.push_back(table.name);
+			candidate_list.push_back(table.name.GetIdentifierName());
 		}
 	}
-	string search_term = schema_name;
+	string search_term = schema_name.GetIdentifierName();
 	if (!search_term.empty()) {
 		search_term += ".";
 	}
@@ -173,10 +173,10 @@ string DuckDBFileReaderOptions::PrintOptions() const {
 }
 
 bool DuckDBFileReaderOptions::Matches(TableCatalogEntry &table) const {
-	if (!schema_name.empty() && !StringUtil::CIEquals(table.ParentSchema().name, schema_name)) {
+	if (!schema_name.empty() && table.ParentSchema().name != schema_name) {
 		return false;
 	}
-	if (!table_name.empty() && !StringUtil::CIEquals(table.name, table_name)) {
+	if (!table_name.empty() && table.name != table_name) {
 		return false;
 	}
 	return true;
@@ -230,7 +230,7 @@ DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const 
 	}
 	auto &table = tables[0].get();
 	for (auto &col : table.GetColumns().Logical()) {
-		columns.emplace_back(col.Name(), col.Type());
+		columns.emplace_back(col.Name().GetIdentifierName(), col.Type());
 	}
 	column_count = columns.size();
 	schema_name = table.ParentSchema().name;
@@ -247,7 +247,7 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		AttachInfo info;
 		info.path = file.path;
 		// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
-		info.name = "\x80__duckdb_reader_" + info.path;
+		info.name = Identifier("\x80__duckdb_reader_" + info.path);
 
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
@@ -350,7 +350,7 @@ optional_idx DuckDBReader::NumRows() {
 	return table_entry.GetStorage().GetTotalRows();
 }
 
-unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DuckDBReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	if (!scan_function.statistics) {
 		return BaseFileReader::GetStatistics(context, name);
 	}
@@ -393,11 +393,11 @@ bool DuckDBMultiFileInfo::ParseOption(ClientContext &context, const string &key,
                                       MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<DuckDBFileReaderOptions>();
 	if (key == "schema_name") {
-		options.schema_name = StringValue::Get(val);
+		options.schema_name = Identifier(StringValue::Get(val));
 		return true;
 	}
 	if (key == "table_name") {
-		options.table_name = StringValue::Get(val);
+		options.table_name = Identifier(StringValue::Get(val));
 		return true;
 	}
 	return false;
@@ -424,8 +424,8 @@ unique_ptr<TableFunctionData> DuckDBMultiFileInfo::InitializeBindData(MultiFileB
 	return std::move(result);
 }
 
-void DuckDBMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                                     MultiFileBindData &bind_data) {
+void DuckDBMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types,
+                                     vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &duckdb_bind_data = bind_data.bind_data->Cast<DuckDBReadBindData>();
 	bind_data.reader_bind =
 	    bind_data.multi_file_reader->BindReader(context, return_types, names, *bind_data.file_list, bind_data,
@@ -472,7 +472,7 @@ shared_ptr<BaseFileReader> DuckDBMultiFileInfo::CreateReader(ClientContext &cont
 shared_ptr<BaseUnionData> DuckDBReader::GetUnionData(idx_t file_idx) {
 	auto result = make_uniq<DuckDBReaderUnionData>(file);
 	for (auto &column : columns) {
-		result->names.push_back(column.name);
+		result->names.push_back(column.name.GetIdentifierName());
 		result->types.push_back(column.type);
 	}
 	result->reader = shared_from_this();
@@ -553,7 +553,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 	return std::move(table_function);
 }

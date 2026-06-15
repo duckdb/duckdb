@@ -16,6 +16,7 @@ add_library_unity(
   aggregate_function.cpp
   built_in_functions.cpp
   cast_rules.cpp
+  combine_types_rules.cpp
   compression_config.cpp
   copy_function.cpp
   encoding_function.cpp

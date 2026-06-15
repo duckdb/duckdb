@@ -31,7 +31,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	case_insensitive_map_t<BoundParameterData> bind_values;
+	identifier_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
@@ -47,11 +47,11 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
 			} else if (constant.GetReturnType().IsIntegral()) {
-				return_type = LogicalType::INTEGER_LITERAL(constant.value);
+				return_type = LogicalType::INTEGER_LITERAL(constant.GetValueMutable());
 			} else {
-				return_type = constant.value.type();
+				return_type = constant.GetValueMutable().type();
 			}
-			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
+			parameter_data = BoundParameterData(std::move(constant.GetValueMutable()), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 			auto value_type = value.type();

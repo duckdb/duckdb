@@ -62,9 +62,33 @@ string BoundFunctionExpression::ToString() const {
 		FunctionToStringInput input(function, bind_info.get(), children);
 		return function.FunctionToString(input);
 	}
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(),
-	                                                                         function.GetName(), is_operator);
+	auto &function_name = function.GetName().GetIdentifierName();
+
+	if (is_operator) {
+		// built-in operator
+		if (children.size() == 1) {
+			if (StringUtil::Contains(function_name, "__postfix")) {
+				return "((" + children[0]->ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "") + ")";
+			}
+			return function_name + "(" + children[0]->ToString() + ")";
+		}
+		if (children.size() == 2) {
+			return StringUtil::Format("(%s %s %s)", children[0]->ToString(), function_name, children[1]->ToString());
+		}
+	}
+
+	// standard function call
+	string result;
+	result += SQLIdentifier(function_name);
+	result += "(";
+
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [&](const unique_ptr<Expression> &child) { return child->ToString(); });
+
+	result += ")";
+	return result;
 }
+
 bool BoundFunctionExpression::PropagatesNullValues() const {
 	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
 	                                                                            : Expression::PropagatesNullValues();
@@ -111,13 +135,14 @@ void BoundFunctionExpression::Verify() const {
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
-	if (!serializer.ShouldSerialize(8) && function.HasLegacySerializeCallback()) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && function.HasLegacySerializeCallback()) {
 		// serialize legacy expression for backwards compatibility
 		FunctionToStringInput input(function, bind_info.get(), children);
 		auto legacy_expr = function.GetLegacySerializeCallback()(input);
 		legacy_expr->Serialize(serializer);
 		return;
 	}
+
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);

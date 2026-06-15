@@ -106,6 +106,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Default Io Mode
+//===----------------------------------------------------------------------===//
+void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -154,6 +161,14 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// H T T P Proxy
+//===----------------------------------------------------------------------===//
+Value HTTPProxySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.http_proxy);
 }
 
 //===----------------------------------------------------------------------===//

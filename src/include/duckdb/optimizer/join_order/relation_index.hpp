@@ -19,12 +19,12 @@ struct RelationIndex {
 
 	idx_t index;
 
-	inline bool operator==(const RelationIndex &rhs) const {
+	bool operator==(const RelationIndex &rhs) const {
 		return index == rhs.index;
-	};
-	inline bool operator<(const RelationIndex &rhs) const {
+	}
+	bool operator<(const RelationIndex &rhs) const {
 		return index < rhs.index;
-	};
+	}
 	bool operator!=(const RelationIndex &other) const {
 		return !(*this == other);
 	}

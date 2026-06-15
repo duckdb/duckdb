@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test
-# description: Test TOTAL_MEMORY_ALLOCATED metric.
+# description: Test system.total_memory_allocated metric.
 # group: [profiling]
 
 require json
@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+SET tracked_metrics = ['system.total_memory_allocated'];
 
 # Create a table with a large dataset to trigger memory allocations
 statement ok
@@ -23,10 +23,10 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
-# Verify that total_memory_allocated is tracked (may be 0 for small queries, but should be present)
+# Verify that system.total_memory_allocated is tracked (may be 0 for small queries, but should be present)
 query I
 SELECT
-	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	CASE WHEN system.total_memory_allocated >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -40,7 +40,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+SET tracked_metrics = ['system.total_memory_allocated'];
 
 # Use a query with aggregation and ordering that should trigger memory allocations
 statement ok
@@ -52,16 +52,16 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
-# Verify that total_memory_allocated is tracked
+# Verify that system.total_memory_allocated is tracked
 query I
 SELECT
-	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	CASE WHEN system.total_memory_allocated >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
 true
 
-# Verify that total_memory_allocated only appears at root level, not in children
+# Verify that system.total_memory_allocated only appears at root level, not in children
 statement ok
 PRAGMA enable_profiling = 'json';
 
@@ -69,7 +69,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true", "OPERATOR_NAME": "true", "OPERATOR_TYPE": "true"}';
+SET tracked_metrics = ['system.total_memory_allocated', 'operator.type'];
 
 statement ok
 SELECT * FROM test WHERE id < 1000 ORDER BY id;
@@ -80,23 +80,23 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
-# Check that root has total_memory_allocated
+# Check that root has system.total_memory_allocated
 query I
 SELECT
-	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	CASE WHEN system.total_memory_allocated >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
 true
 
-# Verify that children nodes don't have total_memory_allocated
+# Verify that children nodes don't have system.total_memory_allocated
 # We'll check by looking at the JSON structure - children should not have this field
 statement ok
-CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(operator_info, recursive := true) FROM metrics_output;
+CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(operator, recursive := true) FROM metrics_output;
 
-# Verify that total_memory_allocated field does not exist in children nodes
+# Verify that system.total_memory_allocated field does not exist in children nodes
 statement error
-SELECT total_memory_allocated FROM metrics_children;
+SELECT system.total_memory_allocated FROM metrics_children;
 ----
 Binder Error
 
@@ -108,7 +108,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "false"}';
+SET tracked_metrics = [];
 
 statement ok
 CREATE OR REPLACE TABLE test2 AS SELECT range AS id FROM range(10000);
@@ -120,7 +120,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement error
-SELECT total_memory_allocated FROM metrics_output;
+SELECT system.total_memory_allocated FROM metrics_output;
 ----
 Binder Error
 
@@ -132,7 +132,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_MEMORY_ALLOCATED": "true"}';
+SET tracked_metrics = ['system.total_memory_allocated'];
 
 statement ok
 SET memory_limit = '100MB';
@@ -147,12 +147,11 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
-# Verify that total_memory_allocated is tracked (should be > 0 for large operations)
+# Verify that system.total_memory_allocated is tracked (should be > 0 for large operations)
 query I
 SELECT
-	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+	CASE WHEN system.total_memory_allocated >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
 true
-

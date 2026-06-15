@@ -73,6 +73,33 @@ void PerColumnMetadataBlocks::AddColumn(idx_t col_idx, const vector<idx_t> &bloc
 	}
 }
 
+PerColumnMetadataBlocks PerColumnMetadataBlocks::Merge(const PerColumnMetadataBlocks &a,
+                                                       const PerColumnMetadataBlocks &b) {
+	PerColumnMetadataBlocks result;
+	result.data.reserve(a.data.size() + b.data.size());
+	idx_t ai = 0;
+	idx_t bi = 0;
+	// each marker is followed by its blocks until the next marker; data is sorted by column index
+	while (ai < a.data.size() && bi < b.data.size()) {
+		D_ASSERT(a.data[ai].is_column_index && b.data[bi].is_column_index);
+		D_ASSERT(a.data[ai].index != b.data[bi].index);
+		bool take_a = a.data[ai].index < b.data[bi].index;
+		const auto &src = take_a ? a.data : b.data;
+		idx_t &pos = take_a ? ai : bi;
+		result.data.push_back(src[pos++]); // marker
+		while (pos < src.size() && !src[pos].is_column_index) {
+			result.data.push_back(src[pos++]);
+		}
+	}
+	while (ai < a.data.size()) {
+		result.data.push_back(a.data[ai++]);
+	}
+	while (bi < b.data.size()) {
+		result.data.push_back(b.data[bi++]);
+	}
+	return result;
+}
+
 void PerColumnMetadataBlocks::RemoveColumn(idx_t col_idx) {
 	idx_t start = data.size();
 	idx_t end = data.size();

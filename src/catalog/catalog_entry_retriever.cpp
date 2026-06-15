@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schema, const string &name,
+LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const Identifier &schema, const Identifier &name,
                                            OnEntryNotFound on_entry_not_found) {
 	EntryLookupInfo lookup_info(CatalogType::TYPE_ENTRY, name);
 	auto result = GetEntry(catalog, schema, lookup_info, on_entry_not_found);
@@ -22,7 +22,7 @@ LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schem
 	return type_entry.user_type;
 }
 
-LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &schema, const string &name,
+LogicalType CatalogEntryRetriever::GetType(const Identifier &catalog, const Identifier &schema, const Identifier &name,
                                            OnEntryNotFound on_entry_not_found) {
 	EntryLookupInfo lookup_info(CatalogType::TYPE_ENTRY, name);
 	auto result = GetEntry(catalog, schema, lookup_info, on_entry_not_found);
@@ -33,13 +33,13 @@ LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &
 	return type_entry.user_type;
 }
 
-optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const Identifier &catalog, const Identifier &schema,
                                                            const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
 	return ReturnAndCallback(Catalog::GetEntry(*this, catalog, schema, lookup_info, on_entry_not_found));
 }
 
-optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog,
+optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const Identifier &catalog,
                                                                   const EntryLookupInfo &schema_lookup_p,
                                                                   OnEntryNotFound on_entry_not_found) {
 	EntryLookupInfo schema_lookup(schema_lookup_p, at_clause);
@@ -54,7 +54,7 @@ optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &
 	return result;
 }
 
-optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(Catalog &catalog, const string &schema,
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(Catalog &catalog, const Identifier &schema,
                                                            const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
 	return ReturnAndCallback(catalog.GetEntry(*this, schema, lookup_info, on_entry_not_found));

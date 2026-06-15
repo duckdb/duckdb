@@ -117,7 +117,7 @@ void BaseCSVData::Finalize() {
 }
 
 static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_data, ClientContext &context,
-                                                            const vector<string> &names,
+                                                            const vector<Identifier> &names,
                                                             const vector<LogicalType> &sql_types) {
 	auto &options = bind_data.options;
 	auto &formats = options.write_date_format;
@@ -173,7 +173,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
-                                             const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                             const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(names);
 
 	// check all the options in the copy info
@@ -337,7 +337,6 @@ static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterState &writer_loca
                                   DataChunk &input, ExpressionExecutor &executor) {
 	// first cast the columns of the chunk to varchar
 	cast_chunk.Reset();
-	cast_chunk.SetCardinality(input);
 
 	executor.Execute(input, cast_chunk);
 
@@ -414,7 +413,8 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
 	auto &original_types = collection->Types();
-	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
+	auto expressions =
+	    CreateCastExpressions(csv_data, context, StringsToIdentifiers(csv_data.options.name_list), original_types);
 	ExpressionExecutor executor(context, expressions);
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 

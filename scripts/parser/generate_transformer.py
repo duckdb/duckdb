@@ -21,8 +21,8 @@ GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
 # Matches: PEGTransformerFactory::TransformRuleName(
 TRANSFORMER_REGEX = re.compile(r"PEGTransformerFactory::Transform(\w+)\s*\(")
 
-# Matches: RegisterEnum<...>("RuleName", ...);
-ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
+# Matches: RegisterEnum<CppType>("RuleName", ...);
+ENUM_RULE_REGEX = re.compile(r'RegisterEnum<([^>]+)>\s*\(\s*"(\w+)"\s*,')
 
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
@@ -37,16 +37,10 @@ class GrammarTypeInfo:
 
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
+    default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
 
 
-def load_grammar_types(types_file):
-    """
-    Loads grammar_types.yml and returns (rule_types, excluded_rules) where
-    rule_types maps rule name -> GrammarTypeInfo (cpp_type + by_value), and excluded_rules is
-    the set of rules that should be skipped during stub generation.
-    Override rules default to by_value=False; a startswith('unique_ptr<') fallback covers
-    any override types that are move-only.
-    """
+def load_grammar_types_yaml(types_file):
     if yaml is None:
         print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
         sys.exit(1)
@@ -62,32 +56,85 @@ def load_grammar_types(types_file):
         print(f"Error: {types_file} is malformed (expected a top-level mapping).", file=sys.stderr)
         sys.exit(1)
 
+    return data
+
+
+def validate_grammar_types(types_file, data, rule_types, excluded_rules):
+    matcher_overrides = data.get("matcher_rule_overrides", {})
+    if not isinstance(matcher_overrides, dict):
+        print(f"Error: matcher_rule_overrides in {types_file} must be a mapping.", file=sys.stderr)
+        sys.exit(1)
+
+    errors = []
+    matcher_rules = set(matcher_overrides.keys())
+    excluded_overlap = sorted(matcher_rules.intersection(excluded_rules))
+    if excluded_overlap:
+        errors.append("Rules cannot be listed in both matcher_rule_overrides and excluded_rules:")
+        errors.extend(f"  - {name}" for name in excluded_overlap)
+
+    for name, override in matcher_overrides.items():
+        if not isinstance(override, dict):
+            errors.append(f"matcher_rule_overrides entry for '{name}' must be a mapping")
+
+    type_overlap = sorted(
+        name
+        for name in matcher_rules.intersection(rule_types)
+        if isinstance(matcher_overrides[name], dict) and not matcher_overrides[name].get("allow_type_overlap")
+    )
+    if type_overlap:
+        errors.append("Matcher override rules with normal return types must set allow_type_overlap: true:")
+        errors.extend(f"  - {name}" for name in type_overlap)
+
+    if errors:
+        print(f"Error: {types_file} contains inconsistent rule metadata:", file=sys.stderr)
+        for error in errors:
+            print(error, file=sys.stderr)
+        sys.exit(1)
+
+
+def load_grammar_types(types_file):
+    """
+    Loads grammar_types.yml and returns (rule_types, excluded_rules) where
+    rule_types maps rule name -> GrammarTypeInfo (cpp_type + by_value + default_initializer), and excluded_rules is
+    the set of rules that should be skipped during stub generation.
+    Override rules default to by_value=False; a startswith('unique_ptr<') fallback covers
+    any override types that are move-only.
+    """
+    data = load_grammar_types_yaml(types_file)
+
     rule_types = {}
     rule_to_source = {}  # tracks where each rule was first seen for error messages
     duplicates = []
 
-    def register(name, cpp_type, by_value, source):
+    def register(name, cpp_type, by_value, default_initializer, source):
         name = str(name)
         if name in rule_types:
             duplicates.append(f"  '{name}' in '{source}' (already listed in '{rule_to_source[name]}')")
         else:
-            rule_types[name] = GrammarTypeInfo(cpp_type=str(cpp_type), by_value=by_value)
+            rule_types[name] = GrammarTypeInfo(
+                cpp_type=str(cpp_type),
+                by_value=by_value,
+                default_initializer=str(default_initializer or ""),
+            )
             rule_to_source[name] = source
 
-    # Top-level overrides: RuleName -> "type" string OR {type, by_value} dict
+    # Top-level overrides: RuleName -> "type" string OR {type, by_value, default_initializer} dict.
+    # default_initializer usually names an enum member (e.g. "INNER"), but full C++ initializers
+    # that start with "=" or "{" are also accepted by gen_transformer_v2.py.
     overrides = data.get("overrides", {})
     if isinstance(overrides, dict):
         for name, value in overrides.items():
             if isinstance(value, str):
-                register(name, value, False, "overrides")
+                register(name, value, False, "", "overrides")
             elif isinstance(value, dict):
                 cpp_type = value.get("type", "")
                 by_value = bool(value.get("by_value", False))
-                register(name, cpp_type, by_value, "overrides")
+                default_initializer = value.get("default_initializer", "")
+                register(name, cpp_type, by_value, default_initializer, "overrides")
 
-    # Category entries: CategoryName -> {type: "...", by_value: bool, rules: [...]}
+    # Category entries: CategoryName -> {type: "...", by_value: bool, default_initializer: "...", rules: [...]}
     for key, value in data.items():
-        if key in ("overrides", "excluded_rules"):
+        if key in ("overrides", "excluded_rules", "matcher_rule_overrides"):
             continue
         if not isinstance(value, dict):
             continue
@@ -96,8 +143,9 @@ def load_grammar_types(types_file):
         if not cpp_type or not isinstance(rules, list):
             continue
         by_value = bool(value.get("by_value", False))
+        default_initializer = value.get("default_initializer", "")
         for name in rules:
-            register(name, cpp_type, by_value, key)
+            register(name, cpp_type, by_value, default_initializer, key)
 
     if duplicates:
         print(f"Error: {types_file} contains duplicate rule listings:", file=sys.stderr)
@@ -106,7 +154,19 @@ def load_grammar_types(types_file):
         sys.exit(1)
 
     excluded_rules = set(data.get("excluded_rules", []))
+    validate_grammar_types(types_file, data, rule_types, excluded_rules)
     return rule_types, excluded_rules
+
+
+def load_matcher_rule_overrides(types_file):
+    """Load matcher_rule_overrides from grammar_types.yml."""
+    data = load_grammar_types_yaml(types_file)
+
+    overrides = data.get("matcher_rule_overrides", {})
+    if not isinstance(overrides, dict):
+        print(f"Error: matcher_rule_overrides in {types_file} must be a mapping.", file=sys.stderr)
+        sys.exit(1)
+    return overrides
 
 
 def find_grammar_rules(grammar_path):
@@ -204,7 +264,7 @@ def find_factory_registrations(factory_file_path):
             content = f.read()
 
             for match in ENUM_RULE_REGEX.finditer(content):
-                enum_rules.add(match.group(1))
+                enum_rules.add(match.group(2))
 
             for match in REGISTER_TRANSFORM_REGEX.finditer(content):
                 registered_rules.add(match.group(1))
@@ -291,6 +351,7 @@ def main():
     args = parser.parse_args()
 
     rule_types, excluded_rules = load_grammar_types(GRAMMAR_TYPES_FILE)
+    matcher_rules = set(load_matcher_rule_overrides(GRAMMAR_TYPES_FILE).keys())
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
     transformer_impls = find_transformer_rules(Path(TRANSFORMER_DIR))
     enum_rules, registered_rules, directly_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
@@ -305,6 +366,7 @@ def main():
     total_rules_scanned = 0
     total_found_enum = 0
     total_found_registered = 0
+    total_found_matcher = 0
     total_missing_registration = 0
     total_missing_implementation = 0
     all_grammar_rules_flat = set()
@@ -327,11 +389,18 @@ def main():
 
         for rule_name in sorted(grammar_rules):
             total_rules_scanned += 1
+            all_grammar_rules_flat.add(rule_name)
+
+            if rule_name in matcher_rules:
+                total_found_matcher += 1
+                if not args.skip_found:
+                    print(f"{'[ MATCHER ]':<14} {rule_name}")
+                continue
+
             if rule_name in excluded_rules:
                 print(f"{'[ EXCLUDED ]':<14} {rule_name}")
                 continue
 
-            all_grammar_rules_flat.add(rule_name)
             total_grammar_rules += 1
 
             is_enum = rule_name in enum_rules
@@ -377,6 +446,7 @@ def main():
     print("\n--- Summary: Rule Coverage ---")
     print(f"{'TOTAL RULES SCANNED':<25} : {total_rules_scanned}")
     print(f"  {'  - Excluded':<23} : {len(excluded_rules)}")
+    print(f"  {'  - Matcher':<23} : {total_found_matcher}")
     print("---------------------------------------")
     print(f"{'TOTAL ACTIONABLE RULES':<25} : {total_grammar_rules}")
     print(f"{'TOTAL COVERED':<25} : {total_covered} ({coverage:.2f}%)")

@@ -37,7 +37,6 @@ SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &con
 		data.offset++;
 		count++;
 	}
-	chunk.SetCardinality(count);
 
 	return data.offset >= data.update_result_entries.size() ? SourceResultType::FINISHED
 	                                                        : SourceResultType::HAVE_MORE_OUTPUT;
@@ -52,7 +51,7 @@ unique_ptr<GlobalSourceState> PhysicalUpdateExtensions::GetGlobalSourceState(Cli
 	} else {
 		// Update extensions in extensions_to_update
 		for (const auto &ext : info->extensions_to_update) {
-			res->update_result_entries.emplace_back(ExtensionHelper::UpdateExtension(context, ext));
+			res->update_result_entries.emplace_back(ExtensionHelper::UpdateExtension(context, ext.GetIdentifierName()));
 		}
 	}
 

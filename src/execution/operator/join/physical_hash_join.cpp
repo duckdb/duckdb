@@ -111,7 +111,7 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 	ExpressionIterator::EnumerateExpression(predicate, [&](unique_ptr<Expression> &expr) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			auto &ref = expr->Cast<BoundReferenceExpression>();
-			idx_t col_idx = ref.index;
+			idx_t col_idx = ref.Index();
 
 			if (col_idx < probe_column_count) {
 				// Probe (LHS) column
@@ -179,7 +179,7 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 	idx_t cond_idx = 0;
 	for (auto &condition : conditions) {
 		if (condition.GetRHS().GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto build_input_idx = condition.GetRHS().Cast<BoundReferenceExpression>().index;
+			auto build_input_idx = condition.GetRHS().Cast<BoundReferenceExpression>().Index();
 			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
 		}
 		cond_idx++;
@@ -605,7 +605,7 @@ void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate
 		auto join_condition_idx = join_condition[pushdown_idx];
 		for (idx_t i = 0; i < 2; i++) {
 			idx_t aggr_idx = pushdown_idx * 2 + i;
-			lstate.local_aggregate_state->Sink(chunk, join_condition_idx, aggr_idx);
+			lstate.local_aggregate_state->Sink(chunk, join_condition_idx, aggr_idx, chunk.size());
 		}
 	}
 }
@@ -623,7 +623,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	}
 
 	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
-		lstate.payload_chunk.SetCardinality(chunk.size());
+		lstate.payload_chunk.SetChildCardinality(chunk.size());
 	} else { // there are payload columns
 		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
 	}
@@ -898,7 +898,7 @@ public:
 		auto &ht = *sink.hash_table;
 		auto prefix_range_state = ht.ShouldBuildPrefixRangeFilter() ? RegisterPrefixRangeState(ht) : nullptr;
 		ExecuteHashJoinFinalizeTask(sink, optional_idx(), prefix_range_state);
-		FinishTasks(false);
+		FinishTasks();
 	}
 
 	void Schedule() override {
@@ -906,21 +906,22 @@ public:
 	}
 
 	void FinishEvent() override {
-		FinishTasks(true);
+		FinishTasks();
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
 
 private:
-	void FinishTasks(bool build_dictionary_arrays) {
+	void FinishTasks() {
 		for (auto &prefix_range_state : prefix_range_states) {
 			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 
-		// chains are final; materialize dict_arrays and overwrite NEXT_PTR with the dict index
-		if (build_dictionary_arrays && sink.hash_table->CanUseDictionaryEmission(
-		                                   sink.op, sink.external, sink.op.children[0].get().estimated_cardinality)) {
+		// Both finalize paths finish writing the chains before reaching here,
+		// so dictionary emission is safe on either path
+		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
+		                                              sink.op.children[0].get().estimated_cardinality)) {
 			sink.hash_table->BuildDictionaryArrays(sink.op);
 		}
 
@@ -1559,6 +1560,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	if (filter_min_max) {
 		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, sink.perfect_join_executor);
+		if (!use_perfect_hash) {
+			ht.PrepareBloomFilterForFinalize();
+		}
 	}
 
 	// In case of a large build side or duplicates, use regular hash join
@@ -1575,6 +1579,33 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
+//! Structural gate for the compressed-vector probe paths; evaluated once per operator state.
+//! Decides whether to allocate ProbeState::dict_state; Probe() dispatches into the fast paths
+//! whenever that allocation is present.
+static bool CanUseCompressedProbe(const HashJoinGlobalSinkState &sink, const vector<JoinCondition> &conditions) {
+	if (sink.external) {
+		// external joins re-finalize the HT mid-probe, invalidating the per-id pointer cache
+		return false;
+	}
+	if (sink.perfect_join_executor) {
+		return false;
+	}
+	if (conditions.size() != 1) {
+		return false;
+	}
+	const auto cmp = conditions[0].GetComparisonType();
+	if (cmp != ExpressionType::COMPARE_EQUAL && cmp != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return false;
+	}
+	if (conditions[0].GetLHS().GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return false;
+	}
+	if (conditions[0].GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT) {
+		return false;
+	}
+	return true;
+}
+
 class HashJoinOperatorState : public CachingOperatorState {
 public:
 	HashJoinOperatorState(ClientContext &context, const PhysicalHashJoin &op_p, HashJoinGlobalSinkState &sink)
@@ -1618,6 +1649,10 @@ public:
 		} else {
 			spill_chunk.Reset();
 		}
+		// discard cached build-side pointers; the HT may have been reset between iterations (e.g. recursive CTE)
+		if (probe_state.dict_state) {
+			probe_state.dict_state = make_uniq<JoinHashTable::ProbeDictionaryState>();
+		}
 		// perfect_hash_join_state will be lazily initialized on first Execute when we have a real ExecutionContext
 	}
 };
@@ -1645,6 +1680,11 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
 		sink.InitializeProbeSpill();
+	}
+
+	if (CanUseCompressedProbe(sink, conditions)) {
+		// non-null dict_state is the enabling signal for the compressed-vector probe paths in Probe()
+		state->probe_state.dict_state = make_uniq<JoinHashTable::ProbeDictionaryState>();
 	}
 
 	return std::move(state);
@@ -2269,9 +2309,9 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		if (i > 0) {
 			condition_info += "\n";
 		}
-		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName().GetIdentifierName(),
 		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
-		                                     join_condition.GetRHS().GetName());
+		                                     join_condition.GetRHS().GetName().GetIdentifierName());
 	}
 
 	if (predicate) {

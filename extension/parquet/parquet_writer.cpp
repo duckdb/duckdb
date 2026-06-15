@@ -486,10 +486,10 @@ void ParquetWriter::InitializeColumnWriters() {
 	column_writers.clear();
 	D_ASSERT(options.sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < options.sql_types.size(); i++) {
-		vector<string> path_in_schema;
+		vector<Identifier> path_in_schema;
 		const bool can_have_nulls = options.not_null_columns.empty() || !options.not_null_columns[i];
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
-		    context, *this, path_in_schema, types[i], unique_names[i], allow_geometry, &options.field_ids,
+		    context, *this, path_in_schema, types[i], Identifier(unique_names[i]), allow_geometry, &options.field_ids,
 		    &options.shredding_types, 0, 1, can_have_nulls));
 	}
 }
@@ -550,7 +550,7 @@ PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
 		if (!column_writer->TryExportPreparedShreddingType(column_shredding_type)) {
 			continue;
 		}
-		result.shredding_types.AddChild(column_writer->Schema().name, std::move(column_shredding_type));
+		result.shredding_types.AddChild(Identifier(column_writer->Schema().name), std::move(column_shredding_type));
 	}
 	return result;
 }
@@ -1306,6 +1306,7 @@ void ParquetWriter::Finalize() {
 		GatherWrittenStatistics();
 		written_stats->file_size_bytes = writer->GetTotalWritten();
 		written_stats->footer_size_bytes = Value::UBIGINT(footer_size);
+		written_stats->extra_info["row_group_count"] = Value::UBIGINT(NumberOfRowGroups());
 	}
 
 	// flush to disk
@@ -1336,5 +1337,7 @@ void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_sta
 	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
 	//! NOTE: the actual accumulators for the writers are created after FinalizeSchema() is called
 }
+
+ParquetWriteGlobalState::ParquetWriteGlobalState() = default;
 
 } // namespace duckdb

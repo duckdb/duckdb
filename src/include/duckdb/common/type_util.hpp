@@ -135,4 +135,64 @@ bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());
 }
 
+//! Returns the LogicalType corresponding to a C++ primitive type
+template <class T>
+LogicalType PrimitiveToLogicalType() {
+	using TYPE = typename std::remove_cv<T>::type;
+	if (std::is_same<TYPE, bool>()) {
+		return LogicalType::BOOLEAN;
+	} else if (std::is_same<TYPE, int8_t>()) {
+		return LogicalType::TINYINT;
+	} else if (std::is_same<TYPE, int16_t>()) {
+		return LogicalType::SMALLINT;
+	} else if (std::is_same<TYPE, int32_t>()) {
+		return LogicalType::INTEGER;
+	} else if (std::is_same<TYPE, int64_t>()) {
+		return LogicalType::BIGINT;
+	} else if (std::is_same<TYPE, uint8_t>()) {
+		return LogicalType::UTINYINT;
+	} else if (std::is_same<TYPE, uint16_t>()) {
+		return LogicalType::USMALLINT;
+	} else if (std::is_same<TYPE, uint32_t>()) {
+		return LogicalType::UINTEGER;
+	} else if (std::is_same<TYPE, uint64_t>() || std::is_same<TYPE, idx_t>()) {
+		return LogicalType::UBIGINT;
+	} else if (std::is_same<TYPE, hugeint_t>()) {
+		return LogicalType::HUGEINT;
+	} else if (std::is_same<TYPE, uhugeint_t>()) {
+		return LogicalType::UHUGEINT;
+	} else if (std::is_same<TYPE, float>()) {
+		return LogicalType::FLOAT;
+	} else if (std::is_same<TYPE, double>()) {
+		return LogicalType::DOUBLE;
+	} else if (std::is_same<TYPE, date_t>()) {
+		return LogicalType::DATE;
+	} else if (std::is_same<TYPE, dtime_t>()) {
+		return LogicalType::TIME;
+	} else if (std::is_same<TYPE, dtime_tz_t>()) {
+		return LogicalType::TIME_TZ;
+	} else if (std::is_same<TYPE, dtime_ns_t>()) {
+		return LogicalType::TIME_NS;
+	} else if (std::is_same<TYPE, timestamp_t>()) {
+		return LogicalType::TIMESTAMP;
+	} else if (std::is_same<TYPE, timestamp_sec_t>()) {
+		return LogicalType::TIMESTAMP_S;
+	} else if (std::is_same<TYPE, timestamp_ms_t>()) {
+		return LogicalType::TIMESTAMP_MS;
+	} else if (std::is_same<TYPE, timestamp_ns_t>()) {
+		return LogicalType::TIMESTAMP_NS;
+	} else if (std::is_same<TYPE, timestamp_tz_t>()) {
+		return LogicalType::TIMESTAMP_TZ;
+	} else if (std::is_same<TYPE, timestamp_tz_ns_t>()) {
+		return LogicalType::TIMESTAMP_TZ_NS;
+	} else if (std::is_same<TYPE, interval_t>()) {
+		return LogicalType::INTERVAL;
+	} else if (std::is_same<TYPE, const char *>() || std::is_same<TYPE, char *>() || std::is_same<TYPE, string_t>() ||
+	           std::is_same<TYPE, bignum_t>()) {
+		return LogicalType::VARCHAR;
+	} else {
+		throw InternalException("Unsupported type in PrimitiveToLogicalType");
+	}
+}
+
 } // namespace duckdb

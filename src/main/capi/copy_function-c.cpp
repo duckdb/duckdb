@@ -99,7 +99,7 @@ void duckdb_copy_function_set_name(duckdb_copy_function copy_function, const cha
 		return;
 	}
 	auto &copy_function_ref = *reinterpret_cast<duckdb::CopyFunction *>(copy_function);
-	copy_function_ref.name = name;
+	copy_function_ref.name = duckdb::Identifier(name);
 }
 
 void duckdb_destroy_copy_function(duckdb_copy_function *copy_function) {
@@ -151,7 +151,7 @@ struct CCopyToBindInfo : FunctionData {
 
 struct CCopyFunctionToInternalBindInfo {
 	CCopyFunctionToInternalBindInfo(ClientContext &context, CopyFunctionBindInput &input,
-	                                const vector<LogicalType> &sql_types, const vector<string> &names,
+	                                const vector<LogicalType> &sql_types, const vector<Identifier> &names,
 	                                const CCopyFunctionInfo &function_info)
 	    : context(context), input(input), sql_types(sql_types), names(names), function_info(function_info),
 	      success(true) {
@@ -160,7 +160,7 @@ struct CCopyFunctionToInternalBindInfo {
 	ClientContext &context;
 	CopyFunctionBindInput &input;
 	const vector<LogicalType> &sql_types;
-	const vector<string> &names;
+	const vector<Identifier> &names;
 	const CCopyFunctionInfo &function_info;
 	bool success;
 	string error;
@@ -170,8 +170,8 @@ struct CCopyFunctionToInternalBindInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInput &input, const vector<string> &names,
-                                     const vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> CCopyToBind(ClientContext &context, CopyFunctionBindInput &input,
+                                     const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	auto &info = input.function_info->Cast<CCopyFunctionInfo>();
 
 	auto result = make_uniq<CCopyToBindInfo>();
@@ -654,7 +654,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto param_it = info.tf.named_parameters.find(opt.first);
+		auto param_it = info.tf.named_parameters.find(Identifier(opt.first));
 		if (param_it == info.tf.named_parameters.end()) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
@@ -686,7 +686,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 		}
 
 		// Assign the option as a named parameter
-		named_parameters[opt.first] = param_value;
+		named_parameters[Identifier(opt.first)] = param_value;
 	}
 
 	// Also pass file path as a regular parameter

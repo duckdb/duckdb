@@ -21,7 +21,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
                                              const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
 }
@@ -34,7 +34,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
@@ -49,7 +49,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	return false;
 }
 
-bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
+bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
                       const vector<LogicalType> &types, const vector<column_t> &column_ids,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
 	TableIndex table_index(0);
@@ -202,7 +202,7 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 }
 
 unique_ptr<MultiFileList> MultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                                               const vector<string> &names,
+                                                               const vector<Identifier> &names,
                                                                const vector<LogicalType> &types,
                                                                const vector<column_t> &column_ids,
                                                                TableFilterSet &filters) const {

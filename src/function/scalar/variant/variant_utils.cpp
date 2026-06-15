@@ -82,7 +82,7 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
-                                   ValidityMask &res_validity, const VariantNestedData *nested_data,
+                                   ValidityMask &res_validity, const array_ptr<VariantNestedData> &nested_data,
                                    const ValidityMask &validity, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel ? sel->get_index(i) : i;
@@ -99,7 +99,7 @@ void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 				continue;
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
-			res[i] = static_cast<uint8_t>(value_id);
+			res[i] = value_id;
 			continue;
 		}
 		bool found_child = false;
@@ -145,7 +145,7 @@ vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &varia
 VariantNestedDataCollectionResult
 VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
                                 const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
-                                VariantNestedData *child_data, ValidityMask &validity) {
+                                array_ptr<VariantNestedData> child_data, ValidityMask &validity) {
 	VariantLogicalType wrong_type = VariantLogicalType::VARIANT_NULL;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -181,6 +181,36 @@ VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Variant
 		return VariantNestedDataCollectionResult(wrong_type);
 	}
 	return VariantNestedDataCollectionResult();
+}
+
+void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
+                                const idx_t count, array_ptr<VariantNestedData> nested_data, ValidityMask &validity,
+                                VariantPathSelection &path_selection) {
+	for (idx_t i = 0; i < components.size(); i++) {
+		auto &component = components[i];
+		auto &input_indices = path_selection.Input(i);
+		auto &output_indices = path_selection.Output(i);
+
+		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+			throw InternalException("Path indexes are not supported for this function");
+		}
+
+		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
+		                                      0, nested_data, validity);
+
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data,
+		                              validity, count);
+
+		for (idx_t j = 0; j < count; j++) {
+			if (!validity.RowIsValid(j)) {
+				continue;
+			}
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
+				validity.SetInvalid(j);
+			}
+		}
+	}
 }
 
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
