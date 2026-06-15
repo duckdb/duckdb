@@ -163,16 +163,37 @@ def sql_list_watches(debugger, command, result, _internal_dict):
 
 def sql_delete_watch(debugger, command, result, _internal_dict):
     parser = argparse.ArgumentParser(prog=SQL_DELETE_WATCH_COMMAND, add_help=False)
-    parser.add_argument("watch_id", type=int)
+    parser.add_argument("watch_id", nargs="?")
 
     try:
         args = parser.parse_args(shlex.split(command))
     except SystemExit:
-        result.SetError("usage: {} <id>".format(SQL_DELETE_WATCH_COMMAND))
+        result.SetError("usage: {} [id|all]".format(SQL_DELETE_WATCH_COMMAND))
         return
 
     target = debugger.GetSelectedTarget()
-    breakpoint_id = args.watch_id
+    _cleanup_dead_watches(target)
+
+    if not _WATCHES:
+        result.SetError("no sql watches installed")
+        return
+
+    if args.watch_id is None:
+        breakpoint_id = max(_WATCHES)
+    elif args.watch_id == "all":
+        deleted_ids = sorted(_WATCHES)
+        for watch_id in deleted_ids:
+            target.BreakpointDelete(watch_id)
+            del _WATCHES[watch_id]
+        result.AppendMessage("Deleted all watches ({})".format(", ".join(str(watch_id) for watch_id in deleted_ids)))
+        return
+    else:
+        try:
+            breakpoint_id = int(args.watch_id)
+        except ValueError:
+            result.SetError("usage: {} [id|all]".format(SQL_DELETE_WATCH_COMMAND))
+            return
+
     if breakpoint_id not in _WATCHES:
         result.SetError("watch {} not found".format(breakpoint_id))
         return

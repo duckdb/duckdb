@@ -24,6 +24,8 @@ sql_watch_statement --connection con2
 sql_next_watch
 sql_list_watches
 sql_delete_watch 5
+sql_delete_watch
+sql_delete_watch all
 ```
 
 ### Suggested `~/.lldbinit`
@@ -47,7 +49,7 @@ command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.
 - `sql_list_watches`
   - lists installed watch rules
 - `sql_delete_watch <id>`
-  - removes one installed watch rule
+  - removes one installed watch rule, the most recently added watch if omitted, or all watches with `all`
 
 ### Filters
 
