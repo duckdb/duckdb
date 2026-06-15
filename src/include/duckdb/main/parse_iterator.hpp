@@ -35,14 +35,19 @@ struct MatcherToken;
 //! produces them (1:1 with peels), with NO preprocessing. Callers that want ready-to-execute
 //! (engine-facing) statements wrap a ParseIterator in an EngineIterator instead.
 //!
-//! parser_override extensions live here: an extension that claims the whole query is just an
-//! alternative front-end producing parse-facing statements, so it belongs at the parse level.
+//! A ParseIterator is really a source of parse-facing statements by any means: by PEG peel, by a
+//! parser_override extension that claims the whole query, or — via the single-statement ctor — by
+//! injecting one already-parsed statement. The latter two share one "emit pre-built statements
+//! without running the PEG parser" path; the injected statement is its degenerate 1-element case.
 //!
 //! Separator-only stretches (e.g. ";;;") are transparently skipped inside Peek — the caller
 //! always sees either a real statement or a clean exhaustion.
 class ParseIterator {
 public:
+	//! Peel parse-facing statements out of a SQL string (PEG / parser_override).
 	DUCKDB_API explicit ParseIterator(string sql);
+	//! Degenerate source of exactly one already-parsed statement: yield it once, then exhaust.
+	DUCKDB_API explicit ParseIterator(unique_ptr<SQLStatement> statement);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;

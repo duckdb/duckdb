@@ -5,34 +5,16 @@
 
 namespace duckdb {
 
-EngineIterator::EngineIterator(ParseIterator parse_iterator)
-    : source(make_uniq<ParseIterator>(std::move(parse_iterator))) {
+EngineIterator::EngineIterator(ParseIterator &&parse_iterator) : source(std::move(parse_iterator)) {
 }
 
-EngineIterator::EngineIterator(unique_ptr<SQLStatement> statement) : pending_single(std::move(statement)) {
+EngineIterator::EngineIterator(unique_ptr<SQLStatement> statement) : source(std::move(statement)) {
 }
 
 EngineIterator::~EngineIterator() = default;
 
 EngineIterator::EngineIterator(EngineIterator &&) noexcept = default;
 EngineIterator &EngineIterator::operator=(EngineIterator &&) noexcept = default;
-
-unique_ptr<SQLStatement> EngineIterator::NextParseStatement(ClientContext &context) {
-	if (source) {
-		if (!source->Peek(context)) {
-			exhausted = true;
-			return nullptr;
-		}
-		return source->GetStatement();
-	}
-	// Single-statement source: yield the pending statement exactly once.
-	if (single_consumed || !pending_single) {
-		exhausted = true;
-		return nullptr;
-	}
-	single_consumed = true;
-	return std::move(pending_single);
-}
 
 bool EngineIterator::Peek(ClientContext &context) {
 	// Already buffered from a prior Peek — just report it.
@@ -51,10 +33,11 @@ bool EngineIterator::Peek(ClientContext &context) {
 	// statements. The preprocessor can swallow a statement entirely (empty expansion), in which
 	// case we loop and pull the next one.
 	while (true) {
-		auto stmt = NextParseStatement(context);
-		if (!stmt) {
+		if (!source.Peek(context)) {
+			exhausted = true;
 			return false;
 		}
+		auto stmt = source.GetStatement();
 		buffer.clear();
 		buffer_cursor = 0;
 		buffer.push_back(std::move(stmt));

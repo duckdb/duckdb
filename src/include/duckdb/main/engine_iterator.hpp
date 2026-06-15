@@ -27,17 +27,17 @@ class SQLStatement;
 //!
 //! This is the upper of the two statement iterators. Its atom is "preprocess one parse-facing
 //! SQLStatement into the one-or-more engine-facing statements the engine actually runs" (PRAGMA
-//! reparse, MULTI_STATEMENT unpack, transaction wrapping) — a 1:N step. Everything else is just
-//! where the parse-facing statements come from, which is why there are two constructors:
+//! reparse, MULTI_STATEMENT unpack, transaction wrapping) — a 1:N step. It always wraps exactly one
+//! ParseIterator; the two constructors differ only in how that ParseIterator is sourced:
 //!   - from a ParseIterator: lazy stream source (the common case; `string -> EngineIterator` is
 //!     sugar for ParseIterator -> EngineIterator).
-//!   - from a single SQLStatement: the degenerate one-statement source, for callers that already
-//!     hold a parsed statement (prepared-statement path, extension-produced statements) and want
-//!     identical engine-level preprocessing without re-parsing.
+//!   - from a single SQLStatement: forwards to ParseIterator's single-statement ctor, for callers
+//!     that already hold a parsed statement (prepared-statement path, extension-produced
+//!     statements) and want identical engine-level preprocessing without re-parsing.
 class EngineIterator {
 public:
-	//! Wrap a lazy parse-facing stream.
-	DUCKDB_API explicit EngineIterator(ParseIterator parse_iterator);
+	//! Wrap a lazy parse-facing stream (consumed by move).
+	DUCKDB_API explicit EngineIterator(ParseIterator &&parse_iterator);
 	//! Single already-parsed statement source (still 1:N — wrapping/unpack can expand it).
 	DUCKDB_API explicit EngineIterator(unique_ptr<SQLStatement> statement);
 	DUCKDB_API ~EngineIterator();
@@ -56,16 +56,9 @@ public:
 	DUCKDB_API unique_ptr<SQLStatement> GetStatement();
 
 private:
-	//! Pull the next parse-facing statement from whichever source backs this iterator. Returns
-	//! nullptr (and sets `exhausted`) when the source is drained.
-	unique_ptr<SQLStatement> NextParseStatement(ClientContext &context);
-
-private:
-	//! Lazy parse-facing source. Null for the single-statement constructor.
-	unique_ptr<ParseIterator> source;
-	//! Single-statement source (consumed once). Null for the ParseIterator constructor.
-	unique_ptr<SQLStatement> pending_single;
-	bool single_consumed = false;
+	//! The single parse-facing source this iterator preprocesses. Always constructed — the
+	//! single-statement ctor forwards to ParseIterator's single-statement ctor.
+	ParseIterator source;
 	//! Engine-facing statements produced by preprocessing one parse-facing statement. Drained
 	//! one-at-a-time across Peek calls before pulling the next parse-facing statement.
 	vector<unique_ptr<SQLStatement>> buffer;

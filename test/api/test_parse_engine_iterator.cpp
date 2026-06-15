@@ -342,6 +342,23 @@ static unique_ptr<SQLStatement> ParseOne(const string &sql, ClientContext &conte
 	return stmt;
 }
 
+TEST_CASE("ParseIterator: single already-parsed statement", "[api][parse_iterator]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &ctx = *con.context;
+
+	auto stmt = ParseOne("SELECT 42;", ctx);
+	ParseIterator it(std::move(stmt));
+	REQUIRE(it.Peek(ctx));
+	auto out = it.GetStatement();
+	REQUIRE(out);
+	REQUIRE(out->type == StatementType::SELECT_STATEMENT);
+	REQUIRE(StringUtil::Contains(out->query, "42"));
+	// Yielded once, then exhausted.
+	REQUIRE_FALSE(it.Peek(ctx));
+	REQUIRE_FALSE(it.GetStatement());
+}
+
 TEST_CASE("EngineIterator: single already-parsed statement", "[api][engine_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
