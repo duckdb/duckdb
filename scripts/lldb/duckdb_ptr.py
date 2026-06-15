@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
 
 CATEGORY_NAME = "duckdb"
 UNIQUE_PTR_REGEX = r"^duckdb::unique_ptr<.+>$"
+MULTILINE_INDENT = "     "
 
 
 def __lldb_init_module(debugger, _internal_dict):
@@ -45,6 +46,8 @@ def duckdb_unique_ptr_summary(valobj, _internal_dict):
     pointee_value = _dereference_pointer(pointer_value)
     pointee_summary = _inline_description(pointee_value)
     if pointee_summary:
+        if "\n" in pointee_summary:
+            return f"{pointee_name} @ 0x{address:016x}\n{pointee_summary}"
         return f"{pointee_name} @ 0x{address:016x} {pointee_summary}"
     return f"{pointee_name} @ 0x{address:016x}"
 
@@ -147,6 +150,33 @@ def _inline_description(value):
     description = _describe_value(value)
     if not description:
         return None
+
+    description = description.strip()
+    if "\n" in description:
+        lines = description.splitlines()
+        if not lines:
+            return None
+
+        first = lines[0].strip()
+        if first.startswith("(") and ") " in first:
+            _, remainder = first.split(") ", 1)
+            lines[0] = remainder
+        elif first.startswith("(") and first.endswith(")"):
+            lines = lines[1:]
+
+        if lines:
+            first = lines[0].strip()
+            if " = " in first:
+                _, remainder = first.split(" = ", 1)
+                lines[0] = remainder
+
+        while lines and not lines[0].strip():
+            lines = lines[1:]
+
+        if not lines:
+            return None
+
+        return "\n".join(MULTILINE_INDENT + line for line in lines)
 
     collapsed = " ".join(description.split())
     parts = collapsed.split(" = ", 1)
