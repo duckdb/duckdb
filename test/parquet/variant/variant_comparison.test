@@ -17,7 +17,7 @@ insert into tbl select * from (VALUES
 	((100.5::decimal(5,1))::VARIANT)
 ) t(col)
 
-# VARIANT comparison uses a total, type-first sort-key order (via variant_sort_key) instead of
+# VARIANT comparison uses a total, type-first sort-key order (via variant_comparator) instead of
 # throwing on incompatible types. Integers, decimals and bignums fold into one NUMBER rank and
 # compare by numeric value; FLOAT/DOUBLE fold into REAL; the remaining types order by type rank
 # first, value second. Here the VARCHAR values rank above NUMBER, so they sort after 100.5.

@@ -1418,7 +1418,7 @@ void CreateSortKeyHelpers::CreateVariantSortKey(const Vector &input, idx_t count
 	// representation (which is reversible, so it can be used by aggregates to store/decode values).
 	// For comparison / ordering we instead encode the *logical* value of the variant - this encoding
 	// is intentionally not reversible (e.g. all integer widths fold together), so it lives here and is
-	// only used by the variant_sort_key collation. NULLs are propagated into the result validity.
+	// only used by the variant_comparator collation. NULLs are propagated into the result validity.
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(input, variant_format);
 	UnifiedVariantVectorData variant(variant_format);

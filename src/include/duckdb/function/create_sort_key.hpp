@@ -56,7 +56,7 @@ struct CreateSortKeyHelpers {
 	static void CreateSortKeyWithValidity(const Vector &input, Vector &result, const OrderModifiers &modifiers,
 	                                      idx_t count);
 	//! Encodes the *logical* value of a VARIANT into a byte-comparable sort key (used by the
-	//! variant_sort_key collation). Unlike CreateSortKey this encoding is not reversible. NULLs are
+	//! variant_comparator collation). Unlike CreateSortKey this encoding is not reversible. NULLs are
 	//! propagated into the result validity.
 	static void CreateVariantSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);
 };

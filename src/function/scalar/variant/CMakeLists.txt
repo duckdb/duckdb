@@ -9,7 +9,7 @@ add_library_unity(
   variant_keys.cpp
   variant_typeof.cpp
   variant_normalize.cpp
-  variant_sort_key.cpp)
+  variant_comparator.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_variant_main>
     PARENT_SCOPE)
