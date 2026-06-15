@@ -676,6 +676,25 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				disallow_alter = false;
 				break;
 			}
+			case AlterTableType::REMOVE_COLUMN: {
+				// Index dependents are checked precisely by the storage layer:
+				// the DataTable constructor refuses the drop when any index
+				// references the removed column (or one after it).
+				if (dep.EntryInfo().type == CatalogType::INDEX_ENTRY) {
+					disallow_alter = false;
+				}
+				break;
+			}
+			case AlterTableType::RENAME_TABLE:
+			case AlterTableType::RENAME_COLUMN: {
+				// Secondary indexes reference their table by catalog entry and
+				// their key columns by storage position, so a rename underneath
+				// them does not affect index lookups.
+				if (dep.EntryInfo().type == CatalogType::INDEX_ENTRY) {
+					disallow_alter = false;
+				}
+				break;
+			}
 			default:
 				break;
 			}
