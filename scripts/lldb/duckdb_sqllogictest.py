@@ -298,7 +298,7 @@ def _parse_matcher_command(prog, command):
     parser.add_argument("--line", type=int)
     parser.add_argument("--line-min", type=int)
     parser.add_argument("--line-max", type=int)
-    parser.add_argument("--kind", choices=("query", "statement"))
+    parser.add_argument("--kind", choices=("query", "statement", "statement_ok", "statement_error"))
     parser.add_argument("--connection")
     parser.add_argument("--loop", action="append", default=[])
 
@@ -335,7 +335,7 @@ def _parse_matcher_command(prog, command):
 def _matcher_usage(prog):
     return (
         "usage: {} [--file <substring>] [--line <n>] [--line-min <n>] "
-        "[--line-max <n>] [--kind query|statement] [--connection <name>] "
+        "[--line-max <n>] [--kind query|statement|statement_ok|statement_error] [--connection <name>] "
         "[--loop <name>[=<value>]]".format(prog)
     )
 
@@ -432,6 +432,7 @@ def _find_sqllogictest_context(thread):
             "frame": frame,
             "priority": frame_kind["priority"],
             "kind": frame_kind["kind"],
+            "statement_expectation": None,
             "file_name": None,
             "query_line": None,
             "sql_text": None,
@@ -445,6 +446,7 @@ def _find_sqllogictest_context(thread):
             context["query_line"] = _read_int(frame, "this->query_line")
             context["sql_text"] = _read_cpp_string(frame, "context.sql_query")
             context["connection_name"] = _read_cpp_string(frame, "this->connection_name")
+            context["statement_expectation"] = _read_statement_expectation(frame, frame_kind["kind"])
             if not context["sql_text"]:
                 context["sql_text"] = _read_cpp_string(frame, "this->base_sql_query")
             context["running_loops"] = _read_running_loops(frame, "context.running_loops")
@@ -497,6 +499,18 @@ def _read_running_loops(frame, expression):
     return loops
 
 
+def _read_statement_expectation(frame, kind):
+    if kind != "statement":
+        return None
+
+    expected_result = _read_int(frame, "(int)(this->expected_result)")
+    if expected_result == 0:
+        return "ok"
+    if expected_result == 1:
+        return "error"
+    return None
+
+
 def _read_cpp_string(frame, expression):
     value = frame.EvaluateExpression("(const char *)({}).c_str()".format(expression))
     if not value.IsValid() or not value.GetError().Success():
@@ -529,7 +543,7 @@ def _format_statement_context(context):
     lines = []
     file_name = context["file_name"] or "<unknown file>"
     query_line = context["query_line"]
-    kind = context["kind"]
+    kind = _format_kind(context)
 
     first_line = file_name
     if query_line is not None:
@@ -565,8 +579,19 @@ def _matches_context(context, matcher):
         if query_line is None or query_line > matcher["line_max"]:
             return False
 
-    if matcher["kind"] is not None and context["kind"] != matcher["kind"]:
-        return False
+    if matcher["kind"] is not None:
+        if matcher["kind"] == "query":
+            if context["kind"] != "query":
+                return False
+        elif matcher["kind"] == "statement":
+            if context["kind"] != "statement":
+                return False
+        elif matcher["kind"] == "statement_ok":
+            if context["kind"] != "statement" or context["statement_expectation"] != "ok":
+                return False
+        elif matcher["kind"] == "statement_error":
+            if context["kind"] != "statement" or context["statement_expectation"] != "error":
+                return False
     if matcher["connection"] is not None and context["connection_name"] != matcher["connection"]:
         return False
 
@@ -604,6 +629,18 @@ def _describe_matcher(matcher):
     if not parts:
         return "match any sqllogictest statement"
     return ", ".join(parts)
+
+
+def _format_kind(context):
+    if context["kind"] != "statement":
+        return context["kind"]
+
+    expectation = context["statement_expectation"]
+    if expectation == "ok":
+        return "statement ok"
+    if expectation == "error":
+        return "statement error"
+    return "statement"
 
 
 def _iter_breakpoints(target):
