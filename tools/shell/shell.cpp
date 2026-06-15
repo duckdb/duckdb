@@ -3388,11 +3388,18 @@ int RunShell(int argc, char **argv, ShellSubcommand subcommand) {
 		if (data.psql_dbname.empty()) {
 			data.psql_dbname = data.psql_user;
 		}
+		// Escape connection params into the conninfo literal ('->'') and the
+		// attached-database identifier ("->"").
+		auto conn_lit = [](const string &s) {
+			return StringUtil::Replace(s, "'", "''");
+		};
+		const string db_id = StringUtil::Replace(data.psql_dbname, "\"", "\"\"");
 		string attach = "SET pg_use_text_protocol = true;";
 		attach += "SET pg_use_binary_copy = false;";
-		attach += "ATTACH 'host=" + data.psql_host + " port=" + data.psql_port + " dbname=" + data.psql_dbname +
-		          " user=" + data.psql_user + "' AS \"" + data.psql_dbname + "\" (TYPE postgres);";
-		attach += "USE \"" + data.psql_dbname + "\";";
+		attach += "ATTACH 'host=" + conn_lit(data.psql_host) + " port=" + conn_lit(data.psql_port) +
+		          " dbname=" + conn_lit(data.psql_dbname) + " user=" + conn_lit(data.psql_user) + "' AS \"" + db_id +
+		          "\" (TYPE postgres);";
+		attach += "USE \"" + db_id + "\";";
 		auto rc = data.RunInitialCommand(attach.c_str(), /*bail=*/true);
 		if (rc != 0) {
 			ShellState::Exit(rc);
@@ -3411,7 +3418,7 @@ int RunShell(int argc, char **argv, ShellSubcommand subcommand) {
 		bool has_runner = false;
 		for (auto &call : command_line_calls) {
 			const string opt(call.option.option);
-			if (opt == "c" || opt == "f" || opt == "command" || opt == "file" || opt == "s") {
+			if (opt == "c" || opt == "f" || opt == "command" || opt == "file") {
 				has_runner = true;
 				break;
 			}
