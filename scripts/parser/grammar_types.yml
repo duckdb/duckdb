@@ -366,9 +366,10 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOp
+    - BetweenInLikeOpExpression
     - InClause
     - InExpression
+    - InContainsExpression
     - InExpressionList
     - InSelectStatement
     - BetweenClause
@@ -970,6 +971,13 @@ String:
     - ReservedKeyword
     - VersionNumber
     - LikeVariations
+    - LikeToken
+    - ILikeToken
+    - GlobToken
+    - SimilarToToken
+    - NotILikeOp
+    - NotLikeOp
+    - NotSimilarToOp
     - OtherOperator
     - QualifiedOperator
     - ColIdDot
@@ -1466,6 +1474,9 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
+  BetweenInLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:
     type: "CaseCheck"
@@ -1693,15 +1704,6 @@ excluded_rules:
   - LogicalAndExpression
   - IsExpression
   - OverClause
-  - BetweenInLikeExpression
-  - BetweenInLikeOp
-  - LikeClause
-  - EscapeClause
-  - InClause
-  - InExpression
-  - InExpressionList
-  - InSelectStatement
-  - BetweenClause
   - CollateExpression
   - AtTimeZoneExpression
   - PrefixExpression

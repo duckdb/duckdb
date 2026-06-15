@@ -5490,6 +5490,173 @@ PEGTransformerFactory::TransformOperatorGreaterThanEqualsInternal(PEGTransformer
 	return make_uniq<TypedTransformResult<ExpressionType>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformBetweenInLikeExpressionInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<BetweenInLikeOperator> between_in_like_op {};
+	auto &between_in_like_op_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (between_in_like_op_opt.HasResult()) {
+		auto between_in_like_op_value =
+		    transformer.Transform<BetweenInLikeOperator>(between_in_like_op_opt.GetResult());
+		between_in_like_op = std::move(between_in_like_op_value);
+	}
+	auto result = TransformBetweenInLikeExpression(transformer, std::move(other_operator_expression),
+	                                               std::move(between_in_like_op));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBetweenInLikeOpInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto between_in_like_op_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformBetweenInLikeOp(transformer, has_result, std::move(between_in_like_op_expression));
+	return make_uniq<TypedTransformResult<BetweenInLikeOperator>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformBetweenInLikeOpExpressionInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLikeClauseInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto like_variations = transformer.Transform<string>(list_pr.GetChild(0));
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	optional<unique_ptr<ParsedExpression>> escape_clause {};
+	auto &escape_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (escape_clause_opt.HasResult()) {
+		auto escape_clause_value = transformer.Transform<unique_ptr<ParsedExpression>>(escape_clause_opt.GetResult());
+		escape_clause = std::move(escape_clause_value);
+	}
+	auto result = TransformLikeClause(transformer, like_variations, std::move(other_operator_expression),
+	                                  std::move(escape_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEscapeClauseInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto comparison_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformEscapeClause(transformer, std::move(comparison_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLikeVariationsInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLikeTokenInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformLikeToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformILikeTokenInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto result = TransformILikeToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGlobTokenInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformGlobToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSimilarToTokenInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformSimilarToToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotILikeOpInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto result = TransformNotILikeOp(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotLikeOpInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformNotLikeOp(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotSimilarToOpInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformNotSimilarToOp(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInClauseInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto in_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformInClause(transformer, std::move(in_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInExpressionInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformInContainsExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto result = TransformInContainsExpression(transformer, std::move(other_operator_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInExpressionListInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expression;
+	auto expression_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &expression_item : expression_items) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_item.get());
+		expression.push_back(std::move(expression_value));
+	}
+	auto result = TransformInExpressionList(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInSelectStatementInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal =
+	    transformer.Transform<unique_ptr<SelectStatement>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformInSelectStatement(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBetweenClauseInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto other_operator_expression_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
+	auto result = TransformBetweenClause(transformer, std::move(other_operator_expression),
+	                                     std::move(other_operator_expression_1));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOtherOperatorInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -9796,6 +9963,25 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"OperatorGreaterThan", &PEGTransformerFactory::TransformOperatorGreaterThanInternal},
 	    {"OperatorLessThanEquals", &PEGTransformerFactory::TransformOperatorLessThanEqualsInternal},
 	    {"OperatorGreaterThanEquals", &PEGTransformerFactory::TransformOperatorGreaterThanEqualsInternal},
+	    {"BetweenInLikeExpression", &PEGTransformerFactory::TransformBetweenInLikeExpressionInternal},
+	    {"BetweenInLikeOp", &PEGTransformerFactory::TransformBetweenInLikeOpInternal},
+	    {"BetweenInLikeOpExpression", &PEGTransformerFactory::TransformBetweenInLikeOpExpressionInternal},
+	    {"LikeClause", &PEGTransformerFactory::TransformLikeClauseInternal},
+	    {"EscapeClause", &PEGTransformerFactory::TransformEscapeClauseInternal},
+	    {"LikeVariations", &PEGTransformerFactory::TransformLikeVariationsInternal},
+	    {"LikeToken", &PEGTransformerFactory::TransformLikeTokenInternal},
+	    {"ILikeToken", &PEGTransformerFactory::TransformILikeTokenInternal},
+	    {"GlobToken", &PEGTransformerFactory::TransformGlobTokenInternal},
+	    {"SimilarToToken", &PEGTransformerFactory::TransformSimilarToTokenInternal},
+	    {"NotILikeOp", &PEGTransformerFactory::TransformNotILikeOpInternal},
+	    {"NotLikeOp", &PEGTransformerFactory::TransformNotLikeOpInternal},
+	    {"NotSimilarToOp", &PEGTransformerFactory::TransformNotSimilarToOpInternal},
+	    {"InClause", &PEGTransformerFactory::TransformInClauseInternal},
+	    {"InExpression", &PEGTransformerFactory::TransformInExpressionInternal},
+	    {"InContainsExpression", &PEGTransformerFactory::TransformInContainsExpressionInternal},
+	    {"InExpressionList", &PEGTransformerFactory::TransformInExpressionListInternal},
+	    {"InSelectStatement", &PEGTransformerFactory::TransformInSelectStatementInternal},
+	    {"BetweenClause", &PEGTransformerFactory::TransformBetweenClauseInternal},
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
 	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},

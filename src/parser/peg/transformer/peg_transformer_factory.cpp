@@ -149,16 +149,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformIsExpression);
-	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
-	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
-	REGISTER_TRANSFORM(TransformInClause);
-	REGISTER_TRANSFORM(TransformInExpression);
-	REGISTER_TRANSFORM(TransformInExpressionList);
-	REGISTER_TRANSFORM(TransformInSelectStatement);
-	REGISTER_TRANSFORM(TransformBetweenClause);
-	REGISTER_TRANSFORM(TransformLikeClause);
-	REGISTER_TRANSFORM(TransformEscapeClause);
-	REGISTER_TRANSFORM(TransformLikeVariations);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformQualifiedOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
@@ -170,7 +160,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 	REGISTER_TRANSFORM(TransformOverClause);
-
 }
 
 void PEGTransformerFactory::RegisterConnect() {
@@ -217,14 +206,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
 
-
-	RegisterEnum<string>("LikeToken", "~~");
-	RegisterEnum<string>("ILikeToken", "~~*");
-	RegisterEnum<string>("GlobToken", "~~~");
-	RegisterEnum<string>("SimilarToToken", "regexp_full_match");
-	RegisterEnum<string>("NotILikeOp", "!~~*");
-	RegisterEnum<string>("NotLikeOp", "!~~");
-	RegisterEnum<string>("NotSimilarToOp", "!~");
 
 	RegisterEnum<WindowExcludeMode>("ExcludeCurrentRow", WindowExcludeMode::CURRENT_ROW);
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);

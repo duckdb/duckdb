@@ -932,7 +932,8 @@ OperatorLessThanEquals <- '<='
 OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
-BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
+BetweenInLikeOp <- 'NOT'? BetweenInLikeOpExpression
+BetweenInLikeOpExpression <- BetweenClause / InClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
 EscapeClause <- 'ESCAPE' ComparisonExpression
 
@@ -946,7 +947,8 @@ NotLikeOp      <- '!~~'
 NotSimilarToOp <- '!~'
 
 InClause <- 'IN' InExpression
-InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression
+InExpression <- InExpressionList / InSelectStatement / InContainsExpression
+InContainsExpression <- OtherOperatorExpression
 InExpressionList <- Parens(List(Expression))
 InSelectStatement <- Parens(SelectStatementInternal)
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression

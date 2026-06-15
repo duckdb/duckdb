@@ -15,4 +15,9 @@ struct ComparisonExpressionTail {
 	unique_ptr<ParsedExpression> expression;
 };
 
+struct BetweenInLikeOperator {
+	bool has_not = false;
+	unique_ptr<ParsedExpression> expression;
+};
+
 } // namespace duckdb
