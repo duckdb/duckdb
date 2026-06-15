@@ -4250,6 +4250,84 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFalseLiteralInt
 	return make_uniq<TypedTransformResult<Value>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCastExpressionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto cast_or_try_cast = transformer.Transform<bool>(list_pr.GetChild(0));
+	auto cast_arguments = transformer.Transform<CastArguments>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformCastExpression(transformer, cast_or_try_cast, std::move(cast_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCastArgumentsInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(2));
+	auto result = TransformCastArguments(transformer, std::move(expression), type);
+	return make_uniq<TypedTransformResult<CastArguments>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCastOrTryCastInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCastKeywordInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformCastKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformTryCastKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeLiteralInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
+	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntervalLiteralInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto interval_parameter = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	optional<DatePartSpecifier> interval {};
+	auto &interval_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (interval_opt.HasResult()) {
+		auto interval_value = transformer.Transform<DatePartSpecifier>(interval_opt.GetResult());
+		interval = interval_value;
+	}
+	auto result = TransformIntervalLiteral(transformer, std::move(interval_parameter), interval);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntervalParameterInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformIntervalStringParameterInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformIntervalStringParameter(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformListExpressionInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8240,6 +8318,15 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NullLiteral", &PEGTransformerFactory::TransformNullLiteralInternal},
 	    {"TrueLiteral", &PEGTransformerFactory::TransformTrueLiteralInternal},
 	    {"FalseLiteral", &PEGTransformerFactory::TransformFalseLiteralInternal},
+	    {"CastExpression", &PEGTransformerFactory::TransformCastExpressionInternal},
+	    {"CastArguments", &PEGTransformerFactory::TransformCastArgumentsInternal},
+	    {"CastOrTryCast", &PEGTransformerFactory::TransformCastOrTryCastInternal},
+	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
+	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
+	    {"TypeLiteral", &PEGTransformerFactory::TransformTypeLiteralInternal},
+	    {"IntervalLiteral", &PEGTransformerFactory::TransformIntervalLiteralInternal},
+	    {"IntervalParameter", &PEGTransformerFactory::TransformIntervalParameterInternal},
+	    {"IntervalStringParameter", &PEGTransformerFactory::TransformIntervalStringParameterInternal},
 	    {"ListExpression", &PEGTransformerFactory::TransformListExpressionInternal},
 	    {"ArrayBoundedListExpression", &PEGTransformerFactory::TransformArrayBoundedListExpressionInternal},
 	    {"ArrayParensSelect", &PEGTransformerFactory::TransformArrayParensSelectInternal},

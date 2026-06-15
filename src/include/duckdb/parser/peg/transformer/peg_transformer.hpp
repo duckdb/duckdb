@@ -28,6 +28,7 @@
 #include "duckdb/parser/peg/ast/sequence_option.hpp"
 #include "duckdb/parser/peg/ast/setting_info.hpp"
 #include "duckdb/parser/peg/ast/table_alias.hpp"
+#include "duckdb/parser/peg/ast/cast_arguments.hpp"
 #include "duckdb/parser/peg/ast/trim_arguments.hpp"
 #include "duckdb/parser/peg/ast/trigger_event_info.hpp"
 #include "duckdb/parser/peg/ast/trigger_table_referencing_info.hpp"
@@ -530,16 +531,9 @@ private:
 	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformCastOrTryCast(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCaseExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer, ParseResult &parse_result);
 	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIntervalLiteral(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIntervalParameter(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
@@ -2039,6 +2033,37 @@ private:
 	static unique_ptr<TransformResultValue> TransformFalseLiteralInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static Value TransformFalseLiteral(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCastExpressionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformCastExpression(PEGTransformer &transformer, const bool &cast_or_try_cast, CastArguments cast_arguments);
+	static unique_ptr<TransformResultValue> TransformCastArgumentsInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static CastArguments TransformCastArguments(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression,
+	                                            const LogicalType &type);
+	static unique_ptr<TransformResultValue> TransformCastOrTryCastInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCastKeywordInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformCastKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformTryCastKeywordInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformTryCastKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformTypeLiteralInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, const Identifier &col_id,
+	                                                         const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformIntervalLiteralInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIntervalLiteral(PEGTransformer &transformer,
+	                                                             unique_ptr<ParsedExpression> interval_parameter,
+	                                                             const optional<DatePartSpecifier> &interval);
+	static unique_ptr<TransformResultValue> TransformIntervalParameterInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntervalStringParameterInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIntervalStringParameter(PEGTransformer &transformer,
+	                                                                     const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformListExpressionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformArrayBoundedListExpressionInternal(PEGTransformer &transformer,

@@ -24,8 +24,11 @@ ConstantLiteral <- NullLiteral / TrueLiteral / FalseLiteral
 NullLiteral <- 'NULL'
 TrueLiteral <- 'TRUE'
 FalseLiteral <- 'FALSE'
-CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
-CastOrTryCast <- 'CAST' / 'TRY_CAST'
+CastExpression <- CastOrTryCast Parens(CastArguments)
+CastArguments <- Expression 'AS' Type
+CastOrTryCast <- CastKeyword / TryCastKeyword
+CastKeyword <- 'CAST'
+TryCastKeyword <- 'TRY_CAST'
 ColIdDot <- ColId '.'
 StarExpression <- ColIdDot* '*' ExcludeList? ReplaceList? RenameList?
 ExcludeList <- ExcludeOrExcept ExcludeNameList / ExcludeNameSingle
@@ -48,7 +51,8 @@ CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
 IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
-IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
+IntervalParameter <- IntervalStringParameter / NumberLiteral / ParensExpression
+IntervalStringParameter <- StringLiteral
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
 FrameExtent <- BetweenFrameExtent / SingleFrameExtent

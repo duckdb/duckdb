@@ -432,6 +432,7 @@ Expression:
     - DefaultExpression
     - IntervalLiteral
     - IntervalParameter
+    - IntervalStringParameter
     - SubqueryExpression
     - MapExpression
     - ListComprehensionExpression
@@ -1005,6 +1006,8 @@ Bool:
     - WithOrWithout
     - FromOrTo
     - CastOrTryCast
+    - CastKeyword
+    - TryCastKeyword
     - WithData
     - WithDataOnly
     - WithNoData
@@ -1400,6 +1403,9 @@ overrides:
   ExcludeName: "QualifiedColumnName"
   ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
   RenameEntry: "pair<QualifiedColumnName, string>"
+  CastArguments:
+    type: "CastArguments"
+    by_value: true
   TrimArguments:
     type: "TrimArguments"
     by_value: true
@@ -1601,7 +1607,6 @@ excluded_rules:
   - WindowDefinition
   - SingleArrowPair
   # expression.gram rules kept manual during incremental transformer generation migration
-  - CastOrTryCast
   - FilterClause
   - ExcludeNameList
   - ExcludeNameSingle
@@ -1619,9 +1624,6 @@ excluded_rules:
   - CaseExpression
   - CaseWhenThen
   - CaseElse
-  - TypeLiteral
-  - IntervalLiteral
-  - IntervalParameter
   - Framing
   - FrameExtent
   - SingleFrameExtent

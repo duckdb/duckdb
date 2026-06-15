@@ -243,14 +243,9 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
-	REGISTER_TRANSFORM(TransformCastExpression);
-	REGISTER_TRANSFORM(TransformCastOrTryCast);
 	REGISTER_TRANSFORM(TransformCaseExpression);
 	REGISTER_TRANSFORM(TransformCaseElse);
 	REGISTER_TRANSFORM(TransformCaseWhenThen);
-	REGISTER_TRANSFORM(TransformTypeLiteral);
-	REGISTER_TRANSFORM(TransformIntervalLiteral);
-	REGISTER_TRANSFORM(TransformIntervalParameter);
 	REGISTER_TRANSFORM(TransformSubqueryExpression);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 	REGISTER_TRANSFORM(TransformListComprehensionFilter);
