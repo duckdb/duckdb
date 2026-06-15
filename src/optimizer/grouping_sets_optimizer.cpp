@@ -120,22 +120,10 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 	const idx_t group_count = aggr.groups.size();
 	const idx_t aggregate_count = aggr.expressions.size();
 
-	// bind the aggregates of the finest level: the original aggregates, with their state exported
-	vector<unique_ptr<Expression>> export_aggregates;
-	vector<LogicalType> state_types;
-	for (auto &expr : aggr.expressions) {
-		auto aggregate_copy = unique_ptr_cast<Expression, BoundAggregateExpression>(expr->Copy());
-		auto export_aggregate = ExportAggregateFunction::Bind(std::move(aggregate_copy));
-		if (!export_aggregate->GetReturnType().IsAggregateState()) {
-			return false;
-		}
-		state_types.push_back(export_aggregate->GetReturnType());
-		export_aggregates.push_back(std::move(export_aggregate));
-	}
-
 	// build the per-level aggregates
 	auto combine_function = CombineAggrFun::GetFunction();
 	FunctionBinder function_binder(optimizer.context);
+	vector<LogicalType> state_types;
 	for (idx_t level_idx = 0; level_idx < levels.size(); level_idx++) {
 		auto &level = levels[level_idx];
 		auto &grouping_set = aggr.grouping_sets[level.grouping_set_idx];
@@ -148,7 +136,16 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 			for (auto &group_idx : grouping_set) {
 				level_groups.push_back(aggr.groups[group_idx]->Copy());
 			}
-			level_aggregates = std::move(export_aggregates);
+			// bind the aggregates
+			for (auto &expr : aggr.expressions) {
+				auto aggregate_copy = unique_ptr_cast<Expression, BoundAggregateExpression>(expr->Copy());
+				auto export_aggregate = ExportAggregateFunction::Bind(std::move(aggregate_copy));
+				if (!export_aggregate->GetReturnType().IsAggregateState()) {
+					return false;
+				}
+				state_types.push_back(export_aggregate->GetReturnType());
+				level_aggregates.push_back(std::move(export_aggregate));
+			}
 		} else {
 			// coarser levels combine the aggregate states of their source level
 			auto &source = levels[level.source_level.GetIndex()];

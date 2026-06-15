@@ -237,6 +237,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
+	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
+	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
+		GroupingSetsOptimizer grouping_sets_optimizer(*this);
+		grouping_sets_optimizer.VisitOperator(plan);
+	});
+
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
@@ -302,12 +308,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
 		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
-	});
-
-	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
-	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
-		GroupingSetsOptimizer grouping_sets_optimizer(*this);
-		grouping_sets_optimizer.VisitOperator(plan);
 	});
 
 	// then we extract common subexpressions inside the different operators
