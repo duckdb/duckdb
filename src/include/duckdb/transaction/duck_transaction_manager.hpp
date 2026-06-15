@@ -66,6 +66,7 @@ public:
 	bool IsDuckTransactionManager() override {
 		return true;
 	}
+	void RefreshStartTime(Transaction &transaction) override;
 
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();

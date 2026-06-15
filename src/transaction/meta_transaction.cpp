@@ -23,6 +23,17 @@ ValidChecker &ValidChecker::Get(MetaTransaction &transaction) {
 	return transaction.transaction_validity;
 }
 
+void MetaTransaction::RefreshStartTime() {
+	lock_guard<mutex> guard(lock);
+	for (auto &db : all_transactions) {
+		auto entry = transactions.find(db.get());
+		if (entry == transactions.end()) {
+			continue;
+		}
+		db.get().GetTransactionManager().RefreshStartTime(entry->second.transaction);
+	}
+}
+
 Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	auto &meta_transaction = MetaTransaction::Get(context);
 	return meta_transaction.GetTransaction(db);
@@ -247,6 +258,10 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationT
 	transaction.SetModifications(modification);
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
+		return;
+	}
+	if (db.GetTransactionManager().ForwardWrites()) {
+		// forwards its writes to another database, so it never occupies the single-writable-db slot
 		return;
 	}
 	if (!modified_database) {

@@ -77,6 +77,9 @@ public:
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
 		return all_transactions;
 	}
+	//! Refresh read visibility of all opened (writeless) transactions to the
+	//! present - statement-level snapshots for READ COMMITTED semantics.
+	void RefreshStartTime();
 	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
 	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
