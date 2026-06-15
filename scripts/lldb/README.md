@@ -58,3 +58,11 @@ command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.
 - `--kind query|statement`
 - `--loop <name>`
 - `--loop <name>=<value>`
+
+### Watch Behavior
+
+`sql_watch_statement` defines persistent watch rules, but normal `c` does not stop on
+those rules by itself.
+
+Use `sql_next_watch` to temporarily arm the installed watch rules while
+auto-continuing your other breakpoints until the first watch match is reached.

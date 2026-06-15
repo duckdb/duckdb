@@ -125,6 +125,7 @@ def sql_watch_statement(debugger, command, result, _internal_dict):
         return
 
     watch_breakpoint.SetThreadID(thread.GetThreadID())
+    watch_breakpoint.SetAutoContinue(True)
     watch_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._watch_statement_callback")
 
     breakpoint_id = watch_breakpoint.GetID()
@@ -208,9 +209,12 @@ def sql_next_watch(debugger, command, result, _internal_dict):
     _restore_next_watch_state(target)
 
     saved_auto_continue = {}
+    saved_watch_auto_continue = {}
     for breakpoint in _iter_breakpoints(target):
         breakpoint_id = breakpoint.GetID()
         if breakpoint_id in _WATCHES:
+            saved_watch_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
+            breakpoint.SetAutoContinue(False)
             continue
         saved_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
         if breakpoint.IsEnabled():
@@ -219,6 +223,7 @@ def sql_next_watch(debugger, command, result, _internal_dict):
     global _NEXT_WATCH_STATE
     _NEXT_WATCH_STATE = {
         "saved_auto_continue": saved_auto_continue,
+        "saved_watch_auto_continue": saved_watch_auto_continue,
     }
 
     command_interpreter = debugger.GetCommandInterpreter()
@@ -583,6 +588,11 @@ def _restore_next_watch_state(target):
         if breakpoint.IsValid():
             breakpoint.SetAutoContinue(auto_continue)
 
+    for breakpoint_id, auto_continue in _NEXT_WATCH_STATE["saved_watch_auto_continue"].items():
+        breakpoint = target.FindBreakpointByID(breakpoint_id)
+        if breakpoint.IsValid():
+            breakpoint.SetAutoContinue(auto_continue)
+
     _NEXT_WATCH_STATE = None
 
 
@@ -626,6 +636,9 @@ def _watch_statement_callback(frame, breakpoint_location, _internal_dict):
     watch = _WATCHES.get(breakpoint_id)
     if watch is None:
         return True
+
+    if not _NEXT_WATCH_STATE:
+        return False
 
     context = _find_sqllogictest_context(frame.GetThread().GetProcess().GetThreadAtIndex(0))
     if context is None:
