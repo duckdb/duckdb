@@ -1,11 +1,13 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
+
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
@@ -19,13 +21,16 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capa
 		validity.Resize(capacity);
 	}
 }
+
 StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
+
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
       type_size(type_size_p), capacity(count) {
 }
+
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
       type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
@@ -51,8 +56,13 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 }
 
 void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (type_size != GetTypeIdSize(type.InternalType())) {
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR ||
+	         vector_type == VectorType::FOR_VECTOR);
+	if (vector_type == VectorType::FOR_VECTOR) {
+		if (type_size < GetTypeIdSize(for_stored_type)) {
+			throw InternalException("Stored type size exceeds buffer stride in FOR vector buffer");
+		}
+	} else if (type_size != GetTypeIdSize(type.InternalType())) {
 		throw InternalException("Type size mismatch in flat vector buffer");
 	}
 	// verify all entries in the sel fit within the validity
@@ -185,14 +195,21 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
                                                                     idx_t count) const {
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
-	auto target_byte_count = allocated_count * type_size;
+	auto target_type_size = vector_type == VectorType::FOR_VECTOR ? GetTypeIdSize(type.InternalType()) : type_size;
+	auto target_byte_count = allocated_count * target_type_size;
 	auto stored_allocator = GetAllocator();
 	auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
 	auto new_data = allocator.Allocate(target_byte_count);
 	// copy data using sel
-	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
+	if (vector_type == VectorType::FOR_VECTOR) {
+		FORVector::WidenToFlat(type, for_stored_type, data_ptr, new_data.get(), sel, count);
+	} else {
+		FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
+	}
 
-	auto result = CreateBuffer(std::move(new_data), count_t(count));
+	auto result = vector_type == VectorType::FOR_VECTOR
+	                  ? make_buffer<StandardVectorBuffer>(std::move(new_data), count_t(count), target_type_size)
+	                  : CreateBuffer(std::move(new_data), count_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.Resize(allocated_count);
@@ -331,6 +348,9 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	}
 	if (!validity.RowIsValid(index)) {
 		return Value(type);
+	}
+	if (vector_type == VectorType::FOR_VECTOR) {
+		return FORVector::GetValue(type, for_stored_type, data_ptr, index);
 	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:

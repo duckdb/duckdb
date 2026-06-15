@@ -9,6 +9,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -140,12 +141,14 @@ void DataChunk::CheckCardinality(idx_t count_p) {
 
 void DataChunk::SetChildCardinality(idx_t count_p) {
 	for (auto &v : data) {
-		// null-buffer placeholders (InitializeEmpty) and non-flat/constant vectors cannot be resized
+		// null-buffer placeholders (InitializeEmpty) and non-resizable vectors cannot be resized
 		if (!v.GetBufferRef()) {
 			continue;
 		}
 		auto vtype = v.GetVectorType();
-		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
+		// FOR vectors store their size in the buffer like flat vectors, so they are resizable too.
+		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR ||
+		    vtype == VectorType::FOR_VECTOR) {
 			FlatVector::SetSize(v, count_p);
 		} else if (v.size() != count_p) {
 			throw InternalException("DataChunk::SetChildCardinality - vector has size %d but expected size %d - and "
@@ -251,6 +254,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 	}
 	idx_t current_size = size();
 	for (idx_t i = 0; i < ColumnCount(); i++) {
+		FORVector::PrepareAppend(data[i], other.data[i], sel.IsSet(), size());
 		// ensure data[i] has the chunk's current size so the append computes new_size = current + append_size
 		if (data[i].size() != current_size) {
 			throw InternalException("DataChunk::Append size mismatch - child has count %d but chunk has size %d",

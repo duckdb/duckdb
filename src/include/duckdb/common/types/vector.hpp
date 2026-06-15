@@ -33,6 +33,9 @@ enum class VectorDataInitialization { UNINITIALIZED, ZERO_INITIALIZE };
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
+	// FORVector needs raw buffer access for in-place narrow data + metadata writes
+	friend struct FORVector;
+
 public:
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);

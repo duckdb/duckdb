@@ -12,6 +12,7 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/size.hpp"
@@ -130,6 +131,15 @@ public:
 	virtual optional_ptr<Allocator> GetAllocator() const {
 		return nullptr;
 	}
+
+	//! Inline FOR vector metadata avoids per-chunk heap allocation.
+	//! Only meaningful when the vector has VectorType::FOR_VECTOR.
+	PhysicalType for_stored_type = PhysicalType::INVALID;
+	uhugeint_t for_max_value = 0;
+	//! True when this buffer is managed by a VectorCache and allows in-place widening on Flatten.
+	bool cache_owned = false;
+	//! Cached flatten buffer reused across iterations to avoid per-chunk malloc/free.
+	buffer_ptr<VectorBuffer> flatten_cache;
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,
 	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));

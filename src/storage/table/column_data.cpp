@@ -5,6 +5,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_view.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -462,8 +463,58 @@ bool TryFlatComparisonToBitmap(ExpressionType op, const Value &constant, Vector 
 	return true;
 }
 
+static void WriteConstantBitmap(bool value, idx_t count, const validity_t *validity, validity_t *__restrict bitmap) {
+	const idx_t nwords = (count + 63) / 64;
+	if (!value) {
+		for (idx_t w = 0; w < nwords; w++) {
+			bitmap[w] = 0;
+		}
+		return;
+	}
+	for (idx_t w = 0; w < nwords; w++) {
+		bitmap[w] = ~validity_t(0);
+	}
+	if (count % 64) {
+		bitmap[nwords - 1] &= (validity_t(1) << (count % 64)) - 1;
+	}
+	if (validity) {
+		for (idx_t w = 0; w < nwords; w++) {
+			bitmap[w] &= validity[w];
+		}
+	}
+}
+
+bool TryForComparisonToBitmap(ExpressionType op, const Value &constant, Vector &col, idx_t count,
+                              validity_t *__restrict bitmap) {
+	ForView view;
+	if (!TryResolveForView(col, op, constant, view) || view.kind != ForView::Kind::FOR) {
+		return false;
+	}
+	const auto validity = view.original_validity ? view.original_validity->GetData() : nullptr;
+	if (view.always_false || view.always_true) {
+		WriteConstantBitmap(view.always_true, count, validity, bitmap);
+		return true;
+	}
+	switch (view.narrow_type) {
+	case PhysicalType::UINT8:
+		DispatchCmpToBitmap<uint8_t>(op, reinterpret_cast<const uint8_t *>(view.data),
+		                             UnsafeNumericCast<uint8_t>(view.rewritten_constant), count, validity, bitmap);
+		return true;
+	case PhysicalType::UINT16:
+		DispatchCmpToBitmap<uint16_t>(op, reinterpret_cast<const uint16_t *>(view.data),
+		                              UnsafeNumericCast<uint16_t>(view.rewritten_constant), count, validity, bitmap);
+		return true;
+	case PhysicalType::UINT32:
+		DispatchCmpToBitmap<uint32_t>(op, reinterpret_cast<const uint32_t *>(view.data),
+		                              UnsafeNumericCast<uint32_t>(view.rewritten_constant), count, validity, bitmap);
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool TryComparisonToBitmap(const Expression &expr, Vector &col, idx_t count, validity_t *__restrict bitmap) {
-	if (!BoundComparisonExpression::IsComparison(expr) || col.GetVectorType() != VectorType::FLAT_VECTOR) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return false;
 	}
 
@@ -480,6 +531,13 @@ bool TryComparisonToBitmap(const Expression &expr, Vector &col, idx_t count, val
 		constant = &left.Cast<BoundConstantExpression>().GetValue();
 		op = FlipComparisonExpression(op);
 	} else {
+		return false;
+	}
+
+	if (col.GetVectorType() == VectorType::FOR_VECTOR) {
+		return TryForComparisonToBitmap(op, *constant, col, count, bitmap);
+	}
+	if (col.GetVectorType() != VectorType::FLAT_VECTOR) {
 		return false;
 	}
 

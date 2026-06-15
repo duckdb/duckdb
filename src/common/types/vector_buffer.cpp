@@ -42,6 +42,7 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 	case VectorType::CONSTANT_VECTOR:
 		break;
 	case VectorType::FLAT_VECTOR:
+	case VectorType::FOR_VECTOR:
 		if (new_size > Capacity()) {
 			throw InternalException(
 			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
@@ -276,6 +277,14 @@ void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_
 	SetVectorSize(new_size);
 }
 
+static void CopyFixedWidthPayload(data_ptr_t target_data, const_data_ptr_t source_data, const SelectionVector &sel,
+                                  idx_t source_offset, idx_t target_offset, idx_t copy_count, idx_t type_size) {
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel.get_index(source_offset + i);
+		memcpy(target_data + (target_offset + i) * type_size, source_data + source_idx * type_size, type_size);
+	}
+}
+
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("SetValue not supported for this buffer type");
 }
@@ -284,6 +293,17 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
                         idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 	if (copy_count == 0) {
 		return;
+	}
+	if (vector_type == VectorType::FOR_VECTOR && source_p.GetVectorType() == VectorType::FOR_VECTOR) {
+		auto &source_buffer = source_p.GetBufferRef();
+		if (for_stored_type == source_buffer->for_stored_type) {
+			auto &validity = GetValidityMask();
+			validity.CopySel(source_buffer->GetValidityMask(), source_sel, source_offset, target_offset, copy_count);
+			CopyFixedWidthPayload(GetData(), source_buffer->GetData(), source_sel, source_offset, target_offset,
+			                      copy_count, GetTypeIdSize(for_stored_type));
+			for_max_value = MaxValue(for_max_value, source_buffer->for_max_value);
+			return;
+		}
 	}
 	// traverse vector types until we have a flat / constant vector as source
 	SelectionVector owned_sel;
