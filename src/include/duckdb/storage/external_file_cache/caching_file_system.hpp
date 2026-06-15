@@ -32,7 +32,6 @@ struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
-
 struct ReadThroughputEstimator {
 	//! Record a timed read.
 	void AddSample(double seconds, idx_t bytes);
