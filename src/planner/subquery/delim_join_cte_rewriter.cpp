@@ -241,6 +241,30 @@ static bool FilterNullRejectsDelimJoinRHS(LogicalFilter &filter, LogicalComparis
 	return false;
 }
 
+static bool ExpressionIsMarkerRef(Expression &expr, TableIndex mark_index) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	auto &colref = expr.Cast<BoundColumnRefExpression>();
+	return colref.Depth() == 0 && colref.Binding().table_index == mark_index;
+}
+
+static bool FilterNegatesDelimJoinMarker(LogicalFilter &filter, LogicalComparisonJoin &delim_join) {
+	if (filter.HasProjectionMap() || delim_join.join_type != JoinType::MARK) {
+		return false;
+	}
+	for (auto &expr : filter.expressions) {
+		if (expr->GetExpressionType() != ExpressionType::OPERATOR_NOT) {
+			continue;
+		}
+		auto &op = expr->Cast<BoundOperatorExpression>();
+		if (!op.GetChildren().empty() && ExpressionIsMarkerRef(*op.GetChildren()[0], delim_join.mark_index)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool PushEligibleFilterExpressionsIntoDelimJoinInputs(unique_ptr<LogicalOperator> &plan) {
 	auto &filter = plan->Cast<LogicalFilter>();
 	if (filter.HasProjectionMap()) {
@@ -350,17 +374,68 @@ static bool HasSelection(const LogicalOperator &op) {
 	return false;
 }
 
+static bool IsEvidenceSide(LogicalOperator &op, idx_t child_idx) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	switch (join.join_type) {
+	case JoinType::MARK:
+	case JoinType::ANTI:
+		return child_idx == 1;
+	case JoinType::RIGHT_ANTI:
+		return child_idx == 0;
+	default:
+		return false;
+	}
+}
+
+static bool HasEvidenceSide(JoinType join_type) {
+	switch (join_type) {
+	case JoinType::MARK:
+	case JoinType::ANTI:
+	case JoinType::RIGHT_ANTI:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool ContainsSubqueryJoin(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::MARK:
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::RIGHT_SEMI:
+		case JoinType::RIGHT_ANTI:
+		case JoinType::SINGLE:
+			return true;
+		default:
+			break;
+		}
+	}
+	for (auto &child : op.children) {
+		if (ContainsSubqueryJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 struct JoinWithGeneratedDedupRef {
 	JoinWithGeneratedDedupRef(unique_ptr<LogicalOperator> &join_p, idx_t depth_p, bool filter_cross_product_p = false,
-	                          bool under_aggregate_p = false)
+	                          bool under_aggregate_p = false, bool under_evidence_side_p = false)
 	    : join(join_p), depth(depth_p), filter_cross_product(filter_cross_product_p),
-	      under_aggregate(under_aggregate_p) {
+	      under_aggregate(under_aggregate_p), under_evidence_side(under_evidence_side_p) {
 	}
 
 	reference<unique_ptr<LogicalOperator>> join;
 	idx_t depth;
 	bool filter_cross_product;
 	bool under_aggregate;
+	bool under_evidence_side;
 };
 
 struct GeneratedDedupRef {
@@ -530,7 +605,7 @@ static void ReplaceOperatorBindings(LogicalOperator &op, const vector<ColumnBind
 class GeneratedDedupRefEliminator {
 public:
 	GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index, idx_t dedup_ref_count,
-	                            LogicalOperator &rewrite_root);
+	                            LogicalOperator &rewrite_root, bool preserve_evidence_side);
 
 	idx_t Remove();
 
@@ -547,7 +622,8 @@ private:
 	bool ExpressionReferencesGeneratedSide(Expression &expr, const GeneratedDedupRef &dedup_ref) const;
 	bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const;
 	void FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op, vector<JoinWithGeneratedDedupRef> &joins,
-	                                     idx_t depth = 0, bool under_aggregate = false) const;
+	                                     idx_t depth = 0, bool under_aggregate = false,
+	                                     bool under_evidence_side = false) const;
 	idx_t CountGeneratedDedupRefs(LogicalOperator &op) const;
 	bool RemoveInequalityJoinConditions(LogicalOperator &target_op, const vector<JoinCondition> &join_conditions,
 	                                    idx_t dedup_idx);
@@ -560,12 +636,14 @@ private:
 	TableIndex dedup_cte_index;
 	idx_t dedup_ref_count;
 	LogicalOperator &rewrite_root;
+	bool preserve_evidence_side;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index,
-                                                         idx_t dedup_ref_count, LogicalOperator &rewrite_root)
+                                                         idx_t dedup_ref_count, LogicalOperator &rewrite_root,
+                                                         bool preserve_evidence_side)
     : delim_join(delim_join), dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count),
-      rewrite_root(rewrite_root) {
+      rewrite_root(rewrite_root), preserve_evidence_side(preserve_evidence_side) {
 }
 
 unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op,
@@ -742,25 +820,27 @@ bool GeneratedDedupRefEliminator::FilterIsGeneratedDedupCrossProduct(LogicalOper
 }
 
 void GeneratedDedupRefEliminator::FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op,
-                                                                  vector<JoinWithGeneratedDedupRef> &joins,
-                                                                  idx_t depth, bool under_aggregate) const {
+                                                                  vector<JoinWithGeneratedDedupRef> &joins, idx_t depth,
+                                                                  bool under_aggregate,
+                                                                  bool under_evidence_side) const {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!op->children.empty()) {
-			FindJoinsWithGeneratedDedupRefs(op->children[0], joins, depth + 1, under_aggregate);
+			FindJoinsWithGeneratedDedupRefs(op->children[0], joins, depth + 1, under_aggregate, under_evidence_side);
 		}
 		return;
 	}
 
 	auto child_under_aggregate = under_aggregate || op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
-	for (auto &child : op->children) {
-		FindJoinsWithGeneratedDedupRefs(child, joins, depth + 1, child_under_aggregate);
+	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+		FindJoinsWithGeneratedDedupRefs(op->children[child_idx], joins, depth + 1, child_under_aggregate,
+		                                under_evidence_side);
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	    (GetGeneratedDedupRef(*op->children[0], false, true) || GetGeneratedDedupRef(*op->children[1], false, true))) {
-		joins.emplace_back(op, depth, false, under_aggregate);
+		joins.emplace_back(op, depth, false, under_aggregate, under_evidence_side);
 	} else if (FilterIsGeneratedDedupCrossProduct(*op)) {
-		joins.emplace_back(op, depth, true, under_aggregate);
+		joins.emplace_back(op, depth, true, under_aggregate, under_evidence_side);
 	}
 }
 
@@ -965,8 +1045,8 @@ bool GeneratedDedupRefEliminator::PreserveJoinAsSemi(unique_ptr<LogicalOperator>
 
 		auto generated_expr = lhs_generated_idx.IsValid() ? cond.GetLHS().Copy() : cond.GetRHS().Copy();
 		auto other_expr = lhs_generated_idx.IsValid() ? cond.GetRHS().Copy() : cond.GetLHS().Copy();
-		auto comparison_type = lhs_generated_idx.IsValid() ? FlipComparisonExpression(cond.GetComparisonType())
-		                                                   : cond.GetComparisonType();
+		auto comparison_type =
+		    lhs_generated_idx.IsValid() ? FlipComparisonExpression(cond.GetComparisonType()) : cond.GetComparisonType();
 		semi_conditions.emplace_back(std::move(other_expr), std::move(generated_expr), comparison_type);
 	}
 	if (!CoversAllDedupColumns(*dedup_ref, covered_dedup_bindings)) {
@@ -1249,7 +1329,11 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 
 idx_t GeneratedDedupRefEliminator::Remove() {
 	vector<JoinWithGeneratedDedupRef> joins;
-	FindJoinsWithGeneratedDedupRefs(delim_join.children[1], joins);
+	auto preserve_selected_domain = HasSelection(*delim_join.children[0]);
+	auto selected_evidence_side = preserve_selected_domain && preserve_evidence_side &&
+	                              HasEvidenceSide(delim_join.join_type) &&
+	                              !ContainsSubqueryJoin(*delim_join.children[0]);
+	FindJoinsWithGeneratedDedupRefs(delim_join.children[1], joins, 0, false, selected_evidence_side);
 	if (joins.empty()) {
 		return dedup_ref_count;
 	}
@@ -1259,11 +1343,10 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 		          return lhs.depth > rhs.depth;
 	          });
 
-	auto preserve_selected_domain = HasSelection(*delim_join.children[0]);
 	for (auto &join : joins) {
-		if (preserve_selected_domain && join.under_aggregate) {
-			// This join is a semijoin reduction for the grouped RHS. Removing it is valid, but can turn a
-			// selective correlated aggregate into a global aggregate over the inner relation.
+		if (preserve_selected_domain && (join.under_aggregate || join.under_evidence_side)) {
+			// This join is a semijoin reduction for a grouped RHS or an existence-check evidence side. Removing it is
+			// valid, but can turn a selective correlated subquery into a global aggregate or full evidence scan.
 			if (!join.filter_cross_product) {
 				PreserveJoinAsSemi(join.join.get());
 			}
@@ -1298,7 +1381,8 @@ public:
 private:
 	void CollectCTEs(LogicalOperator &op);
 	optional_ptr<LogicalCTE> FindCTE(TableIndex cte_index) const;
-	bool TryRewriteOnce(unique_ptr<LogicalOperator> &op, bool under_aggregate = false);
+	bool TryRewriteOnce(unique_ptr<LogicalOperator> &op, bool under_aggregate = false, bool under_evidence_side = false,
+	                    bool negated_marker_filter_above = false);
 
 	unique_ptr<GeneratedDedupRef> GetGeneratedDedupRef(LogicalOperator &op, bool collect_filters = false,
 	                                                   bool allow_projection = false) const;
@@ -1314,8 +1398,8 @@ private:
 
 	bool AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding,
 	                    ColumnBinding new_binding) const;
-	bool RemoveGeneratedDedupJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate);
-	bool RemoveGeneratedDomainJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate);
+	bool RemoveGeneratedDedupJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate, bool under_evidence_side);
+	bool RemoveGeneratedDomainJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate, bool under_evidence_side);
 
 private:
 	unique_ptr<LogicalOperator> &rewrite_root;
@@ -1628,7 +1712,8 @@ bool GeneratedDomainJoinEliminator::AddReplacement(vector<ReplacementBinding> &r
 	return true;
 }
 
-bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate) {
+bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate,
+                                                             bool under_evidence_side) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (comparison_join.join_type != JoinType::INNER &&
 	    (comparison_join.join_type != JoinType::SEMI || !GetGeneratedDedupRef(*join->children[1], false, true))) {
@@ -1648,9 +1733,9 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalO
 	if (!dedup_ref) {
 		return false;
 	}
-	if (under_aggregate && GeneratedDedupRefHasSelection(*dedup_ref)) {
-		// The first CTE rewrite can preserve selected domains below aggregates as regular joins. Do not
-		// substitute that selected generated CTE away in the cleanup pass.
+	if ((under_aggregate || under_evidence_side) && GeneratedDedupRefHasSelection(*dedup_ref)) {
+		// The first CTE rewrite can preserve selected domains below aggregates or existence checks as regular joins.
+		// Do not substitute that selected generated CTE away in the cleanup pass.
 		return false;
 	}
 
@@ -1747,7 +1832,8 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDedupJoin(unique_ptr<LogicalO
 	return true;
 }
 
-bool GeneratedDomainJoinEliminator::RemoveGeneratedDomainJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate) {
+bool GeneratedDomainJoinEliminator::RemoveGeneratedDomainJoin(unique_ptr<LogicalOperator> &join, bool under_aggregate,
+                                                              bool under_evidence_side) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (comparison_join.join_type != JoinType::INNER) {
 		return false;
@@ -1775,8 +1861,9 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDomainJoin(unique_ptr<Logical
 	if (!generated_ref || !domain_ref) {
 		return false;
 	}
-	if (under_aggregate && (domain_ref->has_selection || !domain_ref->filters.empty())) {
-		// Same invariant as above: selected domains below aggregates are part of the physical reduction.
+	if ((under_aggregate || under_evidence_side) && (domain_ref->has_selection || !domain_ref->filters.empty())) {
+		// Same invariant as above: selected domains below aggregates or existence checks are part of the physical
+		// reduction.
 		return false;
 	}
 
@@ -1863,17 +1950,40 @@ bool GeneratedDomainJoinEliminator::RemoveGeneratedDomainJoin(unique_ptr<Logical
 	return true;
 }
 
-bool GeneratedDomainJoinEliminator::TryRewriteOnce(unique_ptr<LogicalOperator> &op, bool under_aggregate) {
+bool GeneratedDomainJoinEliminator::TryRewriteOnce(unique_ptr<LogicalOperator> &op, bool under_aggregate,
+                                                   bool under_evidence_side, bool negated_marker_filter_above) {
 	auto child_under_aggregate = under_aggregate || op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
-	for (auto &child : op->children) {
-		if (TryRewriteOnce(child, child_under_aggregate)) {
+	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+		auto &child = op->children[child_idx];
+		auto child_under_evidence_side = under_evidence_side;
+		if (negated_marker_filter_above && IsEvidenceSide(*op, child_idx)) {
+			child_under_evidence_side = true;
+		} else if (!under_evidence_side && op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = op->Cast<LogicalComparisonJoin>();
+			if ((join.join_type == JoinType::ANTI || join.join_type == JoinType::RIGHT_ANTI) &&
+			    IsEvidenceSide(*op, child_idx)) {
+				child_under_evidence_side = true;
+			}
+		}
+
+		bool child_negated_marker_filter_above = false;
+		if (op->type == LogicalOperatorType::LOGICAL_FILTER && child_idx == 0 &&
+		    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &filter = op->Cast<LogicalFilter>();
+			auto &join = child->Cast<LogicalComparisonJoin>();
+			child_negated_marker_filter_above = FilterNegatesDelimJoinMarker(filter, join);
+		}
+
+		if (TryRewriteOnce(child, child_under_aggregate, child_under_evidence_side,
+		                   child_negated_marker_filter_above)) {
 			return true;
 		}
 	}
 	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;
 	}
-	return RemoveGeneratedDomainJoin(op, under_aggregate) || RemoveGeneratedDedupJoin(op, under_aggregate);
+	return RemoveGeneratedDomainJoin(op, under_aggregate, under_evidence_side) ||
+	       RemoveGeneratedDedupJoin(op, under_aggregate, under_evidence_side);
 }
 
 bool GeneratedDomainJoinEliminator::Rewrite() {
@@ -1954,7 +2064,7 @@ DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 }
 
 void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-                                                     bool null_rejecting_filter_above) {
+                                                     bool null_rejecting_filter_above, bool preserve_evidence_side) {
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (join.delim_flipped) {
 		throw InternalException("Flatten dependent joins - flipped delim join CTE rewrite not supported");
@@ -1967,7 +2077,8 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	if (cte_deliminator_enabled) {
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
-		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root);
+		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root,
+		                                       preserve_evidence_side);
 		dedup_ref_count = eliminator.Remove();
 		if (SingleJoinRHSIsDeduplicated(join)) {
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
@@ -2089,21 +2200,23 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 }
 
 void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-                                                   bool null_rejecting_filter_above) {
+                                                   bool null_rejecting_filter_above, bool preserve_evidence_side) {
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
 		bool child_null_rejecting_filter_above = false;
+		bool child_preserve_evidence_side = false;
 		if (plan->type == LogicalOperatorType::LOGICAL_FILTER &&
 		    child->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			auto &filter = plan->Cast<LogicalFilter>();
 			auto &delim_join = child->Cast<LogicalComparisonJoin>();
 			child_null_rejecting_filter_above = FilterNullRejectsDelimJoinRHS(filter, delim_join);
+			child_preserve_evidence_side = FilterNegatesDelimJoinMarker(filter, delim_join);
 		}
-		RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above);
+		RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above, child_preserve_evidence_side);
 		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above);
+		MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
 	}
 }
 
