@@ -18,7 +18,6 @@
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <algorithm>
@@ -480,18 +479,18 @@ void Executor::WaitForTask() {
 	auto begin = Timestamp::GetMonotonicTimestamp();
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = Timestamp::GetMonotonicTimestamp();
-	auto ms = NumericCast<idx_t>((end.value - begin.value) / Interval::MICROS_PER_MSEC);
+	auto blocked_micros = NumericCast<idx_t>(end.value - begin.value);
 	if (to_be_rescheduled_tasks.empty()) {
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
 		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 
-	blocked_thread_time += ms + WAIT_TIME_MS.count();
+	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
 }
