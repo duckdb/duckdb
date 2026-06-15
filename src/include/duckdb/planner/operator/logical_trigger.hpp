@@ -21,6 +21,15 @@ namespace duckdb {
 //!
 //! This node is transient: a pre-decorrelation rewrite pass converts it into a LogicalDependentJoin
 //!  before FlattenDependentJoins::DecorrelateIndependent runs.
+//!
+//! Known limitations of this set-based model (from firing every row as one decorrelated batch
+//! against a single snapshot, rather than iterating rows sequentially):
+//!  - Visibility: a firing cannot see rows written by an earlier firing in the same statement
+//!    (self-accumulating bodies; cascades into another row-triggered table are rejected at bind time).
+//!  - Order: rows fire in an unspecified order, and with multiple triggers each trigger fires for the whole
+//!    batch before the next (not PostgreSQL's per-row A,B / A,B interleave). Observable only with
+//!    order-sensitive side effects (sequences, clock_timestamp(), or reading prior firings' writes).
+//! Correct semantics for all of these require per-row iterative execution (not yet implemented).
 class LogicalTrigger : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_TRIGGER;

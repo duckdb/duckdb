@@ -169,7 +169,9 @@ SELECT DISTINCT cnt FROM snap_result;
 ----
 3
 
-# Multiple FOR EACH ROW triggers on same event fire in order
+# Multiple FOR EACH ROW triggers on the same event each fire once per row.
+# NOTE: firing order is not PostgreSQL-compatible under the set-based model (see LogicalTrigger doc),
+# so this only asserts order-insensitive aggregates (COUNT, SUM).
 statement ok
 CREATE TABLE t_multi (id INTEGER);
 
@@ -216,6 +218,7 @@ CREATE TRIGGER trg_upd AFTER INSERT ON t_upd_src FOR EACH ROW
 # transaction snapshot, so every firing reads total=0 and only the first rowid-deduped write
 # survives (result: 5, expected: 18).  Correct sequential-accumulation semantics require
 # per-row iterative execution with intermediate visibility, which is not yet implemented.
+# See the LogicalTrigger doc comment for the full list of set-based limitations.
 mode skip instable
 
 statement ok
