@@ -278,11 +278,13 @@ unique_ptr<AlterTableInfo> AddFieldInfo::Deserialize(Deserializer &deserializer)
 void AlterFeatureInfo::Serialize(Serializer &serializer) const {
 	AlterInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<int64_t>(300, "new_version", new_version);
+	serializer.WritePropertyWithDefault<AlterFeatureType>(301, "alter_feature_type", alter_feature_type, AlterFeatureType::BUMP_VERSION);
 }
 
 unique_ptr<AlterInfo> AlterFeatureInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<AlterFeatureInfo>(new AlterFeatureInfo());
 	deserializer.ReadPropertyWithDefault<int64_t>(300, "new_version", result->new_version);
+	deserializer.ReadPropertyWithExplicitDefault<AlterFeatureType>(301, "alter_feature_type", result->alter_feature_type, AlterFeatureType::BUMP_VERSION);
 	return std::move(result);
 }
 

@@ -168,6 +168,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
@@ -451,6 +452,24 @@ const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value) {
 template<>
 AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value) {
 	return static_cast<AlterDatabaseType>(StringUtil::StringToEnum(GetAlterDatabaseTypeValues(), 1, "AlterDatabaseType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAlterFeatureTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AlterFeatureType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterFeatureType::BUMP_VERSION), "BUMP_VERSION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AlterFeatureType>(AlterFeatureType value) {
+	return StringUtil::EnumToString(GetAlterFeatureTypeValues(), 2, "AlterFeatureType", static_cast<uint32_t>(value));
+}
+
+template<>
+AlterFeatureType EnumUtil::FromString<AlterFeatureType>(const char *value) {
+	return static_cast<AlterFeatureType>(StringUtil::StringToEnum(GetAlterFeatureTypeValues(), 2, "AlterFeatureType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterForeignKeyTypeValues() {

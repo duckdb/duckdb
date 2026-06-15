@@ -353,6 +353,12 @@
         "id": 300,
         "name": "new_version",
         "type": "int64_t"
+      },
+      {
+        "id": 301,
+        "name": "alter_feature_type",
+        "type": "AlterFeatureType",
+        "default": "AlterFeatureType::BUMP_VERSION"
       }
     ]
   },

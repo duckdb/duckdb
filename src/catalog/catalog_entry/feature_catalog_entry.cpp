@@ -27,12 +27,18 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 		throw InternalException("Attempting to alter FeatureCatalogEntry with unsupported alter type");
 	}
 	auto &feature_info = info.Cast<AlterFeatureInfo>();
-	// Produce a new entry that is identical except for the bumped current_version. Going through the
+	// Produce a new entry that is identical except for the altered fields. Going through the
 	// catalog (rather than mutating in place) makes the change transactional, so it is written to the
 	// WAL / checkpoint and survives a restart.
 	auto create_info = GetInfo();
 	auto &cast_info = create_info->Cast<CreateFeatureInfo>();
-	cast_info.current_version = feature_info.new_version;
+	switch (feature_info.alter_feature_type) {
+	case AlterFeatureType::BUMP_VERSION:
+		cast_info.current_version = feature_info.new_version;
+		break;
+	default:
+		throw InternalException("Unsupported AlterFeatureType in FeatureCatalogEntry::AlterEntry");
+	}
 	return make_uniq<FeatureCatalogEntry>(catalog, schema, cast_info);
 }
 
