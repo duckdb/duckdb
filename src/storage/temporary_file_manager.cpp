@@ -6,6 +6,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
@@ -403,14 +404,10 @@ void TemporaryFileMap::EraseFile(const TemporaryFileIdentifier &identifier) {
 //===--------------------------------------------------------------------===//
 // TemporaryFileCompressionLevel/TemporaryFileCompressionAdaptivity
 //===--------------------------------------------------------------------===//
-TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_uncompressed_write_ns(INITIAL_NS) {
+TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_uncompressed_write_micros(INITIAL_MICROS) {
 	for (idx_t i = 0; i < LEVELS; i++) {
-		last_compressed_writes_ns[i] = INITIAL_NS;
+		last_compressed_writes_micros[i] = INITIAL_MICROS;
 	}
-}
-
-int64_t TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos() {
-	return duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
 }
 
 TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::IndexToLevel(const idx_t index) {
@@ -441,9 +438,9 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 	{
 		lock_guard<mutex> guard(random_engine.lock);
 
-		auto min_compressed_time = last_compressed_writes_ns[min_compression_idx];
+		auto min_compressed_time = last_compressed_writes_micros[min_compression_idx];
 		for (idx_t compression_idx = 1; compression_idx < LEVELS; compression_idx++) {
-			const auto time = last_compressed_writes_ns[compression_idx];
+			const auto time = last_compressed_writes_micros[compression_idx];
 			if (time < min_compressed_time) {
 				min_compression_idx = compression_idx;
 				min_compressed_time = time;
@@ -451,7 +448,7 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 		}
 		level = IndexToLevel(min_compression_idx);
 
-		ratio = static_cast<double>(min_compressed_time) / static_cast<double>(last_uncompressed_write_ns);
+		ratio = static_cast<double>(min_compressed_time) / static_cast<double>(last_uncompressed_write_micros);
 		should_compress = ratio < DURATION_RATIO_THRESHOLD;
 
 		should_deviate = random_engine.NextRandom() < COMPRESSION_DEVIATION;
@@ -477,13 +474,13 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 	return result;
 }
 
-void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_ns) {
-	const auto duration = GetCurrentTimeNanos() - time_before_ns;
-	auto &last_write_ns = level == TemporaryCompressionLevel::UNCOMPRESSED
-	                          ? last_uncompressed_write_ns
-	                          : last_compressed_writes_ns[LevelToIndex(level)];
+void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_micros) {
+	const auto duration = Timestamp::GetMonotonicTimestamp().value - time_before_micros;
+	auto &last_write_micros = level == TemporaryCompressionLevel::UNCOMPRESSED
+	                              ? last_uncompressed_write_micros
+	                              : last_compressed_writes_micros[LevelToIndex(level)];
 	lock_guard<mutex> guard(random_engine.lock);
-	last_write_ns = (last_write_ns * (WEIGHT - 1) + duration) / WEIGHT;
+	last_write_micros = (last_write_micros * (WEIGHT - 1) + duration) / WEIGHT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -509,7 +506,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
 	const auto adaptivity_idx = TaskScheduler::GetEstimatedCPUId() % COMPRESSION_ADAPTIVITIES;
 	auto &compression_adaptivity = compression_adaptivities[adaptivity_idx];
 
-	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
+	const auto time_before_micros = Timestamp::GetMonotonicTimestamp().value;
 	AllocatedData compressed_buffer;
 	const auto compression_result = CompressBuffer(compression_adaptivity, buffer, compressed_buffer);
 
@@ -543,7 +540,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 
-	compression_adaptivity.Update(compression_result.level, time_before_ns);
+	compression_adaptivity.Update(compression_result.level, time_before_micros);
 	return static_cast<idx_t>(compression_result.size);
 }
 

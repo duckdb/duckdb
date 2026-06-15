@@ -8,6 +8,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
@@ -93,7 +94,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
-	state.start_time = high_resolution_clock::now();
+	state.monotonic_start = Timestamp::GetMonotonicTimestamp();
 	return state;
 }
 
@@ -102,8 +103,9 @@ void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 		// nothing to permute
 		return;
 	}
-	auto end_time = high_resolution_clock::now();
-	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
+	auto duration = static_cast<double>(Timestamp::GetMonotonicTimestamp().value - state.monotonic_start.value) /
+	                static_cast<double>(Interval::MICROS_PER_SEC);
+	AdaptRuntimeStatistics(duration);
 }
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {

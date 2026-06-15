@@ -18,6 +18,8 @@
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -475,11 +477,10 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
-	auto begin = std::chrono::high_resolution_clock::now();
+	auto begin = Timestamp::GetMonotonicTimestamp();
 	std::unique_lock<mutex> l(executor_lock);
-	auto end = std::chrono::high_resolution_clock::now();
-	auto dur = end - begin;
-	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
+	auto end = Timestamp::GetMonotonicTimestamp();
+	auto ms = NumericCast<idx_t>((end.value - begin.value) / Interval::MICROS_PER_MSEC);
 	if (to_be_rescheduled_tasks.empty()) {
 		blocked_thread_time += ms;
 		return;

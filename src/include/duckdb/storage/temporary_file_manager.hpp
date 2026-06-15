@@ -220,12 +220,10 @@ public:
 	TemporaryFileCompressionAdaptivity();
 
 public:
-	//! Get current time in nanoseconds to measure write times
-	static int64_t GetCurrentTimeNanos();
 	//! Get the compression level to use based on current write times
 	TemporaryCompressionLevel GetCompressionLevel();
 	//! Update write time for given compression level
-	void Update(TemporaryCompressionLevel level, int64_t time_before_ns);
+	void Update(TemporaryCompressionLevel level, int64_t time_before_micros);
 
 private:
 	//! Convert from level to index into write time array and back
@@ -237,7 +235,7 @@ private:
 
 private:
 	//! The value to initialize the atomic write counters to
-	static constexpr int64_t INITIAL_NS = 50000;
+	static constexpr int64_t INITIAL_MICROS = 50;
 	//! How many compression levels we adapt between
 	static constexpr idx_t LEVELS = 6;
 	//! Bias towards compressed writes: we only choose uncompressed if it is more than 2x faster than compressed
@@ -250,9 +248,9 @@ private:
 	//! Random engine to (sometimes) randomize compression
 	RandomEngine random_engine;
 	//! Duration of the last uncompressed write
-	int64_t last_uncompressed_write_ns;
+	int64_t last_uncompressed_write_micros;
 	//! Duration of the last compressed writes
-	int64_t last_compressed_writes_ns[LEVELS];
+	int64_t last_compressed_writes_micros[LEVELS];
 };
 
 //===--------------------------------------------------------------------===//
