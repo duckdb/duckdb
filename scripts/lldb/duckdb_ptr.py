@@ -20,13 +20,16 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
 
 CATEGORY_NAME = "duckdb"
 UNIQUE_PTR_REGEX = r"^duckdb::unique_ptr<.+>$"
-MULTILINE_INDENT = "     "
 
 
 def __lldb_init_module(debugger, _internal_dict):
     debugger.HandleCommand(f"type category define {CATEGORY_NAME}")
     debugger.HandleCommand(
-        f"type summary add --category {CATEGORY_NAME} "
+        f"type synthetic add --category {CATEGORY_NAME} "
+        f"-x '{UNIQUE_PTR_REGEX}' --python-class duckdb_ptr.DuckDBUniquePtrSyntheticProvider"
+    )
+    debugger.HandleCommand(
+        f"type summary add -e --category {CATEGORY_NAME} "
         f"-x '{UNIQUE_PTR_REGEX}' -F duckdb_ptr.duckdb_unique_ptr_summary"
     )
     debugger.HandleCommand(f"type category enable {CATEGORY_NAME}")
@@ -41,14 +44,13 @@ def duckdb_unique_ptr_summary(valobj, _internal_dict):
     if address == 0:
         return "nullptr"
 
-    pointee_type = pointer_value.GetType().GetPointeeType()
-    pointee_name = pointee_type.GetDisplayTypeName() or pointee_type.GetName() or "value"
     pointee_value = _dereference_pointer(pointer_value)
-    pointee_summary = _inline_description(pointee_value)
-    if pointee_summary:
-        if "\n" in pointee_summary:
-            return f"{pointee_name} @ 0x{address:016x}\n{pointee_summary}"
-        return f"{pointee_name} @ 0x{address:016x} {pointee_summary}"
+    pointee_type = (
+        pointee_value.GetType()
+        if pointee_value is not None and pointee_value.IsValid()
+        else pointer_value.GetType().GetPointeeType()
+    )
+    pointee_name = pointee_type.GetDisplayTypeName() or pointee_type.GetName() or "value"
     return f"{pointee_name} @ 0x{address:016x}"
 
 
@@ -143,43 +145,38 @@ def _describe_value(value):
     return stream.GetData()
 
 
-def _inline_description(value):
-    if value is None or not value.IsValid():
-        return None
+class DuckDBUniquePtrSyntheticProvider:
+    def __init__(self, valobj, _internal_dict):
+        self.valobj = valobj
+        self.pointer_value = None
+        self.pointee_value = None
+        self.update()
 
-    description = _describe_value(value)
-    if not description:
-        return None
+    def update(self):
+        self.pointer_value = _get_pointer_value(self.valobj)
+        self.pointee_value = _dereference_pointer(self.pointer_value)
+        return False
 
-    description = description.strip()
-    if "\n" in description:
-        lines = description.splitlines()
-        if not lines:
+    def has_children(self):
+        return self.pointee_value is not None and self.pointee_value.IsValid()
+
+    def num_children(self):
+        if not self.has_children():
+            return 0
+        return self.pointee_value.GetNumChildren()
+
+    def get_child_at_index(self, index):
+        if not self.has_children():
             return None
-
-        first = lines[0].strip()
-        if first.startswith("(") and ") " in first:
-            _, remainder = first.split(") ", 1)
-            lines[0] = remainder
-        elif first.startswith("(") and first.endswith(")"):
-            lines = lines[1:]
-
-        if lines:
-            first = lines[0].strip()
-            if " = " in first:
-                _, remainder = first.split(" = ", 1)
-                lines[0] = remainder
-
-        while lines and not lines[0].strip():
-            lines = lines[1:]
-
-        if not lines:
+        if index < 0 or index >= self.pointee_value.GetNumChildren():
             return None
+        return self.pointee_value.GetChildAtIndex(index)
 
-        return "\n".join(MULTILINE_INDENT + line for line in lines)
-
-    collapsed = " ".join(description.split())
-    parts = collapsed.split(" = ", 1)
-    if len(parts) == 2:
-        return parts[1]
-    return collapsed
+    def get_child_index(self, name):
+        if not self.has_children():
+            return -1
+        for index in range(self.pointee_value.GetNumChildren()):
+            child = self.pointee_value.GetChildAtIndex(index)
+            if child.IsValid() and child.GetName() == name:
+                return index
+        return -1
