@@ -10,6 +10,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -33,6 +34,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 
@@ -511,6 +513,16 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
+	// Publish each replayed entry's byte offset on the transaction manager so unbound-index buffering can
+	// stamp its replay ranges; reset to 0 on any exit so live (non-replay) ops never inherit a stale offset.
+	auto &duck_manager = DuckTransactionManager::Get(database);
+	struct ReplayOffsetGuard {
+		DuckTransactionManager &manager;
+		~ReplayOffsetGuard() {
+			manager.ResetReplayCommitOffset();
+		}
+	} replay_offset_guard {duck_manager};
+
 	// reset the reader - we are going to read the WAL from the beginning again
 	reader.Reset();
 
@@ -521,6 +533,9 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	bool all_succeeded = false;
 	try {
 		while (true) {
+			// Publish the byte offset of the entry we are about to replay so any unbound index buffering this
+			// entry's ops can stamp it onto its replay ranges (used to skip already-durable ops at bind time).
+			duck_manager.SetReplayCommitOffset(reader.CurrentOffset());
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, reader);
 			if (deserializer.ReplayEntry()) {

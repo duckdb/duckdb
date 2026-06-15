@@ -5,6 +5,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -65,15 +66,18 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	// The starting index of the buffer range is the size of the buffer.
 	const idx_t start = buffer->Count();
 	const idx_t end = start + combined_chunk.size();
+	const idx_t commit_offset = DuckTransactionManager::Get(db).GetReplayCommitOffset();
 	auto &ranges = buffered_replays.ranges;
 
-	if (ranges.empty() || ranges.back().type != replay_type) {
-		// If there are no buffered ranges, or the replay types don't match, append a new range.
-		ranges.emplace_back(replay_type, start, end);
+	if (ranges.empty() || ranges.back().type != replay_type || ranges.back().commit_offset != commit_offset) {
+		// Append a new range when there are none, the replay types differ, or this chunk came from a different
+		// WAL entry (different commit_offset) -- ranges must not merge across WAL entries or the per-entry skip
+		// bound would be lost.
+		ranges.emplace_back(replay_type, start, end, commit_offset);
 		buffer->Append(combined_chunk);
 		return;
 	}
-	// Otherwise merge the range with the previous one.
+	// Otherwise merge the range with the previous one (same type and same WAL entry).
 	ranges.back().end = end;
 	buffer->Append(combined_chunk);
 }

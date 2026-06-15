@@ -211,6 +211,17 @@ public:
 	void ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
 	                          const vector<StorageIndex> &mapped_column_ids);
 
+	//! Called before ApplyBufferedReplays delivers each buffered range, with that range's WAL byte offset
+	//! (ReplayRange::commit_offset). An index whose payload is durable outside the WAL uses this to skip ranges
+	//! it already persisted before the crash. Default: ignore (in-WAL indexes replay every buffered op).
+	virtual void OnReplayRange(idx_t commit_offset) {
+	}
+
+	//! Called once after ApplyBufferedReplays has delivered every buffered insert/delete for this bind.
+	//! Lets an index that batches replayed operations (e.g. an external-segment index) commit them in one shot.
+	virtual void FinishReplay() {
+	}
+
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
