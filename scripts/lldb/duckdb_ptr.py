@@ -4,13 +4,16 @@ Usage inside LLDB:
     command script import /path/to/duckdb/scripts/lldb/duckdb_ptr.py
 
 After import, LLDB will:
-1. Pretty-print `duckdb::unique_ptr<T>` as if it were the pointee.
+1. Pretty-print DuckDB smart pointers (`unique_ptr`, `shared_ptr`, `optional_ptr`)
+   as if they were the pointee.
 
 The formatter path avoids calling `duckdb::unique_ptr<T>::operator*()` or `.get()`,
 which makes it robust even when those template symbols are not emitted.
 """
 
 from __future__ import annotations
+
+import re
 
 try:
     import lldb  # type: ignore
@@ -19,23 +22,62 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
 
 
 CATEGORY_NAME = "duckdb"
-UNIQUE_PTR_REGEX = r"^duckdb::unique_ptr<.+>$"
+SMART_PTR_REGEX = r"^duckdb::(unique_ptr|shared_ptr|optional_ptr)<.+>$"
+PRINT_COMMAND_NAME = "duckdb-p"
+_ACTIVE_ROOT_EXPRESSIONS = []
 
 
 def __lldb_init_module(debugger, _internal_dict):
-    debugger.HandleCommand(f"type category define {CATEGORY_NAME}")
-    debugger.HandleCommand(
+    _handle_lldb_command(debugger, f"type category define {CATEGORY_NAME}")
+    _handle_lldb_command(
+        debugger,
         f"type synthetic add --category {CATEGORY_NAME} "
-        f"-x '{UNIQUE_PTR_REGEX}' --python-class duckdb_ptr.DuckDBUniquePtrSyntheticProvider"
+        f"-x '{SMART_PTR_REGEX}' --python-class duckdb_ptr.DuckDBSmartPtrSyntheticProvider",
     )
-    debugger.HandleCommand(
+    _handle_lldb_command(
+        debugger,
         f"type summary add -e --category {CATEGORY_NAME} "
-        f"-x '{UNIQUE_PTR_REGEX}' -F duckdb_ptr.duckdb_unique_ptr_summary"
+        f"-x '{SMART_PTR_REGEX}' -F duckdb_ptr.duckdb_smart_ptr_summary",
     )
-    debugger.HandleCommand(f"type category enable {CATEGORY_NAME}")
+    _handle_lldb_command(debugger, f"type category enable {CATEGORY_NAME}")
+    _handle_lldb_command(debugger, f"command script delete {PRINT_COMMAND_NAME}", ignore_errors=True)
+    _handle_lldb_command(debugger, f"command script add -f duckdb_ptr.duckdb_print_command {PRINT_COMMAND_NAME}")
+    _handle_lldb_command(debugger, f"command alias p {PRINT_COMMAND_NAME}")
 
 
-def duckdb_unique_ptr_summary(valobj, _internal_dict):
+def duckdb_print_command(debugger, command, result, _internal_dict):
+    normalized = _normalize_expression_text(command)
+    _ACTIVE_ROOT_EXPRESSIONS.append(normalized)
+    try:
+        debugger.HandleCommand(_build_expression_command(command))
+    finally:
+        _ACTIVE_ROOT_EXPRESSIONS.pop()
+
+
+def _build_expression_command(command):
+    stripped = command.lstrip()
+    if stripped.startswith("/"):
+        match = re.match(r"^/([A-Za-z]+)\s+(.*)$", stripped, re.DOTALL)
+        if match:
+            fmt, expr = match.groups()
+            return f"expression -f {fmt} -- {expr}"
+        return f"expression {command}"
+    return f"expression -- {command}"
+
+
+def _handle_lldb_command(debugger, command, ignore_errors=False):
+    result = lldb.SBCommandReturnObject()
+    debugger.GetCommandInterpreter().HandleCommand(command, result)
+    if ignore_errors or result.Succeeded():
+        return result
+
+    error = result.GetError() or result.GetOutput()
+    if error:
+        print(error.rstrip())
+    return result
+
+
+def duckdb_smart_ptr_summary(valobj, _internal_dict):
     pointer_value = _get_pointer_value(valobj)
     if pointer_value is None or not pointer_value.IsValid():
         return "<unavailable>"
@@ -45,13 +87,35 @@ def duckdb_unique_ptr_summary(valobj, _internal_dict):
         return "nullptr"
 
     pointee_value = _dereference_pointer(pointer_value)
+    pointee_name = _get_pointee_name(valobj, pointer_value, pointee_value)
+    return f"{pointee_name} @ 0x{address:016x}"
+
+
+def _get_pointee_name(valobj, pointer_value, pointee_value):
+    template_type = _get_template_argument_type(valobj)
+    if template_type is not None and template_type.IsValid():
+        template_name = template_type.GetDisplayTypeName() or template_type.GetName()
+        if template_name:
+            return template_name
+
     pointee_type = (
         pointee_value.GetType()
         if pointee_value is not None and pointee_value.IsValid()
         else pointer_value.GetType().GetPointeeType()
     )
-    pointee_name = pointee_type.GetDisplayTypeName() or pointee_type.GetName() or "value"
-    return f"{pointee_name} @ 0x{address:016x}"
+    return pointee_type.GetDisplayTypeName() or pointee_type.GetName() or "value"
+
+
+def _get_template_argument_type(value):
+    if value is None or not value.IsValid():
+        return None
+
+    type_obj = value.GetType().GetUnqualifiedType()
+    try:
+        template_type = type_obj.GetTemplateArgumentType(0)
+    except Exception:
+        return None
+    return template_type if template_type.IsValid() else None
 
 
 def _get_pointer_value(value):
@@ -62,7 +126,7 @@ def _get_pointer_value(value):
             return current
 
         type_name = type_obj.GetUnqualifiedType().GetName() or ""
-        if "unique_ptr<" not in type_name:
+        if not _is_supported_smart_ptr_type(type_name):
             return None
 
         pointer_child = _find_pointer_descendant(current)
@@ -70,6 +134,20 @@ def _get_pointer_value(value):
             return None
         current = pointer_child
     return None
+
+
+def _is_supported_smart_ptr_type(type_name):
+    return "unique_ptr<" in type_name or "shared_ptr<" in type_name or "optional_ptr<" in type_name
+
+
+def _should_expand_children(value):
+    path = _normalize_expression_text(_get_expression_path(value))
+    if not path:
+        return True
+
+    if path in _ACTIVE_ROOT_EXPRESSIONS:
+        return True
+    return _is_simple_expression_path(path)
 
 
 def _dereference_pointer(pointer_value):
@@ -135,6 +213,45 @@ def _value_key(value):
     )
 
 
+def _get_expression_path(value):
+    if value is None or not value.IsValid():
+        return ""
+
+    stream = lldb.SBStream()
+    ok = value.GetExpressionPath(stream)
+    if not ok:
+        return ""
+    return stream.GetData() or ""
+
+
+def _normalize_expression_text(text):
+    if not text:
+        return ""
+
+    normalized = re.sub(r"\s+", "", text).replace("->", ".")
+    while normalized.startswith("(") and normalized.endswith(")") and _outer_parens_wrap_entire_expr(normalized):
+        normalized = normalized[1:-1]
+    return normalized
+
+
+def _outer_parens_wrap_entire_expr(text):
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0 and index != len(text) - 1:
+                return False
+    return depth == 0
+
+
+def _is_simple_expression_path(path):
+    if path.startswith("$"):
+        return "." not in path and "[" not in path
+    return "." not in path and "[" not in path
+
+
 def _describe_value(value):
     stream = lldb.SBStream()
     if value.GetDescription(stream):
@@ -145,20 +262,22 @@ def _describe_value(value):
     return stream.GetData()
 
 
-class DuckDBUniquePtrSyntheticProvider:
+class DuckDBSmartPtrSyntheticProvider:
     def __init__(self, valobj, _internal_dict):
         self.valobj = valobj
         self.pointer_value = None
         self.pointee_value = None
+        self.expand_children = False
         self.update()
 
     def update(self):
         self.pointer_value = _get_pointer_value(self.valobj)
         self.pointee_value = _dereference_pointer(self.pointer_value)
+        self.expand_children = _should_expand_children(self.valobj)
         return False
 
     def has_children(self):
-        return self.pointee_value is not None and self.pointee_value.IsValid()
+        return self.expand_children and self.pointee_value is not None and self.pointee_value.IsValid()
 
     def num_children(self):
         if not self.has_children():
