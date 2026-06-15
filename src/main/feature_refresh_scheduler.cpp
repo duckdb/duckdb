@@ -104,10 +104,10 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 					// concurrent wakeups without adding significant latency for short intervals.
 					int64_t interval_us = IntervalToMicros(feat.schedule_interval);
 					int64_t jitter_cap = std::min(interval_us / 10, static_cast<int64_t>(30000000LL));
-					int64_t jitter_us = jitter_cap > 0
-					                        ? static_cast<int64_t>(std::hash<string> {}(feat.name) %
-					                                               static_cast<size_t>(jitter_cap))
-					                        : 0;
+					int64_t jitter_us =
+					    jitter_cap > 0
+					        ? static_cast<int64_t>(std::hash<string> {}(feat.name) % static_cast<size_t>(jitter_cap))
+					        : 0;
 					next_at = Interval::Add(feat.last_refresh_timestamp, feat.schedule_interval);
 					next_at.value += jitter_us;
 					// If the derived time is already in the past, fire from now.
@@ -157,11 +157,9 @@ void FeatureRefreshScheduler::Run() {
 
 		if (now < next_wakeup) {
 			// Sleep until the next feature is due, waking early on Notify() or Stop().
-			auto wake_tp =
-			    std::chrono::system_clock::time_point(std::chrono::microseconds(next_wakeup.value));
+			auto wake_tp = std::chrono::system_clock::time_point(std::chrono::microseconds(next_wakeup.value));
 			unique_lock<std::mutex> lock(mtx);
-			cv.wait_until(lock, wake_tp,
-			              [this] { return stop_requested.load() || heap_dirty.load(); });
+			cv.wait_until(lock, wake_tp, [this] { return stop_requested.load() || heap_dirty.load(); });
 			continue;
 		}
 
@@ -184,8 +182,7 @@ void FeatureRefreshScheduler::Run() {
 			} catch (std::exception &) {
 				// Transient error — back off for min(interval, 5 minutes) before retrying.
 				static constexpr int64_t FIVE_MIN_MICROS = 5LL * 60 * 1000000;
-				int64_t backoff_us =
-				    std::min(IntervalToMicros(feat.schedule_interval), FIVE_MIN_MICROS);
+				int64_t backoff_us = std::min(IntervalToMicros(feat.schedule_interval), FIVE_MIN_MICROS);
 				feat.next_refresh_at = timestamp_t(now.value + backoff_us);
 			}
 
