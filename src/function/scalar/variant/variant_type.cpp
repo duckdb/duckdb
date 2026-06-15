@@ -66,22 +66,7 @@ static void VariantTypeFunction(DataChunk &input, ExpressionState &state, Vector
 }
 
 ScalarFunctionSet VariantTypeFun::GetFunctions() {
-	ScalarFunctionSet fun_set;
-
-	ScalarFunction variant_type("variant_type", {}, LogicalType::VARCHAR, VariantTypeFunction,
-	                            VariantBindUtils::VariantPathBind, nullptr);
-
-	variant_type.GetSignature().AddParameter(LogicalType::VARIANT());
-	fun_set.AddFunction(variant_type);
-
-	variant_type.GetSignature().AddParameter(LogicalType::VARCHAR);
-	fun_set.AddFunction(variant_type);
-
-	variant_type.GetSignature().GetParameter(1).SetType(LogicalType::LIST(LogicalType::VARCHAR));
-	variant_type.SetReturnType(LogicalType::LIST(LogicalType::BOOLEAN));
-	fun_set.AddFunction(variant_type);
-
-	return fun_set;
+	return VariantPathFunction::CreateFunctionSet("variant_type", VariantTypeFunction, LogicalType::VARCHAR);
 }
 
 } // namespace duckdb

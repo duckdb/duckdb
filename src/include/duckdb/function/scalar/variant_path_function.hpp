@@ -14,6 +14,10 @@
 namespace duckdb {
 
 struct VariantPathFunction {
+	//! Provides unified construction of path based processing functions.
+	static ScalarFunctionSet CreateFunctionSet(const string &name, const scalar_function_t &function,
+	                                           const LogicalType &return_type, bool path_optional = true);
+
 	//! Executes scalar VARIANT functions that accept an optional constant path argument.
 	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR) or f(VARIANT, VARCHAR[]).
 	//! `collect_fn` is run once for each requested path and produces an intermediate result.
