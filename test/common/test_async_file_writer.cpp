@@ -696,8 +696,9 @@ TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]"
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("ab"));
 
 		writer.Flush();
-		REQUIRE(ReadFile(path) == "ab");
 		REQUIRE(fs.write_sizes.size() == 1);
+		REQUIRE(fs.write_sizes[0] == 2);
+		REQUIRE(fs.write_offsets[0] == 0);
 
 		writer.WriteData(make_uniq<StringAsyncWriteBuffer>("cd"));
 		REQUIRE(fs.write_sizes.size() == 1);
