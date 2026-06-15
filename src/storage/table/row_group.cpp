@@ -814,7 +814,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				}
 				if (rate < 1) {
 					auto row_group_start = state.row_group->GetRowStart();
-					sample_count = SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+					sample_count =
+					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
 						NextVector(state);
 						continue;

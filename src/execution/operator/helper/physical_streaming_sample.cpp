@@ -27,7 +27,8 @@ PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, ve
 			percentage = 1.0;
 		}
 		percentage = MinValue(1.0, MaxValue(0.0, percentage));
-		RandomEngine random(sample_options->seed.IsValid() ? static_cast<int64_t>(sample_options->seed.GetIndex()) : -1);
+		RandomEngine random(sample_options->seed.IsValid() ? static_cast<int64_t>(sample_options->seed.GetIndex())
+		                                                   : -1);
 		system_sample_phase = random.NextRandom();
 	}
 }

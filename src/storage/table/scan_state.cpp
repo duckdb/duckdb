@@ -46,7 +46,8 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 				sampling_info.sample_rate = 1.0;
 			}
 			sampling_info.sample_rate = MinValue(1.0, MaxValue(0.0, sampling_info.sample_rate));
-			RandomEngine random(table_sampling->seed.IsValid() ? static_cast<int64_t>(table_sampling->seed.GetIndex()) : -1);
+			RandomEngine random(table_sampling->seed.IsValid() ? static_cast<int64_t>(table_sampling->seed.GetIndex())
+			                                                   : -1);
 			sampling_info.sample_phase = random.NextRandom();
 		}
 		if (table_sampling->seed.IsValid()) {
