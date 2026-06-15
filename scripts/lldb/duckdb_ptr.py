@@ -22,7 +22,18 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
 
 
 CATEGORY_NAME = "duckdb"
-SMART_PTR_REGEX = r"^duckdb::(unique_ptr|shared_ptr|optional_ptr)<.+>$"
+SMART_PTR_TYPES = (
+    "unique_ptr",
+    "shared_ptr",
+    "optional_ptr",
+    "buffer_ptr",
+    "arena_ptr",
+    "unsafe_unique_ptr",
+    "unsafe_shared_ptr",
+    "unsafe_optional_ptr",
+    "unsafe_arena_ptr",
+)
+SMART_PTR_REGEX = r"^duckdb::(" + "|".join(SMART_PTR_TYPES) + r")<.+>$"
 PRINT_COMMAND_NAME = "duckdb-p"
 _ACTIVE_ROOT_EXPRESSIONS = []
 
@@ -137,7 +148,7 @@ def _get_pointer_value(value):
 
 
 def _is_supported_smart_ptr_type(type_name):
-    return "unique_ptr<" in type_name or "shared_ptr<" in type_name or "optional_ptr<" in type_name
+    return any(ptr_type + "<" in type_name for ptr_type in SMART_PTR_TYPES)
 
 
 def _should_expand_children(value):
