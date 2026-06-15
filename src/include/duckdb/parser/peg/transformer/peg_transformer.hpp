@@ -464,8 +464,6 @@ private:
 	                                                                  ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static string TransformPrefixOperator(PEGTransformer &transformer, ParseResult &parse_result);
@@ -532,10 +530,6 @@ private:
 	                                                                     ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
-	                                                                         ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer, ParseResult &parse_result);
@@ -2147,6 +2141,21 @@ private:
 	static unique_ptr<TransformResultValue> TransformDefaultExpressionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformDefaultExpression(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformListComprehensionExpressionInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformListComprehensionExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression,
+	                                     const vector<Identifier> &col_id_or_string,
+	                                     unique_ptr<ParsedExpression> expression_1,
+	                                     optional<unique_ptr<ParsedExpression>> list_comprehension_filter);
+	static unique_ptr<TransformResultValue> TransformListComprehensionFilterInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer,
+	                                                                     unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformParensExpressionInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
+	                                                              unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformUnknownLiteralInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);

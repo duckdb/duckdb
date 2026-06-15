@@ -4570,6 +4570,47 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDefaultExpressi
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformListComprehensionExpressionInternal(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	vector<Identifier> col_id_or_string;
+	auto col_id_or_string_items = ExtractParseResultsFromList(list_pr.GetChild(3));
+	for (auto &col_id_or_string_item : col_id_or_string_items) {
+		auto col_id_or_string_value = transformer.Transform<Identifier>(col_id_or_string_item.get());
+		col_id_or_string.push_back(col_id_or_string_value);
+	}
+	auto expression_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(5));
+	optional<unique_ptr<ParsedExpression>> list_comprehension_filter {};
+	auto &list_comprehension_filter_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
+	if (list_comprehension_filter_opt.HasResult()) {
+		auto list_comprehension_filter_value =
+		    transformer.Transform<unique_ptr<ParsedExpression>>(list_comprehension_filter_opt.GetResult());
+		list_comprehension_filter = std::move(list_comprehension_filter_value);
+	}
+	auto result = TransformListComprehensionExpression(transformer, std::move(expression), col_id_or_string,
+	                                                   std::move(expression_1), std::move(list_comprehension_filter));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformListComprehensionFilterInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformListComprehensionFilter(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformParensExpressionInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformParensExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnknownLiteralInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto result = TransformUnknownLiteral(transformer);
@@ -8439,6 +8480,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColLabelParameter", &PEGTransformerFactory::TransformColLabelParameterInternal},
 	    {"PositionalExpression", &PEGTransformerFactory::TransformPositionalExpressionInternal},
 	    {"DefaultExpression", &PEGTransformerFactory::TransformDefaultExpressionInternal},
+	    {"ListComprehensionExpression", &PEGTransformerFactory::TransformListComprehensionExpressionInternal},
+	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
+	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
 	    {"UnknownLiteral", &PEGTransformerFactory::TransformUnknownLiteralInternal},
 	    {"SpecialFunctionExpression", &PEGTransformerFactory::TransformSpecialFunctionExpressionInternal},
 	    {"CoalesceExpression", &PEGTransformerFactory::TransformCoalesceExpressionInternal},

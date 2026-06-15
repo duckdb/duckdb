@@ -1486,12 +1486,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_result);
 }
 
-// ParensExpression <- Parens(Expression)
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PEGTransformer &transformer,
-                                                                              ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	return transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+                                                                              unique_ptr<ParsedExpression> expression) {
+	return expression;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
@@ -2530,22 +2527,19 @@ PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, uniq
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &transformer,
-                                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-
-	// 1. Extract base components
-	auto result_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-	auto col_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
-	auto in_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(5));
-	auto &list_comprehension_filter = list_pr.Child<OptionalParseResult>(6);
-
+                                                                                         unique_ptr<ParsedExpression> expression,
+                                                                                         const vector<Identifier> &col_id_or_string,
+                                                                                         unique_ptr<ParsedExpression> expression_1,
+                                                                                         optional<unique_ptr<ParsedExpression>>
+                                                                                             list_comprehension_filter) {
+	auto result_expr = std::move(expression);
+	auto in_expr = std::move(expression_1);
 	vector<string> lambda_columns;
-	for (auto col : col_list) {
-		lambda_columns.push_back(transformer.Transform<string>(col));
+	for (auto &col : col_id_or_string) {
+		lambda_columns.push_back(col.GetIdentifierName());
 	}
 
-	// Basic Case: No Filter
-	if (!list_comprehension_filter.HasResult()) {
+	if (!list_comprehension_filter || !*list_comprehension_filter) {
 		auto lambda_expression = make_uniq<LambdaExpression>(lambda_columns, std::move(result_expr));
 		vector<unique_ptr<ParsedExpression>> apply_children;
 		apply_children.push_back(std::move(in_expr));
@@ -2554,8 +2548,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 		return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(apply_children));
 	}
 
-	// --- WITH FILTER: 3-Stage Transformation ---
-	auto filter_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_comprehension_filter.GetResult());
+	auto filter_expr = std::move(*list_comprehension_filter);
 
 	// STAGE 1: list_apply(in_expr, x -> struct_pack(filter := ..., result := ...))
 	vector<FunctionArgument> struct_children;
@@ -2605,9 +2598,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionFilter(PEGTransformer &transformer,
-                                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+                                                                                     unique_ptr<ParsedExpression>
+                                                                                         expression) {
+	return expression;
 }
 
 case_insensitive_map_t<unique_ptr<ParsedExpression>>

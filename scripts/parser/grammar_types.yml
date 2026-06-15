@@ -1642,9 +1642,6 @@ excluded_rules:
   - WindowFrameContents
   - BaseWindowName
   - WindowPartition
-  - ListComprehensionExpression
-  - ListComprehensionFilter
-  - ParensExpression
   - SingleExpression
   - Expression
   - LambdaArrowExpression
