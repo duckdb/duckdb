@@ -157,14 +157,20 @@ ColDefOrExpr <- ColDefAndExpr ('OR' ColDefAndExpr)*
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
 ColDefAndExpr <- IsDistinctFromExpression ('AND' IsDistinctFromExpression)*
 # LEVEL 3
-LogicalNotExpression <- 'NOT'* IsExpression
+LogicalNotExpression <- NotExpression? IsExpression
+NotExpression <- NotKeyword+
+NotKeyword <- 'NOT'
 # LEVEL 4
 IsExpression <- IsDistinctFromExpression IsTest*
 IsTest <- IsLiteral / NotNull / IsNull
-IsLiteral <- 'IS' 'NOT'? (TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral)
+IsLiteral <- 'IS' 'NOT'? IsLiteralValue
+IsLiteralValue <- TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral
 UnknownLiteral <- 'UNKNOWN'
-NotNull <- ('NOT' 'NULL') / 'NOTNULL'
-IsNull <- 'ISNULL'
+NotNull <- NotNullKeyword / NotNullOperator
+NotNullKeyword <- 'NOT' 'NULL'
+NotNullOperator <- 'NOTNULL'
+IsNull <- IsNullOperator
+IsNullOperator <- 'ISNULL'
 # LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
 IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'

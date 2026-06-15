@@ -635,18 +635,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpressio
 	return expr;
 }
 
-// LogicalNotExpression <- 'NOT'* IsExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer,
-                                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-	auto &not_expr_opt = list_pr.Child<OptionalParseResult>(0);
-	if (!not_expr_opt.HasResult()) {
+                                                                                  optional<vector<bool>> not_expression,
+                                                                                  unique_ptr<ParsedExpression> is_expression) {
+	auto expr = std::move(is_expression);
+	if (!not_expression) {
 		return expr;
 	}
-	auto &not_expr_repeat = not_expr_opt.GetResult().Cast<RepeatParseResult>();
-	size_t n = not_expr_repeat.GetChildren().size();
-	for (size_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < not_expression->size(); i++) {
 		vector<unique_ptr<ParsedExpression>> inner_list_children;
 		inner_list_children.push_back(std::move(expr));
 		expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
@@ -682,35 +678,31 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTra
 	return expr;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsTest(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &not_expr = list_pr.Child<OptionalParseResult>(1);
-	auto &inner_list_pr = list_pr.Child<ListParseResult>(2);
-	auto literal_value = transformer.Transform<Value>(inner_list_pr.Child<ChoiceParseResult>(0).GetResult());
-	if (literal_value.IsNull()) {
-		auto expr_type = not_expr.HasResult() ? ExpressionType::OPERATOR_IS_NOT_NULL : ExpressionType::OPERATOR_IS_NULL;
+                                                                       const bool &has_result,
+                                                                       const Value &is_literal_value) {
+	if (is_literal_value.IsNull()) {
+		auto expr_type = has_result ? ExpressionType::OPERATOR_IS_NOT_NULL : ExpressionType::OPERATOR_IS_NULL;
 		return make_uniq<OperatorExpression>(expr_type, nullptr);
 	}
-	auto expr_type =
-	    not_expr.HasResult() ? ExpressionType::COMPARE_DISTINCT_FROM : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	return make_uniq<ComparisonExpression>(expr_type, nullptr, make_uniq<ConstantExpression>(literal_value));
+	auto expr_type = has_result ? ExpressionType::COMPARE_DISTINCT_FROM : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	return make_uniq<ComparisonExpression>(expr_type, nullptr, make_uniq<ConstantExpression>(is_literal_value));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNull(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNullKeyword(PEGTransformer &transformer) {
 	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, nullptr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNull(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNullOperator(PEGTransformer &transformer) {
+	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, nullptr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNullOperator(PEGTransformer &transformer) {
 	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, nullptr);
+}
+
+bool PEGTransformerFactory::TransformNotKeyword(PEGTransformer &transformer) {
+	return true;
 }
 
 // IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*

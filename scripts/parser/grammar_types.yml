@@ -359,7 +359,10 @@ Expression:
     - IsTest
     - IsLiteral
     - NotNull
+    - NotNullKeyword
+    - NotNullOperator
     - IsNull
+    - IsNullOperator
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
@@ -1057,6 +1060,7 @@ Bool:
     - DistinctOrAll
     - DistinctKeyword
     - AllKeyword
+    - NotKeyword
     - Lateral
     - WithOrdinality
     - Asof
@@ -1197,6 +1201,7 @@ Value:
     - UnknownLiteral
     - TrueLiteral
     - FalseLiteral
+    - IsLiteralValue
 
 TriggerTiming:
   type: "TriggerTiming"
@@ -1446,6 +1451,9 @@ overrides:
   FunctionExpressionArgumentList:
     type: "MethodArguments"
     by_value: true
+  NotExpression:
+    type: "vector<bool>"
+    by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:
     type: "CaseCheck"
@@ -1672,10 +1680,6 @@ excluded_rules:
   - LogicalOrExpression
   - LogicalAndExpression
   - IsExpression
-  - IsTest
-  - IsLiteral
-  - NotNull
-  - IsNull
   - OverClause
   - BetweenInLikeExpression
   - BetweenInLikeOp
