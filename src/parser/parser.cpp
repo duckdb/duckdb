@@ -58,7 +58,9 @@ static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
 
-void Parser::ValidateUTF8Query(const string &query) {
+//! Throw a ParserException if `query` contains invalid UTF-8, so the tokenizer never reads past
+//! bad bytes (a bad-byte query can otherwise recurse the tokenizer — see ossfuzz clusterfuzz-test-24).
+static void ValidateUTF8Query(const string &query) {
 	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
 	size_t invalid_pos = 0;
 	auto unicode_type = Utf8Proc::Analyze(query.c_str(), query.size(), &reason, &invalid_pos);
@@ -220,15 +222,18 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 	}
 }
 
-void Parser::ParseQuery(const string &query) {
-	Parser::ValidateUTF8Query(query);
-	{
-		string new_query;
-		if (StripUnicodeSpaces(query, new_query)) {
-			ParseQuery(new_query);
-			return;
-		}
+string Parser::NormalizeSQLString(const string &query) {
+	// Validate before strip: StripUnicodeSpaces walks multi-byte sequences and assumes valid UTF-8.
+	ValidateUTF8Query(query);
+	string normalized;
+	if (StripUnicodeSpaces(query, normalized)) {
+		return normalized;
 	}
+	return query;
+}
+
+void Parser::ParseQuery(const string &query_p) {
+	const string query = NormalizeSQLString(query_p);
 	if (options.extensions) {
 		bool has_strict_extension_error = false;
 		ErrorData last_strict_extension_error;

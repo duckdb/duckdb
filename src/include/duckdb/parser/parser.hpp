@@ -98,9 +98,9 @@ public:
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
-	//! Throw a ParserException if `query` contains invalid UTF-8. Called up front by ParseQuery
-	//! and by ParseIterator so the tokenizer never has to read past bad bytes.
-	static void ValidateUTF8Query(const string &query);
+	//! Normalize a query string before parsing: validate UTF-8 (throws on invalid), then strip
+	//! non-ASCII Unicode spaces
+	static string NormalizeSQLString(const string &query);
 
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 

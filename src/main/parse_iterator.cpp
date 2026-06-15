@@ -13,15 +13,7 @@
 
 namespace duckdb {
 
-ParseIterator::ParseIterator(string sql_p) : sql(std::move(sql_p)) {
-	// Mirror Parser::ParseQuery's up-front normalization: reject invalid UTF-8 (otherwise the
-	// tokenizer can recurse on bad bytes — see ossfuzz clusterfuzz-test-24) and strip non-ASCII
-	// Unicode spaces.
-	Parser::ValidateUTF8Query(sql);
-	string normalized;
-	if (Parser::StripUnicodeSpaces(sql, normalized)) {
-		sql = std::move(normalized);
-	}
+ParseIterator::ParseIterator(const string &sql_p) : sql(Parser::NormalizeSQLString(sql_p)) {
 }
 
 ParseIterator::~ParseIterator() = default;

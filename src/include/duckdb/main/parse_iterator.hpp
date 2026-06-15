@@ -32,7 +32,7 @@ struct MatcherToken;
 class ParseIterator {
 public:
 	//! Peel parse-facing statements out of a SQL string (PEG / parser_override).
-	DUCKDB_API explicit ParseIterator(string sql);
+	DUCKDB_API explicit ParseIterator(const string &sql);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;
