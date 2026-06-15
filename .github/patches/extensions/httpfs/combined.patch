@@ -1,5 +1,5 @@
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 1a9c466..973a3a5 100644
+index 1a9c466..09cf021 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
 @@ -365,6 +365,19 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
@@ -11,9 +11,9 @@ index 1a9c466..973a3a5 100644
 +	if (response && (response->Success() || response->status == HTTPStatusCode::PartialContent_206 ||
 +	                 response->status == HTTPStatusCode::Accepted_202)) {
 +		double total_seconds = 0;
-+		if (get_request.request_end.value > get_request.request_start.value) {
++		if (get_request.request_monotonic_end.value > get_request.request_monotonic_start.value) {
 +			total_seconds =
-+			    static_cast<double>(get_request.request_end.value - get_request.request_start.value) / 1e6;
++			    static_cast<double>(get_request.request_monotonic_end.value - get_request.request_monotonic_start.value) / 1e6;
 +		}
 +		const idx_t bytes = get_request.bytes_received != 0 ? get_request.bytes_received : buffer_out_len;
 +		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_time_to_fst_byte,
@@ -122,7 +122,7 @@ index efdc87d..3852958 100644
  		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index f4e01f7..9e197d1 100644
+index f4e01f7..87339fa 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
 @@ -54,18 +54,32 @@ public:
@@ -131,7 +131,7 @@ index f4e01f7..9e197d1 100644
  		} else {
 -			return TransformResult(client->Get(
 +			// The httplib client streams per chunk, so the first chunk gives us TTFB, used by the prefetch cost model as the latency estimate.
-+			const auto request_start = Timestamp::GetCurrentTimestamp();
++			const auto request_monotonic_start = Timestamp::GetMonotonicTimestamp();
 +			idx_t total_bytes = 0;
 +			bool first_chunk = true;
 +			auto result = TransformResult(client->Get(
@@ -146,7 +146,7 @@ index f4e01f7..9e197d1 100644
 +					    info.have_time_to_fst_byte = true;
 +			            // We calculate the time to first byte as the time from when the request was issues to the chunk arrived.
 +					    info.time_to_fst_byte_sec =
-+					        static_cast<double>(Timestamp::GetCurrentTimestamp().value - request_start.value) / 1e6;
++					        static_cast<double>(Timestamp::GetMonotonicTimestamp().value - request_monotonic_start.value) / 1e6;
 +				    }
 +				    total_bytes += data_length;
  				    if (state) {
