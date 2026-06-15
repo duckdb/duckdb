@@ -2,27 +2,100 @@
 
 from __future__ import annotations
 
+import argparse
 import lldb
+import shlex
 
-COMMAND_NAME = "current_statement"
-NEXT_COMMAND_NAME = "next_statement"
+
+SQL_CURRENT_STATEMENT_COMMAND = "sql_current_statement"
+SQL_NEXT_STATEMENT_COMMAND = "sql_next_statement"
+SQL_NEXT_MATCHING_STATEMENT_COMMAND = "sql_next_matching_statement"
+SQL_WATCH_STATEMENT_COMMAND = "sql_watch_statement"
+SQL_LIST_WATCHES_COMMAND = "sql_list_watches"
+SQL_DELETE_WATCH_COMMAND = "sql_delete_watch"
+
 _NEXT_STATE = None
+_WATCHES = {}
 
 
 def __lldb_init_module(debugger, _internal_dict):
-    debugger.HandleCommand(
-        "command script add --overwrite -h \"Show the active DuckDB sqllogictest location and SQL\" "
-        "-f duckdb_sqllogictest.current_statement {}".format(COMMAND_NAME)
+    _register_command(
+        debugger,
+        SQL_CURRENT_STATEMENT_COMMAND,
+        "Show the active DuckDB sqllogictest location and SQL",
+        "duckdb_sqllogictest.sql_current_statement",
     )
-    debugger.HandleCommand(
-        "command script add --overwrite -h \"Continue until the next sqllogictest statement\" "
-        "-f duckdb_sqllogictest.next_statement {}".format(NEXT_COMMAND_NAME)
+    _register_command(
+        debugger,
+        SQL_NEXT_STATEMENT_COMMAND,
+        "Continue until the next sqllogictest statement",
+        "duckdb_sqllogictest.sql_next_statement",
+    )
+    _register_command(
+        debugger,
+        SQL_NEXT_MATCHING_STATEMENT_COMMAND,
+        "Continue until the next matching sqllogictest statement",
+        "duckdb_sqllogictest.sql_next_matching_statement",
+    )
+    _register_command(
+        debugger,
+        SQL_WATCH_STATEMENT_COMMAND,
+        "Install a persistent sqllogictest-aware watch rule",
+        "duckdb_sqllogictest.sql_watch_statement",
+    )
+    _register_command(
+        debugger,
+        SQL_LIST_WATCHES_COMMAND,
+        "List installed sqllogictest-aware watch rules",
+        "duckdb_sqllogictest.sql_list_watches",
+    )
+    _register_command(
+        debugger,
+        SQL_DELETE_WATCH_COMMAND,
+        "Delete one installed sqllogictest-aware watch rule",
+        "duckdb_sqllogictest.sql_delete_watch",
     )
 
 
-def current_statement(debugger, command, result, _internal_dict):
+def sql_current_statement(debugger, command, result, _internal_dict):
     if command.strip():
-        result.SetError("usage: {}".format(COMMAND_NAME))
+        result.SetError("usage: {}".format(SQL_CURRENT_STATEMENT_COMMAND))
+        return
+
+    context, error = _get_current_statement_context(debugger.GetSelectedTarget())
+    if error:
+        result.SetError(error)
+        return
+
+    result.AppendMessage(_format_statement_context(context))
+
+
+def sql_next_statement(debugger, command, result, _internal_dict):
+    if command.strip():
+        result.SetError("usage: {}".format(SQL_NEXT_STATEMENT_COMMAND))
+        return
+
+    matcher = _default_matcher()
+    error = _start_next_statement_search(debugger, matcher)
+    if error:
+        result.SetError(error)
+
+
+def sql_next_matching_statement(debugger, command, result, _internal_dict):
+    matcher, error = _parse_matcher_command(SQL_NEXT_MATCHING_STATEMENT_COMMAND, command)
+    if error:
+        result.SetError(error)
+        return
+
+    error = _start_next_statement_search(debugger, matcher)
+    if error:
+        result.SetError(error)
+
+
+def sql_watch_statement(debugger, command, result, _internal_dict):
+    matcher, error = _parse_matcher_command(SQL_WATCH_STATEMENT_COMMAND, command)
+    if error:
+        result.SetError(error)
         return
 
     target = debugger.GetSelectedTarget()
@@ -36,32 +109,156 @@ def current_statement(debugger, command, result, _internal_dict):
         result.SetError("thread 1 not found")
         return
 
-    match = _find_sqllogictest_frame(thread)
-    if match is None:
-        result.SetError("no sqllogictest frame found on thread 1")
+    watch_breakpoint = target.BreakpointCreateByName("query_break")
+    if not watch_breakpoint.IsValid() or watch_breakpoint.GetNumLocations() == 0:
+        if watch_breakpoint.IsValid():
+            target.BreakpointDelete(watch_breakpoint.GetID())
+        result.SetError("could not set a breakpoint on query_break")
         return
 
-    result.AppendMessage(_format_current_statement(match))
+    watch_breakpoint.SetThreadID(thread.GetThreadID())
+    watch_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._watch_statement_callback")
+
+    breakpoint_id = watch_breakpoint.GetID()
+    _WATCHES[breakpoint_id] = {
+        "matcher": matcher,
+        "description": _describe_matcher(matcher),
+    }
+
+    result.AppendMessage(
+        "Installed watch {} on query_break ({})".format(breakpoint_id, _WATCHES[breakpoint_id]["description"])
+    )
 
 
-def next_statement(debugger, command, result, _internal_dict):
+def sql_list_watches(debugger, command, result, _internal_dict):
     if command.strip():
-        result.SetError("usage: {}".format(NEXT_COMMAND_NAME))
+        result.SetError("usage: {}".format(SQL_LIST_WATCHES_COMMAND))
         return
 
     target = debugger.GetSelectedTarget()
+    _cleanup_dead_watches(target)
+
+    if not _WATCHES:
+        result.AppendMessage("No sql watches installed.")
+        return
+
+    lines = []
+    for breakpoint_id in sorted(_WATCHES):
+        breakpoint = target.FindBreakpointByID(breakpoint_id)
+        status = "enabled"
+        if breakpoint.IsValid() and not breakpoint.IsEnabled():
+            status = "disabled"
+        lines.append("{}: {} [{}]".format(breakpoint_id, _WATCHES[breakpoint_id]["description"], status))
+    result.AppendMessage("\n".join(lines))
+
+
+def sql_delete_watch(debugger, command, result, _internal_dict):
+    parser = argparse.ArgumentParser(prog=SQL_DELETE_WATCH_COMMAND, add_help=False)
+    parser.add_argument("watch_id", type=int)
+
+    try:
+        args = parser.parse_args(shlex.split(command))
+    except SystemExit:
+        result.SetError("usage: {} <id>".format(SQL_DELETE_WATCH_COMMAND))
+        return
+
+    target = debugger.GetSelectedTarget()
+    breakpoint_id = args.watch_id
+    if breakpoint_id not in _WATCHES:
+        result.SetError("watch {} not found".format(breakpoint_id))
+        return
+
+    target.BreakpointDelete(breakpoint_id)
+    del _WATCHES[breakpoint_id]
+    result.AppendMessage("Deleted watch {}".format(breakpoint_id))
+
+
+def _register_command(debugger, name, help_text, callback):
+    debugger.HandleCommand('command script add --overwrite -h "{}" -f {} {}'.format(help_text, callback, name))
+
+
+def _default_matcher():
+    return {
+        "file": None,
+        "line": None,
+        "line_min": None,
+        "line_max": None,
+        "kind": None,
+        "loops": [],
+    }
+
+
+def _parse_matcher_command(prog, command):
+    parser = argparse.ArgumentParser(prog=prog, add_help=False)
+    parser.add_argument("--file")
+    parser.add_argument("--line", type=int)
+    parser.add_argument("--line-min", type=int)
+    parser.add_argument("--line-max", type=int)
+    parser.add_argument("--kind", choices=("query", "statement"))
+    parser.add_argument("--loop", action="append", default=[])
+
+    try:
+        args = parser.parse_args(shlex.split(command))
+    except SystemExit:
+        return None, _matcher_usage(prog)
+
+    matcher = _default_matcher()
+    matcher["file"] = args.file
+    matcher["line"] = args.line
+    matcher["line_min"] = args.line_min
+    matcher["line_max"] = args.line_max
+    matcher["kind"] = args.kind
+
+    if matcher["line"] is not None:
+        if matcher["line_min"] is not None or matcher["line_max"] is not None:
+            return None, "--line cannot be combined with --line-min/--line-max"
+    if matcher["line_min"] is not None and matcher["line_max"] is not None:
+        if matcher["line_min"] > matcher["line_max"]:
+            return None, "--line-min cannot be greater than --line-max"
+
+    loops = []
+    for loop_filter in args.loop:
+        loop_name, loop_value, error = _parse_loop_filter(loop_filter)
+        if error:
+            return None, error
+        loops.append({"name": loop_name, "value": loop_value})
+    matcher["loops"] = loops
+    return matcher, None
+
+
+def _matcher_usage(prog):
+    return (
+        "usage: {} [--file <substring>] [--line <n>] [--line-min <n>] "
+        "[--line-max <n>] [--kind query|statement] [--loop <name>[=<value>]]".format(prog)
+    )
+
+
+def _parse_loop_filter(loop_filter):
+    if not loop_filter:
+        return None, None, "loop filter cannot be empty"
+
+    if "=" in loop_filter:
+        loop_name, loop_value = loop_filter.split("=", 1)
+        if not loop_name:
+            return None, None, "loop filter must use <name>=<value>"
+        if not loop_value:
+            return None, None, "loop filter value cannot be empty"
+        return loop_name, loop_value, None
+
+    return loop_filter, None, None
+
+
+def _start_next_statement_search(debugger, matcher):
+    target = debugger.GetSelectedTarget()
     process = target.GetProcess()
     if not process.IsValid():
-        result.SetError("no selected process")
-        return
+        return "no selected process"
     if process.GetState() != lldb.eStateStopped:
-        result.SetError("process must be stopped")
-        return
+        return "process must be stopped"
 
     thread = process.GetThreadAtIndex(0)
     if not thread.IsValid():
-        result.SetError("thread 1 not found")
-        return
+        return "thread 1 not found"
 
     _restore_next_state(target)
 
@@ -69,12 +266,10 @@ def next_statement(debugger, command, result, _internal_dict):
     if not helper_breakpoint.IsValid() or helper_breakpoint.GetNumLocations() == 0:
         if helper_breakpoint.IsValid():
             target.BreakpointDelete(helper_breakpoint.GetID())
-        result.SetError("could not set a breakpoint on query_break")
-        return
+        return "could not set a breakpoint on query_break"
 
-    helper_breakpoint.SetOneShot(True)
     helper_breakpoint.SetThreadID(thread.GetThreadID())
-    helper_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._next_statement_callback")
+    helper_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._next_matching_statement_callback")
 
     saved_auto_continue = {}
     for breakpoint in _iter_breakpoints(target):
@@ -88,17 +283,35 @@ def next_statement(debugger, command, result, _internal_dict):
     _NEXT_STATE = {
         "helper_breakpoint_id": helper_breakpoint.GetID(),
         "saved_auto_continue": saved_auto_continue,
+        "matcher": matcher,
     }
 
     command_interpreter = debugger.GetCommandInterpreter()
     command_result = lldb.SBCommandReturnObject()
     command_interpreter.HandleCommand("process continue", command_result)
-    if not command_result.Succeeded():
-        _restore_next_state(target)
-        result.SetError(command_result.GetError() or "process continue failed")
+    if command_result.Succeeded():
+        return None
+
+    _restore_next_state(target)
+    return command_result.GetError() or "process continue failed"
 
 
-def _find_sqllogictest_frame(thread):
+def _get_current_statement_context(target):
+    process = target.GetProcess()
+    if not process.IsValid():
+        return None, "no selected process"
+
+    thread = process.GetThreadAtIndex(0)
+    if not thread.IsValid():
+        return None, "thread 1 not found"
+
+    context = _find_sqllogictest_context(thread)
+    if context is None:
+        return None, "no sqllogictest frame found on thread 1"
+    return context, None
+
+
+def _find_sqllogictest_context(thread):
     best_match = None
     for frame in thread:
         function_name = frame.GetFunctionName() or ""
@@ -106,39 +319,70 @@ def _find_sqllogictest_frame(thread):
         if frame_kind is None:
             continue
 
-        match = {
+        context = {
             "frame": frame,
             "priority": frame_kind["priority"],
+            "kind": frame_kind["kind"],
             "file_name": None,
             "query_line": None,
             "sql_text": None,
+            "running_loops": [],
+            "loop_values": {},
         }
 
         if frame_kind["style"] == "execute_internal":
-            match["file_name"] = _read_cpp_string(frame, "this->file_name")
-            match["query_line"] = _read_int(frame, "this->query_line")
-            match["sql_text"] = _read_cpp_string(frame, "context.sql_query")
-            if not match["sql_text"]:
-                match["sql_text"] = _read_cpp_string(frame, "this->base_sql_query")
+            context["file_name"] = _read_cpp_string(frame, "this->file_name")
+            context["query_line"] = _read_int(frame, "this->query_line")
+            context["sql_text"] = _read_cpp_string(frame, "context.sql_query")
+            if not context["sql_text"]:
+                context["sql_text"] = _read_cpp_string(frame, "this->base_sql_query")
+            context["running_loops"] = _read_running_loops(frame, "context.running_loops")
         else:
-            match["file_name"] = _read_cpp_string(frame, "file_name")
-            match["query_line"] = _read_int(frame, "query_line")
-            match["sql_text"] = _read_cpp_string(frame, "context.sql_query")
+            context["file_name"] = _read_cpp_string(frame, "file_name")
+            context["query_line"] = _read_int(frame, "query_line")
+            context["sql_text"] = _read_cpp_string(frame, "context.sql_query")
+            context["running_loops"] = _read_running_loops(frame, "context.running_loops")
 
-        if best_match is None or match["priority"] < best_match["priority"]:
-            best_match = match
+        context["loop_values"] = {loop["name"]: loop["value"] for loop in context["running_loops"]}
+
+        if best_match is None or context["priority"] < best_match["priority"]:
+            best_match = context
 
     return best_match
 
 
 def _classify_frame(function_name):
     if "duckdb::Query::ExecuteInternal" in function_name:
-        return {"priority": 0, "style": "execute_internal"}
+        return {"priority": 0, "kind": "query", "style": "execute_internal"}
     if "duckdb::Statement::ExecuteInternal" in function_name:
-        return {"priority": 0, "style": "execute_internal"}
+        return {"priority": 0, "kind": "statement", "style": "execute_internal"}
     if "duckdb::Command::ExecuteQuery" in function_name:
-        return {"priority": 1, "style": "execute_query"}
+        return {"priority": 1, "kind": None, "style": "execute_query"}
     return None
+
+
+def _read_running_loops(frame, expression):
+    loop_count = _read_int(frame, "{}.size()".format(expression))
+    if loop_count is None or loop_count <= 0:
+        return []
+
+    loops = []
+    for index in range(loop_count):
+        loop_expr = "{}[{}]".format(expression, index)
+        loop_name = _read_cpp_string(frame, "{}.loop_iterator_name".format(loop_expr))
+        loop_idx = _read_int(frame, "{}.loop_idx".format(loop_expr))
+        token_count = _read_int(frame, "{}.tokens.size()".format(loop_expr))
+
+        if loop_name is None or loop_idx is None:
+            continue
+
+        if token_count is not None and token_count > 0:
+            loop_value = _read_cpp_string(frame, "{}.tokens[{}]".format(loop_expr, loop_idx))
+        else:
+            loop_value = str(loop_idx)
+
+        loops.append({"name": loop_name, "value": loop_value})
+    return loops
 
 
 def _read_cpp_string(frame, expression):
@@ -169,6 +413,81 @@ def _strip_quotes(text):
     return text
 
 
+def _format_statement_context(context):
+    lines = []
+    file_name = context["file_name"] or "<unknown file>"
+    query_line = context["query_line"]
+    kind = context["kind"]
+
+    first_line = file_name
+    if query_line is not None:
+        first_line = "{}:{}".format(file_name, query_line)
+    if kind:
+        first_line = "{} [{}]".format(first_line, kind)
+    lines.append(first_line)
+
+    if context["running_loops"]:
+        loop_text = ", ".join("{}={}".format(loop["name"], loop["value"]) for loop in context["running_loops"])
+        lines.append("loops: {}".format(loop_text))
+
+    sql_text = context["sql_text"]
+    if sql_text:
+        lines.append(sql_text)
+    return "\n".join(lines)
+
+
+def _matches_context(context, matcher):
+    if matcher["file"] is not None:
+        if context["file_name"] is None or matcher["file"] not in context["file_name"]:
+            return False
+
+    query_line = context["query_line"]
+    if matcher["line"] is not None and query_line != matcher["line"]:
+        return False
+    if matcher["line_min"] is not None:
+        if query_line is None or query_line < matcher["line_min"]:
+            return False
+    if matcher["line_max"] is not None:
+        if query_line is None or query_line > matcher["line_max"]:
+            return False
+
+    if matcher["kind"] is not None and context["kind"] != matcher["kind"]:
+        return False
+
+    for loop_filter in matcher["loops"]:
+        loop_name = loop_filter["name"]
+        if loop_name not in context["loop_values"]:
+            return False
+        loop_value = loop_filter["value"]
+        if loop_value is not None and context["loop_values"][loop_name] != loop_value:
+            return False
+
+    return True
+
+
+def _describe_matcher(matcher):
+    parts = []
+    if matcher["file"] is not None:
+        parts.append("file contains {!r}".format(matcher["file"]))
+    if matcher["line"] is not None:
+        parts.append("line={}".format(matcher["line"]))
+    else:
+        if matcher["line_min"] is not None:
+            parts.append("line>={}".format(matcher["line_min"]))
+        if matcher["line_max"] is not None:
+            parts.append("line<={}".format(matcher["line_max"]))
+    if matcher["kind"] is not None:
+        parts.append("kind={}".format(matcher["kind"]))
+    for loop_filter in matcher["loops"]:
+        if loop_filter["value"] is None:
+            parts.append("loop {}".format(loop_filter["name"]))
+        else:
+            parts.append("loop {}={}".format(loop_filter["name"], loop_filter["value"]))
+    if not parts:
+        return "match any sqllogictest statement"
+    return ", ".join(parts)
+
+
 def _iter_breakpoints(target):
     for index in range(target.GetNumBreakpoints()):
         yield target.GetBreakpointAtIndex(index)
@@ -192,29 +511,54 @@ def _restore_next_state(target):
     _NEXT_STATE = None
 
 
-def _next_statement_callback(frame, _breakpoint_location, _internal_dict):
+def _cleanup_dead_watches(target):
+    dead_breakpoints = []
+    for breakpoint_id in _WATCHES:
+        breakpoint = target.FindBreakpointByID(breakpoint_id)
+        if not breakpoint.IsValid():
+            dead_breakpoints.append(breakpoint_id)
+
+    for breakpoint_id in dead_breakpoints:
+        del _WATCHES[breakpoint_id]
+
+
+def _next_matching_statement_callback(frame, breakpoint_location, _internal_dict):
+    breakpoint_id = breakpoint_location.GetBreakpoint().GetID()
     target = frame.GetThread().GetProcess().GetTarget()
+
+    if not _NEXT_STATE or _NEXT_STATE["helper_breakpoint_id"] != breakpoint_id:
+        return False
+
+    context = _find_sqllogictest_context(frame.GetThread().GetProcess().GetThreadAtIndex(0))
+    if context is None:
+        _restore_next_state(target)
+        print("sql_next_matching_statement: failed to extract sqllogictest context")
+        return True
+
+    if not _matches_context(context, _NEXT_STATE["matcher"]):
+        return False
+
     _restore_next_state(target)
-
-    thread = frame.GetThread().GetProcess().GetThreadAtIndex(0)
-    if thread.IsValid():
-        match = _find_sqllogictest_frame(thread)
-        if match is not None:
-            print(_format_current_statement(match))
-
+    print(_format_statement_context(context))
     return True
 
 
-def _format_current_statement(match):
-    lines = []
-    file_name = match["file_name"] or "<unknown file>"
-    query_line = match["query_line"]
-    if query_line is not None:
-        lines.append("{}:{}".format(file_name, query_line))
-    else:
-        lines.append(file_name)
+def _watch_statement_callback(frame, breakpoint_location, _internal_dict):
+    if _NEXT_STATE:
+        return False
 
-    sql_text = match["sql_text"]
-    if sql_text:
-        lines.append(sql_text)
-    return "\n".join(lines)
+    breakpoint_id = breakpoint_location.GetBreakpoint().GetID()
+    watch = _WATCHES.get(breakpoint_id)
+    if watch is None:
+        return True
+
+    context = _find_sqllogictest_context(frame.GetThread().GetProcess().GetThreadAtIndex(0))
+    if context is None:
+        print("sql_watch_statement: failed to extract sqllogictest context")
+        return True
+
+    if not _matches_context(context, watch["matcher"]):
+        return False
+
+    print(_format_statement_context(context))
+    return True

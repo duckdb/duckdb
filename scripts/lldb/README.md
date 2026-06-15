@@ -4,11 +4,10 @@ This directory contains small LLDB helpers for DuckDB development.
 
 ## `duckdb_sqllogictest.py`
 
-Adds a `current_statement` command, to get the active sqllogictest location and query.
+Adds `sql_`-prefixed LLDB commands for sqllogictest-aware debugging.
 
-It assumes the active sqllogictest is running on thread 1.
-
-Adds a `next_statement` command, to continue until the next sqllogictest statement.
+It assumes the active sqllogictest is running on thread 1 and uses
+`query_break` as the hook before each sqllogictest statement/query.
 
 ### One-off usage
 
@@ -16,8 +15,12 @@ Adds a `next_statement` command, to continue until the next sqllogictest stateme
 command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.py
 b <some breakpoint>
 r
-current_statement
-next_statement
+sql_current_statement
+sql_next_statement
+sql_next_matching_statement --kind query
+sql_watch_statement --file test/sql/join --loop i=3
+sql_list_watches
+sql_delete_watch 5
 ```
 
 ### Suggested `~/.lldbinit`
@@ -26,12 +29,29 @@ next_statement
 command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.py
 ```
 
-`current_statement` prints:
+### Commands
 
-- the sqllogictest file and line number
-- the SQL text currently being executed
+- `sql_current_statement`
+  - prints the sqllogictest file, line, kind, SQL, and active loop values
+- `sql_next_statement`
+  - continues until the next sqllogictest statement/query
+- `sql_next_matching_statement`
+  - continues until the next sqllogictest statement/query matching the supplied filters
+- `sql_watch_statement`
+  - installs a persistent sqllogictest-aware watch rule
+- `sql_list_watches`
+  - lists installed watch rules
+- `sql_delete_watch <id>`
+  - removes one installed watch rule
 
-`next_statement`:
+### Filters
 
-- continues execution until the next sqllogictest statement on thread 1
-- auto-continues ordinary breakpoints until then
+`sql_next_matching_statement` and `sql_watch_statement` support:
+
+- `--file <substring>`
+- `--line <n>`
+- `--line-min <n>`
+- `--line-max <n>`
+- `--kind query|statement`
+- `--loop <name>`
+- `--loop <name>=<value>`
