@@ -339,7 +339,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	DeserializeState(layout, input.data[0], count, local_state.state_buffer.get(), local_state.allocator);
 
-	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
+	AggregateFinalizeInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, count, 0);
 
 	auto validity = input.data[0].Validity();
@@ -561,7 +561,7 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 	return std::move(bind_data);
 }
 
-void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	const data_ptr_t *addresses_ptrs;
@@ -643,7 +643,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
 }
 
-void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                          idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
