@@ -305,6 +305,7 @@ WindowExpression:
     - WindowFrameDefinition
     - WindowFrameContentsParens
     - WindowFrameNameContentsParens
+    - WindowFrameNameContents
     - WindowFrameContents
 
 SetScope:
@@ -395,6 +396,8 @@ Expression:
     - StructExpression
     - FunctionExpression
     - FilterClause
+    - FilterClauseExpression
+    - FilterClauseContents
     - ParenthesisExpression
     - Indirection
     - CastOperator
@@ -794,9 +797,20 @@ JoinQualifier:
 
 WindowFrame:
   type: "WindowFrame"
-  by_value: false
+  by_value: true
   rules:
     - FrameClause
+
+WindowExcludeMode:
+  type: "WindowExcludeMode"
+  by_value: false
+  rules:
+    - WindowExcludeClause
+    - WindowExcludeElement
+    - ExcludeCurrentRow
+    - ExcludeGroup
+    - ExcludeTies
+    - ExcludeNoOthers
 
 WindowBoundaryExpression:
   type: "WindowBoundaryExpression"
@@ -1639,15 +1653,6 @@ excluded_rules:
   - SingleArrowPair
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
-  - FilterClause
-  - OverClause
-  - WindowFrame
-  - ParensIdentifier
-  - WindowFrameDefinition
-  - WindowFrameContentsParens
-  - WindowFrameContents
-  - BaseWindowName
-  - WindowPartition
   - SingleExpression
   - Expression
   - LambdaArrowExpression

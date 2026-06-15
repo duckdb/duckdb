@@ -467,28 +467,10 @@ private:
 	static string TransformPrefixOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformFilterClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformStarExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrameDefinition(PEGTransformer &transformer,
-	                                                                   ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrameContentsParens(PEGTransformer &transformer,
-	                                                                       ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
-	                                                                           ParseResult &parse_result);
-	static string TransformBaseWindowName(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrameContents(PEGTransformer &transformer,
-	                                                                 ParseResult &parse_result);
 
 	static WindowFrame TransformFrameClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// pivot.gram
@@ -1951,6 +1933,19 @@ private:
 	                                                                           ParseResult &parse_result);
 	static vector<OrderByNode> TransformWithinGroupClause(PEGTransformer &transformer,
 	                                                      vector<OrderByNode> order_by_clause);
+	static unique_ptr<TransformResultValue> TransformFilterClauseInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFilterClause(PEGTransformer &transformer,
+	                                                          unique_ptr<ParsedExpression> filter_clause_expression);
+	static unique_ptr<TransformResultValue> TransformFilterClauseExpressionInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformFilterClauseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> filter_clause_contents);
+	static unique_ptr<TransformResultValue> TransformFilterClauseContentsInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFilterClauseContents(PEGTransformer &transformer,
+	                                                                  const bool &has_result,
+	                                                                  unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformIgnoreOrRespectNullsInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformIgnoreNullsInternal(PEGTransformer &transformer,
@@ -2101,6 +2096,11 @@ private:
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalStringParameter(PEGTransformer &transformer,
 	                                                                     const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformFrameClauseInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static WindowFrame TransformFrameClause(PEGTransformer &transformer, const string &framing,
+	                                        vector<WindowBoundaryExpression> frame_extent,
+	                                        const optional<WindowExcludeMode> &window_exclude_clause);
 	static unique_ptr<TransformResultValue> TransformFramingInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRowsFramingInternal(PEGTransformer &transformer,
@@ -2145,6 +2145,64 @@ private:
 	static unique_ptr<TransformResultValue> TransformFollowingFrameInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static bool TransformFollowingFrame(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformWindowExcludeClauseInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer,
+	                                                      const WindowExcludeMode &window_exclude_element);
+	static unique_ptr<TransformResultValue> TransformWindowExcludeElementInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExcludeCurrentRowInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static WindowExcludeMode TransformExcludeCurrentRow(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExcludeGroupInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static WindowExcludeMode TransformExcludeGroup(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExcludeTiesInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static WindowExcludeMode TransformExcludeTies(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExcludeNoOthersInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static WindowExcludeMode TransformExcludeNoOthers(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOverClauseInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer,
+	                                                        unique_ptr<WindowExpression> window_frame);
+	static unique_ptr<TransformResultValue> TransformWindowFrameInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformParensIdentifierInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
+	                                                              const Identifier &identifier);
+	static unique_ptr<TransformResultValue> TransformWindowFrameDefinitionInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformWindowFrameNameContentsParensInternal(PEGTransformer &transformer,
+	                                                                                       ParseResult &parse_result);
+	static unique_ptr<WindowExpression>
+	TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
+	                                       unique_ptr<WindowExpression> window_frame_name_contents);
+	static unique_ptr<TransformResultValue> TransformWindowFrameNameContentsInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static unique_ptr<WindowExpression>
+	TransformWindowFrameNameContents(PEGTransformer &transformer, const optional<Identifier> &base_window_name,
+	                                 unique_ptr<WindowExpression> window_frame_contents);
+	static unique_ptr<TransformResultValue> TransformWindowFrameContentsParensInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<WindowExpression>
+	TransformWindowFrameContentsParens(PEGTransformer &transformer, unique_ptr<WindowExpression> window_frame_contents);
+	static unique_ptr<TransformResultValue> TransformWindowFrameContentsInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<WindowExpression>
+	TransformWindowFrameContents(PEGTransformer &transformer,
+	                             optional<vector<unique_ptr<ParsedExpression>>> window_partition,
+	                             optional<vector<OrderByNode>> order_by_clause, optional<WindowFrame> frame_clause);
+	static unique_ptr<TransformResultValue> TransformBaseWindowNameInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static Identifier TransformBaseWindowName(PEGTransformer &transformer, const Identifier &identifier);
+	static unique_ptr<TransformResultValue> TransformWindowPartitionInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformWindowPartition(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<TransformResultValue> TransformListExpressionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformArrayBoundedListExpressionInternal(PEGTransformer &transformer,

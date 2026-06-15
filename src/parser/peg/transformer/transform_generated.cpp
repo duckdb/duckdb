@@ -4202,6 +4202,34 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWithinGroupClau
 	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFilterClauseInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto filter_clause_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformFilterClause(transformer, std::move(filter_clause_expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFilterClauseExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto filter_clause_contents =
+	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformFilterClauseExpression(transformer, std::move(filter_clause_contents));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFilterClauseContentsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformFilterClauseContents(transformer, has_result, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformIgnoreOrRespectNullsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4579,6 +4607,22 @@ PEGTransformerFactory::TransformIntervalStringParameterInternal(PEGTransformer &
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFrameClauseInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto framing = transformer.Transform<string>(list_pr.GetChild(0));
+	auto frame_extent = transformer.Transform<vector<WindowBoundaryExpression>>(list_pr.GetChild(1));
+	optional<WindowExcludeMode> window_exclude_clause {};
+	auto &window_exclude_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (window_exclude_clause_opt.HasResult()) {
+		auto window_exclude_clause_value =
+		    transformer.Transform<WindowExcludeMode>(window_exclude_clause_opt.GetResult());
+		window_exclude_clause = window_exclude_clause_value;
+	}
+	auto result = TransformFrameClause(transformer, framing, std::move(frame_extent), window_exclude_clause);
+	return make_uniq<TypedTransformResult<WindowFrame>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFramingInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4679,6 +4723,161 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFollowingFrameI
                                                                                         ParseResult &parse_result) {
 	auto result = TransformFollowingFrame(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowExcludeClauseInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto window_exclude_element = transformer.Transform<WindowExcludeMode>(list_pr.GetChild(1));
+	auto result = TransformWindowExcludeClause(transformer, window_exclude_element);
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowExcludeElementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<WindowExcludeMode>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeCurrentRowInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto result = TransformExcludeCurrentRow(transformer);
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeGroupInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformExcludeGroup(transformer);
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeTiesInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformExcludeTies(transformer);
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNoOthersInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformExcludeNoOthers(transformer);
+	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOverClauseInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto window_frame = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.GetChild(1));
+	auto result = TransformOverClause(transformer, std::move(window_frame));
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWindowFrameInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = TransformWindowFrame(transformer, choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformParensIdentifierInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = ExtractResultFromParens(list_pr.GetChild(0)).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformParensIdentifier(transformer, identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowFrameDefinitionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowFrameNameContentsParensInternal(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto window_frame_name_contents =
+	    transformer.Transform<unique_ptr<WindowExpression>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformWindowFrameNameContentsParens(transformer, std::move(window_frame_name_contents));
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowFrameNameContentsInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<Identifier> base_window_name {};
+	auto &base_window_name_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (base_window_name_opt.HasResult()) {
+		auto base_window_name_value = transformer.Transform<Identifier>(base_window_name_opt.GetResult());
+		base_window_name = base_window_name_value;
+	}
+	auto window_frame_contents = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.GetChild(1));
+	auto result = TransformWindowFrameNameContents(transformer, base_window_name, std::move(window_frame_contents));
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowFrameContentsParensInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto window_frame_contents =
+	    transformer.Transform<unique_ptr<WindowExpression>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = TransformWindowFrameContentsParens(transformer, std::move(window_frame_contents));
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformWindowFrameContentsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<vector<unique_ptr<ParsedExpression>>> window_partition {};
+	auto &window_partition_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (window_partition_opt.HasResult()) {
+		auto window_partition_value =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(window_partition_opt.GetResult());
+		window_partition = std::move(window_partition_value);
+	}
+	optional<vector<OrderByNode>> order_by_clause {};
+	auto &order_by_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (order_by_clause_opt.HasResult()) {
+		auto order_by_clause_value = transformer.Transform<vector<OrderByNode>>(order_by_clause_opt.GetResult());
+		order_by_clause = std::move(order_by_clause_value);
+	}
+	optional<WindowFrame> frame_clause {};
+	auto &frame_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (frame_clause_opt.HasResult()) {
+		auto frame_clause_value = transformer.Transform<WindowFrame>(frame_clause_opt.GetResult());
+		frame_clause = std::move(frame_clause_value);
+	}
+	auto result = TransformWindowFrameContents(transformer, std::move(window_partition), std::move(order_by_clause),
+	                                           std::move(frame_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBaseWindowNameInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformBaseWindowName(transformer, identifier);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWindowPartitionInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expression;
+	auto expression_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	for (auto &expression_item : expression_items) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_item.get());
+		expression.push_back(std::move(expression_value));
+	}
+	auto result = TransformWindowPartition(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformListExpressionInternal(PEGTransformer &transformer,
@@ -8971,6 +9170,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DistinctKeyword", &PEGTransformerFactory::TransformDistinctKeywordInternal},
 	    {"AllKeyword", &PEGTransformerFactory::TransformAllKeywordInternal},
 	    {"WithinGroupClause", &PEGTransformerFactory::TransformWithinGroupClauseInternal},
+	    {"FilterClause", &PEGTransformerFactory::TransformFilterClauseInternal},
+	    {"FilterClauseExpression", &PEGTransformerFactory::TransformFilterClauseExpressionInternal},
+	    {"FilterClauseContents", &PEGTransformerFactory::TransformFilterClauseContentsInternal},
 	    {"IgnoreOrRespectNulls", &PEGTransformerFactory::TransformIgnoreOrRespectNullsInternal},
 	    {"IgnoreNulls", &PEGTransformerFactory::TransformIgnoreNullsInternal},
 	    {"RespectNulls", &PEGTransformerFactory::TransformRespectNullsInternal},
@@ -9012,6 +9214,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"IntervalLiteral", &PEGTransformerFactory::TransformIntervalLiteralInternal},
 	    {"IntervalParameter", &PEGTransformerFactory::TransformIntervalParameterInternal},
 	    {"IntervalStringParameter", &PEGTransformerFactory::TransformIntervalStringParameterInternal},
+	    {"FrameClause", &PEGTransformerFactory::TransformFrameClauseInternal},
 	    {"Framing", &PEGTransformerFactory::TransformFramingInternal},
 	    {"RowsFraming", &PEGTransformerFactory::TransformRowsFramingInternal},
 	    {"RangeFraming", &PEGTransformerFactory::TransformRangeFramingInternal},
@@ -9026,6 +9229,22 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PrecedingOrFollowing", &PEGTransformerFactory::TransformPrecedingOrFollowingInternal},
 	    {"PrecedingFrame", &PEGTransformerFactory::TransformPrecedingFrameInternal},
 	    {"FollowingFrame", &PEGTransformerFactory::TransformFollowingFrameInternal},
+	    {"WindowExcludeClause", &PEGTransformerFactory::TransformWindowExcludeClauseInternal},
+	    {"WindowExcludeElement", &PEGTransformerFactory::TransformWindowExcludeElementInternal},
+	    {"ExcludeCurrentRow", &PEGTransformerFactory::TransformExcludeCurrentRowInternal},
+	    {"ExcludeGroup", &PEGTransformerFactory::TransformExcludeGroupInternal},
+	    {"ExcludeTies", &PEGTransformerFactory::TransformExcludeTiesInternal},
+	    {"ExcludeNoOthers", &PEGTransformerFactory::TransformExcludeNoOthersInternal},
+	    {"OverClause", &PEGTransformerFactory::TransformOverClauseInternal},
+	    {"WindowFrame", &PEGTransformerFactory::TransformWindowFrameInternal},
+	    {"ParensIdentifier", &PEGTransformerFactory::TransformParensIdentifierInternal},
+	    {"WindowFrameDefinition", &PEGTransformerFactory::TransformWindowFrameDefinitionInternal},
+	    {"WindowFrameNameContentsParens", &PEGTransformerFactory::TransformWindowFrameNameContentsParensInternal},
+	    {"WindowFrameNameContents", &PEGTransformerFactory::TransformWindowFrameNameContentsInternal},
+	    {"WindowFrameContentsParens", &PEGTransformerFactory::TransformWindowFrameContentsParensInternal},
+	    {"WindowFrameContents", &PEGTransformerFactory::TransformWindowFrameContentsInternal},
+	    {"BaseWindowName", &PEGTransformerFactory::TransformBaseWindowNameInternal},
+	    {"WindowPartition", &PEGTransformerFactory::TransformWindowPartitionInternal},
 	    {"ListExpression", &PEGTransformerFactory::TransformListExpressionInternal},
 	    {"ArrayBoundedListExpression", &PEGTransformerFactory::TransformArrayBoundedListExpressionInternal},
 	    {"ArrayParensSelect", &PEGTransformerFactory::TransformArrayParensSelectInternal},

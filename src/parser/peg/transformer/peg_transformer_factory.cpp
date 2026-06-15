@@ -194,25 +194,9 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformPrefixOperator);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
-	REGISTER_TRANSFORM(TransformFilterClause);
 
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);
-
-	REGISTER_TRANSFORM(TransformOverClause);
-	REGISTER_TRANSFORM(TransformWindowFrame);
-	REGISTER_TRANSFORM(TransformParensIdentifier);
-	REGISTER_TRANSFORM(TransformWindowFrameDefinition);
-	REGISTER_TRANSFORM(TransformWindowFrameContentsParens);
-	REGISTER_TRANSFORM(TransformWindowFrameNameContentsParens);
-	REGISTER_TRANSFORM(TransformBaseWindowName);
-	REGISTER_TRANSFORM(TransformWindowFrameContents);
-
-	REGISTER_TRANSFORM(TransformFrameClause);
-	REGISTER_TRANSFORM(TransformWindowExcludeClause);
-	REGISTER_TRANSFORM(TransformWindowExcludeElement);
-
-	REGISTER_TRANSFORM(TransformWindowPartition);
 
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 }

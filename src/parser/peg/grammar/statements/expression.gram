@@ -13,7 +13,9 @@ DistinctKeyword <- 'DISTINCT'
 AllKeyword <- 'ALL'
 ExportClause <- 'EXPORT_STATE'
 WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
-FilterClause <- 'FILTER' Parens('WHERE'? Expression)
+FilterClause <- 'FILTER' FilterClauseExpression
+FilterClauseExpression <- Parens(FilterClauseContents)
+FilterClauseContents <- 'WHERE'? Expression
 IgnoreOrRespectNulls <- IgnoreNulls / RespectNulls
 IgnoreNulls <- 'IGNORE' 'NULLS'
 RespectNulls <- 'RESPECT' 'NULLS'
@@ -84,7 +86,8 @@ OverClause <- 'OVER' WindowFrame
 WindowFrame <- ParensIdentifier / WindowFrameDefinition / Identifier
 ParensIdentifier <- Parens(Identifier)
 WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens
-WindowFrameNameContentsParens <- Parens(BaseWindowName? WindowFrameContents)
+WindowFrameNameContentsParens <- Parens(WindowFrameNameContents)
+WindowFrameNameContents <- BaseWindowName? WindowFrameContents
 WindowFrameContentsParens <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 BaseWindowName <- Identifier
