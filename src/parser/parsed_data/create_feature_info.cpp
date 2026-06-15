@@ -1,12 +1,14 @@
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1) {
+      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
+      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -21,6 +23,9 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
+	result->has_schedule = has_schedule;
+	result->schedule_interval = schedule_interval;
+	result->schedule_enabled = schedule_enabled;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	result->result_names = result_names;
 	result->result_types = result_types;
@@ -62,6 +67,9 @@ string CreateFeatureInfo::ToString() const {
 	case FeatureRefreshMode::INCREMENTAL:
 		result += "INCREMENTAL";
 		break;
+	}
+	if (has_schedule) {
+		result += " EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";
 	}
 	result += " RETAIN " + duckdb::to_string(retain_versions);
 	result += " AS (" + query->ToString() + ")";

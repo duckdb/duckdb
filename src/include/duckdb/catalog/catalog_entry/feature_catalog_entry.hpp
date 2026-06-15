@@ -43,6 +43,12 @@ public:
 	int64_t current_version;
 	//! Timestamp of last refresh (set at creation, derived from backing table at runtime)
 	timestamp_t last_refresh_timestamp;
+	//! Whether an automatic refresh schedule is attached to this feature
+	bool has_schedule;
+	//! The interval between automatic refreshes (valid when has_schedule is true)
+	interval_t schedule_interval;
+	//! Whether the schedule is currently active; can be toggled without dropping the interval
+	bool schedule_enabled;
 
 public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

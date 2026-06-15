@@ -9,7 +9,9 @@ FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
     : StandardEntry(CatalogType::FEATURE_ENTRY, schema, catalog, info.feature_name), source_table(info.source_table),
       entity_column(info.entity_column), timestamp_column(info.timestamp_column), granularity(info.granularity),
       window_size(info.window_size), refresh_mode(info.refresh_mode), retain_versions(info.retain_versions),
-      current_version(info.current_version), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()) {
+      current_version(info.current_version), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()),
+      has_schedule(info.has_schedule), schedule_interval(info.schedule_interval),
+      schedule_enabled(info.schedule_enabled) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
 	}
@@ -53,6 +55,9 @@ unique_ptr<CreateInfo> FeatureCatalogEntry::GetInfo() const {
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
 	info->current_version = current_version;
+	info->has_schedule = has_schedule;
+	info->schedule_interval = schedule_interval;
+	info->schedule_enabled = schedule_enabled;
 	if (query) {
 		info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}

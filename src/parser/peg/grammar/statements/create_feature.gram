@@ -1,8 +1,9 @@
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
 FeatureWindowClause <- 'WINDOW' NumberLiteral
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
+FeatureScheduleClause <- 'EVERY' 'INTERVAL' StringLiteral
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 
 FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute

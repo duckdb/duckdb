@@ -1,0 +1,99 @@
+# name: test/sql/feature/test_feature_schedule.test
+# description: Test attaching a refresh schedule to a feature (EVERY INTERVAL) and its metadata
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+# ============================================================
+# Setup
+# ============================================================
+statement ok
+CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
+
+statement ok
+INSERT INTO hits VALUES
+    ('a', '2024-01-01 08:00:00'),
+    ('a', '2024-01-02 08:00:00'),
+    ('b', '2024-01-01 12:00:00');
+
+# ============================================================
+# Create a feature without a schedule (default: no schedule)
+# ============================================================
+statement ok
+CREATE FEATURE no_sched ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    RETAIN 5
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'no_sched';
+----
+NULL	false
+
+# ============================================================
+# Create a feature WITH a schedule
+# ============================================================
+statement ok
+CREATE FEATURE user_activity ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 hour'
+    RETAIN 5
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'user_activity';
+----
+01:00:00	true
+
+# The schedule should be reflected in the feature's SQL definition
+query I
+SELECT sql FROM duckdb_features() WHERE feature_name = 'user_activity';
+----
+<REGEX>:.*EVERY INTERVAL '01:00:00'.*
+
+# ============================================================
+# Schedule accepts compound / minute intervals
+# ============================================================
+statement ok
+CREATE FEATURE half_hourly ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY MINUTE
+    WINDOW 60
+    EVERY INTERVAL '30 minutes'
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'half_hourly';
+----
+00:30:00	true
+
+# ============================================================
+# Validation: non-positive interval is rejected
+# ============================================================
+statement error
+CREATE FEATURE bad_sched ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    EVERY INTERVAL '0 seconds'
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+----
+<REGEX>:.*interval must be positive.*
+
+# ============================================================
+# A scheduled feature still refreshes normally (no scheduler yet)
+# ============================================================
+query I
+REFRESH FEATURE user_activity;
+----
+1

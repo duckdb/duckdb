@@ -4,6 +4,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -46,15 +48,33 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
 		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
 	}
-	// index 12: FeatureRetainClause? (default: 1)
+	// index 12: FeatureScheduleClause? (default: no schedule)
+	bool has_schedule = false;
+	interval_t schedule_interval {0, 0, 0};
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
+	if (schedule_opt.HasResult()) {
+		// FeatureScheduleClause <- 'EVERY' 'INTERVAL' StringLiteral
+		auto &clause = schedule_opt.GetResult().Cast<ListParseResult>();
+		auto interval_str = clause.Child<StringLiteralParseResult>(2).result;
+		string error_message;
+		if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message,
+		                           false)) {
+			throw ParserException("Invalid interval in EVERY clause: %s", error_message);
+		}
+		if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
+			throw ParserException("Refresh schedule interval must be positive");
+		}
+		has_schedule = true;
+	}
+	// index 13: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(12);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(13);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 13: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(14));
+	// index 14: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(15));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
@@ -68,6 +88,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->window_size = window_size;
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
+	info->has_schedule = has_schedule;
+	info->schedule_interval = schedule_interval;
+	info->schedule_enabled = has_schedule;
 	info->query = std::move(query);
 	result->info = std::move(info);
 	return result;

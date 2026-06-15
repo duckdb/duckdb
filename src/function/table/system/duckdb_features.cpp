@@ -57,6 +57,12 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("last_refresh_timestamp");
 	return_types.emplace_back(LogicalType::TIMESTAMP);
 
+	names.emplace_back("schedule_interval");
+	return_types.emplace_back(LogicalType::INTERVAL);
+
+	names.emplace_back("schedule_enabled");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -132,6 +138,11 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[11].Append(Value(feat.ToSQL()));
 		// last_refresh_timestamp
 		output.data[12].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
+		// schedule_interval (NULL when no schedule is attached)
+		output.data[13].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
+		                                         : Value(LogicalType::INTERVAL));
+		// schedule_enabled (false when no schedule is attached)
+		output.data[14].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
 
 		count++;
 	}
