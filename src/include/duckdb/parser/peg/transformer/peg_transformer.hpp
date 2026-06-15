@@ -2016,10 +2016,10 @@ private:
 	static bool TransformTryCastKeyword(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformExcludeListInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<TransformResultValue> TransformExcludeNameSetInternal(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
-	static qualified_column_set_t TransformExcludeNameSet(PEGTransformer &transformer,
-	                                                      const qualified_column_set_t &exclude_name_list);
+	static qualified_column_set_t TransformExcludeList(PEGTransformer &transformer,
+	                                                   const qualified_column_set_t &exclude_names);
+	static unique_ptr<TransformResultValue> TransformExcludeNamesInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformExcludeNameListInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer,

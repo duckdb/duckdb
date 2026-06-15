@@ -1306,7 +1306,7 @@ QualifiedColumnSet:
   by_value: false
   rules:
     - ExcludeList
-    - ExcludeNameSet
+    - ExcludeNames
     - ExcludeNameList
     - ExcludeNameSingle
 

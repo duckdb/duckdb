@@ -4291,16 +4291,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeListInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<qualified_column_set_t>(choice_pr.GetResult());
+	auto exclude_names = transformer.Transform<qualified_column_set_t>(list_pr.GetChild(1));
+	auto result = TransformExcludeList(transformer, exclude_names);
 	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
 }
 
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNameSetInternal(PEGTransformer &transformer,
-                                                                                        ParseResult &parse_result) {
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNamesInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto exclude_name_list = transformer.Transform<qualified_column_set_t>(list_pr.GetChild(1));
-	auto result = TransformExcludeNameSet(transformer, exclude_name_list);
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<qualified_column_set_t>(choice_pr.GetResult());
 	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
 }
 
@@ -8642,7 +8642,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
 	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
 	    {"ExcludeList", &PEGTransformerFactory::TransformExcludeListInternal},
-	    {"ExcludeNameSet", &PEGTransformerFactory::TransformExcludeNameSetInternal},
+	    {"ExcludeNames", &PEGTransformerFactory::TransformExcludeNamesInternal},
 	    {"ExcludeNameList", &PEGTransformerFactory::TransformExcludeNameListInternal},
 	    {"ExcludeNameSingle", &PEGTransformerFactory::TransformExcludeNameSingleInternal},
 	    {"ExcludeName", &PEGTransformerFactory::TransformExcludeNameInternal},

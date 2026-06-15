@@ -31,9 +31,9 @@ CastKeyword <- 'CAST'
 TryCastKeyword <- 'TRY_CAST'
 ColIdDot <- ColId '.'
 StarExpression <- ColIdDot* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- ExcludeNameSet / ExcludeNameSingle
-ExcludeNameSet <- ExcludeOrExcept ExcludeNameList
+ExcludeList <- ExcludeOrExcept ExcludeNames
 ExcludeOrExcept <- 'EXCLUDE' / 'EXCEPT'
+ExcludeNames <- ExcludeNameList / ExcludeNameSingle
 ExcludeNameList <- Parens(List(ExcludeName))
 ExcludeNameSingle <- ExcludeName
 ExcludeName <- ExcludeDottedName / ExcludeColumnName

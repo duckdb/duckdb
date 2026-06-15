@@ -1754,9 +1754,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	return std::move(result);
 }
 
-qualified_column_set_t PEGTransformerFactory::TransformExcludeNameSet(PEGTransformer &transformer,
-                                                                      const qualified_column_set_t &exclude_name_list) {
-	return exclude_name_list;
+qualified_column_set_t PEGTransformerFactory::TransformExcludeList(PEGTransformer &transformer,
+                                                                   const qualified_column_set_t &exclude_names) {
+	return exclude_names;
 }
 
 qualified_column_set_t
