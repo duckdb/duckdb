@@ -538,8 +538,6 @@ AggregateFunction GetMinMaxNFunction() {
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
 	min.AddFunction(MinFunction::GetFunction());
-	// note: MIN(x, n) does not support state export - MinMaxNState is a binary heap that owns memory,
-	// which the state export machinery cannot describe
 	min.AddFunction(GetMinMaxNFunction<LessThan>());
 	return min;
 }

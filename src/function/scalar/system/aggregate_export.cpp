@@ -782,19 +782,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
-	// note: functions with custom destructors can be exported, but only when they provide a state type callback -
-	// the declared layout must fully describe the exportable state, and states deserialized from exported data are
-	// never destroyed, so all deserialized state memory must come from the provided arena allocator
-	// this should be required
-	D_ASSERT(bound_function.HasStateSizeCallback());
-	D_ASSERT(bound_function.HasStateFinalizeCallback());
-
-	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
 		    bound_function.GetName());
 	}
+	D_ASSERT(bound_function.HasStateSizeCallback());
+	D_ASSERT(bound_function.HasStateFinalizeCallback());
+	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
 	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get()));
 	return child_aggregate;
 }

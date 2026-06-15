@@ -420,9 +420,6 @@ inline Value QuantileParameterValue(const QuantileBindData &bind_data, const Log
 	return Value::LIST(child_type, std::move(quantiles));
 }
 
-//! State type callback: the state's accumulated values (a linked list) are exported as a list of the input type.
-//! The window-only members of QuantileState are not exported - they are only set during window execution,
-//! which does not support state export.
 template <class STATE>
 AggregateStateLayout QuantileStateLayout(const BoundAggregateFunction &function,
                                          optional_ptr<FunctionData> bind_data_p) {
