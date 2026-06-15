@@ -232,12 +232,18 @@ MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
 # LEVEL 16 (Highest)
-BaseExpression <- SingleExpression Indirection*
+BaseExpression <- SingleExpression IndirectionList?
+IndirectionList <- Indirection+
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
-DotOperator <- '.' (MethodExpression / ColLabel)
-MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreOrRespectNulls?)
+DotOperator <- DotMethodOperator / DotColumnOperator
+DotMethodOperator <- '.' MethodExpression
+DotColumnOperator <- '.' ColLabel
+MethodExpression <- ColLabel MethodExpressionArguments
+MethodExpressionArguments <- Parens(MethodExpressionArgumentList)
+MethodExpressionArgumentList <- DistinctOrAll? MethodFunctionArguments? OrderByClause? IgnoreOrRespectNulls?
+MethodFunctionArguments <- List(FunctionArgument)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' EndSliceValue?

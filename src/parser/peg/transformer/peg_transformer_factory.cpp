@@ -144,7 +144,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	Register("ColumnDefaultExpr", &TransformExpression);
 	Register("ColDefOrExpr", &TransformLogicalOrExpression);
 	Register("ColDefAndExpr", &TransformLogicalAndExpression);
-	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
@@ -196,8 +195,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformPrefixOperator);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFilterClause);
-	REGISTER_TRANSFORM(TransformIndirection);
-	REGISTER_TRANSFORM(TransformDotOperator);
 
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);
@@ -227,7 +224,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
-	REGISTER_TRANSFORM(TransformMethodExpression);
 
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }

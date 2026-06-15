@@ -400,6 +400,8 @@ Expression:
     - CastOperator
     - DotOperator
     - MethodExpression
+    - DotMethodOperator
+    - DotColumnOperator
     - SliceExpression
     - EndSliceBound
     - EndSliceValue
@@ -561,6 +563,7 @@ ExpressionList:
   by_value: true
   rules:
     - TypeModifiers
+    - IndirectionList
     - BoundedListExpression
     - SliceBound
     - TargetList
@@ -596,6 +599,7 @@ FunctionArgumentList:
   by_value: true
   rules:
     - TableFunctionArguments
+    - MethodFunctionArguments
 
 FunctionArgument:
   type: "FunctionArgument"
@@ -1418,6 +1422,12 @@ overrides:
     type: "pair<string, unique_ptr<ParsedExpression>>"
     by_value: true
   RenameEntry: "pair<QualifiedColumnName, string>"
+  MethodExpressionArguments:
+    type: "MethodArguments"
+    by_value: true
+  MethodExpressionArgumentList:
+    type: "MethodArguments"
+    by_value: true
   CastArguments:
     type: "CastArguments"
     by_value: true
@@ -1674,5 +1684,3 @@ excluded_rules:
   - CollateExpression
   - AtTimeZoneExpression
   - PrefixExpression
-  - BaseExpression
-  - Indirection
