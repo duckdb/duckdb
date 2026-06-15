@@ -463,17 +463,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformParameter(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
-	                                                                           ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformColLabelParameter(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformPositionalExpression(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
@@ -603,8 +592,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer, ParseResult &parse_result);
 	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformDefaultExpression(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalLiteral(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalParameter(PEGTransformer &transformer,
@@ -2113,6 +2100,30 @@ private:
 	static unique_ptr<TransformResultValue> TransformFalseLiteralInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static Value TransformFalseLiteral(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformParameterInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQuestionMarkNumberedParameterInternal(PEGTransformer &transformer,
+	                                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformQuestionMarkNumberedParameter(PEGTransformer &transformer, unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformAnonymousParameterInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNumberedParameterInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
+	                                                               unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformColLabelParameterInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformColLabelParameter(PEGTransformer &transformer,
+	                                                               const string &col_label);
+	static unique_ptr<TransformResultValue> TransformPositionalExpressionInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformPositionalExpression(PEGTransformer &transformer,
+	                                                                  unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformDefaultExpressionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDefaultExpression(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformInsertStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement>

@@ -192,13 +192,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 
-	REGISTER_TRANSFORM(TransformParameter);
-	REGISTER_TRANSFORM(TransformAnonymousParameter);
-	REGISTER_TRANSFORM(TransformQuestionMarkNumberedParameter);
-	REGISTER_TRANSFORM(TransformColLabelParameter);
-	REGISTER_TRANSFORM(TransformNumberedParameter);
-	REGISTER_TRANSFORM(TransformPositionalExpression);
-
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformUnknownLiteral);
@@ -289,7 +282,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCaseElse);
 	REGISTER_TRANSFORM(TransformCaseWhenThen);
 	REGISTER_TRANSFORM(TransformTypeLiteral);
-	REGISTER_TRANSFORM(TransformDefaultExpression);
 	REGISTER_TRANSFORM(TransformIntervalLiteral);
 	REGISTER_TRANSFORM(TransformIntervalParameter);
 	REGISTER_TRANSFORM(TransformSubqueryExpression);

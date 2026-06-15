@@ -1402,15 +1402,7 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
 	return transformer.TransformEnum<string>(choice_pr.GetResult());
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParameter(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	// Parameter <- AnonymousParameter / NumberedParameter / ColLabelParameter
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer) {
 	// AnonymousParameter <- '?'
 	auto expr = make_uniq<ParameterExpression>();
 
@@ -1427,12 +1419,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQuestionMarkNumberedParameter(PEGTransformer &transformer,
-                                                                                           ParseResult &parse_result) {
+                                                                                           unique_ptr<ParsedExpression>
+                                                                                               number_literal) {
 	// QuestionMarkNumberedParameter <- '?' NumberLiteral
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
-
-	auto &const_expr = number->Cast<ConstantExpression>();
+	auto &const_expr = number_literal->Cast<ConstantExpression>();
 	int32_t param_number = const_expr.GetValue().GetValue<int32_t>();
 
 	if (param_number <= 0) {
@@ -1456,12 +1446,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQuestionMarkNumbere
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
+                                                                               unique_ptr<ParsedExpression>
+                                                                                   number_literal) {
 	// NumberedParameter <- '$' NumberLiteral
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
-
-	auto &const_expr = number->Cast<ConstantExpression>();
+	auto &const_expr = number_literal->Cast<ConstantExpression>();
 	int32_t param_number = const_expr.GetValue().GetValue<int32_t>();
 
 	if (param_number <= 0) {
@@ -1485,10 +1473,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(P
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
+                                                                               const string &col_label) {
 	// ColLabelParameter <- '$' ColLabel
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	string identifier = transformer.Transform<string>(list_pr.GetChild(1));
+	string identifier = col_label;
 
 	auto expr = make_uniq<ParameterExpression>();
 	idx_t known_param_index = DConstants::INVALID_INDEX;
@@ -1507,10 +1494,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(P
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPositionalExpression(PEGTransformer &transformer,
-                                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
-	auto &const_expr = number->Cast<ConstantExpression>();
+                                                                                  unique_ptr<ParsedExpression>
+                                                                                      number_literal) {
+	auto &const_expr = number_literal->Cast<ConstantExpression>();
 	int32_t index = const_expr.GetValue().GetValue<int32_t>();
 	if (index <= 0) {
 		throw ParserException("Positional reference node needs to be >= 1");
@@ -2522,8 +2508,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultExpression(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultExpression(PEGTransformer &transformer) {
 	return make_uniq<DefaultExpression>();
 }
 
