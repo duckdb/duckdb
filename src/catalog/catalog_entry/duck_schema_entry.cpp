@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
@@ -310,6 +311,21 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		string name = info.name;
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
+		}
+		// Detaching a foreign-key pair must also remove the dependency edge
+		// registered at CREATE, or the referenced (main-key) table stays undroppable.
+		if (info.type == AlterType::ALTER_TABLE &&
+		    info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::FOREIGN_KEY_CONSTRAINT) {
+			auto &fk_info = info.Cast<AlterForeignKeyInfo>();
+			if (fk_info.type == AlterForeignKeyType::AFT_DELETE) {
+				auto altered = set.GetEntry(transaction, name);
+				auto other = set.GetEntry(transaction, fk_info.fk_table);
+				auto dependency_manager = catalog.GetDependencyManager();
+				if (altered && other && dependency_manager) {
+					dependency_manager->RemoveDependencyBetween(transaction, *altered, *other);
+					dependency_manager->RemoveDependencyBetween(transaction, *other, *altered);
+				}
+			}
 		}
 	}
 }

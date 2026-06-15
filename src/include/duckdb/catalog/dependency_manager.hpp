@@ -88,6 +88,8 @@ public:
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(ClientContext &context,
 	          const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback);
+	//! Removes the (dependent -> subject) dependency edge if present; one direction only, no-op when absent.
+	void RemoveDependencyBetween(CatalogTransaction transaction, CatalogEntry &dependent, CatalogEntry &subject);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 

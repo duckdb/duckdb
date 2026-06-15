@@ -351,6 +351,27 @@ void DependencyManager::CleanupDependencies(CatalogTransaction transaction, Cata
 	}
 }
 
+void DependencyManager::RemoveDependencyBetween(CatalogTransaction transaction, CatalogEntry &dependent,
+                                                CatalogEntry &subject) {
+	if (IsSystemEntry(dependent) || IsSystemEntry(subject)) {
+		return;
+	}
+	auto dependent_info = GetLookupProperties(dependent);
+	auto subject_info = GetLookupProperties(subject);
+	auto matches = [](const CatalogEntryInfo &a, const CatalogEntryInfo &b) {
+		return a.type == b.type && a.schema == b.schema && a.name == b.name;
+	};
+	vector<DependencyInfo> to_remove;
+	ScanSubjects(transaction, dependent_info, [&](DependencyEntry &dep) {
+		if (matches(dep.EntryInfo(), subject_info)) {
+			to_remove.push_back(DependencyInfo::FromSubject(dep));
+		}
+	});
+	for (auto &dep : to_remove) {
+		RemoveDependency(transaction, dep);
+	}
+}
+
 static string EntryToString(CatalogEntryInfo &info) {
 	auto type = info.type;
 	switch (type) {
