@@ -135,7 +135,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		return index_type->create_plan(input);
 	}
 
-	// Fall back to generic index creation plan
+	return CreateDefaultIndexPlan(op, scan);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreateDefaultIndexPlan(LogicalCreateIndex &op, PhysicalOperator &scan) {
+	const auto index_type = context.db->config.GetIndexTypes().FindByName(op.info->index_type);
+	D_ASSERT(index_type);
 	// SCAN -> PROJECTION -> [FILTER] -> [SORT] -> CREATE INDEX
 	if (op.table.type != CatalogType::TABLE_ENTRY) {
 		throw BinderException("CREATE INDEX with the default index type only supports base tables.");

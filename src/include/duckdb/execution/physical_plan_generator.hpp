@@ -67,6 +67,9 @@ private:
 //! The physical plan generator generates a physical execution plan from a logical query plan.
 class PhysicalPlanGenerator {
 public:
+	//! The generic index-build plan (PROJECTION -> [FILTER] -> [SORT] -> CREATE INDEX over `scan`);
+	//! callable from index_type->create_plan hooks that only override planning for some targets.
+	PhysicalOperator &CreateDefaultIndexPlan(LogicalCreateIndex &op, PhysicalOperator &scan);
 	explicit PhysicalPlanGenerator(ClientContext &context);
 	~PhysicalPlanGenerator();
 
