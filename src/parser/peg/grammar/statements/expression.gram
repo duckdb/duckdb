@@ -31,17 +31,21 @@ CastKeyword <- 'CAST'
 TryCastKeyword <- 'TRY_CAST'
 ColIdDot <- ColId '.'
 StarExpression <- ColIdDot* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- ExcludeOrExcept ExcludeNameList / ExcludeNameSingle
+ExcludeList <- ExcludeNameSet / ExcludeNameSingle
+ExcludeNameSet <- ExcludeOrExcept ExcludeNameList
 ExcludeOrExcept <- 'EXCLUDE' / 'EXCEPT'
 ExcludeNameList <- Parens(List(ExcludeName))
 ExcludeNameSingle <- ExcludeName
-ExcludeName <- DottedIdentifier / ColIdOrString
+ExcludeName <- ExcludeDottedName / ExcludeColumnName
+ExcludeDottedName <- DottedIdentifier
+ExcludeColumnName <- ColIdOrString
 ReplaceList <- 'REPLACE' ReplaceEntries
 ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
 ReplaceEntrySingle <- ReplaceEntry
 ReplaceEntryList <- Parens(List(ReplaceEntry))
 ReplaceEntry <- Expression 'AS' ColumnReference
-RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)
+RenameList <- 'RENAME' RenameEntries
+RenameEntries <- RenameEntryList / SingleRenameEntry
 RenameEntryList <- Parens(List(RenameEntry))
 SingleRenameEntry <- RenameEntry
 RenameEntry <- ExcludeName 'AS' Identifier

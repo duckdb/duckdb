@@ -1306,6 +1306,7 @@ QualifiedColumnSet:
   by_value: false
   rules:
     - ExcludeList
+    - ExcludeNameSet
     - ExcludeNameList
     - ExcludeNameSingle
 
@@ -1314,6 +1315,7 @@ QualifiedColumnMap:
   by_value: false
   rules:
     - RenameList
+    - RenameEntries
     - RenameEntryList
     - SingleRenameEntry
 
@@ -1408,7 +1410,11 @@ overrides:
     type: "CaseCheck"
     by_value: true
   ExcludeName: "QualifiedColumnName"
-  ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
+  ExcludeDottedName: "QualifiedColumnName"
+  ExcludeColumnName: "QualifiedColumnName"
+  ReplaceEntry:
+    type: "pair<string, unique_ptr<ParsedExpression>>"
+    by_value: true
   RenameEntry: "pair<QualifiedColumnName, string>"
   CastArguments:
     type: "CastArguments"
@@ -1614,18 +1620,7 @@ excluded_rules:
   - SingleArrowPair
   # expression.gram rules kept manual during incremental transformer generation migration
   - FilterClause
-  - ExcludeNameList
-  - ExcludeNameSingle
-  - ExcludeName
-  - ReplaceList
-  - ReplaceEntries
-  - ReplaceEntrySingle
-  - ReplaceEntryList
-  - ReplaceEntry
-  - RenameList
-  - RenameEntryList
-  - SingleRenameEntry
-  - RenameEntry
+  - ExcludeOrExcept
   - Framing
   - FrameExtent
   - SingleFrameExtent

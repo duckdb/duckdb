@@ -483,20 +483,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformStepSliceBound(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformStarExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static qualified_column_set_t TransformExcludeList(PEGTransformer &transformer, ParseResult &parse_result);
-	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer, ParseResult &parse_result);
-	static qualified_column_set_t TransformExcludeNameSingle(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedColumnName TransformExcludeName(PEGTransformer &transformer, ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceList(PEGTransformer &transformer,
-	                                                                                 ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntries(PEGTransformer &transformer,
-	                                                                                    ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntrySingle(PEGTransformer &transformer,
-	                                                                                        ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntryList(PEGTransformer &transformer,
-	                                                                                      ParseResult &parse_result);
-	static pair<string, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
@@ -530,13 +516,6 @@ private:
 	                                                                     ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
 
-	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer, ParseResult &parse_result);
-	static qualified_column_map_t<string> TransformRenameEntryList(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static qualified_column_map_t<string> TransformSingleRenameEntry(PEGTransformer &transformer,
-	                                                                 ParseResult &parse_result);
-	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
 	static bool TransformIgnoreOrRespectNulls(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// pivot.gram
@@ -2035,6 +2014,71 @@ private:
 	static unique_ptr<TransformResultValue> TransformTryCastKeywordInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static bool TransformTryCastKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExcludeListInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExcludeNameSetInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static qualified_column_set_t TransformExcludeNameSet(PEGTransformer &transformer,
+	                                                      const qualified_column_set_t &exclude_name_list);
+	static unique_ptr<TransformResultValue> TransformExcludeNameListInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer,
+	                                                       const vector<QualifiedColumnName> &exclude_name);
+	static unique_ptr<TransformResultValue> TransformExcludeNameSingleInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static qualified_column_set_t TransformExcludeNameSingle(PEGTransformer &transformer,
+	                                                         const QualifiedColumnName &exclude_name);
+	static unique_ptr<TransformResultValue> TransformExcludeNameInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExcludeDottedNameInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static QualifiedColumnName TransformExcludeDottedName(PEGTransformer &transformer,
+	                                                      const vector<string> &dotted_identifier);
+	static unique_ptr<TransformResultValue> TransformExcludeColumnNameInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static QualifiedColumnName TransformExcludeColumnName(PEGTransformer &transformer,
+	                                                      const Identifier &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformReplaceListInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceList(PEGTransformer &transformer,
+	                     case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_entries);
+	static unique_ptr<TransformResultValue> TransformReplaceEntriesInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformReplaceEntrySingleInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceEntrySingle(PEGTransformer &transformer, pair<string, unique_ptr<ParsedExpression>> replace_entry);
+	static unique_ptr<TransformResultValue> TransformReplaceEntryListInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceEntryList(PEGTransformer &transformer,
+	                          vector<pair<string, unique_ptr<ParsedExpression>>> replace_entry);
+	static unique_ptr<TransformResultValue> TransformReplaceEntryInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static pair<string, unique_ptr<ParsedExpression>>
+	TransformReplaceEntry(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression,
+	                      unique_ptr<ParsedExpression> column_reference);
+	static unique_ptr<TransformResultValue> TransformRenameListInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer,
+	                                                          const qualified_column_map_t<string> &rename_entries);
+	static unique_ptr<TransformResultValue> TransformRenameEntriesInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRenameEntryListInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static qualified_column_map_t<string>
+	TransformRenameEntryList(PEGTransformer &transformer,
+	                         const vector<pair<QualifiedColumnName, string>> &rename_entry);
+	static unique_ptr<TransformResultValue> TransformSingleRenameEntryInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static qualified_column_map_t<string>
+	TransformSingleRenameEntry(PEGTransformer &transformer, const pair<QualifiedColumnName, string> &rename_entry);
+	static unique_ptr<TransformResultValue> TransformRenameEntryInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
+	                                                              const QualifiedColumnName &exclude_name,
+	                                                              const Identifier &identifier);
 	static unique_ptr<TransformResultValue> TransformSubqueryExpressionInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,

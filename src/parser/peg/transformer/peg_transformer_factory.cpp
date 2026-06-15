@@ -207,15 +207,6 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);
-	REGISTER_TRANSFORM(TransformExcludeList);
-	REGISTER_TRANSFORM(TransformExcludeNameList);
-	REGISTER_TRANSFORM(TransformExcludeNameSingle);
-	REGISTER_TRANSFORM(TransformExcludeName);
-	REGISTER_TRANSFORM(TransformReplaceList);
-	REGISTER_TRANSFORM(TransformReplaceEntries);
-	REGISTER_TRANSFORM(TransformReplaceEntrySingle);
-	REGISTER_TRANSFORM(TransformReplaceEntryList);
-	REGISTER_TRANSFORM(TransformReplaceEntry);
 
 	REGISTER_TRANSFORM(TransformOverClause);
 	REGISTER_TRANSFORM(TransformWindowFrame);
@@ -243,10 +234,6 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 	REGISTER_TRANSFORM(TransformMethodExpression);
-	REGISTER_TRANSFORM(TransformRenameList);
-	REGISTER_TRANSFORM(TransformRenameEntryList);
-	REGISTER_TRANSFORM(TransformSingleRenameEntry);
-	REGISTER_TRANSFORM(TransformRenameEntry);
 
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }

@@ -4288,6 +4288,161 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordI
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeListInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<qualified_column_set_t>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNameSetInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto exclude_name_list = transformer.Transform<qualified_column_set_t>(list_pr.GetChild(1));
+	auto result = TransformExcludeNameSet(transformer, exclude_name_list);
+	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNameListInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<QualifiedColumnName> exclude_name;
+	auto exclude_name_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &exclude_name_item : exclude_name_items) {
+		auto exclude_name_value = transformer.Transform<QualifiedColumnName>(exclude_name_item.get());
+		exclude_name.push_back(exclude_name_value);
+	}
+	auto result = TransformExcludeNameList(transformer, exclude_name);
+	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNameSingleInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto exclude_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
+	auto result = TransformExcludeNameSingle(transformer, exclude_name);
+	return make_uniq<TypedTransformResult<qualified_column_set_t>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNameInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<QualifiedColumnName>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<QualifiedColumnName>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeDottedNameInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.GetChild(0));
+	auto result = TransformExcludeDottedName(transformer, dotted_identifier);
+	return make_uniq<TypedTransformResult<QualifiedColumnName>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeColumnNameInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto result = TransformExcludeColumnName(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<QualifiedColumnName>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReplaceListInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto replace_entries =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+	auto result = TransformReplaceList(transformer, std::move(replace_entries));
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReplaceEntriesInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReplaceEntrySingleInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto replace_entry = transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(list_pr.GetChild(0));
+	auto result = TransformReplaceEntrySingle(transformer, std::move(replace_entry));
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReplaceEntryListInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<pair<string, unique_ptr<ParsedExpression>>> replace_entry;
+	auto replace_entry_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &replace_entry_item : replace_entry_items) {
+		auto replace_entry_value =
+		    transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(replace_entry_item.get());
+		replace_entry.push_back(std::move(replace_entry_value));
+	}
+	auto result = TransformReplaceEntryList(transformer, std::move(replace_entry));
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReplaceEntryInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto column_reference = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	auto result = TransformReplaceEntry(transformer, std::move(expression), std::move(column_reference));
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRenameListInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto rename_entries = transformer.Transform<qualified_column_map_t<string>>(list_pr.GetChild(1));
+	auto result = TransformRenameList(transformer, rename_entries);
+	return make_uniq<TypedTransformResult<qualified_column_map_t<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRenameEntriesInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<qualified_column_map_t<string>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<qualified_column_map_t<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRenameEntryListInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<pair<QualifiedColumnName, string>> rename_entry;
+	auto rename_entry_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &rename_entry_item : rename_entry_items) {
+		auto rename_entry_value = transformer.Transform<pair<QualifiedColumnName, string>>(rename_entry_item.get());
+		rename_entry.push_back(rename_entry_value);
+	}
+	auto result = TransformRenameEntryList(transformer, rename_entry);
+	return make_uniq<TypedTransformResult<qualified_column_map_t<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSingleRenameEntryInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto rename_entry = transformer.Transform<pair<QualifiedColumnName, string>>(list_pr.GetChild(0));
+	auto result = TransformSingleRenameEntry(transformer, rename_entry);
+	return make_uniq<TypedTransformResult<qualified_column_map_t<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRenameEntryInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto exclude_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
+	auto identifier = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformRenameEntry(transformer, exclude_name, identifier);
+	return make_uniq<TypedTransformResult<pair<QualifiedColumnName, string>>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryExpressionInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8486,6 +8641,23 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CastOrTryCast", &PEGTransformerFactory::TransformCastOrTryCastInternal},
 	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
 	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
+	    {"ExcludeList", &PEGTransformerFactory::TransformExcludeListInternal},
+	    {"ExcludeNameSet", &PEGTransformerFactory::TransformExcludeNameSetInternal},
+	    {"ExcludeNameList", &PEGTransformerFactory::TransformExcludeNameListInternal},
+	    {"ExcludeNameSingle", &PEGTransformerFactory::TransformExcludeNameSingleInternal},
+	    {"ExcludeName", &PEGTransformerFactory::TransformExcludeNameInternal},
+	    {"ExcludeDottedName", &PEGTransformerFactory::TransformExcludeDottedNameInternal},
+	    {"ExcludeColumnName", &PEGTransformerFactory::TransformExcludeColumnNameInternal},
+	    {"ReplaceList", &PEGTransformerFactory::TransformReplaceListInternal},
+	    {"ReplaceEntries", &PEGTransformerFactory::TransformReplaceEntriesInternal},
+	    {"ReplaceEntrySingle", &PEGTransformerFactory::TransformReplaceEntrySingleInternal},
+	    {"ReplaceEntryList", &PEGTransformerFactory::TransformReplaceEntryListInternal},
+	    {"ReplaceEntry", &PEGTransformerFactory::TransformReplaceEntryInternal},
+	    {"RenameList", &PEGTransformerFactory::TransformRenameListInternal},
+	    {"RenameEntries", &PEGTransformerFactory::TransformRenameEntriesInternal},
+	    {"RenameEntryList", &PEGTransformerFactory::TransformRenameEntryListInternal},
+	    {"SingleRenameEntry", &PEGTransformerFactory::TransformSingleRenameEntryInternal},
+	    {"RenameEntry", &PEGTransformerFactory::TransformRenameEntryInternal},
 	    {"SubqueryExpression", &PEGTransformerFactory::TransformSubqueryExpressionInternal},
 	    {"SubqueryNot", &PEGTransformerFactory::TransformSubqueryNotInternal},
 	    {"SubqueryExists", &PEGTransformerFactory::TransformSubqueryExistsInternal},
