@@ -1001,6 +1001,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("prefetch_all_parquet_files",
 	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",
 	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption(
+	    "parquet_prefetch_column_gap",
+	    "Byte gap under which Parquet prefetch I/O ranges are coalesced (0 lets the cost model adapt it)",
+	    LogicalType::UBIGINT, Value::UBIGINT(0));
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));

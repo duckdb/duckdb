@@ -212,6 +212,28 @@ static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file
 	return file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
 }
 
+//! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model
+static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReaderScanState &state) {
+	uint64_t gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+	if (!state.prefetch_mode) {
+		return gap;
+	}
+	Value pinned_gap = Value::UBIGINT(0);
+	context.TryGetCurrentSetting("parquet_prefetch_column_gap", pinned_gap);
+	const auto pinned = pinned_gap.GetValue<uint64_t>();
+	if (pinned != 0) {
+		// gaps beyond the ceiling overflow the coalescing comparator into not coalescing at all
+		return MinValue<uint64_t>(pinned, PrefetchCostModel::GAP_MAX);
+	}
+	// remote files measure their requests in the file system, local files in the caching file handle
+	NetworkThroughputEstimate estimate;
+	if (state.file_handle->TryGetNetworkThroughput(estimate)) {
+		state.cost_model_state.RefineFromEstimate(estimate);
+	}
+	state.cost_model_state.TryGetColumnGapSize(gap);
+	return gap;
+}
+
 static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path, idx_t file_size,
                                const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
                                bool &footer_encrypted) {
@@ -1453,16 +1475,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
-		NetworkThroughputEstimate estimate;
-		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-			state.cost_model_state.RefineFromEstimate(estimate);
-		}
-		state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
-	}
-	state.thrift_file_proto =
-	    CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode, accepted_column_gap);
+	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode,
+	                                                   DetermineAcceptedColumnGap(context, state));
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
@@ -1713,14 +1727,8 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	state.current_group_prefetched = false;
 	state.filter_head_count = 0;
 
-	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
-		NetworkThroughputEstimate estimate;
-		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-			state.cost_model_state.RefineFromEstimate(estimate);
-		}
-		uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-		state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
-		trans.SetAcceptedColumnGap(accepted_column_gap);
+	if (state.prefetch_mode) {
+		trans.SetAcceptedColumnGap(DetermineAcceptedColumnGap(context, state));
 	}
 
 	if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {

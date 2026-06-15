@@ -8,6 +8,9 @@ statement ok
 SET threads=1
 
 statement ok
+SET parquet_prefetch_column_gap=16384
+
+statement ok
 COPY (
     SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE i END AS a,
         CASE WHEN i % 11 = 0 THEN NULL ELSE i + 10 END AS b,

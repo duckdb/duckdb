@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_prefetch_cost_model.test
-# description: Check Parquet Prefetching gap stays at the default for local files (cost model is remote-only)
+# description: Check the Parquet prefetch gap for local files: default until measured, adjusted from disk reads, and the pin setting
 # group: [parquet]
 
 require parquet
@@ -30,26 +30,68 @@ SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a
 ----
 52350266
 
-# Local files have no network to measure, so they use the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
-query I
-SELECT accepted_column_gap
-FROM duckdb_logs_parsed('ParquetPrefetch')
-WHERE file_path LIKE '%cost_model_gap.parquet' AND row_group_id = 0
-----
-16384
-
-# values are between the limits
-query I
-SELECT count(*)
-FROM duckdb_logs_parsed('ParquetPrefetch')
-WHERE file_path LIKE '%cost_model_gap.parquet' AND (accepted_column_gap < 4096 OR accepted_column_gap > 33554432)
-----
-0
-
-# The cost model is remote-only: local (on-disk) files keep the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
+# Every read of this file is below the bandwidth sample floor, so the gap stays at the default
 query I
 SELECT DISTINCT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%cost_model_gap.parquet'
 ----
 16384
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (SELECT hash(range) AS c0, hash(range + 1) AS c1 FROM range(2000000))
+TO '{TEST_DIR}/cost_model_big.parquet' (ROW_GROUP_SIZE 500000)
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/cost_model_big.parquet') WHERE c0 > 42
+----
+1999999
+
+# The first row group still uses the default, no reads of this handle have been measured yet
+query I
+SELECT accepted_column_gap
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_big.parquet' AND row_group_id = 0
+----
+16384
+
+# Row group sized reads measure disk latency and bandwidth, later groups adjust the gap upward
+query I
+SELECT count(*)
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_big.parquet' AND row_group_id > 0 AND accepted_column_gap <= 16384
+----
+0
+
+# The adjusted values stay within the [GAP_MIN, GAP_MAX] clamp
+query I
+SELECT count(*)
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_big.parquet' AND (accepted_column_gap < 4096 OR accepted_column_gap > 33554432)
+----
+0
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Pinning the gap takes precedence over the cost model for every row group
+statement ok
+SET parquet_prefetch_column_gap=4096
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/cost_model_big.parquet') WHERE c0 > 42
+----
+1999999
+
+query I
+SELECT DISTINCT accepted_column_gap
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_big.parquet'
+----
+4096
+
+statement ok
+SET parquet_prefetch_column_gap=0
