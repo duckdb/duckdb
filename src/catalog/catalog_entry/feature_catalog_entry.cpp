@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,23 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 	switch (feature_info.alter_feature_type) {
 	case AlterFeatureType::BUMP_VERSION:
 		cast_info.current_version = feature_info.new_version;
+		break;
+	case AlterFeatureType::SET_SCHEDULE:
+		cast_info.has_schedule = true;
+		cast_info.schedule_interval = feature_info.schedule_interval;
+		cast_info.schedule_enabled = true;
+		break;
+	case AlterFeatureType::ENABLE_SCHEDULE:
+		if (!cast_info.has_schedule) {
+			throw CatalogException("Feature \"%s\" has no schedule to enable", name);
+		}
+		cast_info.schedule_enabled = true;
+		break;
+	case AlterFeatureType::DISABLE_SCHEDULE:
+		if (!cast_info.has_schedule) {
+			throw CatalogException("Feature \"%s\" has no schedule to disable", name);
+		}
+		cast_info.schedule_enabled = false;
 		break;
 	default:
 		throw InternalException("Unsupported AlterFeatureType in FeatureCatalogEntry::AlterEntry");

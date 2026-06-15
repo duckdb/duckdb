@@ -323,6 +323,14 @@ private:
 	static unique_ptr<AlterInfo> TransformAlterDatabaseStmt(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterViewStmt(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterSchemaStmt(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureStmt(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureOptions(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureSetSchedule(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureEnableSchedule(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureDisableSchedule(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterSequenceStmt(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterSequenceOptions(PEGTransformer &transformer, ParseResult &parse_result);

@@ -1,6 +1,6 @@
 AlterStatement <- 'ALTER' AlterOptions
 
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt / AlterFeatureStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
@@ -46,3 +46,9 @@ AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
+
+AlterFeatureStmt <- 'FEATURE' IfExists? IdentifierOrStringLiteral AlterFeatureOptions
+AlterFeatureOptions <- AlterFeatureSetSchedule / AlterFeatureEnableSchedule / AlterFeatureDisableSchedule
+AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' 'EVERY' 'INTERVAL' StringLiteral
+AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
+AlterFeatureDisableSchedule <- 'DISABLE' 'SCHEDULE'

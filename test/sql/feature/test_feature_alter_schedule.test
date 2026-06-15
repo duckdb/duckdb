@@ -1,0 +1,137 @@
+# name: test/sql/feature/test_feature_alter_schedule.test
+# description: Test ALTER FEATURE ... SET/ENABLE/DISABLE SCHEDULE and WAL round-trip
+# group: [feature]
+
+load {TEST_DIR}/feature_alter_schedule.db
+
+statement ok
+CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
+
+statement ok
+INSERT INTO hits VALUES
+    ('a', '2024-01-01 08:00:00'),
+    ('b', '2024-01-01 12:00:00');
+
+# ============================================================
+# Create a feature WITHOUT a schedule
+# ============================================================
+statement ok
+CREATE FEATURE f ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    RETAIN 5
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+NULL	false
+
+# ============================================================
+# Enabling/disabling a non-existent schedule is an error
+# ============================================================
+statement error
+ALTER FEATURE f ENABLE SCHEDULE;
+----
+<REGEX>:.*no schedule to enable.*
+
+statement error
+ALTER FEATURE f DISABLE SCHEDULE;
+----
+<REGEX>:.*no schedule to disable.*
+
+# ============================================================
+# SET SCHEDULE attaches an interval and enables it
+# ============================================================
+statement ok
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '30 minutes';
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+00:30:00	true
+
+# ============================================================
+# DISABLE SCHEDULE keeps the interval but flips enabled off
+# ============================================================
+statement ok
+ALTER FEATURE f DISABLE SCHEDULE;
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+00:30:00	false
+
+# ============================================================
+# ENABLE SCHEDULE flips it back on, interval unchanged
+# ============================================================
+statement ok
+ALTER FEATURE f ENABLE SCHEDULE;
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+00:30:00	true
+
+# ============================================================
+# SET SCHEDULE replaces the interval
+# ============================================================
+statement ok
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '2 hours';
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+02:00:00	true
+
+# ============================================================
+# Non-positive interval is rejected
+# ============================================================
+statement error
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '0 seconds';
+----
+<REGEX>:.*interval must be positive.*
+
+# ============================================================
+# IF EXISTS on a missing feature is a no-op
+# ============================================================
+statement ok
+ALTER FEATURE IF EXISTS missing SET SCHEDULE EVERY INTERVAL '1 hour';
+
+# A missing feature without IF EXISTS errors
+statement error
+ALTER FEATURE missing SET SCHEDULE EVERY INTERVAL '1 hour';
+----
+<REGEX>:.*missing.*does not exist.*
+
+# ============================================================
+# Schedule changes survive a WAL replay restart
+# ============================================================
+statement ok
+ALTER FEATURE f DISABLE SCHEDULE;
+
+restart
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+02:00:00	false
+
+# ============================================================
+# And survive a checkpoint + restart
+# ============================================================
+statement ok
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '45 minutes';
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+00:45:00	true

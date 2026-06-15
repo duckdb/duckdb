@@ -457,19 +457,22 @@ AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetAlterFeatureTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AlterFeatureType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(AlterFeatureType::BUMP_VERSION), "BUMP_VERSION" }
+		{ static_cast<uint32_t>(AlterFeatureType::BUMP_VERSION), "BUMP_VERSION" },
+		{ static_cast<uint32_t>(AlterFeatureType::SET_SCHEDULE), "SET_SCHEDULE" },
+		{ static_cast<uint32_t>(AlterFeatureType::ENABLE_SCHEDULE), "ENABLE_SCHEDULE" },
+		{ static_cast<uint32_t>(AlterFeatureType::DISABLE_SCHEDULE), "DISABLE_SCHEDULE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterFeatureType>(AlterFeatureType value) {
-	return StringUtil::EnumToString(GetAlterFeatureTypeValues(), 2, "AlterFeatureType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterFeatureTypeValues(), 5, "AlterFeatureType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterFeatureType EnumUtil::FromString<AlterFeatureType>(const char *value) {
-	return static_cast<AlterFeatureType>(StringUtil::StringToEnum(GetAlterFeatureTypeValues(), 2, "AlterFeatureType", value));
+	return static_cast<AlterFeatureType>(StringUtil::StringToEnum(GetAlterFeatureTypeValues(), 5, "AlterFeatureType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterForeignKeyTypeValues() {

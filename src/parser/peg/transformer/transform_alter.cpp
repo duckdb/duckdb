@@ -5,9 +5,11 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -73,6 +75,52 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	auto new_name = list_pr.Child<IdentifierParseResult>(6).identifier;
 	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureStmt(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	// AlterFeatureStmt <- 'FEATURE' IfExists? IdentifierOrStringLiteral AlterFeatureOptions
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
+	auto result = transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ListParseResult>(3));
+	result->name = feature_name;
+	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	return result;
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureOptions(PEGTransformer &transformer,
+                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureSetSchedule(PEGTransformer &transformer,
+                                                                              ParseResult &parse_result) {
+	// AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' 'EVERY' 'INTERVAL' StringLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto interval_str = list_pr.Child<StringLiteralParseResult>(4).result;
+	interval_t schedule_interval {0, 0, 0};
+	string error_message;
+	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
+		throw ParserException("Invalid interval in SET SCHEDULE clause: %s", error_message);
+	}
+	if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
+		throw ParserException("Refresh schedule interval must be positive");
+	}
+	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::SET_SCHEDULE, schedule_interval);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureEnableSchedule(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	// AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
+	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::ENABLE_SCHEDULE, interval_t {0, 0, 0});
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureDisableSchedule(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	// AlterFeatureDisableSchedule <- 'DISABLE' 'SCHEDULE'
+	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::DISABLE_SCHEDULE, interval_t {0, 0, 0});
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
