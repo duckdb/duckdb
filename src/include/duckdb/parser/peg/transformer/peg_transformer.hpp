@@ -469,16 +469,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static string TransformPrefixOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformListExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformArrayBoundedListExpression(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformArrayParensSelect(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformStructExpression(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
-	static FunctionArgument TransformStructField(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformBoundedListExpression(PEGTransformer &transformer,
-	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformFilterClause(PEGTransformer &transformer, ParseResult &parse_result);
@@ -552,11 +542,6 @@ private:
 	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformMapExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformMapStructExpression(PEGTransformer &transformer,
-	                                                                         ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformMapStructField(PEGTransformer &transformer,
-	                                                                    ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer,
@@ -2054,6 +2039,44 @@ private:
 	static unique_ptr<TransformResultValue> TransformFalseLiteralInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static Value TransformFalseLiteral(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformListExpressionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformArrayBoundedListExpressionInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformArrayBoundedListExpression(PEGTransformer &transformer, const bool &has_result,
+	                                    vector<unique_ptr<ParsedExpression>> bounded_list_expression);
+	static unique_ptr<TransformResultValue> TransformArrayParensSelectInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformArrayParensSelect(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformBoundedListExpressionInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformBoundedListExpression(PEGTransformer &transformer,
+	                               optional<vector<unique_ptr<ParsedExpression>>> expression);
+	static unique_ptr<TransformResultValue> TransformStructExpressionInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformStructExpression(PEGTransformer &transformer,
+	                                                              vector<FunctionArgument> struct_field);
+	static unique_ptr<TransformResultValue> TransformStructFieldInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static FunctionArgument TransformStructField(PEGTransformer &transformer, const Identifier &col_id_or_string,
+	                                             unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformMapExpressionInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformMapExpression(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> map_struct_expression);
+	static unique_ptr<TransformResultValue> TransformMapStructExpressionInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformMapStructExpression(PEGTransformer &transformer,
+	                             optional<vector<vector<unique_ptr<ParsedExpression>>>> map_struct_field);
+	static unique_ptr<TransformResultValue> TransformMapStructFieldInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformMapStructField(PEGTransformer &transformer,
+	                                                                    unique_ptr<ParsedExpression> expression,
+	                                                                    unique_ptr<ParsedExpression> expression_1);
 	static unique_ptr<TransformResultValue> TransformParameterInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformQuestionMarkNumberedParameterInternal(PEGTransformer &transformer,

@@ -197,12 +197,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformUnknownLiteral);
 
 	REGISTER_TRANSFORM(TransformPrefixOperator);
-	REGISTER_TRANSFORM(TransformListExpression);
-	REGISTER_TRANSFORM(TransformStructExpression);
-	REGISTER_TRANSFORM(TransformStructField);
-	REGISTER_TRANSFORM(TransformBoundedListExpression);
-	REGISTER_TRANSFORM(TransformArrayBoundedListExpression);
-	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFilterClause);
 	REGISTER_TRANSFORM(TransformIndirection);
@@ -258,9 +252,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIntervalLiteral);
 	REGISTER_TRANSFORM(TransformIntervalParameter);
 	REGISTER_TRANSFORM(TransformSubqueryExpression);
-	REGISTER_TRANSFORM(TransformMapExpression);
-	REGISTER_TRANSFORM(TransformMapStructExpression);
-	REGISTER_TRANSFORM(TransformMapStructField);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 	REGISTER_TRANSFORM(TransformListComprehensionFilter);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);

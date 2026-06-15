@@ -393,7 +393,6 @@ Expression:
     - ArrayBoundedListExpression
     - ArrayParensSelect
     - StructExpression
-    - StructField
     - FunctionExpression
     - FilterClause
     - ParenthesisExpression
@@ -602,6 +601,7 @@ FunctionArgument:
     - FunctionArgument
     - NamedFunctionArgument
     - PositionalFunctionArgument
+    - StructField
 
 GroupByExpressionInfo:
   type: "GroupByExpressionInfo"
@@ -1639,15 +1639,6 @@ excluded_rules:
   - WindowFrameContents
   - BaseWindowName
   - WindowPartition
-  - ListExpression
-  - ArrayBoundedListExpression
-  - ArrayParensSelect
-  - BoundedListExpression
-  - StructExpression
-  - StructField
-  - MapExpression
-  - MapStructExpression
-  - MapStructField
   - GroupingExpression
   - ListComprehensionExpression
   - ListComprehensionFilter
