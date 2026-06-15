@@ -104,7 +104,8 @@ static bool ExpressionIsNotNull(ClientContext &context, LogicalOperator &op, con
 		}
 		if (get.table_filters.HasFilter(binding.column_index)) {
 			auto column_expr = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
-			auto filter_expr = get.table_filters.GetFilterByColumnIndex(binding.column_index).ToExpression(*column_expr);
+			auto filter_expr =
+			    get.table_filters.GetFilterByColumnIndex(binding.column_index).ToExpression(*column_expr);
 			if (FilterNullRejectsExpression(*filter_expr, expr)) {
 				return true;
 			}
@@ -138,7 +139,8 @@ static void SimplifyNullSafeSemiJoinConditions(ClientContext &context, LogicalCo
 		    !ExpressionIsNotNull(context, *join.children[1], cond.GetRHS())) {
 			continue;
 		}
-		cond = JoinCondition(cond.LeftReference()->Copy(), cond.RightReference()->Copy(), ExpressionType::COMPARE_EQUAL);
+		cond =
+		    JoinCondition(cond.LeftReference()->Copy(), cond.RightReference()->Copy(), ExpressionType::COMPARE_EQUAL);
 	}
 }
 
