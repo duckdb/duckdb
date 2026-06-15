@@ -18,7 +18,9 @@ r
 sql_current_statement
 sql_next_statement
 sql_next_matching_statement --kind query
+sql_next_matching_statement --connection con2
 sql_watch_statement --file test/sql/join --loop i=3
+sql_watch_statement --connection con2
 sql_next_watch
 sql_list_watches
 sql_delete_watch 5
@@ -33,7 +35,7 @@ command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.
 ### Commands
 
 - `sql_current_statement`
-  - prints the sqllogictest file, line, kind, SQL, and active loop values
+  - prints the sqllogictest file, line, kind, connection, SQL, and active loop values
 - `sql_next_statement`
   - continues until the next sqllogictest statement/query
 - `sql_next_matching_statement`
@@ -56,6 +58,7 @@ command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.
 - `--line-min <n>`
 - `--line-max <n>`
 - `--kind query|statement`
+- `--connection <name>`
 - `--loop <name>`
 - `--loop <name>=<value>`
 

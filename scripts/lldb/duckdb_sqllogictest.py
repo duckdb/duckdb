@@ -266,6 +266,7 @@ def _default_matcher():
         "line_min": None,
         "line_max": None,
         "kind": None,
+        "connection": None,
         "loops": [],
     }
 
@@ -277,6 +278,7 @@ def _parse_matcher_command(prog, command):
     parser.add_argument("--line-min", type=int)
     parser.add_argument("--line-max", type=int)
     parser.add_argument("--kind", choices=("query", "statement"))
+    parser.add_argument("--connection")
     parser.add_argument("--loop", action="append", default=[])
 
     try:
@@ -290,6 +292,7 @@ def _parse_matcher_command(prog, command):
     matcher["line_min"] = args.line_min
     matcher["line_max"] = args.line_max
     matcher["kind"] = args.kind
+    matcher["connection"] = args.connection
 
     if matcher["line"] is not None:
         if matcher["line_min"] is not None or matcher["line_max"] is not None:
@@ -311,7 +314,8 @@ def _parse_matcher_command(prog, command):
 def _matcher_usage(prog):
     return (
         "usage: {} [--file <substring>] [--line <n>] [--line-min <n>] "
-        "[--line-max <n>] [--kind query|statement] [--loop <name>[=<value>]]".format(prog)
+        "[--line-max <n>] [--kind query|statement] [--connection <name>] "
+        "[--loop <name>[=<value>]]".format(prog)
     )
 
 
@@ -410,6 +414,7 @@ def _find_sqllogictest_context(thread):
             "file_name": None,
             "query_line": None,
             "sql_text": None,
+            "connection_name": None,
             "running_loops": [],
             "loop_values": {},
         }
@@ -418,6 +423,7 @@ def _find_sqllogictest_context(thread):
             context["file_name"] = _read_cpp_string(frame, "this->file_name")
             context["query_line"] = _read_int(frame, "this->query_line")
             context["sql_text"] = _read_cpp_string(frame, "context.sql_query")
+            context["connection_name"] = _read_cpp_string(frame, "this->connection_name")
             if not context["sql_text"]:
                 context["sql_text"] = _read_cpp_string(frame, "this->base_sql_query")
             context["running_loops"] = _read_running_loops(frame, "context.running_loops")
@@ -425,6 +431,7 @@ def _find_sqllogictest_context(thread):
             context["file_name"] = _read_cpp_string(frame, "file_name")
             context["query_line"] = _read_int(frame, "query_line")
             context["sql_text"] = _read_cpp_string(frame, "context.sql_query")
+            context["connection_name"] = _read_cpp_string(frame, "this->connection_name")
             context["running_loops"] = _read_running_loops(frame, "context.running_loops")
 
         context["loop_values"] = {loop["name"]: loop["value"] for loop in context["running_loops"]}
@@ -508,6 +515,8 @@ def _format_statement_context(context):
         first_line = "{}:{}".format(file_name, query_line)
     if kind:
         first_line = "{} [{}]".format(first_line, kind)
+    if context["connection_name"]:
+        first_line = "{} connection={}".format(first_line, context["connection_name"])
     lines.append(first_line)
 
     if context["running_loops"]:
@@ -537,6 +546,8 @@ def _matches_context(context, matcher):
 
     if matcher["kind"] is not None and context["kind"] != matcher["kind"]:
         return False
+    if matcher["connection"] is not None and context["connection_name"] != matcher["connection"]:
+        return False
 
     for loop_filter in matcher["loops"]:
         loop_name = loop_filter["name"]
@@ -562,6 +573,8 @@ def _describe_matcher(matcher):
             parts.append("line<={}".format(matcher["line_max"]))
     if matcher["kind"] is not None:
         parts.append("kind={}".format(matcher["kind"]))
+    if matcher["connection"] is not None:
+        parts.append("connection={}".format(matcher["connection"]))
     for loop_filter in matcher["loops"]:
         if loop_filter["value"] is None:
             parts.append("loop {}".format(loop_filter["name"]))
