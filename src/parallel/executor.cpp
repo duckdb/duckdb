@@ -1,5 +1,6 @@
 #include "duckdb/execution/executor.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -18,7 +19,6 @@
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 #include <algorithm>
 #include <chrono>
