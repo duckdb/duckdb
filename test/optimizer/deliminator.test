@@ -29,7 +29,7 @@ logical_opt	<!REGEX>:.*SINGLE.*
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<REGEX>:.*Groups: p_partkey.*COMPARISON_JOIN.*l_partkey = p_partkey.*(DELIM_GET|CTE_SCAN).*
+logical_opt	<REGEX>:.*Groups: p_partkey.*COMPARISON_JOIN.*(l_partkey = p_partkey|p_partkey = l_partkey).*(DELIM_GET|CTE_SCAN).*
 
 # Q 17: if we remove the filters """ p_brand = 'Brand#23' AND p_container = 'MED BOX' """ we can remove the whole DELIM join
 query II
@@ -202,7 +202,7 @@ logical_opt	<REGEX>:.*Join Type: RIGHT_SEMI.*x = x.*
 query II
 EXPLAIN SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal FROM customer WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT avg(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode;
 ----
-logical_opt	<REGEX>:.*__duckdb_delim.*Join Type: MARK.*Join Type: INNER.*o_custkey = c_custkey.*
+logical_opt	<REGEX>:.*__duckdb_delim.*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
 
 # Q 21: nested EXISTS/NOT EXISTS domains should still fully decorrelate
 query II

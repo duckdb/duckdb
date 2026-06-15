@@ -446,17 +446,18 @@ struct GeneratedDedupRef {
 	bool has_projection = false;
 };
 
-static bool IsEqualityJoinCondition(const JoinCondition &cond) {
-	if (!cond.IsComparison()) {
-		return false;
-	}
-	switch (cond.GetComparisonType()) {
+static bool IsEqualityComparison(ExpressionType comparison_type) {
+	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		return true;
 	default:
 		return false;
 	}
+}
+
+static bool IsEqualityJoinCondition(const JoinCondition &cond) {
+	return cond.IsComparison() && IsEqualityComparison(cond.GetComparisonType());
 }
 
 static bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings,
@@ -529,7 +530,7 @@ static void ReplaceExpressionBindings(unique_ptr<Expression> &expr, const vector
 	replacer.VisitExpression(&expr);
 }
 
-static bool GetBoundColumnRefBinding(Expression &expr, ColumnBinding &binding) {
+static bool GetBoundColumnRefBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
@@ -612,14 +613,14 @@ public:
 private:
 	unique_ptr<GeneratedDedupRef> GetGeneratedDedupRef(LogicalOperator &op, bool collect_filters = false,
 	                                                   bool allow_projection = false) const;
-	bool ExpressionReferencesGeneratedDedupRef(Expression &expr, const GeneratedDedupRef &dedup_ref) const;
+	bool ExpressionReferencesGeneratedDedupRef(const Expression &expr, const GeneratedDedupRef &dedup_ref) const;
 	bool AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding,
 	                    ColumnBinding new_binding) const;
 	bool AddReplacement(vector<ReplacementBinding> &replacements, ColumnBinding old_binding, ColumnBinding new_binding,
 	                    const LogicalType &new_type) const;
 	bool CoversAllDedupColumns(const GeneratedDedupRef &dedup_ref, const vector<ColumnBinding> &bindings) const;
-	optional_idx FindGeneratedOutputBinding(Expression &expr, const GeneratedDedupRef &dedup_ref) const;
-	bool ExpressionReferencesGeneratedSide(Expression &expr, const GeneratedDedupRef &dedup_ref) const;
+	optional_idx FindGeneratedOutputBinding(const Expression &expr, const GeneratedDedupRef &dedup_ref) const;
+	bool ExpressionReferencesGeneratedSide(const Expression &expr, const GeneratedDedupRef &dedup_ref) const;
 	bool FilterIsGeneratedDedupCrossProduct(LogicalOperator &op) const;
 	void FindJoinsWithGeneratedDedupRefs(unique_ptr<LogicalOperator> &op, vector<JoinWithGeneratedDedupRef> &joins,
 	                                     idx_t depth = 0, bool under_aggregate = false,
@@ -628,6 +629,7 @@ private:
 	bool RemoveInequalityJoinConditions(LogicalOperator &target_op, const vector<JoinCondition> &join_conditions,
 	                                    idx_t dedup_idx);
 	bool PreserveJoinAsSemi(unique_ptr<LogicalOperator> &join);
+	bool PreserveFilterCrossProductAsSemi(unique_ptr<LogicalOperator> &filter_op);
 	bool RemoveJoin(unique_ptr<LogicalOperator> &join);
 	bool RemoveFilterCrossProduct(unique_ptr<LogicalOperator> &filter_op);
 
@@ -708,7 +710,7 @@ unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(
 	return nullptr;
 }
 
-bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedDedupRef(Expression &expr,
+bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedDedupRef(const Expression &expr,
                                                                         const GeneratedDedupRef &dedup_ref) const {
 	bool found = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
@@ -768,7 +770,7 @@ bool GeneratedDedupRefEliminator::CoversAllDedupColumns(const GeneratedDedupRef 
 	return true;
 }
 
-optional_idx GeneratedDedupRefEliminator::FindGeneratedOutputBinding(Expression &expr,
+optional_idx GeneratedDedupRefEliminator::FindGeneratedOutputBinding(const Expression &expr,
                                                                      const GeneratedDedupRef &dedup_ref) const {
 	optional_idx result;
 	bool unsupported = false;
@@ -789,7 +791,7 @@ optional_idx GeneratedDedupRefEliminator::FindGeneratedOutputBinding(Expression 
 	return unsupported ? optional_idx() : result;
 }
 
-bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedSide(Expression &expr,
+bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedSide(const Expression &expr,
                                                                     const GeneratedDedupRef &dedup_ref) const {
 	if (ExpressionReferencesGeneratedDedupRef(expr, dedup_ref)) {
 		return true;
@@ -1079,6 +1081,122 @@ bool GeneratedDedupRefEliminator::PreserveJoinAsSemi(unique_ptr<LogicalOperator>
 	return true;
 }
 
+bool GeneratedDedupRefEliminator::PreserveFilterCrossProductAsSemi(unique_ptr<LogicalOperator> &filter_op) {
+	auto &filter = filter_op->Cast<LogicalFilter>();
+	if (filter.HasProjectionMap() || filter.children.size() != 1 ||
+	    filter.children[0]->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return false;
+	}
+	auto &cross_product = *filter.children[0];
+	if (cross_product.children.size() != 2) {
+		return false;
+	}
+
+	const idx_t dedup_idx = GetGeneratedDedupRef(*cross_product.children[0], false, true) ? 0 : 1;
+	auto dedup_ref = GetGeneratedDedupRef(*cross_product.children[dedup_idx], false, true);
+	if (!dedup_ref) {
+		return false;
+	}
+
+	filter.SplitPredicates();
+	vector<bool> consumed(filter.expressions.size(), false);
+	vector<ColumnBinding> covered_dedup_bindings;
+	covered_dedup_bindings.reserve(dedup_ref->output_bindings.size());
+	vector<ColumnBinding> base_replacement_bindings;
+	vector<unique_ptr<Expression>> base_replacement_expressions;
+	vector<JoinCondition> semi_conditions;
+	ColumnBindingReplacer replacer;
+	auto &replacement_bindings = replacer.replacement_bindings;
+
+	for (idx_t expr_idx = 0; expr_idx < filter.expressions.size(); expr_idx++) {
+		auto &expr = *filter.expressions[expr_idx];
+		if (!BoundComparisonExpression::IsComparison(expr) || !IsEqualityComparison(expr.GetExpressionType())) {
+			continue;
+		}
+		auto &comparison = expr.Cast<BoundFunctionExpression>();
+		auto &lhs = BoundComparisonExpression::Left(comparison);
+		auto &rhs = BoundComparisonExpression::Right(comparison);
+
+		auto lhs_generated_idx = FindGeneratedOutputBinding(lhs, *dedup_ref);
+		auto rhs_generated_idx = FindGeneratedOutputBinding(rhs, *dedup_ref);
+		if (lhs_generated_idx.IsValid() == rhs_generated_idx.IsValid()) {
+			continue;
+		}
+
+		auto generated_idx = lhs_generated_idx.IsValid() ? lhs_generated_idx.GetIndex() : rhs_generated_idx.GetIndex();
+		auto &generated_binding = dedup_ref->output_bindings[generated_idx];
+		auto &generated_expression = *dedup_ref->output_expressions[generated_idx];
+		auto &other_side = lhs_generated_idx.IsValid() ? rhs : lhs;
+
+		ColumnBinding other_binding;
+		if (!GetBoundColumnRefBinding(other_side, other_binding)) {
+			return false;
+		}
+		if (!AddReplacement(replacement_bindings, generated_binding, other_binding,
+		                    generated_expression.GetReturnType())) {
+			return false;
+		}
+
+		ColumnBinding base_binding;
+		if (GetBoundColumnRefBinding(generated_expression, base_binding) &&
+		    base_binding.table_index == dedup_ref->cte_ref->table_index) {
+			if (!AddReplacement(replacement_bindings, base_binding, other_binding)) {
+				return false;
+			}
+			covered_dedup_bindings.emplace_back(base_binding);
+			base_replacement_bindings.push_back(base_binding);
+			base_replacement_expressions.push_back(other_side.Copy());
+		}
+
+		auto generated_expr = lhs_generated_idx.IsValid() ? lhs.Copy() : rhs.Copy();
+		auto other_expr = lhs_generated_idx.IsValid() ? rhs.Copy() : lhs.Copy();
+		auto comparison_type =
+		    lhs_generated_idx.IsValid() ? FlipComparisonExpression(expr.GetExpressionType()) : expr.GetExpressionType();
+		semi_conditions.emplace_back(std::move(other_expr), std::move(generated_expr), comparison_type);
+		consumed[expr_idx] = true;
+	}
+
+	if (semi_conditions.empty() || !CoversAllDedupColumns(*dedup_ref, covered_dedup_bindings)) {
+		return false;
+	}
+	for (idx_t expr_idx = 0; expr_idx < filter.expressions.size(); expr_idx++) {
+		if (!consumed[expr_idx] && ExpressionReferencesGeneratedSide(*filter.expressions[expr_idx], *dedup_ref)) {
+			return false;
+		}
+	}
+
+	vector<unique_ptr<Expression>> generated_output_replacements;
+	generated_output_replacements.reserve(dedup_ref->output_expressions.size());
+	for (auto &expr : dedup_ref->output_expressions) {
+		auto rewritten_expr = expr->Copy();
+		ReplaceExpressionBindings(rewritten_expr, base_replacement_bindings, base_replacement_expressions);
+		if (ExpressionReferencesGeneratedSide(*rewritten_expr, *dedup_ref)) {
+			return false;
+		}
+		generated_output_replacements.push_back(std::move(rewritten_expr));
+	}
+
+	auto semi_join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	semi_join->conditions = std::move(semi_conditions);
+	semi_join->children.push_back(std::move(cross_product.children[1 - dedup_idx]));
+	semi_join->children.push_back(std::move(cross_product.children[dedup_idx]));
+	semi_join->ResolveOperatorTypes();
+
+	unique_ptr<LogicalOperator> replacement_op = std::move(semi_join);
+	for (idx_t expr_idx = 0; expr_idx < filter.expressions.size(); expr_idx++) {
+		if (consumed[expr_idx]) {
+			continue;
+		}
+		AddFilterToOperator(replacement_op, std::move(filter.expressions[expr_idx]));
+	}
+
+	filter_op = std::move(replacement_op);
+	replacer.stop_operator = filter_op.get();
+	replacer.VisitOperator(rewrite_root);
+	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements, filter_op.get());
+	return true;
+}
+
 bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (comparison_join.join_type != JoinType::INNER && comparison_join.join_type != JoinType::SEMI) {
@@ -1347,7 +1465,9 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 		if (preserve_selected_domain && (join.under_aggregate || join.under_evidence_side)) {
 			// This join is a semijoin reduction for a grouped RHS or an existence-check evidence side. Removing it is
 			// valid, but can turn a selective correlated subquery into a global aggregate or full evidence scan.
-			if (!join.filter_cross_product) {
+			if (join.filter_cross_product) {
+				PreserveFilterCrossProductAsSemi(join.join.get());
+			} else {
 				PreserveJoinAsSemi(join.join.get());
 			}
 			continue;
