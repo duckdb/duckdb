@@ -26,7 +26,7 @@ namespace duckdb {
 
 struct LegacyStructPathEntry {
 	idx_t child_idx;
-	string child_name;
+	Identifier child_name;
 };
 
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
@@ -103,7 +103,7 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 		if (!TryExtractLegacySubject(*func.GetChildren()[0], struct_path)) {
 			return false;
 		}
-		string child_name;
+		Identifier child_name;
 		if (func.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
 		    !StructType::IsUnnamed(func.GetChildren()[0]->GetReturnType())) {
 			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx);
@@ -246,8 +246,7 @@ static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const Bou
 		auto &data = func_expr.BindInfo()->Cast<DynamicFilterFunctionData>();
 		return make_uniq<LegacyDynamicFilter>(data.filter_data);
 	}
-	if (func_name == BloomFilterScalarFun::NAME || func_name == PerfectHashJoinScalarFun::NAME ||
-	    func_name == PrefixRangeScalarFun::NAME) {
+	if (func_name == BloomFilterScalarFun::NAME || func_name == PrefixRangeScalarFun::NAME) {
 		return make_uniq<LegacyOptionalFilter>();
 	}
 	throw SerializationException("Unsupported internal tablefilter function \"%s\" during serialization", func_name);

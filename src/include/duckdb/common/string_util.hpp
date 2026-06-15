@@ -143,6 +143,7 @@ public:
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
+	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
 
 	//! Encode special URL characters in a string
@@ -229,6 +230,7 @@ public:
 
 	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
 	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);
+	DUCKDB_API static idx_t CIFind(const vector<Identifier> &vec, const Identifier &str);
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>
@@ -262,6 +264,7 @@ public:
 	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
 	//! Returns a normalized similarity rating between 0.0 - 1.0 (higher is more similar)
 	DUCKDB_API static double SimilarityRating(const string &s1, const string &s2);
+	DUCKDB_API static double SimilarityRating(const Identifier &s1, const Identifier &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! The scores should be normalized between 0.0 and 1.0, where 1.0 is the highest score
 	//! At least one entry is returned (if there is one).
@@ -278,6 +281,8 @@ public:
 	                                                 idx_t threshold = 5);
 	//! Computes the jaro winkler distance of each string in strings, and compares it to target, then returns
 	//! TopNStrings with the given params.
+	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const Identifier &target,
+	                                                 idx_t n = 5, double threshold = 0.5);
 	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                                 double threshold = 0.5);
 	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates,

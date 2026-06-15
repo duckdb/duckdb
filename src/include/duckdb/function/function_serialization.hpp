@@ -27,8 +27,8 @@ public:
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
-		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName(), "");
-		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName(), "");
+		serializer.WritePropertyWithDefault<Identifier>(505, "catalog_name", function.GetCatalogName(), Identifier());
+		serializer.WritePropertyWithDefault<Identifier>(506, "schema_name", function.GetSchemaName(), Identifier());
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -40,16 +40,18 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
-	                                const string &schema_name, const string &name, const vector<LogicalType> &arguments,
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const Identifier &catalog_name,
+	                                const Identifier &schema_name, const Identifier &name,
+	                                const vector<LogicalType> &arguments,
 	                                const vector<LogicalType> &original_arguments) {
 		EntryLookupInfo lookup_info(catalog_type, name);
 		auto &func_catalog =
-		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
-		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
+		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                      schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name);
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		auto function = functions.functions.GetFunctionByArguments(
@@ -61,16 +63,16 @@ public:
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type,
 	                                        optional_ptr<vector<unique_ptr<Expression>>> children = nullptr) {
 		auto &context = deserializer.Get<ClientContext &>();
-		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
-		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		if (catalog_name.empty()) {
-			catalog_name = SYSTEM_CATALOG;
+			catalog_name = Identifier::SystemCatalog();
 		}
 		if (schema_name.empty()) {
-			schema_name = DEFAULT_SCHEMA;
+			schema_name = Identifier::DefaultSchema();
 		}
 
 		if (arguments.empty() && original_arguments.empty() && children && !children->empty()) {
@@ -148,18 +150,18 @@ public:
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
 
-		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto name = deserializer.ReadProperty<Identifier>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
-		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(506, "schema_name");
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
 		if (catalog_name.empty()) {
-			catalog_name = SYSTEM_CATALOG;
+			catalog_name = Identifier::SystemCatalog();
 		}
 		if (schema_name.empty()) {
-			schema_name = DEFAULT_SCHEMA;
+			schema_name = Identifier::DefaultSchema();
 		}
 
 		if (arguments.empty() && original_arguments.empty() && !children.empty()) {
@@ -177,7 +179,8 @@ public:
 		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
+			                        name.GetIdentifierName());
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		const auto &function = functions.functions.GetFunctionByArguments(

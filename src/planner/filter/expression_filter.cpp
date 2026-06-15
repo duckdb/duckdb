@@ -15,7 +15,6 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -72,9 +71,16 @@ static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
 	       func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME;
 }
 
-static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_through_and) {
+static bool IsNonSelectivityOptionalInternalFunction(const BoundFunctionExpression &func) {
+	return func.Function().GetName() == OptionalFilterScalarFun::NAME;
+}
+
+static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_through_and,
+                                         bool include_selectivity_optional) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		return IsOptionalInternalFunction(expr.Cast<BoundFunctionExpression>());
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		return include_selectivity_optional ? IsOptionalInternalFunction(func)
+		                                    : IsNonSelectivityOptionalInternalFunction(func);
 	}
 	if (!recurse_through_and || expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
 	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
@@ -85,7 +91,7 @@ static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_th
 		return false;
 	}
 	for (auto &child : conj.GetChildren()) {
-		if (!IsOptionalExpressionInternal(*child, true)) {
+		if (!IsOptionalExpressionInternal(*child, true, include_selectivity_optional)) {
 			return false;
 		}
 	}
@@ -488,11 +494,11 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 }
 
 bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
-	return IsOptionalExpressionInternal(expr, true);
+	return IsOptionalExpressionInternal(expr, true, true);
 }
 
 bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {
-	return IsOptionalExpressionInternal(expr, false);
+	return IsOptionalExpressionInternal(expr, false, true);
 }
 
 bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
@@ -503,6 +509,11 @@ bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
 bool ExpressionFilter::IsRootOptionalFilter(const TableFilter &filter) {
 	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::IsRootOptionalFilter");
 	return IsRootOptionalExpression(*expr_filter.expr);
+}
+
+bool ExpressionFilter::IsRootNonSelectivityOptionalFilter(const TableFilter &filter) {
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::IsRootNonSelectivityOptionalFilter");
+	return IsOptionalExpressionInternal(*expr_filter.expr, false, false);
 }
 
 static shared_ptr<DynamicFilterData> TryGetRootDynamicFilterData(const Expression &expr) {
@@ -552,9 +563,6 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 	if (func_name == BloomFilterScalarFun::NAME) {
 		auto &data = func_expr.BindInfo()->Cast<BloomFilterFunctionData>();
 		return BloomFilterScalarFun::ToString(column_name, data.key_column_name);
-	} else if (func_name == PerfectHashJoinScalarFun::NAME) {
-		auto &data = func_expr.BindInfo()->Cast<PerfectHashJoinFunctionData>();
-		return PerfectHashJoinScalarFun::ToString(column_name, data.key_column_name);
 	} else if (func_name == PrefixRangeScalarFun::NAME) {
 		auto &data = func_expr.BindInfo()->Cast<PrefixRangeFunctionData>();
 		return PrefixRangeScalarFun::ToString(column_name, data.key_column_name);
@@ -608,7 +616,7 @@ string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression
 	}
 	// Default: use standard expression ToString with column name substitution
 	auto expr_copy = expression.Copy();
-	auto name_expr = make_uniq<BoundReferenceExpression>(column_name, LogicalType::INVALID, 0ULL);
+	auto name_expr = make_uniq<BoundReferenceExpression>(Identifier(column_name), LogicalType::INVALID, 0ULL);
 	ReplaceExpressionRecursive(expr_copy, *name_expr, ExpressionType::BOUND_REF);
 	return expr_copy->ToString();
 }

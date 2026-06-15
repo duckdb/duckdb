@@ -6,7 +6,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCheckpointStatement(PEGTransformer &transformer,
                                                                              const bool &checkpoint_force,
-                                                                             const string &catalog_name) {
+                                                                             const Identifier &catalog_name) {
 	auto checkpoint_name = checkpoint_force ? "force_checkpoint" : "checkpoint";
 	auto result = make_uniq<CallStatement>();
 	vector<unique_ptr<ParsedExpression>> children;

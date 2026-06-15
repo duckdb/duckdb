@@ -228,6 +228,12 @@ public:
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
 
+	//! Per-thread counters for row groups whose data was read / skipped, incremented as row groups are processed.
+	//! Read in ParquetScanGetMetrics and surfaced as the standard row_groups_scanned / total_row_groups_to_scan
+	//! profiling metrics (the profiler sums them across threads).
+	idx_t row_groups_read = 0;
+	idx_t row_groups_skipped = 0;
+
 	//! Prefetch cost model
 	PrefetchCostModelState cost_model_state;
 };
@@ -285,7 +291,7 @@ struct ParquetUnionData : public BaseUnionData {
 	~ParquetUnionData() override;
 
 	optional_idx TryGetCardinalityEstimate() const override;
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 
 	ParquetOptions options;
 	shared_ptr<ParquetFileMetadataCache> metadata;
@@ -293,6 +299,10 @@ struct ParquetUnionData : public BaseUnionData {
 };
 
 class ParquetReader : public BaseFileReader {
+public:
+	//! Virtual column identifier for the "file_row_group_number" column (the file-relative row group index of each row)
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER = UINT64_C(9223372036854775820);
+
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
@@ -313,7 +323,7 @@ public:
 	}
 
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;
 
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
@@ -344,15 +354,16 @@ public:
 	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const;
 
-	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
+	unique_ptr<BaseStatistics> ReadStatistics(const Identifier &name);
 
 	CachingFileHandle &GetHandle() {
 		return *file_handle;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
-	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
-	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const string &name);
+	                                                 shared_ptr<ParquetFileMetadataCache> metadata,
+	                                                 const Identifier &name);
+	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const Identifier &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
@@ -385,7 +396,7 @@ private:
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
-	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,

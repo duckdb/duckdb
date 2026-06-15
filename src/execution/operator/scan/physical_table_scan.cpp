@@ -59,7 +59,6 @@ public:
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c], count_t(1));
 			}
-			input_chunk.SetChildCardinality(1);
 		}
 	}
 
@@ -330,7 +329,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				if (entry == virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
-				filters_info += filter.ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name.GetIdentifierName());
 			} else {
 				auto column_name = column_id.GetName(names[col_id]);
 				filters_info += filter.ToString(column_name);
@@ -349,7 +348,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Function"] = StringUtil::Upper(function.name);
+		result["Function"] = StringUtil::Upper(function.name.GetIdentifierName());
 	}
 	if (function.projection_pushdown) {
 		string projections;
@@ -374,7 +373,8 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	}
 
 	if (extra_info.sample_options) {
-		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() +
+		                          (extra_info.sample_options->is_percentage ? "%" : " rows");
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

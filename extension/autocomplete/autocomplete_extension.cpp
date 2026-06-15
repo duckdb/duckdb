@@ -128,7 +128,7 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = *entry_ref;
-		AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_CATALOG_NAME, 0);
+		AutoCompleteCandidate candidate(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_CATALOG_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -140,7 +140,7 @@ static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
 	auto all_entries = GetAllSchemas(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = entry_ref.get();
-		AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_SCHEMA_NAME, 0);
+		AutoCompleteCandidate candidate(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_SCHEMA_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -154,7 +154,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		// prioritize user-defined entries (views & tables)
 		int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
-		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, bonus);
+		suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_TABLE_NAME, bonus);
 	}
 	return suggestions;
 }
@@ -166,7 +166,8 @@ static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		// prioritize user-defined types
 		int32_t bonus = (entry.internal) ? 0 : 1;
-		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TYPE_NAME, bonus, CandidateType::KEYWORD);
+		suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_TYPE_NAME, bonus,
+		                         CandidateType::KEYWORD);
 	}
 	return suggestions;
 }
@@ -188,7 +189,7 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 			if (column_info) {
 				// view has names
 				for (idx_t n = 0; n < column_info->names.size(); n++) {
-					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+					auto name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
 					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 				}
 			} else {
@@ -198,11 +199,11 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 				}
 			}
 		} else {
-			if (StringUtil::CharacterIsOperator(entry.name[0])) {
+			if (StringUtil::CharacterIsOperator(entry.name.GetIdentifierName()[0])) {
 				continue;
 			}
 			int32_t bonus = entry.internal ? 0 : 2;
-			suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			suggestions.emplace_back(entry.name.GetIdentifierName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 		};
 	}
 	return suggestions;
@@ -222,7 +223,7 @@ static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
 	for (const auto &pragma : all_pragmas) {
-		AutoCompleteCandidate candidate(pragma.get().name, SuggestionState::SUGGEST_PRAGMA_NAME, 0);
+		AutoCompleteCandidate candidate(pragma.get().name.GetIdentifierName(), SuggestionState::SUGGEST_PRAGMA_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
@@ -252,7 +253,8 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 	vector<AutoCompleteCandidate> suggestions;
 	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
 	for (const auto &scalar_function : scalar_functions) {
-		AutoCompleteCandidate candidate(scalar_function.get().name, SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, 0);
+		AutoCompleteCandidate candidate(scalar_function.get().name.GetIdentifierName(),
+		                                SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 
@@ -263,7 +265,8 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 	vector<AutoCompleteCandidate> suggestions;
 	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
 	for (const auto &table_function : table_functions) {
-		AutoCompleteCandidate candidate(table_function.get().name, SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, 0);
+		AutoCompleteCandidate candidate(table_function.get().name.GetIdentifierName(),
+		                                SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 
@@ -462,7 +465,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
-	peg_matcher->Root().Match(state);
+	peg_matcher->ProgramMatcher().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
 }
@@ -510,6 +513,9 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
+		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			continue;
+		}
 
 		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
 		token_type.Append(Value(TokenTypeToString(entry.type)));
@@ -533,8 +539,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
+	tokenizer.TokenizeInput();
+	if (!tokenizer.CanAutocomplete()) {
 		return nullptr;
 	}
 
@@ -548,8 +554,10 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
 	auto peg_matcher = PEGMatcher::Get(context);
-	auto match_result = peg_matcher->Root().Match(state);
-	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+	auto match_result = peg_matcher->ProgramMatcher().Match(state);
+	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
+	// consuming it.
+	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
 			if (!token_list.empty()) {

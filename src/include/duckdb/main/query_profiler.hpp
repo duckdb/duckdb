@@ -11,10 +11,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -24,8 +24,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/profiling_node.hpp"
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 
 namespace duckdb {
 
@@ -33,6 +33,7 @@ class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
+class TreeRenderer;
 class SQLStatement;
 struct MetricsTimer;
 class OperatorProfiler;
@@ -83,8 +84,13 @@ public:
 
 public:
 	DUCKDB_API bool IsEnabled() const;
-	DUCKDB_API bool IsDetailedEnabled() const;
-	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	//! Create the TreeRenderer for the given profiler format name (e.g. "json", "query_tree"). Returns nullptr for the
+	//! "no_output" format, and throws if the format name is not recognized.
+	DUCKDB_API unique_ptr<TreeRenderer> CreateProfiler(const string &name) const;
+	//! Returns the renderer to use for the given ProfilerPrintFormat, taking the configured default format into
+	//! account.
+	DUCKDB_API unique_ptr<TreeRenderer>
+	GetRenderer(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -133,10 +139,15 @@ public:
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
 	DUCKDB_API void Print();
 
-	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
-	//! the return value is formatted based on the current print format (see GetPrintFormat()).
-	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
-	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
+	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
+	//! default profiler format when ProfilerPrintFormat::Default is passed).
+	DUCKDB_API string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
+	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
+	//! profiling-disabled and no-output cases.
+	DUCKDB_API string ToString(const string &profiler_format_name) const;
+	//! Render the profiling node tree using the given renderer. Returns an empty string when there is no tree to
+	//! render. Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
+	DUCKDB_API string RenderProfilingNodeTree(TreeRenderer &renderer) const;
 
 	// Sanitize a Value::MAP
 	static Value JSONSanitize(const Value &input);
@@ -156,7 +167,8 @@ public:
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
-	string RenderDisabledMessage(ProfilerPrintFormat format) const;
+	//! Render the profiler output via the given renderer (nullptr renders nothing), handling the disabled case.
+	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
 private:
 	ClientContext &context;
@@ -202,7 +214,6 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(const PhysicalOperatorType op_type);
-	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 
 } // namespace duckdb

@@ -83,16 +83,16 @@ public:
 	                                                                   vector<unique_ptr<Expression>> &filters);
 	DUCKDB_API virtual unique_ptr<MultiFileList>
 	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<string> &names, const vector<LogicalType> &types,
+	                      const vector<Identifier> &names, const vector<LogicalType> &types,
 	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
 	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-	                             vector<string> &names, MultiFileReaderBindData &bind_data);
+	                             vector<Identifier> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
 	DUCKDB_API virtual void BindOptions(MultiFileOptions &options, MultiFileList &files,
-	                                    vector<LogicalType> &return_types, vector<string> &names,
+	                                    vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                    MultiFileReaderBindData &bind_data);
 
 	//! Initialize global state used by the MultiFileReader
@@ -141,12 +141,12 @@ public:
 	                                         virtual_column_map_t &result);
 
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
-	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, MultiFileBindData &result, BaseFileReaderOptions &options,
-	                                   MultiFileOptions &file_options);
+	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                   vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
+	                                   BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
 	DUCKDB_API virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data,
 	                                                         const MultiFileBindData &bind_data,
@@ -198,7 +198,7 @@ public:
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
-	string function_name;
+	Identifier function_name;
 
 public:
 	template <class TARGET>

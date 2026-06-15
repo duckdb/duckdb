@@ -105,7 +105,7 @@ struct LocalTableFunctionState {
 
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
-	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+	                       vector<LogicalType> &input_table_types, vector<Identifier> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
 	                       TableFunction &table_function, const TableFunctionRef &ref,
 	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
@@ -117,7 +117,7 @@ struct TableFunctionBindInput {
 	vector<Value> &inputs;
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
-	vector<string> &input_table_names;
+	vector<Identifier> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
@@ -377,7 +377,7 @@ public:
 	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -385,7 +385,7 @@ public:
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 	// Overloads taking std::nullptr
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API

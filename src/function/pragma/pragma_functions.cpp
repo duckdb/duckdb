@@ -22,12 +22,11 @@ namespace duckdb {
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
 	PragmaFunctionSet functions("");
-	functions.AddFunction(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
+	functions.AddFunction(PragmaFunction::PragmaStatement(Identifier(), PragmaEnableProfilingStatement));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);

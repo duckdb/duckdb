@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -654,6 +655,45 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
+static idx_t SystemRowsSelection(const ScanSamplingInfo &sampling_info, idx_t start_row, idx_t count,
+                                 SelectionVector &sel) {
+	auto rate = sampling_info.sample_rate;
+	if (rate >= 1) {
+		return count;
+	}
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto row_idx = start_row + i;
+		auto before = std::floor(LossyNumericCast<double>(row_idx) * rate + sampling_info.sample_phase);
+		auto after = std::floor(LossyNumericCast<double>(row_idx + 1) * rate + sampling_info.sample_phase);
+		if (after > before) {
+			sel.set_index(result_count++, i);
+		}
+	}
+	return result_count;
+}
+
+static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, const SelectionVector &right,
+                                 idx_t right_count, SelectionVector &result) {
+	idx_t left_idx = 0;
+	idx_t right_idx = 0;
+	idx_t result_count = 0;
+	while (left_idx < left_count && right_idx < right_count) {
+		auto left_entry = left.get_index(left_idx);
+		auto right_entry = right.get_index(right_idx);
+		if (left_entry == right_entry) {
+			result.set_index(result_count++, left_entry);
+			left_idx++;
+			right_idx++;
+		} else if (left_entry < right_entry) {
+			left_idx++;
+		} else {
+			right_idx++;
+		}
+	}
+	return result_count;
+}
+
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
@@ -678,7 +718,7 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
+		if (ExpressionFilter::IsRootNonSelectivityOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -758,13 +798,37 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			return;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		bool has_sample_selection = false;
+		idx_t sample_count = max_count;
+		SelectionVector sample_sel(STANDARD_VECTOR_SIZE);
 
 		// check the sampling info if we have to sample this chunk
-		if (state.GetSamplingInfo().do_system_sample &&
-		    state.random.NextRandom() > state.GetSamplingInfo().sample_rate) {
-			NextVector(state);
-			continue;
+		if (state.GetSamplingInfo().do_system_sample) {
+			auto &sampling_info = state.GetSamplingInfo();
+			if (!sampling_info.is_percentage) {
+				double rate = sampling_info.sample_rate;
+				if (rate <= 0) {
+					NextVector(state);
+					continue;
+				}
+				if (rate < 1) {
+					auto row_group_start = state.row_group->GetRowStart();
+					sample_count =
+					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+					if (sample_count == 0) {
+						NextVector(state);
+						continue;
+					}
+					has_sample_selection = true;
+				}
+			} else {
+				// Percentage-based system sampling: original behavior
+				if (state.random.NextRandom() > sampling_info.sample_rate) {
+					NextVector(state);
+					continue;
+				}
+			}
 		}
 
 		//! first check the zonemap if we have to scan this partition
@@ -803,12 +867,30 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				// pass max_count explicitly so we never read past the row count we captured at scan
 				// init time (concurrent inserts can grow the column past max_count)
 				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
+				if (has_sample_selection) {
+					result.data[i].Slice(sample_sel, sample_count);
+				}
+			}
+			if (has_sample_selection) {
+				count = sample_count;
 			}
 		} else {
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
 			SelectionVector sel;
-			if (count != max_count) {
+			SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
+			if (has_sample_selection && count != max_count) {
+				approved_tuple_count =
+				    IntersectSelections(state.valid_sel, count, sample_sel, sample_count, intersect_sel);
+				if (approved_tuple_count == 0) {
+					NextVector(state);
+					continue;
+				}
+				sel.Initialize(intersect_sel);
+			} else if (has_sample_selection) {
+				approved_tuple_count = sample_count;
+				sel.Initialize(sample_sel);
+			} else if (count != max_count) {
 				sel.Initialize(state.valid_sel);
 			} else {
 				sel.Initialize(nullptr);
@@ -995,30 +1077,33 @@ idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVec
 	return vinfo->GetSelVector(options, vector_idx, sel_vector, max_count);
 }
 
-bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
-	if (UnsafeNumericCast<idx_t>(row) > count) {
-		throw InternalException("RowGroup::Fetch - row_id out of range for row group");
+idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t fetch_count,
+                      SelectionVector &visible_sel) {
+	if (fetch_count == 0) {
+		return 0;
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return true;
+		// No version info at all, which means every row is visible.
+		return fetch_count;
 	}
-	return vinfo->Fetch(transaction, row);
+	return vinfo->GetVisibleRows(transaction, offsets, fetch_count, visible_sel);
 }
 
-void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
-                        row_t row_id, DataChunk &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
-		throw InternalException("RowGroup::FetchRow - row_id out of range for row group");
+void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
+                         const idx_t *offsets, const SelectionVector &visible_sel, idx_t visible_count,
+                         DataChunk &result, idx_t result_offset) {
+	if (visible_count == 0) {
+		return;
 	}
+
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
-		// regular column: fetch data from the base column
 		auto &col_data = GetColumn(column);
-		col_data.FetchRow(transaction, state, column, row_id, result_vector, result_idx);
+		col_data.FetchRows(transaction, state, column, offsets, visible_sel, visible_count, result_vector,
+		                   result_offset);
 	}
 }
 
@@ -1071,8 +1156,14 @@ RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
 RowGroupAppendState::~RowGroupAppendState() {
 }
 
-void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
-	append_state.row_group = this;
+void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	append_state.row_group = row_group;
+	row_group.GetNode().InitializeAppendInternal(append_state);
+}
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
+	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
+		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
+	}
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());

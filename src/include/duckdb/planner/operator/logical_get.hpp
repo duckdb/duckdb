@@ -23,7 +23,7 @@ public:
 
 public:
 	LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names,
+	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
@@ -35,7 +35,7 @@ public:
 	//! The types of ALL columns that can be returned by the table function
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
-	vector<string> names;
+	vector<Identifier> names;
 	//! A mapping of column index -> type/name for all virtual columns
 	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
@@ -49,7 +49,7 @@ public:
 	//! The set of named input table types for the table-in table-out function
 	vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
-	vector<string> input_table_names;
+	vector<Identifier> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown and sample rate
@@ -74,7 +74,7 @@ public:
 	column_t GetAnyColumn() const;
 
 	const LogicalType &GetColumnType(const ColumnIndex &column_index) const;
-	const string &GetColumnName(const ColumnIndex &column_index) const;
+	const Identifier &GetColumnName(const ColumnIndex &column_index) const;
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);

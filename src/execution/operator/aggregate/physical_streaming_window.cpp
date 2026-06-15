@@ -65,7 +65,7 @@ public:
 
 		~AggregateState() override {
 			if (dtor) {
-				AggregateInputData aggr_input_data(bind_data, arena_allocator);
+				AggregateInputData aggr_input_data(*wexpr.AggregateFunction(), bind_data, arena_allocator);
 				state_ptr = state.data();
 				dtor(statev, aggr_input_data, 1);
 			}
@@ -289,7 +289,8 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	}
 
 	// Update the state and finalize it one row at a time.
-	AggregateInputData aggr_input_data(wexpr.BindInfo().get(), aggr_state.arena_allocator);
+	AggregateFinalizeInputData aggr_input_data(*wexpr.AggregateFunction(), wexpr.BindInfo().get(),
+	                                           aggr_state.arena_allocator);
 	for (idx_t i = 0; i < count; ++i) {
 		sel.set_index(0, i);
 		for (const auto struct_idx : structs) {
@@ -419,7 +420,6 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		//	then just delay more rows, return nothing
 		//	and ask for more data.
 		delayed.Append(input);
-		output.SetChildCardinality(0);
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,

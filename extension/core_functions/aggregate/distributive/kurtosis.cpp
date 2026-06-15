@@ -9,6 +9,9 @@ namespace duckdb {
 namespace {
 
 struct KurtosisState {
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub", "sum_four"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double, double>;
+
 	idx_t n;
 	double sum;
 	double sum_sqr;
@@ -22,12 +25,6 @@ struct KurtosisFlagNoBiasCorrection {};
 
 template <class KURTOSIS_FLAG>
 struct KurtosisOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = state.sum_four = 0.0;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -100,16 +97,6 @@ struct KurtosisOperation {
 	}
 };
 
-LogicalType GetKurtosisStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("n", LogicalType::UBIGINT);
-	children.emplace_back("sum", LogicalType::DOUBLE);
-	children.emplace_back("sum_sqr", LogicalType::DOUBLE);
-	children.emplace_back("sum_cub", LogicalType::DOUBLE);
-	children.emplace_back("sum_four", LogicalType::DOUBLE);
-	return LogicalType::STRUCT(std::move(children));
-}
-
 } // namespace
 
 AggregateFunction KurtosisFun::GetFunction() {
@@ -117,7 +104,6 @@ AggregateFunction KurtosisFun::GetFunction() {
 	    AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE);
 	result.SetFallible();
-	result.SetStructStateExport(GetKurtosisStateType);
 	return result;
 }
 
@@ -126,7 +112,6 @@ AggregateFunction KurtosisPopFun::GetFunction() {
 	                                                KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	result.SetFallible();
-	result.SetStructStateExport(GetKurtosisStateType);
 	return result;
 }
 

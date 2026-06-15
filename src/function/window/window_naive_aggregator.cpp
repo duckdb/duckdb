@@ -164,7 +164,7 @@ void WindowNaiveLocalState::FlushStates(const WindowAggregatorGlobalState &gsink
 	leaves.Slice(scanned, update_sel, flush_count);
 
 	const auto &aggr = gsink.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep,
 	                                       flush_count);
 
@@ -351,7 +351,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	FlushStates(gsink);
 
 	//	Finalise the result aggregates and write to the result
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates

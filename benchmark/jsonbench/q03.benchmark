@@ -1,0 +1,7 @@
+# name: benchmark/jsonbench/q03.benchmark
+# description: Run query 03 from the jsonbench benchmark
+# group: [jsonbench]
+
+template benchmark/jsonbench/jsonbench.benchmark.in
+QUERY_NUMBER=3
+QUERY_NUMBER_PADDED=03

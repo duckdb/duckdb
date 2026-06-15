@@ -536,7 +536,7 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 	auto &leaves = ldastate.leaves;
 	auto &sel = ldastate.sel;
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), ldastate.allocator);
+	AggregateInputData aggr_input_data(aggr, ldastate.allocator);
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
@@ -636,7 +636,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gdstate.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 

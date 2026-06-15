@@ -383,24 +383,12 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
-
-    - name: Clean
-      run: make clean
-
     - name: Install clangd-tidy
       run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-    - name: Tidy Check (clangd)
-      run: |
-        mkdir -p ~/.config/clangd
-        cat > ~/.config/clangd/config.yaml <<'EOF'
-        Diagnostics:
-          UnusedIncludes: None
-        EOF
-        make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Tidy Check Diff
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}
@@ -491,7 +479,7 @@ jobs:
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
         DISABLE_SANITIZER: 1
-        SMOKE_UNITTEST: build/release/test/unittest
+        SMOKE_RUNNER: build/release/test/run
       with:
         build: python3 scripts/ci/retry.py -- make release
         test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}

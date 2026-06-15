@@ -48,7 +48,7 @@ static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, Ta
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto logical_index = LogicalIndex(i);
 		auto &col = table_entry.GetColumn(logical_index);
-		names.push_back(col.GetName());
+		names.emplace_back(col.GetName().GetIdentifierName());
 	}
 
 	return make_uniq<DuckDBTableSampleFunctionData>(entry);

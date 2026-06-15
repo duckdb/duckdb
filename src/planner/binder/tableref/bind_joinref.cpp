@@ -10,13 +10,15 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
 
 static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const BindingAlias &alias,
-                                               const string &column_name) {
+                                               const Identifier &column_name) {
 	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
@@ -25,14 +27,14 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
                                                  const BindingAlias &left_alias, const BindingAlias &right_alias,
-                                                 const string &column_name, ExpressionType type) {
+                                                 const Identifier &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
 	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
-bool Binder::TryFindBinding(const string &using_column, const string &join_side, BindingAlias &result) {
+bool Binder::TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result) {
 	// for each using column, get the matching binding
 	auto bindings = bind_context.GetMatchingBindings(using_column);
 	if (bindings.empty()) {
@@ -61,10 +63,11 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 	return true;
 }
 
-BindingAlias Binder::FindBinding(const string &using_column, const string &join_side) {
+BindingAlias Binder::FindBinding(const Identifier &using_column, const string &join_side) {
 	BindingAlias result;
 	if (!TryFindBinding(using_column, join_side, result)) {
-		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column, join_side);
+		throw BinderException("Column \"%s\" does not exist on %s side of join!", using_column.GetIdentifierName(),
+		                      join_side);
 	}
 	return result;
 }
@@ -99,8 +102,35 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const Bin
 	}
 }
 
+static bool HasLateralCorrelatedColumns(const Expression &root_expr, Binder &binder) {
+	if (binder.IsInsideSubquery()) {
+		return false;
+	}
+	unordered_set<TableIndex> lateral_bindings;
+	for (auto &active_binder_ref : binder.GetActiveBinders()) {
+		auto &active_binder = active_binder_ref.get();
+		if (!active_binder.IsLateralBinder()) {
+			continue;
+		}
+		for (auto &binding : active_binder.GetBinder().bind_context.GetBindingsList()) {
+			lateral_bindings.insert(binding->GetIndex());
+		}
+	}
+	if (lateral_bindings.empty()) {
+		return false;
+	}
+	bool has_lateral_correlated_columns = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+		    if (colref.Depth() > 0 && lateral_bindings.find(colref.Binding().table_index) != lateral_bindings.end()) {
+			    has_lateral_correlated_columns = true;
+		    }
+	    });
+	return has_lateral_correlated_columns;
+}
+
 BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
-                                          const string &using_column, const string &join_side) {
+                                          const Identifier &using_column, const string &join_side) {
 	BindingAlias binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);
@@ -110,9 +140,9 @@ BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<U
 	return binding;
 }
 
-static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_columns) {
-	vector<string> result;
-	case_insensitive_set_t handled_columns;
+static vector<Identifier> RemoveDuplicateUsingColumns(const vector<Identifier> &using_columns) {
+	vector<Identifier> result;
+	identifier_set_t handled_columns;
 	for (auto &using_column : using_columns) {
 		if (handled_columns.find(using_column) == handled_columns.end()) {
 			handled_columns.insert(using_column);
@@ -183,12 +213,12 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
-	vector<string> extra_using_columns;
+	vector<Identifier> extra_using_columns;
 	switch (ref.ref_type) {
 	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
-		case_insensitive_set_t lhs_columns;
+		identifier_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding->GetColumnNames()) {
@@ -338,6 +368,10 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	if (ref.condition) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
+		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
+		    HasLateralCorrelatedColumns(*result->condition, *this)) {
+			throw NotImplementedException("Non-inner join on correlated columns not supported");
+		}
 	}
 
 	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {
@@ -345,7 +379,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		if (result->type == JoinType::MARK) {
 			auto mark_join_idx = GenerateTableIndex();
 			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx.index);
-			bind_context.AddGenericBinding(mark_join_idx, mark_join_alias, {"__mark_index_column"},
+			bind_context.AddGenericBinding(mark_join_idx, Identifier(mark_join_alias), {"__mark_index_column"},
 			                               {LogicalType::BOOLEAN});
 			result->mark_index = mark_join_idx;
 		}

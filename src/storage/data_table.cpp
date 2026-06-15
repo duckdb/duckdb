@@ -14,7 +14,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -39,8 +39,8 @@
 
 namespace duckdb {
 
-DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
-                             string table)
+DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, Identifier schema,
+                             Identifier table)
     : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
 }
 
@@ -52,7 +52,7 @@ bool DataTableInfo::IsTemporary() const {
 	return db.IsTemporary();
 }
 
-IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const string &name) {
+IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) {
 	for (idx_t i = 0; i < index_storage_infos.size(); i++) {
 		if (index_storage_infos[i].name == name) {
 			auto result = std::move(index_storage_infos[i]);
@@ -60,13 +60,15 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const string &name) {
 			return result;
 		}
 	}
-	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found", name);
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found",
+	                        name.GetIdentifierName());
 }
 
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
-    : db(db), info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), schema, table)),
+    : db(db),
+      info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), Identifier(schema), Identifier(table))),
       column_definitions(std::move(column_definitions_p)), version(DataTableVersion::MAIN_TABLE) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
@@ -412,7 +414,6 @@ void DataTable::RebuildIndexes() {
 			for (idx_t i = 0; i < col_ids.size(); i++) {
 				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
 			}
-			table_chunk.SetChildCardinality(scan_chunk.size());
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
 
 			auto error = bound_index.Append(table_chunk, row_ids);
@@ -449,25 +450,25 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
 
-string DataTableInfo::GetSchemaName() {
+Identifier DataTableInfo::GetSchemaName() {
 	return schema;
 }
 
-string DataTableInfo::GetTableName() {
+Identifier DataTableInfo::GetTableName() {
 	lock_guard<mutex> l(name_lock);
 	return table;
 }
 
-void DataTableInfo::SetTableName(string name) {
+void DataTableInfo::SetTableName(Identifier name) {
 	lock_guard<mutex> l(name_lock);
 	table = std::move(name);
 }
 
-string DataTable::GetTableName() const {
+Identifier DataTable::GetTableName() const {
 	return info->GetTableName();
 }
 
-void DataTable::SetTableName(string new_name) {
+void DataTable::SetTableName(Identifier new_name) {
 	info->SetTableName(std::move(new_name));
 }
 
@@ -575,7 +576,7 @@ bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vector, const string &col_name) {
+static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vector, const Identifier &col_name) {
 	if (!VectorOperations::HasNull(vector)) {
 		return;
 	}
@@ -695,7 +696,6 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	auto count = chunk.size();
-	dst_chunk.SetChildCardinality(count);
 	if (count <= 0) {
 		return;
 	}
@@ -1493,8 +1493,6 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	D_ASSERT(IsMainTable() || removal_type == IndexRemovalType::REVERT_MAIN_INDEX ||
-	         removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY);
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
@@ -1632,7 +1630,6 @@ static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalInd
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
 	}
-	mock_chunk.SetChildCardinality(chunk.size());
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,
@@ -1754,7 +1751,6 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	if (n_local_update > 0) {
 		updates_slice.Slice(updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
-		updates_slice.SetChildCardinality(n_local_update);
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten();
 
@@ -1766,7 +1762,6 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
-		updates_slice.SetChildCardinality(n_global_update);
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten();
 

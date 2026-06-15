@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 	node.schema = insert_target->schema_name;
 	node.table = insert_target->table_name;
 	node.column_order = by_name_or_position;
-	node.columns = insert_column_list;
+	node.columns = StringsToIdentifiers(insert_column_list);
 	if (!node.columns.empty() && insert_values.default_values) {
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
@@ -57,12 +57,12 @@ OnConflictAction PEGTransformerFactory::TransformInsertOrIgnore(PEGTransformer &
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransformer &transformer,
                                                                       unique_ptr<BaseTableRef> base_table_name,
-                                                                      const string &insert_alias) {
+                                                                      const Identifier &insert_alias) {
 	base_table_name->alias = insert_alias;
 	return base_table_name;
 }
 
-string PEGTransformerFactory::TransformInsertAlias(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformInsertAlias(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 
@@ -70,7 +70,7 @@ unique_ptr<OnConflictInfo>
 PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
                                                  OnConflictExpressionTarget on_conflict_target,
                                                  unique_ptr<OnConflictInfo> on_conflict_action) {
-	on_conflict_action->indexed_columns = std::move(on_conflict_target.indexed_columns);
+	on_conflict_action->indexed_columns = on_conflict_target.indexed_columns;
 	if (on_conflict_target.where_clause) {
 		on_conflict_action->condition = std::move(on_conflict_target.where_clause);
 	}
@@ -80,13 +80,13 @@ PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
 OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictExpressionTarget(
     PEGTransformer &transformer, const vector<string> &column_id_list, unique_ptr<ParsedExpression> where_clause) {
 	OnConflictExpressionTarget result;
-	result.indexed_columns = column_id_list;
+	result.indexed_columns = StringsToIdentifiers(column_id_list);
 	result.where_clause = std::move(where_clause);
 	return result;
 }
 
 OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictIndexTarget(PEGTransformer &transformer,
-                                                                                 const string &constraint_name) {
+                                                                                 const Identifier &constraint_name) {
 	throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 }
 
@@ -132,8 +132,9 @@ vector<string> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &
 	return column_list;
 }
 
-vector<string> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer, const vector<string> &col_id) {
-	return col_id;
+vector<string> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer,
+                                                          const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
 vector<unique_ptr<ParsedExpression>>

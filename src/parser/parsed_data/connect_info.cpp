@@ -19,7 +19,7 @@ string ConnectInfo::ToString() const {
 	}
 	string result = "CONNECT ";
 	if (name_is_string_literal) {
-		result += SQLString(name);
+		result += SQLString(name.GetIdentifierName());
 	} else {
 		result += SQLIdentifier(name);
 	}

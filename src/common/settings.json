@@ -356,6 +356,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
@@ -469,6 +476,13 @@
         "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
     },
     {
+        "name": "delim_join_as_cte",
+        "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
@@ -573,14 +587,6 @@
         "scope": "global",
         "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
-    },
-    {
-        "name": "enable_http_logging",
-        "description": "(deprecated) Enables HTTP logging",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "EnableHTTPLoggingSetting",
-        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -776,6 +782,13 @@
         "custom_implementation": true
     },
     {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
@@ -800,14 +813,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "http_logging_output",
-        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "struct": "HTTPLoggingOutputSetting",
-        "custom_implementation": true
     },
     {
         "name": "http_proxy",
@@ -1131,16 +1136,6 @@
         "default_value": "false"
     },
     {
-        "name": "profile_output",
-        "description": "The file to which profile output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "profiling_output"
-        ]
-    },
-    {
         "name": "profiling_coverage",
         "description": "The profiling coverage (SELECT or ALL)",
         "type": "VARCHAR",
@@ -1149,8 +1144,25 @@
     },
     {
         "name": "profiling_mode",
-        "description": "The profiling mode (STANDARD or DETAILED)",
+        "description": "DEPRECATED: Sets the profiling mode",
         "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "profiling_output",
+        "description": "The file to which profile output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "profile_output"
+        ]
+    },
+    {
+        "name": "profiling_renderer_settings",
+        "description": "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings not recognized by the active renderer are ignored",
+        "type": "MAP(VARCHAR, VARCHAR)",
         "scope": "local",
         "custom_implementation": true
     },

@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -52,7 +54,7 @@ public:
 	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
-	bool HasBoundedParts();
+	bool HasBoundedParts() const;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -65,29 +67,23 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
-	const string &Catalog() const {
+	const Identifier &Catalog() const {
 		return catalog;
 	}
-	string &CatalogMutable() {
+	Identifier &CatalogMutable() {
 		return catalog;
 	}
-	const string &Schema() const {
+	const Identifier &Schema() const {
 		return schema;
 	}
-	string &SchemaMutable() {
+	Identifier &SchemaMutable() {
 		return schema;
 	}
-	const string &FunctionName() const {
+	const Identifier &FunctionName() const {
 		return function_name;
 	}
-	string &FunctionNameMutable() {
+	Identifier &FunctionNameMutable() {
 		return function_name;
-	}
-	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
-		return children;
-	}
-	vector<unique_ptr<ParsedExpression>> &GetChildrenMutable() {
-		return children;
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;
@@ -162,6 +158,14 @@ public:
 		return arg_orders;
 	}
 
+	const vector<FunctionArgument> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<FunctionArgument> &GetArgumentsMutable() {
+		return arguments;
+	}
+
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
 	                             const WindowBoundary groups) {
 		if (boundary == rows) {
@@ -178,14 +182,27 @@ public:
 		// Start with function call
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
-		auto &children = entry.GetChildren();
-		if (children.size()) {
-			//	Only one DISTINCT is allowed (on the first argument)
-			int distincts = entry.Distinct() ? 0 : 1;
-			result += StringUtil::Join(children, children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
-			});
+
+		if constexpr (std::is_same_v<T, WindowExpression>) {
+			auto &children = entry.GetArguments();
+			if (children.size()) {
+				//	Only one DISTINCT is allowed (on the first argument)
+				int distincts = entry.Distinct() ? 0 : 1;
+				result += StringUtil::Join(children, children.size(), ", ", [&](const FunctionArgument &child) {
+					return (distincts++ ? "" : "DISTINCT ") + child.ToString();
+				});
+			}
+		} else {
+			auto &children = entry.GetChildren();
+			if (children.size()) {
+				//	Only one DISTINCT is allowed (on the first argument)
+				int distincts = entry.Distinct() ? 0 : 1;
+				result += StringUtil::Join(children, children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+					return (distincts++ ? "" : "DISTINCT ") + child->ToString();
+				});
+			}
 		}
+
 		// ORDER BY arguments
 		auto &arg_orders = entry.ArgOrders();
 		if (!arg_orders.empty()) {
@@ -352,15 +369,19 @@ public:
 		return result;
 	}
 
+	bool IsLegacyFunctionCall() const {
+		return is_legacy_function_call;
+	}
+
 private:
 	//! Catalog of the aggregate function
-	string catalog;
+	Identifier catalog;
 	//! Schema of the aggregate function
-	string schema;
+	Identifier schema;
 	//! Name of the aggregate function
-	string function_name;
+	Identifier function_name;
 	//! The child expression of the main window function
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<FunctionArgument> arguments;
 	//! The set of expressions to partition by
 	vector<unique_ptr<ParsedExpression>> partitions;
 	//! The set of ordering clauses
@@ -387,12 +408,14 @@ private:
 	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
 	vector<OrderByNode> arg_orders;
 
+	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
+	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
+	bool is_legacy_function_call = false;
+
 private:
 	WindowExpression();
-	//	Backwards-compatible serialization interface
-	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
-	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
 
+	//	Backwards-compatible serialization interface
 	//	Remove LEAD/LAG offset/default
 	vector<unique_ptr<ParsedExpression>> SerializedChildren(Serializer &serializer) const;
 	unique_ptr<ParsedExpression> SerializedOffset(Serializer &serializer) const;

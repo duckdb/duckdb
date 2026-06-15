@@ -9,9 +9,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -121,7 +119,7 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 	auto &child_entries = StructVector::GetEntries(typed_value);
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &entry = child_types[child_idx];
-		if (StringUtil::CIEquals(entry.first, component.key)) {
+		if (entry.first == component.key) {
 			// key found - move onto next component
 			return TryShreddedExtractRecursive(child_entries[child_idx], components, result, count, path_index + 1);
 		}
@@ -149,7 +147,6 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
-	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
@@ -167,8 +164,8 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 		value_index_sel[i] = 0;
 	}
 
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
 
 	//! Perform the extract
 	ValidityMask validity(count);

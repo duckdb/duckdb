@@ -22,7 +22,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 103,
@@ -281,7 +281,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "duckdb::Identifier"
       },
       {
         "id": 201,

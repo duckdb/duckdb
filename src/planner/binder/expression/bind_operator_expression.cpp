@@ -177,10 +177,10 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
 		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT &&
-		    !extract_expr_type.IsAggregateStateStructType()) {
-			return BindResult(StringUtil::Format(
-			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
-			    name_exp->ToString(), extract_exp->ToString()));
+		    extract_expr_type.id() != LogicalTypeId::GEOMETRY) {
+			return BindResult(StringUtil::Format("Cannot extract field %s from expression \"%s\" because it is not a "
+			                                     "struct, union, map, json or geometry",
+			                                     name_exp->ToString(), extract_exp->ToString()));
 		}
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
@@ -207,6 +207,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
+		} else if (extract_expr_type.id() == LogicalTypeId::GEOMETRY) {
+			function_name = "vertex_extract";
 		} else {
 			function_name = "struct_extract";
 		}
@@ -232,8 +234,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function =
-		    make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.GetChildrenMutable()));
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(Identifier(function_name),
+		                                                                     std::move(op.GetChildrenMutable()));
 		return BindExpression(function, depth, false);
 	}
 

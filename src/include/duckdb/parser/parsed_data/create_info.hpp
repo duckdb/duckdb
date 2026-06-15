@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
@@ -23,7 +24,8 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_INFO;
 
 public:
-	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
+	explicit CreateInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema(),
+	                    Identifier catalog_p = Identifier::InvalidCatalog())
 	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
@@ -33,9 +35,9 @@ public:
 	//! The to-be-created catalog type
 	CatalogType type;
 	//! The catalog name of the entry
-	string catalog;
+	Identifier catalog;
 	//! The schema name of the entry
-	string schema;
+	Identifier schema;
 	//! What to do on create conflict
 	OnCreateConflict on_conflict;
 	//! Whether or not the entry is temporary
@@ -43,7 +45,7 @@ public:
 	//! Whether or not the entry is an internal entry
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
-	string extension_name;
+	Identifier extension_name;
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry

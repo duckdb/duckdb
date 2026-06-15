@@ -11,7 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -64,7 +64,7 @@ public:
 
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);

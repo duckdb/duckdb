@@ -27,7 +27,7 @@ unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	return std::move(result);
 }
 
-string SetOpRelation::GetAlias() {
+Identifier SetOpRelation::GetAlias() {
 	return left->GetAlias();
 }
 

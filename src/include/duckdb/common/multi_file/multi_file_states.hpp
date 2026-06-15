@@ -71,7 +71,7 @@ struct MultiFileBindData : public TableFunctionData {
 	MultiFileReaderBindData reader_bind;
 	MultiFileOptions file_options;
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 	virtual_column_map_t virtual_columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
