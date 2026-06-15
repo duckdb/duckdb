@@ -69,7 +69,7 @@ void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &resu
 	// Emit a row whenever rows_seen * rate crosses the next integer threshold.
 	// Using a fresh multiply per row (rather than an accumulated sum) avoids
 	// floating-point drift where repeated additions of rate never quite reach
-	// a whole number (e.g. 10000 × 0.0001 < 1.0). The phase makes seeds affect
+	// a whole number (e.g. 10000 * 0.0001 < 1.0). The phase makes seeds affect
 	// where the systematic sample starts.
 	auto &state = state_p.Cast<StreamingSampleOperatorState>();
 	idx_t result_count = 0;

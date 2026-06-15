@@ -71,16 +71,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 			auto limit_val = BoundLimitNode::ConstantValue(rows);
 			auto offset_val = BoundLimitNode();
 			// PhysicalLimit requires batch-index support from the pipeline source.
-			// Sources like CTE scans don't provide it, so fall back to a parallel
-			// streaming limit which has no such requirement (mirrors plan_limit.cpp).
-			if (PreserveInsertionOrder(sample) && UseBatchIndex(sample)) {
+			// Sources like CTE scans don't provide it, so fall back to a streaming
+			// limit which has no such requirement.
+			const bool preserve_order = PreserveInsertionOrder(sample);
+			if (preserve_order && UseBatchIndex(sample)) {
 				auto &limit = Make<PhysicalLimit>(op.types, std::move(limit_val), std::move(offset_val),
 				                                  op.estimated_cardinality);
 				limit.children.push_back(sample);
 				return limit;
 			}
 			auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(limit_val), std::move(offset_val),
-			                                           op.estimated_cardinality, true);
+			                                           op.estimated_cardinality, !preserve_order);
 			limit.children.push_back(sample);
 			return limit;
 		}
