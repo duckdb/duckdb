@@ -1008,6 +1008,9 @@ Bool:
     - CastOrTryCast
     - CastKeyword
     - TryCastKeyword
+    - GroupingOrGroupingId
+    - GroupingKeyword
+    - GroupingIdKeyword
     - WithData
     - WithDataOnly
     - WithNoData
@@ -1399,7 +1402,9 @@ overrides:
     by_value: true
   # expression.gram
   AnyAllOperator: "pair<string, bool>"
-  CaseWhenThen: "CaseCheck"
+  CaseWhenThen:
+    type: "CaseCheck"
+    by_value: true
   ExcludeName: "QualifiedColumnName"
   ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
   RenameEntry: "pair<QualifiedColumnName, string>"
@@ -1577,7 +1582,6 @@ excluded_rules:
   - VariableAssign
   - ColLabel
   - ColLabelOrString
-  - GroupingOrGroupingId
   - RowOrRows
   - Recursive
   - StarSymbol
@@ -1621,9 +1625,6 @@ excluded_rules:
   - SingleRenameEntry
   - RenameEntry
   - SubqueryExpression
-  - CaseExpression
-  - CaseWhenThen
-  - CaseElse
   - Framing
   - FrameExtent
   - SingleFrameExtent
@@ -1641,7 +1642,6 @@ excluded_rules:
   - WindowFrameContents
   - BaseWindowName
   - WindowPartition
-  - GroupingExpression
   - ListComprehensionExpression
   - ListComprehensionFilter
   - ParensExpression
@@ -1653,7 +1653,6 @@ excluded_rules:
   - IsExpression
   - IsTest
   - IsLiteral
-  - UnknownLiteral
   - NotNull
   - IsNull
   - IsDistinctFromOp

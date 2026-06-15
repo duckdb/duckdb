@@ -4288,6 +4288,49 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordI
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseExpressionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<unique_ptr<ParsedExpression>> expression {};
+	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.GetResult());
+		expression = std::move(expression_value);
+	}
+	vector<CaseCheck> case_when_then;
+	auto &case_when_then_repeat = list_pr.GetChild(2).Cast<RepeatParseResult>();
+	for (auto &case_when_then_item : case_when_then_repeat.GetChildren()) {
+		auto case_when_then_value = transformer.Transform<CaseCheck>(case_when_then_item.get());
+		case_when_then.push_back(std::move(case_when_then_value));
+	}
+	optional<unique_ptr<ParsedExpression>> case_else {};
+	auto &case_else_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (case_else_opt.HasResult()) {
+		auto case_else_value = transformer.Transform<unique_ptr<ParsedExpression>>(case_else_opt.GetResult());
+		case_else = std::move(case_else_value);
+	}
+	auto result =
+	    TransformCaseExpression(transformer, std::move(expression), std::move(case_when_then), std::move(case_else));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseWhenThenInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto expression_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
+	auto result = TransformCaseWhenThen(transformer, std::move(expression), std::move(expression_1));
+	return make_uniq<TypedTransformResult<CaseCheck>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseElseInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformCaseElse(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeLiteralInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4434,6 +4477,46 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMapStructFieldI
 	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGroupingExpressionInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto grouping_or_grouping_id = transformer.Transform<bool>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> expression {};
+	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> expression_value;
+		auto expression_value_items_1 = ExtractParseResultsFromList(expression_opt.GetResult());
+		for (auto &expression_value_item_1 : expression_value_items_1) {
+			auto expression_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(expression_value_item_1.get());
+			expression_value.push_back(std::move(expression_value_value_1));
+		}
+		expression = std::move(expression_value);
+	}
+	auto result = TransformGroupingExpression(transformer, grouping_or_grouping_id, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformGroupingOrGroupingIdInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGroupingKeywordInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformGroupingKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGroupingIdKeywordInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto result = TransformGroupingIdKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformParameterInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4485,6 +4568,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDefaultExpressi
                                                                                            ParseResult &parse_result) {
 	auto result = TransformDefaultExpression(transformer);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnknownLiteralInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformUnknownLiteral(transformer);
+	return make_uniq<TypedTransformResult<Value>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -8323,6 +8412,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CastOrTryCast", &PEGTransformerFactory::TransformCastOrTryCastInternal},
 	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
 	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
+	    {"CaseExpression", &PEGTransformerFactory::TransformCaseExpressionInternal},
+	    {"CaseWhenThen", &PEGTransformerFactory::TransformCaseWhenThenInternal},
+	    {"CaseElse", &PEGTransformerFactory::TransformCaseElseInternal},
 	    {"TypeLiteral", &PEGTransformerFactory::TransformTypeLiteralInternal},
 	    {"IntervalLiteral", &PEGTransformerFactory::TransformIntervalLiteralInternal},
 	    {"IntervalParameter", &PEGTransformerFactory::TransformIntervalParameterInternal},
@@ -8336,6 +8428,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"MapExpression", &PEGTransformerFactory::TransformMapExpressionInternal},
 	    {"MapStructExpression", &PEGTransformerFactory::TransformMapStructExpressionInternal},
 	    {"MapStructField", &PEGTransformerFactory::TransformMapStructFieldInternal},
+	    {"GroupingExpression", &PEGTransformerFactory::TransformGroupingExpressionInternal},
+	    {"GroupingOrGroupingId", &PEGTransformerFactory::TransformGroupingOrGroupingIdInternal},
+	    {"GroupingKeyword", &PEGTransformerFactory::TransformGroupingKeywordInternal},
+	    {"GroupingIdKeyword", &PEGTransformerFactory::TransformGroupingIdKeywordInternal},
 	    {"Parameter", &PEGTransformerFactory::TransformParameterInternal},
 	    {"QuestionMarkNumberedParameter", &PEGTransformerFactory::TransformQuestionMarkNumberedParameterInternal},
 	    {"AnonymousParameter", &PEGTransformerFactory::TransformAnonymousParameterInternal},
@@ -8343,6 +8439,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColLabelParameter", &PEGTransformerFactory::TransformColLabelParameterInternal},
 	    {"PositionalExpression", &PEGTransformerFactory::TransformPositionalExpressionInternal},
 	    {"DefaultExpression", &PEGTransformerFactory::TransformDefaultExpressionInternal},
+	    {"UnknownLiteral", &PEGTransformerFactory::TransformUnknownLiteralInternal},
 	    {"SpecialFunctionExpression", &PEGTransformerFactory::TransformSpecialFunctionExpressionInternal},
 	    {"CoalesceExpression", &PEGTransformerFactory::TransformCoalesceExpressionInternal},
 	    {"UnpackExpression", &PEGTransformerFactory::TransformUnpackExpressionInternal},

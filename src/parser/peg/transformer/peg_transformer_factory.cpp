@@ -194,7 +194,6 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
-	REGISTER_TRANSFORM(TransformUnknownLiteral);
 
 	REGISTER_TRANSFORM(TransformPrefixOperator);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
@@ -243,14 +242,10 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
-	REGISTER_TRANSFORM(TransformCaseExpression);
-	REGISTER_TRANSFORM(TransformCaseElse);
-	REGISTER_TRANSFORM(TransformCaseWhenThen);
 	REGISTER_TRANSFORM(TransformSubqueryExpression);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 	REGISTER_TRANSFORM(TransformListComprehensionFilter);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
-	REGISTER_TRANSFORM(TransformGroupingExpression);
 	REGISTER_TRANSFORM(TransformMethodExpression);
 	REGISTER_TRANSFORM(TransformRenameList);
 	REGISTER_TRANSFORM(TransformRenameEntryList);
