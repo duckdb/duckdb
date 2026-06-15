@@ -9,6 +9,10 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -29,6 +33,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -269,16 +274,21 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 	state.internal_index = state.offset_in_column;
 }
 
-void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-                              idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
+void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, ScanFilterResult &acc,
+                              const TableFilter &filter, TableFilterState &filter_state) {
 	BeginScanVectorInternal(state);
 	auto &current = state.current->GetNode();
 	if (state.current->GetRowStart() + current.count - state.offset_in_column < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
 	}
+	SelectionVector sel;
+	idx_t sel_count = MaterializeScanFilterResult(acc, sel);
 	current.Filter(state, target_count, result, sel, sel_count, filter, filter_state);
 	state.offset_in_column += target_count;
 	state.internal_index = state.offset_in_column;
+	acc.rep = ScanFilterResult::Rep::SELVEC;
+	acc.sel.Initialize(sel);
+	acc.sel_count = sel_count;
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -371,15 +381,192 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset);
 }
 
-void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
-                        TableFilterState &filter_state) {
-	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	FlatVector::SetSize(result, count_t(scan_count));
+namespace {
 
+template <class T, class OP>
+inline void NarrowCmpToBitmap(const T *__restrict data, T constant, idx_t count, const validity_t *validity,
+                              validity_t *__restrict bitmap) {
+	uint8_t cmp[STANDARD_VECTOR_SIZE];
+	for (idx_t i = 0; i < count; i++) {
+		cmp[i] = OP::Operation(data[i], constant);
+	}
+
+	auto out = reinterpret_cast<uint8_t *>(bitmap);
+	const idx_t full = count / 8;
+	for (idx_t b = 0; b < full; b++) {
+		const auto c = cmp + b * 8;
+		out[b] = c[0] | (c[1] << 1) | (c[2] << 2) | (c[3] << 3) | (c[4] << 4) | (c[5] << 5) | (c[6] << 6) |
+		         (c[7] << 7);
+	}
+
+	const idx_t nwords = (count + 63) / 64;
+	for (idx_t i = full; i < nwords * 8; i++) {
+		out[i] = 0;
+	}
+	if (full * 8 < count) {
+		uint8_t tail = 0;
+		for (idx_t i = full * 8; i < count; i++) {
+			tail = static_cast<uint8_t>(tail | (cmp[i] << (i - full * 8)));
+		}
+		out[full] = tail;
+	}
+
+	if (validity) {
+		for (idx_t w = 0; w < nwords; w++) {
+			bitmap[w] &= validity[w];
+		}
+	}
+}
+
+template <class T>
+inline bool TryGetComparisonConstant(const Value &constant, const LogicalType &target_type, T &result) {
+	if (constant.IsNull()) {
+		return false;
+	}
+	Value cast_value;
+	if (!constant.DefaultTryCastAs(target_type, cast_value, nullptr, true)) {
+		return false;
+	}
+	result = cast_value.GetValueUnsafe<T>();
+	return true;
+}
+
+template <class T>
+inline void DispatchCmpToBitmap(ExpressionType op, const T *__restrict data, T constant, idx_t count,
+                                const validity_t *validity, validity_t *__restrict bitmap) {
+	switch (op) {
+	case ExpressionType::COMPARE_EQUAL:
+		return NarrowCmpToBitmap<T, duckdb::Equals>(data, constant, count, validity, bitmap);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return NarrowCmpToBitmap<T, duckdb::NotEquals>(data, constant, count, validity, bitmap);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return NarrowCmpToBitmap<T, duckdb::LessThan>(data, constant, count, validity, bitmap);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return NarrowCmpToBitmap<T, duckdb::LessThanEquals>(data, constant, count, validity, bitmap);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return NarrowCmpToBitmap<T, duckdb::GreaterThan>(data, constant, count, validity, bitmap);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return NarrowCmpToBitmap<T, duckdb::GreaterThanEquals>(data, constant, count, validity, bitmap);
+	default:
+		throw InternalException("Unsupported comparison for bitmap filter");
+	}
+}
+
+template <class T>
+bool TryFlatComparisonToBitmap(ExpressionType op, const Value &constant, Vector &col, idx_t count,
+                               const validity_t *validity, validity_t *__restrict bitmap) {
+	T typed_constant;
+	if (!TryGetComparisonConstant<T>(constant, col.GetType(), typed_constant)) {
+		return false;
+	}
+	DispatchCmpToBitmap<T>(op, FlatVector::GetData<T>(col), typed_constant, count, validity, bitmap);
+	return true;
+}
+
+bool TryComparisonToBitmap(const Expression &expr, Vector &col, idx_t count, validity_t *__restrict bitmap) {
+	if (!BoundComparisonExpression::IsComparison(expr) || col.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return false;
+	}
+
+	auto &cmp = expr.Cast<BoundFunctionExpression>();
+	auto &left = BoundComparisonExpression::Left(cmp);
+	auto &right = BoundComparisonExpression::Right(cmp);
+	auto op = cmp.GetExpressionType();
+	const Value *constant = nullptr;
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		constant = &right.Cast<BoundConstantExpression>().GetValue();
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		constant = &left.Cast<BoundConstantExpression>().GetValue();
+		op = FlipComparisonExpression(op);
+	} else {
+		return false;
+	}
+
+	auto &validity = FlatVector::Validity(col);
+	const auto validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
+	switch (col.GetType().InternalType()) {
+	case PhysicalType::INT8:
+		return TryFlatComparisonToBitmap<int8_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::INT16:
+		return TryFlatComparisonToBitmap<int16_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::INT32:
+		return TryFlatComparisonToBitmap<int32_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::INT64:
+		return TryFlatComparisonToBitmap<int64_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::UINT8:
+		return TryFlatComparisonToBitmap<uint8_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::UINT16:
+		return TryFlatComparisonToBitmap<uint16_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::UINT32:
+		return TryFlatComparisonToBitmap<uint32_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::UINT64:
+		return TryFlatComparisonToBitmap<uint64_t>(op, *constant, col, count, validity_data, bitmap);
+	default:
+		return false;
+	}
+}
+
+bool TryFilterBitmap(const Expression &expr, Vector &col, idx_t count, validity_t *__restrict bitmap) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		return TryComparisonToBitmap(expr, col, count, bitmap);
+	}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
+	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
+		return false;
+	}
+
+	auto &conj = expr.Cast<BoundConjunctionExpression>();
+	if (conj.GetChildren().empty() || !TryFilterBitmap(*conj.GetChildren()[0], col, count, bitmap)) {
+		return false;
+	}
+
+	validity_t tmp[ScanFilterResult::NWORDS];
+	const idx_t nwords = (count + 63) / 64;
+	for (idx_t child_idx = 1; child_idx < conj.GetChildren().size(); child_idx++) {
+		if (!TryFilterBitmap(*conj.GetChildren()[child_idx], col, count, tmp)) {
+			return false;
+		}
+		for (idx_t w = 0; w < nwords; w++) {
+			bitmap[w] &= tmp[w];
+		}
+	}
+	return true;
+}
+
+} // namespace
+
+void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                        ScanFilterResult &acc, const TableFilter &filter, TableFilterState &filter_state) {
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		FlatVector::SetSize(result, count_t(scan_count));
+	}
+	D_ASSERT(acc.row_span == scan_count);
+
+	if (scan_count <= STANDARD_VECTOR_SIZE && filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		ScanFilterResult col;
+		col.rep = ScanFilterResult::Rep::BITMAP;
+		col.row_span = scan_count;
+		auto &expr = *ExpressionFilter::GetExpressionFilter(filter, "ColumnData::Filter").expr;
+		if (TryFilterBitmap(expr, result, scan_count, col.bitmap)) {
+			ScanFilterAnd(acc, col);
+			return;
+		}
+	}
+
+	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		result.Flatten();
+	}
+	SelectionVector sel;
+	idx_t sel_count = MaterializeScanFilterResult(acc, sel);
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, sel_count);
+	acc.rep = ScanFilterResult::Rep::SELVEC;
+	acc.sel.Initialize(sel);
+	acc.sel_count = sel_count;
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

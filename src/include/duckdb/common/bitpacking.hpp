@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bitpackinghelpers.h"
+#include "fastunpack_inline.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -60,6 +61,11 @@ public:
 	template <class T>
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
 	                                bool skip_sign_extension = false) {
+		if (sizeof(T) <= sizeof(uint64_t) &&
+		    (!NumericLimits<T>::IsSigned() || skip_sign_extension || width == 0 || width == sizeof(T) * 8)) {
+			UnPackBufferBulk<T>(dst, src, RoundUpToAlgorithmGroupSize(count), width);
+			return;
+		}
 		for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
 		}
@@ -224,6 +230,30 @@ private:
 			HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
 		} else {
 			throw InternalException("Unsupported type for bitpacking");
+		}
+	}
+
+	template <class T>
+	static inline void UnPackBufferBulk(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width) {
+		D_ASSERT(count % BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
+			duckdb_fastpforlib::fastunpack_bulk<uint8_t>(reinterpret_cast<const uint32_t *>(src),
+			                                             reinterpret_cast<uint8_t *>(dst), static_cast<size_t>(count),
+			                                             static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
+			duckdb_fastpforlib::fastunpack_bulk<uint16_t>(reinterpret_cast<const uint32_t *>(src),
+			                                              reinterpret_cast<uint16_t *>(dst), static_cast<size_t>(count),
+			                                              static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
+			duckdb_fastpforlib::fastunpack_bulk<uint32_t>(reinterpret_cast<const uint32_t *>(src),
+			                                              reinterpret_cast<uint32_t *>(dst), static_cast<size_t>(count),
+			                                              static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
+			duckdb_fastpforlib::fastunpack_bulk<uint64_t>(reinterpret_cast<const uint32_t *>(src),
+			                                              reinterpret_cast<uint64_t *>(dst), static_cast<size_t>(count),
+			                                              static_cast<uint32_t>(width));
+		} else {
+			throw InternalException("Unsupported type for bulk bitunpacking");
 		}
 	}
 

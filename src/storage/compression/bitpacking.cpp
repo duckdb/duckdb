@@ -797,6 +797,24 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
+		if (scan_state.current_group.mode == BitpackingMode::FOR && offset_in_compression_group == 0) {
+			auto remaining = MinValue<idx_t>(scan_count - scanned,
+			                                 BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			auto batch_count =
+			    remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+			if (batch_count > 0) {
+				auto current_position_ptr =
+				    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
+				auto current_result_ptr = result_data + result_offset + scanned;
+				BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(current_result_ptr), current_position_ptr,
+				                                      batch_count, scan_state.current_width, skip_sign_extend);
+				ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, batch_count);
+				scanned += batch_count;
+				scan_state.current_group_offset += batch_count;
+				continue;
+			}
+		}
+
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
 		// Calculate start of compression algorithm group

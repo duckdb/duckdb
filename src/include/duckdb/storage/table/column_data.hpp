@@ -18,6 +18,7 @@
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/atomic_ptr.hpp"
+#include "duckdb/storage/table/filter_result.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -145,7 +146,7 @@ public:
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
+	                    ScanFilterResult &acc, const TableFilter &filter, TableFilterState &filter_state);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t count);
 
@@ -236,8 +237,8 @@ protected:
 	                 idx_t target_scan, UpdateScanType update_type);
 	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
 	                  idx_t sel_count);
-	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
+	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, ScanFilterResult &acc,
+	                  const TableFilter &filter, TableFilterState &filter_state);
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
 	                  UpdateScanType update_type);

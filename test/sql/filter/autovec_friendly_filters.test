@@ -1,0 +1,112 @@
+# name: test/sql/filter/autovec_friendly_filters.test
+# description: Test bitmap-backed scan filters on thin integer columns
+# group: [filter]
+
+statement ok
+CREATE TABLE autovec_filter_t(
+	i8 TINYINT,
+	i16 SMALLINT,
+	i32 INTEGER,
+	i64 BIGINT,
+	u8 UTINYINT,
+	u16 USMALLINT,
+	u32 UINTEGER,
+	u64 UBIGINT
+);
+
+statement ok
+INSERT INTO autovec_filter_t
+SELECT
+	i::TINYINT,
+	(i * 10)::SMALLINT,
+	(i * 100)::INTEGER,
+	(i * 1000)::BIGINT,
+	(i + 3)::UTINYINT,
+	(i + 30)::USMALLINT,
+	(i + 300)::UINTEGER,
+	(i + 3000)::UBIGINT
+FROM range(-3, 6) tbl(i);
+
+statement ok
+INSERT INTO autovec_filter_t VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+query I
+SELECT i8 FROM autovec_filter_t WHERE i8 = 0
+----
+0
+
+query I
+SELECT i16 FROM autovec_filter_t WHERE i16 != 0 ORDER BY i16
+----
+-30
+-20
+-10
+10
+20
+30
+40
+50
+
+query I
+SELECT i32 FROM autovec_filter_t WHERE i32 > 200 ORDER BY i32
+----
+300
+400
+500
+
+query I
+SELECT i64 FROM autovec_filter_t WHERE i64 >= 3000 ORDER BY i64
+----
+3000
+4000
+5000
+
+query I
+SELECT i8 FROM autovec_filter_t WHERE 0 < i8 ORDER BY i8
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i8 FROM autovec_filter_t WHERE i8 <= -1 ORDER BY i8
+----
+-3
+-2
+-1
+
+query I
+SELECT u8 FROM autovec_filter_t WHERE u8 < 3 ORDER BY u8
+----
+0
+1
+2
+
+query I
+SELECT i32 FROM autovec_filter_t WHERE i32 > -200 AND i32 < 300 ORDER BY i32
+----
+-100
+0
+100
+200
+
+query I
+SELECT i32 FROM autovec_filter_t WHERE i32 > -200 AND i64 < 3000 ORDER BY i32
+----
+-100
+0
+100
+200
+
+statement ok
+CREATE TABLE autovec_arith_t(a INTEGER, b INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO autovec_arith_t SELECT i::INTEGER, (i * 2)::INTEGER, i::INTEGER FROM range(10) tbl(i);
+
+query III
+SELECT sum(a + b), sum(a - b), sum(a * b) FROM autovec_arith_t WHERE k >= 3 AND k < 7
+----
+54	-18	172
