@@ -34,7 +34,7 @@ FROM probe_perfect_hash p
 JOIN build_perfect_hash b
   ON p.k = b.k;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 query II
 EXPLAIN ANALYZE
@@ -43,7 +43,7 @@ FROM probe_perfect_hash p
 JOIN build_perfect_hash b
   ON p.k = b.k;
 ----
-analyzed_plan	<!REGEX>:.*IN BF\(k\).*
+analyzed_plan	<!REGEX>:(?s).*IN.*BF.*\(k\).*
 
 query II
 EXPLAIN ANALYZE
@@ -53,7 +53,7 @@ JOIN build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 SELECT count(*)
@@ -98,7 +98,7 @@ JOIN build_timestamp b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 CREATE OR REPLACE TABLE probe_varchar AS
@@ -135,7 +135,7 @@ JOIN build_hugeint b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<!REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 # COMPARE_NOT_DISTINCT_FROM would be the path where filters_null_values could be false,
 # but join filter pushdown does not currently generate PRF filters for it.
@@ -147,7 +147,7 @@ JOIN build b
   ON p.k IS NOT DISTINCT FROM b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<!REGEX>:.*IN PRF\(k\).*
+analyzed_plan	<!REGEX>:(?s).*IN.*PRF.*\(k\).*
 
 statement ok
 SET disabled_optimizers = '';

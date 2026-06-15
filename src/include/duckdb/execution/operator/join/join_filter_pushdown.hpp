@@ -39,7 +39,7 @@ struct JoinFilterPushdownColumn {
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
-	//! when the mode allows reconstruction of the probe expression for BF/PRF/PHJ runtime filters.
+	//! when the mode allows reconstruction of the probe expression for BF/PRF runtime filters.
 	LogicalType runtime_filter_type;
 };
 
@@ -100,7 +100,8 @@ public:
 	unique_ptr<DataChunk> FinalizeMinMax(JoinFilterGlobalState &gstate) const;
 	unique_ptr<DataChunk> FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
 	                                      unique_ptr<DataChunk> final_min_max, optional_ptr<JoinHashTable> ht = nullptr,
-	                                      bool allow_bloom_filters = true) const;
+	                                      bool allow_bloom_filters = true,
+	                                      bool allow_prefix_range_filters = true) const;
 
 private:
 	bool PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,

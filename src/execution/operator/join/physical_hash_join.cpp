@@ -1340,8 +1340,8 @@ static idx_t BloomFilterBitBudget(idx_t ht_count) {
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
                                                               unique_ptr<DataChunk> final_min_max,
-                                                              optional_ptr<JoinHashTable> ht,
-                                                              bool allow_bloom_filters) const {
+                                                              optional_ptr<JoinHashTable> ht, bool allow_bloom_filters,
+                                                              bool allow_prefix_range_filters) const {
 	if (probe_info.empty()) {
 		return final_min_max; // There are no table sources in which we can push down filters
 	}
@@ -1403,8 +1403,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				uhugeint_t span;
 				const auto can_compute_span =
 				    PrefixRangeFilter::TryComputeSpan(min_val_before_cast, max_val_before_cast, span);
-				const auto can_emit_prf =
-				    can_emit_runtime_filters && CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
+				const auto can_emit_prf = allow_prefix_range_filters && can_emit_runtime_filters &&
+				                          CanUsePrefixRangeFilter(context, op, ht, cmp) && can_compute_span;
 
 				bool pushed_in_filter = false;
 				if (CanUseInFilter(context, ht, cmp)) {
@@ -1419,7 +1419,11 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				}
 
 				if (can_emit_prf) {
-					const auto bloom_filter_bits = BloomFilterBitBudget(ht->Count());
+					auto build_count = ht->Count();
+					if (build_count == 0) {
+						build_count = ht->GetSinkCollection().Count();
+					}
+					const auto bloom_filter_bits = BloomFilterBitBudget(build_count);
 					if (span <= bloom_filter_bits &&
 					    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
 					                                 min_val_before_cast, max_val_before_cast, bloom_filter_bits)) {
@@ -1507,7 +1511,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.owned_local_hash_tables.clear();
 			if (filter_pushdown && !sink.skip_filter_pushdown && ht.GetSinkCollection().Count() > 0) {
 				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
-				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht);
+				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, true, false);
 			}
 			ht.PrepareBloomFilterForFinalize();
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
