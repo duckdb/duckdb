@@ -1,0 +1,299 @@
+# name: test/sql/function/variant/variant_type.test
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_type.db readwrite v1.5.0
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	],
+	'b': 42,
+	'c': {
+	    'd': 'world'
+	}}::VARIANT
+);
+
+# FIXME: Can have VARCHAR as input for variant parameter (should produce [a, b]).
+
+query I
+select variant_type('{"a": 1, "b": {"c": 12, "d": 10}}');
+----
+VARCHAR
+
+# No path supplied
+
+query I
+select variant_type(a) from struct_cast_data();
+----
+OBJECT
+OBJECT
+
+# Empty path supplied
+
+query I
+select variant_type(a, '') from struct_cast_data();
+----
+OBJECT
+OBJECT
+
+query I
+select variant_type(a, []) from struct_cast_data();
+----
+[]
+[]
+
+query I
+select variant_type(a, ['']) from struct_cast_data();
+----
+[OBJECT]
+[OBJECT]
+
+# Single path supplied
+
+query I
+select variant_type(a, 'c') from struct_cast_data();
+----
+NULL
+OBJECT
+
+query I
+select variant_type(a, ['c']) from struct_cast_data();
+----
+[NULL]
+[OBJECT]
+
+# Multiple paths supplied
+
+query I
+select variant_type(a, ['', 'c']) from struct_cast_data();
+----
+[OBJECT, NULL]
+[OBJECT, OBJECT]
+
+# Empty object
+
+query I
+select variant_type('{}'::VARIANT);
+----
+VARCHAR
+
+# Arrays
+
+query I
+select variant_type(['duck', 'goose']::VARIANT);
+----
+ARRAY
+
+query I
+select variant_type({'a': 1, 'b': ['duck', 'goose']}::VARIANT, 'b');
+----
+ARRAY
+
+# FIXME: map type is currently casted into a shape inconsistent with respect to JSON
+
+query I
+select variant_type(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
+----
+NULL
+
+# Primitive values, based on GetVariantLogicalTypeValues() in enum_util.cpp
+
+statement ok
+CREATE TYPE variant_type_mood AS ENUM ('sad', 'ok');
+
+query I
+select variant_type(v) from (values
+	(''::VARIANT),
+	(42::TINYINT::VARIANT),
+	(42::SMALLINT::VARIANT),
+	(42::INTEGER::VARIANT),
+	(42::BIGINT::VARIANT),
+	(42::HUGEINT::VARIANT),
+	(42::UTINYINT::VARIANT),
+	(42::USMALLINT::VARIANT),
+	(42::UINTEGER::VARIANT),
+	(42::UBIGINT::VARIANT),
+	(42::UHUGEINT::VARIANT),
+	(42::INT1::VARIANT),
+	(42::INT8::VARIANT),
+	(true::VARIANT),
+	(false::VARIANT),
+	(42.5::FLOAT::VARIANT),
+	(42.5::DOUBLE::VARIANT),
+	(42.5::DECIMAL(4, 1)::VARIANT),
+	(42.5::DECIMAL(9, 1)::VARIANT),
+	(42.5::DECIMAL(18, 1)::VARIANT),
+	(42.5::DECIMAL(38, 1)::VARIANT),
+	('hello'::VARCHAR::VARIANT),
+	('hello'::BLOB::VARIANT),
+	('10101'::BIT::VARIANT),
+	(123456789012345678901234567890::BIGNUM::VARIANT),
+	('00112233-4455-6677-8899-aabbccddeeff'::UUID::VARIANT),
+	('2020-01-02'::DATE::VARIANT),
+	('20:38:40-05'::TIME::VARIANT),
+	('20:38:40.123456789'::TIME_NS::VARIANT),
+	('20:38:40-05'::TIME_TZ::VARIANT),
+	('2020-01-02 03:04:05'::TIMESTAMP_S::VARIANT),
+	('2020-01-02 03:04:05.123'::TIMESTAMP_MS::VARIANT),
+	('2020-01-02 03:04:05.123456'::TIMESTAMP::VARIANT),
+	('2020-01-02 03:04:05.123456789'::TIMESTAMP_NS::VARIANT),
+	('2001-02-16 20:38:40-05'::TIMESTAMPTZ::VARIANT),
+	('2020-01-02 03:04:05.123456789+00'::TIMESTAMPTZ_NS::VARIANT),
+	('1 year 2 months 3 days'::INTERVAL::VARIANT),
+	('POINT(1 2)'::GEOMETRY::VARIANT),
+	('ok'::variant_type_mood::VARIANT)
+) t(v);
+----
+VARCHAR
+INT8
+INT16
+INT32
+INT64
+INT128
+UINT8
+UINT16
+UINT32
+UINT64
+UINT128
+INT8
+INT64
+BOOL_TRUE
+BOOL_FALSE
+FLOAT
+DOUBLE
+DECIMAL
+DECIMAL
+DECIMAL
+DECIMAL
+VARCHAR
+BLOB
+BITSTRING
+BIGNUM
+UUID
+DATE
+TIME_MICROS
+TIME_NANOS
+TIME_MICROS_TZ
+TIMESTAMP_SEC
+TIMESTAMP_MILIS
+TIMESTAMP_MICROS
+TIMESTAMP_NANOS
+TIMESTAMP_MICROS_TZ
+TIMESTAMP_NANOS_TZ
+INTERVAL
+GEOMETRY
+VARCHAR
+
+# NULL returns NULL
+
+query I
+select variant_type(NULL::VARIANT);
+----
+NULL
+
+query I
+select variant_type(NULL::VARIANT);
+----
+NULL
+
+query I
+select variant_type(NULL::VARIANT, 'a');
+----
+NULL
+
+query I
+select variant_type(j, 'a') from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+OBJECT
+NULL
+
+query I
+select variant_type(j, ['a', 'b']) from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+[OBJECT, NULL]
+NULL
+
+# VARIANT_NULL
+
+query I
+select variant_type({'a': 1, 'b': null}::VARIANT, 'b');
+----
+VARIANT_NULL
+
+# Supplied path does not exist in variant
+
+query I
+select variant_type('{}'::VARIANT, 'a');
+----
+NULL
+
+query I
+select variant_type({'a': 1, 'b': {'c': 12, 'd': 10}}::VARIANT, 'q');
+----
+NULL
+
+# NULL path returns NULL
+
+query I
+select variant_type({'a': 1}::VARIANT, NULL);
+----
+NULL
+
+# FIXME: Support for JSONPath and JSONPointer
+
+query I
+select variant_type({'a': 1, 'b': {'c': {'d': 12}}}::VARIANT, '$.b.c');
+----
+NULL
+
+# Incorrect parameters
+
+statement error
+select variant_type({'a': 1}::VARIANT, [1]);
+----
+<REGEX>:.*No function matches the given name and argument types 'variant_type\(VARIANT, INTEGER\[\]\)'.*
+
+statement error
+select variant_type({'a': 1}::VARIANT, [NULL]);
+----
+Binder Error: 'variant_type' does not accept NULL paths
+
+statement error
+select variant_type({'a': 1}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_type' does not accept NULL paths
+
+statement error
+select variant_type({'c': 1}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_type' does not accept NULL paths
+
+query I
+select variant_type({'c': 1}::VARIANT, []::VARCHAR[]);
+----
+[]
+
+# FIXME: malformed JSON object should result in an error
+
+statement ok
+select variant_type('{"a"\: 1}'::VARIANT);
