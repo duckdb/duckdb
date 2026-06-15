@@ -1,0 +1,147 @@
+# name: test/sql/variant/variant_create_sort_key.test
+# description: Test the logical ordering of VARIANT values (variant_comparator + collation)
+# group: [variant]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# integers: negative numbers sort before positive numbers (not by raw bytes)
+query I
+SELECT v::INT FROM (VALUES (-123), (5), (-1), (100), (0)) t(v)
+ORDER BY v::INT::VARIANT
+----
+-123
+-1
+0
+5
+100
+
+# descending
+query I
+SELECT v::INT FROM (VALUES (-123), (5), (-1), (100), (0)) t(v)
+ORDER BY v::INT::VARIANT DESC
+----
+100
+5
+0
+-1
+-123
+
+# doubles, including NaN (NaN sorts after everything) and -inf/+inf
+query I
+SELECT v FROM (VALUES ('nan'::DOUBLE), (1.5::DOUBLE), (-1.5::DOUBLE), ('-inf'::DOUBLE), ('inf'::DOUBLE), (0.0::DOUBLE)) t(v)
+ORDER BY v::VARIANT
+----
+-inf
+-1.5
+0.0
+1.5
+inf
+nan
+
+# strings
+query I
+SELECT v FROM (VALUES ('banana'), ('apple'), ('cherry')) t(v)
+ORDER BY v::VARCHAR::VARIANT
+----
+apple
+banana
+cherry
+
+# objects with the same keys in different order must produce identical sort keys
+query I
+SELECT variant_comparator({'b': 10, 'a': 1}::VARIANT) = variant_comparator({'a': 1, 'b': 10}::VARIANT)
+----
+true
+
+# objects with different values are not equal
+query I
+SELECT variant_comparator({'a': 1, 'b': 10}::VARIANT) = variant_comparator({'a': 1, 'b': 11}::VARIANT)
+----
+false
+
+# arrays sort element-by-element, shorter prefix sorts first
+query I
+SELECT v::INT[]::VARCHAR FROM (VALUES ([1,2,3]), ([1,2]), ([1,3]), ([1])) t(v)
+ORDER BY v::INT[]::VARIANT
+----
+[1]
+[1, 2]
+[1, 2, 3]
+[1, 3]
+
+# NUMBER fold: integers of all widths/signedness with the same value produce the same sort key
+query IIII
+SELECT
+    variant_comparator(1::TINYINT::VARIANT) = variant_comparator(1::INTEGER::VARIANT),
+    variant_comparator(1::BIGINT::VARIANT) = variant_comparator(1::UINTEGER::VARIANT),
+    variant_comparator(1::HUGEINT::VARIANT) = variant_comparator(1::UTINYINT::VARIANT),
+    variant_comparator(1::INTEGER::VARIANT) = variant_comparator(1::UHUGEINT::VARIANT)
+----
+true	true	true	true
+
+# NUMBER fold: integers, decimals and bignums of equal value produce the same sort key
+query III
+SELECT
+    variant_comparator(5::INTEGER::VARIANT) = variant_comparator(5.00::DECIMAL(5,2)::VARIANT),
+    variant_comparator(5::BIGINT::VARIANT) = variant_comparator(5::BIGNUM::VARIANT),
+    variant_comparator(5.00::DECIMAL(5,2)::VARIANT) = variant_comparator(5::BIGNUM::VARIANT)
+----
+true	true	true
+
+# NUMBER fold: ordered by numeric value across integers, decimals and bignums (negatives included)
+query I
+SELECT v::VARCHAR FROM (VALUES
+    ((-100.5)::DECIMAL(5,1)::VARIANT),
+    (3::TINYINT::VARIANT),
+    (1000000000000000000000000000::BIGNUM::VARIANT),
+    (0::UTINYINT::VARIANT),
+    (1.5::DECIMAL(2,1)::VARIANT),
+    ((-128)::TINYINT::VARIANT),
+    (15::BIGINT::VARIANT)
+) t(v)
+ORDER BY v
+----
+-128
+-100.5
+0
+1.5
+3
+15
+1000000000000000000000000000
+
+# NUMBER fold makes -100.5 less than 0 (decimals and integers compare by numeric value)
+query I
+SELECT (-100.5)::DECIMAL(5,1)::VARIANT > 0
+----
+false
+
+# real fold: FLOAT and DOUBLE with the same value produce the same sort key
+query I
+SELECT variant_comparator(1.5::FLOAT::VARIANT) = variant_comparator(1.5::DOUBLE::VARIANT)
+----
+true
+
+# NUMBER and REAL are still distinct ranks (1::INT is not equal to 1.0::DOUBLE)
+query I
+SELECT variant_comparator(1::INTEGER::VARIANT) = variant_comparator(1.0::DOUBLE::VARIANT)
+----
+false
+
+# booleans: false sorts before true
+query I
+SELECT v FROM (VALUES (true), (false), (true), (false)) t(v)
+ORDER BY v::BOOLEAN::VARIANT
+----
+false
+false
+true
+true
+
+# variant_comparator propagates NULL (so NULL = NULL stays NULL and NULLS FIRST/LAST works)
+query I
+SELECT variant_comparator(NULL::VARIANT) IS NULL
+----
+true
