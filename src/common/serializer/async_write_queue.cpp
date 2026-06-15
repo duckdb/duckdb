@@ -681,7 +681,13 @@ idx_t ManagedAsyncWriteQueue::BackpressureBudget() {
 	if (!memory_state) {
 		return NumericLimits<idx_t>::Maximum();
 	}
-	return MinValue(memory_state->GetReservation(), max_pending_bytes);
+	auto reservation = MinValue(memory_state->GetReservation(), max_pending_bytes);
+	// If TMM only grants a tiny reservation, do not retain an async backlog. This makes low-memory execution
+	// behave close to synchronous writes, but automatically allows overlap again if the reservation grows later.
+	if (reservation < AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD) {
+		return 0;
+	}
+	return reservation;
 }
 
 idx_t ManagedAsyncWriteQueue::DrainTaskByteBudget() const {
