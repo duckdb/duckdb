@@ -245,7 +245,7 @@ public:
 
 private:
 	struct PendingWrite {
-		PendingWrite(AsyncWriteRequest request);
+		explicit PendingWrite(AsyncWriteRequest request);
 
 		idx_t Size() const;
 

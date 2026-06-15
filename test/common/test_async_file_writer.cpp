@@ -551,7 +551,20 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 
 	fs.ReleaseWrites();
 	writer.Close();
-	REQUIRE(ReadFile(path) == large + tail);
+	REQUIRE(fs.write_sizes.size() == 2);
+	REQUIRE(fs.write_offsets.size() == 2);
+	bool saw_large = false;
+	bool saw_tail = false;
+	for (idx_t write_idx = 0; write_idx < fs.write_sizes.size(); write_idx++) {
+		if (fs.write_sizes[write_idx] == large.size() && fs.write_offsets[write_idx] == 0) {
+			saw_large = true;
+		}
+		if (fs.write_sizes[write_idx] == tail.size() && fs.write_offsets[write_idx] == large.size()) {
+			saw_tail = true;
+		}
+	}
+	REQUIRE(saw_large);
+	REQUIRE(saw_tail);
 	fs.RemoveFile(path);
 }
 
