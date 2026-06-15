@@ -1,6 +1,7 @@
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -259,7 +260,11 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
 	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes, location);
+		auto &handle = GetFileHandle();
+		const auto read_start = steady_clock::now();
+		handle.Read(context, buf.GetDataMutable(), nr_bytes, location);
+		const duration<double> read_duration = steady_clock::now() - read_start;
+		RecordReadThroughput(read_duration.count(), nr_bytes);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -416,7 +421,34 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
-	return GetFileHandle().TryGetNetworkThroughput(result);
+	if (GetFileHandle().TryGetNetworkThroughput(result)) {
+		return true;
+	}
+	// local files have no file system measurements, fall back to the throughput of this handle's own reads
+	lock_guard<mutex> guard(throughput_lock);
+	if (tp_sample_count == 0 || !(tp_latency_seconds > 0) || !(tp_bandwidth_bps > 0)) {
+		return false;
+	}
+	result.latency_seconds = tp_latency_seconds;
+	result.bandwidth_bytes_per_s = tp_bandwidth_bps;
+	return true;
+}
+
+void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {
+	if (IsRemoteFile() || !(total_seconds > 0)) {
+		return;
+	}
+	lock_guard<mutex> guard(throughput_lock);
+	const idx_t n = tp_sample_count + 1;
+	const double alpha = MaxValue<double>(0.2, 1.0 / static_cast<double>(n));
+	// a disk read has no observable first byte, so its wall time approximates the time to first byte
+	tp_latency_seconds =
+	    tp_latency_seconds <= 0 ? total_seconds : alpha * total_seconds + (1.0 - alpha) * tp_latency_seconds;
+	if (bytes >= MIN_BANDWIDTH_SAMPLE_BYTES) {
+		const double bandwidth = static_cast<double>(bytes) / total_seconds;
+		tp_bandwidth_bps = tp_bandwidth_bps <= 0 ? bandwidth : alpha * bandwidth + (1.0 - alpha) * tp_bandwidth_bps;
+	}
+	tp_sample_count = n;
 }
 
 idx_t CachingFileHandle::SeekPosition() {

@@ -69,8 +69,13 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Record a timed read of a local file into the throughput estimate
+	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
+	//! Bandwidth samples below this size are dominated by fixed costs
+	constexpr static idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16; // 64 KiB
+
 	QueryContext context;
 
 	//! The client caching file system that was used to create this CachingFileHandle
@@ -98,6 +103,12 @@ private:
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
+
+	//! Throughput measured over this handle's local reads, remote files measure in their own file system
+	mutex throughput_lock;
+	double tp_latency_seconds = 0;
+	double tp_bandwidth_bps = 0;
+	idx_t tp_sample_count = 0;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
