@@ -95,6 +95,11 @@ public:
 	virtual bool Prefetch() {
 		return false;
 	}
+	//! The checkpoint generation: incremented every checkpoint. Pairs with a (resets-per-generation) WAL byte
+	//! offset to form a monotonic cursor. 0 for block managers without a persistent checkpoint counter.
+	virtual uint64_t GetCheckpointIteration() const {
+		return 0;
+	}
 
 	//! Sync changes made to the block manager
 	virtual void FileSync() = 0;

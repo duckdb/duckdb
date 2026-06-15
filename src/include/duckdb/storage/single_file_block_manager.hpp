@@ -127,7 +127,7 @@ public:
 	bool Prefetch() override;
 
 	//! Return the checkpoint iteration of the file.
-	uint64_t GetCheckpointIteration() const {
+	uint64_t GetCheckpointIteration() const override {
 		return iteration_count;
 	}
 	//! Return the version number of the file.
