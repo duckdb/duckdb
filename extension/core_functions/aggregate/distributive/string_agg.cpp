@@ -13,13 +13,11 @@ namespace duckdb {
 namespace {
 
 struct StringAggState {
+	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
+
 	string_t value;
 	bool is_set;
 	uint32_t alloc_size;
-
-	//! For state export: the accumulated string is exported as a nullable VARCHAR (value + is_set);
-	//! alloc_size is not exported - an imported state starts with alloc_size = 0, forcing a re-allocation on append
-	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
 };
 
 struct StringAggBindData : public FunctionData {
@@ -162,22 +160,16 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundA
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
-AggregateStateLayout StringAggStateType(const BoundAggregateFunction &function, optional_ptr<FunctionData> bind_data) {
+AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
 	using ST = StringAggState::STATE_TYPE;
 	AggregateStateLayout layout;
-	if (function.GetReturnType().IsAggregateState()) {
-		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
-		// its return type IS the state type already
-		layout.type = function.GetReturnType();
-	} else {
-		layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
-	}
+	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
 	layout.total_state_size = AlignValue<idx_t>(sizeof(StringAggState));
 	layout.field = BuildStateField<ST>();
 	if (function.GetOriginalArguments().size() == 2) {
-		// the separator must be a constant at bind time (its argument is erased by StringAggBind) - record its
-		// value so that re-binding the exported state can supply it
-		layout.constant_parameters.emplace(1, Value(bind_data->Cast<StringAggBindData>().sep));
+		// record the value of the separator if explicitly provided
+		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
 	}
 	return layout;
 }

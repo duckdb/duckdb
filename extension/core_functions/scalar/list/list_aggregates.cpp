@@ -218,7 +218,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 
 	D_ASSERT(aggr.Function().HasStateUpdateCallback());
 
