@@ -723,34 +723,28 @@ LogicalType ParseSignatureType(ClientContext &context, const Value &arg) {
 
 // parses the optional fourth argument of to_aggregate_state: the constant values for arguments that must be bound to
 // a specific constant rather than a NULL value of the argument type (e.g. string_agg's separator). It is supplied as
-// a MAP or STRUCT keyed by the (0-based) argument index, e.g. {'1': ','} to bind argument 1 to the constant ','
-void ParseConstantParameters(const Value &constants, map<idx_t, Value> &constant_parameters) {
+// a LIST with one entry per argument (i.e. the same length as the signature): NULL for arguments that are not bound to
+// a constant, and the constant value for arguments that are, e.g. [NULL, '|'] to bind argument 1 to the constant '|'
+void ParseConstantParameters(const Value &constants, idx_t argument_count, map<idx_t, Value> &constant_parameters) {
 	if (constants.IsNull()) {
 		return;
 	}
-	auto &type = constants.type();
-	vector<pair<string, Value>> entries;
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &children = StructValue::GetChildren(constants);
-		for (idx_t i = 0; i < children.size(); i++) {
-			entries.emplace_back(StructType::GetChildName(type, i), children[i]);
-		}
-	} else if (type.id() == LogicalTypeId::MAP) {
-		for (auto &entry : ListValue::GetChildren(constants)) {
-			auto &kv = StructValue::GetChildren(entry);
-			entries.emplace_back(kv[0].ToString(), kv[1]);
-		}
-	} else {
-		throw BinderException(
-		    "to_aggregate_state: the constant parameters must be a MAP or STRUCT keyed by argument index");
+	if (constants.type().id() != LogicalTypeId::LIST) {
+		throw BinderException("to_aggregate_state: the constant parameters must be a list with one entry per argument "
+		                      "(use NULL for arguments that are not bound to a constant), e.g. [NULL, '|']");
 	}
-	for (auto &entry : entries) {
-		idx_t arg_idx;
-		if (!TryCast::Operation<string_t, idx_t>(string_t(entry.first), arg_idx)) {
-			throw BinderException("to_aggregate_state: invalid constant parameter index \"%s\" - must be an integer",
-			                      entry.first);
+	auto &children = ListValue::GetChildren(constants);
+	if (children.size() != argument_count) {
+		throw BinderException("to_aggregate_state: the constant parameters list has %llu entries but the aggregate has "
+		                      "%llu arguments - it must have exactly one entry per argument (use NULL for arguments "
+		                      "that are not bound to a constant)",
+		                      children.size(), argument_count);
+	}
+	for (idx_t i = 0; i < children.size(); i++) {
+		if (children[i].IsNull()) {
+			continue;
 		}
-		constant_parameters[arg_idx] = entry.second;
+		constant_parameters[i] = children[i];
 	}
 }
 
@@ -788,14 +782,9 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	map<idx_t, Value> constant_parameters;
 	if (arguments.size() > 3) {
 		auto constants_val = ExpressionExecutor::EvaluateScalar(context, *arguments[3]);
-		ParseConstantParameters(constants_val, constant_parameters);
+		ParseConstantParameters(constants_val, argument_types.size(), constant_parameters);
 	}
 	for (auto &entry : constant_parameters) {
-		if (entry.first >= argument_types.size()) {
-			throw BinderException("to_aggregate_state: constant parameter index %llu is out of range (the aggregate "
-			                      "has %llu arguments)",
-			                      entry.first, argument_types.size());
-		}
 		// cast each constant to the argument type declared in the signature
 		entry.second = entry.second.DefaultCastAs(argument_types[entry.first]);
 	}
@@ -889,7 +878,8 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 	vector<LogicalType> arguments {LogicalTypeId::ANY, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::ANY)};
 	for (idx_t constant_params = 0; constant_params < 2; constant_params++) {
 		if (constant_params) {
-			// optional fourth argument: constant parameter values keyed by argument index (e.g. {'1': ','})
+			// optional fourth argument: constant parameter values as a list with one entry per argument (e.g.
+			// [NULL, ','])
 			arguments.emplace_back(LogicalTypeId::ANY);
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
