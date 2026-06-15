@@ -87,8 +87,13 @@ typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_inp
 //! The type used for combining hashed aggregate states
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                                     idx_t offset);
+typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+                                     idx_t count, idx_t offset);
+//! Initializes the local state used by the finalize of the aggregate (optional).
+//! The local state can be used to cache expensive intermediates between finalized groups - callers can keep the
+//! local state alive to re-use it across multiple finalize calls (see AggregateFinalizeInputData).
+typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
+                                                                                optional_ptr<FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
@@ -185,6 +190,10 @@ public:
 	aggregate_finalize_t GetStateFinalizeCallback() const { return finalize; }
 	bool HasStateFinalizeCallback() const { return finalize != nullptr; }
 
+	void SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) { init_local_state_finalize = callback; }
+	aggregate_init_local_state_finalize_t GetInitLocalStateFinalizeCallback() const { return init_local_state_finalize; }
+	bool HasInitLocalStateFinalizeCallback() const { return init_local_state_finalize != nullptr; }
+
 	bool HasWindowCallback() const { return window != nullptr; }
 	aggregate_window_t GetWindowCallback() const { return window; }
 	void SetWindowCallback(aggregate_window_t callback) { window = callback; }
@@ -220,6 +229,8 @@ public:
 	aggregate_combine_t combine = nullptr;
 	//! The hashed aggregate finalization function (may be null, if window is set)
 	aggregate_finalize_t finalize = nullptr;
+	//! Initializes the local state used by the finalize (may be null)
+	aggregate_init_local_state_finalize_t init_local_state_finalize = nullptr;
 	//! The clustered aggregate update function (may be null)
 	aggregate_cluster_update_t cluster_update = nullptr;
 	//! The windowed aggregate custom function (may be null)
@@ -335,6 +346,10 @@ public: // Callbacks
 	auto HasStateFinalizeCallback() const -> bool { return callbacks.finalize != nullptr; }
 	auto GetStateFinalizeCallback() const -> aggregate_finalize_t { return callbacks.finalize; }
 	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { callbacks.finalize = callback; }
+
+	auto HasInitLocalStateFinalizeCallback() const -> bool { return callbacks.init_local_state_finalize != nullptr; }
+	auto GetInitLocalStateFinalizeCallback() const -> aggregate_init_local_state_finalize_t { return callbacks.init_local_state_finalize; }
+	auto SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) -> void { callbacks.init_local_state_finalize = callback; }
 
 	auto HasWindowCallback() const -> bool { return callbacks.window != nullptr; }
 	auto GetWindowCallback() const -> aggregate_window_t { return callbacks.window; }
@@ -684,15 +699,15 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static void StateFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                          idx_t offset) {
-		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, aggr_input_data, result, count, offset);
+	static void StateFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                          idx_t count, idx_t offset) {
+		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
-	static void StateVoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                              idx_t offset) {
-		AggregateExecutor::VoidFinalize<STATE, OP>(states, aggr_input_data, result, count, offset);
+	static void StateVoidFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                              idx_t count, idx_t offset) {
+		AggregateExecutor::VoidFinalize<STATE, OP>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
