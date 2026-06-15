@@ -104,8 +104,8 @@ protected:
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
-	//! ready to be purged, and false otherwise.
-	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
+	//! ready to be purged, and false otherwise. Requires the handle's block lock.
+	bool AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle);
 	//! Gets the eviction queue for the specified type
 	EvictionQueue &GetEvictionQueueForBlockMemory(const BlockMemory &memory);
 	//! Increments the dead nodes for the queue with specified type

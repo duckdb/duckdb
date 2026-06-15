@@ -116,12 +116,18 @@ public:
 		return ++eviction_seq_num;
 	}
 	//! Returns true, if the block has a live (not yet dead-counted) entry in the eviction queue.
+	bool HasLiveQueueEntry(BlockLock &l) const {
+		VerifyMutex(l);
+		return has_queue_entry;
+	}
+	//! Lock-free overload of HasLiveQueueEntry. Only safe for callers with exclusive ownership of the
+	//! block memory (i.e., the destructor).
 	bool HasLiveQueueEntry() const {
 		return has_queue_entry;
 	}
-	//! Marks whether the block has a live entry in the eviction queue.
-	//! Callers must hold the block lock, or have exclusive ownership of the block memory.
-	void SetHasLiveQueueEntry(bool has_queue_entry_p) {
+	//! Marks whether the block has a live entry in the eviction queue. Requires the block lock.
+	void SetHasLiveQueueEntry(BlockLock &l, bool has_queue_entry_p) {
+		VerifyMutex(l);
 		has_queue_entry = has_queue_entry_p;
 	}
 	//! Get the LRU timestamp.

@@ -268,12 +268,12 @@ BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bo
 BufferPool::~BufferPool() {
 }
 
-bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 	auto &memory = handle->GetMemory();
 	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
-	// The block handle is locked during this operation (Unpin),
-	// or the block handle is still a local variable (ConvertToPersistent)
+	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
+	// (uncontended) lock of the freshly created block before calling.
 	D_ASSERT(memory.GetReaders() == 0);
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
@@ -282,12 +282,12 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 		                           .count());
 	}
 
-	if (memory.HasLiveQueueEntry()) {
+	if (memory.HasLiveQueueEntry(lock)) {
 		// The block's previous entry is still in the queue. The new entry supersedes it,
 		// i.e., we kill exactly one previous version.
 		queue.IncrementDeadNodes();
 	}
-	memory.SetHasLiveQueueEntry(true);
+	memory.SetHasLiveQueueEntry(lock, true);
 
 	// Get the eviction queue for the block and add it
 	BufferEvictionNode node(handle->GetMemoryWeak(), ts);
@@ -492,7 +492,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 		// This node is the block's live queue entry, and we just dequeued it: the block no longer
 		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
-		handle->SetHasLiveQueueEntry(false);
+		handle->SetHasLiveQueueEntry(lock, false);
 		if (!handle->CanUnload()) {
 			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
 			// entry when it is unpinned again.
