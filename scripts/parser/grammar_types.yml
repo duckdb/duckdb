@@ -1011,6 +1011,8 @@ Bool:
     - GroupingOrGroupingId
     - GroupingKeyword
     - GroupingIdKeyword
+    - SubqueryNot
+    - SubqueryExists
     - WithData
     - WithDataOnly
     - WithNoData
@@ -1624,7 +1626,6 @@ excluded_rules:
   - RenameEntryList
   - SingleRenameEntry
   - RenameEntry
-  - SubqueryExpression
   - Framing
   - FrameExtent
   - SingleFrameExtent

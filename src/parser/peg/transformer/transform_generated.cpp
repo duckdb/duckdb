@@ -4288,6 +4288,39 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordI
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryExpressionInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> subquery_not {};
+	auto &subquery_not_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (subquery_not_opt.HasResult()) {
+		auto subquery_not_value = transformer.Transform<bool>(subquery_not_opt.GetResult());
+		subquery_not = subquery_not_value;
+	}
+	optional<bool> subquery_exists {};
+	auto &subquery_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (subquery_exists_opt.HasResult()) {
+		auto subquery_exists_value = transformer.Transform<bool>(subquery_exists_opt.GetResult());
+		subquery_exists = subquery_exists_value;
+	}
+	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
+	auto result =
+	    TransformSubqueryExpression(transformer, subquery_not, subquery_exists, std::move(subquery_reference));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryNotInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformSubqueryNot(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryExistsInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformSubqueryExists(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseExpressionInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8453,6 +8486,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CastOrTryCast", &PEGTransformerFactory::TransformCastOrTryCastInternal},
 	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
 	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
+	    {"SubqueryExpression", &PEGTransformerFactory::TransformSubqueryExpressionInternal},
+	    {"SubqueryNot", &PEGTransformerFactory::TransformSubqueryNotInternal},
+	    {"SubqueryExists", &PEGTransformerFactory::TransformSubqueryExistsInternal},
 	    {"CaseExpression", &PEGTransformerFactory::TransformCaseExpressionInternal},
 	    {"CaseWhenThen", &PEGTransformerFactory::TransformCaseWhenThenInternal},
 	    {"CaseElse", &PEGTransformerFactory::TransformCaseElseInternal},

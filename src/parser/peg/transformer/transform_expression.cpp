@@ -2462,12 +2462,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalStringParam
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool is_not = list_pr.Child<OptionalParseResult>(0).HasResult();
-	bool is_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(2));
-
+                                                                                const optional<bool> &subquery_not,
+                                                                                const optional<bool> &subquery_exists,
+                                                                                unique_ptr<TableRef>
+                                                                                    subquery_reference) {
+	bool is_not = subquery_not ? *subquery_not : false;
+	bool is_exists = subquery_exists ? *subquery_exists : false;
 	auto result = make_uniq<SubqueryExpression>();
 	if (is_exists) {
 		result->GetSubqueryTypeMutable() = SubqueryType::EXISTS;
@@ -2492,6 +2492,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSubqueryExpression(
 		return std::move(not_operator);
 	}
 	return std::move(result);
+}
+
+bool PEGTransformerFactory::TransformSubqueryNot(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformSubqueryExists(PEGTransformer &transformer) {
+	return true;
 }
 
 unique_ptr<ParsedExpression>

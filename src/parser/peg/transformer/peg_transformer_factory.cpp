@@ -241,7 +241,6 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
-	REGISTER_TRANSFORM(TransformSubqueryExpression);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 	REGISTER_TRANSFORM(TransformMethodExpression);
 	REGISTER_TRANSFORM(TransformRenameList);

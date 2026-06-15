@@ -528,8 +528,6 @@ private:
 	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer, ParseResult &parse_result);
@@ -2037,6 +2035,18 @@ private:
 	static unique_ptr<TransformResultValue> TransformTryCastKeywordInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static bool TransformTryCastKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSubqueryExpressionInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
+	                                                                const optional<bool> &subquery_not,
+	                                                                const optional<bool> &subquery_exists,
+	                                                                unique_ptr<TableRef> subquery_reference);
+	static unique_ptr<TransformResultValue> TransformSubqueryNotInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformSubqueryNot(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSubqueryExistsInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformSubqueryExists(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformCaseExpressionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCaseExpression(PEGTransformer &transformer,
