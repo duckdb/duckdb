@@ -76,6 +76,7 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class SimpleBufferedData;  // ExecuteTaskInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;   // LockContext
+	friend class EngineIterator;      // LockContext
 	friend class ConnectionManager;
 
 public:
@@ -211,14 +212,6 @@ public:
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
 
-	//! Parse a query that must contain exactly one statement and return it raw — no
-	//! StatementPreprocessor pass (no PRAGMA reparse, no MULTI_STATEMENT unpacking). Throws if
-	//! the query yields zero or more than one statement. Use this when you need the AST and
-	//! plan to run preprocessing yourself (or skip it entirely, e.g. for static analysis).
-	DUCKDB_API unique_ptr<SQLStatement> ParseStatementRaw(const string &query);
-	//! Same as above, but for callers that already hold the context lock.
-	unique_ptr<SQLStatement> ParseStatementRaw(ClientContextLock &lock, const string &query);
-
 	//! Extract a query's statements as an EngineIterator (iterator-style API). The caller drives
 	//! Peek(context) + GetStatement() to walk through ready-to-execute (engine-facing) statements
 	//! one at a time. Replaces the flat-vector form (`ParseStatements`) over time. Callers that want
@@ -227,7 +220,6 @@ public:
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.

@@ -1,7 +1,9 @@
 #include "duckdb/main/engine_iterator.hpp"
 
+#include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/planner/statement_preprocessor.hpp"
 
 namespace duckdb {
 
@@ -17,46 +19,57 @@ EngineIterator::EngineIterator(EngineIterator &&) noexcept = default;
 EngineIterator &EngineIterator::operator=(EngineIterator &&) noexcept = default;
 
 bool EngineIterator::Peek(ClientContext &context) {
-	// Already buffered from a prior Peek — just report it.
-	if (current_statement) {
-		return true;
-	}
-	// Drain any preprocessed leftovers first.
+	// More buffered engine statements from the current peel's expansion?
 	if (buffer_cursor < buffer.size()) {
-		current_statement = std::move(buffer[buffer_cursor++]);
 		return true;
 	}
-	if (exhausted) {
-		return false;
-	}
-	// Pull the next parse-facing statement and preprocess it into one-or-more engine-facing
-	// statements. The preprocessor can swallow a statement entirely (empty expansion), in which
-	// case we loop and pull the next one.
-	while (true) {
-		if (!source.Peek(context)) {
-			exhausted = true;
-			return false;
-		}
-		auto stmt = source.GetStatement();
-		buffer.clear();
-		buffer_cursor = 0;
-		buffer.push_back(std::move(stmt));
-		context.PreprocessStatements(buffer);
-		if (buffer.empty()) {
-			// Preprocessor swallowed the statement; pull the next one.
-			continue;
-		}
-		current_statement = std::move(buffer[0]);
-		buffer_cursor = 1;
-		return true;
-	}
+	// Otherwise, is there another parse-facing statement to pull? Parses ahead, does NOT preprocess
+	// — safe to use as a lookahead.
+	return source.Peek(context);
 }
 
-unique_ptr<SQLStatement> EngineIterator::GetStatement() {
-	if (!current_statement) {
+unique_ptr<SQLStatement> EngineIterator::GetStatementInternal(ClientContext &context,
+                                                              optional_ptr<ClientContextLock> lock) {
+	// Drain the current peel's expansion first.
+	if (buffer_cursor < buffer.size()) {
+		return std::move(buffer[buffer_cursor++]);
+	}
+	// Pull the next parse-facing statement and preprocess it into one-or-more engine-facing
+	// statements. Preprocessing runs here (not in Peek) so it sees the transaction state left by the
+	// previously executed statement.
+	if (!source.Peek(context)) {
+		return nullptr; // exhausted
+	}
+	auto stmt = source.GetStatement();
+	buffer.clear();
+	buffer_cursor = 0;
+	buffer.push_back(std::move(stmt));
+	// Expand the peel into engine-facing statements. Preprocessing reads the context's current
+	// transaction state, so it must run here (after the previous statement executed), not in Peek.
+	StatementPreprocessor preprocessor(context);
+	const CurrentTransactionState transaction_state =
+	    context.transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
+	if (lock) {
+		preprocessor.Preprocess(*lock, buffer, transaction_state);
+	} else {
+		// No caller-held lock (e.g. the shell): acquire one ourselves for the preprocess pass.
+		auto own_lock = context.LockContext();
+		preprocessor.Preprocess(*own_lock, buffer, transaction_state);
+	}
+	if (buffer.empty()) {
+		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
 		return nullptr;
 	}
-	return std::move(current_statement);
+	buffer_cursor = 1;
+	return std::move(buffer[0]);
+}
+
+unique_ptr<SQLStatement> EngineIterator::GetStatement(ClientContext &context) {
+	return GetStatementInternal(context, nullptr);
+}
+
+unique_ptr<SQLStatement> EngineIterator::GetStatementWithLock(ClientContext &context, ClientContextLock &lock) {
+	return GetStatementInternal(context, &lock);
 }
 
 } // namespace duckdb

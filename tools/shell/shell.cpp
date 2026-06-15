@@ -1022,7 +1022,10 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	try {
 		auto iterator = con.context->ExtractStatements(zSql);
 		while (iterator.Peek(*con.context)) {
-			auto statement = iterator.GetStatement();
+			auto statement = iterator.GetStatement(*con.context);
+			if (!statement) {
+				continue; // a peel that preprocessing swallowed
+			}
 			idx_t start_pos = statement->stmt_location;
 			idx_t len = statement->stmt_length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
