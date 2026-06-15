@@ -402,6 +402,8 @@ Expression:
     - MethodExpression
     - SliceExpression
     - EndSliceBound
+    - EndSliceValue
+    - EndSliceMinus
     - StepSliceBound
     - SingleArrowPair
     - StarExpression
@@ -1618,9 +1620,9 @@ excluded_rules:
   - WithClause
   - WindowDefinition
   - SingleArrowPair
+  - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
   - FilterClause
-  - ExcludeOrExcept
   - Framing
   - FrameExtent
   - SingleFrameExtent
@@ -1674,8 +1676,3 @@ excluded_rules:
   - PrefixExpression
   - BaseExpression
   - Indirection
-  - CastOperator
-  - SliceExpression
-  - SliceBound
-  - StepSliceBound
-  - PostfixOperator

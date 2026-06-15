@@ -240,7 +240,9 @@ DotOperator <- '.' (MethodExpression / ColLabel)
 MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreOrRespectNulls?)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
-EndSliceBound <- ':' (Expression / '-')?
+EndSliceBound <- ':' EndSliceValue?
+EndSliceValue <- Expression / EndSliceMinus
+EndSliceMinus <- '-'
 StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 

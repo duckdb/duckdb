@@ -1548,16 +1548,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndirection(PEGTran
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEGTransformer &transformer) {
 	vector<unique_ptr<ParsedExpression>> func_children;
 	return make_uniq<FunctionExpression>("factorial", std::move(func_children));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
+                                                                          const LogicalType &type) {
 	// We input a dummy constant expression but replace this later with the real expression that precedes this post-fix
 	// castOperator
 	return make_uniq<CastExpression>(type, make_uniq<ConstantExpression>(Value()));
@@ -1615,10 +1612,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto slice_bound = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
+                                                vector<unique_ptr<ParsedExpression>> slice_bound) {
 	if (slice_bound.empty()) {
 		throw ParserException("Empty subscript '[]' is not allowed");
 	}
@@ -1628,65 +1624,53 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEG
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(slice_bound));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
+                                           optional<unique_ptr<ParsedExpression>> end_slice_bound,
+                                           optional<unique_ptr<ParsedExpression>> step_slice_bound) {
 	vector<unique_ptr<ParsedExpression>> slice_bounds;
-	auto &start_slice_opt = list_pr.Child<OptionalParseResult>(0);
-	auto &end_slice_opt = list_pr.Child<OptionalParseResult>(1);
-	auto &step_slice_opt = list_pr.Child<OptionalParseResult>(2);
-	if (!end_slice_opt.HasResult() && !step_slice_opt.HasResult()) {
-		if (start_slice_opt.HasResult()) {
-			slice_bounds.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(start_slice_opt.GetResult()));
+	if (!end_slice_bound && !step_slice_bound) {
+		if (expression && *expression) {
+			slice_bounds.push_back(std::move(*expression));
 		}
 		return slice_bounds;
 	}
-	auto const_list = make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
-	if (start_slice_opt.HasResult()) {
-		slice_bounds.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(start_slice_opt.GetResult()));
+	if (expression && *expression) {
+		slice_bounds.push_back(std::move(*expression));
 	} else {
-		slice_bounds.push_back(const_list->Copy());
+		slice_bounds.push_back(make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>())));
 	}
-	if (end_slice_opt.HasResult()) {
-		slice_bounds.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(end_slice_opt.GetResult()));
+	if (end_slice_bound && *end_slice_bound) {
+		slice_bounds.push_back(std::move(*end_slice_bound));
 	} else {
-		slice_bounds.push_back(const_list->Copy());
+		slice_bounds.push_back(make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>())));
 	}
-	if (step_slice_opt.HasResult()) {
-		slice_bounds.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(step_slice_opt.GetResult()));
+	if (step_slice_bound && *step_slice_bound) {
+		slice_bounds.push_back(std::move(*step_slice_bound));
 	}
 	return slice_bounds;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
-                                                                           ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &nested_list_opt = list_pr.Child<OptionalParseResult>(1);
+                                                                           optional<unique_ptr<ParsedExpression>>
+                                                                               end_slice_value) {
 	// If either the lower or upper bound is not specified, we use an empty constant LIST,
 	// which we handle in the execution.
-	auto const_list = make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
-	if (nested_list_opt.HasResult()) {
-		auto &nested_list = nested_list_opt.GetResult().Cast<ListParseResult>();
-		auto &choice_pr = nested_list.Child<ChoiceParseResult>(0);
-		if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
-			// We have hit the '-'
-			return std::move(const_list);
-		}
-		if (choice_pr.GetResult().type == ParseResultType::LIST) {
-			return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
-		}
-		throw InternalException("Unexpected parse result type encountered");
+	if (end_slice_value && *end_slice_value) {
+		return std::move(*end_slice_value);
 	}
-	// return empty list here
-	return std::move(const_list);
+	return make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &expression_opt = list_pr.Child<OptionalParseResult>(1);
-	if (expression_opt.HasResult()) {
-		return transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.GetResult());
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceMinus(PEGTransformer &transformer) {
+	return make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformStepSliceBound(PEGTransformer &transformer,
+                                               optional<unique_ptr<ParsedExpression>> expression) {
+	if (expression && *expression) {
+		return std::move(*expression);
 	}
 	return make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 }

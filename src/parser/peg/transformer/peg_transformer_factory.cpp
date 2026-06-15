@@ -187,7 +187,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformFactor);
 	REGISTER_TRANSFORM(TransformExponentiationExpression);
 	REGISTER_TRANSFORM(TransformExponentOperator);
-	REGISTER_TRANSFORM(TransformPostfixOperator);
 	REGISTER_TRANSFORM(TransformCollateExpression);
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
@@ -198,12 +197,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFilterClause);
 	REGISTER_TRANSFORM(TransformIndirection);
-	REGISTER_TRANSFORM(TransformCastOperator);
 	REGISTER_TRANSFORM(TransformDotOperator);
-	REGISTER_TRANSFORM(TransformSliceExpression);
-	REGISTER_TRANSFORM(TransformSliceBound);
-	REGISTER_TRANSFORM(TransformEndSliceBound);
-	REGISTER_TRANSFORM(TransformStepSliceBound);
 
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);

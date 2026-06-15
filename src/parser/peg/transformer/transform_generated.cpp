@@ -4805,6 +4805,97 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnknownLiteralI
 	return make_uniq<TypedTransformResult<Value>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCastOperatorInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(1));
+	auto result = TransformCastOperator(transformer, type);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSliceExpressionInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto slice_bound = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+	auto result = TransformSliceExpression(transformer, std::move(slice_bound));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSliceBoundInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<unique_ptr<ParsedExpression>> expression {};
+	auto &expression_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.GetResult());
+		expression = std::move(expression_value);
+	}
+	optional<unique_ptr<ParsedExpression>> end_slice_bound {};
+	auto &end_slice_bound_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (end_slice_bound_opt.HasResult()) {
+		auto end_slice_bound_value =
+		    transformer.Transform<unique_ptr<ParsedExpression>>(end_slice_bound_opt.GetResult());
+		end_slice_bound = std::move(end_slice_bound_value);
+	}
+	optional<unique_ptr<ParsedExpression>> step_slice_bound {};
+	auto &step_slice_bound_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (step_slice_bound_opt.HasResult()) {
+		auto step_slice_bound_value =
+		    transformer.Transform<unique_ptr<ParsedExpression>>(step_slice_bound_opt.GetResult());
+		step_slice_bound = std::move(step_slice_bound_value);
+	}
+	auto result = TransformSliceBound(transformer, std::move(expression), std::move(end_slice_bound),
+	                                  std::move(step_slice_bound));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEndSliceBoundInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<unique_ptr<ParsedExpression>> end_slice_value {};
+	auto &end_slice_value_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (end_slice_value_opt.HasResult()) {
+		auto end_slice_value_value =
+		    transformer.Transform<unique_ptr<ParsedExpression>>(end_slice_value_opt.GetResult());
+		end_slice_value = std::move(end_slice_value_value);
+	}
+	auto result = TransformEndSliceBound(transformer, std::move(end_slice_value));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEndSliceValueInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEndSliceMinusInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto result = TransformEndSliceMinus(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStepSliceBoundInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<unique_ptr<ParsedExpression>> expression {};
+	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.GetResult());
+		expression = std::move(expression_value);
+	}
+	auto result = TransformStepSliceBound(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPostfixOperatorInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformPostfixOperator(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSpecialFunctionExpressionInternal(PEGTransformer &transformer,
                                                                   ParseResult &parse_result) {
@@ -8692,6 +8783,14 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
 	    {"UnknownLiteral", &PEGTransformerFactory::TransformUnknownLiteralInternal},
+	    {"CastOperator", &PEGTransformerFactory::TransformCastOperatorInternal},
+	    {"SliceExpression", &PEGTransformerFactory::TransformSliceExpressionInternal},
+	    {"SliceBound", &PEGTransformerFactory::TransformSliceBoundInternal},
+	    {"EndSliceBound", &PEGTransformerFactory::TransformEndSliceBoundInternal},
+	    {"EndSliceValue", &PEGTransformerFactory::TransformEndSliceValueInternal},
+	    {"EndSliceMinus", &PEGTransformerFactory::TransformEndSliceMinusInternal},
+	    {"StepSliceBound", &PEGTransformerFactory::TransformStepSliceBoundInternal},
+	    {"PostfixOperator", &PEGTransformerFactory::TransformPostfixOperatorInternal},
 	    {"SpecialFunctionExpression", &PEGTransformerFactory::TransformSpecialFunctionExpressionInternal},
 	    {"CoalesceExpression", &PEGTransformerFactory::TransformCoalesceExpressionInternal},
 	    {"UnpackExpression", &PEGTransformerFactory::TransformUnpackExpressionInternal},
