@@ -84,8 +84,7 @@ public:
 	}
 	//! Decrement the dead node counter in the purge queue.
 	inline void DecrementDeadNodes() {
-		auto old_total_dead_nodes = total_dead_nodes.fetch_sub(1, std::memory_order_relaxed);
-		D_ASSERT(old_total_dead_nodes > 0);
+		total_dead_nodes--;
 	}
 	bool HasFileBufferType(const FileBufferType &type) const {
 		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
@@ -242,8 +241,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		}
 	}
 
-	auto old_total_dead_nodes = total_dead_nodes.fetch_sub(dead_count, std::memory_order_relaxed);
-	D_ASSERT(old_total_dead_nodes >= dead_count);
+	total_dead_nodes -= dead_count;
 
 	// Re-enqueue alive nodes via producer token — goes into a dedicated sub-queue
 	// that the consumer token has already passed
