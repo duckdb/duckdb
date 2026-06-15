@@ -42,7 +42,7 @@ template <bool IS_STRUCT_PACK>
 static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
@@ -56,13 +56,13 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->GetAlias();
-			if (name_collision_set.find(alias) != name_collision_set.end()) {
+			alias = child->GetAlias().GetIdentifierName();
+			if (name_collision_set.find(Identifier(alias)) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}
-			name_collision_set.insert(alias);
+			name_collision_set.insert(Identifier(alias));
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
+		struct_children.emplace_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons

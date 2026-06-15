@@ -1,5 +1,7 @@
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -140,7 +142,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 }
 
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
-#ifdef DEBUG
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_FUNCTIONS) {
+		return;
+	}
 	if (args.data.empty() || expr.Function().GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return;
 	}
@@ -163,11 +167,13 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	// Default is that if any of the arguments are NULL, the result is also NULL
 	auto result_validity = result.Validity();
 	for (idx_t i = 0; i < count; i++) {
-		if (!combined_mask.RowIsValid(i)) {
-			D_ASSERT(!result_validity.IsValid(i));
+		if (!combined_mask.RowIsValid(i) && result_validity.IsValid(i)) {
+			throw InternalException(
+			    "VerifyNullHandling failed for scalar function \"%s\": row %d has a NULL argument but the result is "
+			    "not NULL - functions with default NULL handling should return NULL for any NULL input",
+			    expr.Function().GetName(), i);
 		}
 	}
-#endif
 }
 
 static idx_t SelectBooleanResult(Vector &result, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,

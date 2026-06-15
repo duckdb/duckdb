@@ -86,7 +86,7 @@ duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types_p
 		duckdb::child_list_t<duckdb::LogicalType> members;
 
 		for (idx_t i = 0; i < member_count; i++) {
-			members.push_back(make_pair(member_names[i], *member_types[i]));
+			members.emplace_back(make_pair(member_names[i], *member_types[i]));
 		}
 		duckdb::LogicalType *mtype = new duckdb::LogicalType(duckdb::LogicalType::UNION(members));
 		return reinterpret_cast<duckdb_logical_type>(mtype);
@@ -111,7 +111,7 @@ duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_
 		duckdb::child_list_t<duckdb::LogicalType> members;
 
 		for (idx_t i = 0; i < member_count; i++) {
-			members.push_back(make_pair(member_names[i], *member_types[i]));
+			members.emplace_back(make_pair(member_names[i], *member_types[i]));
 		}
 		duckdb::LogicalType *mtype = new duckdb::LogicalType(duckdb::LogicalType::STRUCT(members));
 		return reinterpret_cast<duckdb_logical_type>(mtype);

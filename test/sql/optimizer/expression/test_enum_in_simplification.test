@@ -11,7 +11,7 @@ CREATE TYPE sym_enum AS ENUM (
 set seed 0.8675309
 
 statement ok
-CREATE TABLE QUOTE AS (
+CREATE TABLE quote AS (
 	WITH asks AS (
 		SELECT 
 			(100.0 * random() + 10.0)::FLOAT AS ask,
@@ -57,3 +57,93 @@ GROUP BY sym
 ORDER BY sym;
 ----
 physical_plan	<!REGEX>:.*AS VARCHAR.*
+
+query II
+explain
+SELECT sym, 
+    SUM(asize * ask) AS wsumAsk, 
+    SUM(bid * bsize) AS wsumBid, 
+    STDDEV(asize) AS sdevasksize, 
+    STDDEV(bid) AS sdevbid, 
+    CORR(ask, bid) AS corPrice, 
+    CORR(asize, bsize) AS corSize 
+FROM quote
+WHERE sym IN (
+	'10',
+	'11',
+	'12',
+)
+GROUP BY sym 
+ORDER BY sym;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+explain
+SELECT sym, 
+    SUM(asize * ask) AS wsumAsk, 
+    SUM(bid * bsize) AS wsumBid, 
+    STDDEV(asize) AS sdevasksize, 
+    STDDEV(bid) AS sdevbid, 
+    CORR(ask, bid) AS corPrice, 
+    CORR(asize, bsize) AS corSize 
+FROM quote
+WHERE sym NOT IN (
+	'10',
+	'11',
+	'12',
+)
+GROUP BY sym 
+ORDER BY sym;
+----
+physical_plan	<REGEX>:.*NOT constant_or_null.*
+
+#
+# Test no valid strings and NULL
+#
+statement ok
+INSERT INTO quote VALUES (NULL, NULL, NULL, NULL, NULL);
+
+# IN
+query II
+explain
+SELECT count(*), max(n) 
+FROM (
+	select sym IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+physical_plan	<REGEX>:.*constant_or_null.*IS.*NOT.*NULL.*
+
+query II
+SELECT count(*), max(n) 
+FROM (
+	select sym IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+100	false
+
+# NOT IN
+query II
+explain
+SELECT count(*), max(n) 
+FROM (
+	select sym NOT IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+physical_plan	<REGEX>:.*NOT.*constant_or_null.*IS.*NOT.*NULL.*
+
+query II
+SELECT count(*), max(n) 
+FROM (
+	select sym NOT IN ('10', '11', '12') AS n
+	FROM quote
+	WHERE n IS NOT NULL
+) tbl;
+----
+100	true

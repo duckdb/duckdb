@@ -67,8 +67,9 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 	if (!gstate.collection) {
 		gstate.collection = CreateCollection(*gstate.context);
 	}
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
-	                                                 gstate.context->GetClientProperties());
+	auto result =
+	    make_uniq<MaterializedQueryResult>(statement_type, properties, IdentifiersToStrings(names),
+	                                       std::move(gstate.collection), gstate.context->GetClientProperties());
 	return std::move(result);
 }
 

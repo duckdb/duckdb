@@ -13,17 +13,14 @@
 namespace duckdb {
 
 struct RegrSlopeState {
+	static constexpr const char *STATE_NAMES[] = {"cov_pop", "var_pop"};
+	using STATE_TYPE = StructStateType<CovarState, StddevState>;
+
 	CovarState cov_pop;
 	StddevState var_pop;
 };
 
 struct RegrSlopeOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CovarOperation::Initialize<CovarState>(state.cov_pop);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x, idata);

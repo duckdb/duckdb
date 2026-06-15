@@ -5,6 +5,13 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -13,6 +20,109 @@ unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition,
 	auto filter = make_uniq<LogicalFilter>(std::move(condition));
 	filter->AddChild(std::move(root));
 	return std::move(filter);
+}
+
+bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_ptr<LogicalOperator> &root) {
+	if (!Settings::Get<DebugVerifyAggregateStateExportSetting>(context)) {
+		return false;
+	}
+	if (statement.groups.grouping_sets.size() > 1 || !statement.grouping_functions.empty()) {
+		// verification is not supported with multiple grouping sets / grouping functions (yet?)
+		return false;
+	}
+	for (auto &aggr : statement.aggregates) {
+		if (aggr->GetAlias() == "__collated_group") {
+			// collated GROUP BY adds first() aggregates to preserve original values - skip verification since
+			// ExtractPivotAggregates relies on the __collated_group alias to filter them out
+			return false;
+		}
+		auto &res_type = aggr->GetReturnType();
+		if (res_type.IsAggregateState()) {
+			// already an aggregate state export - skip verification
+			return false;
+		}
+	}
+
+	// we transform a query like "SELECT grp, SUM(col) FROM tbl GROUP BY grp" into
+	// "SELECT grp, first(finalize(sum_state)) FROM (SELECT grp, SUM(col) export_state FROM tbl GROUP BY grp) GROUP BY
+	// grp the second grouping is technically not necessary - we add this just so that subsequent binding remains
+	// correct first push an aggregate that actually does the state export
+	vector<unique_ptr<Expression>> finalize_expressions;
+	vector<unique_ptr<Expression>> final_group_expressions;
+	vector<unique_ptr<Expression>> final_aggregates;
+	auto intermediate_group_index = GenerateTableIndex();
+	auto intermediate_aggregate_index = GenerateTableIndex();
+	auto intermediate_proj_index = GenerateTableIndex();
+	// push references to any groups first
+	for (idx_t grp_idx = 0; grp_idx < statement.groups.group_expressions.size(); grp_idx++) {
+		auto &group = statement.groups.group_expressions[grp_idx];
+		auto group_ref = make_uniq<BoundColumnRefExpression>(
+		    group->GetReturnType(), ColumnBinding(intermediate_group_index, ProjectionIndex(grp_idx)));
+
+		auto final_group_ref = make_uniq<BoundColumnRefExpression>(
+		    group->GetReturnType(),
+		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
+
+		finalize_expressions.push_back(std::move(group_ref));
+		final_group_expressions.push_back(std::move(final_group_ref));
+	}
+	auto &system_catalog = Catalog::GetSystemCatalog(context);
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	for (idx_t aggr_idx = 0; aggr_idx < statement.aggregates.size(); aggr_idx++) {
+		auto &aggr = statement.aggregates[aggr_idx];
+		auto aggr_expr = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(aggr));
+		aggr = ExportAggregateFunction::Bind(std::move(aggr_expr));
+
+		// create a reference to the exported aggregate state
+		auto aggr_state_ref = make_uniq<BoundColumnRefExpression>(
+		    aggr->GetReturnType(), ColumnBinding(intermediate_aggregate_index, ProjectionIndex(aggr_idx)));
+
+		// create the "finalize" expression
+		vector<unique_ptr<Expression>> finalize_children;
+		finalize_children.push_back(std::move(aggr_state_ref));
+		auto &finalize_function =
+		    system_catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "finalize");
+		auto result =
+		    function_binder.BindScalarFunction(finalize_function, std::move(finalize_children), error, false, *this);
+		if (!result) {
+			throw InternalException("Failed to bind finalize during debug verification - %s", error.Message());
+		}
+
+		// create the "first" expression
+		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "first");
+		auto finalize_ref = make_uniq<BoundColumnRefExpression>(
+		    result->GetReturnType(),
+		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
+
+		vector<pair<Identifier, unique_ptr<Expression>>> first_children;
+		first_children.emplace_back(Identifier(), std::move(finalize_ref));
+		auto first_fun = function_binder.BindAggregateFunction(first_function, std::move(first_children), error);
+
+		finalize_expressions.push_back(std::move(result));
+		final_aggregates.push_back(std::move(first_fun));
+	}
+
+	// create the initial aggregate that performs the aggregate state export
+	auto aggregate = make_uniq<LogicalAggregate>(intermediate_group_index, intermediate_aggregate_index,
+	                                             std::move(statement.aggregates));
+	aggregate->groups = std::move(statement.groups.group_expressions);
+	aggregate->grouping_sets = statement.groups.grouping_sets;
+	aggregate->AddChild(std::move(root));
+
+	// now push the projection that finalizes the states
+	auto proj = make_uniq<LogicalProjection>(intermediate_proj_index, std::move(finalize_expressions));
+	proj->AddChild(std::move(aggregate));
+
+	// in order for bindings after this point to be correct, we need to push another aggregate
+	// this just does grp1, grp2, FIRST(finalize_result), etc
+	auto final_aggr =
+	    make_uniq<LogicalAggregate>(statement.group_index, statement.aggregate_index, std::move(final_aggregates));
+	final_aggr->groups = std::move(final_group_expressions);
+	final_aggr->grouping_sets = std::move(statement.groups.grouping_sets);
+	final_aggr->AddChild(std::move(proj));
+	root = std::move(final_aggr);
+	return true;
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
@@ -30,16 +140,18 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		for (auto &expr : statement.aggregates) {
 			PlanSubqueries(expr, root);
 		}
-		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
-		auto aggregate = make_uniq<LogicalAggregate>(statement.group_index, statement.aggregate_index,
-		                                             std::move(statement.aggregates));
-		aggregate->groups = std::move(statement.groups.group_expressions);
-		aggregate->groupings_index = statement.groupings_index;
-		aggregate->grouping_sets = std::move(statement.groups.grouping_sets);
-		aggregate->grouping_functions = std::move(statement.grouping_functions);
 
-		aggregate->AddChild(std::move(root));
-		root = std::move(aggregate);
+		if (!DebugAggregateStateExportVerify(statement, root)) {
+			// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
+			auto aggregate = make_uniq<LogicalAggregate>(statement.group_index, statement.aggregate_index,
+			                                             std::move(statement.aggregates));
+			aggregate->groups = std::move(statement.groups.group_expressions);
+			aggregate->groupings_index = statement.groupings_index;
+			aggregate->grouping_sets = std::move(statement.groups.grouping_sets);
+			aggregate->grouping_functions = std::move(statement.grouping_functions);
+			aggregate->AddChild(std::move(root));
+			root = std::move(aggregate);
+		}
 	} else if (!statement.groups.grouping_sets.empty()) {
 		// edge case: we have grouping sets but no groups or aggregates
 		// this can only happen if we have e.g. select 1 from tbl group by ();

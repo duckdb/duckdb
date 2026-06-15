@@ -415,7 +415,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
-
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));

@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -16,6 +17,8 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 #include <sstream>
 
@@ -53,7 +56,7 @@ StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) co
 	return result;
 }
 
-LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) const {
+LogicalIndex TableCatalogEntry::GetColumnIndex(Identifier &column_name, bool if_exists) const {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
 		if (if_exists) {
@@ -61,11 +64,12 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 		}
 		vector<string> column_names;
 		for (auto &col : columns.Logical()) {
-			column_names.push_back(col.Name());
+			column_names.emplace_back(col.Name());
 		}
-		auto candidates = StringUtil::CandidatesErrorMessage(column_names, column_name, "Did you mean");
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name, column_name,
-		                      candidates);
+		auto candidates =
+		    StringUtil::CandidatesErrorMessage(column_names, column_name.GetIdentifierName(), "Did you mean");
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name.GetIdentifierName(),
+		                      column_name, candidates);
 	}
 	return entry;
 }
@@ -74,11 +78,11 @@ unique_ptr<BlockingSample> TableCatalogEntry::GetSample() {
 	return nullptr;
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) const {
+bool TableCatalogEntry::ColumnExists(const Identifier &name) const {
 	return columns.ColumnExists(name);
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) const {
+const ColumnDefinition &TableCatalogEntry::GetColumn(const Identifier &name) const {
 	return columns.GetColumn(name);
 }
 
@@ -116,7 +120,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	logical_index_set_t not_null_columns;
 	logical_index_set_t unique_columns;
 	logical_index_set_t pk_columns;
-	unordered_set<string> multi_key_pks;
+	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
@@ -159,7 +163,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		ss << column.ToSQLString();
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
-		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
+		bool is_multi_key_pk = multi_key_pks.find(Identifier(column.Name().GetIdentifierName())) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
@@ -304,7 +308,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
 	// Therefore switch the update to a delete and insert.
-	update.update_is_del_and_insert = false;
+	update.update_is_del_and_insert = Settings::Get<ForceUpdateToDelAndInsertSetting>(context);
 	TableStorageInfo table_storage_info = GetStorageInfo(context);
 	for (auto index : table_storage_info.index_info) {
 		for (auto &column : update.columns) {
@@ -349,6 +353,21 @@ optional_ptr<Constraint> TableCatalogEntry::GetPrimaryKey() const {
 
 bool TableCatalogEntry::HasPrimaryKey() const {
 	return GetPrimaryKey() != nullptr;
+}
+
+LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &column) const {
+	return column.Type();
+}
+
+unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientContext &context,
+                                                                        const LogicalType &input_type,
+                                                                        const LogicalType &result_type,
+                                                                        ColumnBinding binding,
+                                                                        const Expression &constant_value) const {
+	(void)context;
+	(void)constant_value;
+	return BoundCastExpression::AddCastToType(context, make_uniq<BoundColumnRefExpression>(input_type, binding),
+	                                          result_type);
 }
 
 virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {

@@ -18,7 +18,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_REF;
 
 public:
-	BoundReferenceExpression(string alias, LogicalType type, idx_t index);
+	BoundReferenceExpression(Identifier alias, LogicalType type, idx_t index);
 	BoundReferenceExpression(LogicalType type, storage_t index);
 
 public:

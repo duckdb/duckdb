@@ -114,7 +114,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 				continue;
 			}
 			auto &obj_value = res[i];
-			obj_value.AddChild(child_name, std::move(values[i]));
+			obj_value.AddChild(child_name.GetIdentifierName(), std::move(values[i]));
 		}
 	}
 	return res;

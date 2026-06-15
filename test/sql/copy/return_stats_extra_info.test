@@ -1,0 +1,53 @@
+# name: test/sql/copy/return_stats_extra_info.test
+# description: test extra_info (row_group_count) returned by RETURN_STATS for COPY
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(10000);
+
+statement ok
+CREATE TABLE empty_test AS FROM integers LIMIT 0;
+
+statement ok
+CREATE TABLE partitioned_test AS SELECT range%2 AS partition_key, range val FROM range(10000);
+
+# test with preserve_insertion_order=true/false to test both the batch copy and the regular copy
+foreach PRESERVE_INSERTION_ORDER true false
+
+statement ok
+SET preserve_insertion_order={PRESERVE_INSERTION_ORDER};
+
+# everything fits in a single row group
+query IIIIIII
+COPY integers TO '{TEST_DIR}/rg_count_single.parquet' (RETURN_STATS);
+----
+<REGEX>:.*rg_count_single.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=1}
+
+# multiple row groups
+query IIIIIII
+COPY integers TO '{TEST_DIR}/rg_count_multi.parquet' (RETURN_STATS, ROW_GROUP_SIZE 2048);
+----
+<REGEX>:.*rg_count_multi.parquet	10000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=5}
+
+# returned row group count matches the parquet metadata
+query I
+SELECT count(*) FROM parquet_metadata('{TEST_DIR}/rg_count_multi.parquet');
+----
+5
+
+# empty file
+query IIIIIII
+COPY empty_test TO '{TEST_DIR}/rg_count_empty.parquet' (RETURN_STATS);
+----
+<REGEX>:.*rg_count_empty.parquet	0	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	{row_group_count=0}
+
+endloop
+
+# partitioned write returns the row group count of each file
+query IIIIIII rowsort
+COPY partitioned_test TO '{TEST_DIR}/rg_count_partitioned' (FORMAT PARQUET, PARTITION_BY (partition_key), ROW_GROUP_SIZE 2048, RETURN_STATS, OVERWRITE);
+----
+<REGEX>:.*rg_count_partitioned.*partition_key=0.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=0}	{row_group_count=3}
+<REGEX>:.*rg_count_partitioned.*partition_key=1.*.parquet	5000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	{partition_key=1}	{row_group_count=3}

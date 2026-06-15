@@ -10,32 +10,35 @@ namespace duckdb {
 ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
-                                             : vector<string> {std::move(table_name), std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(Identifier column_name, Identifier table_name)
+    : ColumnRefExpression(table_name.empty() ? vector<Identifier> {std::move(column_name)}
+                                             : vector<Identifier> {std::move(table_name), std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name, const BindingAlias &alias)
+ColumnRefExpression::ColumnRefExpression(Identifier column_name, const BindingAlias &alias)
     : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 	if (alias.IsSet()) {
 		if (!alias.GetCatalog().empty()) {
-			column_names.push_back(alias.GetCatalog());
+			column_names.emplace_back(alias.GetCatalog());
 		}
 		if (!alias.GetSchema().empty()) {
-			column_names.push_back(alias.GetSchema());
+			column_names.emplace_back(alias.GetSchema());
 		}
-		column_names.push_back(alias.GetAlias());
+		column_names.emplace_back(alias.GetAlias());
 	}
-	column_names.push_back(std::move(column_name));
+	column_names.emplace_back(std::move(column_name));
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name)
-    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(Identifier column_name)
+    : ColumnRefExpression(vector<Identifier> {std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
-      column_names(std::move(column_names_p)) {
+ColumnRefExpression::ColumnRefExpression(vector<Identifier> column_names_p)
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+	column_names.reserve(column_names_p.size());
+	for (auto &col_name : column_names_p) {
+		column_names.emplace_back(std::move(col_name));
+	}
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());
@@ -47,12 +50,12 @@ bool ColumnRefExpression::IsQualified() const {
 	return column_names.size() > 1;
 }
 
-const string &ColumnRefExpression::GetColumnName() const {
+const Identifier &ColumnRefExpression::GetColumnName() const {
 	D_ASSERT(column_names.size() <= 4);
 	return column_names.back();
 }
 
-const string &ColumnRefExpression::GetTableName() const {
+const Identifier &ColumnRefExpression::GetTableName() const {
 	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
 	if (column_names.size() == 4) {
 		return column_names[2];
@@ -63,7 +66,7 @@ const string &ColumnRefExpression::GetTableName() const {
 	return column_names[0];
 }
 
-string ColumnRefExpression::GetName() const {
+Identifier ColumnRefExpression::GetName() const {
 	return !alias.empty() ? alias : column_names.back();
 }
 

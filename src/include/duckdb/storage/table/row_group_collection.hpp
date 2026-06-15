@@ -107,8 +107,9 @@ public:
 	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
 	//! done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state);
-	//! Appends to the row group collection. Returns true if a new row group has been created to append to
-	bool Append(DataChunk &chunk, TableAppendState &state);
+	//! Appends to the row group collection. Returns the finished row group index if a new row group has been appended
+	//! to
+	optional_idx Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);

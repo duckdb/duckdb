@@ -10,19 +10,16 @@ namespace duckdb {
 namespace {
 
 struct SkewState {
-	size_t n;
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double>;
+
+	idx_t n;
 	double sum;
 	double sum_sqr;
 	double sum_cub;
 };
 
 struct SkewnessOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = 0;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {

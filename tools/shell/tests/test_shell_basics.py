@@ -441,6 +441,7 @@ def test_volatile_commands(shell, cmd):
     ""
 ])
 def test_schema(shell, pattern):
+    # .schema pretty-prints the statements using the SQL formatter by default
     test = (
         ShellTest(shell)
         .statement("create table test (a int, b varchar);")
@@ -448,7 +449,7 @@ def test_schema(shell, pattern):
         .statement(f".schema {pattern}")
     )
     result = test.run()
-    result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+    result.check_stdout("CREATE TABLE test(\n    a INTEGER,\n    b VARCHAR\n);")
 
 def test_schema_indent(shell):
     test = (
@@ -458,6 +459,27 @@ def test_schema_indent(shell):
     )
     result = test.run()
     result.check_stdout("CREATE TABLE test(\n")
+
+@pytest.mark.parametrize("option", ["--no-indent", "--no-format"])
+def test_schema_no_indent(shell, option):
+    # --no-indent / --no-format prints the statements as they are stored (single line)
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar);")
+        .statement(f".schema {option}")
+    )
+    result = test.run()
+    result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+def test_schema_unknown_option(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar);")
+        .statement(".schema -x")
+    )
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr('unknown option "-x"')
 
 def test_tables(shell):
     test = (
@@ -567,7 +589,7 @@ def test_schema_pattern(shell):
         .statement(".schema %p")
     )
     result = test.run()
-    result.check_stdout("CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);")
+    result.check_stdout("CREATE TABLE duckdb_p(\n    a INTEGER,\n    b VARCHAR,\n    c BIT\n);")
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows treats newlines in a problematic manner")
 def test_schema_pattern_extended(shell):
@@ -579,8 +601,8 @@ def test_schema_pattern_extended(shell):
     )
     result = test.run()
     expected = [
-        "CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);",
-        "CREATE TABLE p_duck(d INTEGER, f DATE);"
+        "CREATE TABLE duckdb_p(\n    a INTEGER,\n    b VARCHAR,\n    c BIT\n);",
+        "CREATE TABLE p_duck(\n    d INTEGER,\n    f DATE\n);"
     ]
     result.check_stdout(expected)
 

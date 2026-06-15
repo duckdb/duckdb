@@ -67,7 +67,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	return alias_cte;
 }
 
-void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
 		return;
@@ -88,7 +88,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
-		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
@@ -97,24 +97,24 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 		}
 		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
-			    catalog_name, schema);
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
 		}
 	}
 	catalog = schema;
-	schema = string();
+	schema = Identifier();
 }
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema) {
 	CatalogEntryRetriever retriever(context);
 	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-const string Binder::BindCatalog(string &catalog) {
+Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
 	if (database) {
@@ -127,7 +127,7 @@ const string Binder::BindCatalog(string &catalog) {
 void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
-		info.catalog = TEMP_CATALOG;
+		info.catalog = Identifier::TempCatalog();
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
@@ -135,9 +135,9 @@ void Binder::SearchSchema(CreateInfo &info) {
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
 	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(context, info.catalog);
+		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
 	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = search_path->GetDefaultCatalog(info.schema);
+		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
 	}
 	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
@@ -179,9 +179,10 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+                      const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+                      vector<Identifier> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
@@ -354,20 +355,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		vector<LogicalType> dummy_types;
-		vector<string> dummy_names;
+		vector<Identifier> dummy_names;
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
-			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
+			dummy_names.emplace_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
 
 		if (!type_overloads.insert(dummy_types).second) {
 			throw BinderException(
 			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
-			    base.name);
+			    base.name.GetIdentifierName());
 		}
 
-		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetIdentifierName());
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
@@ -778,8 +779,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
-		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
+		CreateSecretInput create_secret_input {Identifier(type_string),
+		                                       Identifier(provider_string),
+		                                       Identifier(info.storage_type),
+		                                       info.name,
+		                                       scope_strings,
+		                                       bound_options,
+		                                       info.on_conflict,
+		                                       info.persist_type};
 
 		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 		break;

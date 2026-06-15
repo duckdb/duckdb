@@ -1,5 +1,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -125,6 +126,10 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 	//	then swap out the children for the valid ENUM values
 	if (in_children.size() > 1) {
 		children.swap(in_children);
+	} else {
+		// constant_or_null(not_in, child[0])
+		const bool not_in = (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
+		return rewriter.ConstantOrNull(in_children[0]->Copy(), Value::BOOLEAN(not_in));
 	}
 
 	return nullptr;

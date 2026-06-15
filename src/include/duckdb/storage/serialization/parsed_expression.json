@@ -29,7 +29,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string",
+        "type": "Identifier",
         "equals_skip": true
       },
       {
@@ -233,14 +233,14 @@
       {
         "id": 200,
         "name": "function_name",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "FunctionNameMutable()",
         "accessor": "FunctionName()"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "SchemaMutable()",
         "accessor": "Schema()"
       },
@@ -293,7 +293,7 @@
       {
         "id": 208,
         "name": "catalog",
-        "type": "string",
+        "type": "Identifier",
         "accessor_mut": "CatalogMutable()",
         "accessor": "Catalog()"
       },
@@ -363,7 +363,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "Identifier"
+        "type": "duckdb::Identifier"
       }
     ]
   },
@@ -387,19 +387,20 @@
       {
         "id": 200,
         "name": "relation_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "case_insensitive_set_t",
+        "type": "identifier_set_t",
         "serialize_property": "SerializedExcludeList()",
+        "required_until": "v2.0.0",
         "hash_skip": true
       },
       {
         "id": 202,
         "name": "replace_list",
-        "type": "case_insensitive_map_t<ParsedExpression*>",
+        "type": "identifier_map_t<ParsedExpression*>",
         "accessor_mut": "ReplaceListMutable()",
         "accessor": "ReplaceList()"
       },
@@ -434,8 +435,8 @@
       {
         "id": 207,
         "name": "rename_list",
-        "type": "qualified_column_map_t<string>",
-        "default": "qualified_column_map_t<string>()"
+        "type": "qualified_column_map_t<Identifier>",
+        "default": "qualified_column_map_t<Identifier>()"
       }
     ],
     "constructor_method": "StarExpression::DeserializeStarExpression"
@@ -478,25 +479,24 @@
       {
         "id": 200,
         "name": "function_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "children",
-        "type": "vector<ParsedExpression*>",
-        "serialize_property": "SerializedChildren(serializer)",
-        "accessor_mut": "GetChildrenMutable()",
-        "accessor": "GetChildren()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 204,
@@ -588,14 +588,16 @@
         "name": "has_ignore_nulls",
         "type": "bool",
         "version": "v2.0.0"
+      },
+      {
+        "id": 218,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
     ],
-    "constructor": [
-      "type",
-      "children",
-      "offset_expr",
-      "default_expr"
-    ]
+    "custom_implementation": true
   },
   {
     "class": "TypeExpression",
@@ -605,17 +607,17 @@
       {
         "id": 200,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,
         "name": "type_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,

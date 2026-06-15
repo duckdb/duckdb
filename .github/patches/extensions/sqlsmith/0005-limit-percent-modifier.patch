@@ -1,5 +1,5 @@
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 4c750ce..75d884a 100644
+index 257728b..84d44d5 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -402,7 +402,8 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {

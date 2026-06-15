@@ -20,7 +20,7 @@ DirectFileReader::DirectFileReader(OpenFileInfo file_p, const LogicalType &type)
 DirectFileReader::~DirectFileReader() {
 }
 
-unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
 

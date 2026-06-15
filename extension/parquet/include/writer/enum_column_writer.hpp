@@ -29,7 +29,7 @@ struct ParquetColumnSchema;
 
 class EnumColumnWriter : public PrimitiveColumnWriter {
 public:
-	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
+	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p);
 	~EnumColumnWriter() override = default;
 
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override;

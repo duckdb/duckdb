@@ -148,7 +148,7 @@ LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
 		auto type = chunk.data[c].GetType();
-		std::pair<string, LogicalType> child {name, type};
+		std::pair<Identifier, LogicalType> child {Identifier(name), type};
 		partition_children.emplace_back(child);
 	}
 	//	For single children, don;t build a struct - compare will be slow

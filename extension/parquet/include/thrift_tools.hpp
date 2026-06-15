@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 
@@ -48,6 +47,15 @@ struct ReadHead {
 			buffer_ptr = local_buffer.get();
 		}
 	}
+
+	void Fetch(CachingFileHandle &file_handle) {
+		if (GetEnd() > file_handle.GetFileSize()) {
+			throw std::runtime_error("Prefetch registered requested for bytes outside file");
+		}
+		handle_group = file_handle.Read(size, location);
+		Materialize(file_handle.GetBufferAllocator());
+		data_isset = true;
+	}
 };
 
 struct ReadHeadComparator {
@@ -81,8 +89,8 @@ struct ReadAheadBuffer {
 	    : merge_set(ReadHeadComparator(accepted_column_gap)), file_handle(file_handle_p) {
 	}
 
-	// The list of read heads
-	std::list<ReadHead> read_heads;
+	// The list of read heads.
+	vector<shared_ptr<ReadHead>> read_heads;
 	// Set for merging consecutive ranges
 	std::set<ReadHead *, ReadHeadComparator> merge_set;
 
@@ -111,9 +119,9 @@ struct ReadAheadBuffer {
 			}
 		}
 
-		read_heads.emplace_front(ReadHead(pos, len));
+		read_heads.insert(read_heads.begin(), make_shared_ptr<ReadHead>(pos, len));
 		total_size += len;
-		auto &read_head = read_heads.front();
+		auto &read_head = *read_heads.front();
 
 		if (merge_buffers) {
 			merge_set.insert(&read_head);
@@ -130,8 +138,8 @@ struct ReadAheadBuffer {
 	// Returns the relevant read head
 	ReadHead *GetReadHead(idx_t pos) {
 		for (auto &read_head : read_heads) {
-			if (pos >= read_head.location && pos < read_head.GetEnd()) {
-				return &read_head;
+			if (pos >= read_head->location && pos < read_head->GetEnd()) {
+				return read_head.get();
 			}
 		}
 		return nullptr;
@@ -140,12 +148,7 @@ struct ReadAheadBuffer {
 	// Prefetch all read heads
 	void Prefetch() {
 		for (auto &read_head : read_heads) {
-			if (read_head.GetEnd() > file_handle.GetFileSize()) {
-				throw std::runtime_error("Prefetch registered requested for bytes outside file");
-			}
-			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
-			read_head.Materialize(file_handle.GetBufferAllocator());
-			read_head.data_isset = true;
+			read_head->Fetch(file_handle);
 		}
 	}
 };
@@ -175,9 +178,7 @@ public:
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
 			if (!prefetch_buffer->data_isset) {
-				prefetch_buffer->handle_group = file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
-				prefetch_buffer->Materialize(file_handle.GetBufferAllocator());
-				prefetch_buffer->data_isset = true;
+				prefetch_buffer->Fetch(file_handle);
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
@@ -239,6 +240,14 @@ public:
 
 	optional_ptr<ReadHead> GetReadHead(idx_t pos) {
 		return ra_buffer.GetReadHead(pos);
+	}
+
+	vector<shared_ptr<ReadHead>> &GetReadHeads() {
+		return ra_buffer.read_heads;
+	}
+
+	CachingFileHandle &GetCachingFileHandle() const {
+		return file_handle;
 	}
 
 	idx_t GetSize() const {

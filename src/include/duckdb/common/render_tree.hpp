@@ -12,7 +12,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 
 namespace duckdb {
 class LogicalOperator;

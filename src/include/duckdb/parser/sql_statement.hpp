@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
@@ -33,7 +34,7 @@ public:
 	//! The statement length within the query string
 	idx_t stmt_length = 0;
 	//! The map of named parameter to param index
-	case_insensitive_map_t<idx_t> named_param_map;
+	identifier_map_t<idx_t> named_param_map;
 	//! The query text that corresponds to this SQL statement
 	string query;
 

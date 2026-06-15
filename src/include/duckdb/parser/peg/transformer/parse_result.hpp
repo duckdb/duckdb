@@ -10,30 +10,10 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/peg/special_string_utils.hpp"
+#include "duckdb/parser/peg/token_type.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
-
-enum class TokenType {
-	INVALID,
-	KEYWORD,
-	STRING_LITERAL,
-	NUMBER_LITERAL,
-	OPERATOR,
-	IDENTIFIER,
-	COMMENT,
-	TERMINATOR,
-	CATALOG_NAME,
-	SCHEMA_NAME,
-	TABLE_NAME,
-	TYPE_NAME,
-	COLUMN_NAME,
-	SCALAR_FUNCTION,
-	TABLE_FUNCTION,
-	PRAGMA_FUNCTION,
-	SETTING_NAME,
-	ERROR
-};
 
 inline string TokenTypeToString(TokenType type) {
 	switch (type) {
@@ -51,7 +31,7 @@ inline string TokenTypeToString(TokenType type) {
 		return "COMMENT";
 	case TokenType::TERMINATOR:
 		return "TERMINATOR";
-	case TokenType::ERROR:
+	case TokenType::TOKEN_ERROR:
 		return "ERROR";
 	case TokenType::CATALOG_NAME:
 		return "CATALOG_NAME";
@@ -71,6 +51,10 @@ inline string TokenTypeToString(TokenType type) {
 		return "PRAGMA_FUNCTION";
 	case TokenType::SETTING_NAME:
 		return "SETTING_NAME";
+	case TokenType::END_OF_INPUT:
+		return "END_OF_INPUT";
+	case TokenType::END_OF_INPUT_AUTOCOMPLETE:
+		return "END_OF_INPUT_AUTOCOMPLETE";
 	default:
 		return "UNKNOWN";
 	}
@@ -91,6 +75,7 @@ enum class ParseResultType : uint8_t {
 	EXTENSION,
 	NUMBER,
 	STRING,
+	END_OF_INPUT,
 	INVALID
 };
 
@@ -120,6 +105,8 @@ inline const char *ParseResultToString(ParseResultType type) {
 		return "NUMBER";
 	case ParseResultType::STRING:
 		return "STRING";
+	case ParseResultType::END_OF_INPUT:
+		return "END_OF_INPUT";
 	case ParseResultType::INVALID:
 		return "INVALID";
 	}
@@ -168,7 +155,7 @@ public:
 
 struct IdentifierParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::IDENTIFIER;
-	string identifier;
+	Identifier identifier;
 
 	explicit IdentifierParseResult(string identifier_p, optional_idx offset)
 	    : ParseResult(TYPE, offset), identifier(std::move(identifier_p)) {
@@ -177,7 +164,20 @@ struct IdentifierParseResult : ParseResult {
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
-		ss << ": " << identifier << "\n";
+		ss << ": " << identifier.GetIdentifierName() << "\n";
+	}
+};
+
+struct EndOfInputParseResult : ParseResult {
+	static constexpr ParseResultType TYPE = ParseResultType::END_OF_INPUT;
+
+	EndOfInputParseResult() : ParseResult(TYPE, optional_idx()) {
+	}
+
+	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
+	                      const std::string &indent, bool is_last) const override {
+		ParseResult::ToStringInternal(ss, visited, indent, is_last);
+		ss << "\n";
 	}
 };
 

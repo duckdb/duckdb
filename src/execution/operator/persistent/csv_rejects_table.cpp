@@ -8,14 +8,16 @@
 namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetErrorsTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, Identifier::TempCatalog(),
+	                                                             Identifier::DefaultSchema(), Identifier(errors_table));
 	return table_entry;
 }
 
 TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
-	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
+	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, Identifier::TempCatalog(),
+	                                                             Identifier::DefaultSchema(), Identifier(scan_table));
 	return table_entry;
 }
 
@@ -34,14 +36,16 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 		throw BinderException("The names of the rejects scan and rejects error tables can't be the same. Use different "
 		                      "names for these tables.");
 	}
-	auto key =
-	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
+	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
+	                              StringUtil::Upper(rejects_error));
 	auto &cache = ObjectCache::GetObjectCache(context);
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
-	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
-	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
-	                                                               OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
+	auto rejects_scan_exist =
+	    catalog.GetEntry<TableCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(rejects_scan),
+	                                        OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_error_exist =
+	    catalog.GetEntry<TableCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(rejects_error),
+	                                        OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
@@ -59,7 +63,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
 	// (Re)Create the temporary rejects table
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 
 	// Create CSV_ERROR_TYPE ENUM
 	string enum_name = "CSV_ERROR_TYPE";
@@ -81,7 +85,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create Rejects Scans Table
 	{
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
+		auto info =
+		    make_uniq<CreateTableInfo>(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID
@@ -114,7 +119,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	}
 	{
 		// Create Rejects Error Table
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
+		auto info = make_uniq<CreateTableInfo>(Identifier::TempCatalog(), Identifier::DefaultSchema(),
+		                                       Identifier(errors_table));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID

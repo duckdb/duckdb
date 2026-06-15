@@ -31,7 +31,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	case_insensitive_map_t<BoundParameterData> bind_values;
+	identifier_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {

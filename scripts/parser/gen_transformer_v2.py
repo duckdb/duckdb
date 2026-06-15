@@ -2,12 +2,13 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from generate_transformer import load_grammar_types, load_matcher_rule_overrides
+from generate_transformer import load_grammar_types, load_grammar_types_yaml, load_matcher_rule_overrides
 
 
 # ---------------------------------------------------------------------------
@@ -263,10 +264,10 @@ def classify_choice_alternatives(alternatives, rule_types, excluded_rules, ident
     for ref in alternatives:
         assert isinstance(ref, ReferenceNode)
         name = ref.name
-        if name in rule_types:
-            transformer_alts.append(name)
-        elif name in identifier_override_rules:
+        if name in identifier_override_rules:
             identifier_alts.append(name)
+        elif name in rule_types:
+            transformer_alts.append(name)
         elif name in excluded_rules:
             excluded_alts.append(name)
         else:
@@ -285,6 +286,30 @@ def _box_result(return_type, return_by_value):
     return f"\treturn make_uniq<TypedTransformResult<{return_type}>>({arg});\n"
 
 
+def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
+    # Extract a terminal value from a choice over matcher identifiers / keywords / string literals.
+    # When the rule itself is an Identifier, the keyword/string-literal alternatives are wrapped so
+    # the result is produced as an Identifier directly (no lossy string round-trip).
+    def as_result(expr):
+        return f"Identifier({expr})" if result_type == "Identifier" else expr
+
+    identifier_value = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
+    if result_type != "Identifier":
+        identifier_value = f"{identifier_value}.GetIdentifierName()"
+    return (
+        f"\t{result_type} {var_name};\n"
+        f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
+        f"\t\t{var_name} = {identifier_value};\n"
+        f"\t}} else if ({source_expr}.type == ParseResultType::KEYWORD) {{\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<KeywordParseResult>().keyword')};\n"
+        f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
+        f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<StringLiteralParseResult>().result')};\n"
+        f"\t}} else {{\n"
+        f"\t\t{var_name} = transformer.Transform<{result_type}>({source_expr});\n"
+        f"\t}}\n"
+    )
+
+
 def generate_choice_internal_full(rule_name, return_type, return_by_value):
     """
     Fully auto-generated Internal for a pure-transformer choice rule.
@@ -296,6 +321,22 @@ def generate_choice_internal_full(rule_name, return_type, return_by_value):
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
         f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        + _box_result(return_type, return_by_value)
+        + f"}}\n"
+    )
+
+
+def generate_string_terminal_choice_internal(rule_name, return_type, return_by_value):
+    """
+    Choice wrapper for string-valued alternatives that can include matcher-provided
+    terminal parse results, such as Identifier or ReservedIdentifier.
+    """
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
+        f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
+        + _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -340,13 +381,18 @@ def generate_choice_internal_with_typed_body(rule_name, return_type, return_by_v
     child value and the manual body performs the type conversion.
     """
     arg = "std::move(child)" if child_by_value else "child"
+    child_extraction = (
+        "\tauto &choice_result = choice_pr.GetResult();\n" + _emit_string_result_extraction("child", "choice_result")
+        if child_type == "string"
+        else f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
+    )
     return (
         f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
-        f"\tauto result = Transform{rule_name}(transformer, {arg});\n"
+        + child_extraction
+        + f"\tauto result = Transform{rule_name}(transformer, {arg});\n"
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -381,14 +427,7 @@ def generate_typed_choice_body_stub(rule_name, return_type, child_type, child_by
 # Mirrors the per-token-type dispatch inside MatcherFactory::CreateMatcher()
 # in matcher.cpp.  Each helper handles one matcher/parse-result kind:
 #
-#   _classify_literal           LiteralNode          -> KeywordParseResult                     (skip)
-#   _classify_reference         ReferenceNode        -> IdentifierParseResult OR Transform<T>
-#   _classify_optional_reference OptionalNode(Ref)   -> optional identifier OR TransformOptional<T>
-#   _classify_repeat            OptionalNode(Rep)/Rep -> OptionalParseResult(Repeat)/Repeat     vector<T>
-#   _classify_macro             ParensNode/ListMacroNode (any depth) -> scalar T or vector<T>
-#     _analyze_macro_node       recursively unwraps to (leaf_name, ['parens'/'list', ...])
-#     _build_wrapped_expr       builds nested ExtractResultFromParens(...) call chains
-#     Examples: D, Parens(D), List(D), Parens(List(D)), List(Parens(D)), ...
+#   _classify_recursive         matcher AST          -> recursively extracted scalar/vector<T>
 #
 # classify_sequence_element() is the top-level dispatch (= the switch in CreateMatcher).
 # classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
@@ -424,337 +463,265 @@ def _classify_literal():
     return SeqElement(skip=True)
 
 
-def _classify_reference(name, idx, rule_types, excluded_rules, identifier_override_rules):
-    """
-    REFERENCE token -> CreateMatcher(rule_name).
-    Priority order mirrors runtime dispatch:
-      1. identifier_override_rules  -> IdentifierMatcher -> Child<IdentifierParseResult>()
-      2. excluded_rules             -> keyword-only rule, no semantic value -> skip
-      3. rule_types                 -> regular ListMatcher -> transformer.Transform<T>()
-    """
-    if name in identifier_override_rules:
-        var_name = to_snake_case(name)
-        lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in rule_types:
-        cpp_type = rule_types[name].cpp_type
-        var_name = to_snake_case(name)
-        lines = [f"\tauto {var_name} = transformer.Transform<{cpp_type}>(list_pr, {idx});"]
-        return SeqElement(
-            skip=False,
-            var_name=var_name,
-            cpp_type=cpp_type,
-            by_value=_is_by_value(name, rule_types),
-            extraction_lines=lines,
-        )
-    if name in excluded_rules:
-        return _classify_literal()
-    return None
+class ExtractionKind(Enum):
+    SKIP = auto()
+    REFERENCE = auto()
+    PARENS = auto()
+    OPTIONAL = auto()
+    LIST = auto()
+    REPEAT = auto()
+    SEQUENCE = auto()
+    CHOICE = auto()
 
 
-def _classify_optional_reference(name, idx, rule_types, excluded_rules, identifier_override_rules):
-    """
-    OptionalNode(ReferenceNode) -> OptionalMatcher wrapping a named rule.
-    Priority order matches _classify_reference:
-      1. identifier_override_rules  -> optional identifier, extracted via HasResult()
-      2. excluded_rules             -> keyword-only optional (Transaction?) -> skip
-      3. rule_types                 -> optional typed rule, extracted via TransformOptional
-    """
-    var_name = to_snake_case(name)
-    if name in identifier_override_rules:
-        lines = [
-            f"\tstring {var_name};",
-            f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
-            f"\tif ({var_name}_opt.HasResult()) {{",
-            f"\t\t{var_name} = {var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;",
-            f"\t}}",
-        ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in rule_types:
-        cpp_type = rule_types[name].cpp_type
-        lines = [
-            f"\t{cpp_type} {var_name} {{}};",
-            f"\ttransformer.TransformOptional(list_pr, {idx}, {var_name});",
-        ]
-        return SeqElement(
-            skip=False,
-            var_name=var_name,
-            cpp_type=cpp_type,
-            by_value=_is_by_value(name, rule_types),
-            extraction_lines=lines,
-        )
-    if name in excluded_rules:
-        return _classify_literal()
-    return None
+@dataclass
+class ExtractionPlan:
+    """Recursive description of how to extract one semantic value from a ParseResult."""
+
+    kind: ExtractionKind
+    cpp_type: str = ""
+    var_name: str = ""
+    by_value: bool = False
+    default_initializer: str = ""
+    child: "ExtractionPlan | None" = None
+    child_index: int = 0
+    identifier: bool = False
 
 
-def _analyze_macro_node(node):
-    """
-    Recursively unwrap Parens/List nesting to find the leaf ReferenceNode.
-    Returns (leaf_name, ops) where ops is a list of 'parens'/'list' tokens
-    ordered outermost to innermost.  Returns None for unsupported structures.
-    """
+def _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False):
+    """Build a recursive extraction plan. Nested sequences must collapse to one semantic value."""
+    if isinstance(node, LiteralNode):
+        return ExtractionPlan(kind=ExtractionKind.SKIP)
     if isinstance(node, ReferenceNode):
-        return (node.name, [])
+        if node.name in identifier_override_rules:
+            return ExtractionPlan(
+                kind=ExtractionKind.REFERENCE, cpp_type="Identifier", var_name=to_snake_case(node.name), identifier=True
+            )
+        if node.name in rule_types:
+            return ExtractionPlan(
+                kind=ExtractionKind.REFERENCE,
+                cpp_type=rule_types[node.name].cpp_type,
+                var_name=to_snake_case(node.name),
+                by_value=_is_by_value(node.name, rule_types),
+                default_initializer=rule_types[node.name].default_initializer,
+            )
+        if node.name in excluded_rules:
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        return None
     if isinstance(node, ParensNode):
-        result = _analyze_macro_node(node.inner)
-        if result is None:
-            return None
-        leaf_name, ops = result
-        return (leaf_name, ['parens'] + ops)
-    if isinstance(node, ListMacroNode):
-        result = _analyze_macro_node(node.inner)
-        if result is None:
-            return None
-        leaf_name, ops = result
-        return (leaf_name, ['list'] + ops)
+        child = _plan_extraction(
+            node.inner, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
+        return _wrap_extraction(ExtractionKind.PARENS, child)
     if isinstance(node, OptionalNode):
-        result = _analyze_macro_node(node.child)
-        if result is None:
+        child = _plan_extraction(
+            node.child, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
+        if not optional_semantic_values:
+            return _wrap_extraction(ExtractionKind.OPTIONAL, child)
+        if child is None:
             return None
-        leaf_name, ops = result
-        return (leaf_name, ['optional'] + ops)
+        if child.kind == ExtractionKind.SKIP:
+            return ExtractionPlan(kind=ExtractionKind.OPTIONAL, cpp_type="bool", var_name="has_result")
+        return ExtractionPlan(
+            kind=ExtractionKind.OPTIONAL,
+            cpp_type=f"optional<{child.cpp_type}>",
+            var_name=child.var_name,
+            by_value=child.by_value,
+            child=child,
+        )
+    if isinstance(node, (ListMacroNode, RepeatNode)):
+        child_node = node.inner if isinstance(node, ListMacroNode) else node.child
+        child = _plan_extraction(
+            child_node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
+        if child is None or child.kind == ExtractionKind.SKIP:
+            return None
+        return ExtractionPlan(
+            kind=ExtractionKind.LIST if isinstance(node, ListMacroNode) else ExtractionKind.REPEAT,
+            cpp_type=f"vector<{child.cpp_type}>",
+            var_name=child.var_name,
+            by_value=child.by_value,
+            child=child,
+        )
+    if isinstance(node, SequenceNode):
+        semantic = []
+        for idx, sequence_child in enumerate(node.children):
+            child = _plan_extraction(
+                sequence_child, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
+            if child is None:
+                return None
+            if child.kind != ExtractionKind.SKIP:
+                semantic.append((idx, child))
+        if not semantic:
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        if len(semantic) != 1:
+            return None
+        child_index, child = semantic[0]
+        return ExtractionPlan(
+            kind=ExtractionKind.SEQUENCE, child=child, child_index=child_index, **_plan_value_args(child)
+        )
+    if isinstance(node, ChoiceNode):
+        alternatives = [
+            _plan_extraction(
+                alternative, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
+            for alternative in node.alternatives
+        ]
+        if all(alternative is not None and alternative.kind == ExtractionKind.SKIP for alternative in alternatives):
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        if any(alternative is None or alternative.kind != ExtractionKind.REFERENCE for alternative in alternatives):
+            return None
+        first = alternatives[0]
+        if any(
+            alternative.cpp_type != first.cpp_type or alternative.identifier != first.identifier
+            for alternative in alternatives[1:]
+        ):
+            return None
+        return ExtractionPlan(kind=ExtractionKind.CHOICE, child=first, **_plan_value_args(first))
     return None
 
 
-def _build_wrapped_expr(base_expr, parens_count):
-    """Wrap base_expr in parens_count layers of ExtractResultFromParens."""
-    expr = base_expr
-    for _ in range(parens_count):
-        expr = f"ExtractResultFromParens({expr})"
-    return expr
+def _plan_value_args(plan):
+    """Copy the semantic properties preserved by transparent wrapper nodes."""
+    return {
+        "cpp_type": plan.cpp_type,
+        "var_name": plan.var_name,
+        "by_value": plan.by_value,
+        "default_initializer": plan.default_initializer,
+    }
 
 
-def _classify_macro(node, idx, rule_types, identifier_override_rules, optional=False):
-    """
-    Unified classifier for arbitrary Parens/List nesting around a leaf rule.
+def _wrap_extraction(kind, child):
+    """Wrap a child plan while preserving syntax-only and unsupported results."""
+    if child is None or child.kind == ExtractionKind.SKIP:
+        return child
+    return ExtractionPlan(kind=kind, child=child, **_plan_value_args(child))
 
-    Scalar result (no List in the chain):
-      D, Parens(D), Parens(Parens(D)), ...
 
-    Vector result (exactly one List in the chain):
-      List(D), Parens(List(D)), List(Parens(D)), Parens(List(Parens(D))), ...
+def _temp_name(target_name, suffix, depth):
+    """Build readable temporary names while avoiding collisions in nested wrappers."""
+    depth_suffix = f"_{depth}" if depth else ""
+    return f"{target_name}_{suffix}{depth_suffix}"
 
-    Nested lists (List(List(D))) produce vector<vector<T>> and are not supported.
 
-    When optional=True the node is wrapped in an OptionalParseResult: the vector
-    case emits a HasResult() guard (scalar optional macros are not supported).
-    """
-    result = _analyze_macro_node(node)
-    if result is None:
-        return None
-    leaf_name, ops = result
+def _format_default_initializer(cpp_type, initializer):
+    """Format a rule default from grammar_types.yml as a C++ variable initializer."""
+    if not initializer:
+        return "{}"
+    if initializer.startswith("=") or initializer.startswith("{"):
+        return initializer
+    return f"= {cpp_type}::{initializer}"
 
-    var_name = to_snake_case(leaf_name)
-    is_identifier = leaf_name in identifier_override_rules
 
-    if not is_identifier and leaf_name not in rule_types:
-        return None
+def _optional_child_temp_name(target_name, depth):
+    return _temp_name(target_name, "value", depth)
 
-    child_type = "string" if is_identifier else rule_types[leaf_name].cpp_type
 
-    list_positions = [i for i, op in enumerate(ops) if op == 'list']
-    optional_positions = [i for i, op in enumerate(ops) if op == 'optional']
-    if len(list_positions) > 1:
-        return None  # nested lists not supported
-    if len(optional_positions) > 1:
-        return None
-    if optional and optional_positions:
-        return None
-
-    if not list_positions:
-        if optional:
-            return None
-        if optional_positions:
-            optional_pos = optional_positions[0]
-            pre_optional_parens = ops[:optional_pos].count('parens')
-            post_optional_parens = ops[optional_pos + 1 :].count('parens')
-            opt_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_optional_parens)
-            result_expr = _build_wrapped_expr(f"{var_name}_opt.GetResult()", post_optional_parens)
-            if is_identifier:
-                assign_line = f"\t\t{var_name} = {result_expr}.Cast<IdentifierParseResult>().identifier;"
-            else:
-                assign_line = f"\t\t{var_name} = transformer.Transform<{child_type}>({result_expr});"
-            lines = [
-                f"\t{child_type} {var_name} {{}};",
-                f"\tauto &{var_name}_opt = {opt_expr}.Cast<OptionalParseResult>();",
-                f"\tif ({var_name}_opt.HasResult()) {{",
-                assign_line,
-                f"\t}}",
-            ]
-            return SeqElement(
-                skip=False,
-                var_name=var_name,
-                cpp_type=child_type,
-                by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
-                extraction_lines=lines,
-            )
-        # Scalar path: all ops are 'parens'.
-        access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
-        if is_identifier:
-            line = f"\tauto {var_name} = {access_expr}.Cast<IdentifierParseResult>().identifier;"
+def _emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=True, depth=0):
+    """Emit recursive extraction code for a plan rooted at source_expr."""
+    target_name = target_name or plan.var_name
+    if plan.kind == ExtractionKind.SKIP:
+        return []
+    if plan.kind == ExtractionKind.REFERENCE:
+        if plan.identifier:
+            value_expr = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
         else:
-            line = f"\tauto {var_name} = transformer.Transform<{child_type}>({access_expr});"
-        return SeqElement(
-            skip=False,
-            var_name=var_name,
-            cpp_type=child_type,
-            by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
-            extraction_lines=[line],
+            value_expr = f"transformer.Transform<{plan.cpp_type}>({source_expr})"
+        prefix = "auto " if declare else ""
+        return [f"{indent}{prefix}{target_name} = {value_expr};"]
+    if plan.kind == ExtractionKind.PARENS:
+        return _emit_extraction(
+            plan.child, f"ExtractResultFromParens({source_expr})", target_name, indent, declare, depth
         )
+    if plan.kind == ExtractionKind.SEQUENCE:
+        list_expr = f"{source_expr}.Cast<ListParseResult>()"
+        return _emit_extraction(
+            plan.child, f"{list_expr}.GetChild({plan.child_index})", target_name, indent, declare, depth
+        )
+    if plan.kind == ExtractionKind.CHOICE:
+        choice_expr = f"{source_expr}.Cast<ChoiceParseResult>()"
+        return _emit_extraction(plan.child, f"{choice_expr}.GetResult()", target_name, indent, declare, depth)
+    if plan.kind == ExtractionKind.OPTIONAL:
+        opt_name = _temp_name(target_name, "opt", depth)
+        lines = []
+        if declare:
+            lines.append(f"{indent}{plan.cpp_type} {target_name} {{}};")
+        lines.extend(
+            [
+                f"{indent}auto &{opt_name} = {source_expr}.Cast<OptionalParseResult>();",
+            ]
+        )
+        if plan.child is None:
+            lines.append(f"{indent}{target_name} = {opt_name}.HasResult();")
+            return lines
+        value_name = _optional_child_temp_name(target_name, depth)
+        lines.append(f"{indent}if ({opt_name}.HasResult()) {{")
+        lines.extend(
+            _emit_extraction(
+                plan.child, f"{opt_name}.GetResult()", value_name, indent + "\t", declare=True, depth=depth + 1
+            )
+        )
+        value_expr = f"std::move({value_name})" if plan.child.by_value else value_name
+        lines.append(f"{indent}\t{target_name} = {value_expr};")
+        lines.append(f"{indent}}}")
+        return lines
+    if plan.kind in (ExtractionKind.LIST, ExtractionKind.REPEAT):
+        item_name = _temp_name(target_name, "item", depth)
+        value_name = _temp_name(target_name, "value", depth)
+        lines = [f"{indent}{plan.cpp_type} {target_name};"] if declare else []
+        if plan.kind == ExtractionKind.LIST:
+            items_name = _temp_name(target_name, "items", depth)
+            lines.append(f"{indent}auto {items_name} = ExtractParseResultsFromList({source_expr});")
+            children_expr = items_name
+        else:
+            repeat_name = _temp_name(target_name, "repeat", depth)
+            lines.append(f"{indent}auto &{repeat_name} = {source_expr}.Cast<RepeatParseResult>();")
+            children_expr = f"{repeat_name}.GetChildren()"
+        lines.append(f"{indent}for (auto &{item_name} : {children_expr}) {{")
+        lines.extend(_emit_extraction(plan.child, f"{item_name}.get()", value_name, indent + "\t", depth=depth + 1))
+        value_expr = f"std::move({value_name})" if plan.child.by_value else value_name
+        lines.append(f"{indent}\t{target_name}.push_back({value_expr});")
+        lines.append(f"{indent}}}")
+        return lines
+    raise ValueError(f"Unsupported extraction plan kind: {plan.kind}")
 
-    # Vector path: parens before the list wrap the collection access;
-    # parens after the list unwrap each individual item.
-    list_pos = list_positions[0]
-    if optional_positions:
-        optional_pos = optional_positions[0]
-        if optional_pos > list_pos:
-            return None
-        pre_optional_parens = ops[:optional_pos].count('parens')
-        pre_parens = ops[optional_pos + 1 : list_pos].count('parens')
-    else:
-        optional_pos = None
-        pre_optional_parens = 0
-        pre_parens = ops[:list_pos].count('parens')
-    post_parens = ops[list_pos + 1 :].count('parens')
 
-    item_var = f"{var_name}_item"
-    item_access = _build_wrapped_expr(item_var, post_parens)
-
-    if is_identifier:
-        # item_var is reference<ParseResult> (std::reference_wrapper); need .get() when not already
-        # unwrapped by ExtractResultFromParens (which returns ParseResult&).
-        ident_access = f"{item_access}.get()" if post_parens == 0 else item_access
-        push_content = f"{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
-    else:
-        push_content = f"{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
-
-    if optional:
-        opt_var = f"{var_name}_opt"
-        base_expr = f"{opt_var}.GetResult()"
-        ind = "\t\t"
-    elif optional_pos is not None:
-        opt_var = f"{var_name}_opt"
-        base_expr = f"{opt_var}.GetResult()"
-        ind = "\t\t"
-    else:
-        base_expr = f"list_pr.GetChild({idx})"
-        ind = "\t"
-
-    outer_expr = _build_wrapped_expr(base_expr, pre_parens)
-    loop_lines = [
-        f"{ind}auto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
-        f"{ind}for (auto &{item_var} : {var_name}_items) {{",
-        f"{ind}\t{push_content}",
-        f"{ind}}}",
-    ]
-
-    if optional:
-        lines = [
-            f"\tauto &{opt_var} = list_pr.Child<OptionalParseResult>({idx});",
-            f"\tvector<{child_type}> {var_name};",
-            f"\tif ({opt_var}.HasResult()) {{",
-            *loop_lines,
-            f"\t}}",
-        ]
-    elif optional_pos is not None:
-        opt_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_optional_parens)
-        lines = [
-            f"\tauto &{opt_var} = {opt_expr}.Cast<OptionalParseResult>();",
-            f"\tvector<{child_type}> {var_name};",
-            f"\tif ({opt_var}.HasResult()) {{",
-            *loop_lines,
-            f"\t}}",
-        ]
-    else:
-        lines = [
-            f"\tvector<{child_type}> {var_name};",
-            *loop_lines,
-        ]
+def _classify_recursive(
+    node, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
+    """Classify nested matcher structures by recursively planning and emitting extraction."""
+    plan = _plan_extraction(node, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values)
+    if plan is None:
+        return None
+    if plan.kind == ExtractionKind.SKIP:
+        return _classify_literal()
     return SeqElement(
         skip=False,
-        var_name=var_name,
-        cpp_type=f"vector<{child_type}>",
-        by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
-        extraction_lines=lines,
+        var_name=plan.var_name,
+        cpp_type=plan.cpp_type,
+        by_value=plan.by_value,
+        extraction_lines=_emit_extraction(plan, f"list_pr.GetChild({idx})"),
     )
 
 
-def _classify_repeat(node, idx, rule_types, optional):
-    """
-    Shared helper for A* and A+.
-    A* -> OptionalNode(RepeatNode(A)) -> OptionalParseResult wrapping RepeatParseResult.
-    A+ -> RepeatNode(A)              -> RepeatParseResult directly (guaranteed >= 1 element).
-    Only supported when the repeated element is a plain reference with a known type.
-    Produces vector<T>.
-    """
-    child = node.child
-    if not isinstance(child, ReferenceNode):
-        return None
-    ref_name = child.name
-    if ref_name not in rule_types:
-        return None
-    child_type = rule_types[ref_name].cpp_type
-    var_name = to_snake_case(ref_name)
-    if optional:
-        lines = [
-            f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
-            f"\tvector<{child_type}> {var_name};",
-            f"\tif ({var_name}_opt.HasResult()) {{",
-            f"\t\tauto &{var_name}_repeat = {var_name}_opt.GetResult().Cast<RepeatParseResult>();",
-            f"\t\tfor (auto &{var_name}_item : {var_name}_repeat.GetChildren()) {{",
-            f"\t\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-            f"\t\t}}",
-            f"\t}}",
-        ]
-    else:
-        lines = [
-            f"\tauto &{var_name}_repeat = list_pr.Child<RepeatParseResult>({idx});",
-            f"\tvector<{child_type}> {var_name};",
-            f"\tfor (auto &{var_name}_item : {var_name}_repeat.GetChildren()) {{",
-            f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-            f"\t}}",
-        ]
-    return SeqElement(
-        skip=False,
-        var_name=var_name,
-        cpp_type=f"vector<{child_type}>",
-        by_value=_is_by_value(ref_name, rule_types),
-        extraction_lines=lines,
-    )
-
-
-def classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules):
+def classify_sequence_element(
+    child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """
     Classify one element of a SequenceNode.
     Mirrors the token-type switch in MatcherFactory::CreateMatcher().
     Returns SeqElement or None if the element cannot be auto-generated.
     """
-    if isinstance(child, LiteralNode):
-        return _classify_literal()
-    if isinstance(child, ReferenceNode):
-        return _classify_reference(child.name, idx, rule_types, excluded_rules, identifier_override_rules)
-    if isinstance(child, OptionalNode):
-        inner = child.child
-        if isinstance(inner, LiteralNode):
-            return _classify_literal()
-        if isinstance(inner, ReferenceNode):
-            return _classify_optional_reference(inner.name, idx, rule_types, excluded_rules, identifier_override_rules)
-        if isinstance(inner, RepeatNode):
-            # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
-            # OptionalMatcher(RepeatMatcher(A)) structure.
-            return _classify_repeat(inner, idx, rule_types, optional=True)
-        if isinstance(inner, (ParensNode, ListMacroNode)):
-            return _classify_macro(inner, idx, rule_types, identifier_override_rules, optional=True)
-        return None
-    if isinstance(child, RepeatNode):
-        return _classify_repeat(child, idx, rule_types, optional=False)
-    if isinstance(child, (ParensNode, ListMacroNode)):
-        return _classify_macro(child, idx, rule_types, identifier_override_rules)
-    return None
+    return _classify_recursive(
+        child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+    )
 
 
-def classify_sequence_elements(children, rule_types, excluded_rules, identifier_override_rules):
+def classify_sequence_elements(
+    children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """
     Classify all children of a SequenceNode.
     Mirrors the token loop in MatcherFactory::CreateMatcher().
@@ -763,7 +730,9 @@ def classify_sequence_elements(children, rule_types, excluded_rules, identifier_
     elements = []
     seen = {}  # var_name -> occurrence count, for deduplication
     for idx, child in enumerate(children):
-        elem = classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules)
+        elem = classify_sequence_element(
+            child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
         if elem is None:
             return None
         if not elem.skip:
@@ -783,10 +752,17 @@ def classify_sequence_elements(children, rule_types, excluded_rules, identifier_
     return elements
 
 
-def _sequence_skip_reason(children, rule_types, excluded_rules, identifier_override_rules):
+def _sequence_skip_reason(
+    children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values=False
+):
     """Return a specific reason string explaining why classify_sequence_elements failed."""
     for idx, child in enumerate(children):
-        if classify_sequence_element(child, idx, rule_types, excluded_rules, identifier_override_rules) is not None:
+        if (
+            classify_sequence_element(
+                child, idx, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
+            is not None
+        ):
             continue
         inner = child.child if isinstance(child, OptionalNode) else child
         if isinstance(inner, ReferenceNode):
@@ -899,7 +875,15 @@ class GramFileResult:
     body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
-def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
+def collect_generated(
+    gram_stem,
+    rules,
+    rule_types,
+    excluded_rules,
+    provided_rule_names,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
     """Classify all rules; return a GramFileResult."""
     declarations = []
     implementations = []
@@ -986,24 +970,58 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
                     )
                     body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             else:
-                declarations.append(generate_choice_body_declaration(rule_name, return_type))
-                implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
-                reason_parts = []
-                if identifier_alts:
-                    reason_parts.append(f"identifier alternatives: {identifier_alts}")
-                if excluded_alts:
-                    reason_parts.append(f"syntax-only alternatives: {excluded_alts}")
-                manual_bodies.append((rule_name, f"choice body; {', '.join(reason_parts)}"))
-                body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
+                alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
+                if identifier_alts and not excluded_alts and alt_types <= {"string"}:
+                    if return_type in ("string", "Identifier"):
+                        # string-terminal alternatives are emitted directly as the rule's own type
+                        # (Identifier-typed rules wrap keyword/string-literal alternatives in Identifier)
+                        implementations.append(
+                            generate_string_terminal_choice_internal(rule_name, return_type, return_by_value)
+                        )
+                    else:
+                        child_type = "string"
+                        child_by_value = False
+                        declarations.append(
+                            generate_typed_choice_body_declaration(rule_name, return_type, child_type, child_by_value)
+                        )
+                        implementations.append(
+                            generate_choice_internal_with_typed_body(
+                                rule_name, return_type, return_by_value, child_type, child_by_value
+                            )
+                        )
+                        manual_bodies.append((rule_name, "choice body; wraps string terminal alternatives"))
+                        body_stubs.append(
+                            (
+                                rule_name,
+                                generate_typed_choice_body_stub(rule_name, return_type, child_type, child_by_value),
+                            )
+                        )
+                else:
+                    declarations.append(generate_choice_body_declaration(rule_name, return_type))
+                    implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
+                    reason_parts = []
+                    if identifier_alts:
+                        reason_parts.append(f"identifier alternatives: {identifier_alts}")
+                    if excluded_alts:
+                        reason_parts.append(f"syntax-only alternatives: {excluded_alts}")
+                    manual_bodies.append((rule_name, f"choice body; {', '.join(reason_parts)}"))
+                    body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             continue
 
-        # Normalize: a single non-sequence, non-choice token (e.g. a lone keyword literal)
-        # is treated as a one-element sequence so the all-skip path handles it.
-        if not isinstance(ast, (SequenceNode, ChoiceNode)):
+        # Normalize a single token or syntax-only choice to a one-element sequence so
+        # the all-skip path generates a no-argument semantic body.
+        ast_plan = _plan_extraction(
+            ast, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+        )
+        if not isinstance(ast, (SequenceNode, ChoiceNode)) or (
+            ast_plan is not None and ast_plan.kind == ExtractionKind.SKIP
+        ):
             ast = SequenceNode([ast])
 
         if isinstance(ast, SequenceNode):
-            elements = classify_sequence_elements(ast.children, rule_types, excluded_rules, identifier_override_rules)
+            elements = classify_sequence_elements(
+                ast.children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+            )
             if elements is not None:
                 declarations.append(generate_internal_declaration(rule_name))
                 registrations.append(generate_registration(rule_name))
@@ -1025,7 +1043,12 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rul
                     body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
                 continue
             skipped.append(
-                (rule_name, _sequence_skip_reason(ast.children, rule_types, excluded_rules, identifier_override_rules))
+                (
+                    rule_name,
+                    _sequence_skip_reason(
+                        ast.children, rule_types, excluded_rules, identifier_override_rules, optional_semantic_values
+                    ),
+                )
             )
             continue
 
@@ -1323,9 +1346,12 @@ def print_manual_steps(all_results):
             step += 1
 
 
-def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
+def process_gram_file(
+    gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules, optional_value_grammars
+):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
+    optional_semantic_values = gram_stem in optional_value_grammars
     gram_path = statements_dir / gram_filename
     try:
         rules = parse_peg_grammar(gram_path.read_text())
@@ -1337,7 +1363,13 @@ def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_n
             rules[rule_name].return_type = info.cpp_type
 
     return collect_generated(
-        gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules
+        gram_stem,
+        rules,
+        rule_types,
+        excluded_rules,
+        provided_rule_names,
+        identifier_override_rules,
+        optional_semantic_values,
     )
 
 
@@ -1353,7 +1385,7 @@ def main():
         'call.gram',
         'checkpoint.gram',
         'comment.gram',
-        # 'common.gram',
+        'common.gram',
         'connect.gram',
         'copy.gram',
         'create_index.gram',
@@ -1361,7 +1393,7 @@ def main():
         'create_schema.gram',
         'create_secret.gram',
         'create_sequence.gram',
-        # 'create_table.gram',
+        'create_table.gram',
         'create_trigger.gram',
         'create_type.gram',
         'create_view.gram',
@@ -1380,7 +1412,7 @@ def main():
         'pivot.gram',
         'pragma.gram',
         'prepare.gram',
-        # 'select.gram',
+        'select.gram',
         'set.gram',
         'transaction.gram',
         'update.gram',
@@ -1388,12 +1420,16 @@ def main():
         'vacuum.gram',
     ]
     grammar_types_file = type_dir / 'grammar_types.yml'
+    grammar_types_data = load_grammar_types_yaml(grammar_types_file)
+    optional_value_grammars = set(grammar_types_data.get('optional_value_grammars', []))
     matcher_overrides = load_matcher_rule_overrides(grammar_types_file)
     matcher_rule_names = set(matcher_overrides.keys())
     identifier_override_rules = load_identifier_override_rules(grammar_types_file)
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
     results = [
-        process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
+        process_gram_file(
+            f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules, optional_value_grammars
+        )
         for f in gram_files_to_gen
     ]
 
