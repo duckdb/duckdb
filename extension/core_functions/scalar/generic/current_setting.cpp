@@ -50,12 +50,18 @@ void CurrentSettingDynamic(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 		auto key = StringUtil::Lower(name_ptr[n_idx].GetString());
 		Value val;
-		if (context.TryGetCurrentSetting(key, val)) {
-			val = Settings::FormatDisplayValue(context, val);
-			result_ptr[row] = StringVector::AddString(result, val.ToString());
+		if (!context.TryGetCurrentSetting(key, val)) {
+			Catalog::AutoloadExtensionByConfigName(context, key);
+			if (!context.TryGetCurrentSetting(key, val)) {
+				throw InvalidInputException("unrecognized configuration parameter \"%s\"", key);
+			}
+		}
+		val = Settings::FormatDisplayValue(context, val);
+		if (val.IsNull()) {
+			result_validity.SetInvalid(row);
 			continue;
 		}
-		throw InvalidInputException("unrecognized configuration parameter \"%s\"", key);
+		result_ptr[row] = StringVector::AddString(result, val.ToString());
 	}
 }
 
