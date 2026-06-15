@@ -2,24 +2,22 @@
 
 namespace duckdb {
 
-ScalarFunctionSet VariantPathFunction::CreateFunctionSet(const string &name, const scalar_function_t &function,
+ScalarFunctionSet VariantPathFunction::CreateFunctionSet(const Identifier &name, const scalar_function_t &function,
                                                          const LogicalType &return_type, const bool path_optional) {
-	ScalarFunctionSet fun_set;
+	ScalarFunctionSet fun_set(name);
 
 	if (path_optional) {
 		fun_set.AddFunction(ScalarFunction {
-		    name, {LogicalType::VARIANT()}, return_type, function, VariantBindUtils::VariantPathBind, nullptr});
+		    {LogicalType::VARIANT()}, return_type, function, VariantBindUtils::VariantPathBind, nullptr});
 	}
 
-	fun_set.AddFunction(ScalarFunction {name,
-	                                    {LogicalType::VARIANT(), LogicalType::VARCHAR},
+	fun_set.AddFunction(ScalarFunction {{LogicalType::VARIANT(), LogicalType::VARCHAR},
 	                                    return_type,
 	                                    function,
 	                                    VariantBindUtils::VariantPathBind,
 	                                    nullptr});
 
-	fun_set.AddFunction(ScalarFunction {name,
-	                                    {LogicalType::VARIANT(), LogicalType::LIST(LogicalType::VARCHAR)},
+	fun_set.AddFunction(ScalarFunction {{LogicalType::VARIANT(), LogicalType::LIST(LogicalType::VARCHAR)},
 	                                    LogicalType::LIST(return_type),
 	                                    function,
 	                                    VariantBindUtils::VariantPathBind,
