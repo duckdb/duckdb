@@ -36,6 +36,7 @@ struct DatabaseCacheEntry;
 class LogManager;
 class ExternalFileCache;
 class ResultSetManager;
+class FeatureRefreshScheduler;
 struct ParserCache;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
@@ -82,6 +83,10 @@ public:
 	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
 
+	//! Start the feature auto-refresh scheduler. Must be called after FinalizeStartup() so the
+	//! catalog is fully loaded before the initial heap scan runs.
+	void StartFeatureRefreshScheduler();
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 	void LoadExtensionSettings();
@@ -103,6 +108,7 @@ private:
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
 	unique_ptr<ParserCache> parser_cache;
+	unique_ptr<FeatureRefreshScheduler> feature_refresh_scheduler;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

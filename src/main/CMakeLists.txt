@@ -35,6 +35,7 @@ add_library_unity(
   connection.cpp
   database.cpp
   database_file_path_manager.cpp
+  feature_refresh_scheduler.cpp
   database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
