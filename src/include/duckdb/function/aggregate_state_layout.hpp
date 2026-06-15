@@ -9,8 +9,10 @@
 
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/type_util.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -481,6 +483,8 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
+	//! Constant values for arguments that must be re-bound with a specific constant rather than only the type
+	unordered_map<idx_t, Value> constant_parameters;
 };
 
 } // namespace duckdb

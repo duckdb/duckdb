@@ -96,6 +96,21 @@ struct TableFunctionData : public FunctionData {
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
 };
 
+struct FunctionLocalState {
+	DUCKDB_API virtual ~FunctionLocalState();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 struct FunctionParameters {
 	vector<Value> values;
 	named_parameter_map_t named_parameters;

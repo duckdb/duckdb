@@ -531,7 +531,8 @@ AggregateFunction GetMinMaxNFunction() {
 	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-AggregateStateLayout GetExportStateType(const BoundAggregateFunction &function) {
+AggregateStateLayout GetExportStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
 	child_list_t<LogicalType> struct_children_types;
 	struct_children_types.emplace_back("value", function.GetReturnType());
 	struct_children_types.emplace_back("is_set", LogicalType::BOOLEAN);

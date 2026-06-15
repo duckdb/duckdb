@@ -1,17 +1,23 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/explain_format.hpp
+// duckdb/main/profiler/metric_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
-enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON, HTML, GRAPHVIZ, YAML, MERMAID };
+struct MetricInfo {
+	string name;
+	string metric_type; // "double" | "uint64" | "string" | "map"
+	string description;
+	string unit;
+};
 
 } // namespace duckdb

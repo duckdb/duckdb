@@ -357,8 +357,7 @@ pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTrans
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(
     PEGTransformer &transformer,
-    // NOLINTNEXTLINE(performance-unnecessary-value-param): fixed generated signature; BIT takes no modifiers
-    vector<unique_ptr<ParsedExpression>> expression) {
+    vector<unique_ptr<ParsedExpression>> expression) { // NOLINT(performance-unnecessary-value-param)
 	return make_uniq<TypeExpression>(Identifier("BIT"), vector<unique_ptr<ParsedExpression>> {});
 }
 

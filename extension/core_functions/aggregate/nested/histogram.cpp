@@ -84,7 +84,8 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 }
 
 template <class OP, class T, class MAP_TYPE>
-void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+void HistogramFinalizeFunction(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                               idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
 	auto states = state_vector.Values<HIST_STATE *>();
