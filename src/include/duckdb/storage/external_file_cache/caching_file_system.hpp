@@ -32,6 +32,24 @@ struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
+
+struct ReadThroughputEstimator {
+	//! Record a timed read.
+	void AddSample(double seconds, idx_t bytes);
+	//! Try to produce an estimate. Needs reads of at least two different sizes to separate latency from bandwidth.
+	bool TryEstimate(NetworkThroughputEstimate &result) const;
+
+private:
+	mutable mutex lock;
+	idx_t sample_count = 0;
+	double sum_bytes = 0;
+	double sum_seconds = 0;
+	//! sum of bytes squared
+	double sum_bytes_sq = 0;
+	//! sum of bytes times seconds
+	double sum_bytes_seconds = 0;
+};
+
 struct CachingFileHandle {
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
@@ -73,9 +91,6 @@ private:
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
-	//! Bandwidth samples below this size are dominated by fixed costs
-	constexpr static idx_t MIN_BANDWIDTH_SAMPLE_BYTES = 1 << 16; // 64 KiB
-
 	QueryContext context;
 
 	//! The client caching file system that was used to create this CachingFileHandle
@@ -104,11 +119,8 @@ private:
 	//! Current position (if non-seeking reads)
 	idx_t position;
 
-	//! Throughput measured over this handle's local reads, remote files measure in their own file system
-	mutex throughput_lock;
-	double tp_latency_seconds = 0;
-	double tp_bandwidth_bps = 0;
-	idx_t tp_sample_count = 0;
+	//! Throughput fitted from this handle's own reads, used for local files (remote files measure their own).
+	ReadThroughputEstimator throughput_estimator;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.

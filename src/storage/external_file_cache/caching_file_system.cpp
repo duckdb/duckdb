@@ -420,35 +420,52 @@ bool CachingFileHandle::OnDiskFile() {
 	return GetFileHandle().OnDiskFile();
 }
 
+void ReadThroughputEstimator::AddSample(double seconds, idx_t bytes) {
+	const double b = static_cast<double>(bytes);
+	lock_guard<mutex> guard(lock);
+	sample_count++;
+	sum_bytes += b;
+	sum_seconds += seconds;
+	sum_bytes_sq += b * b;
+	sum_bytes_seconds += b * seconds;
+}
+
+bool ReadThroughputEstimator::TryEstimate(NetworkThroughputEstimate &result) const {
+	lock_guard<mutex> guard(lock);
+	if (sample_count < 2) {
+		return false;
+	}
+	const double n = static_cast<double>(sample_count);
+	const double variance = sum_bytes_sq - sum_bytes * sum_bytes / n;
+	if (!(variance > 0)) {
+		// every read was the same size, so we cant really get the latency
+		return false;
+	}
+	// least squares estimate of the line "total_time = intercept + slope * bytes".
+	const double slope = (sum_bytes_seconds - sum_bytes * sum_seconds / n) / variance;
+	const double intercept = (sum_seconds - slope * sum_bytes) / n;
+	if (!(slope > 0) || !(intercept > 0)) {
+		return false;
+	}
+	// intercept is the fixed start-up cost of a read, slope is seconds per byte so bandwidth is 1 / slope
+	result.latency_seconds = intercept;
+	result.bandwidth_bytes_per_s = 1.0 / slope;
+	return true;
+}
+
 bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
+	// Remote files measure throughput in their own file system; local files fit it from this handle's own reads.
 	if (GetFileHandle().TryGetNetworkThroughput(result)) {
 		return true;
 	}
-	// local files have no file system measurements, fall back to the throughput of this handle's own reads
-	lock_guard<mutex> guard(throughput_lock);
-	if (tp_sample_count == 0 || !(tp_latency_seconds > 0) || !(tp_bandwidth_bps > 0)) {
-		return false;
-	}
-	result.latency_seconds = tp_latency_seconds;
-	result.bandwidth_bytes_per_s = tp_bandwidth_bps;
-	return true;
+	return throughput_estimator.TryEstimate(result);
 }
 
 void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {
 	if (IsRemoteFile() || !(total_seconds > 0)) {
 		return;
 	}
-	lock_guard<mutex> guard(throughput_lock);
-	const idx_t n = tp_sample_count + 1;
-	const double alpha = MaxValue<double>(0.2, 1.0 / static_cast<double>(n));
-	// a disk read has no observable first byte, so its wall time approximates the time to first byte
-	tp_latency_seconds =
-	    tp_latency_seconds <= 0 ? total_seconds : alpha * total_seconds + (1.0 - alpha) * tp_latency_seconds;
-	if (bytes >= MIN_BANDWIDTH_SAMPLE_BYTES) {
-		const double bandwidth = static_cast<double>(bytes) / total_seconds;
-		tp_bandwidth_bps = tp_bandwidth_bps <= 0 ? bandwidth : alpha * bandwidth + (1.0 - alpha) * tp_bandwidth_bps;
-	}
-	tp_sample_count = n;
+	throughput_estimator.AddSample(total_seconds, bytes);
 }
 
 idx_t CachingFileHandle::SeekPosition() {
