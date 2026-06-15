@@ -103,6 +103,7 @@
         "test/sql/types/geo/geometry_shred_fetch.test",
         "test/sql/types/geo/geometry_shred_list.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
+        "test/sql/types/geo/geometry_shred_more.test",
         "test/sql/types/geo/geometry_wkb.test",
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_crs_projjson.test",

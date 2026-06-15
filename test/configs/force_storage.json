@@ -50,7 +50,8 @@
         "test/sql/storage/types/variant/update.test",
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_stats.test",
-        "test/sql/sample/can_sample_from_ingested_files.test"
+        "test/sql/sample/can_sample_from_ingested_files.test",
+        "test/sql/types/geo/geometry_shred_more.test"
       ]
     }
 
