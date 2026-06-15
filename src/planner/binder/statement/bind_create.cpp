@@ -588,9 +588,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			col_types.push_back(col.GetType());
 		}
 		auto new_idx = validation_binder->GenerateTableIndex();
-		validation_binder->bind_context.AddGenericBinding(new_idx, "new", col_names, col_types);
-		row_scope_binder = make_uniq<ExpressionBinder>(*validation_binder, context);
-		validation_binder->GetActiveBinders().push_back(*row_scope_binder);
+		row_scope_binder = validation_binder->SetupNewRowScope(new_idx, col_names, col_types);
 	}
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());

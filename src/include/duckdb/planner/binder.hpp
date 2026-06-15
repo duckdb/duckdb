@@ -478,6 +478,11 @@ private:
 	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                 const TableCatalogEntry &table,
 	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	//! Register NEW as a generic binding so child binders can resolve NEW.col at depth=1.
+	//! Returns the ExpressionBinder that was pushed onto GetActiveBinders() — caller must keep it alive
+	//! until the matching GetActiveBinders().pop_back().
+	unique_ptr<ExpressionBinder> SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                              const vector<LogicalType> &col_types);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);

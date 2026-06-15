@@ -444,6 +444,14 @@ unique_ptr<BoundStatement> Binder::TryExpandRowTriggers(QueryNode &node,
 	return make_uniq<BoundStatement>(std::move(bound));
 }
 
+unique_ptr<ExpressionBinder> Binder::SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+                                                     const vector<LogicalType> &col_types) {
+	bind_context.AddGenericBinding(table_index, "new", col_names, col_types);
+	auto scope_binder = make_uniq<ExpressionBinder>(*this, context);
+	GetActiveBinders().push_back(*scope_binder);
+	return scope_binder;
+}
+
 BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
                                          const TableCatalogEntry &table,
                                          const vector<const_reference<TriggerCatalogEntry>> &triggers) {
@@ -492,13 +500,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 	new_rows_proj->children.push_back(std::move(cte_ref));
 	new_rows_proj->ResolveOperatorTypes();
 
-	// Register NEW in this binder's bind_context so child binders resolve NEW.col at depth=1
-	bind_context.AddGenericBinding(proj_idx, "new", col_names, col_types);
-
-	// Without this, active_binders is empty at statement-binding level and BindCorrelatedColum cannot traverse up
-	// to resolve NEW.col references at depth=1.
-	ExpressionBinder new_scope_binder(*this, context);
-	GetActiveBinders().push_back(new_scope_binder);
+	auto new_scope_binder = SetupNewRowScope(proj_idx, col_names, col_types);
 
 	unique_ptr<LogicalOperator> trigger_plan = std::move(new_rows_proj);
 	for (idx_t i = 0; i < triggers.size(); i++) {
