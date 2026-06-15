@@ -80,7 +80,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAlias(PEG
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> single_expression,
+PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
+                                               unique_ptr<ParsedExpression> single_expression,
                                                optional<vector<unique_ptr<ParsedExpression>>> indirection_list) {
 	auto expr = std::move(single_expression);
 	if (!indirection_list) {
@@ -1583,8 +1584,9 @@ PEGTransformerFactory::TransformMethodExpression(PEGTransformer &transformer, co
 	return std::move(result);
 }
 
-MethodArguments PEGTransformerFactory::TransformMethodExpressionArguments(PEGTransformer &transformer,
-                                                                          MethodArguments method_expression_argument_list) {
+MethodArguments
+PEGTransformerFactory::TransformMethodExpressionArguments(PEGTransformer &transformer,
+                                                          MethodArguments method_expression_argument_list) {
 	return method_expression_argument_list;
 }
 
@@ -1606,8 +1608,9 @@ MethodArguments PEGTransformerFactory::TransformMethodExpressionArgumentList(
 	return result;
 }
 
-vector<FunctionArgument> PEGTransformerFactory::TransformMethodFunctionArguments(
-    PEGTransformer &transformer, vector<FunctionArgument> function_argument) {
+vector<FunctionArgument>
+PEGTransformerFactory::TransformMethodFunctionArguments(PEGTransformer &transformer,
+                                                        vector<FunctionArgument> function_argument) {
 	return function_argument;
 }
 
@@ -1623,10 +1626,9 @@ PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(slice_bound));
 }
 
-vector<unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
-                                           optional<unique_ptr<ParsedExpression>> end_slice_bound,
-                                           optional<unique_ptr<ParsedExpression>> step_slice_bound) {
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
+    PEGTransformer &transformer, optional<unique_ptr<ParsedExpression>> expression,
+    optional<unique_ptr<ParsedExpression>> end_slice_bound, optional<unique_ptr<ParsedExpression>> step_slice_bound) {
 	vector<unique_ptr<ParsedExpression>> slice_bounds;
 	if (!end_slice_bound && !step_slice_bound) {
 		if (expression && *expression) {
@@ -1650,9 +1652,9 @@ PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer, optional
 	return slice_bounds;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
-                                                                           optional<unique_ptr<ParsedExpression>>
-                                                                               end_slice_value) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
+                                              optional<unique_ptr<ParsedExpression>> end_slice_value) {
 	// If either the lower or upper bound is not specified, we use an empty constant LIST,
 	// which we handle in the execution.
 	if (end_slice_value && *end_slice_value) {
@@ -2595,11 +2597,11 @@ case_insensitive_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer,
                                                  vector<pair<string, unique_ptr<ParsedExpression>>> replace_entry) {
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
-	for (auto &replace_entry : replace_entry) {
-		if (entry_map.find(replace_entry.first) != entry_map.end()) {
-			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
+	for (auto &entry : replace_entry) {
+		if (entry_map.find(entry.first) != entry_map.end()) {
+			throw ParserException("Duplicate entry \"%s\" in REPLACE list", entry.first);
 		}
-		entry_map.insert(std::move(replace_entry));
+		entry_map.insert(std::move(entry));
 	}
 	return entry_map;
 }
@@ -2654,8 +2656,8 @@ qualified_column_map_t<string>
 PEGTransformerFactory::TransformRenameEntryList(PEGTransformer &transformer,
                                                 const vector<pair<QualifiedColumnName, string>> &rename_entry) {
 	qualified_column_map_t<string> result;
-	for (auto &rename_entry : rename_entry) {
-		result[rename_entry.first] = rename_entry.second;
+	for (auto &entry : rename_entry) {
+		result[entry.first] = entry.second;
 	}
 	return result;
 }
@@ -2674,9 +2676,12 @@ pair<QualifiedColumnName, string> PEGTransformerFactory::TransformRenameEntry(PE
 	return make_pair(exclude_name, identifier.GetIdentifierName());
 }
 
-bool PEGTransformerFactory::TransformIgnoreOrRespectNulls(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+bool PEGTransformerFactory::TransformIgnoreNulls(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformRespectNulls(PEGTransformer &transformer) {
+	return false;
 }
 
 } // namespace duckdb

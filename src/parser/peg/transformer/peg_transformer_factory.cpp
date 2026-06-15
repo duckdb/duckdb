@@ -224,8 +224,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
-
-	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }
 
 void PEGTransformerFactory::RegisterConnect() {
@@ -294,9 +292,6 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<bool>("SubqueryAny", true);
 	RegisterEnum<bool>("SubqueryAll", false);
-
-	RegisterEnum<bool>("IgnoreNulls", true);
-	RegisterEnum<bool>("RespectNulls", false);
 
 	RegisterEnum<bool>("IncludeNulls", true);
 	RegisterEnum<bool>("ExcludeNulls", false);

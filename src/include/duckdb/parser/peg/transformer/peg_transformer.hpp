@@ -503,8 +503,6 @@ private:
 	                                                                     ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
 
-	static bool TransformIgnoreOrRespectNulls(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// pivot.gram
 	static unique_ptr<SelectStatement> TransformPivotStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformUnpivotStatement(PEGTransformer &transformer,
@@ -1965,6 +1963,14 @@ private:
 	                                                                           ParseResult &parse_result);
 	static vector<OrderByNode> TransformWithinGroupClause(PEGTransformer &transformer,
 	                                                      vector<OrderByNode> order_by_clause);
+	static unique_ptr<TransformResultValue> TransformIgnoreOrRespectNullsInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIgnoreNullsInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformIgnoreNulls(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRespectNullsInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformRespectNulls(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformParenthesisExpressionInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformParenthesisExpression(PEGTransformer &transformer,

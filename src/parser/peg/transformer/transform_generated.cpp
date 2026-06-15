@@ -4203,6 +4203,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWithinGroupClau
 }
 
 unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformIgnoreOrRespectNullsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIgnoreNullsInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformIgnoreNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRespectNullsInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformRespectNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformParenthesisExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> expression;
@@ -8849,6 +8869,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DistinctKeyword", &PEGTransformerFactory::TransformDistinctKeywordInternal},
 	    {"AllKeyword", &PEGTransformerFactory::TransformAllKeywordInternal},
 	    {"WithinGroupClause", &PEGTransformerFactory::TransformWithinGroupClauseInternal},
+	    {"IgnoreOrRespectNulls", &PEGTransformerFactory::TransformIgnoreOrRespectNullsInternal},
+	    {"IgnoreNulls", &PEGTransformerFactory::TransformIgnoreNullsInternal},
+	    {"RespectNulls", &PEGTransformerFactory::TransformRespectNullsInternal},
 	    {"ParenthesisExpression", &PEGTransformerFactory::TransformParenthesisExpressionInternal},
 	    {"LiteralExpression", &PEGTransformerFactory::TransformLiteralExpressionInternal},
 	    {"ConstantLiteral", &PEGTransformerFactory::TransformConstantLiteralInternal},
