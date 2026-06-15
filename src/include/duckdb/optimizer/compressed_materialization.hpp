@@ -142,6 +142,8 @@ private:
 	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
 	                                           const BaseStatistics &stats);
+	unique_ptr<Expression> GetVariantDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
+	                                            const BaseStatistics &stats);
 
 private:
 	Optimizer &optimizer;

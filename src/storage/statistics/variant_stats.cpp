@@ -364,7 +364,7 @@ static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shre
 		return Value();
 	}
 
-	auto &typed_value = StructStats::GetChildStats(stats, VariantStats::TYPED_VALUE_INDEX);
+	auto &typed_value = VariantStats::GetTypedStats(stats);
 	auto type_id = typed_value.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {
 		// list

@@ -14,7 +14,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
 
@@ -94,6 +94,8 @@ struct CMHelper {
 	static unique_ptr<CompressExpression> CreateStringFunctionCompress(unique_ptr<Expression> input,
 	                                                                   const LogicalType &target_type,
 	                                                                   unique_ptr<BaseStatistics> compress_stats);
+	static bool GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
+	                                   unique_ptr<BaseStatistics> &typed_stats);
 };
 
 //===--------------------------------------------------------------------===//
@@ -706,32 +708,128 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	return CMHelper::CreateStringFunctionCompress(std::move(input), cast_type, std::move(compress_stats));
 }
 
+bool CMHelper::GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
+                                      unique_ptr<BaseStatistics> &typed_stats) {
+	if (stats.GetType().id() != LogicalTypeId::VARIANT) {
+		return false;
+	}
+	if (!VariantStats::IsShredded(stats)) {
+		return false;
+	}
+	auto structured_type = VariantStats::GetShreddedStructuredType(stats);
+	if (structured_type.IsNested()) {
+		// We can only compress VARIANT columns that are shredded on a primitive type
+		return false;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(stats);
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
+		// Partially shredded - some values do not fit the shredded type, the cast would fail for those
+		return false;
+	}
+	switch (structured_type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+	case LogicalTypeId::UUID:
+		break;
+	default:
+		// We require that equal values of the shredded type always have identical VARIANT binary representations,
+		// e.g., FLOAT/DOUBLE ("-0.0" == "0.0") and INTERVAL ('1 month' == '30 days') do not qualify
+		return false;
+	}
+	auto &typed = VariantStats::GetTypedStats(shredded_stats);
+	if (typed.GetType() != structured_type) { // LCOV_EXCL_START
+		return false;
+	} // LCOV_EXCL_STOP
+	typed_stats = typed.ToUnique();
+	if (stats.CanHaveNull()) {
+		// Both SQL NULL and the VARIANT null value become SQL NULL when casting to the shredded type
+		// (and they are indistinguishable at the top level of a VARIANT column, so this is lossless)
+		typed_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	shredded_type = structured_type;
+	return true;
+}
+
 unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(unique_ptr<Expression> input,
                                                                              const BaseStatistics &stats) {
-	if (!VariantStats::IsShredded(stats)) {
-		return nullptr; // Not shredded
+	LogicalType shredded_type;
+	unique_ptr<BaseStatistics> typed_stats;
+	if (!CMHelper::GetVariantCompressInfo(stats, shredded_type, typed_stats)) {
+		return nullptr;
 	}
 
-	reference<const BaseStatistics> shredded_stats = VariantStats::GetShreddedStats(stats);
-	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
-		return nullptr; // Not fully shredded
+	// VARIANT columns can only be sorted/grouped/compared after being wrapped in "variant_normalize" by the binder.
+	// The normalized binary representation does not order the same as the shredded type, but it does preserve
+	// equality, so we can only compress VARIANT in positions where order does not matter. Plain column references
+	// (handled generically) are always payload columns, as key columns are wrapped in "variant_normalize".
+	// Since "variant_normalize" does not change any values, we can strip it and compress the input directly.
+	// FIXME: this is a current limitation that should be fixed in the future
+	// variant should have the same sort order as the types it contains
+	if (input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function_expr = input->Cast<BoundFunctionExpression>();
+		if (function_expr.Function().GetName() == "variant_normalize") {
+			input = std::move(function_expr.GetChildrenMutable()[0]);
+		}
 	}
 
-	if (shredded_stats.get().GetType().id() == LogicalTypeId::STRUCT) {
-		shredded_stats = StructStats::GetChildStats(shredded_stats.get(), VariantStats::TYPED_VALUE_INDEX);
+	auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(input), shredded_type);
+
+	// Try to compress the shredded type further using the typed statistics
+	if (shredded_type.IsIntegral() && GetTypeIdSize(shredded_type.InternalType()) > 1) {
+		LogicalType offset_type;
+		Value range_value;
+		Value min;
+		if (CMHelper::GetIntegralOffsetCompressInfo(context, shredded_type, *typed_stats, offset_type, min,
+		                                            range_value) &&
+		    GetTypeIdSize(offset_type.InternalType()) < GetTypeIdSize(shredded_type.InternalType())) {
+			// We always use the offset compress function (not a value-preserving cast) so that decompression
+			// can unambiguously derive how to restore the shredded type from the statistics alone
+			return CMHelper::CreateIntegralFunctionCompress(std::move(cast_expr), shredded_type, offset_type, min,
+			                                                range_value, *typed_stats);
+		}
+	} else if (shredded_type.id() == LogicalTypeId::VARCHAR) {
+		LogicalType string_type = LogicalType::INVALID;
+		uint32_t max_string_length = 0;
+		if (CMHelper::GetStringCompressInfo(*typed_stats, string_type, max_string_length)) {
+			auto compress_stats = CMHelper::CreateStringCompressStats(*typed_stats, string_type, max_string_length);
+			return CMHelper::CreateStringFunctionCompress(std::move(cast_expr), string_type, std::move(compress_stats));
+		}
 	}
 
-	auto compress_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(input), VariantStats::GetShreddedStructuredType(stats));
-	auto compress_stats = shredded_stats.get().ToUnique();
-	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
-	                                     CompressedMaterializationType::CAST);
+	// Just the cast to the shredded type, this is still a lot cheaper to materialize than VARIANT.
+	// We mark it as FUNCTION (rather than CAST) so that decompression goes through GetVariantDecompress
+	return make_uniq<CompressExpression>(std::move(cast_expr), std::move(typed_stats),
+	                                     CompressedMaterializationType::FUNCTION);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique_ptr<Expression> input,
                                                                           const LogicalType &result_type,
                                                                           const BaseStatistics &stats) {
 	const auto &type = result_type;
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return GetVariantDecompress(std::move(input), result_type, stats);
+	}
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);
 	}
@@ -771,6 +869,28 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	bound_function.SetReturnType(result_type);
 
 	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+}
+
+unique_ptr<Expression> CompressedMaterialization::GetVariantDecompress(unique_ptr<Expression> input,
+                                                                       const LogicalType &result_type,
+                                                                       const BaseStatistics &stats) {
+	D_ASSERT(result_type.id() == LogicalTypeId::VARIANT);
+	LogicalType shredded_type;
+	unique_ptr<BaseStatistics> typed_stats;
+	if (!CMHelper::GetVariantCompressInfo(stats, shredded_type, typed_stats)) {
+		throw InternalException("Could not obtain compress info for VARIANT decompression!");
+	}
+	if (input->GetReturnType() != shredded_type) {
+		// The cast to the shredded type was compressed further, decompress to the shredded type first
+		if (shredded_type.IsIntegral()) {
+			input = GetIntegralDecompress(std::move(input), shredded_type, *typed_stats);
+		} else if (shredded_type.id() == LogicalTypeId::VARCHAR) {
+			input = GetStringDecompress(std::move(input), shredded_type, *typed_stats);
+		} else { // LCOV_EXCL_START
+			throw InternalException("Cannot decompress to the shredded type of a VARIANT!");
+		} // LCOV_EXCL_STOP
+	}
+	return BoundCastExpression::AddCastToType(context, std::move(input), result_type);
 }
 
 } // namespace duckdb
