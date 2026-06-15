@@ -203,25 +203,6 @@ TEST_CASE("ParseIterator: semicolons in strings and comments handled", "[api][pa
 	REQUIRE(DrainParse(with_comments, ctx).size() == 2);
 }
 
-TEST_CASE("ParseIterator: single already-parsed statement", "[api][parse_iterator]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	auto &ctx = *con.context;
-
-	ParseIterator parse("SELECT 42;");
-	REQUIRE(parse.Peek(ctx));
-	auto parsed = parse.GetStatement();
-	REQUIRE(parsed);
-
-	ParseIterator it(std::move(parsed));
-	REQUIRE(it.Peek(ctx));
-	auto out = it.GetStatement();
-	REQUIRE(out);
-	REQUIRE(out->type == StatementType::SELECT_STATEMENT);
-	REQUIRE(StringUtil::Contains(out->query, "42"));
-	REQUIRE_FALSE(it.Peek(ctx));
-}
-
 //===--------------------------------------------------------------------===//
 // EngineIterator (new contract: Peek = "more input?", Get = work, may be null)
 //===--------------------------------------------------------------------===//
@@ -350,24 +331,4 @@ TEST_CASE("EngineIterator: movable", "[api][engine_iterator]") {
 	REQUIRE(moved.Peek(ctx));
 	REQUIRE(moved.GetStatement(ctx));
 	REQUIRE_FALSE(moved.Peek(ctx));
-}
-
-TEST_CASE("EngineIterator: single already-parsed statement source", "[api][engine_iterator]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	auto &ctx = *con.context;
-
-	ParseIterator parse("SELECT 42;");
-	REQUIRE(parse.Peek(ctx));
-	auto parsed = parse.GetStatement();
-	REQUIRE(parsed);
-
-	EngineIterator it(std::move(parsed));
-	REQUIRE(it.Peek(ctx));
-	auto out = it.GetStatement(ctx);
-	REQUIRE(out);
-	REQUIRE(out->type == StatementType::SELECT_STATEMENT);
-	REQUIRE(StringUtil::Contains(out->query, "42"));
-	REQUIRE_FALSE(it.Peek(ctx));
-	REQUIRE_FALSE(it.GetStatement(ctx));
 }

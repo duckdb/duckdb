@@ -34,8 +34,6 @@ class EngineIterator {
 public:
 	//! Wrap a lazy parse-facing stream (consumed by move).
 	DUCKDB_API explicit EngineIterator(ParseIterator &&parse_iterator);
-	//! Single already-parsed statement source (still 1:N — wrapping/unpack can expand it).
-	DUCKDB_API explicit EngineIterator(unique_ptr<SQLStatement> statement);
 	DUCKDB_API ~EngineIterator();
 
 	EngineIterator(const EngineIterator &) = delete;

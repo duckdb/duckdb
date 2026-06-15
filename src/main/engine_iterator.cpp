@@ -10,9 +10,6 @@ namespace duckdb {
 EngineIterator::EngineIterator(ParseIterator &&parse_iterator) : source(std::move(parse_iterator)) {
 }
 
-EngineIterator::EngineIterator(unique_ptr<SQLStatement> statement) : source(std::move(statement)) {
-}
-
 EngineIterator::~EngineIterator() = default;
 
 EngineIterator::EngineIterator(EngineIterator &&) noexcept = default;
@@ -34,9 +31,7 @@ unique_ptr<SQLStatement> EngineIterator::GetStatementInternal(ClientContext &con
 	if (buffer_cursor < buffer.size()) {
 		return std::move(buffer[buffer_cursor++]);
 	}
-	// Pull the next parse-facing statement and preprocess it into one-or-more engine-facing
-	// statements. Preprocessing runs here (not in Peek) so it sees the transaction state left by the
-	// previously executed statement.
+	// Pull the next parse-facing statement.
 	if (!source.Peek(context)) {
 		return nullptr; // exhausted
 	}
@@ -44,8 +39,8 @@ unique_ptr<SQLStatement> EngineIterator::GetStatementInternal(ClientContext &con
 	buffer.clear();
 	buffer_cursor = 0;
 	buffer.push_back(std::move(stmt));
-	// Expand the peel into engine-facing statements. Preprocessing reads the context's current
-	// transaction state, so it must run here (after the previous statement executed), not in Peek.
+	// Preprocess the peel into one-or-more engine-facing statements. This runs in Get (not Peek) so it
+	// sees the transaction state left by the previously executed statement.
 	StatementPreprocessor preprocessor(context);
 	const CurrentTransactionState transaction_state =
 	    context.transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;

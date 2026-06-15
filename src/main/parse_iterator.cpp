@@ -24,15 +24,6 @@ ParseIterator::ParseIterator(string sql_p) : sql(std::move(sql_p)) {
 	}
 }
 
-ParseIterator::ParseIterator(unique_ptr<SQLStatement> statement) {
-	// A single already-parsed statement rides the same direct-emit path as parser_override
-	// (statements yielded without running the PEG parser). override_resolved is set so the first
-	// Peek skips extension consultation and yields the injected statement straight away.
-	overridden_statements = make_uniq<vector<unique_ptr<SQLStatement>>>();
-	overridden_statements->push_back(std::move(statement));
-	override_resolved = true;
-}
-
 ParseIterator::~ParseIterator() = default;
 
 ParseIterator::ParseIterator(ParseIterator &&) noexcept = default;

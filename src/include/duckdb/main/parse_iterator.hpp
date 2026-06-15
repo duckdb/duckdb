@@ -33,8 +33,6 @@ class ParseIterator {
 public:
 	//! Peel parse-facing statements out of a SQL string (PEG / parser_override).
 	DUCKDB_API explicit ParseIterator(string sql);
-	//! Degenerate source of exactly one already-parsed statement: yield it once, then exhaust.
-	DUCKDB_API explicit ParseIterator(unique_ptr<SQLStatement> statement);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;
