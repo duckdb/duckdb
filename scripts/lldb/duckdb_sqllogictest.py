@@ -13,8 +13,10 @@ SQL_NEXT_MATCHING_STATEMENT_COMMAND = "sql_next_matching_statement"
 SQL_WATCH_STATEMENT_COMMAND = "sql_watch_statement"
 SQL_LIST_WATCHES_COMMAND = "sql_list_watches"
 SQL_DELETE_WATCH_COMMAND = "sql_delete_watch"
+SQL_NEXT_WATCH_COMMAND = "sql_next_watch"
 
 _NEXT_STATE = None
+_NEXT_WATCH_STATE = None
 _WATCHES = {}
 
 
@@ -54,6 +56,12 @@ def __lldb_init_module(debugger, _internal_dict):
         SQL_DELETE_WATCH_COMMAND,
         "Delete one installed sqllogictest-aware watch rule",
         "duckdb_sqllogictest.sql_delete_watch",
+    )
+    _register_command(
+        debugger,
+        SQL_NEXT_WATCH_COMMAND,
+        "Continue until an installed sqllogictest watch rule matches",
+        "duckdb_sqllogictest.sql_next_watch",
     )
 
 
@@ -171,6 +179,58 @@ def sql_delete_watch(debugger, command, result, _internal_dict):
     target.BreakpointDelete(breakpoint_id)
     del _WATCHES[breakpoint_id]
     result.AppendMessage("Deleted watch {}".format(breakpoint_id))
+
+
+def sql_next_watch(debugger, command, result, _internal_dict):
+    if command.strip():
+        result.SetError("usage: {}".format(SQL_NEXT_WATCH_COMMAND))
+        return
+
+    target = debugger.GetSelectedTarget()
+    process = target.GetProcess()
+    if not process.IsValid():
+        result.SetError("no selected process")
+        return
+    if process.GetState() != lldb.eStateStopped:
+        result.SetError("process must be stopped")
+        return
+
+    thread = process.GetThreadAtIndex(0)
+    if not thread.IsValid():
+        result.SetError("thread 1 not found")
+        return
+
+    _cleanup_dead_watches(target)
+    if not _WATCHES:
+        result.SetError("no sql watches installed")
+        return
+
+    _restore_next_watch_state(target)
+
+    saved_auto_continue = {}
+    for breakpoint in _iter_breakpoints(target):
+        breakpoint_id = breakpoint.GetID()
+        if breakpoint_id in _WATCHES:
+            continue
+        saved_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
+        if breakpoint.IsEnabled():
+            breakpoint.SetAutoContinue(True)
+
+    global _NEXT_WATCH_STATE
+    _NEXT_WATCH_STATE = {
+        "saved_auto_continue": saved_auto_continue,
+    }
+
+    command_interpreter = debugger.GetCommandInterpreter()
+    command_result = lldb.SBCommandReturnObject()
+    command_interpreter.HandleCommand("process continue", command_result)
+    if _NEXT_WATCH_STATE is not None:
+        _restore_next_watch_state(target)
+
+    if command_result.Succeeded():
+        return
+
+    result.SetError(command_result.GetError() or "process continue failed")
 
 
 def _register_command(debugger, name, help_text, callback):
@@ -513,6 +573,19 @@ def _restore_next_state(target):
     _NEXT_STATE = None
 
 
+def _restore_next_watch_state(target):
+    global _NEXT_WATCH_STATE
+    if not _NEXT_WATCH_STATE:
+        return
+
+    for breakpoint_id, auto_continue in _NEXT_WATCH_STATE["saved_auto_continue"].items():
+        breakpoint = target.FindBreakpointByID(breakpoint_id)
+        if breakpoint.IsValid():
+            breakpoint.SetAutoContinue(auto_continue)
+
+    _NEXT_WATCH_STATE = None
+
+
 def _cleanup_dead_watches(target):
     dead_breakpoints = []
     for breakpoint_id in _WATCHES:
@@ -562,5 +635,27 @@ def _watch_statement_callback(frame, breakpoint_location, _internal_dict):
     if not _matches_context(context, watch["matcher"]):
         return False
 
+    signature = _statement_signature(context)
+    if watch.get("suppress_duplicate_signature") == signature:
+        watch["suppress_duplicate_signature"] = None
+        return False
+
+    watch["suppress_duplicate_signature"] = signature
+
+    target = frame.GetThread().GetProcess().GetTarget()
+    if _NEXT_WATCH_STATE:
+        _restore_next_watch_state(target)
+
     print(_format_statement_context(context))
     return True
+
+
+def _statement_signature(context):
+    loop_signature = tuple((loop["name"], loop["value"]) for loop in context["running_loops"])
+    return (
+        context["kind"],
+        context["file_name"],
+        context["query_line"],
+        context["sql_text"],
+        loop_signature,
+    )

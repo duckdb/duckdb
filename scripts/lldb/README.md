@@ -19,6 +19,7 @@ sql_current_statement
 sql_next_statement
 sql_next_matching_statement --kind query
 sql_watch_statement --file test/sql/join --loop i=3
+sql_next_watch
 sql_list_watches
 sql_delete_watch 5
 ```
@@ -39,6 +40,8 @@ command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.
   - continues until the next sqllogictest statement/query matching the supplied filters
 - `sql_watch_statement`
   - installs a persistent sqllogictest-aware watch rule
+- `sql_next_watch`
+  - continues until one installed watch rule matches
 - `sql_list_watches`
   - lists installed watch rules
 - `sql_delete_watch <id>`
