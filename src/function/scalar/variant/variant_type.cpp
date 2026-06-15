@@ -3,17 +3,6 @@
 
 namespace duckdb {
 
-static string FormatType(const VariantLogicalType &type) {
-	switch (type) {
-	case VariantLogicalType::OBJECT:
-		return "OBJECT";
-	case VariantLogicalType::ARRAY:
-		return "ARRAY";
-	default:
-		return EnumUtil::ToString(type);
-	}
-}
-
 static void WriteTypes(const UnifiedVariantVectorData &variant, Vector &types, SelectionVector value_index_sel,
                        const idx_t count) {
 	auto writer = FlatVector::Writer<string_t>(types, count);
@@ -26,7 +15,7 @@ static void WriteTypes(const UnifiedVariantVectorData &variant, Vector &types, S
 		}
 
 		auto type = variant.GetTypeId(row_idx, value_index_sel[row_idx]);
-		writer.WriteValue(string_t(FormatType(type)));
+		writer.WriteValue(string_t(EnumUtil::ToString(type)));
 	}
 }
 
