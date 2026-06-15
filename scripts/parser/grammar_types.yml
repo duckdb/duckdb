@@ -1289,6 +1289,12 @@ ExpressionType:
   rules:
     - ComparisonOperator
     - IsDistinctFromOp
+    - OperatorEqual
+    - OperatorNotEqual
+    - OperatorLessThan
+    - OperatorGreaterThan
+    - OperatorLessThanEquals
+    - OperatorGreaterThanEquals
     - LambdaOperator
 
 SecretPersistType:
@@ -1453,6 +1459,12 @@ overrides:
     by_value: true
   NotExpression:
     type: "vector<bool>"
+    by_value: true
+  IsDistinctFromTail:
+    type: "IsDistinctFromTail"
+    by_value: true
+  ComparisonExpressionTail:
+    type: "ComparisonExpressionTail"
     by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:

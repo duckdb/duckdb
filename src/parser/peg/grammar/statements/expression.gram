@@ -172,10 +172,12 @@ NotNullOperator <- 'NOTNULL'
 IsNull <- IsNullOperator
 IsNullOperator <- 'ISNULL'
 # LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
-IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
+IsDistinctFromExpression <- ComparisonExpression IsDistinctFromTail*
+IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
-ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*
+ComparisonExpression <- BetweenInLikeExpression ComparisonExpressionTail*
+ComparisonExpressionTail <- ComparisonOperator NotExpression? BetweenInLikeExpression
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /

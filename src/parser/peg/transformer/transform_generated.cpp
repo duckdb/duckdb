@@ -5365,6 +5365,37 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsNullOperatorI
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformIsDistinctFromExpressionInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto comparison_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<IsDistinctFromTail>> is_distinct_from_tail {};
+	auto &is_distinct_from_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (is_distinct_from_tail_opt.HasResult()) {
+		vector<IsDistinctFromTail> is_distinct_from_tail_value;
+		auto &is_distinct_from_tail_value_repeat_1 = is_distinct_from_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &is_distinct_from_tail_value_item_1 : is_distinct_from_tail_value_repeat_1.GetChildren()) {
+			auto is_distinct_from_tail_value_value_1 =
+			    transformer.Transform<IsDistinctFromTail>(is_distinct_from_tail_value_item_1.get());
+			is_distinct_from_tail_value.push_back(std::move(is_distinct_from_tail_value_value_1));
+		}
+		is_distinct_from_tail = std::move(is_distinct_from_tail_value);
+	}
+	auto result = TransformIsDistinctFromExpression(transformer, std::move(comparison_expression),
+	                                                std::move(is_distinct_from_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsDistinctFromTailInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto is_distinct_from_op = transformer.Transform<ExpressionType>(list_pr.GetChild(0));
+	auto comparison_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformIsDistinctFromTail(transformer, is_distinct_from_op, std::move(comparison_expression));
+	return make_uniq<TypedTransformResult<IsDistinctFromTail>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsDistinctFromOpInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -5372,6 +5403,90 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsDistinctFromO
 	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	auto result = TransformIsDistinctFromOp(transformer, has_result);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformComparisonExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto between_in_like_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<ComparisonExpressionTail>> comparison_expression_tail {};
+	auto &comparison_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (comparison_expression_tail_opt.HasResult()) {
+		vector<ComparisonExpressionTail> comparison_expression_tail_value;
+		auto &comparison_expression_tail_value_repeat_1 =
+		    comparison_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &comparison_expression_tail_value_item_1 : comparison_expression_tail_value_repeat_1.GetChildren()) {
+			auto comparison_expression_tail_value_value_1 =
+			    transformer.Transform<ComparisonExpressionTail>(comparison_expression_tail_value_item_1.get());
+			comparison_expression_tail_value.push_back(std::move(comparison_expression_tail_value_value_1));
+		}
+		comparison_expression_tail = std::move(comparison_expression_tail_value);
+	}
+	auto result = TransformComparisonExpression(transformer, std::move(between_in_like_expression),
+	                                            std::move(comparison_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformComparisonExpressionTailInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto comparison_operator = transformer.Transform<ExpressionType>(list_pr.GetChild(0));
+	optional<vector<bool>> not_expression {};
+	auto &not_expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (not_expression_opt.HasResult()) {
+		auto not_expression_value = transformer.Transform<vector<bool>>(not_expression_opt.GetResult());
+		not_expression = std::move(not_expression_value);
+	}
+	auto between_in_like_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	auto result = TransformComparisonExpressionTail(transformer, comparison_operator, std::move(not_expression),
+	                                                std::move(between_in_like_expression));
+	return make_uniq<TypedTransformResult<ComparisonExpressionTail>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformComparisonOperatorInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<ExpressionType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOperatorEqualInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto result = TransformOperatorEqual(transformer);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOperatorNotEqualInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto result = TransformOperatorNotEqual(transformer);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOperatorLessThanInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto result = TransformOperatorLessThan(transformer);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOperatorGreaterThanInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformOperatorGreaterThan(transformer);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOperatorLessThanEqualsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformOperatorLessThanEquals(transformer);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOperatorGreaterThanEqualsInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto result = TransformOperatorGreaterThanEquals(transformer);
 	return make_uniq<TypedTransformResult<ExpressionType>>(result);
 }
 
@@ -9669,7 +9784,18 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"NotNullOperator", &PEGTransformerFactory::TransformNotNullOperatorInternal},
 	    {"IsNull", &PEGTransformerFactory::TransformIsNullInternal},
 	    {"IsNullOperator", &PEGTransformerFactory::TransformIsNullOperatorInternal},
+	    {"IsDistinctFromExpression", &PEGTransformerFactory::TransformIsDistinctFromExpressionInternal},
+	    {"IsDistinctFromTail", &PEGTransformerFactory::TransformIsDistinctFromTailInternal},
 	    {"IsDistinctFromOp", &PEGTransformerFactory::TransformIsDistinctFromOpInternal},
+	    {"ComparisonExpression", &PEGTransformerFactory::TransformComparisonExpressionInternal},
+	    {"ComparisonExpressionTail", &PEGTransformerFactory::TransformComparisonExpressionTailInternal},
+	    {"ComparisonOperator", &PEGTransformerFactory::TransformComparisonOperatorInternal},
+	    {"OperatorEqual", &PEGTransformerFactory::TransformOperatorEqualInternal},
+	    {"OperatorNotEqual", &PEGTransformerFactory::TransformOperatorNotEqualInternal},
+	    {"OperatorLessThan", &PEGTransformerFactory::TransformOperatorLessThanInternal},
+	    {"OperatorGreaterThan", &PEGTransformerFactory::TransformOperatorGreaterThanInternal},
+	    {"OperatorLessThanEquals", &PEGTransformerFactory::TransformOperatorLessThanEqualsInternal},
+	    {"OperatorGreaterThanEquals", &PEGTransformerFactory::TransformOperatorGreaterThanEqualsInternal},
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
 	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},

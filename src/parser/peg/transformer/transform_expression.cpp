@@ -705,60 +705,81 @@ bool PEGTransformerFactory::TransformNotKeyword(PEGTransformer &transformer) {
 	return true;
 }
 
-// IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto &is_test_opt = list_pr.Child<OptionalParseResult>(1);
-	if (!is_test_opt.HasResult()) {
+                                                                                      unique_ptr<ParsedExpression> comparison_expression,
+                                                                                      optional<vector<IsDistinctFromTail>> is_distinct_from_tail) {
+	auto expr = std::move(comparison_expression);
+	if (!is_distinct_from_tail) {
 		return expr;
 	}
-	auto &is_distinct_repeat = is_test_opt.GetResult().Cast<RepeatParseResult>();
-	for (auto &is_distinct : is_distinct_repeat.GetChildren()) {
-		auto &distinct_list = is_distinct.get().Cast<ListParseResult>();
-		auto distinct_type = transformer.Transform<ExpressionType>(distinct_list.Child<ListParseResult>(0));
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(distinct_list.Child<ListParseResult>(1));
-		auto distinct_operator = make_uniq<ComparisonExpression>(distinct_type, std::move(expr), std::move(right_expr));
+	for (auto &is_distinct : *is_distinct_from_tail) {
+		auto distinct_operator =
+		    make_uniq<ComparisonExpression>(is_distinct.comparison_type, std::move(expr), std::move(is_distinct.expression));
 		expr = std::move(distinct_operator);
 	}
 	return expr;
 }
 
-// ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpression(PEGTransformer &transformer,
-                                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto &comparison_opt = list_pr.Child<OptionalParseResult>(1);
-	if (!comparison_opt.HasResult()) {
+                                                                                  unique_ptr<ParsedExpression> between_in_like_expression,
+                                                                                  optional<vector<ComparisonExpressionTail>> comparison_expression_tail) {
+	auto expr = std::move(between_in_like_expression);
+	if (!comparison_expression_tail) {
 		return expr;
 	}
-	auto &comparison_repeat = comparison_opt.GetResult().Cast<RepeatParseResult>();
-	auto cmp_depth_guard = transformer.StackCheck(comparison_repeat.GetChildren().size());
-	for (auto &comparison_expr : comparison_repeat.GetChildren()) {
-		auto &inner_list_pr = comparison_expr.get().Cast<ListParseResult>();
-		auto comparison_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
-		auto &not_expr_opt = inner_list_pr.Child<OptionalParseResult>(1);
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(2));
-		if (not_expr_opt.HasResult()) {
-			auto &not_expr_repeat = not_expr_opt.GetResult().Cast<RepeatParseResult>();
-			for (size_t i = 0; i < not_expr_repeat.GetChildren().size(); i++) {
-				vector<unique_ptr<ParsedExpression>> inner_list_children;
-				inner_list_children.push_back(std::move(right_expr));
-				right_expr =
-				    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
-			}
+	auto cmp_depth_guard = transformer.StackCheck(comparison_expression_tail->size());
+	for (auto &comparison_expr : *comparison_expression_tail) {
+		auto right_expr = std::move(comparison_expr.expression);
+		for (idx_t i = 0; i < comparison_expr.not_keywords.size(); i++) {
+			vector<unique_ptr<ParsedExpression>> inner_list_children;
+			inner_list_children.push_back(std::move(right_expr));
+			right_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
 		}
-		expr = make_uniq<ComparisonExpression>(comparison_operator, std::move(expr), std::move(right_expr));
+		expr = make_uniq<ComparisonExpression>(comparison_expr.comparison_type, std::move(expr), std::move(right_expr));
 	}
 	return expr;
 }
 
-ExpressionType PEGTransformerFactory::TransformComparisonOperator(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+IsDistinctFromTail PEGTransformerFactory::TransformIsDistinctFromTail(PEGTransformer &transformer,
+                                                                      const ExpressionType &is_distinct_from_op,
+                                                                      unique_ptr<ParsedExpression> comparison_expression) {
+	return {is_distinct_from_op, std::move(comparison_expression)};
+}
+
+ComparisonExpressionTail PEGTransformerFactory::TransformComparisonExpressionTail(
+    PEGTransformer &transformer, const ExpressionType &comparison_operator, optional<vector<bool>> not_expression,
+    unique_ptr<ParsedExpression> between_in_like_expression) {
+	ComparisonExpressionTail result;
+	result.comparison_type = comparison_operator;
+	if (not_expression) {
+		result.not_keywords = std::move(*not_expression);
+	}
+	result.expression = std::move(between_in_like_expression);
+	return result;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorEqual(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_EQUAL;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorNotEqual(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_NOTEQUAL;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorLessThan(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_LESSTHAN;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorGreaterThan(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_GREATERTHAN;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorLessThanEquals(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_LESSTHANOREQUALTO;
+}
+
+ExpressionType PEGTransformerFactory::TransformOperatorGreaterThanEquals(PEGTransformer &transformer) {
+	return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 }
 
 bool TryNegateLikeFunction(Identifier &function_name) {

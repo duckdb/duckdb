@@ -29,6 +29,7 @@
 #include "duckdb/parser/peg/ast/setting_info.hpp"
 #include "duckdb/parser/peg/ast/table_alias.hpp"
 #include "duckdb/parser/peg/ast/cast_arguments.hpp"
+#include "duckdb/parser/peg/ast/expression_chain.hpp"
 #include "duckdb/parser/peg/ast/method_arguments.hpp"
 #include "duckdb/parser/peg/ast/trim_arguments.hpp"
 #include "duckdb/parser/peg/ast/trigger_event_info.hpp"
@@ -407,11 +408,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformLogicalAndExpression(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIsDistinctFromExpression(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformComparisonExpression(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
-	static ExpressionType TransformComparisonOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenInLikeExpression(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenInLikeOp(PEGTransformer &transformer,
@@ -2330,9 +2326,50 @@ private:
 	static unique_ptr<TransformResultValue> TransformIsNullOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIsNullOperator(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIsDistinctFromExpressionInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformIsDistinctFromExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> comparison_expression,
+	                                  optional<vector<IsDistinctFromTail>> is_distinct_from_tail);
+	static unique_ptr<TransformResultValue> TransformIsDistinctFromTailInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static IsDistinctFromTail TransformIsDistinctFromTail(PEGTransformer &transformer,
+	                                                      const ExpressionType &is_distinct_from_op,
+	                                                      unique_ptr<ParsedExpression> comparison_expression);
 	static unique_ptr<TransformResultValue> TransformIsDistinctFromOpInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, const bool &has_result);
+	static unique_ptr<TransformResultValue> TransformComparisonExpressionInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformComparisonExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> between_in_like_expression,
+	                              optional<vector<ComparisonExpressionTail>> comparison_expression_tail);
+	static unique_ptr<TransformResultValue> TransformComparisonExpressionTailInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static ComparisonExpressionTail
+	TransformComparisonExpressionTail(PEGTransformer &transformer, const ExpressionType &comparison_operator,
+	                                  optional<vector<bool>> not_expression,
+	                                  unique_ptr<ParsedExpression> between_in_like_expression);
+	static unique_ptr<TransformResultValue> TransformComparisonOperatorInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformOperatorEqualInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static ExpressionType TransformOperatorEqual(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOperatorNotEqualInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static ExpressionType TransformOperatorNotEqual(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOperatorLessThanInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static ExpressionType TransformOperatorLessThan(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOperatorGreaterThanInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static ExpressionType TransformOperatorGreaterThan(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOperatorLessThanEqualsInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static ExpressionType TransformOperatorLessThanEquals(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOperatorGreaterThanEqualsInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static ExpressionType TransformOperatorGreaterThanEquals(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformOtherOperatorInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static string TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result);
