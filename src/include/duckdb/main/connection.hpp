@@ -133,8 +133,7 @@ public:
 	//! DEFAULT_SCHEMA.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &table_name);
 
-	//! Extract a query's statements into a vector (eager convenience over ClientContext's lazy
-	//! IterateStatements iterator)
+	//! Extract a set of SQL statements from a specific query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
 	//! Extract the logical plan that corresponds to a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);

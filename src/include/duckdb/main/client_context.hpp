@@ -210,9 +210,7 @@ public:
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Iterate a query's statements as an EngineIterator (iterator-style API). The caller drives
-	//! Peek(context) + GetStatement() to walk through ready-to-execute (engine-facing) statements
-	//! one at a time. The eager flat-vector form is Connection::ExtractStatements. Callers that want
-	//! raw parse-facing statements and drive their own preprocessing construct a ParseIterator.
+	//! Peek(context) + GetStatement(context) to walk through ready-to-execute statements one by one
 	DUCKDB_API EngineIterator IterateStatements(const string &query);
 
 	//! Extract the logical plan of a query

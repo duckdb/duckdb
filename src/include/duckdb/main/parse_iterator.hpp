@@ -27,19 +27,6 @@ struct MatcherToken;
 //!       // raw, just-parsed statement
 //!   }
 //!
-//! Peek does the work — it advances the byte/token cursor through `sql` and parses one
-//! TopLevelStatement per call via `Parser::ParseTopLevelStatement`. The iterator buffers at most
-//! one statement at a time; GetStatement yields it and clears the buffer for the next Peek.
-//!
-//! This is the lower of the two statement iterators: it yields statements exactly as the parser
-//! produces them (1:1 with peels), with NO preprocessing. Callers that want ready-to-execute
-//! (engine-facing) statements wrap a ParseIterator in an EngineIterator instead.
-//!
-//! A ParseIterator is really a source of parse-facing statements by any means: by PEG peel, by a
-//! parser_override extension that claims the whole query, or — via the single-statement ctor — by
-//! injecting one already-parsed statement. The latter two share one "emit pre-built statements
-//! without running the PEG parser" path; the injected statement is its degenerate 1-element case.
-//!
 //! Separator-only stretches (e.g. ";;;") are transparently skipped inside Peek — the caller
 //! always sees either a real statement or a clean exhaustion.
 class ParseIterator {

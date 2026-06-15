@@ -30,21 +30,6 @@ class SQLStatement;
 //!       // ready-to-execute statement
 //!   }
 //!
-//! Contract: Peek answers "is there more input?" only — it parses ahead but does NOT preprocess
-//! (so it can be used as a lookahead without disturbing transaction state). GetStatement does the
-//! work: it parses + preprocesses the next peel into one-or-more engine-facing statements (PRAGMA
-//! reparse, MULTI_STATEMENT unpack, transaction wrapping) and returns them one at a time. A peel can
-//! preprocess to zero statements, so GetStatement may return nullptr — the caller skips it with
-//! `continue` and Peek reports whether more remains.
-//!
-//! Preprocessing needs the context lock. GetStatement(context) self-locks — for external drivers
-//! that hold nothing (shell, tests). Callers that already hold the lock (Query, ParseStatements*)
-//! call GetStatementWithLock(context, lock) so they don't re-lock the non-recursive context_lock.
-//!
-//! It always wraps exactly one ParseIterator; the two constructors differ only in how that
-//! ParseIterator is sourced: from a stream (string -> ParseIterator) or from a single already-parsed
-//! SQLStatement (forwarded to ParseIterator's single-statement ctor — same engine preprocessing
-//! without re-parsing).
 class EngineIterator {
 public:
 	//! Wrap a lazy parse-facing stream (consumed by move).
