@@ -787,12 +787,7 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &query) {
-	auto lock = LockContext();
-	return ParseStatementsInternal(*lock, query);
-}
-
-EngineIterator ClientContext::ExtractStatements(const string &query) {
+EngineIterator ClientContext::IterateStatements(const string &query) {
 	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse,
 	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
 	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
@@ -1107,7 +1102,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
-	// The lazy path bypasses ParseStatements → InitialCleanup, so clear leftover query state
+	// The lazy path bypasses ParseStatementsInternal → InitialCleanup, so clear leftover query state
 	// (interrupt flag, etc.) ourselves.
 	InitialCleanup(*lock);
 	auto &profiler = QueryProfiler::Get(*this);
@@ -1210,12 +1205,6 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		has_current = has_next;
 	}
 	return result;
-}
-
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLock &lock, const string &query) {
-	InitialCleanup(lock);
-	// parse the query and transform it into a set of statements
-	return ParseStatementsInternal(lock, query);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {

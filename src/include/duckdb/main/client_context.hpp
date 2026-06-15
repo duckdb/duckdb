@@ -209,14 +209,11 @@ public:
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
-	//! Parse statements from a query
-	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
-
-	//! Extract a query's statements as an EngineIterator (iterator-style API). The caller drives
+	//! Iterate a query's statements as an EngineIterator (iterator-style API). The caller drives
 	//! Peek(context) + GetStatement() to walk through ready-to-execute (engine-facing) statements
-	//! one at a time. Replaces the flat-vector form (`ParseStatements`) over time. Callers that want
+	//! one at a time. The eager flat-vector form is Connection::ExtractStatements. Callers that want
 	//! raw parse-facing statements and drive their own preprocessing construct a ParseIterator.
-	DUCKDB_API EngineIterator ExtractStatements(const string &query);
+	DUCKDB_API EngineIterator IterateStatements(const string &query);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
@@ -267,8 +264,6 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
-	//! Parse statements and resolve pragmas from a query
-	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);

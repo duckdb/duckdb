@@ -1020,7 +1020,7 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
-		auto iterator = con.context->ExtractStatements(zSql);
+		auto iterator = con.context->IterateStatements(zSql);
 		while (iterator.Peek(*con.context)) {
 			auto statement = iterator.GetStatement(*con.context);
 			if (!statement) {
