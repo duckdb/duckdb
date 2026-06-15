@@ -443,6 +443,7 @@ struct ScalarDiscreteQuantile {
 		                      AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, nullptr,
 		                      AggregateFunction::StateDestroy<STATE, OP>);
 		fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<string_t>::Init);
+		fun.SetStructStateExport(QuantileStateLayout<STATE, StateListType<StateSortKey<StateInputType<0>>>>);
 		return fun;
 	}
 };
@@ -472,6 +473,7 @@ struct ListDiscreteQuantile {
 		                      AggregateFunction::StateFinalize<STATE, list_entry_t, OP>, nullptr, nullptr,
 		                      AggregateFunction::StateDestroy<STATE, OP>);
 		fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<string_t>::Init);
+		fun.SetStructStateExport(QuantileStateLayout<STATE, StateListType<StateSortKey<StateInputType<0>>>>);
 		return fun;
 	}
 };

@@ -16,9 +16,9 @@ namespace duckdb {
 
 //! The state of the "list" aggregate - shared by aggregates that buffer their input in a linked list
 struct ListAggState {
-	LinkedList linked_list;
-
 	using STATE_TYPE = StateListType<StateReturnType>;
+
+	LinkedList linked_list;
 };
 
 struct ListFunction {

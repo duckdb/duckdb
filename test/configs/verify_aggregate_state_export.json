@@ -55,14 +55,6 @@
       ]
     },
     {
-      "reason": "FIXME: quantile/median over nested types fall back to sort-key states which have no state type callback",
-      "paths": [
-        "test/sql/aggregate/aggregates/test_median.test",
-        "test/sql/aggregate/aggregates/test_quantile_disc.test",
-        "test/sql/aggregate/aggregates/test_quantile_disc_list.test"
-      ]
-    },
-    {
       "reason": "FIXME: aggregate functions missing state type callback (approx_count_distinct, sum over VARINT, test_named_agg_inspect)",
       "paths": [
         "test/extension/test_function_named_args.test",

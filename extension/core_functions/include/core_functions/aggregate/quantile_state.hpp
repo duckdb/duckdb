@@ -382,7 +382,7 @@ inline Value QuantileParameterValue(const QuantileBindData &bind_data, const Log
 	return Value::LIST(child_type, std::move(quantiles));
 }
 
-template <class STATE>
+template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
 AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	auto &function = input.function;
 	AggregateStateLayout layout;
@@ -394,7 +394,7 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 		layout.type = LogicalType::LIST(function.GetArguments()[0]);
 	}
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-	layout.field = BuildStateField<StateListType<StateInputType<0>>>();
+	layout.field = BuildStateField<STATE_FIELD>();
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
 	if (function.GetOriginalArguments().size() == 2) {
 		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -

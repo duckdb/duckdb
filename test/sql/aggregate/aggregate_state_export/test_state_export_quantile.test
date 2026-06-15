@@ -124,6 +124,67 @@ SELECT finalize(combine(
 ----
 different parameters
 
+# nested types fall back to sort-key states - exercise the sort-key list export/import
+
+# quantile_disc over a STRUCT (scalar)
+query I nosort struct0
+SELECT quantile_disc({'a': d, 'b': d::VARCHAR}, 0.5) FROM dummy;
+----
+
+query I nosort struct0
+SELECT finalize(quantile_disc({'a': d, 'b': d::VARCHAR}, 0.5) EXPORT_STATE) FROM dummy;
+----
+
+# quantile_disc over a STRUCT (list of quantiles)
+query I nosort structlist0
+SELECT quantile_disc({'a': d, 'b': d::VARCHAR}, [0.25, 0.5, 0.75]) FROM dummy;
+----
+
+query I nosort structlist0
+SELECT finalize(quantile_disc({'a': d, 'b': d::VARCHAR}, [0.25, 0.5, 0.75]) EXPORT_STATE) FROM dummy;
+----
+
+# median over a nested LIST
+query I nosort medianstruct0
+SELECT median([d, d + 1]) FROM dummy;
+----
+
+query I nosort medianstruct0
+SELECT finalize(median([d, d + 1]) EXPORT_STATE) FROM dummy;
+----
+
+# grouped fallback
+query II nosort structgrouped0
+SELECT g, quantile_disc({'a': d}, 0.5) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort structgrouped0
+SELECT g, finalize(quantile_disc({'a': d}, 0.5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# combining two fallback states computes the quantile over the union of the values
+query I nosort structcombine0
+SELECT quantile_disc({'a': d}, 0.5) FROM dummy;
+----
+
+query I nosort structcombine0
+SELECT finalize(combine(
+	(SELECT quantile_disc({'a': d}, 0.5) EXPORT_STATE FROM dummy WHERE d < 50),
+	(SELECT quantile_disc({'a': d}, 0.5) EXPORT_STATE FROM dummy WHERE d >= 50)))
+----
+
+# a fallback list larger than a standard vector exercises the chunked sort-key transform
+statement ok
+create table big as select range r, {'a': range} s from range(5000);
+
+query I nosort big0
+SELECT quantile_disc(s, [0.1, 0.5, 0.9]) FROM big;
+----
+
+query I nosort big0
+SELECT finalize(quantile_disc(s, [0.1, 0.5, 0.9]) EXPORT_STATE) FROM big;
+----
+
 # the state (including the quantile parameter) can be persisted - finalize re-binds from the stored type
 load {TEST_DIR}/test_quantile_state.db readwrite latest
 
