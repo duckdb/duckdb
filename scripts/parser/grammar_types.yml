@@ -413,6 +413,9 @@ Expression:
     - ColumnsExpression
     - ExtractExpression
     - ExtractArgument
+    - ExtractDatePartArgument
+    - ExtractIdentifierArgument
+    - ExtractStringArgument
     - LambdaExpression
     - NullIfExpression
     - RowExpression
@@ -421,6 +424,8 @@ Expression:
     - TrimSource
     - OverlayExpression
     - PositionExpression
+    - FromExpression
+    - ForExpression
     - CastExpression
     - CaseExpression
     - CaseElse
@@ -568,12 +573,13 @@ ExpressionList:
     - NullIfArguments
     - PositionArguments
     - SubstringParameters
+    - SubstringFromFor
+    - SubstringFromOptionalFor
+    - SubstringFor
     - SubstringArguments
     - SubstringExpressionList
     - OverlayArguments
     - OverlayParameters
-    - FromExpression
-    - ForExpression
     - OverlayExpressionList
     - PartitionOptions
     - SortedOptions
@@ -1190,6 +1196,7 @@ DatePartSpecifier:
     - DecadeKeyword
     - CenturyKeyword
     - MillenniumKeyword
+    - ExtractDatePart
     - YearToMonth
     - DayToHour
     - DayToMinute
@@ -1687,15 +1694,3 @@ excluded_rules:
   - SliceBound
   - StepSliceBound
   - PostfixOperator
-  - ColumnsExpression
-  - LambdaExpression
-  - SubstringExpression
-  - SubstringArguments
-  - SubstringExpressionList
-  - OverlayExpression
-  - OverlayArguments
-  - OverlayParameters
-  - FromExpression
-  - ForExpression
-  - OverlayExpressionList
-  - ExtractArgument

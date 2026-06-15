@@ -975,7 +975,7 @@ SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpressi
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
 TryExpression <- 'TRY' Parens(Expression)
-ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
+ColumnsExpression <- StarSymbol? 'COLUMNS' Parens(Expression)
 ExtractExpression <- 'EXTRACT' Parens(ExtractArguments)
 ExtractArguments <- ExtractArgument 'FROM' Expression
 LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
@@ -1005,10 +1005,14 @@ FromExpression <- 'FROM' Expression
 ForExpression <- 'FOR' Expression
 OverlayExpressionList <- List(Expression)
 
-ExtractArgument <-
+ExtractArgument <- ExtractDatePartArgument / ExtractIdentifierArgument / ExtractStringArgument
+ExtractDatePartArgument <- ExtractDatePart
+ExtractIdentifierArgument <- Identifier
+ExtractStringArgument <- StringLiteral
+ExtractDatePart <-
     YearKeyword / MonthKeyword / DayKeyword / HourKeyword / MinuteKeyword / SecondKeyword /
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
-    CenturyKeyword / MillenniumKeyword / Identifier / StringLiteral
+    CenturyKeyword / MillenniumKeyword
 
 ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList

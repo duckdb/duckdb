@@ -249,22 +249,6 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
-	REGISTER_TRANSFORM(TransformColumnsExpression);
-	REGISTER_TRANSFORM(TransformExtractArgument);
-	REGISTER_TRANSFORM(TransformLambdaExpression);
-	REGISTER_TRANSFORM(TransformSubstringExpression);
-	REGISTER_TRANSFORM(TransformSubstringArguments);
-	REGISTER_TRANSFORM(TransformSubstringExpressionList);
-	REGISTER_TRANSFORM(TransformSubstringParameters);
-	REGISTER_TRANSFORM(TransformSubstringFromFor);
-	REGISTER_TRANSFORM(TransformSubstringFromOptionalFor);
-	REGISTER_TRANSFORM(TransformSubstringFor);
-	REGISTER_TRANSFORM(TransformOverlayExpression);
-	REGISTER_TRANSFORM(TransformOverlayArguments);
-	REGISTER_TRANSFORM(TransformOverlayParameters);
-	REGISTER_TRANSFORM(TransformFromExpression);
-	REGISTER_TRANSFORM(TransformForExpression);
-	REGISTER_TRANSFORM(TransformOverlayExpressionList);
 	REGISTER_TRANSFORM(TransformCastExpression);
 	REGISTER_TRANSFORM(TransformCastOrTryCast);
 	REGISTER_TRANSFORM(TransformCaseExpression);

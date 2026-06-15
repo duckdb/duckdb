@@ -4341,6 +4341,17 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryExpressionIn
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColumnsExpressionInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.GetChild(2)));
+	auto result = TransformColumnsExpression(transformer, has_result, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtractExpressionInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4357,6 +4368,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtractArgument
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
 	auto result = TransformExtractArguments(transformer, std::move(extract_argument), std::move(expression));
 	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLambdaExpressionInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<Identifier> col_id_or_string;
+	auto col_id_or_string_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	for (auto &col_id_or_string_item : col_id_or_string_items) {
+		auto col_id_or_string_value = transformer.Transform<Identifier>(col_id_or_string_item.get());
+		col_id_or_string.push_back(col_id_or_string_value);
+	}
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
+	auto result = TransformLambdaExpression(transformer, col_id_or_string, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNullIfExpressionInternal(PEGTransformer &transformer,
@@ -4412,6 +4437,77 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowExpressionIn
 	}
 	auto result = TransformRowExpression(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSubstringExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto substring_arguments =
+	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformSubstringExpression(transformer, std::move(substring_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubstringArgumentsInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSubstringExpressionListInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expression;
+	auto expression_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &expression_item : expression_items) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_item.get());
+		expression.push_back(std::move(expression_value));
+	}
+	auto result = TransformSubstringExpressionList(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSubstringParametersInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto substring_from_for = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+	auto result = TransformSubstringParameters(transformer, std::move(expression), std::move(substring_from_for));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubstringFromForInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSubstringFromOptionalForInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto from_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<unique_ptr<ParsedExpression>> for_expression {};
+	auto &for_expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (for_expression_opt.HasResult()) {
+		auto for_expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(for_expression_opt.GetResult());
+		for_expression = std::move(for_expression_value);
+	}
+	auto result = TransformSubstringFromOptionalFor(transformer, std::move(from_expression), std::move(for_expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubstringForInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto for_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto result = TransformSubstringFor(transformer, std::move(for_expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTrimExpressionInternal(PEGTransformer &transformer,
@@ -4484,6 +4580,111 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTrimSourceInter
 	}
 	auto result = TransformTrimSource(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOverlayExpressionInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto overlay_arguments =
+	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformOverlayExpression(transformer, std::move(overlay_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOverlayArgumentsInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOverlayParametersInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto expression_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	auto from_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
+	optional<unique_ptr<ParsedExpression>> for_expression {};
+	auto &for_expression_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (for_expression_opt.HasResult()) {
+		auto for_expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(for_expression_opt.GetResult());
+		for_expression = std::move(for_expression_value);
+	}
+	auto result = TransformOverlayParameters(transformer, std::move(expression), std::move(expression_1),
+	                                         std::move(from_expression), std::move(for_expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFromExpressionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformFromExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForExpressionInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformForExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOverlayExpressionListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expression;
+	auto expression_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &expression_item : expression_items) {
+		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_item.get());
+		expression.push_back(std::move(expression_value));
+	}
+	auto result = TransformOverlayExpressionList(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtractArgumentInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExtractDatePartArgumentInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto extract_date_part = transformer.Transform<DatePartSpecifier>(list_pr.GetChild(0));
+	auto result = TransformExtractDatePartArgument(transformer, extract_date_part);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExtractIdentifierArgumentInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformExtractIdentifierArgument(transformer, identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExtractStringArgumentInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformExtractStringArgument(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtractDatePartInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<DatePartSpecifier>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<DatePartSpecifier>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertStatementInternal(PEGTransformer &transformer,
@@ -7944,13 +8145,22 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CoalesceExpression", &PEGTransformerFactory::TransformCoalesceExpressionInternal},
 	    {"UnpackExpression", &PEGTransformerFactory::TransformUnpackExpressionInternal},
 	    {"TryExpression", &PEGTransformerFactory::TransformTryExpressionInternal},
+	    {"ColumnsExpression", &PEGTransformerFactory::TransformColumnsExpressionInternal},
 	    {"ExtractExpression", &PEGTransformerFactory::TransformExtractExpressionInternal},
 	    {"ExtractArguments", &PEGTransformerFactory::TransformExtractArgumentsInternal},
+	    {"LambdaExpression", &PEGTransformerFactory::TransformLambdaExpressionInternal},
 	    {"NullIfExpression", &PEGTransformerFactory::TransformNullIfExpressionInternal},
 	    {"NullIfArguments", &PEGTransformerFactory::TransformNullIfArgumentsInternal},
 	    {"PositionExpression", &PEGTransformerFactory::TransformPositionExpressionInternal},
 	    {"PositionArguments", &PEGTransformerFactory::TransformPositionArgumentsInternal},
 	    {"RowExpression", &PEGTransformerFactory::TransformRowExpressionInternal},
+	    {"SubstringExpression", &PEGTransformerFactory::TransformSubstringExpressionInternal},
+	    {"SubstringArguments", &PEGTransformerFactory::TransformSubstringArgumentsInternal},
+	    {"SubstringExpressionList", &PEGTransformerFactory::TransformSubstringExpressionListInternal},
+	    {"SubstringParameters", &PEGTransformerFactory::TransformSubstringParametersInternal},
+	    {"SubstringFromFor", &PEGTransformerFactory::TransformSubstringFromForInternal},
+	    {"SubstringFromOptionalFor", &PEGTransformerFactory::TransformSubstringFromOptionalForInternal},
+	    {"SubstringFor", &PEGTransformerFactory::TransformSubstringForInternal},
 	    {"TrimExpression", &PEGTransformerFactory::TransformTrimExpressionInternal},
 	    {"TrimArguments", &PEGTransformerFactory::TransformTrimArgumentsInternal},
 	    {"TrimDirection", &PEGTransformerFactory::TransformTrimDirectionInternal},
@@ -7958,6 +8168,17 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"TrimLeading", &PEGTransformerFactory::TransformTrimLeadingInternal},
 	    {"TrimTrailing", &PEGTransformerFactory::TransformTrimTrailingInternal},
 	    {"TrimSource", &PEGTransformerFactory::TransformTrimSourceInternal},
+	    {"OverlayExpression", &PEGTransformerFactory::TransformOverlayExpressionInternal},
+	    {"OverlayArguments", &PEGTransformerFactory::TransformOverlayArgumentsInternal},
+	    {"OverlayParameters", &PEGTransformerFactory::TransformOverlayParametersInternal},
+	    {"FromExpression", &PEGTransformerFactory::TransformFromExpressionInternal},
+	    {"ForExpression", &PEGTransformerFactory::TransformForExpressionInternal},
+	    {"OverlayExpressionList", &PEGTransformerFactory::TransformOverlayExpressionListInternal},
+	    {"ExtractArgument", &PEGTransformerFactory::TransformExtractArgumentInternal},
+	    {"ExtractDatePartArgument", &PEGTransformerFactory::TransformExtractDatePartArgumentInternal},
+	    {"ExtractIdentifierArgument", &PEGTransformerFactory::TransformExtractIdentifierArgumentInternal},
+	    {"ExtractStringArgument", &PEGTransformerFactory::TransformExtractStringArgumentInternal},
+	    {"ExtractDatePart", &PEGTransformerFactory::TransformExtractDatePartInternal},
 	    {"InsertStatement", &PEGTransformerFactory::TransformInsertStatementInternal},
 	    {"OrAction", &PEGTransformerFactory::TransformOrActionInternal},
 	    {"InsertOrReplace", &PEGTransformerFactory::TransformInsertOrReplaceInternal},
