@@ -270,22 +270,25 @@ BufferPool::~BufferPool() {
 
 bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 	auto &memory = handle->GetMemory();
-	auto &queue = GetEvictionQueueForBlockMemory(memory);
-
+	// Verify the caller passed this block's lock before we mutate any of its state.
 	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
 	// (uncontended) lock of the freshly created block before calling.
+	memory.VerifyMutex(lock);
+	auto &queue = GetEvictionQueueForBlockMemory(memory);
+
 	D_ASSERT(memory.GetReaders() == 0);
+	if (memory.HasLiveQueueEntry(lock)) {
+		// Count the previous live entry before bumping the sequence number. PurgeIteration
+		// reads sequence numbers without the block lock; bumping first could let it see the
+		// previous entry as stale and decrement dead_nodes before this matching increment.
+		queue.IncrementDeadNodes();
+	}
+
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
 		                           .count());
-	}
-
-	if (memory.HasLiveQueueEntry(lock)) {
-		// The block's previous entry is still in the queue. The new entry supersedes it,
-		// i.e., we kill exactly one previous version.
-		queue.IncrementDeadNodes();
 	}
 	memory.SetHasLiveQueueEntry(lock, true);
 

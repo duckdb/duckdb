@@ -37,6 +37,9 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	if (HasLiveQueueEntry() && GetBufferType() != FileBufferType::TINY_BUFFER) {
 		// The block still has a live entry in the eviction queue. That entry is now dead —
 		// account for it. (No lock needed: the destructor has exclusive ownership.)
+		// Note: the weak pointer in the queue entry can become un-lockable before this
+		// destructor body runs, so a queue consumer can briefly decrement before this increment.
+		// This increment repairs the final count for that expired live entry.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 
