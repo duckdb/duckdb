@@ -124,14 +124,6 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 			ConstantVector::SetNull(target_vector, count_t(count));
 		}
 	}
-
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::SetSize(result, count);
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-		return all_converted;
-	}
-
 	FlatVector::CopyValidity(result, source, count);
 	FlatVector::SetSize(result, count);
 	result.Verify();

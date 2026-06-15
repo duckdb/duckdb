@@ -36,7 +36,7 @@ string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) cons
 }
 
 void ShreddedVectorBuffer::SetVectorType(VectorType new_vector_type) {
-	shredded_data->SetVectorType(new_vector_type);
+	throw InternalException("ShreddedVectorBuffer::SetVectorType is not implemented and shouldn't be reached");
 }
 
 Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
