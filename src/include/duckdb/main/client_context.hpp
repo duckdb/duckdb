@@ -24,7 +24,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/main/statement_iterator.hpp"
+#include "duckdb/main/engine_iterator.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
@@ -219,11 +219,11 @@ public:
 	//! Same as above, but for callers that already hold the context lock.
 	unique_ptr<SQLStatement> ParseStatementRaw(ClientContextLock &lock, const string &query);
 
-	//! Extract a query's statements as a StatementIterator (iterator-style API). The caller drives
-	//! Peek(context) + GetStatement() to walk through statements one at a time. Replaces the
-	//! flat-vector form (`ParseStatements` / `ExtractStatements`) over time. `preprocess` (default
-	//! true) yields ready-to-execute statements; callers that preprocess themselves pass false.
-	DUCKDB_API StatementIterator ExtractStatements(const string &query, bool preprocess = true);
+	//! Extract a query's statements as an EngineIterator (iterator-style API). The caller drives
+	//! Peek(context) + GetStatement() to walk through ready-to-execute (engine-facing) statements
+	//! one at a time. Replaces the flat-vector form (`ParseStatements`) over time. Callers that want
+	//! raw parse-facing statements and drive their own preprocessing construct a ParseIterator.
+	DUCKDB_API EngineIterator ExtractStatements(const string &query);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);

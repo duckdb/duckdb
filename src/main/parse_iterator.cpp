@@ -1,4 +1,4 @@
-#include "duckdb/main/statement_iterator.hpp"
+#include "duckdb/main/parse_iterator.hpp"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
@@ -7,15 +7,13 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
-#include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 
-StatementIterator::StatementIterator(string sql_p, bool preprocess)
-    : sql(std::move(sql_p)), preprocess_on_peek(preprocess) {
+ParseIterator::ParseIterator(string sql_p) : sql(std::move(sql_p)) {
 	// Mirror Parser::ParseQuery's up-front normalization: reject invalid UTF-8 (otherwise the
 	// tokenizer can recurse on bad bytes — see ossfuzz clusterfuzz-test-24) and strip non-ASCII
 	// Unicode spaces.
@@ -26,27 +24,21 @@ StatementIterator::StatementIterator(string sql_p, bool preprocess)
 	}
 }
 
-StatementIterator::~StatementIterator() = default;
+ParseIterator::~ParseIterator() = default;
 
-StatementIterator::StatementIterator(StatementIterator &&) noexcept = default;
-StatementIterator &StatementIterator::operator=(StatementIterator &&) noexcept = default;
+ParseIterator::ParseIterator(ParseIterator &&) noexcept = default;
+ParseIterator &ParseIterator::operator=(ParseIterator &&) noexcept = default;
 
-bool StatementIterator::Peek(ClientContext &context) {
+bool ParseIterator::Peek(ClientContext &context) {
 	// Already buffered from a prior Peek — just report it.
 	if (current_statement) {
-		return true;
-	}
-	// Drain any preprocessed leftovers first.
-	if (preprocess_buffer_cursor < preprocess_buffer.size()) {
-		current_statement = std::move(preprocess_buffer[preprocess_buffer_cursor++]);
 		return true;
 	}
 	if (exhausted) {
 		return false;
 	}
 	// Charge the time spent tokenizing/parsing on this Peek to MetricParserTotalTime so callers
-	// (Query, ParseStatementsInternal, ParseStatementRaw, …) get parse metrics without each
-	// having to remember to wrap us in a timer.
+	// get parse metrics without each having to remember to wrap us in a timer.
 	auto parser_timer = QueryProfiler::Get(context).StartTimer<MetricParserTotalTime>();
 	auto options = context.GetParserOptions();
 	// On the very first Peek, give `parser_override` extensions a chance to claim the whole
@@ -143,22 +135,6 @@ bool StatementIterator::Peek(ClientContext &context) {
 				auto &create = stmt->Cast<CreateStatement>();
 				create.info->sql = stmt->query;
 			}
-			if (preprocess_on_peek) {
-				// Drive PRAGMA reparse / MULTI_STATEMENT unpacking / transaction wrapping. One
-				// peeled statement can expand into multiple; we park the tail in preprocess_buffer
-				// and yield them across subsequent Peek calls.
-				preprocess_buffer.clear();
-				preprocess_buffer_cursor = 0;
-				preprocess_buffer.push_back(std::move(stmt));
-				context.PreprocessStatements(preprocess_buffer);
-				if (preprocess_buffer.empty()) {
-					// Preprocessor swallowed the statement; loop and parse the next.
-					continue;
-				}
-				current_statement = std::move(preprocess_buffer[0]);
-				preprocess_buffer_cursor = 1;
-				return true;
-			}
 			current_statement = std::move(stmt);
 			return true;
 		}
@@ -170,7 +146,7 @@ bool StatementIterator::Peek(ClientContext &context) {
 	}
 }
 
-unique_ptr<SQLStatement> StatementIterator::GetStatement() {
+unique_ptr<SQLStatement> ParseIterator::GetStatement() {
 	if (!current_statement) {
 		return nullptr;
 	}

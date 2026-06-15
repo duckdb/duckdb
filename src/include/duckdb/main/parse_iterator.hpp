@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/statement_iterator.hpp
+// duckdb/main/parse_iterator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,34 +18,37 @@ class Parser;
 class SQLStatement;
 struct MatcherToken;
 
-//! Iterator over the SQL statements contained in a multi-statement query.
+//! Iterator over the parse-facing statements of a multi-statement query.
 //!
 //! Usage:
-//!   auto it = context.ExtractStatements(sql);
+//!   ParseIterator it(sql);
 //!   while (it.Peek(context)) {
 //!       auto stmt = it.GetStatement();
-//!       // dispatch stmt
+//!       // raw, just-parsed statement
 //!   }
 //!
-//! Peek does the work — it advances the byte cursor through `sql` and parses one
-//! TopLevelStatement per call via `Parser::ParseStatement`. The iterator buffers at most one
-//! statement at a time; GetStatement yields it and clears the buffer for the next Peek.
+//! Peek does the work — it advances the byte/token cursor through `sql` and parses one
+//! TopLevelStatement per call via `Parser::ParseTopLevelStatement`. The iterator buffers at most
+//! one statement at a time; GetStatement yields it and clears the buffer for the next Peek.
+//!
+//! This is the lower of the two statement iterators: it yields statements exactly as the parser
+//! produces them (1:1 with peels), with NO preprocessing. Callers that want ready-to-execute
+//! (engine-facing) statements wrap a ParseIterator in an EngineIterator instead.
+//!
+//! parser_override extensions live here: an extension that claims the whole query is just an
+//! alternative front-end producing parse-facing statements, so it belongs at the parse level.
 //!
 //! Separator-only stretches (e.g. ";;;") are transparently skipped inside Peek — the caller
 //! always sees either a real statement or a clean exhaustion.
-class StatementIterator {
+class ParseIterator {
 public:
-	//! When `preprocess` is true, each peeled statement is run through the StatementPreprocessor
-	//! (PRAGMA reparse, MULTI_STATEMENT unpack, transaction wrapping) so the caller gets
-	//! ready-to-execute statements. Internal callers that drive their own preprocessor leave it
-	//! false (the default); ClientContext::ExtractStatements passes true for eager-API parity.
-	DUCKDB_API explicit StatementIterator(string sql, bool preprocess = false);
-	DUCKDB_API ~StatementIterator();
+	DUCKDB_API explicit ParseIterator(string sql);
+	DUCKDB_API ~ParseIterator();
 
-	StatementIterator(const StatementIterator &) = delete;
-	StatementIterator &operator=(const StatementIterator &) = delete;
-	DUCKDB_API StatementIterator(StatementIterator &&) noexcept;
-	DUCKDB_API StatementIterator &operator=(StatementIterator &&) noexcept;
+	ParseIterator(const ParseIterator &) = delete;
+	ParseIterator &operator=(const ParseIterator &) = delete;
+	DUCKDB_API ParseIterator(ParseIterator &&) noexcept;
+	DUCKDB_API ParseIterator &operator=(ParseIterator &&) noexcept;
 
 	//! Returns true if a statement is currently available (after parsing as needed). Returns
 	//! false when the iterator is exhausted. Non-const: parses on demand and buffers the result.
@@ -79,13 +82,6 @@ private:
 	idx_t override_cursor = 0;
 	//! True once we've consulted parser_override extensions for this query.
 	bool override_resolved = false;
-	//! Set from the constructor `preprocess` argument. When true, Peek runs each peeled statement
-	//! through the StatementPreprocessor before yielding it.
-	bool preprocess_on_peek = false;
-	//! Buffer for statements produced by preprocessing one peeled statement. Drained
-	//! one-at-a-time across subsequent Peek calls before parsing the next raw statement.
-	vector<unique_ptr<SQLStatement>> preprocess_buffer;
-	idx_t preprocess_buffer_cursor = 0;
 };
 
 } // namespace duckdb

@@ -60,7 +60,7 @@ public:
 	//! Run the `parse_function` extensions over the tail of `query` starting at `token_cursor`,
 	//! the way `ParseQuery` does in its catch handler. Returns the produced `ExtensionStatement`
 	//! and advances `token_cursor` past the bytes the extension claimed. Returns nullptr if no
-	//! extension claims the segment. Used by both `ParseQuery` and the lazy `StatementIterator`
+	//! extension claims the segment. Used by both `ParseQuery` and the lazy `ParseIterator`
 	//! so the two paths handle PEG failures identically.
 	DUCKDB_API unique_ptr<SQLStatement> TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
 	                                                               const string &query);
@@ -99,7 +99,7 @@ public:
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
 	//! Throw a ParserException if `query` contains invalid UTF-8. Called up front by ParseQuery
-	//! and by StatementIterator so the tokenizer never has to read past bad bytes.
+	//! and by ParseIterator so the tokenizer never has to read past bad bytes.
 	static void ValidateUTF8Query(const string &query);
 
 	void ThrowParserOverrideError(ParserOverrideResult &result);
