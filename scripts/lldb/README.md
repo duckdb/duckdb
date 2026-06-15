@@ -66,3 +66,10 @@ those rules by itself.
 
 Use `sql_next_watch` to temporarily arm the installed watch rules while
 auto-continuing your other breakpoints until the first watch match is reached.
+
+You can optionally pass a watch id to only arm one installed watch:
+
+```lldb
+sql_next_watch
+sql_next_watch 5
+```

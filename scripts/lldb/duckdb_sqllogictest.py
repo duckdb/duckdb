@@ -183,8 +183,13 @@ def sql_delete_watch(debugger, command, result, _internal_dict):
 
 
 def sql_next_watch(debugger, command, result, _internal_dict):
-    if command.strip():
-        result.SetError("usage: {}".format(SQL_NEXT_WATCH_COMMAND))
+    parser = argparse.ArgumentParser(prog=SQL_NEXT_WATCH_COMMAND, add_help=False)
+    parser.add_argument("watch_id", nargs="?", type=int)
+
+    try:
+        args = parser.parse_args(shlex.split(command))
+    except SystemExit:
+        result.SetError("usage: {} [id]".format(SQL_NEXT_WATCH_COMMAND))
         return
 
     target = debugger.GetSelectedTarget()
@@ -206,6 +211,13 @@ def sql_next_watch(debugger, command, result, _internal_dict):
         result.SetError("no sql watches installed")
         return
 
+    selected_watch_ids = sorted(_WATCHES)
+    if args.watch_id is not None:
+        if args.watch_id not in _WATCHES:
+            result.SetError("watch {} not found".format(args.watch_id))
+            return
+        selected_watch_ids = [args.watch_id]
+
     _restore_next_watch_state(target)
 
     saved_auto_continue = {}
@@ -214,7 +226,7 @@ def sql_next_watch(debugger, command, result, _internal_dict):
         breakpoint_id = breakpoint.GetID()
         if breakpoint_id in _WATCHES:
             saved_watch_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
-            breakpoint.SetAutoContinue(False)
+            breakpoint.SetAutoContinue(breakpoint_id not in selected_watch_ids)
             continue
         saved_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
         if breakpoint.IsEnabled():
@@ -224,6 +236,7 @@ def sql_next_watch(debugger, command, result, _internal_dict):
     _NEXT_WATCH_STATE = {
         "saved_auto_continue": saved_auto_continue,
         "saved_watch_auto_continue": saved_watch_auto_continue,
+        "selected_watch_ids": set(selected_watch_ids),
     }
 
     command_interpreter = debugger.GetCommandInterpreter()
@@ -638,6 +651,8 @@ def _watch_statement_callback(frame, breakpoint_location, _internal_dict):
         return True
 
     if not _NEXT_WATCH_STATE:
+        return False
+    if breakpoint_id not in _NEXT_WATCH_STATE["selected_watch_ids"]:
         return False
 
     context = _find_sqllogictest_context(frame.GetThread().GetProcess().GetThreadAtIndex(0))
