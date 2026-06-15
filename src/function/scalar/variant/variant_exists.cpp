@@ -33,7 +33,7 @@ static void VariantExistsFunction(DataChunk &input, ExpressionState &state, Vect
 }
 
 ScalarFunctionSet VariantExistsFun::GetFunctions() {
-	return VariantPathFunction::CreateFunctionSet("variant_exists", VariantExistsFunction, LogicalType::VARCHAR, false);
+	return VariantPathFunction::CreateFunctionSet("variant_exists", VariantExistsFunction, LogicalType::BOOLEAN, false);
 }
 
 } // namespace duckdb
