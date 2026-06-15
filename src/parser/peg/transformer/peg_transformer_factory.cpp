@@ -141,11 +141,11 @@ void PEGTransformerFactory::RegisterCreateTable() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
-	REGISTER_TRANSFORM(TransformBaseExpression);
-	REGISTER_TRANSFORM(TransformExpression);
 	Register("ColumnDefaultExpr", &TransformExpression);
 	Register("ColDefOrExpr", &TransformLogicalOrExpression);
 	Register("ColDefAndExpr", &TransformLogicalAndExpression);
+	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
@@ -192,10 +192,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 
-	REGISTER_TRANSFORM(TransformColumnReference);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTableColumnName);
-	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
-
 	REGISTER_TRANSFORM(TransformParameter);
 	REGISTER_TRANSFORM(TransformAnonymousParameter);
 	REGISTER_TRANSFORM(TransformQuestionMarkNumberedParameter);
@@ -203,13 +199,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformNumberedParameter);
 	REGISTER_TRANSFORM(TransformPositionalExpression);
 
-	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
-	REGISTER_TRANSFORM(TransformConstantLiteral);
-	REGISTER_TRANSFORM(TransformFalseLiteral);
-	REGISTER_TRANSFORM(TransformTrueLiteral);
-	REGISTER_TRANSFORM(TransformNullLiteral);
 	REGISTER_TRANSFORM(TransformUnknownLiteral);
 
 	REGISTER_TRANSFORM(TransformPrefixOperator);
@@ -220,12 +211,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformArrayBoundedListExpression);
 	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
-	REGISTER_TRANSFORM(TransformWithinGroupClause);
 	REGISTER_TRANSFORM(TransformFilterClause);
-	REGISTER_TRANSFORM(TransformFunctionIdentifier);
-	REGISTER_TRANSFORM(TransformSchemaReservedFunctionName);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaFunctionName);
-	REGISTER_TRANSFORM(TransformParenthesisExpression);
 	REGISTER_TRANSFORM(TransformIndirection);
 	REGISTER_TRANSFORM(TransformCastOperator);
 	REGISTER_TRANSFORM(TransformDotOperator);
@@ -234,7 +220,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformEndSliceBound);
 	REGISTER_TRANSFORM(TransformStepSliceBound);
 
-	REGISTER_TRANSFORM(TransformTableReservedColumnName);
 	REGISTER_TRANSFORM(TransformColIdDot);
 	REGISTER_TRANSFORM(TransformStarExpression);
 	REGISTER_TRANSFORM(TransformExcludeList);
@@ -341,9 +326,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	// select.gram rules that remain manual after generated wrappers are registered.
 	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
 	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformDistinctOrAll);
-	REGISTER_TRANSFORM(TransformDistinctKeyword);
-	REGISTER_TRANSFORM(TransformAllKeyword);
 	REGISTER_TRANSFORM(TransformTableRef);
 	REGISTER_TRANSFORM(TransformWithClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);

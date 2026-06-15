@@ -1405,7 +1405,7 @@ def main():
         'execute.gram',
         'explain.gram',
         'export.gram',
-        # 'expression.gram',
+        'expression.gram',
         'insert.gram',
         'load.gram',
         'merge_into.gram',
