@@ -169,31 +169,31 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
 	//	Not binary comparable
 	if (type == LogicalType::TIME_TZ) {
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
+		                                         ApproxQuantileScalarOperation>(type, type);
 	}
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int8_t, int8_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, int8_t, int8_t, ApproxQuantileScalarOperation>(
+		    type, type);
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int16_t, int16_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, int16_t, int16_t, ApproxQuantileScalarOperation>(
+		    type, type);
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int32_t, int32_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, int32_t, int32_t, ApproxQuantileScalarOperation>(
+		    type, type);
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int64_t, int64_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, int64_t, int64_t, ApproxQuantileScalarOperation>(
+		    type, type);
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, hugeint_t, hugeint_t,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, hugeint_t, hugeint_t,
+		                                         ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, float, float,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, float, float, ApproxQuantileScalarOperation>(
+		    type, type);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, double, double,
-		                                                   ApproxQuantileScalarOperation>(type, type);
+		return AggregateFunction::UnaryAggregate<ApproxQuantileState, double, double, ApproxQuantileScalarOperation>(
+		    type, type);
 	default:
 		throw InternalException("Unimplemented quantile aggregate");
 	}

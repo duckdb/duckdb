@@ -483,10 +483,8 @@ struct AggregateStateLayout {
 	LogicalType type;
 	AggregateStateField field;
 	idx_t total_state_size = 0;
-	//! Constant values for arguments that must be re-bound with a specific constant rather than a NULL value of the
-	//! argument type (e.g. string_agg's separator), keyed by the argument's index in the original argument list.
-	//! These are recorded in the AGGREGATE_STATE type so the aggregate can be re-bound from the type alone.
-	map<idx_t, Value> constant_parameters;
+	//! Constant values for arguments that must be re-bound with a specific constant rather than only the type
+	unordered_map<idx_t, Value> constant_parameters;
 };
 
 } // namespace duckdb

@@ -2514,12 +2514,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
 		                      EnumUtil::ToString(type.id()));
 	}
-	if (type == LogicalTypeId::UNBOUND || type.InternalType() == PhysicalType::INVALID) {
-		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
-	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
-	auto result = make_uniq<CastExpression>(type, std::move(child));
+	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
+	auto result = make_uniq<CastExpression>(unbound_type, std::move(child));
 	return std::move(result);
 }
 

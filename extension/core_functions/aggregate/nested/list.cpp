@@ -5,7 +5,7 @@ namespace duckdb {
 
 namespace {
 
-void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+void ListFinalize(Vector &states_vector, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                   idx_t offset) {
 	auto states = states_vector.Values<ListAggState *>();
 
@@ -27,7 +27,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 AggregateFunction ListFun::GetFunction() {
 	auto func = AggregateFunction({LogicalType::TEMPLATE("T")}, LogicalType::LIST(LogicalType::TEMPLATE("T")),
 	                              AggregateFunction::StateSize<ListAggState>,
-	                              AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
+	                              AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction<>,
 	                              ListCombineFunction<ListFunction>, ListFinalize, nullptr, nullptr, nullptr, nullptr);
 	AggregateFunction::WireStructStateType<ListAggState>(func);
 
