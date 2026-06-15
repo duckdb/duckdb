@@ -798,7 +798,10 @@ IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
 IntervalParameter <- IntervalStringParameter / NumberLiteral / ParensExpression
 IntervalStringParameter <- StringLiteral
 FrameClause <- Framing FrameExtent WindowExcludeClause?
-Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
+Framing <- RowsFraming / RangeFraming / GroupsFraming
+RowsFraming <- 'ROWS'
+RangeFraming <- 'RANGE'
+GroupsFraming <- 'GROUPS'
 FrameExtent <- BetweenFrameExtent / SingleFrameExtent
 SingleFrameExtent <- FrameBound
 BetweenFrameExtent <- 'BETWEEN' FrameBound 'AND' FrameBound
@@ -806,7 +809,9 @@ FrameBound <- FrameUnbounded / FrameCurrentRow / FrameExpression
 FrameUnbounded <- 'UNBOUNDED' PrecedingOrFollowing
 FrameExpression <- Expression PrecedingOrFollowing
 FrameCurrentRow <- 'CURRENT' 'ROW'
-PrecedingOrFollowing <- 'PRECEDING' / 'FOLLOWING'
+PrecedingOrFollowing <- PrecedingFrame / FollowingFrame
+PrecedingFrame <- 'PRECEDING'
+FollowingFrame <- 'FOLLOWING'
 WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
 WindowExcludeElement <- ExcludeCurrentRow / ExcludeGroup / ExcludeTies / ExcludeNoOthers
 ExcludeCurrentRow <- 'CURRENT' 'ROW'

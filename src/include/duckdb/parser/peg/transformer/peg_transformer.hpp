@@ -485,18 +485,6 @@ private:
 	                                                                 ParseResult &parse_result);
 
 	static WindowFrame TransformFrameClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformFraming(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<WindowBoundaryExpression> TransformFrameExtent(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
-	static vector<WindowBoundaryExpression> TransformBetweenFrameExtent(PEGTransformer &transformer,
-	                                                                    ParseResult &parse_result);
-	static vector<WindowBoundaryExpression> TransformSingleFrameExtent(PEGTransformer &transformer,
-	                                                                   ParseResult &parse_result);
-	static WindowBoundaryExpression TransformFrameBound(PEGTransformer &transformer, ParseResult &parse_result);
-	static WindowBoundaryExpression TransformFrameUnbounded(PEGTransformer &transformer, ParseResult &parse_result);
-	static WindowBoundaryExpression TransformFrameCurrentRow(PEGTransformer &transformer, ParseResult &parse_result);
-	static WindowBoundaryExpression TransformFrameExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformPrecedingOrFollowing(PEGTransformer &transformer, ParseResult &parse_result);
 	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
@@ -2113,6 +2101,50 @@ private:
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalStringParameter(PEGTransformer &transformer,
 	                                                                     const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformFramingInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRowsFramingInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static string TransformRowsFraming(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRangeFramingInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static string TransformRangeFraming(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformGroupsFramingInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static string TransformGroupsFraming(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFrameExtentInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSingleFrameExtentInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static vector<WindowBoundaryExpression> TransformSingleFrameExtent(PEGTransformer &transformer,
+	                                                                   WindowBoundaryExpression frame_bound);
+	static unique_ptr<TransformResultValue> TransformBetweenFrameExtentInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static vector<WindowBoundaryExpression> TransformBetweenFrameExtent(PEGTransformer &transformer,
+	                                                                    WindowBoundaryExpression frame_bound,
+	                                                                    WindowBoundaryExpression frame_bound_1);
+	static unique_ptr<TransformResultValue> TransformFrameBoundInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformFrameUnboundedInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static WindowBoundaryExpression TransformFrameUnbounded(PEGTransformer &transformer,
+	                                                        const bool &preceding_or_following);
+	static unique_ptr<TransformResultValue> TransformFrameExpressionInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static WindowBoundaryExpression TransformFrameExpression(PEGTransformer &transformer,
+	                                                         unique_ptr<ParsedExpression> expression,
+	                                                         const bool &preceding_or_following);
+	static unique_ptr<TransformResultValue> TransformFrameCurrentRowInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static WindowBoundaryExpression TransformFrameCurrentRow(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformPrecedingOrFollowingInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformPrecedingFrameInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformPrecedingFrame(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFollowingFrameInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformFollowingFrame(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformListExpressionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformArrayBoundedListExpressionInternal(PEGTransformer &transformer,

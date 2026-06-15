@@ -679,7 +679,7 @@ GenericCopyOptionList:
 
 WindowBoundaryExpressionList:
   type: "vector<WindowBoundaryExpression>"
-  by_value: false
+  by_value: true
   rules:
     - FrameExtent
     - BetweenFrameExtent
@@ -800,7 +800,7 @@ WindowFrame:
 
 WindowBoundaryExpression:
   type: "WindowBoundaryExpression"
-  by_value: false
+  by_value: true
   rules:
     - FrameBound
     - FrameUnbounded
@@ -964,6 +964,9 @@ String:
     - ExponentOperator
     - PrefixOperator
     - Framing
+    - RowsFraming
+    - RangeFraming
+    - GroupsFraming
     - AtUnit
     - VersionAtUnit
     - TimestampAtUnit
@@ -1046,6 +1049,8 @@ Bool:
     - IgnoreOrRespectNulls
     - IgnoreNulls
     - RespectNulls
+    - PrecedingFrame
+    - FollowingFrame
     - IncludeNulls
     - ExcludeNulls
     - PrecedingOrFollowing
@@ -1635,15 +1640,6 @@ excluded_rules:
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
   - FilterClause
-  - Framing
-  - FrameExtent
-  - SingleFrameExtent
-  - BetweenFrameExtent
-  - FrameBound
-  - FrameUnbounded
-  - FrameExpression
-  - FrameCurrentRow
-  - PrecedingOrFollowing
   - OverClause
   - WindowFrame
   - ParensIdentifier
