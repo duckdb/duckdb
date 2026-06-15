@@ -564,6 +564,9 @@ ExpressionList:
     - ValuesExpressions
     - MapStructExpression
     - MapStructField
+    - ExtractArguments
+    - NullIfArguments
+    - PositionArguments
     - SubstringParameters
     - SubstringArguments
     - SubstringExpressionList
@@ -952,6 +955,9 @@ String:
     - VersionAtUnit
     - TimestampAtUnit
     - TrimDirection
+    - TrimBoth
+    - TrimLeading
+    - TrimTrailing
     - CubeOrRollup
     - CubeKeyword
     - RollupKeyword
@@ -1387,6 +1393,9 @@ overrides:
   ExcludeName: "QualifiedColumnName"
   ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
   RenameEntry: "pair<QualifiedColumnName, string>"
+  TrimArguments:
+    type: "TrimArguments"
+    by_value: true
   # select.gram
   SetopType: "SetOperationType"
   SetopUnion: "SetOperationType"
@@ -1678,17 +1687,11 @@ excluded_rules:
   - SliceBound
   - StepSliceBound
   - PostfixOperator
-  - SpecialFunctionExpression
-  - CoalesceExpression
-  - UnpackExpression
-  - TryExpression
   - ColumnsExpression
   - LambdaExpression
-  - RowExpression
   - SubstringExpression
   - SubstringArguments
   - SubstringExpressionList
-  - TrimSource
   - OverlayExpression
   - OverlayArguments
   - OverlayParameters

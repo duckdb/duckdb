@@ -249,16 +249,9 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
-	REGISTER_TRANSFORM(TransformSpecialFunctionExpression);
-	REGISTER_TRANSFORM(TransformCoalesceExpression);
-	REGISTER_TRANSFORM(TransformUnpackExpression);
-	REGISTER_TRANSFORM(TransformTryExpression);
 	REGISTER_TRANSFORM(TransformColumnsExpression);
-	REGISTER_TRANSFORM(TransformExtractExpression);
 	REGISTER_TRANSFORM(TransformExtractArgument);
 	REGISTER_TRANSFORM(TransformLambdaExpression);
-	REGISTER_TRANSFORM(TransformNullIfExpression);
-	REGISTER_TRANSFORM(TransformRowExpression);
 	REGISTER_TRANSFORM(TransformSubstringExpression);
 	REGISTER_TRANSFORM(TransformSubstringArguments);
 	REGISTER_TRANSFORM(TransformSubstringExpressionList);
@@ -266,16 +259,12 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSubstringFromFor);
 	REGISTER_TRANSFORM(TransformSubstringFromOptionalFor);
 	REGISTER_TRANSFORM(TransformSubstringFor);
-	REGISTER_TRANSFORM(TransformTrimExpression);
-	REGISTER_TRANSFORM(TransformTrimDirection);
-	REGISTER_TRANSFORM(TransformTrimSource);
 	REGISTER_TRANSFORM(TransformOverlayExpression);
 	REGISTER_TRANSFORM(TransformOverlayArguments);
 	REGISTER_TRANSFORM(TransformOverlayParameters);
 	REGISTER_TRANSFORM(TransformFromExpression);
 	REGISTER_TRANSFORM(TransformForExpression);
 	REGISTER_TRANSFORM(TransformOverlayExpressionList);
-	REGISTER_TRANSFORM(TransformPositionExpression);
 	REGISTER_TRANSFORM(TransformCastExpression);
 	REGISTER_TRANSFORM(TransformCastOrTryCast);
 	REGISTER_TRANSFORM(TransformCaseExpression);
@@ -351,10 +340,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-
-	RegisterEnum<string>("TrimBoth", "trim");
-	RegisterEnum<string>("TrimLeading", "ltrim");
-	RegisterEnum<string>("TrimTrailing", "rtrim");
 
 	RegisterEnum<string>("LikeToken", "~~");
 	RegisterEnum<string>("ILikeToken", "~~*");
