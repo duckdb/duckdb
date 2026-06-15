@@ -124,7 +124,7 @@ def sql_watch_statement(debugger, command, result, _internal_dict):
         result.SetError("could not set a breakpoint on query_break")
         return
 
-    watch_breakpoint.SetThreadID(thread.GetThreadID())
+    watch_breakpoint.SetThreadIndex(1)
     watch_breakpoint.SetAutoContinue(True)
     watch_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._watch_statement_callback")
 
@@ -218,6 +218,9 @@ def sql_next_watch(debugger, command, result, _internal_dict):
             return
         selected_watch_ids = [args.watch_id]
 
+    for breakpoint_id in selected_watch_ids:
+        _WATCHES[breakpoint_id]["suppress_duplicate_signature"] = None
+
     _restore_next_watch_state(target)
 
     saved_auto_continue = {}
@@ -225,6 +228,7 @@ def sql_next_watch(debugger, command, result, _internal_dict):
     for breakpoint in _iter_breakpoints(target):
         breakpoint_id = breakpoint.GetID()
         if breakpoint_id in _WATCHES:
+            breakpoint.SetThreadIndex(1)
             saved_watch_auto_continue[breakpoint_id] = breakpoint.GetAutoContinue()
             breakpoint.SetAutoContinue(breakpoint_id not in selected_watch_ids)
             continue
