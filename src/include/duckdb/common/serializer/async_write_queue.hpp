@@ -150,8 +150,8 @@ private:
 	void VerifyOpen() const;
 	//! Throw if the queue still owns registered or scheduled write work.
 	void VerifyDrained() const;
-	//! Discard queued requests after an async write failure once all scheduled tasks have stopped.
-	void CancelPendingRequestsAfterFailure() noexcept;
+	//! Fail and discard queued requests after an async write failure once all scheduled tasks have stopped.
+	void CancelPendingRequestsAfterFailure(const ErrorData &error) noexcept;
 
 private:
 	ClientContext &client_context;
@@ -287,8 +287,8 @@ private:
 	void VerifyOpen() const;
 	//! Throw if the queue still owns registered or scheduled write work.
 	void VerifyDrained() const;
-	//! Discard queued writes after an async write failure once all submitted writes have stopped.
-	void CancelPendingWritesAfterFailure() noexcept;
+	//! Fail and discard queued writes after an async write failure once all submitted writes have stopped.
+	void CancelPendingWritesAfterFailure(const ErrorData &error) noexcept;
 
 	//! Write bytes to the managed target at the assigned physical offset.
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override;

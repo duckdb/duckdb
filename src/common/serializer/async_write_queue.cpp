@@ -15,6 +15,16 @@
 
 namespace duckdb {
 
+static ErrorData ErrorDataFromExceptionPtr(std::exception_ptr error_ptr) {
+	try {
+		std::rethrow_exception(error_ptr);
+	} catch (const std::exception &ex) {
+		return ErrorData(ex);
+	} catch (...) { // LCOV_EXCL_START
+		return ErrorData("Unknown exception during async write");
+	} // LCOV_EXCL_STOP
+}
+
 AsyncWriteRequest::AsyncWriteRequest(unique_ptr<AsyncWritePayload> payload_p, idx_t offset_p,
                                      AsyncWriteCompletionCallback completion_p)
     : payload(std::move(payload_p)), offset(offset_p), completion(std::move(completion_p)) {
@@ -416,21 +426,34 @@ void AsyncWriteQueue::VerifyDrained() const {
 	}
 }
 
-void AsyncWriteQueue::CancelPendingRequestsAfterFailure() noexcept {
-	lock_guard<mutex> guard(lock);
-	D_ASSERT(active_tasks == 0);
-	D_ASSERT(pending_tasks == 0);
-	D_ASSERT(in_flight_bytes == 0);
-	D_ASSERT(scheduled_pending_bytes == 0);
-	D_ASSERT(pending_task_bytes.empty());
-	if (active_tasks != 0 || pending_tasks != 0 || in_flight_bytes != 0 || scheduled_pending_bytes != 0 ||
-	    !pending_task_bytes.empty()) {
-		return;
+void AsyncWriteQueue::CancelPendingRequestsAfterFailure(const ErrorData &error) noexcept {
+	deque<PendingRequest> requests;
+	{
+		lock_guard<mutex> guard(lock);
+		D_ASSERT(active_tasks == 0);
+		D_ASSERT(pending_tasks == 0);
+		D_ASSERT(in_flight_bytes == 0);
+		D_ASSERT(scheduled_pending_bytes == 0);
+		D_ASSERT(pending_task_bytes.empty());
+		if (active_tasks != 0 || pending_tasks != 0 || in_flight_bytes != 0 || scheduled_pending_bytes != 0 ||
+		    !pending_task_bytes.empty()) {
+			return;
+		}
+
+		requests = std::move(pending_requests);
+		pending_bytes = 0;
+		closed = true;
 	}
 
-	pending_requests.clear();
-	pending_bytes = 0;
-	closed = true;
+	for (auto &pending : requests) {
+		auto request_size = pending.Size();
+		auto &request = pending.request;
+		request.payload.reset();
+		try {
+			CompleteRequest(request, request_size, error);
+		} catch (...) {
+		}
+	}
 }
 
 void AsyncWriteQueue::Close() {
@@ -448,7 +471,8 @@ void AsyncWriteQueue::Close() {
 		Flush();
 	} catch (...) {
 		auto error = std::current_exception();
-		CancelPendingRequestsAfterFailure();
+		auto error_data = ErrorDataFromExceptionPtr(error);
+		CancelPendingRequestsAfterFailure(error_data);
 		std::rethrow_exception(error);
 	}
 
@@ -803,18 +827,33 @@ void ManagedAsyncWriteQueue::VerifyDrained() const {
 	}
 }
 
-void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure() noexcept {
-	lock_guard<mutex> guard(lock);
-	D_ASSERT(submitted_requests == 0);
-	D_ASSERT(submitted_bytes == 0);
-	if (submitted_requests != 0 || submitted_bytes != 0) {
-		return;
+void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure(const ErrorData &error) noexcept {
+	deque<PendingWrite> writes;
+	{
+		lock_guard<mutex> guard(lock);
+		D_ASSERT(submitted_requests == 0);
+		D_ASSERT(submitted_bytes == 0);
+		if (submitted_requests != 0 || submitted_bytes != 0) {
+			return;
+		}
+
+		writes = std::move(pending_writes);
+		pending_bytes = 0;
+		external_pending_bytes = 0;
+		closed = true;
 	}
 
-	pending_writes.clear();
-	pending_bytes = 0;
-	external_pending_bytes = 0;
-	closed = true;
+	for (auto &pending : writes) {
+		auto request_size = pending.Size();
+		auto &request = pending.request;
+		request.payload.reset();
+		if (request.completion) {
+			try {
+				request.completion(request.offset, request_size, error);
+			} catch (...) {
+			}
+		}
+	}
 }
 
 void ManagedAsyncWriteQueue::Close() {
@@ -834,11 +873,12 @@ void ManagedAsyncWriteQueue::Close() {
 		ReleaseMemoryReservation();
 	} catch (...) {
 		auto error = std::current_exception();
-		CancelPendingWritesAfterFailure();
 		try {
 			write_queue->Close();
 		} catch (...) {
 		}
+		auto error_data = ErrorDataFromExceptionPtr(error);
+		CancelPendingWritesAfterFailure(error_data);
 		try {
 			ReleaseMemoryReservation();
 		} catch (...) {
@@ -1349,11 +1389,11 @@ void ManagedAsyncWriteStreamQueue::Close() {
 		write_queue->Close();
 	} catch (...) {
 		auto error = std::current_exception();
-		CancelPendingWritesAfterFailure();
 		try {
 			write_queue->Close();
 		} catch (...) {
 		}
+		CancelPendingWritesAfterFailure();
 		try {
 			ReleaseMemoryReservation();
 		} catch (...) {
