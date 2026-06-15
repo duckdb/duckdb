@@ -111,7 +111,9 @@ struct VariantCastData : BoundCastData {
 	LogicalType shredded_type;
 
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_uniq<VariantCastData>(shredded_type);
+		// NOTE: copy the already-computed shredded_type directly - passing it back into the
+		// constructor would apply VariantUtils::ShreddedType to it a second time
+		return make_uniq<VariantCastData>(*this);
 	}
 };
 

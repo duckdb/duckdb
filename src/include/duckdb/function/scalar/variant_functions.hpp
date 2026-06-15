@@ -55,6 +55,16 @@ struct VariantNormalizeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct VariantSortKeyFun {
+	static constexpr const char *Name = "variant_sort_key";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).";
+	static constexpr const char *Example = "variant_sort_key({'a': 1, 'b': 2}::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
 struct VariantTypeofFun {
 	static constexpr const char *Name = "variant_typeof";
 	static constexpr const char *Parameters = "input_variant";

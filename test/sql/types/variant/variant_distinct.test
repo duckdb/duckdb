@@ -771,7 +771,7 @@ true
 true
 true
 
-# Without the collation that pushes 'variant_normalize',
+# Without the collation that pushes 'variant_sort_key',
 # the 'variant_extract' (performed by the ['nested'] call) will break the comparison
 query T
 WITH cte as (
