@@ -19,6 +19,17 @@ static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector
 	}
 }
 
+#ifndef DEBUG
+static bool HasVariantType(LogicalOperator &op) {
+	for (const auto &type : op.types) {
+		if (type.id() == LogicalTypeId::VARIANT) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
 	if (join.join_type == JoinType::MARK) {
@@ -32,18 +43,21 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 #ifndef DEBUG
 	// In debug mode, we always apply compressed materialization to joins regardless of cardinalities,
 	// so that it is well-tested. In release mode, we use the thresholds defined in the header
-	const auto build_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
-	                                                                     : right_child.EstimateCardinality(context);
-	if (build_cardinality < JOIN_BUILD_CARDINALITY_THRESHOLD) {
-		return;
-	}
-
-	if (right_child.types.size() < JOIN_BUILD_COLUMN_COUNT_THRESHOLD) {
-		const auto join_cardinality =
-		    join.has_estimated_cardinality ? join.estimated_cardinality : join.EstimateCardinality(context);
-		const double ratio = static_cast<double>(join_cardinality) / static_cast<double>(build_cardinality);
-		if (ratio > JOIN_CARDINALITY_RATIO_THRESHOLD) {
+	// If any of the inputs has VARIANT, we skip these checks: compressing is assumed to always be better
+	if (!HasVariantType(left_child) && !HasVariantType(right_child)) {
+		const auto build_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
+		                                                                     : right_child.EstimateCardinality(context);
+		if (build_cardinality < JOIN_BUILD_CARDINALITY_THRESHOLD) {
 			return;
+		}
+
+		if (right_child.types.size() < JOIN_BUILD_COLUMN_COUNT_THRESHOLD) {
+			const auto join_cardinality =
+			    join.has_estimated_cardinality ? join.estimated_cardinality : join.EstimateCardinality(context);
+			const double ratio = static_cast<double>(join_cardinality) / static_cast<double>(build_cardinality);
+			if (ratio > JOIN_CARDINALITY_RATIO_THRESHOLD) {
+				return;
+			}
 		}
 	}
 #endif
