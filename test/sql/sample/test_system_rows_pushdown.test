@@ -48,8 +48,8 @@ physical_plan	<!REGEX>:.*Limit:.*Limit:.*
 query I
 SELECT COUNT(*) FROM (
     SELECT a.i FROM 
-        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system)) a,
-        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system)) b
+        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system, 42)) a,
+        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system, 42)) b
     WHERE a.i = b.i
 );
 ----

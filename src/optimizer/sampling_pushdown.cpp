@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/sampling_pushdown.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
@@ -16,6 +17,10 @@ unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperato
 		    get.function.sampling_pushdown && sample_options.method == SampleMethod::SYSTEM_SAMPLE && !has_filters;
 
 		if (can_push_system_sample) {
+			if (!sample_op.sample_options->seed.IsValid()) {
+				auto &random_engine = RandomEngine::Get(context);
+				sample_op.sample_options->SetSeed(random_engine.NextRandomInteger());
+			}
 			const bool is_row_count_sampling = !sample_options.is_percentage;
 			int64_t row_limit = 0;
 			if (is_row_count_sampling) {

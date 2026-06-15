@@ -10,7 +10,7 @@ namespace duckdb {
 PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                  unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::STREAMING_SAMPLE, std::move(types), estimated_cardinality),
-      sample_options(std::move(options)), percentage(0.0), rows(0) {
+      sample_options(std::move(options)), percentage(0.0), system_sample_phase(0.0), rows(0) {
 	if (sample_options->is_percentage) {
 		percentage = sample_options->sample_size.GetValue<double>() / 100;
 	} else {
@@ -23,12 +23,12 @@ PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, ve
 			percentage = sample_options->sample_rate;
 		} else if (estimated_cardinality > 0) {
 			percentage = static_cast<double>(rows) / static_cast<double>(estimated_cardinality);
-			if (percentage > 1.0) {
-				percentage = 1.0;
-			}
 		} else {
 			percentage = 1.0;
 		}
+		percentage = MinValue(1.0, MaxValue(0.0, percentage));
+		RandomEngine random(sample_options->seed.IsValid() ? static_cast<int64_t>(sample_options->seed.GetIndex()) : -1);
+		system_sample_phase = random.NextRandom();
 	}
 }
 
@@ -37,14 +37,13 @@ PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, ve
 //===--------------------------------------------------------------------===//
 class StreamingSampleOperatorState : public OperatorState {
 public:
-	explicit StreamingSampleOperatorState(int64_t seed) : random(seed), system_rows_seen(0), system_rows_emitted(0) {
+	explicit StreamingSampleOperatorState(int64_t seed) : random(seed), system_rows_seen(0) {
 	}
 
 	RandomEngine random;
 
 	// Counters for row-count SYSTEM sampling.
 	idx_t system_rows_seen;
-	idx_t system_rows_emitted;
 };
 
 void PhysicalStreamingSample::SystemSamplePercent(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
@@ -62,20 +61,25 @@ void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &resu
 	if (rate <= 0) {
 		return;
 	}
+	if (rate >= 1) {
+		result.Reference(input);
+		return;
+	}
 
 	// Emit a row whenever rows_seen * rate crosses the next integer threshold.
 	// Using a fresh multiply per row (rather than an accumulated sum) avoids
 	// floating-point drift where repeated additions of rate never quite reach
-	// a whole number (e.g. 10000 × 0.0001 < 1.0).
+	// a whole number (e.g. 10000 × 0.0001 < 1.0). The phase makes seeds affect
+	// where the systematic sample starts.
 	auto &state = state_p.Cast<StreamingSampleOperatorState>();
 	idx_t result_count = 0;
 	SelectionVector sel(input.size());
 	for (idx_t i = 0; i < input.size(); i++) {
+		auto before = std::floor(LossyNumericCast<double>(state.system_rows_seen) * rate + system_sample_phase);
 		state.system_rows_seen++;
-		if (LossyNumericCast<double>(state.system_rows_seen) * rate >=
-		    LossyNumericCast<double>(state.system_rows_emitted) + 1.0) {
+		auto after = std::floor(LossyNumericCast<double>(state.system_rows_seen) * rate + system_sample_phase);
+		if (after > before) {
 			sel.set_index(result_count++, i);
-			state.system_rows_emitted++;
 		}
 	}
 	if (result_count > 0) {

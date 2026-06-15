@@ -24,6 +24,7 @@ public:
 
 	unique_ptr<SampleOptions> sample_options;
 	double percentage;
+	double system_sample_phase;
 	idx_t rows;
 
 public:

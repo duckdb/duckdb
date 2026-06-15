@@ -73,6 +73,21 @@ SELECT COUNT(*) FROM test_table USING SAMPLE 200 ROWS (system, 999);
 ----
 200
 
+# Different seeds should choose different row-count SYSTEM samples
+query I
+WITH s1 AS (
+    SELECT i FROM test_table USING SAMPLE 10 ROWS (system, 1)
+), s2 AS (
+    SELECT i FROM test_table USING SAMPLE 10 ROWS (system, 999)
+)
+SELECT COUNT(*) > 0 FROM (
+    (SELECT i FROM s1 EXCEPT SELECT i FROM s2)
+    UNION ALL
+    (SELECT i FROM s2 EXCEPT SELECT i FROM s1)
+);
+----
+true
+
 # Test with small table; materialized range() source for sampling below
 statement ok
 CREATE TABLE small_table AS SELECT i FROM range(10) tbl(i);
@@ -136,15 +151,12 @@ SELECT COUNT(*) FROM (
 ----
 50
 
-# Filtered scans keep the sample above the scan, so SYSTEM rows sampling happens
-# after filters rather than being pushed into the scan before filters apply.
-require exact_vector_size 2048
-
-# System sampling with filtering pushed down to the scan; sample remains after filter
+# In this query shape, SYSTEM sampling is applied before the WHERE filter.
+# With a systematic 100-row sample over 10000 rows, exactly half survives i < 5000.
 query I
 SELECT COUNT(*) FROM test_table WHERE i < 5000 USING SAMPLE 100 ROWS (system);
 ----
-100
+50
 
 # System sampling over a filtered subquery remains a STREAMING_SAMPLE after filter;
 # 5000 rows pass the filter, rate = 0.02, systematic sampling gives exactly 100

@@ -41,11 +41,13 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 			} else if (estimated_table_row_count > 0) {
 				sampling_info.sample_rate = static_cast<double>(sampling_info.target_sample_rows) /
 				                            static_cast<double>(estimated_table_row_count);
-				sampling_info.sample_rate = MinValue(1.0, MaxValue(0.0, sampling_info.sample_rate));
 			} else {
 				// No estimate available, use a conservative rate
 				sampling_info.sample_rate = 1.0;
 			}
+			sampling_info.sample_rate = MinValue(1.0, MaxValue(0.0, sampling_info.sample_rate));
+			RandomEngine random(table_sampling->seed.IsValid() ? static_cast<int64_t>(table_sampling->seed.GetIndex()) : -1);
+			sampling_info.sample_phase = random.NextRandom();
 		}
 		if (table_sampling->seed.IsValid()) {
 			table_state.random.SetSeed(table_sampling->seed.GetIndex());
