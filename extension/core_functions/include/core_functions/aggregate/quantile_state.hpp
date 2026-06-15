@@ -11,6 +11,7 @@
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "SkipList.h"
 
 namespace duckdb {
@@ -64,46 +65,14 @@ struct QuantileOperation {
 		new (&state) STATE();
 	}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_input) {
-		state.AddElement(input, aggr_input.input);
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
-		if (source.v.total_capacity == 0) {
-			return;
-		}
-		if (input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
-			// append the source linked list to the target
-			if (target.v.total_capacity == 0) {
-				target.v = source.v;
-			} else {
-				target.v.last_segment->next = source.v.first_segment;
-				target.v.last_segment = source.v.last_segment;
-				target.v.total_capacity += source.v.total_capacity;
-			}
-			return;
-		}
-		// we cannot absorb the source - copy the values by traversing the linked list
-		ListSegmentCopy<typename STATE::InputType>(input_data.allocator, source.v, target.v);
+	//! The type of the values buffered in the linked list - used by the shared list update/combine functions
+	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
+		return aggr_input_data.function.GetArguments()[0];
 	}
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &) {
 		state.~STATE();
-	}
-
-	static bool IgnoreNull() {
-		return true;
 	}
 
 	template <class STATE, class INPUT_TYPE>
@@ -150,6 +119,19 @@ struct QuantileOperation {
 		return n;
 	}
 };
+
+//! Creates a quantile aggregate that buffers the input values in a linked list, sharing the "list" aggregate
+//! callbacks for update/combine - the operation only provides the finalizer.
+//! Quantiles ignore NULL values, so they are filtered out while appending.
+template <class STATE, class RESULT_TYPE, class OP>
+AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
+	return AggregateFunction({input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	                         AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                         ListUpdateFunction<true>, ListCombineFunction<OP>,
+	                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+	                         FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                         AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+}
 
 template <class T>
 struct SkipLess {
@@ -299,40 +281,16 @@ struct WindowQuantileState {
 	}
 };
 
-struct QuantileStandardType {
-	template <class T>
-	static T Operation(T input, AggregateInputData &) {
-		return input;
-	}
-};
-
-struct QuantileStringType {
-	template <class T>
-	static T Operation(T input, AggregateInputData &input_data) {
-		if (input.IsInlined()) {
-			return input;
-		}
-		auto string_data = input_data.allocator.Allocate(input.GetSize());
-		memcpy(string_data, input.GetData(), input.GetSize());
-		return string_t(char_ptr_cast(string_data), UnsafeNumericCast<uint32_t>(input.GetSize()));
-	}
-};
-
-template <typename INPUT_TYPE, class TYPE_OP>
-struct QuantileState {
+//! Regular aggregation buffers the values in the linked list of the ListAggState base,
+//! shared with the "list" aggregate callbacks
+template <typename INPUT_TYPE>
+struct QuantileState : ListAggState {
 	using InputType = INPUT_TYPE;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
-
-	//! Regular aggregation: the values are accumulated in a linked list
-	LinkedList v;
 
 	// Window Quantile State (only used for window execution)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
-
-	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
-		ListSegmentAppendValue<INPUT_TYPE>(aggr_input.allocator, v, element);
-	}
 
 	bool HasTree() const {
 		return window_state && window_state->HasTree();
