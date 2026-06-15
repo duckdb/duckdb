@@ -289,10 +289,12 @@ def _start_next_statement_search(debugger, matcher):
     command_interpreter = debugger.GetCommandInterpreter()
     command_result = lldb.SBCommandReturnObject()
     command_interpreter.HandleCommand("process continue", command_result)
+    if _NEXT_STATE is not None:
+        _restore_next_state(target)
+
     if command_result.Succeeded():
         return None
 
-    _restore_next_state(target)
     return command_result.GetError() or "process continue failed"
 
 
