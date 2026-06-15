@@ -5126,6 +5126,113 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnknownLiteralI
 	return make_uniq<TypedTransformResult<Value>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOtherOperatorInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = TransformOtherOperator(transformer, choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyAllOperatorInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto any_op = transformer.Transform<string>(list_pr.GetChild(0));
+	auto any_or_all = transformer.Transform<bool>(list_pr.GetChild(1));
+	auto result = TransformAnyAllOperator(transformer, any_op, any_or_all);
+	return make_uniq<TypedTransformResult<pair<string, bool>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyOrAllInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryAnyInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformSubqueryAny(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSubqueryAllInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformSubqueryAll(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInetOperatorInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformJsonOperatorInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	string result = "->>";
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformListOperatorInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStringOperatorInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyOpInternal(PEGTransformer &transformer,
+                                                                               ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitOperatorInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTermInternal(PEGTransformer &transformer,
+                                                                              ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFactorInternal(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExponentOperatorInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBaseExpressionInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -9269,6 +9376,20 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
 	    {"UnknownLiteral", &PEGTransformerFactory::TransformUnknownLiteralInternal},
+	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
+	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
+	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},
+	    {"SubqueryAny", &PEGTransformerFactory::TransformSubqueryAnyInternal},
+	    {"SubqueryAll", &PEGTransformerFactory::TransformSubqueryAllInternal},
+	    {"InetOperator", &PEGTransformerFactory::TransformInetOperatorInternal},
+	    {"JsonOperator", &PEGTransformerFactory::TransformJsonOperatorInternal},
+	    {"ListOperator", &PEGTransformerFactory::TransformListOperatorInternal},
+	    {"StringOperator", &PEGTransformerFactory::TransformStringOperatorInternal},
+	    {"AnyOp", &PEGTransformerFactory::TransformAnyOpInternal},
+	    {"BitOperator", &PEGTransformerFactory::TransformBitOperatorInternal},
+	    {"Term", &PEGTransformerFactory::TransformTermInternal},
+	    {"Factor", &PEGTransformerFactory::TransformFactorInternal},
+	    {"ExponentOperator", &PEGTransformerFactory::TransformExponentOperatorInternal},
 	    {"BaseExpression", &PEGTransformerFactory::TransformBaseExpressionInternal},
 	    {"IndirectionList", &PEGTransformerFactory::TransformIndirectionListInternal},
 	    {"Indirection", &PEGTransformerFactory::TransformIndirectionInternal},

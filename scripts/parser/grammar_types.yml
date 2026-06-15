@@ -1060,6 +1060,8 @@ Bool:
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
+    - SubqueryAny
+    - SubqueryAll
     - IgnoreOrRespectNulls
     - IgnoreNulls
     - RespectNulls
@@ -1673,17 +1675,6 @@ excluded_rules:
   - InExpressionList
   - InSelectStatement
   - BetweenClause
-  - OtherOperator
-  - AnyAllOperator
-  - InetOperator
-  - JsonOperator
-  - ListOperator
-  - StringOperator
-  - AnyOp
-  - BitOperator
-  - Term
-  - Factor
-  - ExponentOperator
   - CollateExpression
   - AtTimeZoneExpression
   - PrefixExpression

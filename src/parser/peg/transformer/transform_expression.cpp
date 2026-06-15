@@ -1036,14 +1036,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 	return expr;
 }
 
-string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &child = list_pr.Child<ChoiceParseResult>(0).GetResult();
+string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result) {
 	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
-	if (child.type == ParseResultType::OPERATOR) {
-		return child.Cast<OperatorParseResult>().operator_token;
+	if (choice_result.type == ParseResultType::OPERATOR) {
+		return choice_result.Cast<OperatorParseResult>().operator_token;
 	}
-	return transformer.Transform<string>(child);
+	if (StringUtil::CIEquals(choice_result.name, "AnyAllOperator")) {
+		return transformer.Transform<pair<string, bool>>(choice_result).first;
+	}
+	return transformer.Transform<string>(choice_result);
 }
 
 // QualifiedOperator <- 'OPERATOR' Parens(ColId* AnyOp)
@@ -1062,47 +1063,17 @@ string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transfo
 	return StringUtil::Join(result, ".");
 }
 
-// AnyOp <- '!~~*' / '>>=' / ... / '!'
-string PEGTransformerFactory::TransformAnyOp(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
-string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<KeywordParseResult>(0).keyword;
-}
-
-string PEGTransformerFactory::TransformInetOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
-string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
-string PEGTransformerFactory::TransformListOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
 pair<string, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto op_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	auto subquery_type = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
-	return make_pair(op_string, subquery_type);
+                                                                  const string &any_op, const bool &any_or_all) {
+	return make_pair(any_op, any_or_all);
 }
 
-bool PEGTransformerFactory::TransformAnyOrAll(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+bool PEGTransformerFactory::TransformSubqueryAny(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformSubqueryAll(PEGTransformer &transformer) {
+	return false;
 }
 
 // BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
@@ -1128,12 +1099,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(P
 		expr = std::move(func_expr);
 	}
 	return expr;
-}
-
-string PEGTransformerFactory::TransformBitOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
 }
 
 // AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
@@ -1164,12 +1129,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAdditiveExpression(
 	return expr;
 }
 
-string PEGTransformerFactory::TransformTerm(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
 // MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpression(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
@@ -1198,12 +1157,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpre
 	return expr;
 }
 
-string PEGTransformerFactory::TransformFactor(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
-}
-
 // ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpression(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
@@ -1226,12 +1179,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpre
 		expr = std::move(func_expr);
 	}
 	return expr;
-}
-
-string PEGTransformerFactory::TransformExponentOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return choice_pr.Cast<KeywordParseResult>().keyword;
 }
 
 // CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*

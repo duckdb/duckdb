@@ -434,28 +434,16 @@ private:
 	static string TransformLikeVariations(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static string TransformOtherOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformQualifiedOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformAnyOp(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformStringOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformJsonOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformInetOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformListOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformAnyOrAll(PEGTransformer &transformer, ParseResult &parse_result);
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
-	static string TransformBitOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
-	static string TransformTerm(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformMultiplicativeExpression(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
-	static string TransformFactor(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
-	static string TransformExponentOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformAtTimeZoneExpression(PEGTransformer &transformer,
@@ -2296,6 +2284,39 @@ private:
 	static unique_ptr<TransformResultValue> TransformUnknownLiteralInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOtherOperatorInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static string TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformAnyAllOperatorInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
+	                                                  const bool &any_or_all);
+	static unique_ptr<TransformResultValue> TransformAnyOrAllInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSubqueryAnyInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformSubqueryAny(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSubqueryAllInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformSubqueryAll(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformInetOperatorInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformJsonOperatorInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformListOperatorInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformStringOperatorInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformAnyOpInternal(PEGTransformer &transformer,
+	                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformBitOperatorInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTermInternal(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformFactorInternal(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExponentOperatorInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformBaseExpressionInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>

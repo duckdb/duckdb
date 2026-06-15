@@ -248,6 +248,15 @@ def is_pure_reference_choice(ast):
     return isinstance(ast, ChoiceNode) and all(isinstance(a, ReferenceNode) for a in ast.alternatives)
 
 
+def literal_string_values(ast):
+    """Return literal alternatives for a string-valued literal rule, or None if the rule is not literal-only."""
+    if isinstance(ast, LiteralNode):
+        return [ast.text]
+    if isinstance(ast, ChoiceNode) and all(isinstance(a, LiteralNode) for a in ast.alternatives):
+        return [a.text for a in ast.alternatives]
+    return None
+
+
 def classify_choice_alternatives(alternatives, rule_types, excluded_rules, identifier_override_rules):
     """
     Split choice alternatives into three groups:
@@ -338,6 +347,30 @@ def generate_string_terminal_choice_internal(rule_name, return_type, return_by_v
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
         + _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
         + _box_result(return_type, return_by_value)
+        + f"}}\n"
+    )
+
+
+def _quote_cpp_string(value):
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def generate_literal_string_internal(rule_name, literals, return_by_value):
+    """Fully auto-generated Internal for a string rule that consists only of literal tokens."""
+    if len(literals) == 1:
+        result_expr = _quote_cpp_string(literals[0])
+        body = f"\tstring result = {result_expr};\n"
+    else:
+        body = (
+            f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
+            f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
+            f"\tauto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;\n"
+        )
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        + body
+        + _box_result("string", return_by_value)
         + f"}}\n"
     )
 
@@ -914,6 +947,14 @@ def collect_generated(
             continue
 
         return_by_value = _is_by_value(rule_name, rule_types)
+
+        literals = literal_string_values(ast)
+        if return_type == "string" and literals is not None and not manual_body_exists(gram_stem, rule_name):
+            declarations.append(generate_internal_declaration(rule_name))
+            registrations.append(generate_registration(rule_name))
+            generated_rule_names.append(rule_name)
+            implementations.append(generate_literal_string_internal(rule_name, literals, return_by_value))
+            continue
 
         if is_pure_reference_choice(ast):
             transformer_alts, identifier_alts, excluded_alts, unknown_alts = classify_choice_alternatives(
