@@ -68,6 +68,13 @@ public:
 	//! reverting SET LOCAL values for custom-impl settings like search_path).
 	virtual void TransactionPreCommit(MetaTransaction &transaction, ClientContext &context) {
 	}
+	//! Fires inside the engine commit of a single database, after that database's
+	//! changes are durable but before the in-commit auto-checkpoint. Use this to
+	//! commit dependent state (e.g. an out-of-band search-index leg) synchronously
+	//! with the table changes, so the checkpoint never observes an un-committed
+	//! in-flight batch.
+	virtual void TransactionPreCheckpoint(AttachedDatabase &db, ClientContext &context) {
+	}
 	virtual void TransactionPreRollback(MetaTransaction &transaction, ClientContext &context,
 	                                    optional_ptr<ErrorData> error) {
 	}

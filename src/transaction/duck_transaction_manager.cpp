@@ -12,6 +12,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -437,6 +438,18 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 
 	CleanupTransactions();
+
+	// Let registered client states commit dependent changes (e.g. an out-of-band
+	// search-index leg) now that this database's changes are durable but before the
+	// in-commit checkpoint below -- so the checkpoint's index serialization
+	// never waits on an un-committed in-flight batch. Only on a successful
+	// commit: on error the transaction has been rolled back above and the
+	// dependent changes must be discarded (via the rollback hook), not flushed.
+	if (!error.HasError() && context.registered_state) {
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionPreCheckpoint(db, context);
+		}
+	}
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
