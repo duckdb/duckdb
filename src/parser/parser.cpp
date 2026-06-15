@@ -626,7 +626,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	return std::move(order.orders);
 }
 
-void Parser::ParseUpdateList(const string &update_list, vector<string> &update_columns,
+void Parser::ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
                              vector<unique_ptr<ParsedExpression>> &expressions, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
@@ -638,7 +638,7 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = std::move(update.node->set_info->columns);
+	update_columns = update.node->set_info->columns;
 	expressions = std::move(update.node->set_info->expressions);
 }
 

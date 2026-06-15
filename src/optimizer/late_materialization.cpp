@@ -134,7 +134,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {

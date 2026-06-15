@@ -91,6 +91,16 @@ struct MaxFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct DecimalAverageFun {
+	static constexpr const char *Name = "decimal_average";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Computes the average of a DECIMAL column using exact integer arithmetic with banker's rounding. Returns a DECIMAL with the same width and scale as the input.";
+	static constexpr const char *Example = "decimal_average(col::DECIMAL(18,2))";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct CombineAggrFun {
 	static constexpr const char *Name = "combine_aggr";
 	static constexpr const char *Parameters = "arg";

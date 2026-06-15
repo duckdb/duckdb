@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct FunctionDescription {
@@ -26,12 +27,12 @@ struct FunctionDescription {
 };
 
 struct CreateFunctionInfo : public CreateInfo {
-	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA);
+	explicit CreateFunctionInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema());
 
 	//! Function name
-	string name;
+	Identifier name;
 	//! The function name of which this function is an alias
-	string alias_of;
+	Identifier alias_of;
 	//! Function description
 	vector<FunctionDescription> descriptions;
 

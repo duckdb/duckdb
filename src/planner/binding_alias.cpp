@@ -8,17 +8,18 @@ namespace duckdb {
 BindingAlias::BindingAlias() {
 }
 
-BindingAlias::BindingAlias(string alias_p) : alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(Identifier alias_p) : alias(std::move(alias_p)) {
 }
 
-BindingAlias::BindingAlias(string schema_p, string alias_p) : schema(std::move(schema_p)), alias(std::move(alias_p)) {
+BindingAlias::BindingAlias(Identifier schema_p, Identifier alias_p)
+    : schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 
 BindingAlias::BindingAlias(const StandardEntry &entry)
     : catalog(entry.ParentCatalog().GetName()), schema(entry.schema.name), alias(entry.name) {
 }
 
-BindingAlias::BindingAlias(string catalog_p, string schema_p, string alias_p)
+BindingAlias::BindingAlias(Identifier catalog_p, Identifier schema_p, Identifier alias_p)
     : catalog(std::move(catalog_p)), schema(std::move(schema_p)), alias(std::move(alias_p)) {
 }
 
@@ -26,7 +27,7 @@ bool BindingAlias::IsSet() const {
 	return !alias.empty();
 }
 
-const string &BindingAlias::GetAlias() const {
+const Identifier &BindingAlias::GetAlias() const {
 	if (!IsSet()) {
 		throw InternalException("Calling BindingAlias::GetAlias on a non-set alias");
 	}
@@ -50,21 +51,20 @@ bool BindingAlias::Matches(const BindingAlias &other) const {
 	// i.e. "tbl" matches "catalog.schema.tbl"
 	// but "schema2.tbl" does not match "schema.tbl"
 	if (!other.catalog.empty()) {
-		if (!StringUtil::CIEquals(catalog, other.catalog)) {
+		if (catalog != other.catalog) {
 			return false;
 		}
 	}
 	if (!other.schema.empty()) {
-		if (!StringUtil::CIEquals(schema, other.schema)) {
+		if (schema != other.schema) {
 			return false;
 		}
 	}
-	return StringUtil::CIEquals(alias, other.alias);
+	return alias == other.alias;
 }
 
 bool BindingAlias::operator==(const BindingAlias &other) const {
-	return StringUtil::CIEquals(catalog, other.catalog) && StringUtil::CIEquals(schema, other.schema) &&
-	       StringUtil::CIEquals(alias, other.alias);
+	return catalog == other.catalog && schema == other.schema && alias == other.alias;
 }
 
 } // namespace duckdb

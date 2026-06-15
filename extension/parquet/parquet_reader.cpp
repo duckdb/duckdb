@@ -1107,7 +1107,7 @@ optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
 	return optional_idx();
 }
 
-unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
 	if (reader) {
 		return reader->Cast<ParquetReader>().GetStatistics(context, name);
 	}
@@ -1152,7 +1152,7 @@ static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &fil
 	return column_stats;
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name) {
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
 		if (columns[file_col_idx].name == name) {
@@ -1168,12 +1168,12 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
                                                          shared_ptr<ParquetFileMetadataCache> metadata,
-                                                         const string &name) {
+                                                         const Identifier &name) {
 	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
 	return reader.ReadStatistics(name);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const Identifier &name) {
 	const auto &col_names = union_data.names;
 
 	idx_t file_col_idx;
@@ -1301,8 +1301,8 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
-static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
-                                                     const TableFilter &filter) {
+static FilterPropagateResult CheckParquetFloatFilter(ClientContext &context, ColumnReader &reader,
+                                                     const Statistics &pq_col_stats, const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
 	// check both stats against the filter
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetFloatFilter");
@@ -1311,10 +1311,10 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
 	auto nan_value = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(nan_stats, nan_value);
 	NumericStats::SetMax(nan_stats, nan_value);
-	auto nan_prune = expr_filter.CheckStatistics(nan_stats);
+	auto nan_prune = expr_filter.CheckStatistics(context, nan_stats);
 
 	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
-	auto prune = expr_filter.CheckStatistics(*min_max_stats);
+	auto prune = expr_filter.CheckStatistics(context, *min_max_stats);
 
 	// if EITHER of them cannot be pruned - we cannot prune
 	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
@@ -1334,7 +1334,7 @@ ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
 	return *column_readers[i];
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
+void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
 	auto &column_reader = state.GetColumnReader(col_idx);
@@ -1372,12 +1372,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 				// based on nan
-				prune_result = CheckParquetFloatFilter(column_reader,
+				prune_result = CheckParquetFloatFilter(context, column_reader,
 				                                       group.columns[schema_column_index].meta_data.statistics, filter);
 			} else {
 				auto &expr_filter =
 				    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
-				prune_result = expr_filter.CheckStatistics(*stats);
+				prune_result = expr_filter.CheckStatistics(context, *stats);
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
@@ -1745,7 +1745,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	uint64_t to_scan_compressed_bytes = 0;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
-		PrepareRowGroupBuffer(state, col_idx);
+		PrepareRowGroupBuffer(context, state, col_idx);
 		to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
 	}
 

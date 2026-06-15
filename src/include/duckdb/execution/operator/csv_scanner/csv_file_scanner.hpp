@@ -34,7 +34,7 @@ public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const OpenFileInfo &file, CSVReaderOptions options,
-	            const MultiFileOptions &file_options, const vector<string> &names, const vector<LogicalType> &types,
+	            const MultiFileOptions &file_options, const vector<Identifier> &names, const vector<LogicalType> &types,
 	            CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
@@ -43,7 +43,7 @@ public:
 
 public:
 	void SetStart();
-	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
+	void SetNamesAndTypes(const vector<Identifier> &names, const vector<LogicalType> &types);
 
 public:
 	string GetReaderType() const override {

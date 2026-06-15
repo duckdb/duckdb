@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_func_variant_main
   OBJECT
   variant_utils.cpp
+  variant_array_length.cpp
   variant_bind_utils.cpp
   variant_exists.cpp
   variant_extract.cpp

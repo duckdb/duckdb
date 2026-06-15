@@ -77,7 +77,7 @@ public:
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
 	static vector<OrderByNode> ParseOrderList(const string &select_list, ParserOptions options = ParserOptions());
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
-	static void ParseUpdateList(const string &update_list, vector<string> &update_columns,
+	static void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
 	                            vector<unique_ptr<ParsedExpression>> &expressions,
 	                            ParserOptions options = ParserOptions());
 	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)

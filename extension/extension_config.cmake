@@ -10,3 +10,4 @@
 # these extensions are loaded by default on every build as they are an essential part of DuckDB
 duckdb_extension_load(core_functions)
 duckdb_extension_load(parquet)
+

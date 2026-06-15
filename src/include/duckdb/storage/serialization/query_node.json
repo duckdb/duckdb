@@ -127,7 +127,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -149,7 +149,7 @@
       {
         "id": 204,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,
@@ -166,7 +166,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -182,7 +182,7 @@
       {
         "id": 203,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -276,22 +276,22 @@
       {
         "id": 201,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
         "name": "table",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 203,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 204,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 205,
@@ -349,7 +349,7 @@
       {
         "id": 203,
         "name": "using_columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,

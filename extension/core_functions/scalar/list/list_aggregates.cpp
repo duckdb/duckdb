@@ -218,7 +218,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 
 	D_ASSERT(aggr.Function().HasStateUpdateCallback());
 
@@ -445,8 +445,8 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// look up the aggregate function in the catalog
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
-	                                                                                        function_name);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context, Identifier::DefaultSchema(), Identifier(function_name));
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {

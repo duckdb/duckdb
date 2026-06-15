@@ -271,7 +271,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 template <class OP, class T>
-void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+void HistogramBinFinalizeFunction(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>();
 

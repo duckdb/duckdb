@@ -14,11 +14,30 @@ namespace {
 struct SumSetOperation {
 	template <class STATE>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!source.is_set) {
+			return;
+		}
+		if (!target.is_set) {
+			target.value = source.value;
+			target.is_set = true;
+		} else {
+			target.value += source.value;
+		}
+	}
+	template <class STATE>
+	static void AddValues(STATE &state, idx_t count) {
+		state.is_set = true;
+	}
+};
+
+struct KahanSumSetOperation {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE &state, idx_t count) {
-		state.isset = true;
+		state.is_set = true;
 	}
 };
 
@@ -27,7 +46,7 @@ struct ClusteredSumStateCopy : public BASE, public ClusteredStateCopy {
 	template <class STATE>
 	static void FlushClusteredLocal(STATE &state, STATE &local, bool saw_value) {
 		if (saw_value) {
-			local.isset = true;
+			local.is_set = true;
 		}
 		state = local;
 	}
@@ -62,7 +81,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
@@ -80,6 +99,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 			if (run_count == 0) {
 				continue;
 			}
+			state.is_set = true;
 			int64_t local64 = 0;
 			auto add_row = [&](idx_t idx) {
 				const int64_t v = static_cast<int64_t>(vals[idx]);
@@ -112,7 +132,6 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 			}
 			pos += run_count;
 			state.value = Hugeint::Add(state.value, local64);
-			state.isset = true;
 		}
 	}
 
@@ -137,13 +156,13 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				}
 			}
 			if (local64 != 0) {
+				state.is_set = true;
 				state.value = Hugeint::Add(state.value, local64);
-				state.isset = true;
-			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
+			} else if (!state.is_set) { // rare: we added 0 -- were all values NULL?
 				for (idx_t k = 0; k < run_count; k++) {
 					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
 					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
-						state.isset = true;
+						state.is_set = true;
 						break;
 					}
 				}
@@ -156,7 +175,7 @@ struct IntegerSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = Hugeint::Convert(state.value);
@@ -169,10 +188,10 @@ using SumToHugeintOperation =
 using NumericSumOperation =
     ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>>;
 
-struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
+struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
 			target = state.value;
@@ -202,7 +221,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT32: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
+		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);
@@ -212,7 +231,7 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
+		function.SetName("sum_no_overflow");
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		function.SetBindCallback(SumNoOverflowBind);
 		function.SetSerializeCallback(SumNoOverflowSerialize);

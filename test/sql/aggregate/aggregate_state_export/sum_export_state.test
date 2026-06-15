@@ -48,3 +48,14 @@ query T
 SELECT typeof(sum(1.00::DECIMAL(4,2)) EXPORT_STATE);
 ----
 AGGREGATE_STATE
+
+# kahan_sum returns NULL when no non-null inputs, struct otherwise
+query T
+SELECT kahan_sum(NULL::double) EXPORT_STATE;
+----
+NULL
+
+query T
+SELECT kahan_sum(v) EXPORT_STATE FROM (VALUES (1.0), (2.0), (3.0)) t(v);
+----
+{'value': 6.0, 'err': 0.0}

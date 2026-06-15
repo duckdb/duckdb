@@ -1,5 +1,5 @@
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -208,7 +208,7 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
+	info.name = Identifier(AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem()));
 	info.path = config.options.database_path;
 
 	Connection con(*this);

@@ -52,7 +52,8 @@ public:
 	//! Create a DOUBLE value
 	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val);       // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const Identifier &val); // NOLINT: Allow implicit conversion from `Identifier`
 	//! Create a NULL value
 	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value

@@ -287,7 +287,7 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto found = false;
 	for (const auto &name : geometry_predicates) {
-		if (StringUtil::CIEquals(func.Function().GetName().c_str(), name)) {
+		if (func.Function().GetName() == name) {
 			found = true;
 			break;
 		}
