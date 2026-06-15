@@ -93,6 +93,8 @@ public:
 	DUCKDB_API static void Convert(timestamp_ns_t date, date_t &out_date, dtime_t &out_time, int32_t &out_nanos);
 	//! Returns current timestamp
 	DUCKDB_API static timestamp_t GetCurrentTimestamp();
+	//! Returns current monotonic timestamp in microseconds (for interval calculations only)
+	DUCKDB_API static timestamp_t GetMonotonicTimestamp();
 
 	//! Convert the epoch (in sec) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochSecondsPossiblyInfinite(int64_t s);

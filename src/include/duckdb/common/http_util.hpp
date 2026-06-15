@@ -151,8 +151,11 @@ struct BaseRequest {
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
-	timestamp_t request_start;
-	timestamp_t request_end;
+	// System clock start timestamp
+	timestamp_t request_system_start;
+	// Monotonic clock start and end timestamp
+	timestamp_t request_monotonic_start;
+	timestamp_t request_monotonic_end;
 
 	//! Optional per-request network measurements, populated by clients that measure them.
 	bool have_time_to_fst_byte = false;

@@ -10,12 +10,12 @@ namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext> context) {
-	auto target_time = Timestamp::GetCurrentTimestamp();
+	auto target_time = Timestamp::GetMonotonicTimestamp();
 	target_time.value += static_cast<int64_t>(sleep_ms) * Interval::MICROS_PER_MSEC;
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
 	while (true) {
-		auto current_time = Timestamp::GetCurrentTimestamp();
+		auto current_time = Timestamp::GetMonotonicTimestamp();
 		if (context && context->IsInterrupted()) {
 			throw InterruptException();
 		}

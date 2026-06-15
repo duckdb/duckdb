@@ -266,14 +266,15 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 
 		try {
-			request.request_start = Timestamp::GetCurrentTimestamp();
+			request.request_system_start = Timestamp::GetCurrentTimestamp();
+			request.request_monotonic_start = Timestamp::GetMonotonicTimestamp();
 			response = client->Request(request);
 		} catch (...) {
-			request.request_end = Timestamp::GetCurrentTimestamp();
+			request.request_monotonic_end = Timestamp::GetMonotonicTimestamp();
 			LogRequest(request, nullptr);
 			throw;
 		}
-		request.request_end = Timestamp::GetCurrentTimestamp();
+		request.request_monotonic_end = Timestamp::GetMonotonicTimestamp();
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});

@@ -58,7 +58,7 @@ static void MallocTrim(idx_t pad) {
 	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
 
 	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
-	auto current_ts = Timestamp::GetCurrentTimestamp();
+	auto current_ts = Timestamp::GetMonotonicTimestamp();
 	auto current_timestamp_ms = Cast::Operation<timestamp_t, timestamp_ms_t>(current_ts).value;
 
 	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
