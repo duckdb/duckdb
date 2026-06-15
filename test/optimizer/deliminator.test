@@ -25,6 +25,12 @@ explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHER
 ----
 logical_opt	<!REGEX>:.*SINGLE.*
 
+# Q 17: the selected delimiter domain should still restrict the inner aggregate input
+query II
+explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+----
+logical_opt	<REGEX>:.*Groups: p_partkey.*COMPARISON_JOIN.*l_partkey = p_partkey.*(DELIM_GET|CTE_SCAN).*
+
 # Q 17: if we remove the filters """ p_brand = 'Brand#23' AND p_container = 'MED BOX' """ we can remove the whole DELIM join
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
@@ -181,3 +187,13 @@ NULL	0
 1	1
 2	1
 3	0
+
+# CTE delimiter rewrite: marker-only EXISTS joins can be converted to a RIGHT_SEMI join if the RHS key is
+# null-rejected and the filtered LHS can act as a runtime-filter build side.
+statement ok
+SET delim_join_as_cte=true;
+
+query II
+EXPLAIN SELECT x FROM range(1000000) o(x) WHERE x < 10000 AND EXISTS (SELECT 1 FROM range(10000000) l(y) WHERE y = x AND y > 0);
+----
+logical_opt	<REGEX>:.*Join Type: RIGHT_SEMI.*x = x.*
