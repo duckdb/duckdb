@@ -100,9 +100,10 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"url", Value(request.url)},
 	    {"headers", CreateHTTPHeadersValue(request.headers)},
 	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
-	    {"duration_ms", request.have_request_timing ? Value::BIGINT(Timestamp::GetEpochMs(request.request_monotonic_end) -
-	                                                                Timestamp::GetEpochMs(request.request_monotonic_start))
-	                                                : Value()}};
+	    {"duration_ms", request.have_request_timing
+	                        ? Value::BIGINT(Timestamp::GetEpochMs(request.request_monotonic_end) -
+	                                        Timestamp::GetEpochMs(request.request_monotonic_start))
+	                        : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
 	if (response) {
