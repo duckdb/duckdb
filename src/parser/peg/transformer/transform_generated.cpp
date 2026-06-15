@@ -4138,6 +4138,97 @@ PEGTransformerFactory::TransformTableReservedColumnNameInternal(PEGTransformer &
 	return make_uniq<TypedTransformResult<unique_ptr<ColumnRefExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFunctionExpressionInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto function_identifier = transformer.Transform<QualifiedName>(list_pr.GetChild(0));
+	auto function_expression_arguments = transformer.Transform<MethodArguments>(list_pr.GetChild(1));
+	optional<vector<OrderByNode>> within_group_clause {};
+	auto &within_group_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (within_group_clause_opt.HasResult()) {
+		auto within_group_clause_value =
+		    transformer.Transform<vector<OrderByNode>>(within_group_clause_opt.GetResult());
+		within_group_clause = std::move(within_group_clause_value);
+	}
+	optional<unique_ptr<ParsedExpression>> filter_clause {};
+	auto &filter_clause_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (filter_clause_opt.HasResult()) {
+		auto filter_clause_value = transformer.Transform<unique_ptr<ParsedExpression>>(filter_clause_opt.GetResult());
+		filter_clause = std::move(filter_clause_value);
+	}
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	optional<unique_ptr<WindowExpression>> over_clause {};
+	auto &over_clause_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (over_clause_opt.HasResult()) {
+		auto over_clause_value = transformer.Transform<unique_ptr<WindowExpression>>(over_clause_opt.GetResult());
+		over_clause = std::move(over_clause_value);
+	}
+	auto result = TransformFunctionExpression(transformer, function_identifier,
+	                                          std::move(function_expression_arguments), std::move(within_group_clause),
+	                                          std::move(filter_clause), has_result, std::move(over_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFunctionExpressionArgumentsInternal(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto function_expression_argument_list =
+	    transformer.Transform<MethodArguments>(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto result = std::move(function_expression_argument_list);
+	return make_uniq<TypedTransformResult<MethodArguments>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFunctionExpressionArgumentListInternal(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> distinct_or_all {};
+	auto &distinct_or_all_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (distinct_or_all_opt.HasResult()) {
+		auto distinct_or_all_value = transformer.Transform<bool>(distinct_or_all_opt.GetResult());
+		distinct_or_all = distinct_or_all_value;
+	}
+	optional<vector<FunctionArgument>> function_argument_list {};
+	auto &function_argument_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (function_argument_list_opt.HasResult()) {
+		auto function_argument_list_value =
+		    transformer.Transform<vector<FunctionArgument>>(function_argument_list_opt.GetResult());
+		function_argument_list = std::move(function_argument_list_value);
+	}
+	optional<vector<OrderByNode>> order_by_clause {};
+	auto &order_by_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (order_by_clause_opt.HasResult()) {
+		auto order_by_clause_value = transformer.Transform<vector<OrderByNode>>(order_by_clause_opt.GetResult());
+		order_by_clause = std::move(order_by_clause_value);
+	}
+	optional<bool> ignore_or_respect_nulls {};
+	auto &ignore_or_respect_nulls_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (ignore_or_respect_nulls_opt.HasResult()) {
+		auto ignore_or_respect_nulls_value = transformer.Transform<bool>(ignore_or_respect_nulls_opt.GetResult());
+		ignore_or_respect_nulls = ignore_or_respect_nulls_value;
+	}
+	auto result =
+	    TransformFunctionExpressionArgumentList(transformer, distinct_or_all, std::move(function_argument_list),
+	                                            std::move(order_by_clause), ignore_or_respect_nulls);
+	return make_uniq<TypedTransformResult<MethodArguments>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformFunctionArgumentListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<FunctionArgument> function_argument;
+	auto function_argument_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &function_argument_item : function_argument_items) {
+		auto function_argument_value = transformer.Transform<FunctionArgument>(function_argument_item.get());
+		function_argument.push_back(std::move(function_argument_value));
+	}
+	auto result = std::move(function_argument);
+	return make_uniq<TypedTransformResult<vector<FunctionArgument>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFunctionIdentifierInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4334,6 +4425,60 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTryCastKeywordI
                                                                                         ParseResult &parse_result) {
 	auto result = TransformTryCastKeyword(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdDotInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto result = TransformColIdDot(transformer, col_id);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStarExpressionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<vector<string>> star_qualifier_list {};
+	auto &star_qualifier_list_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (star_qualifier_list_opt.HasResult()) {
+		auto star_qualifier_list_value = transformer.Transform<vector<string>>(star_qualifier_list_opt.GetResult());
+		star_qualifier_list = star_qualifier_list_value;
+	}
+	optional<qualified_column_set_t> exclude_list {};
+	auto &exclude_list_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (exclude_list_opt.HasResult()) {
+		auto exclude_list_value = transformer.Transform<qualified_column_set_t>(exclude_list_opt.GetResult());
+		exclude_list = exclude_list_value;
+	}
+	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> replace_list {};
+	auto &replace_list_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (replace_list_opt.HasResult()) {
+		auto replace_list_value =
+		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
+		replace_list = std::move(replace_list_value);
+	}
+	optional<qualified_column_map_t<string>> rename_list {};
+	auto &rename_list_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (rename_list_opt.HasResult()) {
+		auto rename_list_value = transformer.Transform<qualified_column_map_t<string>>(rename_list_opt.GetResult());
+		rename_list = rename_list_value;
+	}
+	auto result =
+	    TransformStarExpression(transformer, star_qualifier_list, exclude_list, std::move(replace_list), rename_list);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStarQualifierListInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<string> col_id_dot;
+	auto &col_id_dot_repeat = list_pr.GetChild(0).Cast<RepeatParseResult>();
+	for (auto &col_id_dot_item : col_id_dot_repeat.GetChildren()) {
+		auto col_id_dot_value = transformer.Transform<string>(col_id_dot_item.get());
+		col_id_dot.push_back(col_id_dot_value);
+	}
+	auto result = col_id_dot;
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeListInternal(PEGTransformer &transformer,
@@ -4765,14 +4910,6 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNoOthers
 	return make_uniq<TypedTransformResult<WindowExcludeMode>>(result);
 }
 
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOverClauseInternal(PEGTransformer &transformer,
-                                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto window_frame = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.GetChild(1));
-	auto result = TransformOverClause(transformer, std::move(window_frame));
-	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
-}
-
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWindowFrameInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -5120,10 +5257,28 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformParensExpressio
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSingleExpressionInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnknownLiteralInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto result = TransformUnknownLiteral(transformer);
 	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsDistinctFromOpInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto result = TransformIsDistinctFromOp(transformer, has_result);
+	return make_uniq<TypedTransformResult<ExpressionType>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOtherOperatorInternal(PEGTransformer &transformer,
@@ -5230,6 +5385,32 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExponentOperato
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPrefixOperatorInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformMinusPrefixOperatorInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	string result = "-";
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPlusPrefixOperatorInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	string result = "+";
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformTildePrefixOperatorInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	string result = "~";
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -9269,6 +9450,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	     &PEGTransformerFactory::TransformCatalogReservedSchemaTableColumnNameInternal},
 	    {"SchemaReservedTableColumnName", &PEGTransformerFactory::TransformSchemaReservedTableColumnNameInternal},
 	    {"TableReservedColumnName", &PEGTransformerFactory::TransformTableReservedColumnNameInternal},
+	    {"FunctionExpression", &PEGTransformerFactory::TransformFunctionExpressionInternal},
+	    {"FunctionExpressionArguments", &PEGTransformerFactory::TransformFunctionExpressionArgumentsInternal},
+	    {"FunctionExpressionArgumentList", &PEGTransformerFactory::TransformFunctionExpressionArgumentListInternal},
+	    {"FunctionArgumentList", &PEGTransformerFactory::TransformFunctionArgumentListInternal},
 	    {"FunctionIdentifier", &PEGTransformerFactory::TransformFunctionIdentifierInternal},
 	    {"CatalogReservedSchemaFunctionName",
 	     &PEGTransformerFactory::TransformCatalogReservedSchemaFunctionNameInternal},
@@ -9294,6 +9479,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CastOrTryCast", &PEGTransformerFactory::TransformCastOrTryCastInternal},
 	    {"CastKeyword", &PEGTransformerFactory::TransformCastKeywordInternal},
 	    {"TryCastKeyword", &PEGTransformerFactory::TransformTryCastKeywordInternal},
+	    {"ColIdDot", &PEGTransformerFactory::TransformColIdDotInternal},
+	    {"StarExpression", &PEGTransformerFactory::TransformStarExpressionInternal},
+	    {"StarQualifierList", &PEGTransformerFactory::TransformStarQualifierListInternal},
 	    {"ExcludeList", &PEGTransformerFactory::TransformExcludeListInternal},
 	    {"ExcludeNames", &PEGTransformerFactory::TransformExcludeNamesInternal},
 	    {"ExcludeNameList", &PEGTransformerFactory::TransformExcludeNameListInternal},
@@ -9342,7 +9530,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExcludeGroup", &PEGTransformerFactory::TransformExcludeGroupInternal},
 	    {"ExcludeTies", &PEGTransformerFactory::TransformExcludeTiesInternal},
 	    {"ExcludeNoOthers", &PEGTransformerFactory::TransformExcludeNoOthersInternal},
-	    {"OverClause", &PEGTransformerFactory::TransformOverClauseInternal},
 	    {"WindowFrame", &PEGTransformerFactory::TransformWindowFrameInternal},
 	    {"ParensIdentifier", &PEGTransformerFactory::TransformParensIdentifierInternal},
 	    {"WindowFrameDefinition", &PEGTransformerFactory::TransformWindowFrameDefinitionInternal},
@@ -9375,7 +9562,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ListComprehensionExpression", &PEGTransformerFactory::TransformListComprehensionExpressionInternal},
 	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
+	    {"SingleExpression", &PEGTransformerFactory::TransformSingleExpressionInternal},
 	    {"UnknownLiteral", &PEGTransformerFactory::TransformUnknownLiteralInternal},
+	    {"IsDistinctFromOp", &PEGTransformerFactory::TransformIsDistinctFromOpInternal},
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
 	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},
@@ -9390,6 +9579,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"Term", &PEGTransformerFactory::TransformTermInternal},
 	    {"Factor", &PEGTransformerFactory::TransformFactorInternal},
 	    {"ExponentOperator", &PEGTransformerFactory::TransformExponentOperatorInternal},
+	    {"PrefixOperator", &PEGTransformerFactory::TransformPrefixOperatorInternal},
+	    {"MinusPrefixOperator", &PEGTransformerFactory::TransformMinusPrefixOperatorInternal},
+	    {"PlusPrefixOperator", &PEGTransformerFactory::TransformPlusPrefixOperatorInternal},
+	    {"TildePrefixOperator", &PEGTransformerFactory::TransformTildePrefixOperatorInternal},
 	    {"BaseExpression", &PEGTransformerFactory::TransformBaseExpressionInternal},
 	    {"IndirectionList", &PEGTransformerFactory::TransformIndirectionListInternal},
 	    {"Indirection", &PEGTransformerFactory::TransformIndirectionInternal},

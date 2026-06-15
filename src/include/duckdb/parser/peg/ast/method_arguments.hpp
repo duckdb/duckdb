@@ -10,6 +10,7 @@ struct MethodArguments {
 	vector<FunctionArgument> arguments;
 	vector<OrderByNode> order_bys;
 	bool has_ignore_nulls = false;
+	bool ignore_nulls = false;
 };
 
 } // namespace duckdb

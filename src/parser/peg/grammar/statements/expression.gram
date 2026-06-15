@@ -2,7 +2,10 @@ ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableCol
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
 SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
 TableReservedColumnName <- TableQualification ReservedColumnName
-FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreOrRespectNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
+FunctionExpression <- FunctionIdentifier FunctionExpressionArguments WithinGroupClause? FilterClause? ExportClause? OverClause?
+FunctionExpressionArguments <- Parens(FunctionExpressionArgumentList)
+FunctionExpressionArgumentList <- DistinctOrAll? FunctionArgumentList? OrderByClause? IgnoreOrRespectNulls?
+FunctionArgumentList <- List(FunctionArgument)
 
 FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
@@ -32,7 +35,8 @@ CastOrTryCast <- CastKeyword / TryCastKeyword
 CastKeyword <- 'CAST'
 TryCastKeyword <- 'TRY_CAST'
 ColIdDot <- ColId '.'
-StarExpression <- ColIdDot* '*' ExcludeList? ReplaceList? RenameList?
+StarExpression <- StarQualifierList? '*' ExcludeList? ReplaceList? RenameList?
+StarQualifierList <- ColIdDot+
 ExcludeList <- ExcludeOrExcept ExcludeNames
 ExcludeOrExcept <- 'EXCLUDE' / 'EXCEPT'
 ExcludeNames <- ExcludeNameList / ExcludeNameSingle

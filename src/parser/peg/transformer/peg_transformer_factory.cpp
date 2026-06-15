@@ -177,16 +177,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCollateExpression);
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
+	REGISTER_TRANSFORM(TransformOverClause);
 
-	REGISTER_TRANSFORM(TransformSingleExpression);
-
-	REGISTER_TRANSFORM(TransformPrefixOperator);
-	REGISTER_TRANSFORM(TransformFunctionExpression);
-
-	REGISTER_TRANSFORM(TransformColIdDot);
-	REGISTER_TRANSFORM(TransformStarExpression);
-
-	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 }
 
 void PEGTransformerFactory::RegisterConnect() {

@@ -601,6 +601,7 @@ FunctionArgumentList:
   type: "vector<FunctionArgument>"
   by_value: true
   rules:
+    - FunctionArgumentList
     - TableFunctionArguments
     - MethodFunctionArguments
 
@@ -664,6 +665,7 @@ StringList:
     - ColumnAliases
     - TriggerColumnList
     - StarSymbolColumnList
+    - StarQualifierList
     - PivotGroupByList
     - UnpivotHeader
     - UnpivotHeaderSingle
@@ -967,6 +969,7 @@ String:
     - LikeVariations
     - OtherOperator
     - QualifiedOperator
+    - ColIdDot
     - AnyOp
     - StringOperator
     - JsonOperator
@@ -977,6 +980,9 @@ String:
     - Factor
     - ExponentOperator
     - PrefixOperator
+    - MinusPrefixOperator
+    - PlusPrefixOperator
+    - TildePrefixOperator
     - Framing
     - RowsFraming
     - RangeFraming
@@ -1434,6 +1440,12 @@ overrides:
     type: "ColumnList"
     by_value: true
   # expression.gram
+  FunctionExpressionArguments:
+    type: "MethodArguments"
+    by_value: true
+  FunctionExpressionArgumentList:
+    type: "MethodArguments"
+    by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:
     type: "CaseCheck"
@@ -1655,7 +1667,6 @@ excluded_rules:
   - SingleArrowPair
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
-  - SingleExpression
   - Expression
   - LambdaArrowExpression
   - LogicalOrExpression
@@ -1665,7 +1676,7 @@ excluded_rules:
   - IsLiteral
   - NotNull
   - IsNull
-  - IsDistinctFromOp
+  - OverClause
   - BetweenInLikeExpression
   - BetweenInLikeOp
   - LikeClause
