@@ -402,3 +402,33 @@ statement error
 INSERT INTO t_conflict VALUES (1, 'b') ON CONFLICT DO NOTHING;
 ----
 Not implemented Error: ON CONFLICT is not yet supported on tables with FOR EACH ROW triggers
+
+# Cascading FOR EACH ROW triggers are not yet supported
+statement ok
+CREATE TABLE casc_a (id INTEGER);
+
+statement ok
+CREATE TABLE casc_b (id INTEGER);
+
+statement ok
+CREATE TABLE casc_c (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_casc_a AFTER INSERT ON casc_a FOR EACH ROW
+    INSERT INTO casc_b VALUES (NEW.id + 100);
+
+statement ok
+CREATE TRIGGER trg_casc_b AFTER INSERT ON casc_b FOR EACH ROW
+    INSERT INTO casc_c VALUES (NEW.id + 1000);
+
+# Inserting into casc_a fires trg_casc_a, whose body writes to casc_b which has trg_casc_b -> rejected
+statement error
+INSERT INTO casc_a VALUES (1), (2), (3);
+----
+writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+
+# Single-row inserts are rejected too (the limitation is structural, not row-count dependent)
+statement error
+INSERT INTO casc_a VALUES (1);
+----
+writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)

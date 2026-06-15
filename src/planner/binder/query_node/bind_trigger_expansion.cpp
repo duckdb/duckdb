@@ -418,6 +418,24 @@ static bool BoundBodyTargetsTable(const LogicalOperator &op, const TableCatalogE
 	return false;
 }
 
+// Detects a nested LogicalTrigger in a bound trigger body, which means the body targets a table that itself has a
+// FOR EACH ROW trigger (a cascade). Cascades are rejected for now for two reasons:
+//  1. Over-firing: the inner trigger's affected-row set gets cross-joined with the outer rows during decorrelation,
+//     so it fires once per (outer row x inner row) instead of once per inner row.
+//  2. all firings run as one set-based batch against a single snapshot, so a downstream trigger cannot
+//     see rows an upstream trigger wrote earlier in the same statement. Correct semantics need per-row execution.
+static bool BoundBodyContainsTrigger(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_TRIGGER) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (child && BoundBodyContainsTrigger(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<BoundStatement> Binder::TryExpandRowTriggers(QueryNode &node,
                                                         vector<unique_ptr<ParsedExpression>> &returning_list,
                                                         TableCatalogEntry &table, TriggerEventType event_type) {
@@ -445,7 +463,7 @@ unique_ptr<BoundStatement> Binder::TryExpandRowTriggers(QueryNode &node,
 }
 
 unique_ptr<ExpressionBinder> Binder::SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
-                                                     const vector<LogicalType> &col_types) {
+                                                      const vector<LogicalType> &col_types) {
 	bind_context.AddGenericBinding(table_index, "new", col_names, col_types);
 	auto scope_binder = make_uniq<ExpressionBinder>(*this, context);
 	GetActiveBinders().push_back(*scope_binder);
@@ -521,6 +539,12 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" writes to the trigger table "
 			                      "(self-referential triggers are not supported)",
 			                      trigger.name, table.name);
+		}
+
+		if (BoundBodyContainsTrigger(*bound_body.plan)) {
+			throw NotImplementedException("FOR EACH ROW trigger \"%s\" on table \"%s\" writes to a table that has its "
+			                              "own FOR EACH ROW trigger (cascading row triggers are not yet supported)",
+			                              trigger.name, table.name);
 		}
 
 		auto logi_trig = make_uniq<LogicalTrigger>(trigger.name.GetIdentifierName(), trigger.timing, trigger.event_type,
