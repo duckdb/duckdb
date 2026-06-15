@@ -5,18 +5,12 @@ Usage inside LLDB:
 
 After import, LLDB will:
 1. Pretty-print `duckdb::unique_ptr<T>` as if it were the pointee.
-2. Keep a manual escape hatch:
-       duckdb-deref some_unique_ptr_expression
-       dderef some_unique_ptr_expression
 
 The formatter path avoids calling `duckdb::unique_ptr<T>::operator*()` or `.get()`,
 which makes it robust even when those template symbols are not emitted.
 """
 
 from __future__ import annotations
-
-import shlex
-
 
 try:
     import lldb  # type: ignore
@@ -25,69 +19,16 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
 
 
 CATEGORY_NAME = "duckdb"
-COMMAND_NAME = "duckdb-deref"
-COMMAND_ALIAS = "dderef"
 UNIQUE_PTR_REGEX = r"^duckdb::unique_ptr<.+>$"
 
 
 def __lldb_init_module(debugger, _internal_dict):
-    debugger.HandleCommand(
-        "command script add --overwrite -h "
-        "\"Dereference DuckDB smart pointers without calling operator* or get()\" "
-        f"-f duckdb_ptr.duckdb_deref {COMMAND_NAME}"
-    )
-    debugger.HandleCommand(f"command alias {COMMAND_ALIAS} {COMMAND_NAME}")
-
     debugger.HandleCommand(f"type category define {CATEGORY_NAME}")
-    debugger.HandleCommand(
-        f"type synthetic add --category {CATEGORY_NAME} "
-        f"-x '{UNIQUE_PTR_REGEX}' --python-class duckdb_ptr.DuckDBUniquePtrSyntheticProvider"
-    )
     debugger.HandleCommand(
         f"type summary add --category {CATEGORY_NAME} "
         f"-x '{UNIQUE_PTR_REGEX}' -F duckdb_ptr.duckdb_unique_ptr_summary"
     )
     debugger.HandleCommand(f"type category enable {CATEGORY_NAME}")
-
-
-def duckdb_deref(debugger, command, result, _internal_dict):
-    tokens = shlex.split(command)
-    if not tokens or "--help" in tokens or "-h" in tokens:
-        result.AppendMessage(
-            "usage: {} <expression>\n"
-            "example: {} this->children.arena.arena_allocator.private_data->debug_info".format(
-                COMMAND_NAME, COMMAND_NAME
-            )
-        )
-        return
-
-    expression = command.strip()
-    target = debugger.GetSelectedTarget()
-    process = target.GetProcess() if target.IsValid() else None
-    thread = process.GetSelectedThread() if process and process.IsValid() else None
-    frame = thread.GetSelectedFrame() if thread and thread.IsValid() else None
-    if frame is None or not frame.IsValid():
-        result.SetError("no selected frame")
-        return
-
-    options = lldb.SBExpressionOptions()
-    options.SetTryAllThreads(False)
-    value = frame.EvaluateExpression(expression, options)
-    error = value.GetError()
-    if error.Fail():
-        result.SetError(error.GetCString())
-        return
-
-    pointee = _get_pointee_value(value)
-    if pointee is None:
-        result.SetError(f"could not extract a pointer from expression: {expression}")
-        return
-
-    description = _describe_value(pointee)
-    if description:
-        result.AppendMessage(description)
-    else:
-        result.AppendMessage(str(pointee))
 
 
 def duckdb_unique_ptr_summary(valobj, _internal_dict):
@@ -106,48 +47,6 @@ def duckdb_unique_ptr_summary(valobj, _internal_dict):
     if pointee_summary:
         return f"{pointee_name} @ 0x{address:016x} {pointee_summary}"
     return f"{pointee_name} @ 0x{address:016x}"
-
-
-class DuckDBUniquePtrSyntheticProvider:
-    def __init__(self, valobj, _internal_dict):
-        self.valobj = valobj
-        self.pointer_value = None
-        self.pointee_value = None
-        self.update()
-
-    def update(self):
-        self.pointer_value = _get_pointer_value(self.valobj)
-        self.pointee_value = _dereference_pointer(self.pointer_value)
-        return False
-
-    def has_children(self):
-        return self.pointee_value is not None and self.pointee_value.IsValid()
-
-    def num_children(self):
-        if not self.has_children():
-            return 0
-        return self.pointee_value.GetNumChildren()
-
-    def get_child_at_index(self, index):
-        if not self.has_children():
-            return None
-        if index < 0 or index >= self.pointee_value.GetNumChildren():
-            return None
-        return self.pointee_value.GetChildAtIndex(index)
-
-    def get_child_index(self, name):
-        if not self.has_children():
-            return -1
-        for index in range(self.pointee_value.GetNumChildren()):
-            child = self.pointee_value.GetChildAtIndex(index)
-            if child.IsValid() and child.GetName() == name:
-                return index
-        return -1
-
-
-def _get_pointee_value(value):
-    pointer_value = _get_pointer_value(value)
-    return _dereference_pointer(pointer_value)
 
 
 def _get_pointer_value(value):
@@ -181,42 +80,54 @@ def _dereference_pointer(pointer_value):
     return pointee
 
 
-def _find_child_named(value, name):
-    direct = value.GetChildMemberWithName(name)
-    if direct and direct.IsValid():
-        return direct
-
-    for i in range(value.GetNumChildren()):
-        child = value.GetChildAtIndex(i)
-        if not child.IsValid():
-            continue
-        if child.GetName() == name:
-            return child
-        nested = _find_child_named(child, name)
-        if nested and nested.IsValid():
-            return nested
-    return None
-
-
 def _find_pointer_descendant(value):
     if value is None or not value.IsValid():
         return None
 
-    direct = _find_child_named(value, "pointer")
-    if direct and direct.IsValid():
-        return direct
+    pending = [value]
+    seen = set()
+    scanned = 0
 
-    for i in range(value.GetNumChildren()):
-        child = value.GetChildAtIndex(i)
-        if not child.IsValid():
+    while pending and scanned < 64:
+        current = pending.pop()
+        if current is None or not current.IsValid():
             continue
-        child_type = child.GetType()
-        if child_type.IsPointerType():
-            return child
-        nested = _find_pointer_descendant(child)
-        if nested and nested.IsValid():
-            return nested
+
+        key = _value_key(current)
+        if key in seen:
+            continue
+        seen.add(key)
+        scanned += 1
+
+        for field_name in ("pointer", "__ptr_"):
+            direct = current.GetChildMemberWithName(field_name)
+            if direct and direct.IsValid():
+                return direct
+
+        child_count = current.GetNumChildren()
+        for i in range(child_count):
+            child = current.GetChildAtIndex(i)
+            if not child.IsValid():
+                continue
+            child_type = child.GetType()
+            if child_type.IsPointerType():
+                return child
+            pending.append(child)
     return None
+
+
+def _value_key(value):
+    value_id = getattr(value, "GetID", None)
+    if callable(value_id):
+        return ("id", value_id())
+
+    return (
+        value.GetName(),
+        value.GetType().GetName() if value.GetType().IsValid() else None,
+        value.GetValue(),
+        value.GetValueAsUnsigned(0),
+        value.GetNumChildren(),
+    )
 
 
 def _describe_value(value):
