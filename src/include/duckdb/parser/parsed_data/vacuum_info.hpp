@@ -21,10 +21,9 @@ struct VacuumOptions {
 
 	bool vacuum;
 	bool analyze;
-	//! SereneDB-specific pragma option: a REFRESH_*/COMPACT_* scope verb,
-	//! "sync_stats", or "compact". Lowers VACUUM to
-	//! `PRAGMA serenedb_vacuum(<this>, name, [schema], [catalog])` instead of
-	//! producing a VacuumStatement.
+	//! SereneDB-specific pragma option: a REFRESH_*/COMPACT_*/RECOMPUTE_STATS_* scope
+	//! verb. Lowers VACUUM to `PRAGMA serenedb_vacuum(<this>, name, [schema], [catalog])`
+	//! instead of producing a VacuumStatement.
 	string serenedb_pragma_option;
 
 	void Serialize(Serializer &serializer) const;

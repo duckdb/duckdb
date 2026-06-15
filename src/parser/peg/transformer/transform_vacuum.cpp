@@ -9,10 +9,9 @@ namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTransformer &transformer,
                                                                          const VacuumOptions &vacuum_options,
                                                                          AnalyzeTarget analyze_target) {
-	// SereneDB extension: VACUUM (REFRESH_*) / VACUUM (COMPACT_*) / VACUUM
-	// (SYNC_STATS) / VACUUM (COMPACT) lower to a PRAGMA call instead of the
-	// standard VacuumStatement. Parameters are positional: option, name,
-	// schema, catalog.
+	// SereneDB extension: VACUUM (REFRESH_*) / VACUUM (COMPACT_*) /
+	// VACUUM (RECOMPUTE_STATS_*) lower to a PRAGMA call instead of the standard
+	// VacuumStatement. Parameters are positional: option, name, schema, catalog.
 	if (!vacuum_options.serenedb_pragma_option.empty()) {
 		auto pragma = make_uniq<PragmaStatement>();
 		pragma->info->name = "serenedb_vacuum";
@@ -56,9 +55,21 @@ VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer
 VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer &transformer,
                                                                   const vector<string> &vacuum_option) {
 	static constexpr const char *kSerenedbOptions[] = {
-	    "refresh_database", "refresh_schema",    "refresh_table",       "refresh_index",  "refresh_all",
-	    "compact_database", "compact_schema",    "compact_table",       "compact_index",  "compact_all",
-	    "sync_stats_table", "sync_stats_schema", "sync_stats_database", "sync_stats_all", "compact_rocksdb",
+	    "refresh_database",
+	    "refresh_schema",
+	    "refresh_table",
+	    "refresh_index",
+	    "refresh_all",
+	    "compact_database",
+	    "compact_schema",
+	    "compact_table",
+	    "compact_index",
+	    "compact_all",
+	    "recompute_stats_table",
+	    "recompute_stats_schema",
+	    "recompute_stats_database",
+	    "recompute_stats_all",
+	    "recompute_stats_column",
 	};
 	VacuumOptions options;
 	options.vacuum = true;
