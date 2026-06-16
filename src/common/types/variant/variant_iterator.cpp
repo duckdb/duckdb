@@ -1,7 +1,4 @@
 #include "duckdb/common/types/variant_iterator.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 
@@ -48,6 +45,11 @@ VariantNestedData DecodeNestedData(const string_t &blob, uint32_t byte_offset) {
 	return result;
 }
 
+//! Whether the value at logical position 'index' of a shredded layer is valid (non-NULL)
+bool ShreddedIsValid(const RecursiveUnifiedVectorFormat &node, idx_t index) {
+	return node.unified.validity.RowIsValid(node.unified.sel->get_index(index));
+}
+
 } // namespace
 
 //===--------------------------------------------------------------------===//
@@ -62,17 +64,11 @@ VariantIteratorState::VariantIteratorState(const Vector &variant)
 	}
 	is_shredded = true;
 
-	//! Flatten the shredded component so the tree can be navigated directly. Flattening these
-	//! (regular, typed) vectors is cheap and - unlike flattening the SHREDDED_VECTOR itself - does
-	//! not reconstruct the unshredded representation.
+	//! Read the shredded component through a (recursive) unified format. This does not reconstruct the
+	//! unshredded representation (unlike flattening the SHREDDED_VECTOR itself) - it only normalizes the
+	//! regular, typed vectors of the shredded tree so each layer can be navigated by index.
 	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant);
-	shredded_root = make_uniq<Vector>(Vector::Ref(shredded_vec));
-	shredded_root->Flatten();
-
-	//! The row validity lives on the parent STRUCT(unshredded, shredded)
-	auto &struct_vec = variant.GetBufferRef()->Cast<ShreddedVectorBuffer>().GetChild();
-	row_format = make_uniq<UnifiedVectorFormat>();
-	struct_vec.ToUnifiedFormat(*row_format);
+	Vector::RecursiveToUnifiedFormat(shredded_vec, shredded_format);
 }
 
 //===--------------------------------------------------------------------===//
@@ -127,12 +123,14 @@ uint32_t UnshreddedVariantIterator::GetValuesIndex(idx_t row, idx_t child_index)
 //===--------------------------------------------------------------------===//
 VariantIterator VariantIteratorState::Root(idx_t row) const {
 	if (is_shredded) {
-		//! A SQL-NULL row has both components NULL - the resolution below already yields a NULL cursor in
-		//! that case, but we short-circuit on the row validity to avoid touching the child vectors
-		if (!row_format->validity.RowIsValid(row_format->sel->get_index(row))) {
+		//! The shredded component's top-level validity is the authoritative row validity (a SQL-NULL row
+		//! has the whole shredded struct set to NULL). This must be checked separately because
+		//! ResolveShredded only inspects the typed_value / untyped_value_index of a wrapper, never the
+		//! wrapper's own struct validity.
+		if (!ShreddedIsValid(shredded_format, row)) {
 			return VariantIterator::MakeNull(*this);
 		}
-		auto root = VariantIterator::ResolveShredded(*this, *shredded_root, row, row);
+		auto root = VariantIterator::ResolveShredded(*this, shredded_format, row, row);
 		//! a root value is never "missing" - treat any such case as a SQL NULL
 		return root.IsMissing() ? VariantIterator::MakeNull(*this) : root;
 	}
@@ -176,13 +174,14 @@ VariantIterator VariantIterator::MakeUnshredded(const VariantIteratorState &stat
 	return result;
 }
 
-VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state, const Vector &content, idx_t index,
-                                              idx_t row, uint32_t overlay_value_index) {
+VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state,
+                                              const RecursiveUnifiedVectorFormat &content, idx_t index, idx_t row,
+                                              uint32_t overlay_value_index) {
 	VariantIterator result;
 	result.state = &state;
 	result.kind = Kind::SHREDDED;
 	result.row = row;
-	result.shredded_content = content;
+	result.shredded_format = content;
 	result.shredded_index = index;
 	result.overlay_value_index = overlay_value_index;
 	return result;
@@ -191,38 +190,38 @@ VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state,
 //===--------------------------------------------------------------------===//
 // Shredded resolution
 //===--------------------------------------------------------------------===//
-VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &state, const Vector &node, idx_t index,
-                                                 idx_t row) {
-	if (node.GetType().id() != LogicalTypeId::STRUCT) {
+VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &state,
+                                                 const RecursiveUnifiedVectorFormat &node, idx_t index, idx_t row) {
+	if (node.logical_type.id() != LogicalTypeId::STRUCT) {
 		//! A flattened (fully-consistent) primitive - a NULL here represents a VARIANT_NULL value
-		if (FlatVector::IsNull(node, index)) {
+		if (!ShreddedIsValid(node, index)) {
 			return MakeNull(state);
 		}
 		return MakeShredded(state, node, index, row, 0);
 	}
 
 	//! A "STRUCT(typed_value, [untyped_value_index])" wrapper
-	auto &entries = StructVector::GetEntries(node);
-	auto &typed_value = entries[TYPED_VALUE_INDEX];
+	auto &typed_value = node.children[TYPED_VALUE_INDEX];
 
 	bool overlay_valid = false;
 	uint32_t overlay_value_index = 0;
-	if (entries.size() > 1) {
-		auto &untyped_value_index = entries[UNTYPED_VALUE_INDEX];
-		if (!FlatVector::IsNull(untyped_value_index, index)) {
+	if (node.children.size() > 1) {
+		auto &untyped_value_index = node.children[UNTYPED_VALUE_INDEX];
+		auto untyped_sel = untyped_value_index.unified.sel->get_index(index);
+		if (untyped_value_index.unified.validity.RowIsValid(untyped_sel)) {
 			overlay_valid = true;
-			overlay_value_index = FlatVector::GetData<uint32_t>(untyped_value_index)[index];
+			overlay_value_index = untyped_value_index.unified.GetData<uint32_t>()[untyped_sel];
 		}
 	}
 
-	if (!FlatVector::IsNull(typed_value, index)) {
+	if (ShreddedIsValid(typed_value, index)) {
 		//! The value is (at least partially) shredded
-		if (typed_value.GetType().id() == LogicalTypeId::LIST) {
+		if (typed_value.logical_type.id() == LogicalTypeId::LIST) {
 			//! ARRAY values are not partially shredded - ignore any overlay
 			return MakeShredded(state, typed_value, index, row, 0);
 		}
 		//! Only OBJECT values merge a leftover (overlay) object
-		auto overlay = typed_value.GetType().id() == LogicalTypeId::STRUCT ? overlay_value_index : 0;
+		auto overlay = typed_value.logical_type.id() == LogicalTypeId::STRUCT ? overlay_value_index : 0;
 		if (!overlay_valid) {
 			overlay = 0;
 		}
@@ -245,16 +244,16 @@ VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &sta
 //===--------------------------------------------------------------------===//
 // Type resolution
 //===--------------------------------------------------------------------===//
-static VariantLogicalType ShreddedTypeId(const Vector &content, idx_t index) {
-	auto &type = content.GetType();
+static VariantLogicalType ShreddedTypeId(const RecursiveUnifiedVectorFormat &content, idx_t index) {
+	auto &type = content.logical_type;
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 		return VariantLogicalType::OBJECT;
 	case LogicalTypeId::LIST:
 		return VariantLogicalType::ARRAY;
 	case LogicalTypeId::BOOLEAN:
-		return FlatVector::GetData<bool>(content)[index] ? VariantLogicalType::BOOL_TRUE
-		                                                 : VariantLogicalType::BOOL_FALSE;
+		return content.unified.GetData<bool>()[content.unified.sel->get_index(index)] ? VariantLogicalType::BOOL_TRUE
+		                                                                              : VariantLogicalType::BOOL_FALSE;
 	case LogicalTypeId::TINYINT:
 		return VariantLogicalType::INT8;
 	case LogicalTypeId::SMALLINT:
@@ -328,7 +327,7 @@ VariantLogicalType VariantIterator::GetTypeId() const {
 	case Kind::UNSHREDDED:
 		return state->unshredded.GetTypeId(row, value_index);
 	case Kind::SHREDDED:
-		return ShreddedTypeId(*shredded_content, shredded_index);
+		return ShreddedTypeId(*shredded_format, shredded_index);
 	default:
 		throw InternalException("VariantIterator::GetTypeId called on a MISSING value");
 	}
@@ -343,9 +342,9 @@ const_data_ptr_t VariantIterator::GetDataPointer() const {
 		return const_data_ptr_cast(blob.GetData()) + state->unshredded.GetByteOffset(row, value_index);
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
-	auto &content = *shredded_content;
-	auto type_size = GetTypeIdSize(content.GetType().InternalType());
-	return FlatVector::GetData(content) + shredded_index * type_size;
+	auto &content = *shredded_format;
+	auto type_size = GetTypeIdSize(content.unified.physical_type);
+	return content.unified.data + content.unified.sel->get_index(shredded_index) * type_size;
 }
 
 string_t VariantIterator::GetString() const {
@@ -353,7 +352,8 @@ string_t VariantIterator::GetString() const {
 		return DecodeStringData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
-	return FlatVector::GetData<string_t>(*shredded_content)[shredded_index];
+	auto &content = *shredded_format;
+	return content.unified.GetData<string_t>()[content.unified.sel->get_index(shredded_index)];
 }
 
 VariantDecimalData VariantIterator::GetDecimal() const {
@@ -361,11 +361,12 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 		return DecodeDecimalData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
-	auto &type = shredded_content->GetType();
+	auto &content = *shredded_format;
+	auto &type = content.logical_type;
 	auto width = DecimalType::GetWidth(type);
 	auto scale = DecimalType::GetScale(type);
-	auto type_size = GetTypeIdSize(type.InternalType());
-	auto value_ptr = FlatVector::GetData(*shredded_content) + shredded_index * type_size;
+	auto type_size = GetTypeIdSize(content.unified.physical_type);
+	auto value_ptr = content.unified.data + content.unified.sel->get_index(shredded_index) * type_size;
 	return VariantDecimalData(width, scale, value_ptr);
 }
 
@@ -387,11 +388,11 @@ vector<pair<string_t, VariantIterator>> VariantIterator::GetObjectChildren() con
 		return result;
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
-	auto &content = *shredded_content;
-	auto &child_types = StructType::GetChildTypes(content.GetType());
-	auto &child_entries = StructVector::GetEntries(content);
-	for (idx_t i = 0; i < child_entries.size(); i++) {
-		auto child = ResolveShredded(*state, child_entries[i], shredded_index, row);
+	auto &content = *shredded_format;
+	auto &child_types = StructType::GetChildTypes(content.logical_type);
+	for (idx_t i = 0; i < content.children.size(); i++) {
+		//! struct fields preserve the (logical) index of the parent
+		auto child = ResolveShredded(*state, content.children[i], shredded_index, row);
 		if (child.IsMissing()) {
 			//! The field is absent for this row
 			continue;
@@ -423,10 +424,11 @@ vector<VariantIterator> VariantIterator::GetArrayChildren() const {
 		return result;
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
-	auto &content = *shredded_content;
-	auto list_data = FlatVector::GetData<list_entry_t>(content);
-	auto &element = ListVector::GetChild(content);
-	auto &entry = list_data[shredded_index];
+	auto &content = *shredded_format;
+	auto list_data = content.unified.GetData<list_entry_t>();
+	auto &entry = list_data[content.unified.sel->get_index(shredded_index)];
+	//! list elements live at flat positions (offset + i) in the child layer
+	auto &element = content.children[0];
 	result.reserve(entry.length);
 	for (idx_t i = 0; i < entry.length; i++) {
 		result.emplace_back(ResolveShredded(*state, element, entry.offset + i, row));

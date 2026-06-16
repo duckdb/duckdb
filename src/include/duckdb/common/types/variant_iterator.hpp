@@ -12,7 +12,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/pair.hpp"
@@ -97,10 +96,8 @@ private:
 
 	//! Whether the variant vector is shredded
 	bool is_shredded = false;
-	//! The (flattened) shredded component - the root of the shredded tree
-	unique_ptr<Vector> shredded_root;
-	//! The row validity of the shredded vector
-	unique_ptr<UnifiedVectorFormat> row_format;
+	//! The shredded component - the (recursive) unified format of the root of the shredded tree
+	RecursiveUnifiedVectorFormat shredded_format;
 
 	friend class VariantIterator;
 };
@@ -150,12 +147,12 @@ public:
 private:
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
 	//! flattened primitive) at the given index into a concrete cursor
-	static VariantIterator ResolveShredded(const VariantIteratorState &state, const Vector &node, idx_t index,
-	                                       idx_t row);
+	static VariantIterator ResolveShredded(const VariantIteratorState &state, const RecursiveUnifiedVectorFormat &node,
+	                                       idx_t index, idx_t row);
 
 	static VariantIterator MakeUnshredded(const VariantIteratorState &state, idx_t row, uint32_t value_index);
-	static VariantIterator MakeShredded(const VariantIteratorState &state, const Vector &content, idx_t index,
-	                                    idx_t row, uint32_t overlay_value_index);
+	static VariantIterator MakeShredded(const VariantIteratorState &state, const RecursiveUnifiedVectorFormat &content,
+	                                    idx_t index, idx_t row, uint32_t overlay_value_index);
 	static VariantIterator MakeNull(const VariantIteratorState &state);
 	static VariantIterator MakeMissing(const VariantIteratorState &state);
 
@@ -168,10 +165,10 @@ private:
 	//! UNSHREDDED: 0-based index into the 'values' array of the unshredded component
 	uint32_t value_index = 0;
 
-	//! SHREDDED: the typed content vector (the resolved 'typed_value', i.e. the object struct, the
-	//! array list, or the primitive vector)
-	optional_ptr<const Vector> shredded_content;
-	//! SHREDDED: the index into shredded_content
+	//! SHREDDED: the current layer in the shredded format tree (the resolved 'typed_value', i.e. the
+	//! object struct, the array list, or the primitive)
+	optional_ptr<const RecursiveUnifiedVectorFormat> shredded_format;
+	//! SHREDDED: the (logical) index into shredded_format
 	idx_t shredded_index = 0;
 	//! SHREDDED OBJECT: 1-based index into the unshredded component holding the leftover fields
 	//! (0 means there is no leftover object to merge)
