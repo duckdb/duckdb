@@ -33,6 +33,8 @@ public:
 	void SetVectorType(VectorType new_vector_type) override;
 
 protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;

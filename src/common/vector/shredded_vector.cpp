@@ -59,6 +59,20 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	return result_vec.GetValue(0);
 }
 
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	auto count = count_t(end - offset);
+	Vector sliced(*shredded_data, offset, end);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                             idx_t count) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	Vector sliced(*shredded_data, sel, count);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count_t(count));
+}
+
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                                     idx_t count) const {
 	Vector *source = shredded_data.get();
