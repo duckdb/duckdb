@@ -1250,7 +1250,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 		auto constraint = constraints[i]->Copy();
 		if (constraint->type == ConstraintType::FOREIGN_KEY) {
 			ForeignKeyConstraint &fk = constraint->Cast<ForeignKeyConstraint>();
-			if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && fk.info.table == info.fk_table) {
+			// Symmetric removal: drops the PK-side back-reference when applied
+			// to the main-key table, and the FK constraint itself when applied
+			// to the referencing table.
+			if (fk.info.table == info.fk_table) {
 				continue;
 			}
 		}
