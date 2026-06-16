@@ -406,7 +406,7 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 //===--------------------------------------------------------------------===//
 // Nested accessors
 //===--------------------------------------------------------------------===//
-VariantObjectIterator VariantIterator::GetOrderedObject(VariantIterationOrder order) const {
+VariantObjectIterator VariantIterator::GetObjectChildren(VariantIterationOrder order) const {
 	return VariantObjectIterator(*this, order);
 }
 

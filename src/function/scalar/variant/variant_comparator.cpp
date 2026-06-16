@@ -465,7 +465,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 	case VariantLogicalType::OBJECT: {
 		// process the children in string-sorted key order so that objects that only differ in key order
 		// compare equal
-		for (auto &entry : it.GetOrderedObject(VariantIterationOrder::LEXICOGRAPHIC)) {
+		for (auto &entry : it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
 			VariantEncodeString(sink, entry.key, true);
 			EncodeVariantValue(entry.value, sink);
 		}
