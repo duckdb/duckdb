@@ -359,6 +359,10 @@ def backtrace_command(pid: int):
     gdb = shutil.which("gdb")
     if gdb:
         return "gdb", [gdb, "-p", str(pid), "-batch", "-nx", "-ex", "set pagination off", "-ex", "thread apply all bt"]
+    eu_stack = shutil.which("eu-stack")
+    if eu_stack:
+        # elfutils fallback: dumps every thread's stack of a running process without a full debugger.
+        return "eu-stack", [eu_stack, "-p", str(pid)]
     return None
 
 

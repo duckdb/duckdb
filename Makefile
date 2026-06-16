@@ -650,7 +650,7 @@ APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
 .PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20 gdb,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20 gdb)
 	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
 	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
