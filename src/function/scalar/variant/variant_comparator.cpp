@@ -440,8 +440,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 		VariantEncodeString(sink, it.GetString(), false);
 		break;
 	case VariantLogicalType::ARRAY: {
-		auto children = it.GetArrayChildren();
-		for (auto &child : children) {
+		for (auto child : it.GetArrayChildren()) {
 			EncodeVariantValue(child, sink);
 		}
 		sink.Write(LIST_DELIMITER);
@@ -450,14 +449,15 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 	case VariantLogicalType::OBJECT: {
 		// gather (key, value) pairs and process them in string-sorted key order so that objects
 		// that only differ in key order compare equal
-		auto entries = it.GetObjectChildren();
+		vector<VariantObjectEntry> entries;
+		for (auto &entry : it.GetObjectChildren()) {
+			entries.push_back(entry);
+		}
 		std::sort(entries.begin(), entries.end(),
-		          [](const std::pair<string_t, VariantIterator> &a, const std::pair<string_t, VariantIterator> &b) {
-			          return a.first < b.first;
-		          });
+		          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
 		for (auto &entry : entries) {
-			VariantEncodeString(sink, entry.first, true);
-			EncodeVariantValue(entry.second, sink);
+			VariantEncodeString(sink, entry.key, true);
+			EncodeVariantValue(entry.value, sink);
 		}
 		sink.Write(LIST_DELIMITER);
 		break;

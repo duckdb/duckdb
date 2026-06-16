@@ -13,8 +13,6 @@
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -100,7 +98,12 @@ private:
 	RecursiveUnifiedVectorFormat shredded_format;
 
 	friend class VariantIterator;
+	friend class VariantArrayIterator;
+	friend class VariantObjectIterator;
 };
+
+class VariantArrayIterator;
+class VariantObjectIterator;
 
 //! A lightweight cursor pointing at a single logical VARIANT value.
 class VariantIterator {
@@ -139,10 +142,10 @@ public:
 	//! Returns the decimal payload of a DECIMAL value
 	DUCKDB_API VariantDecimalData GetDecimal() const;
 
-	//! Returns the (key, value) children of an OBJECT value (merging shredded + unshredded)
-	DUCKDB_API vector<pair<string_t, VariantIterator>> GetObjectChildren() const;
-	//! Returns the element values of an ARRAY value
-	DUCKDB_API vector<VariantIterator> GetArrayChildren() const;
+	//! Lazily iterates the (key, value) children of an OBJECT value (merging shredded + unshredded)
+	DUCKDB_API VariantObjectIterator GetObjectChildren() const;
+	//! Lazily iterates the element values of an ARRAY value
+	DUCKDB_API VariantArrayIterator GetArrayChildren() const;
 
 private:
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
@@ -175,6 +178,130 @@ private:
 	uint32_t overlay_value_index = 0;
 
 	friend class VariantIteratorState;
+	friend class VariantArrayIterator;
+	friend class VariantObjectIterator;
+};
+
+//! Lazily iterates the element values of an ARRAY VariantIterator. Random-access: no child cursor is
+//! materialized until it is dereferenced.
+class VariantArrayIterator {
+public:
+	DUCKDB_API explicit VariantArrayIterator(const VariantIterator &array);
+
+public:
+	idx_t size() const {
+		return length;
+	}
+	DUCKDB_API VariantIterator operator[](idx_t i) const;
+
+	class Iterator {
+	public:
+		Iterator(const VariantArrayIterator &parent, idx_t pos) : parent(parent), pos(pos) {
+		}
+		VariantIterator operator*() const {
+			return parent[pos];
+		}
+		Iterator &operator++() { // NOLINT: match stl API
+			++pos;
+			return *this;
+		}
+		bool operator!=(const Iterator &other) const {
+			return pos != other.pos;
+		}
+
+	private:
+		const VariantArrayIterator &parent;
+		idx_t pos;
+	};
+	Iterator begin() const { // NOLINT: match stl API
+		return Iterator(*this, 0);
+	}
+	Iterator end() const { // NOLINT: match stl API
+		return Iterator(*this, length);
+	}
+
+private:
+	const VariantIteratorState *state;
+	idx_t row;
+	idx_t length;
+	bool shredded;
+	//! UNSHREDDED: the 'children' base index; SHREDDED: the list offset of the array's elements
+	idx_t base;
+	//! SHREDDED: the element layer of the array
+	optional_ptr<const RecursiveUnifiedVectorFormat> element_node;
+};
+
+//! A single (key, value) entry of an OBJECT
+struct VariantObjectEntry {
+	string_t key;
+	VariantIterator value;
+};
+
+//! Lazily iterates the (key, value) children of an OBJECT VariantIterator, merging the shredded
+//! (typed) fields with the leftover unshredded fields. Forward iteration; missing fields are skipped.
+class VariantObjectIterator {
+public:
+	DUCKDB_API explicit VariantObjectIterator(const VariantIterator &object);
+
+public:
+	class Iterator {
+	public:
+		Iterator(const VariantObjectIterator &parent, idx_t raw_pos) : parent(parent), raw_pos(raw_pos) {
+			AdvanceToValid();
+		}
+		const VariantObjectEntry &operator*() const {
+			return current;
+		}
+		const VariantObjectEntry *operator->() const {
+			return &current;
+		}
+		Iterator &operator++() { // NOLINT: match stl API
+			++raw_pos;
+			AdvanceToValid();
+			return *this;
+		}
+		bool operator!=(const Iterator &other) const {
+			return raw_pos != other.raw_pos;
+		}
+
+	private:
+		//! Advances to the next non-missing entry, materializing it into 'current'
+		void AdvanceToValid();
+
+	private:
+		const VariantObjectIterator &parent;
+		idx_t raw_pos;
+		VariantObjectEntry current;
+	};
+	Iterator begin() const { // NOLINT: match stl API
+		return Iterator(*this, 0);
+	}
+	Iterator end() const { // NOLINT: match stl API
+		return Iterator(*this, raw_count);
+	}
+
+private:
+	//! Materializes the entry at the given raw position (before missing-field skipping)
+	VariantObjectEntry RawEntry(idx_t raw_pos) const;
+
+private:
+	const VariantIteratorState *state;
+	idx_t row;
+	bool shredded;
+	//! Total number of raw entries (typed fields + leftover fields), before missing-field skipping
+	idx_t raw_count;
+
+	//! UNSHREDDED: the 'children' base index of the object
+	idx_t base;
+
+	//! SHREDDED: the object's typed struct layer + its index, the number of typed fields, and the
+	//! 'children' base index of the leftover (overlay) object
+	optional_ptr<const RecursiveUnifiedVectorFormat> content;
+	idx_t shredded_index;
+	idx_t typed_field_count;
+	idx_t overlay_base;
+
+	friend class Iterator;
 };
 
 } // namespace duckdb

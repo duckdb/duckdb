@@ -373,67 +373,100 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 //===--------------------------------------------------------------------===//
 // Nested accessors
 //===--------------------------------------------------------------------===//
-vector<pair<string_t, VariantIterator>> VariantIterator::GetObjectChildren() const {
-	vector<pair<string_t, VariantIterator>> result;
-	if (kind == Kind::UNSHREDDED) {
-		auto nested_data =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
-		result.reserve(nested_data.child_count);
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
-			auto child_idx = nested_data.children_idx + i;
-			auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
-			auto child_values_idx = state->unshredded.GetValuesIndex(row, child_idx);
-			result.emplace_back(state->unshredded.GetKey(row, key_idx), MakeUnshredded(*state, row, child_values_idx));
-		}
-		return result;
-	}
-	D_ASSERT(kind == Kind::SHREDDED);
-	auto &content = *shredded_format;
-	auto &child_types = StructType::GetChildTypes(content.logical_type);
-	for (idx_t i = 0; i < content.children.size(); i++) {
-		//! struct fields preserve the (logical) index of the parent
-		auto child = ResolveShredded(*state, content.children[i], shredded_index, row);
-		if (child.IsMissing()) {
-			//! The field is absent for this row
-			continue;
-		}
-		auto &name = child_types[i].first;
-		result.emplace_back(string_t(name.c_str(), NumericCast<uint32_t>(name.size())), child);
-	}
-	if (overlay_value_index != 0) {
-		//! Merge the leftover fields that did not fit the shredded schema
-		auto overlay = MakeUnshredded(*state, row, overlay_value_index - 1);
-		auto overlay_children = overlay.GetObjectChildren();
-		for (auto &entry : overlay_children) {
-			result.emplace_back(std::move(entry));
-		}
-	}
-	return result;
+VariantObjectIterator VariantIterator::GetObjectChildren() const {
+	return VariantObjectIterator(*this);
 }
 
-vector<VariantIterator> VariantIterator::GetArrayChildren() const {
-	vector<VariantIterator> result;
-	if (kind == Kind::UNSHREDDED) {
-		auto nested_data =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
-		result.reserve(nested_data.child_count);
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
-			auto child_values_idx = state->unshredded.GetValuesIndex(row, nested_data.children_idx + i);
-			result.emplace_back(MakeUnshredded(*state, row, child_values_idx));
-		}
-		return result;
+VariantArrayIterator VariantIterator::GetArrayChildren() const {
+	return VariantArrayIterator(*this);
+}
+
+//===--------------------------------------------------------------------===//
+// VariantArrayIterator
+//===--------------------------------------------------------------------===//
+VariantArrayIterator::VariantArrayIterator(const VariantIterator &array)
+    : state(array.state), row(array.row), shredded(array.kind == VariantIterator::Kind::SHREDDED) {
+	if (!shredded) {
+		auto nested =
+		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, array.value_index));
+		base = nested.children_idx;
+		length = nested.child_count;
+		return;
 	}
-	D_ASSERT(kind == Kind::SHREDDED);
-	auto &content = *shredded_format;
+	//! The array's elements live at flat positions (offset + i) in the list's child layer
+	auto &content = *array.shredded_format;
 	auto list_data = content.unified.GetData<list_entry_t>();
-	auto &entry = list_data[content.unified.sel->get_index(shredded_index)];
-	//! list elements live at flat positions (offset + i) in the child layer
-	auto &element = content.children[0];
-	result.reserve(entry.length);
-	for (idx_t i = 0; i < entry.length; i++) {
-		result.emplace_back(ResolveShredded(*state, element, entry.offset + i, row));
+	auto &entry = list_data[content.unified.sel->get_index(array.shredded_index)];
+	base = entry.offset;
+	length = entry.length;
+	element_node = content.children[0];
+}
+
+VariantIterator VariantArrayIterator::operator[](idx_t i) const {
+	if (shredded) {
+		return VariantIterator::ResolveShredded(*state, *element_node, base + i, row);
 	}
-	return result;
+	return VariantIterator::MakeUnshredded(*state, row, state->unshredded.GetValuesIndex(row, base + i));
+}
+
+//===--------------------------------------------------------------------===//
+// VariantObjectIterator
+//===--------------------------------------------------------------------===//
+VariantObjectIterator::VariantObjectIterator(const VariantIterator &object)
+    : state(object.state), row(object.row), shredded(object.kind == VariantIterator::Kind::SHREDDED) {
+	if (!shredded) {
+		auto nested =
+		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, object.value_index));
+		base = nested.children_idx;
+		raw_count = nested.child_count;
+		return;
+	}
+	//! Shredded object: the typed struct fields, followed by the leftover (overlay) object's fields
+	content = object.shredded_format;
+	shredded_index = object.shredded_index;
+	typed_field_count = content->children.size();
+	raw_count = typed_field_count;
+	if (object.overlay_value_index != 0) {
+		auto overlay_value_index = object.overlay_value_index - 1;
+		auto nested =
+		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, overlay_value_index));
+		overlay_base = nested.children_idx;
+		raw_count += nested.child_count;
+	}
+}
+
+VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
+	if (!shredded) {
+		auto child_idx = base + raw_pos;
+		auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
+		auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
+		return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
+		                           VariantIterator::MakeUnshredded(*state, row, value_idx)};
+	}
+	if (raw_pos < typed_field_count) {
+		//! A shredded (typed) field - struct fields preserve the (logical) index of the parent
+		auto &name = StructType::GetChildTypes(content->logical_type)[raw_pos].first;
+		return VariantObjectEntry {
+		    string_t(name.c_str(), NumericCast<uint32_t>(name.size())),
+		    VariantIterator::ResolveShredded(*state, content->children[raw_pos], shredded_index, row)};
+	}
+	//! A leftover field from the overlay (unshredded) object
+	auto child_idx = overlay_base + (raw_pos - typed_field_count);
+	auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
+	auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
+	return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
+	                           VariantIterator::MakeUnshredded(*state, row, value_idx)};
+}
+
+void VariantObjectIterator::Iterator::AdvanceToValid() {
+	//! Only shredded typed fields can be "missing" (absent for this row) - skip them
+	while (raw_pos < parent.raw_count) {
+		current = parent.RawEntry(raw_pos);
+		if (!current.value.IsMissing()) {
+			return;
+		}
+		++raw_pos;
+	}
 }
 
 } // namespace duckdb
