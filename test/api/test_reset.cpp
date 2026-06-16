@@ -144,7 +144,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_caching_operators", {false}},
 	    {"enable_optimizer", {false}},
 	    {"parallelize_sequential_sources", {false}},
-	    {"initial_column_segment_size", {4096}}};
+	    {"initial_column_segment_size", {4096}},
+	    {"delim_join_as_cte", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
