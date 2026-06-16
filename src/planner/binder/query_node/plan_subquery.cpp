@@ -105,7 +105,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		D_ASSERT(bindings.size() == 1);
-		if (PlanReturnsExactlyOneRow(*plan)) {
+		if (expr.GetReturnType().id() != LogicalTypeId::SQLNULL && PlanReturnsExactlyOneRow(*plan)) {
 			auto result = make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), bindings[0]);
 			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
 			return std::move(result);
