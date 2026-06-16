@@ -17,6 +17,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -220,15 +221,35 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		storage->Commit(commit_state.get());
 		commit_timer.EndTimer();
 
-		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
-		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		if (commit_state->HasRowGroupData()) {
-			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
-			// optimistically written blocks
-			// hence we need to ensure those optimistically written blocks are persisted
-			storage_manager.GetBlockManager().FileSync();
+		// Validate that the commit cannot fail BEFORE writing any WAL entries. The deferred (group commit) path is
+		// data-only (defer_publish requires no catalog changes), so VerifyTableModification is the complete
+		// pre-commit conflict check there: a commit that passes it can no longer fail. Writing the WAL entries only
+		// after validation means a failing commit never puts bytes in the shared WAL - so there is no WAL truncation
+		// on the concurrent commit path, which would otherwise race the group commit sync leader's flush and corrupt
+		// the WAL. This check is read-only and only needs the WAL lock (held here, blocking concurrent catalog
+		// changes that VerifyTableModification guards against); it does not need the transaction lock, so the (slow)
+		// entry write below still runs without it. Catalog-changing commits take the synchronous path and validate
+		// as they apply - they are serialized behind the WAL lock and drain pending commits, so their (rare) revert
+		// does not race the sync leader.
+		error_data = undo_buffer.ValidateCommitConflicts();
+		if (!error_data.HasError()) {
+			auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
+			undo_buffer.WriteToWAL(*wal, commit_state.get());
+			if (commit_state->HasRowGroupData()) {
+				// if we have optimistically written any data AND we are writing to the WAL, we have written
+				// references to optimistically written blocks
+				// hence we need to ensure those optimistically written blocks are persisted
+				if (Settings::Get<ExperimentalGroupCommitSetting>(db.GetDatabase())) {
+					// group commit: defer the database file sync to the WAL sync leader, which performs it (batched
+					// across transactions, outside of the WAL lock) before any WAL fsync that makes this commit's
+					// flush marker durable - preserving the blocks-before-references ordering
+					commit_state->DeferBlockSync();
+				} else {
+					storage_manager.GetBlockManager().FileSync();
+				}
+			}
+			wal_timer.EndTimer();
 		}
-		wal_timer.EndTimer();
 
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
@@ -309,6 +330,51 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		                             error_data.RawMessage());
 	}
 	return error_data;
+}
+
+ErrorData DuckTransaction::CommitToWAL(AttachedDatabase &db, CommitInfo &commit_info,
+                                       unique_ptr<StorageCommitState> commit_state,
+                                       idx_t &flush_marker_offset) noexcept {
+	this->commit_id = commit_info.commit_id;
+	flush_marker_offset = 0;
+	D_ASSERT(commit_state);
+	D_ASSERT(ChangesMade());
+	D_ASSERT(!IsReadOnly());
+	try {
+		// Conflicts were already validated in WriteToWAL, BEFORE any WAL entries were written (the deferred path is
+		// data-only, so that check is complete). This commit can no longer fail, and its entries are already in the
+		// WAL - so we just write the flush marker. Once the marker is written the commit must complete; it can be
+		// replayed after a crash. The marker is written without fsync (the caller batches the fsync across
+		// transactions); we capture the WAL offset the caller must SyncUpTo() to make this commit durable.
+		flush_marker_offset = commit_state->FlushCommitMarker();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		try {
+			commit_state->RevertCommit();
+		} catch (...) { // NOLINT
+		}
+		return ErrorData(ex);
+	}
+}
+
+ErrorData DuckTransaction::PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept {
+	D_ASSERT(this->commit_id == commit_info.commit_id);
+	// deferred commits are data-only: catalog-changing transactions commit through Commit()
+	D_ASSERT(catalog_version < TRANSACTION_ID_START);
+	UndoBuffer::IteratorState iterator_state;
+	optional_ptr<BlockManager> block_manager;
+	if (db.HasStorageManager()) {
+		block_manager = db.GetStorageManager().GetBlockManager();
+	}
+	CommitDropState drop_state(block_manager);
+	commit_info.drop_state = &drop_state;
+	try {
+		undo_buffer.Commit(iterator_state, commit_info);
+		drop_state.FinalizeCommit();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		return ErrorData(ex);
+	}
 }
 
 ErrorData DuckTransaction::Rollback() {

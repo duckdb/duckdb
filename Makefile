@@ -550,7 +550,8 @@ TEST_CONFIGS := \
 	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
 	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json
+	test/configs/shredded_vector.json \
+	test/configs/group_commit.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))

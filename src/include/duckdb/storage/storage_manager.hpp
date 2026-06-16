@@ -37,6 +37,19 @@ public:
 	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
+	//! Write only the WAL flush marker that completes the commit in the WAL, WITHOUT making it durable - the
+	//! caller must fsync via WriteAheadLog::SyncUpTo before acknowledging the commit (group commit). Returns the
+	//! WAL offset that SyncUpTo() must reach to make this commit durable (the offset of the flush marker).
+	//! The default implementation falls back to the fully durable FlushCommit.
+	virtual idx_t FlushCommitMarker() {
+		FlushCommit();
+		return 0;
+	}
+	//! Mark that the database file sync for optimistically written row group data is deferred to the WAL sync
+	//! leader (group commit), instead of being performed by the committing transaction itself. Must be called
+	//! before the flush marker is written. The default implementation ignores this.
+	virtual void DeferBlockSync() {
+	}
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
@@ -82,6 +95,10 @@ public:
 	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
+	//! Gets a shared reference to the WAL that keeps it alive even if a concurrent checkpoint swaps the WAL.
+	//! Used for group commit: a committer must be able to finish WriteAheadLog::SyncUpTo after releasing the WAL
+	//! lock. Must be called while holding the WAL lock.
+	shared_ptr<WriteAheadLog> GetWALShared();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        ActiveCheckpointWrapper &active_checkpoint);
@@ -168,8 +185,10 @@ protected:
 	string path;
 	//! The WAL path
 	string wal_path;
-	//! The WriteAheadLog of the storage manager
-	unique_ptr<WriteAheadLog> wal;
+	//! The WriteAheadLog of the storage manager.
+	//! Held as shared_ptr because committing transactions can hold a reference across a concurrent WAL swap
+	//! (see GetWALShared).
+	shared_ptr<WriteAheadLog> wal;
 	//! Mutex used to control writes to the WAL
 	mutex wal_lock;
 	//! Whether or not the database is opened in read-only mode

@@ -12,6 +12,9 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/set.hpp"
+
+#include <condition_variable>
 
 namespace duckdb {
 class DuckTransactionManager;
@@ -82,6 +85,19 @@ public:
 	                      idx_t extra_data_size = 0);
 	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
 
+	//! Wait until all commits that have written their WAL flush marker have been published (made visible).
+	//! Used by checkpoints and catalog-changing commits to ensure no commit is "in between" WAL durability and
+	//! visibility. The caller must hold the WAL lock (so no new pending commits can register) and must NOT hold
+	//! the transaction lock (pending commits need it to publish).
+	void WaitForPendingCommits();
+	//! Wait until no pending (unpublished) commits exist, then return while holding the publish lock - blocking
+	//! new deferred commits from registering until the returned lock is released. Used by DDL (ALTER/DROP) to
+	//! attach a new catalog version: a deferred commit validates against the catalog before writing its WAL flush
+	//! marker, and that validation must stay authoritative until the commit is published. While a caller is
+	//! waiting, new commits fall back to the synchronous commit path instead of deferring (avoids starvation).
+	//! The caller must NOT hold the transaction lock or the WAL lock.
+	unique_lock<mutex> BlockPendingCommits();
+
 protected:
 	struct CheckpointDecision {
 		explicit CheckpointDecision(string reason_p);
@@ -109,6 +125,16 @@ private:
 
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
+
+	//! Register a commit that is about to write its WAL flush marker and defer its publish.
+	//! Returns false if a DDL gate is currently waiting (see BlockPendingCommits) - the commit must then
+	//! fall back to the synchronous commit path.
+	bool RegisterPendingCommit(transaction_t commit_id);
+	//! Wait until all earlier pending commits have been published. Publishing in commit order keeps
+	//! recently_committed_transactions ordered on commit_id and matches WAL replay order.
+	void WaitForPublishTurn(transaction_t commit_id);
+	//! Mark a pending commit as published (or abandoned on fatal failure) and wake up waiters.
+	void FinishPendingCommit(transaction_t commit_id);
 
 private:
 	//! The current start timestamp used by transactions
@@ -138,6 +164,18 @@ private:
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;
+
+	//! Protects pending_commit_publishes.
+	mutex publish_lock;
+	//! Signalled whenever a pending commit is published.
+	std::condition_variable publish_cv;
+	//! Commits that are durable in the WAL (flush marker written) but not yet published/visible.
+	//! Lock ordering: transaction_lock -> publish_lock. Waiting on publish_cv requires holding neither
+	//! the transaction lock nor the WAL lock.
+	set<transaction_t> pending_commit_publishes;
+	//! Number of DDL operations currently waiting in BlockPendingCommits. While non-zero, new commits
+	//! cannot register as pending and fall back to the synchronous commit path.
+	idx_t catalog_gate_waiters = 0;
 
 	//! Only one cleanup can be active at any time.
 	mutex cleanup_lock;

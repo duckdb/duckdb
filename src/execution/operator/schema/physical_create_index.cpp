@@ -7,9 +7,11 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -171,6 +173,14 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
+
+	// Block deferred (group) commits from being in-flight while we attach the new index to the table: a deferred
+	// commit that is durable in the WAL but not yet published must not interleave with the index list changing
+	// (see DuckTransactionManager::BlockPendingCommits). This must be acquired AFTER the catalog operations above,
+	// which can re-acquire the gate internally (it is not re-entrant).
+	// NOTE: this does NOT fix the pre-existing race where rows committed during the index build are missing from
+	// the new index - that race reproduces on upstream main and needs a separate fix in the index build protocol.
+	auto publish_gate = DuckTransactionManager::Get(table.ParentCatalog().GetAttached()).BlockPendingCommits();
 
 	// Add the index to the storage.
 	storage.AddIndex(std::move(bound_index));

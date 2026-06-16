@@ -721,6 +721,20 @@
         "struct": "ErrorsAsJSONSetting"
     },
     {
+        "name": "experimental_group_commit",
+        "description": "EXPERIMENTAL: Batch the WAL fsync of concurrently committing transactions (group commit). Commits are acknowledged only after their WAL entries are durable, and are only published once durable.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "experimental_group_commit_delay",
+        "description": "EXPERIMENTAL: Maximum time in microseconds that a group commit leader waits for concurrently committing transactions to join its WAL fsync (-1 = automatic, scaled to the observed fsync duration, 0 = no wait). Only used with experimental_group_commit.",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "-1"
+    },
+    {
         "name": "experimental_metadata_reuse",
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",

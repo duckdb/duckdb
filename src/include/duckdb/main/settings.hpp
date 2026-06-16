@@ -1105,6 +1105,31 @@ struct ErrorsAsJSONSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ExperimentalGroupCommitSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_group_commit";
+	static constexpr const char *Description =
+	    "EXPERIMENTAL: Batch the WAL fsync of concurrently committing transactions (group commit). Commits are "
+	    "acknowledged only after their WAL entries are durable, and are only published once durable.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct ExperimentalGroupCommitDelaySetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "experimental_group_commit_delay";
+	static constexpr const char *Description =
+	    "EXPERIMENTAL: Maximum time in microseconds that a group commit leader waits for concurrently committing "
+	    "transactions to join its WAL fsync (-1 = automatic, scaled to the observed fsync duration, 0 = no wait). Only "
+	    "used with experimental_group_commit.";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *DefaultValue = "-1";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ExperimentalMetadataReuseSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "experimental_metadata_reuse";

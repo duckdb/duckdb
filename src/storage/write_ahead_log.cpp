@@ -20,10 +20,15 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/wal_entry.hpp"
+
+#include <chrono>
+#include <thread>
 
 namespace duckdb {
 
@@ -86,8 +91,15 @@ void WriteAheadLog::Truncate(idx_t size) {
 		storage_manager.SetWALSize(size);
 		return;
 	}
-	writer->Truncate(size);
-	storage_manager.SetWALSize(writer->GetFileSize());
+	idx_t file_size;
+	{
+		// serialize the truncate (which removes reverted/uncommitted WAL entries) against the group commit sync
+		// leader's push-to-OS, which runs without the storage manager WAL lock (see LockFlush())
+		auto flush_guard = LockFlush();
+		writer->Truncate(size);
+		file_size = writer->GetFileSize();
+	}
+	storage_manager.SetWALSize(file_size);
 }
 
 bool WriteAheadLog::Initialized() const {
@@ -121,6 +133,9 @@ public:
 			return FlushEncrypted();
 		}
 
+		// serialize this entry's writes into the WAL buffer against the group commit sync leader's push-to-OS
+		// (which takes the same flush lock) - see WriteAheadLog::LockFlush()
+		auto flush_guard = wal.LockFlush();
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
@@ -138,6 +153,8 @@ public:
 		auto &catalog = wal.GetDatabase().GetCatalog().Cast<DuckCatalog>();
 		auto encryption_key_id = catalog.GetEncryptionKeyId();
 
+		// serialize this entry's writes into the WAL buffer against the sync leader's push-to-OS (see LockFlush())
+		auto flush_guard = wal.LockFlush();
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 
@@ -246,6 +263,13 @@ private:
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteHeader() {
 	D_ASSERT(writer);
+	// Serialize the "has a header been written?" check + the header write against the group commit sync leader's
+	// push-to-OS. GetFileSize() = on-disk size + buffered offset, read non-atomically, while the leader's Flush()
+	// mutates both (fs.Write grows the file, then sets offset=0). Without this lock a committer can observe
+	// GetFileSize()==0 after the header was already written (torn read across the leader's flush) and write a
+	// SECOND header mid-WAL, which corrupts replay. The header is written directly to the writer (not via
+	// ChecksumWriter), so it would otherwise bypass the flush lock entirely.
+	auto flush_guard = LockFlush();
 	if (writer->GetFileSize() > 0) {
 		// Already written - no need to write a header.
 		return;
@@ -578,14 +602,156 @@ void WriteAheadLog::Flush() {
 	if (!writer) {
 		return;
 	}
+	auto target_offset = WriteFlushMarker();
+	// the caller holds the WAL lock, so no concurrent appends can arrive - no point waiting for a batch
+	SyncUpTo(target_offset, false);
+}
 
-	// write an empty entry
+idx_t WriteAheadLog::WriteFlushMarker(bool requires_block_sync, bool push_to_os) {
+	if (!writer) {
+		return 0;
+	}
+
+	// write an empty entry (appended to the in-memory WAL buffer under flush_lock, via ChecksumWriter::Flush)
 	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);
 	serializer.End();
 
-	// flushes all changes made to the WAL to disk
-	writer->Sync();
-	storage_manager.SetWALSize(writer->GetFileSize());
+	idx_t target_offset;
+	idx_t file_size;
+	{
+		// Under flush_lock: (optionally) push the buffered data to the OS now, and snapshot + advance written_offset.
+		// Holding flush_lock keeps the push and the written_offset update atomic with respect to the sync leader
+		// (which also pushes the buffer + reads written_offset under flush_lock). In the deferred path
+		// (push_to_os=false) the bytes stay buffered until the sync leader flushes them.
+		auto flush_guard = LockFlush();
+		if (push_to_os) {
+			// synchronous path: push all buffered data to the operating system now (the fsync happens in SyncUpTo)
+			writer->Flush();
+		}
+		// note: GetTotalWritten() is the logical byte count (buffered + flushed), the same whether or not we pushed
+		target_offset = writer->GetTotalWritten();
+		file_size = writer->GetFileSize();
+		if (requires_block_sync) {
+			// record that this marker references optimistically written row group data
+			// this must happen BEFORE written_offset advances: any sync leader whose fsync covers this marker
+			// must observe the block sync requirement (see SyncUpTo)
+			block_sync_pending_offset = MaxValue<idx_t>(block_sync_pending_offset.load(), target_offset);
+		}
+		written_offset = target_offset;
+	}
+	storage_manager.SetWALSize(file_size);
+	return target_offset;
+}
+
+void WriteAheadLog::SyncUpTo(idx_t target_offset, bool wait_for_batch, bool leader_pushes_batch) {
+	// PROTOTYPE BENCHMARK HACK - DO NOT COMMIT
+	// when DUCKDB_BENCH_SKIP_WAL_SYNC is set we skip the fsync to measure the no-fsync commit throughput ceiling
+	static const bool skip_wal_sync = getenv("DUCKDB_BENCH_SKIP_WAL_SYNC") != nullptr;
+
+	std::unique_lock<mutex> lock(sync_mutex);
+	if (skip_wal_sync) {
+		synced_offset = MaxValue(synced_offset, target_offset);
+		return;
+	}
+	while (synced_offset < target_offset) {
+		if (sync_in_progress) {
+			// another thread is currently performing an fsync - wait for it to finish
+			// its fsync might not cover our target offset (it could have started before our data was written),
+			// in which case we loop around and either become the next leader or wait again
+			sync_waiters++;
+			sync_cv.wait(lock);
+			sync_waiters--;
+			continue;
+		}
+		// no fsync in progress - this thread becomes the sync leader
+		// the fsync covers everything pushed to the operating system up to this point, including the flush
+		// markers of other concurrently committing transactions - they share this single fsync (group commit)
+		sync_in_progress = true;
+		bool do_batch_wait = wait_for_batch && batch_commits;
+		lock.unlock();
+		auto sync_target = written_offset.load();
+		if (do_batch_wait) {
+			// Other transactions were committing concurrently during the previous fsync.
+			// Before fsync-ing, give concurrently committing transactions a window to finish appending their
+			// flush markers, so that this fsync covers them as well and they do not have to wait for the next
+			// one (micro-batching, similar in spirit to PostgreSQL's commit_delay).
+			// The maximum window is experimental_group_commit_delay microseconds; with -1 (automatic, the
+			// default) it is scaled to a fraction of the observed fsync duration: a wait that is small relative
+			// to the fsync adds little commit latency, while letting (at best) an entire round of concurrent
+			// committers share this fsync. The wait stops early as soon as no new appends arrive.
+			auto delay_micros = Settings::Get<ExperimentalGroupCommitDelaySetting>(GetDatabase().GetDatabase());
+			if (delay_micros < 0) {
+				delay_micros = static_cast<int64_t>(sync_duration_micros.load() / 4);
+			}
+			if (delay_micros > 0) {
+				auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(delay_micros);
+				// note that the effective poll granularity is limited by the operating system timer resolution
+				auto poll_interval = std::chrono::microseconds(MaxValue<int64_t>(delay_micros / 10, 20));
+				while (true) {
+					std::this_thread::sleep_for(poll_interval);
+					auto new_target = written_offset.load();
+					if (new_target == sync_target) {
+						// no new appends - stop waiting
+						break;
+					}
+					sync_target = new_target;
+					if (std::chrono::steady_clock::now() >= deadline) {
+						break;
+					}
+				}
+			}
+		}
+		if (leader_pushes_batch && writer) {
+			// Deferred group commit: committers only appended their flush markers to the in-memory WAL buffer
+			// (WriteFlushMarker with push_to_os=false). The sync leader now pushes the whole accumulated batch to
+			// the operating system in a single write(), so the per-write round-trip (multi-ms on network storage
+			// like EFS, and worse under concurrency) is shared across all batched commits instead of paid per
+			// commit. The push runs under the WAL flush_lock - NOT the storage manager WAL lock - so it cannot
+			// deadlock against a checkpoint / catalog commit / synchronous commit that holds the WAL lock and waits.
+			// Pushing the whole buffer is safe: deferred commits write their WAL entries only after
+			// ValidateCommitConflicts (so they cannot be reverted/truncated), and any not-yet-marked trailing bytes
+			// are ignored on crash recovery (replay stops at the last flush marker). sync_target stays at the last
+			// committed marker, so durability is only ever promised up to a committed point.
+			lock_guard<mutex> flush_guard(flush_lock);
+			writer->Flush();
+			sync_target = written_offset.load();
+		}
+		ErrorData error;
+		try {
+			if (block_sync_pending_offset.load() > block_synced_offset.load()) {
+				// one or more flush markers covered by this fsync reference optimistically written row group
+				// data: the referenced blocks must be durable in the database file BEFORE the WAL fsync makes
+				// those markers durable. Perform one (batched) database file sync covering all of them.
+				// A marker above sync_target conservatively triggers another sync in a later round.
+				storage_manager.GetBlockManager().FileSync();
+				block_synced_offset = MaxValue<idx_t>(block_synced_offset.load(), sync_target);
+			}
+			auto sync_start = std::chrono::steady_clock::now();
+			writer->SyncData();
+			// update the moving average of the fsync duration (drives the automatic micro-batching window)
+			auto sync_micros = static_cast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - sync_start)
+			        .count());
+			auto previous = sync_duration_micros.load();
+			sync_duration_micros = previous == 0 ? sync_micros : (3 * previous + sync_micros) / 4;
+		} catch (std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		// detect concurrent commit activity: did other transactions append while we were syncing?
+		auto post_sync_written = written_offset.load();
+		lock.lock();
+		sync_in_progress = false;
+		// adaptive micro-batching: only wait for a batch to form when there is concurrent commit activity,
+		// i.e. other transactions are waiting on this fsync or appended to the WAL while we were syncing
+		batch_commits = sync_waiters > 0 || post_sync_written > sync_target;
+		if (!error.HasError()) {
+			synced_offset = MaxValue(synced_offset, sync_target);
+		}
+		sync_cv.notify_all();
+		if (error.HasError()) {
+			error.Throw();
+		}
+	}
 }
 
 void WriteAheadLog::IncrementWALEntriesCount() {

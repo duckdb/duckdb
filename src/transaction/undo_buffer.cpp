@@ -11,10 +11,12 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
@@ -191,6 +193,34 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	WALWriteState state(transaction, wal, commit_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+}
+
+ErrorData UndoBuffer::ValidateCommitConflicts() {
+	UndoBuffer::IteratorState iterator_state;
+	try {
+		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) {
+			optional_ptr<DuckTableEntry> table;
+			switch (type) {
+			case UndoFlags::INSERT_TUPLE:
+				table = reinterpret_cast<AppendInfo *>(data)->table;
+				break;
+			case UndoFlags::DELETE_TUPLE:
+				table = reinterpret_cast<DeleteInfo *>(data)->table;
+				break;
+			case UndoFlags::UPDATE_TUPLE:
+				table = reinterpret_cast<UpdateInfo *>(data)->table;
+				break;
+			default:
+				return;
+			}
+			// the same check that CommitState::CommitEntry performs when committing the entry:
+			// if another transaction has altered/dropped a modified table in the meantime, the commit must fail
+			CommitState::VerifyTableModification(*table, transaction.transaction_id);
+		});
+		return ErrorData();
+	} catch (std::exception &ex) {
+		return ErrorData(ex);
+	}
 }
 
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
