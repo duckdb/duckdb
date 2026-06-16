@@ -250,6 +250,9 @@ jobs:
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
       EXTENSION_STATIC_BUILD: 0
+      # Bound the LeakSanitizer report so its (slow) symbolization of libduckdb.so finishes and the
+      # full "allocated by" stacks are printed within the batch timeout. TODO: remove once the leak is fixed.
+      ASAN_OPTIONS: "detect_leaks=1:max_leaks=10"
 
     steps:
     - name: "Checkout"
@@ -293,7 +296,7 @@ jobs:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
-        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        test: make smoke SMOKE_BATCH_TIMEOUT=900 T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz

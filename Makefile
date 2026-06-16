@@ -34,6 +34,7 @@ endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
 SMOKE_RUNNER ?= build/relassert/test/run
+SMOKE_BATCH_TIMEOUT ?= 120
 UNITTEST_SLOW_FLAGS ?= --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
@@ -569,7 +570,7 @@ unittest_relassert:
 	build/relassert/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
-	$(SMOKE_RUNNER) --batch-timeout 120 --test-list test/smoke_tests.list $(T)
+	$(SMOKE_RUNNER) --batch-timeout $(SMOKE_BATCH_TIMEOUT) --test-list test/smoke_tests.list $(T)
 
 unittestarrow:
 	build/debug/test/run "[arrow]"
