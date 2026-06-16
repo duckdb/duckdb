@@ -32,6 +32,23 @@ struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
+struct ReadThroughputEstimator {
+	//! Record a timed read.
+	void AddSample(double seconds, idx_t bytes);
+	//! Try to produce an estimate. Needs reads of at least two different sizes to separate latency from bandwidth.
+	bool TryEstimate(NetworkThroughputEstimate &result) const;
+
+private:
+	mutable mutex lock;
+	idx_t sample_count = 0;
+	double sum_bytes = 0;
+	double sum_seconds = 0;
+	//! sum of bytes squared
+	double sum_bytes_sq = 0;
+	//! sum of bytes times seconds
+	double sum_bytes_seconds = 0;
+};
+
 struct CachingFileHandle {
 public:
 	using CachedFile = ExternalFileCache::CachedFile;
@@ -51,6 +68,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
+	//! Read and record time
+	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -69,6 +88,8 @@ private:
 	bool StripForceFullDownloadIfPresent();
 	//! Refresh the cached file if the global cache state has changed.
 	shared_ptr<CachedFile> EnsureCachedFileCurrent();
+	//! Record a timed read of a local file into the throughput estimate
+	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
 private:
 	QueryContext context;
@@ -98,6 +119,9 @@ private:
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
+
+	//! Throughput fitted from this handle's own reads, used for local files (remote files measure their own).
+	ReadThroughputEstimator throughput_estimator;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
