@@ -34,15 +34,6 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
-# optional_value_grammars: grammar stems whose generated wrappers represent
-# Optional(...) semantic children as optional<T> and syntax-only Optional(...)
-# children as bool presence flags. Grammars not listed here keep the legacy
-# default-initializer representation while their typed bodies are migrated.
-
-optional_value_grammars:
-  - expression
-  - select
-
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
