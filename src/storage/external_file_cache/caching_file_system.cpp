@@ -67,7 +67,7 @@ public:
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
-					file_handle.Read(context, buf.GetDataMutable(), to_read, offset);
+					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
 
 					lk.lock();
 					block->block_handle = buf.GetBlockHandle();
@@ -260,11 +260,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
 	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		auto &handle = GetFileHandle();
-		const auto read_start = steady_clock::now();
-		handle.Read(context, buf.GetDataMutable(), nr_bytes, location);
-		const duration<double> read_duration = steady_clock::now() - read_start;
-		RecordReadThroughput(read_duration.count(), nr_bytes);
+		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -459,6 +455,13 @@ bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &resul
 		return true;
 	}
 	return throughput_estimator.TryEstimate(result);
+}
+
+void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
+	auto &handle = GetFileHandle();
+	const auto read_start = steady_clock::now();
+	handle.Read(context, buffer, nr_bytes, location);
+	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
 }
 
 void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {

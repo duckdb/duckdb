@@ -68,6 +68,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
+	//! Read and record time
+	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
