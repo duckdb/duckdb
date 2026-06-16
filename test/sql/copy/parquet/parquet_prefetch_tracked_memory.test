@@ -5,23 +5,22 @@
 require parquet
 
 statement ok
-set prefetch_all_parquet_files=true;
+copy (select range i from range(16000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 16000000);
 
+# prefetch pins the full ~64MB row group span on top of the decode memory, so it OOMs where sync reads fit
 statement ok
-copy (select range i from range(8000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 8000000);
-
-statement ok
-set memory_limit='140mb';
+set memory_limit='240mb';
 
 statement error
 select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
 ----
 Out of Memory
 
+# disabling prefetching reads the file in small synchronous chunks, which fits in the memory limit
 statement ok
-set prefetch_all_parquet_files=false;
+set disable_parquet_prefetching=true;
 
 query II
 select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
 ----
-8000000	31999996000000
+16000000	127999992000000
