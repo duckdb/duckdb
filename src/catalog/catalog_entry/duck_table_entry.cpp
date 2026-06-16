@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -294,6 +295,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	case AlterTableType::SET_NOT_NULL: {
 		auto &set_not_null_info = table_info.Cast<SetNotNullInfo>();
 		return SetNotNull(context, set_not_null_info);
+	}
+	case AlterTableType::DROP_CONSTRAINT: {
+		auto &drop_constraint_info = table_info.Cast<DropConstraintInfo>();
+		return DropConstraint(context, drop_constraint_info);
 	}
 	case AlterTableType::DROP_NOT_NULL: {
 		auto &drop_not_null_info = table_info.Cast<DropNotNullInfo>();
@@ -1051,6 +1056,34 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 				break;
 			}
 		}
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::DropConstraint(ClientContext &context, DropConstraintInfo &info) {
+	auto create_info = GetInfo();
+	auto &table_info = create_info->Cast<CreateTableInfo>();
+
+	// CHECK constraints carry no name in the catalog; the caller identifies
+	// the constraint by its expression text.
+	bool found = false;
+	for (idx_t i = 0; i < table_info.constraints.size(); i++) {
+		auto &constraint = table_info.constraints[i];
+		if (constraint->type != ConstraintType::CHECK) {
+			continue;
+		}
+		auto &check = constraint->Cast<CheckConstraint>();
+		if (check.expression->ToString() == info.constraint_name) {
+			table_info.constraints.erase(table_info.constraints.begin() + static_cast<ptrdiff_t>(i));
+			found = true;
+			break;
+		}
+	}
+	if (!found && !info.if_constraint_not_found) {
+		throw CatalogException("constraint \"%s\" of table \"%s\" does not exist", info.constraint_name, name);
 	}
 
 	auto binder = Binder::CreateBinder(context);
