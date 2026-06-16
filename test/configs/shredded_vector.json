@@ -13,10 +13,9 @@
 			]
 		},
 		{
-			"reason": "FIXME: surfaces pre-existing bugs in consuming shredded variants - aggregating/hashing a shredded variant crashes, and the partial-shred (overlay) roundtrip corrupts some values",
+			"reason": "FIXME: surfaces pre-existing bugs in consuming shredded variants - aggregating/hashing a shredded variant crashes",
 			"paths": [
-				"test/sql/storage/types/variant/big_table.test_slow",
-				"test/parquet/variant/variant_snowflake_test.test"
+				"test/sql/storage/types/variant/big_table.test_slow"
 			]
 		}
 	]
