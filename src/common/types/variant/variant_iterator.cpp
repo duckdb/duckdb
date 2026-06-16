@@ -105,6 +105,24 @@ void ShreddedVariantIterator::Build(const Vector &vec) {
 	}
 }
 
+const vector<pair<string_t, idx_t>> &ShreddedVariantIterator::GetOrderedFields() const {
+	if (!ordered_fields_built) {
+		//! Build the lexicographic ordering once: each field's (name, index in 'children'), sorted by name.
+		//! The string_t keys reference the (stable) field names, so iterating the ordering does not need to
+		//! re-construct them for every value.
+		auto &child_types = StructType::GetChildTypes(logical_type);
+		ordered_fields.reserve(child_types.size());
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto &name = child_types[i].first;
+			ordered_fields.emplace_back(string_t(name.c_str(), NumericCast<uint32_t>(name.size())), i);
+		}
+		std::sort(ordered_fields.begin(), ordered_fields.end(),
+		          [](const pair<string_t, idx_t> &a, const pair<string_t, idx_t> &b) { return a.first < b.first; });
+		ordered_fields_built = true;
+	}
+	return ordered_fields;
+}
+
 //===--------------------------------------------------------------------===//
 // UnshreddedVariantIterator
 //===--------------------------------------------------------------------===//
@@ -235,37 +253,37 @@ VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &sta
 
 	//! A "STRUCT(typed_value, [untyped_value_index])" wrapper
 	auto &typed_value = node.children[TYPED_VALUE_INDEX];
-
-	bool overlay_valid = false;
-	uint32_t overlay_value_index = 0;
-	if (node.children.size() > 1) {
-		auto &untyped_value_index = node.children[UNTYPED_VALUE_INDEX];
-		auto untyped_sel = untyped_value_index.unified.sel->get_index(index);
-		if (untyped_value_index.unified.validity.RowIsValid(untyped_sel)) {
-			overlay_valid = true;
-			overlay_value_index = untyped_value_index.unified.GetData<uint32_t>()[untyped_sel];
-		}
-	}
+	const bool has_overlay = node.children.size() > 1;
 
 	if (ShreddedIsValid(typed_value, index)) {
-		//! The value is (at least partially) shredded
-		if (typed_value.logical_type.id() == LogicalTypeId::LIST) {
-			//! ARRAY values are not partially shredded - ignore any overlay
+		//! The value is (at least partially) shredded. The untyped_value_index (overlay) is only relevant
+		//! for OBJECTs (to merge leftover fields) - for primitives and ARRAYs we avoid reading it entirely,
+		//! which is the hot path for fully-shredded values.
+		if (!has_overlay || typed_value.logical_type.id() != LogicalTypeId::STRUCT) {
 			return MakeShredded(state, typed_value, index, row, 0);
 		}
-		//! Only OBJECT values merge a leftover (overlay) object
-		auto overlay = typed_value.logical_type.id() == LogicalTypeId::STRUCT ? overlay_value_index : 0;
-		if (!overlay_valid) {
-			overlay = 0;
+		//! OBJECT: read the overlay - either NULL (fully shredded) or a 1-based index to the leftover object
+		auto &untyped = node.children[UNTYPED_VALUE_INDEX];
+		auto untyped_sel = untyped.unified.sel->get_index(index);
+		uint32_t overlay = 0;
+		if (untyped.unified.validity.RowIsValid(untyped_sel)) {
+			overlay = untyped.unified.GetData<uint32_t>()[untyped_sel];
 		}
 		return MakeShredded(state, typed_value, index, row, overlay);
 	}
 
-	//! The value did not fit the shredded schema - it lives entirely in the unshredded component
-	if (!overlay_valid) {
-		//! No shredded and no unshredded value -> VARIANT_NULL
+	//! The typed value is absent - the value (if any) lives entirely in the unshredded component
+	if (!has_overlay) {
+		//! No unshredded value -> VARIANT_NULL
 		return MakeNull(state);
 	}
+	auto &untyped = node.children[UNTYPED_VALUE_INDEX];
+	auto untyped_sel = untyped.unified.sel->get_index(index);
+	if (!untyped.unified.validity.RowIsValid(untyped_sel)) {
+		//! NULL untyped value -> VARIANT_NULL
+		return MakeNull(state);
+	}
+	auto overlay_value_index = untyped.unified.GetData<uint32_t>()[untyped_sel];
 	if (overlay_value_index == 0) {
 		//! 0 is reserved to indicate a missing value
 		return MakeMissing(state);
@@ -467,21 +485,44 @@ VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, Vari
 		}
 	}
 
-	if (order == VariantIterationOrder::LEXICOGRAPHIC) {
-		//! Materialize all (non-missing) entries and sort them by key up-front. This is done per value
-		//! for now; a future optimization could cache the field order (e.g. for fully-shredded vectors,
-		//! where it is constant across rows).
-		ordered_entries.reserve(raw_count);
-		for (idx_t raw_pos = 0; raw_pos < raw_count; raw_pos++) {
-			auto entry = RawEntry(raw_pos);
-			if (entry.value.IsMissing()) {
-				continue;
-			}
-			ordered_entries.push_back(entry);
-		}
-		std::sort(ordered_entries.begin(), ordered_entries.end(),
-		          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
+	if (order != VariantIterationOrder::LEXICOGRAPHIC) {
+		return;
 	}
+
+	if (IsFullyShredded()) {
+		//! Fully shredded at this level (no leftover fields): the present fields are a subset of the typed
+		//! fields, so their lexicographic ordering is constant across rows. Use (building on first use) the
+		//! ordering cached on the ShreddedVariantIterator instead of sorting for every value. Missing fields
+		//! are skipped while iterating (see Iterator::Load).
+		ordered_fields = content->GetOrderedFields();
+		return;
+	}
+
+	//! Otherwise materialize all (non-missing) entries and sort them by key up-front
+	ordered_entries.reserve(raw_count);
+	for (idx_t raw_pos = 0; raw_pos < raw_count; raw_pos++) {
+		auto entry = RawEntry(raw_pos);
+		if (entry.value.IsMissing()) {
+			continue;
+		}
+		ordered_entries.push_back(entry);
+	}
+	std::sort(ordered_entries.begin(), ordered_entries.end(),
+	          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
+}
+
+bool VariantObjectIterator::IsFullyShredded() const {
+	//! "Fully shredded" means all of the object's data lives in the typed fields with no leftover
+	//! (overlay) fields. Individual typed fields may still be missing for a given row; those are skipped
+	//! during iteration. This is an O(1) check (no overlay <=> raw_count == typed_field_count).
+	return shredded && raw_count == typed_field_count;
+}
+
+VariantObjectEntry VariantObjectIterator::OrderedEntry(idx_t pos) const {
+	//! The key string_t is already built and cached - only the value cursor is resolved per row
+	auto &entry = (*ordered_fields)[pos];
+	return VariantObjectEntry {
+	    entry.first, VariantIterator::ResolveShredded(*state, content->children[entry.second], shredded_index, row)};
 }
 
 VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
@@ -507,7 +548,18 @@ VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
 	                           VariantIterator::MakeUnshredded(*state, row, value_idx)};
 }
 
-void VariantObjectIterator::Iterator::AdvanceToValid() {
+void VariantObjectIterator::Iterator::Load() {
+	if (parent.ordered_fields) {
+		//! Cached lexicographic ordering: iterate the (sorted) vector, skipping fields missing for this row
+		while (pos < parent.ordered_fields->size()) {
+			current = parent.OrderedEntry(pos);
+			if (!current.value.IsMissing()) {
+				return;
+			}
+			++pos;
+		}
+		return;
+	}
 	if (parent.order == VariantIterationOrder::LEXICOGRAPHIC) {
 		//! Iterate the pre-sorted entries (missing fields were already filtered out)
 		if (pos < parent.ordered_entries.size()) {
