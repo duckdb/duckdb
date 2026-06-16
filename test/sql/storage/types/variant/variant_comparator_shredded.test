@@ -1,0 +1,96 @@
+# name: test/sql/storage/types/variant/variant_comparator_shredded.test
+# description: variant_comparator must order/compare shredded variants identically to unshredded ones
+# group: [variant]
+
+load {TEST_DIR}/variant_comparator_shredded.db readwrite v1.5.0
+
+# always shred, and force a partial object shredding so that the leftover fields (c/d/e/g) and the
+# NULL/array rows end up in the unshredded component - exercising the merge in VariantIterator
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b VARCHAR)';
+
+statement ok
+CREATE TABLE shredded(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO shredded VALUES
+	(1, '{"a": 1, "b": "x", "c": 100}'::VARIANT),
+	(2, '{"a": 2, "b": "y"}'::VARIANT),
+	(3, '{"a": 3, "b": "z", "d": [1, 2, 3]}'::VARIANT),
+	(4, NULL::VARIANT),
+	(5, '{"a": 40, "b": "m"}'::VARIANT),
+	(6, '{"a": 6, "b": "hello", "g": "extra"}'::VARIANT),
+	(7, '{"a": 7, "b": "aaa"}'::VARIANT),
+	(8, '{"a": 5, "b": "q", "e": {"nested": true}}'::VARIANT),
+	(9, '{"a": 5, "b": "q"}'::VARIANT),
+	(10, '{"a": 100, "b": "z"}'::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+# reopen so the variant column is scanned from storage as a shredded vector
+restart
+
+# the ordering of the in-memory (unshredded) literals is the source of truth
+query I nosort id_order
+SELECT id FROM (VALUES
+	(1, '{"a": 1, "b": "x", "c": 100}'::VARIANT),
+	(2, '{"a": 2, "b": "y"}'::VARIANT),
+	(3, '{"a": 3, "b": "z", "d": [1, 2, 3]}'::VARIANT),
+	(4, NULL::VARIANT),
+	(5, '{"a": 40, "b": "m"}'::VARIANT),
+	(6, '{"a": 6, "b": "hello", "g": "extra"}'::VARIANT),
+	(7, '{"a": 7, "b": "aaa"}'::VARIANT),
+	(8, '{"a": 5, "b": "q", "e": {"nested": true}}'::VARIANT),
+	(9, '{"a": 5, "b": "q"}'::VARIANT),
+	(10, '{"a": 100, "b": "z"}'::VARIANT)
+) tbl(id, v) ORDER BY v, id;
+----
+
+# the ordering computed over the shredded stored variant must match exactly
+query I nosort id_order
+SELECT id FROM shredded ORDER BY v, id;
+----
+
+# and the logical values must round-trip identically in that order
+query I nosort value_order
+SELECT v::VARCHAR FROM (VALUES
+	(1, '{"a": 1, "b": "x", "c": 100}'::VARIANT),
+	(2, '{"a": 2, "b": "y"}'::VARIANT),
+	(3, '{"a": 3, "b": "z", "d": [1, 2, 3]}'::VARIANT),
+	(4, NULL::VARIANT),
+	(5, '{"a": 40, "b": "m"}'::VARIANT),
+	(6, '{"a": 6, "b": "hello", "g": "extra"}'::VARIANT),
+	(7, '{"a": 7, "b": "aaa"}'::VARIANT),
+	(8, '{"a": 5, "b": "q", "e": {"nested": true}}'::VARIANT),
+	(9, '{"a": 5, "b": "q"}'::VARIANT),
+	(10, '{"a": 100, "b": "z"}'::VARIANT)
+) tbl(id, v) ORDER BY v, id;
+----
+
+query I nosort value_order
+SELECT v::VARCHAR FROM shredded ORDER BY v, id;
+----
+
+# comparison predicates over the shredded variant must match the unshredded semantics
+query I nosort filter_order
+SELECT id FROM (VALUES
+	(1, '{"a": 1, "b": "x", "c": 100}'::VARIANT),
+	(2, '{"a": 2, "b": "y"}'::VARIANT),
+	(3, '{"a": 3, "b": "z", "d": [1, 2, 3]}'::VARIANT),
+	(4, NULL::VARIANT),
+	(5, '{"a": 40, "b": "m"}'::VARIANT),
+	(6, '{"a": 6, "b": "hello", "g": "extra"}'::VARIANT),
+	(7, '{"a": 7, "b": "aaa"}'::VARIANT),
+	(8, '{"a": 5, "b": "q", "e": {"nested": true}}'::VARIANT),
+	(9, '{"a": 5, "b": "q"}'::VARIANT),
+	(10, '{"a": 100, "b": "z"}'::VARIANT)
+) tbl(id, v) WHERE v > '{"a": 5, "b": "q"}'::VARIANT ORDER BY id;
+----
+
+query I nosort filter_order
+SELECT id FROM shredded WHERE v > '{"a": 5, "b": "q"}'::VARIANT ORDER BY id;
+----
