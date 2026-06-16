@@ -581,6 +581,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		if (table.HasGeneratedColumns()) {
+			throw NotImplementedException(
+			    "FOR EACH ROW triggers on tables with generated columns are not yet supported");
+		}
 		vector<Identifier> col_names;
 		vector<LogicalType> col_types;
 		for (auto &col : table.GetColumns().Physical()) {
