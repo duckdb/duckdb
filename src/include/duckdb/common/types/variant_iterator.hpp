@@ -13,11 +13,20 @@
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 class Vector;
 struct UnifiedVectorFormat;
+
+//! The order in which the children of an OBJECT are iterated
+enum class VariantIterationOrder : uint8_t {
+	//! The order in which the children are physically stored (no sorting)
+	INTERNAL,
+	//! Sorted by object key
+	LEXICOGRAPHIC
+};
 
 //===--------------------------------------------------------------------===//
 // VariantIterator
@@ -142,8 +151,9 @@ public:
 	//! Returns the decimal payload of a DECIMAL value
 	DUCKDB_API VariantDecimalData GetDecimal() const;
 
-	//! Lazily iterates the (key, value) children of an OBJECT value (merging shredded + unshredded)
-	DUCKDB_API VariantObjectIterator GetObjectChildren() const;
+	//! Iterates the (key, value) children of an OBJECT value (merging shredded + unshredded) in the
+	//! requested order. LEXICOGRAPHIC sorts by key (currently materialized + sorted up-front).
+	DUCKDB_API VariantObjectIterator GetOrderedObject(VariantIterationOrder order) const;
 	//! Lazily iterates the element values of an ARRAY value
 	DUCKDB_API VariantArrayIterator GetArrayChildren() const;
 
@@ -241,12 +251,14 @@ struct VariantObjectEntry {
 //! (typed) fields with the leftover unshredded fields. Forward iteration; missing fields are skipped.
 class VariantObjectIterator {
 public:
-	DUCKDB_API explicit VariantObjectIterator(const VariantIterator &object);
+	DUCKDB_API VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order);
 
 public:
+	//! Forward iterator. For INTERNAL order it lazily materializes entries (skipping missing fields);
+	//! for LEXICOGRAPHIC order it iterates the pre-sorted 'ordered_entries'.
 	class Iterator {
 	public:
-		Iterator(const VariantObjectIterator &parent, idx_t raw_pos) : parent(parent), raw_pos(raw_pos) {
+		Iterator(const VariantObjectIterator &parent, idx_t pos) : parent(parent), pos(pos) {
 			AdvanceToValid();
 		}
 		const VariantObjectEntry &operator*() const {
@@ -256,37 +268,42 @@ public:
 			return &current;
 		}
 		Iterator &operator++() { // NOLINT: match stl API
-			++raw_pos;
+			++pos;
 			AdvanceToValid();
 			return *this;
 		}
 		bool operator!=(const Iterator &other) const {
-			return raw_pos != other.raw_pos;
+			return pos != other.pos;
 		}
 
 	private:
-		//! Advances to the next non-missing entry, materializing it into 'current'
+		//! Loads the entry at the current position (skipping missing fields for INTERNAL order)
 		void AdvanceToValid();
 
 	private:
 		const VariantObjectIterator &parent;
-		idx_t raw_pos;
+		idx_t pos;
 		VariantObjectEntry current;
 	};
 	Iterator begin() const { // NOLINT: match stl API
 		return Iterator(*this, 0);
 	}
 	Iterator end() const { // NOLINT: match stl API
-		return Iterator(*this, raw_count);
+		return Iterator(*this, EndPos());
 	}
 
 private:
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
+	//! The end position in the iteration space (raw_count for INTERNAL, ordered_entries.size() for sorted)
+	idx_t EndPos() const {
+		return order == VariantIterationOrder::LEXICOGRAPHIC ? ordered_entries.size() : raw_count;
+	}
 
 private:
 	const VariantIteratorState *state;
 	idx_t row;
+	VariantIterationOrder order;
 	bool shredded;
 	//! Total number of raw entries (typed fields + leftover fields), before missing-field skipping
 	idx_t raw_count;
@@ -300,6 +317,9 @@ private:
 	idx_t shredded_index;
 	idx_t typed_field_count;
 	idx_t overlay_base;
+
+	//! LEXICOGRAPHIC: the entries materialized and sorted by key up-front
+	vector<VariantObjectEntry> ordered_entries;
 
 	friend class Iterator;
 };

@@ -447,15 +447,9 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 		break;
 	}
 	case VariantLogicalType::OBJECT: {
-		// gather (key, value) pairs and process them in string-sorted key order so that objects
-		// that only differ in key order compare equal
-		vector<VariantObjectEntry> entries;
-		for (auto &entry : it.GetObjectChildren()) {
-			entries.push_back(entry);
-		}
-		std::sort(entries.begin(), entries.end(),
-		          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
-		for (auto &entry : entries) {
+		// process the children in string-sorted key order so that objects that only differ in key order
+		// compare equal
+		for (auto &entry : it.GetOrderedObject(VariantIterationOrder::LEXICOGRAPHIC)) {
 			VariantEncodeString(sink, entry.key, true);
 			EncodeVariantValue(entry.value, sink);
 		}

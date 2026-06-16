@@ -2,6 +2,8 @@
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 //! Indices into the shredded "STRUCT(typed_value, untyped_value_index)" wrapper
@@ -373,8 +375,8 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 //===--------------------------------------------------------------------===//
 // Nested accessors
 //===--------------------------------------------------------------------===//
-VariantObjectIterator VariantIterator::GetObjectChildren() const {
-	return VariantObjectIterator(*this);
+VariantObjectIterator VariantIterator::GetOrderedObject(VariantIterationOrder order) const {
+	return VariantObjectIterator(*this, order);
 }
 
 VariantArrayIterator VariantIterator::GetArrayChildren() const {
@@ -412,26 +414,42 @@ VariantIterator VariantArrayIterator::operator[](idx_t i) const {
 //===--------------------------------------------------------------------===//
 // VariantObjectIterator
 //===--------------------------------------------------------------------===//
-VariantObjectIterator::VariantObjectIterator(const VariantIterator &object)
-    : state(object.state), row(object.row), shredded(object.kind == VariantIterator::Kind::SHREDDED) {
+VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order)
+    : state(object.state), row(object.row), order(order), shredded(object.kind == VariantIterator::Kind::SHREDDED) {
 	if (!shredded) {
 		auto nested =
 		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, object.value_index));
 		base = nested.children_idx;
 		raw_count = nested.child_count;
-		return;
+	} else {
+		//! Shredded object: the typed struct fields, followed by the leftover (overlay) object's fields
+		content = object.shredded_format;
+		shredded_index = object.shredded_index;
+		typed_field_count = content->children.size();
+		raw_count = typed_field_count;
+		if (object.overlay_value_index != 0) {
+			auto overlay_value_index = object.overlay_value_index - 1;
+			auto nested = DecodeNestedData(state->unshredded.GetBlob(row),
+			                               state->unshredded.GetByteOffset(row, overlay_value_index));
+			overlay_base = nested.children_idx;
+			raw_count += nested.child_count;
+		}
 	}
-	//! Shredded object: the typed struct fields, followed by the leftover (overlay) object's fields
-	content = object.shredded_format;
-	shredded_index = object.shredded_index;
-	typed_field_count = content->children.size();
-	raw_count = typed_field_count;
-	if (object.overlay_value_index != 0) {
-		auto overlay_value_index = object.overlay_value_index - 1;
-		auto nested =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, overlay_value_index));
-		overlay_base = nested.children_idx;
-		raw_count += nested.child_count;
+
+	if (order == VariantIterationOrder::LEXICOGRAPHIC) {
+		//! Materialize all (non-missing) entries and sort them by key up-front. This is done per value
+		//! for now; a future optimization could cache the field order (e.g. for fully-shredded vectors,
+		//! where it is constant across rows).
+		ordered_entries.reserve(raw_count);
+		for (idx_t raw_pos = 0; raw_pos < raw_count; raw_pos++) {
+			auto entry = RawEntry(raw_pos);
+			if (entry.value.IsMissing()) {
+				continue;
+			}
+			ordered_entries.push_back(entry);
+		}
+		std::sort(ordered_entries.begin(), ordered_entries.end(),
+		          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
 	}
 }
 
@@ -459,13 +477,21 @@ VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
 }
 
 void VariantObjectIterator::Iterator::AdvanceToValid() {
-	//! Only shredded typed fields can be "missing" (absent for this row) - skip them
-	while (raw_pos < parent.raw_count) {
-		current = parent.RawEntry(raw_pos);
+	if (parent.order == VariantIterationOrder::LEXICOGRAPHIC) {
+		//! Iterate the pre-sorted entries (missing fields were already filtered out)
+		if (pos < parent.ordered_entries.size()) {
+			current = parent.ordered_entries[pos];
+		}
+		return;
+	}
+	//! INTERNAL order: lazily materialize, skipping missing entries (only shredded typed fields can be
+	//! "missing", i.e. absent for this row)
+	while (pos < parent.raw_count) {
+		current = parent.RawEntry(pos);
 		if (!current.value.IsMissing()) {
 			return;
 		}
-		++raw_pos;
+		++pos;
 	}
 }
 
