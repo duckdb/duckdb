@@ -21,7 +21,7 @@ class Vector;
 struct UnifiedVectorFormat;
 
 //! The order in which the children of an OBJECT are iterated
-enum class VariantIterationOrder : uint8_t {
+enum class VariantIterationOrder {
 	//! The order in which the children are physically stored (no sorting)
 	INTERNAL,
 	//! Sorted by object key
