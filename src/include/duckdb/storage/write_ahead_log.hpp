@@ -16,6 +16,8 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/block.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 struct AlterInfo;
@@ -120,6 +122,15 @@ public:
 	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
+	//! Append the WAL_FLUSH marker for this commit and push the buffered bytes into the page cache, WITHOUT issuing an
+	//! fsync. Must be called while the WAL lock (StorageManager::wal_lock) is held so the append stays totally ordered.
+	//! Returns the WAL byte offset that covers this commit's entries; the caller must subsequently call GroupSync with
+	//! this offset to make the bytes durable before acknowledging the commit.
+	idx_t FlushAppendNoSync();
+	//! Flat-combining group commit: fsync the WAL so that every byte up to (at least) my_offset is durable. Called with
+	//! the WAL lock NOT held, so multiple committers can coalesce onto a single physical fsync. A committer returns
+	//! from this call only once durable_offset >= my_offset, i.e. its WAL_FLUSH marker is on stable storage.
+	void GroupSync(idx_t my_offset);
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
@@ -131,6 +142,34 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
+
+private:
+	//! Group-commit (flat combining) fsync coordination, lock-free on a single futex-backed word.
+	enum class SyncState : uint64_t { IDLE = 0, SYNCING = 1, SYNC_PENDING = 2 };
+	static constexpr uint64_t kStateBits = 2;
+	static constexpr uint64_t kStateMask = (uint64_t(1) << kStateBits) - 1;
+	static uint64_t MakeSyncWord(SyncState s, uint64_t round) {
+		return (round << kStateBits) | static_cast<uint64_t>(s);
+	}
+	static SyncState SyncWordState(uint64_t w) {
+		return static_cast<SyncState>(w & kStateMask);
+	}
+	static uint64_t SyncWordRound(uint64_t w) {
+		return w >> kStateBits;
+	}
+	//! Lead one grouped fsync (plus any SYNC_PENDING re-sync) after winning the IDLE->SYNCING election.
+	void RunSyncLeader(uint64_t round);
+
+	//! Coordination word: [round : 63..2][state : 1..0]. round increments on every word-changing transition so a
+	//! parked follower cannot alias a prior state -- this defeats ABA and lost wakeups (load-bearing, not diagnostic).
+	atomic<uint64_t> sync_state {MakeSyncWord(SyncState::IDLE, 0)};
+	//! Highest WAL byte offset known durable (fsynced). Raise-only; release-stored by the leader strictly AFTER
+	//! writer->handle->Sync() returns, acquire-loaded as the sole durable-before-ack predicate.
+	atomic<idx_t> durable_offset {0};
+	//! Highest WAL byte offset pushed to the page cache (writer->Flush()). Release-stored under the WAL lock by
+	//! FlushAppendNoSync (so it is monotonic and needs no sync coordination), acquire-loaded by the leader to size
+	//! its fsync, and clamped down by Truncate.
+	atomic<idx_t> flushed_offset {0};
 };
 
 } // namespace duckdb

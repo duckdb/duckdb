@@ -86,7 +86,13 @@ void WriteAheadLog::Truncate(idx_t size) {
 		return;
 	}
 	writer->Truncate(size);
-	storage_manager.SetWALSize(writer->GetFileSize());
+	idx_t truncated = writer->GetFileSize();
+	storage_manager.SetWALSize(truncated);
+	// Truncate runs under the WAL lock (the same lock that serializes the FlushAppendNoSync publish), so lower the
+	// published page-cache offset too -- otherwise a later GroupSync leader could snapshot a target beyond the file.
+	if (truncated < flushed_offset.load(std::memory_order_acquire)) {
+		flushed_offset.store(truncated, std::memory_order_release);
+	}
 }
 
 bool WriteAheadLog::Initialized() const {
@@ -576,6 +582,92 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 	storage_manager.SetWALSize(writer->GetFileSize());
+}
+
+idx_t WriteAheadLog::FlushAppendNoSync() {
+	if (!writer) {
+		return 0;
+	}
+
+	// write an empty entry, marking the end of this commit in the WAL byte stream
+	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);
+	serializer.End();
+
+	// push the buffered bytes into the OS page cache, but do NOT fsync yet -- the grouped fsync in GroupSync makes
+	// them durable. Appends are serialized under the WAL lock, so the returned offset covers exactly this commit's
+	// entries (and every earlier commit's), and the publish below is monotonic with a plain release store.
+	writer->Flush();
+	auto offset = writer->GetFileSize();
+	storage_manager.SetWALSize(offset);
+	flushed_offset.store(offset, std::memory_order_release);
+	return offset;
+}
+
+void WriteAheadLog::RunSyncLeader(uint64_t round) {
+	for (;;) {
+		// Target the highest flushed offset so this one fsync also covers bytes other committers flushed (under the
+		// WAL lock) after we were elected. Reloaded each iteration so a SYNC_PENDING re-sync picks up the late append.
+		idx_t target = flushed_offset.load(std::memory_order_acquire);
+		bool advanced = false;
+		try {
+			writer->handle->Sync();
+			if (target > durable_offset.load(std::memory_order_relaxed)) {
+				durable_offset.store(target, std::memory_order_release);
+			}
+			uint64_t expected = MakeSyncWord(SyncState::SYNCING, round);
+			uint64_t desired = MakeSyncWord(SyncState::IDLE, round + 1);
+			if (sync_state.compare_exchange_strong(expected, desired, std::memory_order_acq_rel,
+			                                       std::memory_order_acquire)) {
+				advanced = true;
+				sync_state.notify_all();
+				return;
+			}
+			// A late committer flipped SYNCING->SYNC_PENDING: its bytes are not covered by this fsync. We are the only
+			// leader (single-writer once SYNCING is set), so consume the flag, bump the round, and re-sync.
+			advanced = true;
+			sync_state.store(MakeSyncWord(SyncState::SYNCING, round + 1), std::memory_order_release);
+			sync_state.notify_all();
+			++round;
+		} catch (...) {
+			// On fsync failure release the SYNCING token so a re-elected committer can retry; without this the word
+			// stays SYNCING forever and the whole commit path deadlocks.
+			if (!advanced) {
+				sync_state.store(MakeSyncWord(SyncState::IDLE, round + 1), std::memory_order_release);
+				sync_state.notify_all();
+			}
+			throw;
+		}
+	}
+}
+
+void WriteAheadLog::GroupSync(idx_t my_offset) {
+	if (!writer || my_offset == 0) {
+		return;
+	}
+	for (;;) {
+		if (durable_offset.load(std::memory_order_acquire) >= my_offset) {
+			return;
+		}
+		uint64_t w = sync_state.load(std::memory_order_acquire);
+		switch (SyncWordState(w)) {
+		case SyncState::IDLE: {
+			uint64_t want = MakeSyncWord(SyncState::SYNCING, SyncWordRound(w));
+			if (sync_state.compare_exchange_weak(w, want, std::memory_order_acq_rel, std::memory_order_acquire)) {
+				RunSyncLeader(SyncWordRound(w));
+			}
+		} break;
+		case SyncState::SYNCING: {
+			// Record that our (later) bytes need a fsync, then park. The leader's completion CAS will fail on this
+			// flag and force a re-sync that covers us.
+			uint64_t pend = MakeSyncWord(SyncState::SYNC_PENDING, SyncWordRound(w));
+			sync_state.compare_exchange_weak(w, pend, std::memory_order_acq_rel, std::memory_order_acquire);
+			sync_state.wait(pend, std::memory_order_acquire);
+		} break;
+		case SyncState::SYNC_PENDING: {
+			sync_state.wait(w, std::memory_order_acquire);
+		} break;
+		}
+	}
 }
 
 void WriteAheadLog::IncrementWALEntriesCount() {

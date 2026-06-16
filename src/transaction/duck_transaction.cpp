@@ -269,7 +269,10 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		// }
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
+			// this appends the WAL_FLUSH marker and pushes the bytes into the page cache, but defers the fsync; the
+			// transaction manager issues the flat-combined GroupSync once the locks are dropped
 			commit_state->FlushCommit();
+			commit_info.wal_flush_offset = commit_state->GetFlushOffset();
 		}
 		drop_state.FinalizeCommit();
 		return ErrorData();

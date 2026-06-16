@@ -313,6 +313,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
 	ErrorData error;
 	unique_lock<mutex> held_wal_lock;
+	// Pin the WAL object (captured below while holding the WAL lock) so a concurrent checkpoint that resets it cannot
+	// free the object out from under our GroupSync fsync, which runs with the WAL lock released.
+	shared_ptr<WriteAheadLog> wal_ref;
 	unique_ptr<StorageCommitState> commit_state;
 	bool skip_wal_write_due_to_checkpoint = false;
 	if (checkpoint_decision.can_checkpoint) {
@@ -341,6 +344,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = storage_manager.GetWALLock();
+		wal_ref = storage_manager.GetWALShared();
 
 		// Commit the changes to the WAL.
 		if (!skip_wal_write_due_to_checkpoint) {
@@ -435,6 +439,16 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// this prevents any concurrent transactions from happening during this time
 	if (!skip_wal_write_due_to_checkpoint && held_wal_lock.owns_lock()) {
 		held_wal_lock.unlock();
+	}
+
+	// Flat-combining group commit: this commit appended its entries + WAL_FLUSH marker and pushed them to the page
+	// cache under the WAL lock (now released), but deferred the fsync. Issue the grouped fsync here, with neither the
+	// transaction lock nor the WAL lock held, so concurrent committers coalesce onto a single physical fsync. We block
+	// until the fsync covering this commit's bytes completes -- so the commit is durable before it is acknowledged and
+	// before the durability-dependent registered-state hook below. Because WAL append order (under the WAL lock) equals
+	// commit order, a later committer's fsync also covers this one, preserving prefix-consistent replay.
+	if (!error.HasError() && info.wal_flush_offset > 0) {
+		wal_ref->GroupSync(info.wal_flush_offset);
 	}
 
 	CleanupTransactions();

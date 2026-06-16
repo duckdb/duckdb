@@ -31,6 +31,10 @@ struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
+	//! WAL byte offset covering this commit's entries after FlushCommit appended+flushed (without fsync), or 0 if no
+	//! WAL bytes were written. The transaction manager passes this to WriteAheadLog::GroupSync to make the bytes
+	//! durable.
+	idx_t wal_flush_offset = 0;
 };
 
 class DuckTransaction : public Transaction {

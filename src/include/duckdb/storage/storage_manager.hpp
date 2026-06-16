@@ -37,6 +37,11 @@ public:
 	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
+	//! The WAL byte offset covering this commit's entries after FlushCommit, or 0 if no WAL bytes were written. The
+	//! transaction manager passes this to WriteAheadLog::GroupSync to make the bytes durable before acknowledging.
+	virtual idx_t GetFlushOffset() const {
+		return 0;
+	}
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
@@ -82,6 +87,9 @@ public:
 	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
+	//! Gets a shared owning reference to the WAL. Must be called while holding the WAL lock. Lets a committer pin the
+	//! WAL object across an unlocked GroupSync so a concurrent checkpoint's wal.reset() cannot free it mid-fsync.
+	shared_ptr<WriteAheadLog> GetWALShared();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        ActiveCheckpointWrapper &active_checkpoint);
@@ -168,8 +176,9 @@ protected:
 	string path;
 	//! The WAL path
 	string wal_path;
-	//! The WriteAheadLog of the storage manager
-	unique_ptr<WriteAheadLog> wal;
+	//! The WriteAheadLog of the storage manager. shared_ptr (not unique) so a committer can pin it across an unlocked
+	//! GroupSync; a checkpoint that resets/recreates the WAL only drops this reference, not the in-flight object.
+	shared_ptr<WriteAheadLog> wal;
 	//! Mutex used to control writes to the WAL
 	mutex wal_lock;
 	//! Whether or not the database is opened in read-only mode

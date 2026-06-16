@@ -197,6 +197,10 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
+shared_ptr<WriteAheadLog> StorageManager::GetWALShared() {
+	return wal;
+}
+
 // comparison used to see whether the storage version is compatible
 bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t storage_version) {
 	if (storage_version < static_cast<idx_t>(target_version)) {
@@ -280,7 +284,8 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	// as such override the checkpoint iteration number to the next one
 	auto &single_file_block_manager = GetBlockManager().Cast<SingleFileBlockManager>();
 	auto next_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration() + 1;
-	wal = make_uniq<WriteAheadLog>(*this, checkpoint_wal_path, 0ULL, WALInitState::NO_WAL, next_checkpoint_iteration);
+	wal = make_shared_ptr<WriteAheadLog>(*this, checkpoint_wal_path, 0ULL, WALInitState::NO_WAL,
+	                                     next_checkpoint_iteration);
 	return true;
 }
 
@@ -296,7 +301,7 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
 		ResetWALEntriesCount();
-		wal = make_uniq<WriteAheadLog>(*this, wal_path);
+		wal = make_shared_ptr<WriteAheadLog>(*this, wal_path);
 		return;
 	}
 
@@ -309,7 +314,7 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	fs.MoveFile(checkpoint_wal_path, wal_path);
 
 	// open what is now the main WAL again
-	wal = make_uniq<WriteAheadLog>(*this, wal_path);
+	wal = make_shared_ptr<WriteAheadLog>(*this, wal_path);
 	wal->Initialize();
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
@@ -475,7 +480,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
-		wal = make_uniq<WriteAheadLog>(*this, wal_path);
+		wal = make_shared_ptr<WriteAheadLog>(*this, wal_path);
 
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
@@ -589,6 +594,9 @@ public:
 	void RevertCommit() override;
 	// Make the commit persistent
 	void FlushCommit() override;
+	idx_t GetFlushOffset() const override {
+		return flush_offset;
+	}
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -598,6 +606,10 @@ public:
 private:
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
+	//! WAL byte offset covering this commit after the buffered append+marker flush (set by FlushCommit). The grouped
+	//! fsync is deferred to WriteAheadLog::GroupSync, which the transaction manager calls once both the transaction and
+	//! WAL locks are released, so the fsync can coalesce across concurrent committers.
+	idx_t flush_offset = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
@@ -643,8 +655,11 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
-	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	wal.Flush();
+	// Append the WAL_FLUSH marker and push this commit's bytes into the page cache, but defer the fsync: the
+	// transaction manager issues a flat-combined WriteAheadLog::GroupSync(flush_offset) after dropping the transaction
+	// and WAL locks, so concurrent committers coalesce onto one physical fsync while durability is still guaranteed
+	// before the commit is acknowledged.
+	flush_offset = wal.FlushAppendNoSync();
 	state = WALCommitState::FLUSHED;
 }
 
