@@ -830,7 +830,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
-			    GetFORArithmeticFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
+			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});

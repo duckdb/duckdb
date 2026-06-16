@@ -13,6 +13,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include <type_traits>
@@ -428,6 +429,46 @@ public:
 		return UpdateUnaryClusteredOpt<false, LOCAL_TYPE, INPUT_TYPE, OP>(vals, local, count, mask, sel, isel);
 	}
 
+	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class STORED_TYPE, class OP>
+	static inline bool UpdateUnaryClusteredFOROpt(const STORED_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
+	                                              const ValidityMask &mask, const sel_t *sel = nullptr,
+	                                              const SelectionVector *isel = nullptr) {
+		bool saw_value = !CHECK_VALIDITY && count != 0;
+		auto update = [&](idx_t idx) {
+			if constexpr (CHECK_VALIDITY) {
+				if (!mask.RowIsValidUnsafe(idx)) {
+					return;
+				}
+				saw_value = true;
+			}
+			auto value = FORVector::WidenStored<INPUT_TYPE>(vals[idx]);
+			OP::template UpdateClusteredLocal<INPUT_TYPE>(local, value);
+		};
+		if (sel) {
+			for (idx_t i = 0; i < count; i++) {
+				update(isel ? isel->get_index(sel[i]) : sel[i]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				update(isel ? isel->get_index(i) : i);
+			}
+		}
+		return saw_value;
+	}
+
+	template <class LOCAL_TYPE, class INPUT_TYPE, class STORED_TYPE, class OP>
+	static inline bool UpdateUnaryClusteredFORDispatch(const STORED_TYPE *__restrict vals, LOCAL_TYPE &local,
+	                                                   idx_t count, const ValidityMask &mask,
+	                                                   const sel_t *sel = nullptr,
+	                                                   const SelectionVector *isel = nullptr) {
+		if (OP::IgnoreNull() && mask.CanHaveNull()) {
+			return UpdateUnaryClusteredFOROpt<true, LOCAL_TYPE, INPUT_TYPE, STORED_TYPE, OP>(vals, local, count, mask,
+			                                                                                 sel, isel);
+		}
+		return UpdateUnaryClusteredFOROpt<false, LOCAL_TYPE, INPUT_TYPE, STORED_TYPE, OP>(vals, local, count, mask, sel,
+		                                                                                  isel);
+	}
+
 	template <class LOCAL_TYPE, class INPUT_TYPE, class OP>
 	static inline void UpdateUnaryClusteredLocalRepeat(LOCAL_TYPE &local, const INPUT_TYPE &input, idx_t count,
 	                                                   std::true_type) {
@@ -535,6 +576,39 @@ public:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void ExecuteUnaryClusteredFOROpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
+		FORVector::ScanData<INPUT_TYPE> scan_data;
+		if (!FORVector::TryGetScanData(input, scan_data)) {
+			ExecuteUnaryClusteredUnifiedOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+			return;
+		}
+		auto &validity = *scan_data.validity;
+		FOR_SWITCH_STORED(scan_data.stored_type, STORED_TYPE, {
+			auto vals = reinterpret_cast<const STORED_TYPE *>(scan_data.data);
+			if (IsDenseSingleRun(clustered, count)) {
+				auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[0].state);
+				using local_type = clustered_local_state_t<OP, STATE_TYPE>;
+				local_type local;
+				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
+				auto saw_value = UpdateUnaryClusteredFORDispatch<local_type, INPUT_TYPE, STORED_TYPE, OP>(
+				    vals, local, count, validity, nullptr, scan_data.sel);
+				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
+				return;
+			}
+			using local_type = clustered_local_state_t<OP, STATE_TYPE>;
+			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+				auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+				local_type local;
+				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
+				auto saw_value = UpdateUnaryClusteredFORDispatch<local_type, INPUT_TYPE, STORED_TYPE, OP>(
+				    vals, local, clustered.group_runs[r].count, validity, clustered.group_runs[r].sel, scan_data.sel);
+				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
+			}
+			return;
+		});
+	}
+
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClusteredConstantOpt(Vector &input, const ClusteredAggr &clustered) {
 		using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 		if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
@@ -622,10 +696,24 @@ public:
 			case VectorType::FLAT_VECTOR:
 				ExecuteUnaryClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
 				return;
+			case VectorType::FOR_VECTOR:
+				if constexpr (NumericLimits<INPUT_TYPE>::IsIntegral() && sizeof(INPUT_TYPE) > 1) {
+					ExecuteUnaryClusteredFOROpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+				} else {
+					ExecuteUnaryClusteredUnifiedOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+				}
+				return;
 			case VectorType::CONSTANT_VECTOR:
 				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
+				if constexpr (NumericLimits<INPUT_TYPE>::IsIntegral() && sizeof(INPUT_TYPE) > 1) {
+					const SelectionVector *sel;
+					if (FORVector::TryGetFOR(input, sel)) {
+						ExecuteUnaryClusteredFOROpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+						return;
+					}
+				}
 				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
 					if (clustered.state) {
 						auto props = clustered.state->GetDictProps(input);

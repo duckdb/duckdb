@@ -2,7 +2,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
@@ -54,15 +53,18 @@ void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
 	auto &input_vec = args.data[0];
 	auto count = args.size();
-	if (min_val == INPUT_TYPE(0)) {
-		const SelectionVector *dict_sel = nullptr;
-		auto *for_vec = FORVector::TryGetFOR(input_vec, dict_sel);
-		if (for_vec) {
-			auto stored_type = FORVector::GetStoredType(*for_vec);
-			auto src = FORVector::GetData(*for_vec);
-			const auto for_max = FORVector::GetMax<INPUT_TYPE>(*for_vec);
-			if (IntegralCompressFitsResult<INPUT_TYPE, RESULT_TYPE>(for_max)) {
-				if (stored_type == result.GetType().InternalType()) {
+
+	const SelectionVector *dict_sel = nullptr;
+	auto *for_vec = FORVector::TryGetFOR(input_vec, dict_sel);
+	if (for_vec) {
+		auto stored_type = FORVector::GetStoredType(*for_vec);
+		auto src = FORVector::GetData(*for_vec);
+		const auto for_max = FORVector::GetMax<INPUT_TYPE>(*for_vec);
+
+		if (min_val <= for_max) {
+			const auto compressed_max = for_max - min_val;
+			if (IntegralCompressFitsResult<INPUT_TYPE, RESULT_TYPE>(compressed_max)) {
+				if (min_val == INPUT_TYPE(0) && stored_type == result.GetType().InternalType()) {
 					auto stored_view = FORVector::CreateStoredView(*for_vec);
 					if (!dict_sel) {
 						result.Reference(stored_view);
@@ -77,7 +79,8 @@ void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 					auto stored_data = reinterpret_cast<const STORED_T *>(src);
 					for (idx_t i = 0; i < count; i++) {
 						auto src_idx = dict_sel ? dict_sel->get_index(i) : i;
-						result_data[i] = UnsafeNumericCast<RESULT_TYPE>(stored_data[src_idx]);
+						auto value = FORVector::WidenStored<INPUT_TYPE>(stored_data[src_idx]);
+						result_data[i] = TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(value, min_val);
 					}
 				});
 				if (!dict_sel) {
@@ -98,8 +101,9 @@ void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 			}
 		}
 	}
+
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    input_vec, result,
+	    input_vec, result, count,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },
