@@ -351,7 +351,13 @@ Expression:
     - BaseExpression
     - LambdaArrowExpression
     - LogicalOrExpression
+    - LogicalOrExpressionTail
+    - ColDefOrExpr
+    - ColDefOrExpressionTail
     - LogicalAndExpression
+    - LogicalAndExpressionTail
+    - ColDefAndExpr
+    - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
     - IsTest
@@ -1719,8 +1725,6 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - Expression
   - LambdaArrowExpression
-  - LogicalOrExpression
-  - LogicalAndExpression
   - IsExpression
   - OverClause
   - PrefixExpression

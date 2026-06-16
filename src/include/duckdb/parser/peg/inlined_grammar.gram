@@ -889,11 +889,15 @@ ColumnDefaultExpr <- ColDefOrExpr
 # LEVEL 1.5
 LambdaArrowExpression <- LogicalOrExpression SingleArrowPair*
 SingleArrowPair <- '->' LogicalOrExpression
-LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
-ColDefOrExpr <- ColDefAndExpr ('OR' ColDefAndExpr)*
+LogicalOrExpression <- LogicalAndExpression LogicalOrExpressionTail*
+LogicalOrExpressionTail <- 'OR' LogicalAndExpression
+ColDefOrExpr <- ColDefAndExpr ColDefOrExpressionTail*
+ColDefOrExpressionTail <- 'OR' ColDefAndExpr
 # LEVEL 2
-LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
-ColDefAndExpr <- IsDistinctFromExpression ('AND' IsDistinctFromExpression)*
+LogicalAndExpression <- LogicalNotExpression LogicalAndExpressionTail*
+LogicalAndExpressionTail <- 'AND' LogicalNotExpression
+ColDefAndExpr <- IsDistinctFromExpression ColDefAndExpressionTail*
+ColDefAndExpressionTail <- 'AND' IsDistinctFromExpression
 # LEVEL 3
 LogicalNotExpression <- NotExpression? IsExpression
 NotExpression <- NotKeyword+

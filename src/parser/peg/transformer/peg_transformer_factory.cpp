@@ -141,13 +141,8 @@ void PEGTransformerFactory::RegisterCreateTable() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
-	Register("ColumnDefaultExpr", &TransformExpression);
-	Register("ColDefOrExpr", &TransformLogicalOrExpression);
-	Register("ColDefAndExpr", &TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
-	REGISTER_TRANSFORM(TransformLogicalOrExpression);
-	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformIsExpression);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformPrefixExpression);

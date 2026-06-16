@@ -5265,6 +5265,139 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSingleExpressio
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColumnDefaultExprInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_def_or_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto result = std::move(col_def_or_expr);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformLogicalOrExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_and_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> logical_or_expression_tail {};
+	auto &logical_or_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (logical_or_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> logical_or_expression_tail_value;
+		auto &logical_or_expression_tail_value_repeat_1 =
+		    logical_or_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &logical_or_expression_tail_value_item_1 : logical_or_expression_tail_value_repeat_1.GetChildren()) {
+			auto logical_or_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(logical_or_expression_tail_value_item_1.get());
+			logical_or_expression_tail_value.push_back(std::move(logical_or_expression_tail_value_value_1));
+		}
+		logical_or_expression_tail = std::move(logical_or_expression_tail_value);
+	}
+	auto result = TransformLogicalOrExpression(transformer, std::move(logical_and_expression),
+	                                           std::move(logical_or_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformLogicalOrExpressionTailInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_and_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(logical_and_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColDefOrExprInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_def_and_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> col_def_or_expression_tail {};
+	auto &col_def_or_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (col_def_or_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> col_def_or_expression_tail_value;
+		auto &col_def_or_expression_tail_value_repeat_1 =
+		    col_def_or_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &col_def_or_expression_tail_value_item_1 : col_def_or_expression_tail_value_repeat_1.GetChildren()) {
+			auto col_def_or_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(col_def_or_expression_tail_value_item_1.get());
+			col_def_or_expression_tail_value.push_back(std::move(col_def_or_expression_tail_value_value_1));
+		}
+		col_def_or_expression_tail = std::move(col_def_or_expression_tail_value);
+	}
+	auto result =
+	    TransformColDefOrExpr(transformer, std::move(col_def_and_expr), std::move(col_def_or_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformColDefOrExpressionTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_def_and_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(col_def_and_expr);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformLogicalAndExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_not_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> logical_and_expression_tail {};
+	auto &logical_and_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (logical_and_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> logical_and_expression_tail_value;
+		auto &logical_and_expression_tail_value_repeat_1 =
+		    logical_and_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &logical_and_expression_tail_value_item_1 :
+		     logical_and_expression_tail_value_repeat_1.GetChildren()) {
+			auto logical_and_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(logical_and_expression_tail_value_item_1.get());
+			logical_and_expression_tail_value.push_back(std::move(logical_and_expression_tail_value_value_1));
+		}
+		logical_and_expression_tail = std::move(logical_and_expression_tail_value);
+	}
+	auto result = TransformLogicalAndExpression(transformer, std::move(logical_not_expression),
+	                                            std::move(logical_and_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformLogicalAndExpressionTailInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_not_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(logical_not_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColDefAndExprInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto is_distinct_from_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> col_def_and_expression_tail {};
+	auto &col_def_and_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (col_def_and_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> col_def_and_expression_tail_value;
+		auto &col_def_and_expression_tail_value_repeat_1 =
+		    col_def_and_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &col_def_and_expression_tail_value_item_1 :
+		     col_def_and_expression_tail_value_repeat_1.GetChildren()) {
+			auto col_def_and_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(col_def_and_expression_tail_value_item_1.get());
+			col_def_and_expression_tail_value.push_back(std::move(col_def_and_expression_tail_value_value_1));
+		}
+		col_def_and_expression_tail = std::move(col_def_and_expression_tail_value);
+	}
+	auto result = TransformColDefAndExpr(transformer, std::move(is_distinct_from_expression),
+	                                     std::move(col_def_and_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformColDefAndExpressionTailInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto is_distinct_from_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(is_distinct_from_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformLogicalNotExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10191,6 +10324,15 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ListComprehensionFilter", &PEGTransformerFactory::TransformListComprehensionFilterInternal},
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
 	    {"SingleExpression", &PEGTransformerFactory::TransformSingleExpressionInternal},
+	    {"ColumnDefaultExpr", &PEGTransformerFactory::TransformColumnDefaultExprInternal},
+	    {"LogicalOrExpression", &PEGTransformerFactory::TransformLogicalOrExpressionInternal},
+	    {"LogicalOrExpressionTail", &PEGTransformerFactory::TransformLogicalOrExpressionTailInternal},
+	    {"ColDefOrExpr", &PEGTransformerFactory::TransformColDefOrExprInternal},
+	    {"ColDefOrExpressionTail", &PEGTransformerFactory::TransformColDefOrExpressionTailInternal},
+	    {"LogicalAndExpression", &PEGTransformerFactory::TransformLogicalAndExpressionInternal},
+	    {"LogicalAndExpressionTail", &PEGTransformerFactory::TransformLogicalAndExpressionTailInternal},
+	    {"ColDefAndExpr", &PEGTransformerFactory::TransformColDefAndExprInternal},
+	    {"ColDefAndExpressionTail", &PEGTransformerFactory::TransformColDefAndExpressionTailInternal},
 	    {"LogicalNotExpression", &PEGTransformerFactory::TransformLogicalNotExpressionInternal},
 	    {"NotExpression", &PEGTransformerFactory::TransformNotExpressionInternal},
 	    {"NotKeyword", &PEGTransformerFactory::TransformNotKeywordInternal},
