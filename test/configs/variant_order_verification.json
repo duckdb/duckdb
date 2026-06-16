@@ -16,26 +16,14 @@
         "test/sql/collate/test_default_collations.test",
         "test/sql/collate/test_icu_collate.test",
         "test/sql/settings/setting_collation.test",
-        "test/sql/storage/icu_collation.test"
+        "test/sql/storage/icu_collation.test",
+        "test/sql/types/struct/unnest_struct_mix.test"
       ]
     },
     {
-      "reason": "VARIANT orders nested types (LIST/ARRAY/STRUCT/UNION) - and NULL elements within them - differently from native nested ordering (e.g. nested NULLs do not follow the ASC/DESC-dependent null order).",
+      "reason": "UNION values order by tag first and then by value natively, but a UNION cast to VARIANT keeps only the active member value, so VARIANT orders by value regardless of tag.",
       "paths": [
-        "test/sql/alter/alter_type/test_alter_type.test",
-        "test/sql/filter/test_struct_pushdown.test",
-        "test/sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test",
-        "test/sql/function/list/lambdas/expression_iterator_cases.test",
-        "test/sql/function/list/list_zip.test",
         "test/sql/index/art/types/test_art_union.test",
-        "test/sql/join/inner/test_join_is_distinct.test",
-        "test/sql/join/inner/test_join_is_not_distinct.test",
-        "test/sql/subquery/complex/nested_unnest_subquery.test",
-        "test/sql/types/list/list_null_members.test",
-        "test/sql/types/list/unnest_table_function.test",
-        "test/sql/types/nested/array/array_coverage.test",
-        "test/sql/types/nested/array/array_simple.test",
-        "test/sql/types/struct/unnest_struct_mix.test",
         "test/sql/types/union/union_cast.test",
         "test/sql/types/union/union_sort.test"
       ]
@@ -54,9 +42,14 @@
       ]
     },
     {
-      "reason": "Top-N NULL ordering and row-group pruning rely on the native comparison of the ORDER BY type.",
+      "reason": "Unnamed (positional) STRUCT cannot be cast to VARIANT, so ORDER BY over such values cannot be rewritten.",
       "paths": [
-        "test/sql/topn/test_top_n_lists.test",
+        "test/sql/function/list/list_zip.test"
+      ]
+    },
+    {
+      "reason": "These tests assert EXPLAIN / Top-N optimizer plans; the injected CAST to VARIANT changes the plan output (the create_sort_key-style ORDER BY rewrite has the same limitation).",
+      "paths": [
         "test/sql/topn/test_top_n_nulls_row_group_pruner_extensive.test",
         "test/sql/topn/top_n_pruning.test",
         "test/sql/topn/topn_nulls_first.test"

@@ -50,10 +50,12 @@ constexpr int64_t NANOS_PER_MILLI = 1000000;
 constexpr int64_t NANOS_PER_SEC = 1000000000;
 constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
 
-//! The sort-key rank of a variant value - determines the cross-type ordering (type-first)
+//! The sort-key rank of a variant value - determines the cross-type ordering (type-first).
+//! Ranks start at 1 so that every rank is strictly greater than the LIST/STRING delimiter (0); this
+//! guarantees a shorter list/object sorts before a longer one (the delimiter is smaller than any
+//! following element's rank byte) and that an element can never be confused with an end-of-list marker.
 enum class VariantSortRank : data_t {
-	NULL_VALUE = 0,
-	BOOLEAN,
+	BOOLEAN = 1,
 	NUMBER,
 	REAL,
 	VARCHAR,
@@ -67,7 +69,12 @@ enum class VariantSortRank : data_t {
 	GEOMETRY,
 	BITSTRING,
 	ARRAY,
-	OBJECT
+	OBJECT,
+	//! VARIANT_NULL ranks last so a nested NULL element orders after all non-null values, matching the
+	//! native "NULLS LAST" ordering of nested NULLs under ASC. For DESC the ORDER BY operator reverses
+	//! the (always-ascending) comparator key, which then places nested NULLs first - exactly as native
+	//! nested ordering does (where the null position within nested types follows ASC/DESC).
+	NULL_VALUE
 };
 
 data_t GetVariantTypeRank(VariantLogicalType type_id) {

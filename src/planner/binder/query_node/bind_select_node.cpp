@@ -370,12 +370,10 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 					// PushCollation below then routes ordering through the VARIANT comparator) to verify it
 					// produces the same ordering as the regular comparison. We do this on the *bound*
 					// expression so alias / positional / GROUP BY ALL resolution is unaffected.
-					order_node.expression =
-					    BoundCastExpression::AddCastToType(context, std::move(order_node.expression),
-					                                       LogicalType::VARIANT());
+					order_node.expression = BoundCastExpression::AddCastToType(
+					    context, std::move(order_node.expression), LogicalType::VARIANT());
 				}
-				ExpressionBinder::PushCollation(context, order_node.expression,
-				                                order_node.expression->GetReturnType());
+				ExpressionBinder::PushCollation(context, order_node.expression, order_node.expression->GetReturnType());
 			}
 			break;
 		}
