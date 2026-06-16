@@ -1005,8 +1005,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption(
 	    "parquet_prefetch_column_gap",
-	    "Byte gap under which Parquet prefetch I/O ranges are coalesced (0 lets the cost model adapt it)",
-	    LogicalType::UBIGINT, Value::UBIGINT(0));
+	    "Byte gap under which Parquet prefetch I/O ranges are coalesced (NULL lets the cost model adapt it)",
+	    LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));

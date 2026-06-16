@@ -218,12 +218,10 @@ static uint64_t DetermineAcceptedColumnGap(ClientContext &context, ParquetReader
 	if (!state.prefetch_mode) {
 		return gap;
 	}
-	Value pinned_gap = Value::UBIGINT(0);
+	Value pinned_gap;
 	context.TryGetCurrentSetting("parquet_prefetch_column_gap", pinned_gap);
-	const auto pinned = pinned_gap.GetValue<uint64_t>();
-	if (pinned != 0) {
-		// gaps beyond the ceiling overflow the coalescing comparator into not coalescing at all
-		return MinValue<uint64_t>(pinned, PrefetchCostModel::GAP_MAX);
+	if (!pinned_gap.IsNull()) {
+		return MinValue<uint64_t>(pinned_gap.GetValue<uint64_t>(), PrefetchCostModel::GAP_MAX);
 	}
 	// remote files measure their requests in the file system, local files in the caching file handle
 	NetworkThroughputEstimate estimate;

@@ -65,4 +65,20 @@ WHERE file_path LIKE '%cost_model_gap.parquet'
 4096
 
 statement ok
+CALL truncate_duckdb_logs()
+
+# Check 0
+statement ok
 SET parquet_prefetch_column_gap=0
+
+query I
+SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a >= 0 AND c >= 0
+----
+52350266
+
+query I
+SELECT DISTINCT accepted_column_gap
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_gap.parquet'
+----
+0
