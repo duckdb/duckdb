@@ -122,6 +122,20 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// first check if there are any indexes that exist that point to the removed column
 	for (auto &index : info->indexes.Indexes()) {
+		if (index.GetConstraintType() == IndexConstraintType::NONE) {
+			// Plain indexes are always entry-backed; when the entry is no longer
+			// visible the index was dropped earlier in this transaction and only
+			// leaves the storage list at commit - it cannot block the drop.
+			// (Unique CREATE INDEX entries still block: their names are not
+			// distinguishable from constraint-backed indexes here.)
+			auto &index_catalog = db.GetCatalog();
+			EntryLookupInfo lookup_info(CatalogType::INDEX_ENTRY, index.GetIndexName());
+			auto entry =
+			    index_catalog.GetEntry(context, info->GetSchemaName(), lookup_info, OnEntryNotFound::RETURN_NULL);
+			if (!entry) {
+				continue;
+			}
+		}
 		for (auto &column_id : index.GetColumnIds()) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
