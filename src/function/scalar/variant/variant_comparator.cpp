@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -42,6 +43,12 @@ constexpr data_t NULL_LAST_BYTE = 2;
 constexpr data_t STRING_DELIMITER = 0;
 constexpr data_t LIST_DELIMITER = 0;
 constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
+
+//! BIT/BITSTRING sort-key bytes (mirrors CreateBitStringSortKey in the core_functions bitstring code):
+//! each bit is expanded to one byte, kept above the STRING_DELIMITER (0) so a shorter bitstring (a
+//! prefix) sorts first, while preserving 0 < 1
+constexpr data_t BIT_SORT_KEY_ZERO = 2;
+constexpr data_t BIT_SORT_KEY_ONE = 3;
 
 //! nanoseconds-per-unit scale factors used to fold the DATE / TIME / TIMESTAMP precisions into a
 //! common unit (nanoseconds) so that values of different precision compare by their actual instant
@@ -446,9 +453,20 @@ void EncodeVariantValue(const UnifiedVariantVectorData &variant, idx_t row, uint
 		break;
 	case VariantLogicalType::BLOB:
 	case VariantLogicalType::GEOMETRY:
-	case VariantLogicalType::BITSTRING:
 		VariantEncodeString(sink, VariantUtils::DecodeStringData(variant, row, values_idx), false);
 		break;
+	case VariantLogicalType::BITSTRING: {
+		// BIT is ordered by its logical bit sequence, not by its raw bytes - expand each bit to a sort
+		// key byte (matching the bitstring_byte_comparable collation), terminated so a shorter bitstring
+		// (a prefix) sorts before a longer one
+		auto bitstring = VariantUtils::DecodeStringData(variant, row, values_idx);
+		auto bit_length = Bit::BitLength(bitstring);
+		for (idx_t bit_idx = 0; bit_idx < bit_length; bit_idx++) {
+			sink.Write(Bit::GetBit(bitstring, bit_idx) ? BIT_SORT_KEY_ONE : BIT_SORT_KEY_ZERO);
+		}
+		sink.Write(STRING_DELIMITER);
+		break;
+	}
 	case VariantLogicalType::ARRAY: {
 		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
 		for (idx_t i = 0; i < nested_data.child_count; i++) {

@@ -143,6 +143,24 @@ false
 true
 true
 
+# BITSTRING is ordered by its logical bit sequence (like the bitstring_byte_comparable collation),
+# so a shorter bitstring that is a prefix sorts first and bit 0 sorts before bit 1
+query I
+SELECT v::VARCHAR FROM (VALUES
+    ('0'::BIT::VARIANT),
+    ('10101010'::BIT::VARIANT),
+    ('00'::BIT::VARIANT),
+    ('01'::BIT::VARIANT),
+    ('1'::BIT::VARIANT)
+) t(v)
+ORDER BY v
+----
+0
+00
+01
+1
+10101010
+
 # temporal fold: DATE and all (non-tz) TIMESTAMP precisions fold into one rank and compare by instant
 # (a DATE compares as midnight of that day, and equal instants of different precision are equal)
 query III

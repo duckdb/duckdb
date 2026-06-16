@@ -36,12 +36,6 @@
       ]
     },
     {
-      "reason": "VARIANT orders BIT/BITSTRING by its blob bytes, which differs from native BIT ordering.",
-      "paths": [
-        "test/sql/types/bit/bit_issue_22527.test"
-      ]
-    },
-    {
       "reason": "Unnamed (positional) STRUCT cannot be cast to VARIANT, so ORDER BY over such values cannot be rewritten.",
       "paths": [
         "test/sql/function/list/list_zip.test"
