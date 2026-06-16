@@ -288,7 +288,7 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIt
 	default: {
 		// integer types
 		bool negative;
-		auto magnitude = VariantIntegralMagnitude(type_id, it.GetData(), negative);
+		auto magnitude = VariantIntegralMagnitude(type_id, it.GetDataPointer(), negative);
 		return BuildNumberKey(negative, Uhugeint::ToString(magnitude), 0);
 	}
 	}
@@ -387,49 +387,49 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 		break;
 	case VariantLogicalType::FLOAT:
 		// fold FLOAT into the REAL rank by widening to double (lossless)
-		VariantEncodeFixed<double>(sink, static_cast<double>(Load<float>(it.GetData())));
+		VariantEncodeFixed<double>(sink, static_cast<double>(it.GetData<float>()));
 		break;
 	case VariantLogicalType::DOUBLE:
-		VariantEncodeFixed<double>(sink, Load<double>(it.GetData()));
+		VariantEncodeFixed<double>(sink, it.GetData<double>());
 		break;
 	case VariantLogicalType::UUID:
-		VariantEncodeFixed<hugeint_t>(sink, Load<hugeint_t>(it.GetData()));
+		VariantEncodeFixed<hugeint_t>(sink, it.GetData<hugeint_t>());
 		break;
 	// DATE and all (non-tz) TIMESTAMP precisions fold into the TIMESTAMP rank and compare as the number
 	// of nanoseconds since the epoch (DATE compares as midnight of that day, TIMESTAMP WITH TIME ZONE
 	// as its UTC instant). int128 is used so that the conversion to nanoseconds is lossless across the
 	// full range of each type. The type rank already separates the tz / non-tz groups.
 	case VariantLogicalType::DATE:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int32_t>(it.GetData())) * hugeint_t(NANOS_PER_DAY));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(it.GetData<int32_t>()) * hugeint_t(NANOS_PER_DAY));
 		break;
 	case VariantLogicalType::TIMESTAMP_SEC:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_SEC));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(it.GetData<int64_t>()) * hugeint_t(NANOS_PER_SEC));
 		break;
 	case VariantLogicalType::TIMESTAMP_MILIS:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_MILLI));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(it.GetData<int64_t>()) * hugeint_t(NANOS_PER_MILLI));
 		break;
 	case VariantLogicalType::TIMESTAMP_MICROS:
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_MICRO));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(it.GetData<int64_t>()) * hugeint_t(NANOS_PER_MICRO));
 		break;
 	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(it.GetData<int64_t>()));
 		break;
 	// TIME precisions fold into the TIME rank and compare as nanoseconds since midnight (fits in int64)
 	case VariantLogicalType::TIME_MICROS:
-		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(it.GetData()) * NANOS_PER_MICRO);
+		VariantEncodeFixed<int64_t>(sink, it.GetData<int64_t>() * NANOS_PER_MICRO);
 		break;
 	case VariantLogicalType::TIME_NANOS:
-		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(it.GetData()));
+		VariantEncodeFixed<int64_t>(sink, it.GetData<int64_t>());
 		break;
 	case VariantLogicalType::TIME_MICROS_TZ:
 		// TIME WITH TIME ZONE requires a dedicated byte-comparable transform
-		VariantEncodeFixed<uint64_t>(sink, Load<dtime_tz_t>(it.GetData()).sort_key());
+		VariantEncodeFixed<uint64_t>(sink, it.GetData<dtime_tz_t>().sort_key());
 		break;
 	case VariantLogicalType::INTERVAL:
 		// normalize the interval so that equal intervals encode identically
-		VariantEncodeFixed<interval_t>(sink, Load<interval_t>(it.GetData()).Normalize());
+		VariantEncodeFixed<interval_t>(sink, it.GetData<interval_t>().Normalize());
 		break;
 	case VariantLogicalType::VARCHAR:
 		VariantEncodeString(sink, it.GetString(), true);

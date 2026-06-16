@@ -337,7 +337,7 @@ VariantLogicalType VariantIterator::GetTypeId() const {
 //===--------------------------------------------------------------------===//
 // Primitive accessors
 //===--------------------------------------------------------------------===//
-const_data_ptr_t VariantIterator::GetData() const {
+const_data_ptr_t VariantIterator::GetDataPointer() const {
 	if (kind == Kind::UNSHREDDED) {
 		auto &blob = state->unshredded.GetBlob(row);
 		return const_data_ptr_cast(blob.GetData()) + state->unshredded.GetByteOffset(row, value_index);

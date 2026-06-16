@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -129,8 +130,13 @@ public:
 	//! The logical type of the value the cursor points at
 	DUCKDB_API VariantLogicalType GetTypeId() const;
 
+	//! Returns the fixed-width primitive payload loaded as T (e.g. GetData<int32_t>())
+	template <class T>
+	T GetData() const {
+		return Load<T>(GetDataPointer());
+	}
 	//! Returns a pointer to the raw payload of a fixed-width primitive value
-	DUCKDB_API const_data_ptr_t GetData() const;
+	DUCKDB_API const_data_ptr_t GetDataPointer() const;
 	//! Returns the (variable-length) string payload of a VARCHAR/BLOB/BIGNUM/GEOMETRY/BITSTRING value
 	DUCKDB_API string_t GetString() const;
 	//! Returns the decimal payload of a DECIMAL value
