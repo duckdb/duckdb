@@ -51,21 +51,6 @@ Identifier PEGTransformerFactory::TransformTriggerName(PEGTransformer &transform
 	return identifier;
 }
 
-TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<TriggerTiming>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-TriggerEventInfo PEGTransformerFactory::TransformTriggerEvent(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<TriggerEventInfo>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
 TriggerTiming PEGTransformerFactory::TransformTriggerBefore(PEGTransformer &transformer) {
 	return TriggerTiming::BEFORE;
 }

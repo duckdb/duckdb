@@ -1720,11 +1720,8 @@ excluded_rules:
   - TableRef
   - WithClause
   - WindowDefinition
-  - SingleArrowPair
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
   - Expression
-  - LambdaArrowExpression
-  - IsExpression
   - OverClause
   - PrefixExpression

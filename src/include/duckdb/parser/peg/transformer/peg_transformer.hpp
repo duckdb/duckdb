@@ -390,43 +390,13 @@ private:
 	static string TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// create_trigger.gram
-	static TriggerForEach TransformForEachClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static TriggerTiming TransformTriggerTiming(PEGTransformer &transformer, ParseResult &parse_result);
-	static TriggerEventInfo TransformTriggerEvent(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// expression.gram
-	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformExpressionAlias(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformLambdaArrowExpression(PEGTransformer &transformer,
-	                                                                   ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformLogicalOrExpression(PEGTransformer &transformer,
-	                                                                 ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformLogicalAndExpression(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
-	static string TransformQualifiedOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformMultiplicativeExpression(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformAtTimeZoneExpression(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
-	static WindowFrame TransformFrameClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// pivot.gram
@@ -2280,6 +2250,13 @@ private:
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColumnDefaultExprInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformLambdaArrowExpressionInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformLambdaArrowExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_or_expression,
+	                               optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair);
+	static unique_ptr<TransformResultValue> TransformSingleArrowPairInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformLogicalOrExpressionInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -2318,6 +2295,11 @@ private:
 	static unique_ptr<TransformResultValue> TransformNotKeywordInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIsExpressionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer,
+	                                                          unique_ptr<ParsedExpression> is_distinct_from_expression,
+	                                                          optional<vector<unique_ptr<ParsedExpression>>> is_test);
 	static unique_ptr<TransformResultValue> TransformIsTestInternal(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformIsLiteralInternal(PEGTransformer &transformer,

@@ -5274,6 +5274,35 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColumnDefaultEx
 }
 
 unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformLambdaArrowExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_or_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair {};
+	auto &single_arrow_pair_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (single_arrow_pair_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> single_arrow_pair_value;
+		auto &single_arrow_pair_value_repeat_1 = single_arrow_pair_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &single_arrow_pair_value_item_1 : single_arrow_pair_value_repeat_1.GetChildren()) {
+			auto single_arrow_pair_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(single_arrow_pair_value_item_1.get());
+			single_arrow_pair_value.push_back(std::move(single_arrow_pair_value_value_1));
+		}
+		single_arrow_pair = std::move(single_arrow_pair_value);
+	}
+	auto result =
+	    TransformLambdaArrowExpression(transformer, std::move(logical_or_expression), std::move(single_arrow_pair));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSingleArrowPairInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto logical_or_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(logical_or_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformLogicalOrExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto logical_and_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
@@ -5429,6 +5458,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotKeywordInter
                                                                                     ParseResult &parse_result) {
 	auto result = TransformNotKeyword(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsExpressionInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto is_distinct_from_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> is_test {};
+	auto &is_test_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (is_test_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> is_test_value;
+		auto &is_test_value_repeat_1 = is_test_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &is_test_value_item_1 : is_test_value_repeat_1.GetChildren()) {
+			auto is_test_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(is_test_value_item_1.get());
+			is_test_value.push_back(std::move(is_test_value_value_1));
+		}
+		is_test = std::move(is_test_value);
+	}
+	auto result = TransformIsExpression(transformer, std::move(is_distinct_from_expression), std::move(is_test));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIsTestInternal(PEGTransformer &transformer,
@@ -10325,6 +10374,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ParensExpression", &PEGTransformerFactory::TransformParensExpressionInternal},
 	    {"SingleExpression", &PEGTransformerFactory::TransformSingleExpressionInternal},
 	    {"ColumnDefaultExpr", &PEGTransformerFactory::TransformColumnDefaultExprInternal},
+	    {"LambdaArrowExpression", &PEGTransformerFactory::TransformLambdaArrowExpressionInternal},
+	    {"SingleArrowPair", &PEGTransformerFactory::TransformSingleArrowPairInternal},
 	    {"LogicalOrExpression", &PEGTransformerFactory::TransformLogicalOrExpressionInternal},
 	    {"LogicalOrExpressionTail", &PEGTransformerFactory::TransformLogicalOrExpressionTailInternal},
 	    {"ColDefOrExpr", &PEGTransformerFactory::TransformColDefOrExprInternal},
@@ -10336,6 +10387,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"LogicalNotExpression", &PEGTransformerFactory::TransformLogicalNotExpressionInternal},
 	    {"NotExpression", &PEGTransformerFactory::TransformNotExpressionInternal},
 	    {"NotKeyword", &PEGTransformerFactory::TransformNotKeywordInternal},
+	    {"IsExpression", &PEGTransformerFactory::TransformIsExpressionInternal},
 	    {"IsTest", &PEGTransformerFactory::TransformIsTestInternal},
 	    {"IsLiteral", &PEGTransformerFactory::TransformIsLiteralInternal},
 	    {"IsLiteralValue", &PEGTransformerFactory::TransformIsLiteralValueInternal},
