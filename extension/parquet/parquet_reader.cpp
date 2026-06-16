@@ -1445,10 +1445,8 @@ ParquetScanFilter::~ParquetScanFilter() {
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state,
                                    vector<idx_t> groups_to_read) const {
 	state.current_group = -1;
-	state.finished = false;
+	state.scan_state = ParquetScanState::SCHEDULE;
 	state.offset_in_group = 0;
-	// filter_done gates the chunk reset at Scan entry - it must never carry over into a fresh scan
-	state.filter_done = false;
 	state.filter_count = 0;
 	state.group_idx_list = std::move(groups_to_read);
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -1611,13 +1609,10 @@ CollectIOTasks(ThriftFileTransport &trans, const shared_ptr<CachingFileHandle> &
 ParquetPrefetchStrategy ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
                                                           const duckdb_parquet::RowGroup &group,
                                                           uint64_t total_row_group_span, bool log_prefetch) {
-	if (!state.current_group_prefetched) {
-		auto total_compressed_size = GetGroupCompressedSize(state);
-		if (total_compressed_size > 0) {
-			trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span, false);
-			trans.FinalizeRegistration();
-		}
-		state.current_group_prefetched = true;
+	auto total_compressed_size = GetGroupCompressedSize(state);
+	if (total_compressed_size > 0) {
+		trans.RegisterPrefetch(GetGroupOffset(state), total_row_group_span, false);
+		trans.FinalizeRegistration();
 	}
 	if (log_prefetch) {
 		state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
@@ -1704,24 +1699,24 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 }
 
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	if (!state.filter_done) {
-		// unless we are resuming a scan that blocked on the payload I/O - in which case the chunk holds the decoded
-		// filter columns - we start from a clean chunk
-		result.Reset();
-	}
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
-
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 
-	// see if we have to switch to the next row group in the parquet file
-	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
+	switch (state.scan_state) {
+	case ParquetScanState::FINISHED:
+		result.Reset();
+		return SourceResultType::FINISHED;
+	case ParquetScanState::SCHEDULE:
+		result.Reset();
 		return Schedule(context, state, result, log_prefetch);
+	case ParquetScanState::PROCESS:
+		result.Reset();
+		return Process(state, result, log_prefetch);
+	case ParquetScanState::RESUME_PAYLOAD:
+		return Process(state, result, log_prefetch);
+	default:
+		throw InternalException("Unexpected ParquetScanState");
 	}
-
-	return Process(state, result, log_prefetch);
 }
 
 AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
@@ -1731,7 +1726,6 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 	trans.ClearPrefetch();
-	state.current_group_prefetched = false;
 	state.filter_head_count = 0;
 
 	if (state.prefetch_mode) {
@@ -1744,7 +1738,7 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	state.prefetch_metrics.FinalizeRowGroupSelectivity();
 
 	if ((idx_t)state.current_group == state.group_idx_list.size()) {
-		state.finished = true;
+		state.scan_state = ParquetScanState::FINISHED;
 		return SourceResultType::FINISHED;
 	}
 
@@ -1833,6 +1827,8 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		}
 	}
 	result.Reset();
+	// a skipped row group has no rows to decode, so we loop back to schedule the next one
+	state.scan_state = row_group_skipped ? ParquetScanState::SCHEDULE : ParquetScanState::PROCESS;
 	if (!io_tasks.empty()) {
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
@@ -1942,17 +1938,13 @@ vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetRea
 		// no payload to do
 		return {};
 	}
-	state.filter_done = true;
+	state.scan_state = ParquetScanState::RESUME_PAYLOAD;
 	return io_tasks;
 }
 
 AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
                                           uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
-	if (state.filter_done) {
-		// the filters already ran before we blocked on the payload I/O
-		state.filter_done = false;
-	} else {
-		// we need to evaluate the filters, then async-fetch the payload and resume into the decode
+	if (state.scan_state == ParquetScanState::PROCESS) {
 		state.filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
 		auto io_tasks = ScheduleRemainingColumns(state, result, scan_count);
 		if (!io_tasks.empty()) {
@@ -1967,13 +1959,14 @@ AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChu
 }
 
 AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
-	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
-	if (!state.filter_done) {
+	const idx_t group_num_rows = GetGroup(state).num_rows;
+	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, group_num_rows - state.offset_in_group);
+	if (state.scan_state == ParquetScanState::PROCESS) {
 		result.SetChildCardinality(scan_count);
 	}
 
 	if (scan_count == 0) {
-		state.finished = true;
+		state.scan_state = ParquetScanState::FINISHED;
 		// end of last group, we are done
 		return SourceResultType::FINISHED;
 	}
@@ -2014,6 +2007,8 @@ AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &res
 	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
+	// once the group is fully consumed we schedule the next one, otherwise we keep processing this group
+	state.scan_state = state.offset_in_group >= group_num_rows ? ParquetScanState::SCHEDULE : ParquetScanState::PROCESS;
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
