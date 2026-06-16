@@ -133,6 +133,23 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deseri
 
 typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
 
+//! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
+//! dest_buffer (state i at offset i * layout.total_state_size).
+struct AggregateImportInputData {
+	AggregateImportInputData(const AggregateStateLayout &layout, const Vector &input_vec, data_ptr_t dest_buffer,
+	                         ArenaAllocator &allocator)
+	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator) {
+	}
+
+	const AggregateStateLayout &layout;
+	const Vector &input_vec;
+	data_ptr_t dest_buffer;
+	ArenaAllocator &allocator;
+};
+
+//! The counterpart of export_aggregate_state, for states a static field layout cannot describe (e.g. a hash map).
+typedef void (*aggregate_import_state_t)(AggregateImportInputData &input);
+
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
 
@@ -255,6 +272,11 @@ public:
 
 	aggregate_get_state_type_t get_state_type = nullptr;
 
+	//! Explicit state export/import callbacks for states a static field layout cannot describe (e.g. a hash map).
+	//! Must be set together; export acts as the finalize in state-export mode.
+	aggregate_finalize_t export_aggregate_state = nullptr;
+	aggregate_import_state_t import_aggregate_state = nullptr;
+
 	bool operator==(const AggregateFunctionCallbacks &rhs) const;
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
 };
@@ -375,6 +397,14 @@ public: // Callbacks
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
+
+	bool HasExportAggregateStateCallback() const { return callbacks.export_aggregate_state != nullptr; }
+	aggregate_finalize_t GetExportAggregateStateCallback() const { return callbacks.export_aggregate_state; }
+	void SetExportAggregateStateCallback(aggregate_finalize_t callback) { callbacks.export_aggregate_state = callback; }
+
+	bool HasImportAggregateStateCallback() const { return callbacks.import_aggregate_state != nullptr; }
+	aggregate_import_state_t GetImportAggregateStateCallback() const { return callbacks.import_aggregate_state; }
+	void SetImportAggregateStateCallback(aggregate_import_state_t callback) { callbacks.import_aggregate_state = callback; }
 	// clang-format on
 
 public: // Extra function info
@@ -512,6 +542,17 @@ public:
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		callbacks.get_state_type = get_state_type_callback;
+		return *this;
+	}
+
+	//! Registers explicit export/import callbacks for states a static field layout cannot describe (e.g. a hash map);
+	//! get_state_type still supplies the exported logical type.
+	AggregateFunction &SetStateExportCallbacks(aggregate_get_state_type_t get_state_type_callback,
+	                                           aggregate_finalize_t export_aggregate_state_callback,
+	                                           aggregate_import_state_t import_aggregate_state_callback) {
+		callbacks.get_state_type = get_state_type_callback;
+		callbacks.export_aggregate_state = export_aggregate_state_callback;
+		callbacks.import_aggregate_state = import_aggregate_state_callback;
 		return *this;
 	}
 
