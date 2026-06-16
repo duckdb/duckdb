@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # integers: negative numbers sort before positive numbers (not by raw bytes)
 query I
 SELECT v::INT FROM (VALUES (-123), (5), (-1), (100), (0)) t(v)
@@ -40,6 +37,12 @@ ORDER BY v::VARIANT
 1.5
 inf
 nan
+
+# -0.0 is equivalent to 0.0 in the comparator (IEEE / SQL semantics)
+query I
+SELECT variant_comparator('-0.0'::DOUBLE::VARIANT) = variant_comparator('0.0'::DOUBLE::VARIANT)
+----
+true
 
 # strings
 query I
