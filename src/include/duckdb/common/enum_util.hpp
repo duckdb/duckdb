@@ -166,6 +166,8 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugOrderVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -759,6 +761,9 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
 
 template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
+
+template<>
+const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
@@ -1549,6 +1554,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);
 
 template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
+
+template<>
+DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);

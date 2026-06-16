@@ -78,6 +78,23 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Order Verification
+//===----------------------------------------------------------------------===//
+void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.debug_order_verification = EnumUtil::FromString<DebugOrderVerification>(str_input);
+}
+
+void DebugOrderVerificationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_order_verification = DBConfigOptions().debug_order_verification;
+}
+
+Value DebugOrderVerificationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_order_verification)));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Physical Table Scan Execution Strategy
 //===----------------------------------------------------------------------===//
 void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
