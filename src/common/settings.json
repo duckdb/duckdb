@@ -328,6 +328,12 @@
         "default_value": "false"
     },
     {
+        "name": "debug_order_verification",
+        "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
+        "type": "ENUM<DebugOrderVerification>",
+        "scope": "global"
+    },
+    {
         "name": "debug_physical_table_scan_execution_strategy",
         "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
         "type": "ENUM<PhysicalTableScanExecutionStrategy>",

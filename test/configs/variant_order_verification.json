@@ -1,0 +1,66 @@
+{
+  "description": "Run with debug_order_verification=variant (cast every ORDER BY expression to VARIANT to verify the VARIANT comparator matches the regular comparison ordering).",
+  "on_init": "SET debug_order_verification='variant';",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "VARIANT does not carry the VARCHAR collation, so ORDER BY on collated strings orders by the raw (binary) value instead of the collation.",
+      "paths": [
+        "test/sql/attach/attach_icu_collation.test",
+        "test/sql/collate/icu_collation_propagation.test",
+        "test/sql/collate/test_collate_accent_insensitive.test",
+        "test/sql/collate/test_collate_case_insensitive.test",
+        "test/sql/collate/test_collate_expression.test",
+        "test/sql/collate/test_collate_orderby_column_number.test",
+        "test/sql/collate/test_collation_propagation.test",
+        "test/sql/collate/test_default_collations.test",
+        "test/sql/collate/test_icu_collate.test",
+        "test/sql/settings/setting_collation.test",
+        "test/sql/storage/icu_collation.test"
+      ]
+    },
+    {
+      "reason": "VARIANT orders nested types (LIST/ARRAY/STRUCT/UNION) - and NULL elements within them - differently from native nested ordering (e.g. nested NULLs do not follow the ASC/DESC-dependent null order).",
+      "paths": [
+        "test/sql/alter/alter_type/test_alter_type.test",
+        "test/sql/filter/test_struct_pushdown.test",
+        "test/sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test",
+        "test/sql/function/list/lambdas/expression_iterator_cases.test",
+        "test/sql/function/list/list_zip.test",
+        "test/sql/index/art/types/test_art_union.test",
+        "test/sql/join/inner/test_join_is_distinct.test",
+        "test/sql/join/inner/test_join_is_not_distinct.test",
+        "test/sql/subquery/complex/nested_unnest_subquery.test",
+        "test/sql/types/list/list_null_members.test",
+        "test/sql/types/list/unnest_table_function.test",
+        "test/sql/types/nested/array/array_coverage.test",
+        "test/sql/types/nested/array/array_simple.test",
+        "test/sql/types/struct/unnest_struct_mix.test",
+        "test/sql/types/union/union_cast.test",
+        "test/sql/types/union/union_sort.test"
+      ]
+    },
+    {
+      "reason": "ENUM is ordered by its dictionary (definition) order natively, but VARIANT stores the enum value as a string and orders it lexically.",
+      "paths": [
+        "test/sql/export/export_database.test",
+        "test/sql/types/enum/test_enum_table.test"
+      ]
+    },
+    {
+      "reason": "VARIANT orders BIT/BITSTRING by its blob bytes, which differs from native BIT ordering.",
+      "paths": [
+        "test/sql/types/bit/bit_issue_22527.test"
+      ]
+    },
+    {
+      "reason": "Top-N NULL ordering and row-group pruning rely on the native comparison of the ORDER BY type.",
+      "paths": [
+        "test/sql/topn/test_top_n_lists.test",
+        "test/sql/topn/test_top_n_nulls_row_group_pruner_extensive.test",
+        "test/sql/topn/top_n_pruning.test",
+        "test/sql/topn/topn_nulls_first.test"
+      ]
+    }
+  ]
+}
