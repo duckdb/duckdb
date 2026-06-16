@@ -754,6 +754,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			table_ptr = get.GetTable();
 		}
 		if (table_ptr) {
+			// CREATE INDEX is dispatched on table.catalog (below). A facade
+			// catalog delegates the scan to a storage table in another catalog;
+			// dispatching on that scanned table would build the index in the
+			// store catalog and skip the owning catalog's index routing. Resolve
+			// the named entry so dispatch lands on the catalog that owns it.
+			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, create_index_info.table);
+			auto resolved = Catalog::GetEntry(context, create_index_info.catalog, create_index_info.schema,
+			                                  table_lookup, OnEntryNotFound::RETURN_NULL);
+			if (resolved && resolved->type == CatalogType::TABLE_ENTRY) {
+				table_ptr = &resolved->Cast<TableCatalogEntry>();
+			}
+		}
+		if (table_ptr) {
 			auto &table = *table_ptr;
 			if (table.temporary) {
 				stmt.info->temporary = true;
