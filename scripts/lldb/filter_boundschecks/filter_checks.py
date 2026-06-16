@@ -1,7 +1,7 @@
 """LLDB helpers for stepping over tiny checked wrapper/container frames.
 
 Usage inside LLDB:
-    command script import /path/to/duckdb/scripts/lldb/duckdb_step_avoid.py
+    command script import /path/to/duckdb/scripts/lldb/filter_boundschecks/filter_checks.py
 
 Importing the script automatically augments `target.process.thread.step-avoid-regexp`
 for the current LLDB session so `step`/`thread step-in` skip small helper frames such as:
@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
     lldb = None
 
 
+MODULE_NAME = __name__.rsplit(".", 1)[-1]
 ENABLE_COMMAND = "duckdb-step-avoid-enable"
 DISABLE_COMMAND = "duckdb-step-avoid-disable"
 SHOW_COMMAND = "duckdb-step-avoid-show"
@@ -47,17 +48,17 @@ def __lldb_init_module(debugger, _internal_dict):
     debugger.HandleCommand(
         "command script add --overwrite -h "
         "\"Enable DuckDB-specific step-avoid rules for checked wrappers\" "
-        "-f duckdb_step_avoid.enable {}".format(ENABLE_COMMAND)
+        "-f {} {}".format(_callback_name("enable"), ENABLE_COMMAND)
     )
     debugger.HandleCommand(
         "command script add --overwrite -h "
         "\"Disable DuckDB-specific step-avoid rules and restore the previous regexp\" "
-        "-f duckdb_step_avoid.disable {}".format(DISABLE_COMMAND)
+        "-f {} {}".format(_callback_name("disable"), DISABLE_COMMAND)
     )
     debugger.HandleCommand(
         "command script add --overwrite -h "
         "\"Show the current step-avoid regexp and the DuckDB additions\" "
-        "-f duckdb_step_avoid.show {}".format(SHOW_COMMAND)
+        "-f {} {}".format(_callback_name("show"), SHOW_COMMAND)
     )
 
     message = _enable(debugger)
@@ -125,3 +126,7 @@ def _set_step_avoid_regex(debugger, regex):
     error = debugger.SetInternalVariable("target.process.thread.step-avoid-regexp", regex, debugger.GetInstanceName())
     if error is not None and not error.Success():
         raise RuntimeError(error.GetCString() or "failed to set step-avoid regexp")
+
+
+def _callback_name(name):
+    return "{}.{}".format(MODULE_NAME, name)

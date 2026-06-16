@@ -2,7 +2,7 @@
 
 This directory contains small LLDB helpers for DuckDB development.
 
-## `duckdb_sqllogictest.py`
+## `sql_break.py`
 
 Adds `sql_`-prefixed LLDB commands for sqllogictest-aware debugging.
 
@@ -12,7 +12,7 @@ It assumes the active sqllogictest is running on thread 1 and uses
 ### One-off usage
 
 ```lldb
-command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.py
+command script import <duckdb repository root>/scripts/lldb/sqllogictest_breakpoints/sql_break.py
 b <some breakpoint>
 r
 sql_current_statement
@@ -33,7 +33,7 @@ sql_delete_watch all
 ### Suggested `~/.lldbinit`
 
 ```lldb
-command script import <duckdb repository root>/scripts/lldb/duckdb_sqllogictest.py
+command script import <duckdb repository root>/scripts/lldb/sqllogictest_breakpoints/sql_break.py
 ```
 
 ### Commands

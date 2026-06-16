@@ -1,7 +1,7 @@
 """LLDB helpers for DuckDB smart pointers.
 
 Usage inside LLDB:
-    command script import /path/to/duckdb/scripts/lldb/duckdb_ptr.py
+    command script import /path/to/duckdb/scripts/lldb/pointer_print/pointer_print.py
 
 After import, LLDB will:
 1. Pretty-print DuckDB smart pointers (`unique_ptr`, `shared_ptr`, `optional_ptr`)
@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
     lldb = None
 
 
+MODULE_NAME = __name__.rsplit(".", 1)[-1]
 CATEGORY_NAME = "duckdb"
 SMART_PTR_TYPES = (
     "unique_ptr",
@@ -43,16 +44,18 @@ def __lldb_init_module(debugger, _internal_dict):
     _handle_lldb_command(
         debugger,
         f"type synthetic add --category {CATEGORY_NAME} "
-        f"-x '{SMART_PTR_REGEX}' --python-class duckdb_ptr.DuckDBSmartPtrSyntheticProvider",
+        f"-x '{SMART_PTR_REGEX}' --python-class {_callback_name('DuckDBSmartPtrSyntheticProvider')}",
     )
     _handle_lldb_command(
         debugger,
         f"type summary add -e --category {CATEGORY_NAME} "
-        f"-x '{SMART_PTR_REGEX}' -F duckdb_ptr.duckdb_smart_ptr_summary",
+        f"-x '{SMART_PTR_REGEX}' -F {_callback_name('duckdb_smart_ptr_summary')}",
     )
     _handle_lldb_command(debugger, f"type category enable {CATEGORY_NAME}")
     _handle_lldb_command(debugger, f"command script delete {PRINT_COMMAND_NAME}", ignore_errors=True)
-    _handle_lldb_command(debugger, f"command script add -f duckdb_ptr.duckdb_print_command {PRINT_COMMAND_NAME}")
+    _handle_lldb_command(
+        debugger, f"command script add -f {_callback_name('duckdb_print_command')} {PRINT_COMMAND_NAME}"
+    )
     _handle_lldb_command(debugger, f"command alias p {PRINT_COMMAND_NAME}")
 
 
@@ -86,6 +89,10 @@ def _handle_lldb_command(debugger, command, ignore_errors=False):
     if error:
         print(error.rstrip())
     return result
+
+
+def _callback_name(name):
+    return f"{MODULE_NAME}.{name}"
 
 
 def duckdb_smart_ptr_summary(valobj, _internal_dict):

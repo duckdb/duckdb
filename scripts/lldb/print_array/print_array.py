@@ -1,7 +1,7 @@
 """LLDB helper for printing arrays behind pointers.
 
 Usage inside LLDB:
-    command script import /path/to/duckdb/scripts/lldb/print_array.py
+    command script import /path/to/duckdb/scripts/lldb/print_array/print_array.py
     print_array result_sel.sel_vector 1024
 
 `print_array <path> <size>` only accepts:
@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover - imported by LLDB at runtime
     lldb = None
 
 
+MODULE_NAME = __name__.rsplit(".", 1)[-1]
 COMMAND_NAME = "print_array"
 
 
@@ -29,7 +30,7 @@ def __lldb_init_module(debugger, _internal_dict):
     debugger.HandleCommand(
         "command script add --overwrite -h "
         "\"Print a fixed-size array behind a pointer expression\" "
-        "-f print_array.print_array {}".format(COMMAND_NAME)
+        "-f {} {}".format(_callback_name("print_array"), COMMAND_NAME)
     )
 
 
@@ -177,3 +178,7 @@ def _get_selected_frame(debugger, result):
         result.SetError("no selected frame")
         return None
     return frame
+
+
+def _callback_name(name):
+    return "{}.{}".format(MODULE_NAME, name)

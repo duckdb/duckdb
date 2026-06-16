@@ -54,10 +54,7 @@ The helper remembers the original regexp for the lifetime of the imported
 module, so disabling returns LLDB to the prior setting instead of clearing the
 value outright.
 
-## Caveat
+## Rename Safety
 
-The script currently registers Python callbacks under the module name
-`duckdb_step_avoid`, while the checked-in filename is `filter_checks.py`. If you
-import the file exactly as it exists in-tree and LLDB cannot resolve the command
-callbacks, the registration strings in the script will need to match the
-imported module name.
+The script derives its LLDB callback module name at import time, so the command
+registration keeps working if the file is renamed later.

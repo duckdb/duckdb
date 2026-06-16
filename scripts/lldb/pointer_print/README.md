@@ -56,10 +56,7 @@ The `/x`-style prefix is forwarded to LLDB as `expression -f <format>`.
 This avoids depending on `operator*()` or `.get()` template symbols being
 emitted in the binary.
 
-## Caveat
+## Rename Safety
 
-The script currently registers Python callbacks under the module name
-`duckdb_ptr`, while the checked-in filename is `pointer_print.py`. If you import
-the file exactly as it exists in-tree and LLDB reports callback lookup failures,
-the registration strings in the script will need to match the imported module
-name.
+The script derives its LLDB callback module name at import time, so the callback
+registration stays aligned if the file is renamed later.

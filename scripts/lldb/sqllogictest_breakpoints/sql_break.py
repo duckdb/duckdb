@@ -14,6 +14,7 @@ SQL_WATCH_STATEMENT_COMMAND = "sql_watch_statement"
 SQL_LIST_WATCHES_COMMAND = "sql_list_watches"
 SQL_DELETE_WATCH_COMMAND = "sql_delete_watch"
 SQL_NEXT_WATCH_COMMAND = "sql_next_watch"
+MODULE_NAME = __name__.rsplit(".", 1)[-1]
 
 _NEXT_STATE = None
 _NEXT_WATCH_STATE = None
@@ -25,43 +26,43 @@ def __lldb_init_module(debugger, _internal_dict):
         debugger,
         SQL_CURRENT_STATEMENT_COMMAND,
         "Show the active DuckDB sqllogictest location and SQL",
-        "duckdb_sqllogictest.sql_current_statement",
+        _callback_name("sql_current_statement"),
     )
     _register_command(
         debugger,
         SQL_NEXT_STATEMENT_COMMAND,
         "Continue until the next sqllogictest statement",
-        "duckdb_sqllogictest.sql_next_statement",
+        _callback_name("sql_next_statement"),
     )
     _register_command(
         debugger,
         SQL_NEXT_MATCHING_STATEMENT_COMMAND,
         "Continue until the next matching sqllogictest statement",
-        "duckdb_sqllogictest.sql_next_matching_statement",
+        _callback_name("sql_next_matching_statement"),
     )
     _register_command(
         debugger,
         SQL_WATCH_STATEMENT_COMMAND,
         "Install a persistent sqllogictest-aware watch rule",
-        "duckdb_sqllogictest.sql_watch_statement",
+        _callback_name("sql_watch_statement"),
     )
     _register_command(
         debugger,
         SQL_LIST_WATCHES_COMMAND,
         "List installed sqllogictest-aware watch rules",
-        "duckdb_sqllogictest.sql_list_watches",
+        _callback_name("sql_list_watches"),
     )
     _register_command(
         debugger,
         SQL_DELETE_WATCH_COMMAND,
         "Delete one installed sqllogictest-aware watch rule",
-        "duckdb_sqllogictest.sql_delete_watch",
+        _callback_name("sql_delete_watch"),
     )
     _register_command(
         debugger,
         SQL_NEXT_WATCH_COMMAND,
         "Continue until an installed sqllogictest watch rule matches",
-        "duckdb_sqllogictest.sql_next_watch",
+        _callback_name("sql_next_watch"),
     )
 
 
@@ -126,7 +127,7 @@ def sql_watch_statement(debugger, command, result, _internal_dict):
 
     watch_breakpoint.SetThreadIndex(1)
     watch_breakpoint.SetAutoContinue(True)
-    watch_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._watch_statement_callback")
+    watch_breakpoint.SetScriptCallbackFunction(_callback_name("_watch_statement_callback"))
 
     breakpoint_id = watch_breakpoint.GetID()
     _WATCHES[breakpoint_id] = {
@@ -280,6 +281,10 @@ def _register_command(debugger, name, help_text, callback):
     debugger.HandleCommand('command script add --overwrite -h "{}" -f {} {}'.format(help_text, callback, name))
 
 
+def _callback_name(function_name):
+    return "{}.{}".format(MODULE_NAME, function_name)
+
+
 def _default_matcher():
     return {
         "file": None,
@@ -376,7 +381,7 @@ def _start_next_statement_search(debugger, matcher):
         return "could not set a breakpoint on query_break"
 
     helper_breakpoint.SetThreadID(thread.GetThreadID())
-    helper_breakpoint.SetScriptCallbackFunction("duckdb_sqllogictest._next_matching_statement_callback")
+    helper_breakpoint.SetScriptCallbackFunction(_callback_name("_next_matching_statement_callback"))
 
     saved_auto_continue = {}
     for breakpoint in _iter_breakpoints(target):
