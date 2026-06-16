@@ -3,8 +3,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/varint.hpp"
 
 namespace duckdb {
 
@@ -12,36 +11,120 @@ namespace duckdb {
 static constexpr idx_t TYPED_VALUE_INDEX = 0;
 static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
 
+//! Child indices into the unshredded layout (see UnshreddedVariantLayout)
+static constexpr idx_t KEYS_INDEX = 0;
+static constexpr idx_t CHILDREN_INDEX = 1;
+static constexpr idx_t VALUES_INDEX = 2;
+static constexpr idx_t DATA_INDEX = 3;
+//! Child indices within the children / values structs
+static constexpr idx_t KEY_ID_INDEX = 0;
+static constexpr idx_t VALUE_ID_INDEX = 1;
+static constexpr idx_t TYPE_ID_INDEX = 0;
+static constexpr idx_t BYTE_OFFSET_INDEX = 1;
+
+namespace {
+
+//! Decode the (length-prefixed) string payload of a value at the given byte offset in the blob
+string_t DecodeStringData(const string_t &blob, uint32_t byte_offset) {
+	auto ptr = const_data_ptr_cast(blob.GetData()) + byte_offset;
+	auto length = VarintDecode<uint32_t>(ptr);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
+}
+
+//! Decode the (width, scale, value pointer) of a DECIMAL value at the given byte offset
+VariantDecimalData DecodeDecimalData(const string_t &blob, uint32_t byte_offset) {
+	auto ptr = const_data_ptr_cast(blob.GetData()) + byte_offset;
+	auto width = VarintDecode<uint32_t>(ptr);
+	auto scale = VarintDecode<uint32_t>(ptr);
+	return VariantDecimalData(width, scale, ptr);
+}
+
+//! Decode the (child_count, children_idx) of an OBJECT/ARRAY value at the given byte offset
+VariantNestedData DecodeNestedData(const string_t &blob, uint32_t byte_offset) {
+	auto ptr = const_data_ptr_cast(blob.GetData()) + byte_offset;
+	VariantNestedData result;
+	result.child_count = VarintDecode<uint32_t>(ptr);
+	result.children_idx = result.child_count ? VarintDecode<uint32_t>(ptr) : 0;
+	return result;
+}
+
+} // namespace
+
 //===--------------------------------------------------------------------===//
 // VariantIteratorState
 //===--------------------------------------------------------------------===//
-VariantIteratorState::VariantIteratorState(const Vector &variant, idx_t count) {
-	if (variant.GetVectorType() == VectorType::SHREDDED_VECTOR) {
-		is_shredded = true;
-
-		//! The unshredded component is read through the regular (recursive) unified format - this does
-		//! not trigger any unshredding because the unshredded component is itself a canonical variant
-		auto &unshredded_vec = ShreddedVector::GetUnshreddedVector(variant);
-		Vector::RecursiveToUnifiedFormat(unshredded_vec, unshredded_format);
-		unshredded = make_uniq<UnifiedVariantVectorData>(unshredded_format);
-
-		//! Flatten the shredded component so the tree can be navigated directly. Flattening these
-		//! (regular, typed) vectors is cheap and - unlike flattening the SHREDDED_VECTOR itself - does
-		//! not reconstruct the unshredded representation.
-		auto &shredded_vec = ShreddedVector::GetShreddedVector(variant);
-		shredded_root = make_uniq<Vector>(Vector::Ref(shredded_vec));
-		shredded_root->Flatten();
-
-		//! The row validity lives on the parent STRUCT(unshredded, shredded)
-		auto &struct_vec = variant.GetBufferRef()->Cast<ShreddedVectorBuffer>().GetChild();
-		row_format = make_uniq<UnifiedVectorFormat>();
-		struct_vec.ToUnifiedFormat(*row_format);
-	} else {
-		Vector::RecursiveToUnifiedFormat(variant, unshredded_format);
-		unshredded = make_uniq<UnifiedVariantVectorData>(unshredded_format);
+VariantIteratorState::VariantIteratorState(const Vector &variant)
+    //! The unshredded ("core") source is the variant itself, or the unshredded component of a shredded vector
+    : unshredded(variant.GetVectorType() == VectorType::SHREDDED_VECTOR ? ShreddedVector::GetUnshreddedVector(variant)
+                                                                        : variant) {
+	if (variant.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		return;
 	}
+	is_shredded = true;
+
+	//! Flatten the shredded component so the tree can be navigated directly. Flattening these
+	//! (regular, typed) vectors is cheap and - unlike flattening the SHREDDED_VECTOR itself - does
+	//! not reconstruct the unshredded representation.
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant);
+	shredded_root = make_uniq<Vector>(Vector::Ref(shredded_vec));
+	shredded_root->Flatten();
+
+	//! The row validity lives on the parent STRUCT(unshredded, shredded)
+	auto &struct_vec = variant.GetBufferRef()->Cast<ShreddedVectorBuffer>().GetChild();
+	row_format = make_uniq<UnifiedVectorFormat>();
+	struct_vec.ToUnifiedFormat(*row_format);
 }
 
+//===--------------------------------------------------------------------===//
+// UnshreddedVariantIterator
+//===--------------------------------------------------------------------===//
+UnshreddedVariantIterator::UnshreddedVariantIterator(const Vector &unshredded) : data(unshredded) {
+}
+
+bool UnshreddedVariantIterator::RowIsValid(idx_t row) const {
+	return data[row].IsValid();
+}
+
+VariantLogicalType UnshreddedVariantIterator::GetTypeId(idx_t row, idx_t value_index) const {
+	auto raw = data[row].GetChildValue<VALUES_INDEX>().GetChildValue(value_index).GetChildValue<TYPE_ID_INDEX>();
+	return static_cast<VariantLogicalType>(raw.GetValueUnsafe());
+}
+
+uint32_t UnshreddedVariantIterator::GetByteOffset(idx_t row, idx_t value_index) const {
+	return data[row]
+	    .GetChildValue<VALUES_INDEX>()
+	    .GetChildValue(value_index)
+	    .GetChildValue<BYTE_OFFSET_INDEX>()
+	    .GetValueUnsafe();
+}
+
+const string_t &UnshreddedVariantIterator::GetBlob(idx_t row) const {
+	return data[row].GetChildValue<DATA_INDEX>().GetValueUnsafe();
+}
+
+string_t UnshreddedVariantIterator::GetKey(idx_t row, idx_t key_index) const {
+	return data[row].GetChildValue<KEYS_INDEX>().GetChildValue(key_index).GetValueUnsafe();
+}
+
+uint32_t UnshreddedVariantIterator::GetKeysIndex(idx_t row, idx_t child_index) const {
+	return data[row]
+	    .GetChildValue<CHILDREN_INDEX>()
+	    .GetChildValue(child_index)
+	    .GetChildValue<KEY_ID_INDEX>()
+	    .GetValueUnsafe();
+}
+
+uint32_t UnshreddedVariantIterator::GetValuesIndex(idx_t row, idx_t child_index) const {
+	return data[row]
+	    .GetChildValue<CHILDREN_INDEX>()
+	    .GetChildValue(child_index)
+	    .GetChildValue<VALUE_ID_INDEX>()
+	    .GetValueUnsafe();
+}
+
+//===--------------------------------------------------------------------===//
+// Root / row validity
+//===--------------------------------------------------------------------===//
 VariantIterator VariantIteratorState::Root(idx_t row) const {
 	if (is_shredded) {
 		//! A SQL-NULL row has both components NULL - the resolution below already yields a NULL cursor in
@@ -53,7 +136,7 @@ VariantIterator VariantIteratorState::Root(idx_t row) const {
 		//! a root value is never "missing" - treat any such case as a SQL NULL
 		return root.IsMissing() ? VariantIterator::MakeNull(*this) : root;
 	}
-	if (!unshredded->RowIsValid(row)) {
+	if (!unshredded.RowIsValid(row)) {
 		return VariantIterator::MakeNull(*this);
 	}
 	//! The unshredded root value lives at values[0]
@@ -243,7 +326,7 @@ VariantLogicalType VariantIterator::GetTypeId() const {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
 	case Kind::UNSHREDDED:
-		return state->Unshredded().GetTypeId(row, value_index);
+		return state->unshredded.GetTypeId(row, value_index);
 	case Kind::SHREDDED:
 		return ShreddedTypeId(*shredded_content, shredded_index);
 	default:
@@ -256,9 +339,8 @@ VariantLogicalType VariantIterator::GetTypeId() const {
 //===--------------------------------------------------------------------===//
 const_data_ptr_t VariantIterator::GetData() const {
 	if (kind == Kind::UNSHREDDED) {
-		auto &variant = state->Unshredded();
-		auto blob_ptr = const_data_ptr_cast(variant.GetData(row).GetData());
-		return blob_ptr + variant.GetByteOffset(row, value_index);
+		auto &blob = state->unshredded.GetBlob(row);
+		return const_data_ptr_cast(blob.GetData()) + state->unshredded.GetByteOffset(row, value_index);
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
 	auto &content = *shredded_content;
@@ -268,7 +350,7 @@ const_data_ptr_t VariantIterator::GetData() const {
 
 string_t VariantIterator::GetString() const {
 	if (kind == Kind::UNSHREDDED) {
-		return VariantUtils::DecodeStringData(state->Unshredded(), row, value_index);
+		return DecodeStringData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
 	return FlatVector::GetData<string_t>(*shredded_content)[shredded_index];
@@ -276,7 +358,7 @@ string_t VariantIterator::GetString() const {
 
 VariantDecimalData VariantIterator::GetDecimal() const {
 	if (kind == Kind::UNSHREDDED) {
-		return VariantUtils::DecodeDecimalData(state->Unshredded(), row, value_index);
+		return DecodeDecimalData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
 	D_ASSERT(kind == Kind::SHREDDED);
 	auto &type = shredded_content->GetType();
@@ -293,14 +375,14 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 vector<pair<string_t, VariantIterator>> VariantIterator::GetObjectChildren() const {
 	vector<pair<string_t, VariantIterator>> result;
 	if (kind == Kind::UNSHREDDED) {
-		auto &variant = state->Unshredded();
-		auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
+		auto nested_data =
+		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 		result.reserve(nested_data.child_count);
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto child_idx = nested_data.children_idx + i;
-			auto key_idx = variant.GetKeysIndex(row, child_idx);
-			auto child_values_idx = variant.GetValuesIndex(row, child_idx);
-			result.emplace_back(variant.GetKey(row, key_idx), MakeUnshredded(*state, row, child_values_idx));
+			auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
+			auto child_values_idx = state->unshredded.GetValuesIndex(row, child_idx);
+			result.emplace_back(state->unshredded.GetKey(row, key_idx), MakeUnshredded(*state, row, child_values_idx));
 		}
 		return result;
 	}
@@ -331,11 +413,11 @@ vector<pair<string_t, VariantIterator>> VariantIterator::GetObjectChildren() con
 vector<VariantIterator> VariantIterator::GetArrayChildren() const {
 	vector<VariantIterator> result;
 	if (kind == Kind::UNSHREDDED) {
-		auto &variant = state->Unshredded();
-		auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
+		auto nested_data =
+		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 		result.reserve(nested_data.child_count);
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
-			auto child_values_idx = variant.GetValuesIndex(row, nested_data.children_idx + i);
+			auto child_values_idx = state->unshredded.GetValuesIndex(row, nested_data.children_idx + i);
 			result.emplace_back(MakeUnshredded(*state, row, child_values_idx));
 		}
 		return result;

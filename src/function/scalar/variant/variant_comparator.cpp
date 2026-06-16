@@ -474,7 +474,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
 void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result) {
-	VariantIteratorState variant(input, count);
+	VariantIteratorState variant(input);
 
 	data_t null_byte = NULL_FIRST_BYTE;
 	data_t valid_byte = NULL_LAST_BYTE;

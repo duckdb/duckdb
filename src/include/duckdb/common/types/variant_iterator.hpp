@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -35,20 +36,53 @@ struct UnifiedVectorFormat;
 // or as a SHREDDED_VECTOR which combines a typed ("shredded") representation with the leftover
 // "unshredded" component for everything that did not fit the shredded schema.
 //
-// Instead of materializing the unshredded representation (which is what UnifiedVariantVectorData
-// requires) the iterator descends into the shredded tree directly and only falls back to the
-// unshredded component for the leftover values, merging the two on the fly.
-//
-// The unshredded component is read through UnifiedVariantVectorData, which forms the "core" of the
-// iterator - the vector iterators over the canonical unshredded layout.
+// The unshredded component is read through plain VectorIterator<>s over the layout above (see
+// UnshreddedVariantLayout) - no RecursiveUnifiedVectorFormat / UnifiedVariantVectorData is involved.
+// For a shredded vector the iterator descends into the typed shredded tree directly and only falls
+// back to these unshredded iterators for the leftover values, merging the two on the fly.
+
+//! The VectorIterator<> layout of the canonical (unshredded) VARIANT representation
+using UnshreddedVariantLayout = VectorStructType<         //
+    VectorListType<string_t>,                             // keys VARCHAR[]
+    VectorListType<VectorStructType<uint32_t, uint32_t>>, // children STRUCT(key_id, value_id)[]
+    VectorListType<VectorStructType<uint8_t, uint32_t>>,  // values STRUCT(type_id, byte_offset)[]
+    string_t>;                                            // data BLOB
+
+//! Reads the canonical (unshredded) VARIANT layout (see UnshreddedVariantLayout) through plain
+//! VectorIterator<>s. This is the "core" all variant iteration is built on - it is used both for a
+//! fully unshredded variant and for the leftover ("unshredded") component of a shredded variant.
+class UnshreddedVariantIterator {
+public:
+	DUCKDB_API explicit UnshreddedVariantIterator(const Vector &unshredded);
+
+public:
+	//! Whether the top-level row is valid (non-NULL)
+	bool RowIsValid(idx_t row) const;
+	//! The type_id of values[value_index]
+	VariantLogicalType GetTypeId(idx_t row, idx_t value_index) const;
+	//! The byte_offset of values[value_index]
+	uint32_t GetByteOffset(idx_t row, idx_t value_index) const;
+	//! The data BLOB of the row. Returned by reference: the inlined bytes of a returned string_t copy
+	//! would otherwise dangle once the temporary is destroyed.
+	const string_t &GetBlob(idx_t row) const;
+	//! The key string of keys[key_index]
+	string_t GetKey(idx_t row, idx_t key_index) const;
+	//! The key_id of children[child_index]
+	uint32_t GetKeysIndex(idx_t row, idx_t child_index) const;
+	//! The value_id of children[child_index]
+	uint32_t GetValuesIndex(idx_t row, idx_t child_index) const;
+
+private:
+	VectorIterator<UnshreddedVariantLayout> data;
+};
 
 class VariantIterator;
 
-//! Shared state required to iterate a single VARIANT vector. Owns the unified formats / flattened
+//! Shared state required to iterate a single VARIANT vector. Owns the vector iterators / flattened
 //! vectors that the individual VariantIterator cursors point into - so it must outlive any cursor.
 class VariantIteratorState {
 public:
-	DUCKDB_API VariantIteratorState(const Vector &variant, idx_t count);
+	DUCKDB_API explicit VariantIteratorState(const Vector &variant);
 
 public:
 	//! Whether the row is a (SQL) NULL variant
@@ -56,14 +90,9 @@ public:
 	//! Returns a cursor pointing at the root value of the given row
 	DUCKDB_API VariantIterator Root(idx_t row) const;
 
-	const UnifiedVariantVectorData &Unshredded() const {
-		return *unshredded;
-	}
-
 private:
-	//! The "core": the unshredded component reader
-	RecursiveUnifiedVectorFormat unshredded_format;
-	unique_ptr<UnifiedVariantVectorData> unshredded;
+	//! The "core": the unshredded component reader (plain vector iterators)
+	UnshreddedVariantIterator unshredded;
 
 	//! Whether the variant vector is shredded
 	bool is_shredded = false;
