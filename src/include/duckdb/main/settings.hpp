@@ -776,7 +776,7 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *Description =
 	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
