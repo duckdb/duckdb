@@ -11,7 +11,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 
 #include <algorithm>
 
@@ -255,11 +255,10 @@ uhugeint_t VariantIntegralMagnitude(VariantLogicalType type_id, const_data_ptr_t
 }
 
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
-VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const UnifiedVariantVectorData &variant, idx_t row,
-                                     uint32_t values_idx, const_data_ptr_t value_ptr) {
+VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIterator &it) {
 	switch (type_id) {
 	case VariantLogicalType::DECIMAL: {
-		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_idx);
+		auto decimal_data = it.GetDecimal();
 		hugeint_t unscaled;
 		switch (decimal_data.GetPhysicalType()) {
 		case PhysicalType::INT16:
@@ -280,7 +279,7 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const UnifiedVa
 		return BuildNumberKey(negative, Uhugeint::ToString(magnitude), decimal_data.scale);
 	}
 	case VariantLogicalType::BIGNUM: {
-		auto bignum_blob = VariantUtils::DecodeStringData(variant, row, values_idx);
+		auto bignum_blob = it.GetString();
 		auto decimal_string = Bignum::BignumToVarchar(bignum_t(bignum_blob));
 		bool negative = !decimal_string.empty() && decimal_string[0] == '-';
 		idx_t offset = negative ? 1 : 0;
@@ -289,7 +288,7 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const UnifiedVa
 	default: {
 		// integer types
 		bool negative;
-		auto magnitude = VariantIntegralMagnitude(type_id, value_ptr, negative);
+		auto magnitude = VariantIntegralMagnitude(type_id, it.GetData(), negative);
 		return BuildNumberKey(negative, Uhugeint::ToString(magnitude), 0);
 	}
 	}
@@ -356,13 +355,11 @@ void VariantEncodeString(SINK &sink, const string_t &str, bool is_varchar) {
 }
 
 template <class SINK>
-void EncodeVariantValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, SINK &sink) {
-	auto type_id = variant.GetTypeId(row, values_idx);
+void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
+	auto type_id = it.GetTypeId();
 	// write the type rank - this guarantees values are ordered by type first
 	sink.Write(GetVariantTypeRank(type_id));
 
-	auto blob_ptr = const_data_ptr_cast(variant.GetData(row).GetData());
-	auto value_ptr = blob_ptr + variant.GetByteOffset(row, values_idx);
 	switch (type_id) {
 	case VariantLogicalType::VARIANT_NULL:
 		// no payload - the rank fully describes the value
@@ -386,89 +383,81 @@ void EncodeVariantValue(const UnifiedVariantVectorData &variant, idx_t row, uint
 	case VariantLogicalType::UINT128:
 	case VariantLogicalType::DECIMAL:
 	case VariantLogicalType::BIGNUM:
-		VariantEncodeNumber(sink, VariantGetNumberKey(type_id, variant, row, values_idx, value_ptr));
+		VariantEncodeNumber(sink, VariantGetNumberKey(type_id, it));
 		break;
 	case VariantLogicalType::FLOAT:
 		// fold FLOAT into the REAL rank by widening to double (lossless)
-		VariantEncodeFixed<double>(sink, static_cast<double>(Load<float>(value_ptr)));
+		VariantEncodeFixed<double>(sink, static_cast<double>(Load<float>(it.GetData())));
 		break;
 	case VariantLogicalType::DOUBLE:
-		VariantEncodeFixed<double>(sink, Load<double>(value_ptr));
+		VariantEncodeFixed<double>(sink, Load<double>(it.GetData()));
 		break;
 	case VariantLogicalType::UUID:
-		VariantEncodeFixed<hugeint_t>(sink, Load<hugeint_t>(value_ptr));
+		VariantEncodeFixed<hugeint_t>(sink, Load<hugeint_t>(it.GetData()));
 		break;
 	// DATE and all (non-tz) TIMESTAMP precisions fold into the TIMESTAMP rank and compare as the number
 	// of nanoseconds since the epoch (DATE compares as midnight of that day, TIMESTAMP WITH TIME ZONE
 	// as its UTC instant). int128 is used so that the conversion to nanoseconds is lossless across the
 	// full range of each type. The type rank already separates the tz / non-tz groups.
 	case VariantLogicalType::DATE:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int32_t>(value_ptr)) * hugeint_t(NANOS_PER_DAY));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int32_t>(it.GetData())) * hugeint_t(NANOS_PER_DAY));
 		break;
 	case VariantLogicalType::TIMESTAMP_SEC:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_SEC));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_SEC));
 		break;
 	case VariantLogicalType::TIMESTAMP_MILIS:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_MILLI));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_MILLI));
 		break;
 	case VariantLogicalType::TIMESTAMP_MICROS:
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_MICRO));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())) * hugeint_t(NANOS_PER_MICRO));
 		break;
 	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(it.GetData())));
 		break;
 	// TIME precisions fold into the TIME rank and compare as nanoseconds since midnight (fits in int64)
 	case VariantLogicalType::TIME_MICROS:
-		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(value_ptr) * NANOS_PER_MICRO);
+		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(it.GetData()) * NANOS_PER_MICRO);
 		break;
 	case VariantLogicalType::TIME_NANOS:
-		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(value_ptr));
+		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(it.GetData()));
 		break;
 	case VariantLogicalType::TIME_MICROS_TZ:
 		// TIME WITH TIME ZONE requires a dedicated byte-comparable transform
-		VariantEncodeFixed<uint64_t>(sink, Load<dtime_tz_t>(value_ptr).sort_key());
+		VariantEncodeFixed<uint64_t>(sink, Load<dtime_tz_t>(it.GetData()).sort_key());
 		break;
 	case VariantLogicalType::INTERVAL:
 		// normalize the interval so that equal intervals encode identically
-		VariantEncodeFixed<interval_t>(sink, Load<interval_t>(value_ptr).Normalize());
+		VariantEncodeFixed<interval_t>(sink, Load<interval_t>(it.GetData()).Normalize());
 		break;
 	case VariantLogicalType::VARCHAR:
-		VariantEncodeString(sink, VariantUtils::DecodeStringData(variant, row, values_idx), true);
+		VariantEncodeString(sink, it.GetString(), true);
 		break;
 	case VariantLogicalType::BLOB:
 	case VariantLogicalType::GEOMETRY:
 	case VariantLogicalType::BITSTRING:
-		VariantEncodeString(sink, VariantUtils::DecodeStringData(variant, row, values_idx), false);
+		VariantEncodeString(sink, it.GetString(), false);
 		break;
 	case VariantLogicalType::ARRAY: {
-		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
-			auto child_values_idx = variant.GetValuesIndex(row, nested_data.children_idx + i);
-			EncodeVariantValue(variant, row, child_values_idx, sink);
+		auto children = it.GetArrayChildren();
+		for (auto &child : children) {
+			EncodeVariantValue(child, sink);
 		}
 		sink.Write(LIST_DELIMITER);
 		break;
 	}
 	case VariantLogicalType::OBJECT: {
-		auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
 		// gather (key, value) pairs and process them in string-sorted key order so that objects
 		// that only differ in key order compare equal
-		vector<std::pair<string_t, uint32_t>> entries;
-		entries.reserve(nested_data.child_count);
-		for (idx_t i = 0; i < nested_data.child_count; i++) {
-			auto key_idx = variant.GetKeysIndex(row, nested_data.children_idx + i);
-			auto child_values_idx = variant.GetValuesIndex(row, nested_data.children_idx + i);
-			entries.emplace_back(variant.GetKey(row, key_idx), child_values_idx);
-		}
+		auto entries = it.GetObjectChildren();
 		std::sort(entries.begin(), entries.end(),
-		          [](const std::pair<string_t, uint32_t> &a, const std::pair<string_t, uint32_t> &b) {
+		          [](const std::pair<string_t, VariantIterator> &a, const std::pair<string_t, VariantIterator> &b) {
 			          return a.first < b.first;
 		          });
 		for (auto &entry : entries) {
 			VariantEncodeString(sink, entry.first, true);
-			EncodeVariantValue(variant, row, entry.second, sink);
+			EncodeVariantValue(entry.second, sink);
 		}
 		sink.Write(LIST_DELIMITER);
 		break;
@@ -485,9 +474,7 @@ void EncodeVariantValue(const UnifiedVariantVectorData &variant, idx_t row, uint
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
 void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result) {
-	RecursiveUnifiedVectorFormat variant_format;
-	Vector::RecursiveToUnifiedFormat(input, variant_format);
-	UnifiedVariantVectorData variant(variant_format);
+	VariantIteratorState variant(input, count);
 
 	data_t null_byte = NULL_FIRST_BYTE;
 	data_t valid_byte = NULL_LAST_BYTE;
@@ -501,12 +488,14 @@ void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers mo
 	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	for (idx_t r = 0; r < count; r++) {
-		const bool valid = variant.RowIsValid(r);
+		auto root = variant.Root(r);
+		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
+		const bool valid = !root.IsNull();
 		// phase 1 - compute the encoded length
 		idx_t length = 1; // validity byte
 		if (valid) {
 			VariantComparatorLengthSink length_sink;
-			EncodeVariantValue(variant, r, 0, length_sink);
+			EncodeVariantValue(root, length_sink);
 			length += length_sink.length;
 		}
 		// phase 2 - allocate and construct
@@ -521,7 +510,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers mo
 		}
 		ptr[0] = valid_byte;
 		VariantComparatorWriteSink write_sink(ptr, 1, flip_bytes);
-		EncodeVariantValue(variant, r, 0, write_sink);
+		EncodeVariantValue(root, write_sink);
 		result_data[r].Finalize();
 	}
 }
