@@ -9,7 +9,6 @@
 
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
-#include "duckdb/common/types/interval.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
