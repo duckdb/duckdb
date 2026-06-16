@@ -175,7 +175,21 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		optional_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			auto &index = *entry->index;
-			if (!index.IsBound() && (index_type == nullptr || index.GetIndexType() == index_type)) {
+			if (index.IsBound()) {
+				continue;
+			}
+			bool should_bind;
+			if (index_type != nullptr) {
+				should_bind = index.GetIndexType() == index_type;
+			} else {
+				// Implicit "bind all" pass: skip index types that opt out of it
+				// (bound explicitly by name once their dependencies are ready).
+				// Keeps external indexes (e.g. serenedb's inverted index) from
+				// being bound during an ALTER-driven rebuild / WAL replay.
+				auto idx_type = context.db->config.GetIndexTypes().FindByName(index.GetIndexType());
+				should_bind = !(idx_type && idx_type->defer_implicit_bind);
+			}
+			if (should_bind) {
 				index_entry = entry.get();
 				break;
 			}

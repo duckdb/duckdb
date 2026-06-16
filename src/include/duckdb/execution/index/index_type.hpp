@@ -204,6 +204,14 @@ public:
 
 	index_build_plan_t create_plan = nullptr;          // escape hatch for creating the physical plan
 	index_create_function_t create_instance = nullptr; // function to create an instance of the index
+
+	// If true, the implicit "bind all indexes" pass skips this type; it is only
+	// bound when requested explicitly by name. Used by external indexes whose
+	// bind depends on state that loads after the storage layer (e.g. serenedb's
+	// inverted index, bound only by InitInvertedIndexes once the catalog and its
+	// backing index storage are ready). Without this, an ALTER-driven table
+	// rebuild during WAL replay would bind such an index too early and fault.
+	bool defer_implicit_bind = false;
 };
 
 } // namespace duckdb
