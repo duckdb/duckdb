@@ -91,8 +91,7 @@ bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
 
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
-                                                           vector<PushdownFilterTarget> &targets,
-                                                           bool for_scan_order) {
+                                                           vector<PushdownFilterTarget> &targets, bool for_scan_order) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:

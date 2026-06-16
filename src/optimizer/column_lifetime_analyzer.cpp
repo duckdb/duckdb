@@ -135,9 +135,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-		auto &projection_map = op.type == LogicalOperatorType::LOGICAL_TOP_N
-		                           ? op.Cast<LogicalTopN>().projection_map
-		                           : op.Cast<LogicalOrder>().projection_map;
+		auto &projection_map = op.type == LogicalOperatorType::LOGICAL_TOP_N ? op.Cast<LogicalTopN>().projection_map
+		                                                                     : op.Cast<LogicalOrder>().projection_map;
 
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);

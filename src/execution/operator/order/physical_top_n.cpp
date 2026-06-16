@@ -169,8 +169,8 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
                    const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset,
                    const vector<idx_t> &projections_p)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), arena_allocator(allocator),
-      heap(arena_allocator), payload_types(payload_types_p), orders(orders_p), projections(projections_p),
-      limit(limit), offset(offset), heap_size(limit + offset), executor(context), sort_key_heap(allocator),
+      heap(arena_allocator), payload_types(payload_types_p), orders(orders_p), projections(projections_p), limit(limit),
+      offset(offset), heap_size(limit + offset), executor(context), sort_key_heap(allocator),
       matching_sel(STANDARD_VECTOR_SIZE), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
       false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
@@ -192,14 +192,12 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 }
 
 TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset,
-                   const vector<idx_t> &projections)
+                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset, const vector<idx_t> &projections)
     : TopNHeap(context, BufferAllocator::Get(context), payload_types, orders, limit, offset, projections) {
 }
 
 TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
-                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset,
-                   const vector<idx_t> &projections)
+                   const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset, const vector<idx_t> &projections)
     : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, limit, offset,
                projections) {
 }
