@@ -5,6 +5,7 @@ import contextlib
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -314,6 +315,90 @@ def get_process_rss_bytes(pid: int):
             return None
 
     return None
+
+
+# Time budget for collecting a stack trace from a hung batch before it is killed.
+HANG_BACKTRACE_TIMEOUT_SECONDS = 60
+
+
+def collect_descendant_pids(pid: int):
+    """Best-effort list of `pid` plus its descendants (the batch may spawn child unittest processes)."""
+    pids = [pid]
+    if not sys.platform.startswith("linux"):
+        return pids
+    frontier = [pid]
+    seen = {pid}
+    while frontier:
+        cur = frontier.pop()
+        try:
+            task_dir = Path(f"/proc/{cur}/task")
+            for tid_dir in task_dir.iterdir():
+                children = (tid_dir / "children").read_text(encoding="utf8").split()
+                for child in children:
+                    child_pid = int(child)
+                    if child_pid not in seen:
+                        seen.add(child_pid)
+                        pids.append(child_pid)
+                        frontier.append(child_pid)
+        except (FileNotFoundError, ProcessLookupError, ValueError, OSError):
+            continue
+    return pids
+
+
+def backtrace_command(pid: int):
+    """Return (tool_name, argv) for dumping all-thread backtraces of `pid`, or None if no tool is available."""
+    if sys.platform == "darwin":
+        lldb = shutil.which("lldb")
+        if lldb:
+            return "lldb", [lldb, "-p", str(pid), "--batch", "-o", "thread backtrace all", "-o", "detach"]
+        sample = shutil.which("sample")
+        if sample:
+            # `sample` profiles for a couple of seconds and prints per-thread call stacks.
+            return "sample", [sample, str(pid), "2", "-mayDie"]
+        return None
+    gdb = shutil.which("gdb")
+    if gdb:
+        return "gdb", [gdb, "-p", str(pid), "-batch", "-nx", "-ex", "set pagination off", "-ex", "thread apply all bt"]
+    return None
+
+
+def capture_hang_backtrace(pid: int):
+    """
+    Capture all-thread backtraces of a hung batch process (and any children) before it is killed.
+    A batch timeout otherwise yields no clue about *where* it hung; this turns it into an actionable stack trace.
+    Returns a printable string, or an explanatory note when no debugger/permissions are available.
+    """
+    if os.environ.get("DUCKDB_TEST_NO_HANG_BACKTRACE"):
+        return None
+    sections = []
+    for target_pid in collect_descendant_pids(pid):
+        resolved = backtrace_command(target_pid)
+        if resolved is None:
+            return (
+                "no stack trace captured: install gdb (Linux) or lldb (macOS) to dump hung-batch backtraces "
+                "(set DUCKDB_TEST_NO_HANG_BACKTRACE=1 to silence)"
+            )
+        tool, argv = resolved
+        try:
+            proc = subprocess.run(
+                argv,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf8",
+                errors="backslashreplace",
+                timeout=HANG_BACKTRACE_TIMEOUT_SECONDS,
+            )
+            output = proc.stdout.strip()
+            if proc.returncode != 0 and not output:
+                output = f"({tool} exited with {proc.returncode} and produced no output - missing ptrace permissions?)"
+        except subprocess.TimeoutExpired:
+            output = f"({tool} timed out after {HANG_BACKTRACE_TIMEOUT_SECONDS}s while attaching)"
+        except OSError as exc:
+            output = f"({tool} failed to launch: {exc})"
+        sections.append(f"--- {tool} backtrace for pid {target_pid} ---\n{output}")
+    return "\n\n".join(sections) if sections else None
 
 
 def format_mib(value_bytes: int):
@@ -908,6 +993,12 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             batch_test_name or stdout_info.last_unfinished_test or infer_timed_out_test_from_stdout(stdout_lines, batch)
         )
         reproduce_batch = [timeout_test_name] if timeout_test_name else list(batch)
+        # surface the hung-batch backtrace captured before the kill (see capture_hang_backtrace) in the failure output
+        timeout_detail_lines = []
+        for idx, line in enumerate(stderr_lines):
+            if line.startswith("hung batch backtrace:"):
+                timeout_detail_lines = stderr_lines[idx:]
+                break
         return FailureInfo(
             kind="timeout",
             test_name=timeout_test_name,
@@ -918,7 +1009,7 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
             snippet_lines=[],
             expected_result_lines=[],
             actual_result_lines=[],
-            detail_lines=[],
+            detail_lines=timeout_detail_lines,
             timeout_seconds=float(re.search(r"after ([0-9]+(?:\.[0-9]+)?) seconds", message).group(1)),
             reproduce_batch=reproduce_batch,
         )
@@ -1026,7 +1117,10 @@ def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, ret
 def render_failure_lines(failure: FailureInfo):
     if failure.kind == "timeout":
         test_name = failure.test_name or "test batch"
-        return [f"error: timeout ({format_duration_seconds(failure.timeout_seconds)}s) for {test_name}."]
+        lines = [f"error: timeout ({format_duration_seconds(failure.timeout_seconds)}s) for {test_name}."]
+        if failure.detail_lines:
+            lines.extend(["", *failure.detail_lines])
+        return lines
 
     if failure.kind == "wrong_result":
         test_name = failure.test_name or "test batch"
@@ -1264,10 +1358,14 @@ def run_batch(config: TestRunnerConfig, batch):
             if rss_bytes is not None:
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             if time.monotonic() >= deadline:
+                # Dump all-thread backtraces *before* killing so a hang leaves an actionable stack trace in the log.
+                hang_backtrace = capture_hang_backtrace(proc.pid)
                 proc.kill()
                 stdout, stderr = proc.communicate()
                 stdout = normalize_output(stdout)
                 stderr = normalize_output(stderr)
+                if hang_backtrace:
+                    stderr = (stderr + "\n\n" if stderr else "") + "hung batch backtrace:\n" + hang_backtrace
                 failed = True
                 message = f"batch timed out after {config.batch_timeout_seconds} seconds"
                 break
