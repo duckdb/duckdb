@@ -30,6 +30,19 @@ static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
 		auto &aggr = op.Cast<LogicalAggregate>();
 		return aggr.groups.empty() && aggr.grouping_sets.empty() && aggr.grouping_functions.empty();
 	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		return true;
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = op.Cast<LogicalLimit>();
+		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.limit_val.GetConstantValue() != 1) {
+			return false;
+		}
+		if (limit.offset_val.Type() != LimitNodeType::UNSET &&
+		    (limit.offset_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.offset_val.GetConstantValue() != 0)) {
+			return false;
+		}
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	}
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
 	default:
