@@ -43,6 +43,13 @@ constexpr data_t STRING_DELIMITER = 0;
 constexpr data_t LIST_DELIMITER = 0;
 constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
+//! nanoseconds-per-unit scale factors used to fold the DATE / TIME / TIMESTAMP precisions into a
+//! common unit (nanoseconds) so that values of different precision compare by their actual instant
+constexpr int64_t NANOS_PER_MICRO = 1000;
+constexpr int64_t NANOS_PER_MILLI = 1000000;
+constexpr int64_t NANOS_PER_SEC = 1000000000;
+constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
+
 //! The sort-key rank of a variant value - determines the cross-type ordering (type-first)
 enum class VariantSortRank : data_t {
 	NULL_VALUE = 0,
@@ -52,16 +59,10 @@ enum class VariantSortRank : data_t {
 	VARCHAR,
 	BLOB,
 	UUID,
-	DATE,
-	TIME_MICROS,
-	TIME_NANOS,
-	TIME_MICROS_TZ,
-	TIMESTAMP_SEC,
-	TIMESTAMP_MILIS,
-	TIMESTAMP_MICROS,
-	TIMESTAMP_NANOS,
-	TIMESTAMP_MICROS_TZ,
-	TIMESTAMP_NANOS_TZ,
+	TIMESTAMP,    // DATE and all non-tz TIMESTAMP precisions, compared as nanoseconds since the epoch
+	TIMESTAMP_TZ, // TIMESTAMP WITH TIME ZONE (all precisions), compared as nanoseconds since the epoch (UTC)
+	TIME,         // TIME (all precisions), compared as nanoseconds since midnight
+	TIME_TZ,      // TIME WITH TIME ZONE
 	INTERVAL,
 	GEOMETRY,
 	BITSTRING,
@@ -100,26 +101,24 @@ data_t GetVariantTypeRank(VariantLogicalType type_id) {
 		return static_cast<data_t>(VariantSortRank::BLOB);
 	case VariantLogicalType::UUID:
 		return static_cast<data_t>(VariantSortRank::UUID);
+	// DATE folds into the TIMESTAMP rank (a date compares as midnight of that day), together with all
+	// non-tz TIMESTAMP precisions (SEC / MILIS / MICROS / NANOS)
 	case VariantLogicalType::DATE:
-		return static_cast<data_t>(VariantSortRank::DATE);
-	case VariantLogicalType::TIME_MICROS:
-		return static_cast<data_t>(VariantSortRank::TIME_MICROS);
-	case VariantLogicalType::TIME_NANOS:
-		return static_cast<data_t>(VariantSortRank::TIME_NANOS);
-	case VariantLogicalType::TIME_MICROS_TZ:
-		return static_cast<data_t>(VariantSortRank::TIME_MICROS_TZ);
 	case VariantLogicalType::TIMESTAMP_SEC:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_SEC);
 	case VariantLogicalType::TIMESTAMP_MILIS:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_MILIS);
 	case VariantLogicalType::TIMESTAMP_MICROS:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_MICROS);
 	case VariantLogicalType::TIMESTAMP_NANOS:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_NANOS);
+		return static_cast<data_t>(VariantSortRank::TIMESTAMP);
+	// TIMESTAMP WITH TIME ZONE precisions fold into a single TIMESTAMP_TZ rank
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_MICROS_TZ);
 	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		return static_cast<data_t>(VariantSortRank::TIMESTAMP_NANOS_TZ);
+		return static_cast<data_t>(VariantSortRank::TIMESTAMP_TZ);
+	// TIME precisions fold into a single TIME rank
+	case VariantLogicalType::TIME_MICROS:
+	case VariantLogicalType::TIME_NANOS:
+		return static_cast<data_t>(VariantSortRank::TIME);
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return static_cast<data_t>(VariantSortRank::TIME_TZ);
 	case VariantLogicalType::INTERVAL:
 		return static_cast<data_t>(VariantSortRank::INTERVAL);
 	case VariantLogicalType::GEOMETRY:
@@ -399,18 +398,32 @@ void EncodeVariantValue(const UnifiedVariantVectorData &variant, idx_t row, uint
 	case VariantLogicalType::UUID:
 		VariantEncodeFixed<hugeint_t>(sink, Load<hugeint_t>(value_ptr));
 		break;
+	// DATE and all (non-tz) TIMESTAMP precisions fold into the TIMESTAMP rank and compare as the number
+	// of nanoseconds since the epoch (DATE compares as midnight of that day, TIMESTAMP WITH TIME ZONE
+	// as its UTC instant). int128 is used so that the conversion to nanoseconds is lossless across the
+	// full range of each type. The type rank already separates the tz / non-tz groups.
 	case VariantLogicalType::DATE:
-		VariantEncodeFixed<int32_t>(sink, Load<int32_t>(value_ptr));
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int32_t>(value_ptr)) * hugeint_t(NANOS_PER_DAY));
 		break;
-	case VariantLogicalType::TIME_MICROS:
-	case VariantLogicalType::TIME_NANOS:
 	case VariantLogicalType::TIMESTAMP_SEC:
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_SEC));
+		break;
 	case VariantLogicalType::TIMESTAMP_MILIS:
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_MILLI));
+		break;
 	case VariantLogicalType::TIMESTAMP_MICROS:
-	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)) * hugeint_t(NANOS_PER_MICRO));
+		break;
+	case VariantLogicalType::TIMESTAMP_NANOS:
 	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		// all of these are stored as a single (UTC-normalized) int64 that compares directly
+		VariantEncodeFixed<hugeint_t>(sink, hugeint_t(Load<int64_t>(value_ptr)));
+		break;
+	// TIME precisions fold into the TIME rank and compare as nanoseconds since midnight (fits in int64)
+	case VariantLogicalType::TIME_MICROS:
+		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(value_ptr) * NANOS_PER_MICRO);
+		break;
+	case VariantLogicalType::TIME_NANOS:
 		VariantEncodeFixed<int64_t>(sink, Load<int64_t>(value_ptr));
 		break;
 	case VariantLogicalType::TIME_MICROS_TZ:

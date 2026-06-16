@@ -1,4 +1,4 @@
-# name: test/sql/variant/variant_create_sort_key.test
+# name: test/sql/variant/variant_comparator.test
 # description: Test the logical ordering of VARIANT values (variant_comparator + collation)
 # group: [variant]
 
@@ -139,6 +139,61 @@ false
 false
 true
 true
+
+# temporal fold: DATE and all (non-tz) TIMESTAMP precisions fold into one rank and compare by instant
+# (a DATE compares as midnight of that day, and equal instants of different precision are equal)
+query III
+SELECT
+    variant_comparator('2020-01-01'::DATE::VARIANT) = variant_comparator('2020-01-01 00:00:00'::TIMESTAMP::VARIANT),
+    variant_comparator('2020-01-01 00:00:00'::TIMESTAMP_S::VARIANT) = variant_comparator('2020-01-01 00:00:00'::TIMESTAMP_MS::VARIANT),
+    variant_comparator('2020-01-01 00:00:00'::TIMESTAMP::VARIANT) = variant_comparator('2020-01-01 00:00:00'::TIMESTAMP_NS::VARIANT)
+----
+true	true	true
+
+# temporal fold: ordering is by actual instant across DATE and every TIMESTAMP precision
+query I
+SELECT v::VARCHAR FROM (VALUES
+    ('2019-12-31'::DATE::VARIANT),
+    ('2020-01-01 00:00:01'::TIMESTAMP_MS::VARIANT),
+    ('2020-01-01 00:00:00'::TIMESTAMP_S::VARIANT),
+    ('2020-01-02'::DATE::VARIANT),
+    ('2020-01-01 00:00:00.5'::TIMESTAMP_NS::VARIANT)
+) t(v)
+ORDER BY v
+----
+2019-12-31
+2020-01-01 00:00:00
+2020-01-01 00:00:00.5
+2020-01-01 00:00:01
+2020-01-02
+
+# temporal fold: TIME precisions fold into one rank and compare by time-of-day
+query I
+SELECT variant_comparator('12:00:00'::TIME::VARIANT) = variant_comparator('12:00:00'::TIME_NS::VARIANT)
+----
+true
+
+query I
+SELECT v::VARCHAR FROM (VALUES
+    ('12:00:01'::TIME::VARIANT),
+    ('00:00:00'::TIME_NS::VARIANT),
+    ('12:00:00.5'::TIME_NS::VARIANT)
+) t(v)
+ORDER BY v
+----
+00:00:00
+12:00:00.5
+12:00:01
+
+# the four temporal groups (TIMESTAMP / TIMESTAMP WITH TIME ZONE / TIME / TIME WITH TIME ZONE) keep
+# their own ranks, so values from different groups are never equal even at the same wall-clock value
+query III
+SELECT
+    variant_comparator('2020-01-01 00:00:00'::TIMESTAMP::VARIANT) = variant_comparator('2020-01-01 00:00:00+00'::TIMESTAMPTZ::VARIANT),
+    variant_comparator('12:00:00'::TIME::VARIANT) = variant_comparator('2020-01-01 12:00:00'::TIMESTAMP::VARIANT),
+    variant_comparator('12:00:00'::TIME::VARIANT) = variant_comparator('12:00:00+00'::TIMETZ::VARIANT)
+----
+false	false	false
 
 # variant_comparator propagates NULL (so NULL = NULL stays NULL and NULLS FIRST/LAST works)
 query I
