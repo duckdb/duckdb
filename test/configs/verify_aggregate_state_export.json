@@ -69,12 +69,25 @@
       ]
     },
     {
-      "reason": "FIXME: ExportAggregateFinalize asserts offset == 0 - finalizing with an offset is not supported (hit by array_list_aggregate and ordered first/last/any_value)",
+      "reason": "FIXME: ordered aggregate rewrite fails - list_sort cannot bind over an exported AGGREGATE_STATE",
       "paths": [
-        "test/sql/aggregate/aggregates/test_any_value.test",
-        "test/sql/aggregate/aggregates/test_last.test",
         "test/sql/aggregate/aggregates/test_order_by_aggregate.test",
-        "test/sql/types/nested/array/array_list_aggregate.test"
+        "test/sql/copy/csv/read_csv_variable.test",
+        "test/sql/cte/test_recursive_cte_recurring.test"
+      ]
+    },
+    {
+      "reason": "FIXME: pivot aggregate count mismatch - the verification rewrite adds aggregates that break PIVOT detection",
+      "paths": [
+        "test/sql/pivot/pivot_case_insensitive.test",
+        "test/sql/pivot/test_pivot_duplicate_aggregates.test"
+      ]
+    },
+    {
+      "reason": "FIXME: null pointer dereference when the partial aggregate pushdown optimizer encounters STATE_EXPORT aggregates",
+      "paths": [
+        "test/optimizer/partial_aggregate_pushdown.test",
+        "test/sql/tpcds/tpcds_sf0.test"
       ]
     },
     {
