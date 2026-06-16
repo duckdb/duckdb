@@ -49,16 +49,13 @@ enum class VariantIterationOrder : uint8_t {
 // back to these unshredded iterators for the leftover values, merging the two on the fly.
 
 //! The VectorIterator<> layout of the canonical (unshredded) VARIANT representation
-using UnshreddedVariantLayout = VectorStructType<         //
-    VectorListType<string_t>,                             // keys VARCHAR[]
-    VectorListType<VectorStructType<uint32_t, uint32_t>>, // children STRUCT(key_id, value_id)[]
-    VectorListType<VectorStructType<uint8_t, uint32_t>>,  // values STRUCT(type_id, byte_offset)[]
-    string_t>;                                            // data BLOB
 
-//! Reads the canonical (unshredded) VARIANT layout (see UnshreddedVariantLayout) through plain
-//! VectorIterator<>s. This is the "core" all variant iteration is built on - it is used both for a
-//! fully unshredded variant and for the leftover ("unshredded") component of a shredded variant.
+//! Reads the canonical (unshredded) VARIANT layout (see UnshreddedVariantLayout) through iterators
 class UnshreddedVariantIterator {
+	using UnshreddedVariantLayout =
+	    VectorStructType<VectorListType<string_t>, VectorListType<VectorStructType<uint32_t, uint32_t>>,
+	                     VectorListType<VectorStructType<uint8_t, uint32_t>>, string_t>;
+
 public:
 	DUCKDB_API explicit UnshreddedVariantIterator(const Vector &unshredded);
 
@@ -83,6 +80,21 @@ private:
 	VectorIterator<UnshreddedVariantLayout> data;
 };
 
+//! A recursive, self-similar view over the typed ("shredded") component of a variant
+struct ShreddedVariantIterator {
+public:
+	//! Recursively populates this node (and its children) from a shredded variant Vector
+	DUCKDB_API void Build(const Vector &vec);
+
+public:
+	//! The unified format of this layer
+	UnifiedVectorFormat unified;
+	//! The children layers (list/array element, or struct fields)
+	vector<ShreddedVariantIterator> children;
+	//! The logical type of this layer
+	LogicalType logical_type;
+};
+
 class VariantIterator;
 
 //! Shared state required to iterate a single VARIANT vector. Owns the vector iterators / flattened
@@ -103,8 +115,8 @@ private:
 
 	//! Whether the variant vector is shredded
 	bool is_shredded = false;
-	//! The shredded component - the (recursive) unified format of the root of the shredded tree
-	RecursiveUnifiedVectorFormat shredded_format;
+	//! The shredded component - the (recursive) view of the root of the shredded tree
+	ShreddedVariantIterator shredded_format;
 
 	friend class VariantIterator;
 	friend class VariantArrayIterator;
@@ -160,11 +172,11 @@ public:
 private:
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
 	//! flattened primitive) at the given index into a concrete cursor
-	static VariantIterator ResolveShredded(const VariantIteratorState &state, const RecursiveUnifiedVectorFormat &node,
+	static VariantIterator ResolveShredded(const VariantIteratorState &state, const ShreddedVariantIterator &node,
 	                                       idx_t index, idx_t row);
 
 	static VariantIterator MakeUnshredded(const VariantIteratorState &state, idx_t row, uint32_t value_index);
-	static VariantIterator MakeShredded(const VariantIteratorState &state, const RecursiveUnifiedVectorFormat &content,
+	static VariantIterator MakeShredded(const VariantIteratorState &state, const ShreddedVariantIterator &content,
 	                                    idx_t index, idx_t row, uint32_t overlay_value_index);
 	static VariantIterator MakeNull(const VariantIteratorState &state);
 	static VariantIterator MakeMissing(const VariantIteratorState &state);
@@ -180,7 +192,7 @@ private:
 
 	//! SHREDDED: the current layer in the shredded format tree (the resolved 'typed_value', i.e. the
 	//! object struct, the array list, or the primitive)
-	optional_ptr<const RecursiveUnifiedVectorFormat> shredded_format;
+	optional_ptr<const ShreddedVariantIterator> shredded_format;
 	//! SHREDDED: the (logical) index into shredded_format
 	idx_t shredded_index = 0;
 	//! SHREDDED OBJECT: 1-based index into the unshredded component holding the leftover fields
@@ -238,7 +250,7 @@ private:
 	//! UNSHREDDED: the 'children' base index; SHREDDED: the list offset of the array's elements
 	idx_t base;
 	//! SHREDDED: the element layer of the array
-	optional_ptr<const RecursiveUnifiedVectorFormat> element_node;
+	optional_ptr<const ShreddedVariantIterator> element_node;
 };
 
 //! A single (key, value) entry of an OBJECT
@@ -313,7 +325,7 @@ private:
 
 	//! SHREDDED: the object's typed struct layer + its index, the number of typed fields, and the
 	//! 'children' base index of the leftover (overlay) object
-	optional_ptr<const RecursiveUnifiedVectorFormat> content;
+	optional_ptr<const ShreddedVariantIterator> content;
 	idx_t shredded_index;
 	idx_t typed_field_count;
 	idx_t overlay_base;

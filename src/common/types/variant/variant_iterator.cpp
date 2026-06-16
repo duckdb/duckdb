@@ -1,5 +1,8 @@
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 
 #include <algorithm>
@@ -48,7 +51,7 @@ VariantNestedData DecodeNestedData(const string_t &blob, uint32_t byte_offset) {
 }
 
 //! Whether the value at logical position 'index' of a shredded layer is valid (non-NULL)
-bool ShreddedIsValid(const RecursiveUnifiedVectorFormat &node, idx_t index) {
+bool ShreddedIsValid(const ShreddedVariantIterator &node, idx_t index) {
 	return node.unified.validity.RowIsValid(node.unified.sel->get_index(index));
 }
 
@@ -66,11 +69,40 @@ VariantIteratorState::VariantIteratorState(const Vector &variant)
 	}
 	is_shredded = true;
 
-	//! Read the shredded component through a (recursive) unified format. This does not reconstruct the
-	//! unshredded representation (unlike flattening the SHREDDED_VECTOR itself) - it only normalizes the
-	//! regular, typed vectors of the shredded tree so each layer can be navigated by index.
+	//! Build the (recursive) view of the shredded component. This does not reconstruct the unshredded
+	//! representation (unlike flattening the SHREDDED_VECTOR itself) - it only normalizes the regular,
+	//! typed vectors of the shredded tree so each layer can be navigated by index.
 	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant);
-	Vector::RecursiveToUnifiedFormat(shredded_vec, shredded_format);
+	shredded_format.Build(shredded_vec);
+}
+
+//===--------------------------------------------------------------------===//
+// ShreddedVariantIterator
+//===--------------------------------------------------------------------===//
+void ShreddedVariantIterator::Build(const Vector &vec) {
+	vec.ToUnifiedFormat(unified);
+	logical_type = vec.GetType();
+
+	switch (vec.GetType().InternalType()) {
+	case PhysicalType::LIST:
+		children.resize(1);
+		children[0].Build(ListVector::GetChild(vec));
+		break;
+	case PhysicalType::ARRAY:
+		children.resize(1);
+		children[0].Build(ArrayVector::GetChild(vec));
+		break;
+	case PhysicalType::STRUCT: {
+		auto &entries = StructVector::GetEntries(vec);
+		children.resize(entries.size());
+		for (idx_t i = 0; i < entries.size(); i++) {
+			children[i].Build(entries[i]);
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -176,9 +208,8 @@ VariantIterator VariantIterator::MakeUnshredded(const VariantIteratorState &stat
 	return result;
 }
 
-VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state,
-                                              const RecursiveUnifiedVectorFormat &content, idx_t index, idx_t row,
-                                              uint32_t overlay_value_index) {
+VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state, const ShreddedVariantIterator &content,
+                                              idx_t index, idx_t row, uint32_t overlay_value_index) {
 	VariantIterator result;
 	result.state = &state;
 	result.kind = Kind::SHREDDED;
@@ -192,8 +223,8 @@ VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state,
 //===--------------------------------------------------------------------===//
 // Shredded resolution
 //===--------------------------------------------------------------------===//
-VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &state,
-                                                 const RecursiveUnifiedVectorFormat &node, idx_t index, idx_t row) {
+VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &state, const ShreddedVariantIterator &node,
+                                                 idx_t index, idx_t row) {
 	if (node.logical_type.id() != LogicalTypeId::STRUCT) {
 		//! A flattened (fully-consistent) primitive - a NULL here represents a VARIANT_NULL value
 		if (!ShreddedIsValid(node, index)) {
@@ -246,7 +277,7 @@ VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &sta
 //===--------------------------------------------------------------------===//
 // Type resolution
 //===--------------------------------------------------------------------===//
-static VariantLogicalType ShreddedTypeId(const RecursiveUnifiedVectorFormat &content, idx_t index) {
+static VariantLogicalType ShreddedTypeId(const ShreddedVariantIterator &content, idx_t index) {
 	auto &type = content.logical_type;
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
