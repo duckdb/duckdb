@@ -4,6 +4,8 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -118,7 +120,12 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 
 unique_ptr<CreateMacroInfo>
 DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
-	Parser parser;
+	return CreateTableMacroInfo(default_macro, ParserOptions());
+}
+
+unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
+                                                                                ParserOptions options) {
+	Parser parser(options);
 	parser.ParseQuery(default_macro.macro);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw InternalException("Expected a single select statement in CreateTableMacroInfo internal");
@@ -130,10 +137,10 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
-                                                              const Identifier &input_name) {
+                                                              const Identifier &input_name, ParserOptions options) {
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
-			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index]);
+			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index], options);
 		}
 	}
 	return nullptr;
@@ -141,7 +148,9 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                            const Identifier &entry_name) {
-	auto info = GetDefaultTableFunction(schema.name, entry_name);
+	ParserOptions options;
+	options.parser_cache = &context.db->GetParserCache();
+	auto info = GetDefaultTableFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}

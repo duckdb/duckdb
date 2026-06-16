@@ -376,7 +376,8 @@ void StandardBufferManager::PurgeQueue(const BlockHandle &handle) {
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
-	buffer_pool.AddToEvictionQueue(handle);
+	auto lock = handle->GetMemory().GetLock();
+	buffer_pool.AddToEvictionQueue(lock, handle);
 }
 
 void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
@@ -412,7 +413,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);
 			if (block_memory.MustAddToEvictionQueue()) {
-				purge = buffer_pool.AddToEvictionQueue(handle);
+				purge = buffer_pool.AddToEvictionQueue(lock, handle);
 			} else {
 				block_memory.Unload(lock);
 			}

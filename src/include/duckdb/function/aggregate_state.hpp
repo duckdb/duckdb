@@ -50,6 +50,42 @@ struct AggregateInputData {
 	optional_ptr<const ClusteredAggr> clustered;
 };
 
+//! Input to the get_state_type callback - bundles the bound aggregate function with its bind data so that the
+//! callback can resolve the exported state layout (including any constant parameters stored in the bind data).
+struct AggregateLayoutInput {
+	AggregateLayoutInput(const BoundAggregateFunction &function_p, optional_ptr<FunctionData> bind_data_p)
+	    : function(function_p), bind_data(bind_data_p) {
+	}
+
+	const BoundAggregateFunction &function;
+	optional_ptr<FunctionData> bind_data;
+};
+
+//! The input data provided to the finalize callback of an aggregate function.
+//! If the function defines an "init_local_state_finalize" callback, the local state is initialized on construction.
+//! Callers can instead pass in an externally-owned local state - this way the local state can be kept alive and
+//! re-used across multiple finalize calls (e.g. for the duration of a hash table scan).
+struct AggregateFinalizeInputData : public AggregateInputData {
+	DUCKDB_API AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
+	                                      optional_ptr<FunctionData> bind_data_p, ArenaAllocator &allocator_p,
+	                                      optional_ptr<FunctionLocalState> local_state_p = nullptr);
+	DUCKDB_API AggregateFinalizeInputData(const BoundAggregateExpression &expr, ArenaAllocator &allocator_p,
+	                                      optional_ptr<FunctionLocalState> local_state_p = nullptr);
+	DUCKDB_API AggregateFinalizeInputData(const AggregateObject &aggr, ArenaAllocator &allocator_p,
+	                                      optional_ptr<FunctionLocalState> local_state_p = nullptr);
+
+	//! The local state of the finalize (set if the function defines an "init_local_state_finalize" callback)
+	optional_ptr<FunctionLocalState> local_state;
+
+private:
+	//! Initializes the local state when the caller did not pass in an external one
+	void InitializeLocalState();
+
+private:
+	//! The local state owned by this input data - used when the caller does not pass in an external local state
+	unique_ptr<FunctionLocalState> owned_state;
+};
+
 struct AggregateUnaryInput {
 	AggregateUnaryInput(AggregateInputData &input_p, const ValidityMask &input_mask_p)
 	    : input(input_p), input_mask(input_mask_p), input_idx(0) {
@@ -77,15 +113,14 @@ struct AggregateBinaryInput {
 };
 
 struct AggregateFinalizeData {
-	AggregateFinalizeData(Vector &result_p, AggregateInputData &input_p, idx_t result_count_p = 1)
+	AggregateFinalizeData(Vector &result_p, AggregateFinalizeInputData &input_p, idx_t result_count_p = 1)
 	    : result(result_p), input(input_p), result_idx(0), result_count(result_count_p) {
 	}
 
 	Vector &result;
-	AggregateInputData &input;
+	AggregateFinalizeInputData &input;
 	idx_t result_idx;
 	idx_t result_count;
-	unique_ptr<FunctionLocalState> local_state;
 
 	inline void ReturnNull() {
 		switch (result.GetVectorType()) {

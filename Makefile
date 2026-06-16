@@ -526,7 +526,6 @@ TEST_CONFIGS := \
 	test/configs/disable_caching_operators.json \
 	test/configs/wal_verification.json \
 	test/configs/vacuum_rebuild_indexes_force_storage.json \
-	test/configs/prefetch_all_parquet_files.json \
 	test/configs/verification_projection.json \
 	test/configs/verify_column_bindings.json \
 	test/configs/no_local_filesystem.json \

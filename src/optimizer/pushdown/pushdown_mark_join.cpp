@@ -1,10 +1,148 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
+
+static bool FilterNullRejectsExpression(const Expression &filter, const Expression &expr) {
+	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
+		for (auto &child : conjunction.GetChildren()) {
+			if (FilterNullRejectsExpression(*child, expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
+		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
+		if (conjunction.GetChildren().empty()) {
+			return false;
+		}
+		for (auto &child : conjunction.GetChildren()) {
+			if (!FilterNullRejectsExpression(*child, expr)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	if (filter.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+		auto &op = filter.Cast<BoundOperatorExpression>();
+		return !op.GetChildren().empty() && Expression::Equals(*op.GetChildren()[0], expr);
+	}
+	if (!BoundComparisonExpression::IsComparison(filter)) {
+		return false;
+	}
+	if (filter.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+	    filter.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return false;
+	}
+	auto &comparison = filter.Cast<BoundFunctionExpression>();
+	return Expression::Equals(BoundComparisonExpression::Left(comparison), expr) ||
+	       Expression::Equals(BoundComparisonExpression::Right(comparison), expr);
+}
+
+static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	auto &colref = expr.Cast<BoundColumnRefExpression>();
+	if (colref.Depth() != 0) {
+		return false;
+	}
+	binding = colref.Binding();
+	return true;
+}
+
+static bool ExpressionIsNotNull(ClientContext &context, LogicalOperator &op, const Expression &expr) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		if (projection.children.size() != 1) {
+			return false;
+		}
+		ColumnBinding binding;
+		if (!GetColumnRefBinding(expr, binding)) {
+			return false;
+		}
+		auto projection_bindings = projection.GetColumnBindings();
+		for (idx_t idx = 0; idx < projection_bindings.size(); idx++) {
+			if (projection_bindings[idx] == binding) {
+				return ExpressionIsNotNull(context, *projection.children[0], *projection.expressions[idx]);
+			}
+		}
+		return false;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		for (auto &filter_expr : filter.expressions) {
+			if (FilterNullRejectsExpression(*filter_expr, expr)) {
+				return true;
+			}
+		}
+		return filter.children.size() == 1 && ExpressionIsNotNull(context, *filter.children[0], expr);
+	}
+	case LogicalOperatorType::LOGICAL_GET: {
+		ColumnBinding binding;
+		if (!GetColumnRefBinding(expr, binding)) {
+			return false;
+		}
+		auto &get = op.Cast<LogicalGet>();
+		if (binding.table_index != get.table_index) {
+			return false;
+		}
+		if (get.table_filters.HasFilter(binding.column_index)) {
+			auto column_expr = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
+			auto filter_expr =
+			    get.table_filters.GetFilterByColumnIndex(binding.column_index).ToExpression(*column_expr);
+			if (FilterNullRejectsExpression(*filter_expr, expr)) {
+				return true;
+			}
+		}
+		auto table = get.GetTable();
+		if (!table) {
+			return false;
+		}
+		auto &column_index = get.GetColumnIndex(binding);
+		if (!column_index.HasPrimaryIndex() || column_index.HasChildren() ||
+		    column_index.GetPrimaryIndex() == DConstants::INVALID_INDEX) {
+			return false;
+		}
+		auto stats = table->GetStatistics(context, column_index.GetPrimaryIndex());
+		return stats && !stats->CanHaveNull();
+	}
+	default:
+		return false;
+	}
+}
+
+static void SimplifyNullSafeSemiJoinConditions(ClientContext &context, LogicalComparisonJoin &join) {
+	D_ASSERT(join.join_type == JoinType::SEMI);
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			continue;
+		}
+		// Once a MARK join is reduced to SEMI, a null-safe equality is equivalent to regular equality if either
+		// join key is known not to be NULL. Regular equality unlocks the existing runtime-filter infrastructure.
+		if (!ExpressionIsNotNull(context, *join.children[0], cond.GetLHS()) &&
+		    !ExpressionIsNotNull(context, *join.children[1], cond.GetRHS())) {
+			continue;
+		}
+		cond =
+		    JoinCondition(cond.LeftReference()->Copy(), cond.RightReference()->Copy(), ExpressionType::COMPARE_EQUAL);
+	}
+}
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<TableIndex> &left_bindings,
@@ -82,6 +220,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	}
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	if (join.join_type == JoinType::SEMI) {
+		SimplifyNullSafeSemiJoinConditions(GetContext(), comp_join);
+	}
 	return PushFinalFilters(std::move(op));
 }
 

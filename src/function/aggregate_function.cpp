@@ -17,6 +17,39 @@ AggregateInputData::AggregateInputData(const AggregateObject &aggr, ArenaAllocat
                          allocator_p, combine_type_p) {
 }
 
+AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateFunction &function_p,
+                                                       optional_ptr<FunctionData> bind_data_p,
+                                                       ArenaAllocator &allocator_p,
+                                                       optional_ptr<FunctionLocalState> local_state_p)
+    : AggregateInputData(function_p, bind_data_p, allocator_p), local_state(local_state_p) {
+	InitializeLocalState();
+}
+
+AggregateFinalizeInputData::AggregateFinalizeInputData(const BoundAggregateExpression &expr,
+                                                       ArenaAllocator &allocator_p,
+                                                       optional_ptr<FunctionLocalState> local_state_p)
+    : AggregateInputData(expr, allocator_p), local_state(local_state_p) {
+	InitializeLocalState();
+}
+
+AggregateFinalizeInputData::AggregateFinalizeInputData(const AggregateObject &aggr, ArenaAllocator &allocator_p,
+                                                       optional_ptr<FunctionLocalState> local_state_p)
+    : AggregateInputData(aggr, allocator_p), local_state(local_state_p) {
+	InitializeLocalState();
+}
+
+void AggregateFinalizeInputData::InitializeLocalState() {
+	if (local_state) {
+		// the caller passed in an externally-owned local state
+		return;
+	}
+	auto &callbacks = function.GetCallbacks();
+	if (callbacks.HasInitLocalStateFinalizeCallback()) {
+		owned_state = callbacks.GetInitLocalStateFinalizeCallback()(function, bind_data);
+		local_state = owned_state.get();
+	}
+}
+
 bool AggregateFunctionProperties::operator==(const AggregateFunctionProperties &rhs) const {
 	return FunctionProperties::operator==(rhs) && order_dependent == rhs.order_dependent &&
 	       distinct_dependent == rhs.distinct_dependent;
@@ -27,7 +60,8 @@ bool AggregateFunctionProperties::operator!=(const AggregateFunctionProperties &
 
 bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rhs) const {
 	return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
-	       combine == rhs.combine && finalize == rhs.finalize && cluster_update == rhs.cluster_update &&
+	       combine == rhs.combine && finalize == rhs.finalize &&
+	       init_local_state_finalize == rhs.init_local_state_finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
 	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type;

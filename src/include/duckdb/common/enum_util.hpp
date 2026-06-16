@@ -166,6 +166,8 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugOrderVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -183,6 +185,8 @@ enum class DeprecatedIndexType : uint8_t;
 enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
+
+enum class DialectCompatibilityMode : uint8_t;
 
 enum class DistinctCountSource : uint8_t;
 
@@ -759,6 +763,9 @@ template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
+const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
@@ -784,6 +791,9 @@ const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
+const char* EnumUtil::ToChars<DialectCompatibilityMode>(DialectCompatibilityMode value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
@@ -1546,6 +1556,9 @@ template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
+DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
+
+template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
@@ -1571,6 +1584,9 @@ DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const ch
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
+DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const char *value);
 
 template<>
 DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
