@@ -52,9 +52,9 @@ public:
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		// Pre-allocate a flatten buffer for FOR vectors (only for primitive integer types)
-		if (!buffer->flatten_cache && GetTypeIdSize(internal_type) > 1 &&
-		    internal_type != PhysicalType::LIST && internal_type != PhysicalType::ARRAY &&
-		    internal_type != PhysicalType::STRUCT && internal_type != PhysicalType::VARCHAR) {
+		if (!buffer->flatten_cache && GetTypeIdSize(internal_type) > 1 && internal_type != PhysicalType::LIST &&
+		    internal_type != PhysicalType::ARRAY && internal_type != PhysicalType::STRUCT &&
+		    internal_type != PhysicalType::VARCHAR) {
 			buffer->flatten_cache = VectorBuffer::CreateStandardVector(internal_type);
 		}
 		buffer->ClearAuxiliaryData();

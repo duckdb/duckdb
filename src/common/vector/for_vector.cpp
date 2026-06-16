@@ -150,9 +150,8 @@ void FORVector::CopyToFlat(const Vector &source, const SelectionVector &sel, Vec
 template <class LOGICAL_T>
 static LOGICAL_T GetFORValue(PhysicalType stored_type, const_data_ptr_t data, idx_t index) {
 	LOGICAL_T result;
-	FOR_SWITCH_STORED(stored_type, STORED_T, {
-		result = FORVector::WidenStored<LOGICAL_T>(reinterpret_cast<const STORED_T *>(data)[index]);
-	});
+	FOR_SWITCH_STORED(stored_type, STORED_T,
+	                  { result = FORVector::WidenStored<LOGICAL_T>(reinterpret_cast<const STORED_T *>(data)[index]); });
 	return result;
 }
 

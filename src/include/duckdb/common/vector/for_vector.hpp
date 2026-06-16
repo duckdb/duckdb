@@ -112,17 +112,21 @@ struct FORVector {
 		auto data = reinterpret_cast<const STORED_T *>(scan_data.data);
 		if (!scan_data.sel) {
 			if (!scan_data.validity->CanHaveNull()) {
-				for (idx_t i = lo; i < hi; i++) func(i, data[i]);
+				for (idx_t i = lo; i < hi; i++)
+					func(i, data[i]);
 			} else {
 				for (idx_t i = lo; i < hi; i++)
-					if (scan_data.validity->RowIsValid(i)) func(i, data[i]);
+					if (scan_data.validity->RowIsValid(i))
+						func(i, data[i]);
 			}
 		} else if (!scan_data.validity->CanHaveNull()) {
-			for (idx_t i = lo; i < hi; i++) func(i, data[scan_data.sel->get_index(i)]);
+			for (idx_t i = lo; i < hi; i++)
+				func(i, data[scan_data.sel->get_index(i)]);
 		} else {
 			for (idx_t i = lo; i < hi; i++) {
 				auto idx = scan_data.sel->get_index(i);
-				if (scan_data.validity->RowIsValid(idx)) func(i, data[idx]);
+				if (scan_data.validity->RowIsValid(idx))
+					func(i, data[idx]);
 			}
 		}
 	}

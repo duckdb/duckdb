@@ -288,20 +288,19 @@ static bool TryFORConstantAddSub(Vector &left, Vector &right, Vector &result, id
 			}
 			auto source =
 			    FORVector::CreatePayloadView(scan.stored_type, FORVector::GetData(*scan.for_vec), target_count);
-			auto target_payload =
-			    FORVector::CreatePayloadView(result_stored, FORVector::GetData(target), target_count);
+			auto target_payload = FORVector::CreatePayloadView(result_stored, FORVector::GetData(target), target_count);
 			FOR_SWITCH_STORED(scan.stored_type, ST, {
 				FOR_SWITCH_STORED(result_stored, RST, {
 					Vector constant_view(Value::CreateValue(UnsafeNumericCast<RST>(constant)), count_t(target_count));
 					if constexpr (TRAITS::IS_ADD) {
 						BinaryExecutor::ExecuteStandard<ST, RST, RST, AddOperator>(source, constant_view,
-						                                                            target_payload, target_count);
+						                                                           target_payload, target_count);
 					} else if (left_for) {
 						BinaryExecutor::ExecuteStandard<ST, RST, RST, SubtractOperator>(source, constant_view,
-						                                                                 target_payload, target_count);
+						                                                                target_payload, target_count);
 					} else {
 						BinaryExecutor::ExecuteStandard<RST, ST, RST, SubtractOperator>(constant_view, source,
-						                                                                 target_payload, target_count);
+						                                                                target_payload, target_count);
 					}
 				});
 			});
