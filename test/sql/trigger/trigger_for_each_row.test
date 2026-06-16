@@ -435,3 +435,73 @@ statement error
 INSERT INTO casc_a VALUES (1);
 ----
 writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+
+# INSERT trigger body with SELECT
+statement ok
+CREATE TABLE t_ins2 (id INTEGER);
+
+statement ok
+CREATE TABLE source_ins2 (id INTEGER);
+
+statement ok
+CREATE TABLE audit_ins2 (id INTEGER);
+
+statement ok
+INSERT INTO source_ins2 VALUES (10), (20);
+
+statement ok
+CREATE TRIGGER trg_ins2 AFTER INSERT ON t_ins2 FOR EACH ROW
+    INSERT INTO audit_ins2 SELECT NEW.id;
+
+statement ok
+INSERT INTO t_ins2 VALUES (1), (2);
+
+query I
+SELECT COUNT(*) FROM audit_ins2;
+----
+2
+
+# UPDATE trigger body with correlated WHERE
+statement ok
+CREATE TABLE t_upd1 (id INTEGER);
+
+statement ok
+CREATE TABLE target_upd1 (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO target_upd1 VALUES (1, 0), (2, 0), (3, 0);
+
+statement ok
+CREATE TRIGGER trg_upd1 AFTER INSERT ON t_upd1 FOR EACH ROW
+    UPDATE target_upd1 SET val = val + 1 WHERE id = NEW.id;
+
+statement ok
+INSERT INTO t_upd1 VALUES (1), (2);
+
+query II
+SELECT id, val FROM target_upd1 WHERE val = 1 ORDER BY id;
+----
+1	1
+2	1
+
+# DELETE trigger body with correlated WHERE
+statement ok
+CREATE TABLE t_del1 (id INTEGER);
+
+statement ok
+CREATE TABLE other_del1 (id INTEGER);
+
+statement ok
+INSERT INTO other_del1 VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_del1 AFTER INSERT ON t_del1 FOR EACH ROW
+    DELETE FROM other_del1 WHERE id = NEW.id;
+
+statement ok
+INSERT INTO t_del1 VALUES (1), (3);
+
+query I
+SELECT COUNT(*) FROM other_del1;
+----
+1
