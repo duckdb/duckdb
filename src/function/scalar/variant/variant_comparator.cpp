@@ -218,33 +218,28 @@ uhugeint_t HugeintMagnitude(hugeint_t value, bool &negative) {
 	return uhugeint_t(hi, lo);
 }
 
-//! Decompose a variant integer value into (sign, 128-bit magnitude)
-uhugeint_t VariantIntegralMagnitude(VariantLogicalType type_id, const_data_ptr_t ptr, bool &negative) {
-	negative = false;
-	switch (type_id) {
-	case VariantLogicalType::INT8:
-		return HugeintMagnitude(hugeint_t(Load<int8_t>(ptr)), negative);
-	case VariantLogicalType::INT16:
-		return HugeintMagnitude(hugeint_t(Load<int16_t>(ptr)), negative);
-	case VariantLogicalType::INT32:
-		return HugeintMagnitude(hugeint_t(Load<int32_t>(ptr)), negative);
-	case VariantLogicalType::INT64:
-		return HugeintMagnitude(hugeint_t(Load<int64_t>(ptr)), negative);
-	case VariantLogicalType::INT128:
-		return HugeintMagnitude(Load<hugeint_t>(ptr), negative);
-	case VariantLogicalType::UINT8:
-		return uhugeint_t(0, Load<uint8_t>(ptr));
-	case VariantLogicalType::UINT16:
-		return uhugeint_t(0, Load<uint16_t>(ptr));
-	case VariantLogicalType::UINT32:
-		return uhugeint_t(0, Load<uint32_t>(ptr));
-	case VariantLogicalType::UINT64:
-		return uhugeint_t(0, Load<uint64_t>(ptr));
-	case VariantLogicalType::UINT128:
-		return Load<uhugeint_t>(ptr);
-	default:
-		throw InternalException("VariantIntegralMagnitude called on non-integer type");
+//! Decimal-digit string of a 128-bit magnitude. Uses a cheap 64-bit conversion when the value fits in
+//! 64 bits, avoiding the slower 128-bit Uhugeint::ToString.
+string MagnitudeToString(uhugeint_t magnitude) {
+	if (magnitude.upper == 0) {
+		return to_string(magnitude.lower);
 	}
+	return Uhugeint::ToString(magnitude);
+}
+
+//! Build a number key from a native (<= 64-bit) integer value, computing the magnitude in 64-bit
+//! arithmetic instead of widening every value to uhugeint_t.
+template <class T>
+VariantNumberKey IntegerNumberKey(T value) {
+	bool negative = false;
+	auto magnitude = static_cast<uint64_t>(value);
+	if constexpr (std::is_signed<T>::value) {
+		if (value < 0) {
+			negative = true;
+			magnitude = uint64_t(0) - magnitude; // unsigned negate -> |value| (also handles the minimum)
+		}
+	}
+	return BuildNumberKey(negative, to_string(magnitude), 0);
 }
 
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
@@ -269,7 +264,7 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIt
 		}
 		bool negative;
 		auto magnitude = HugeintMagnitude(unscaled, negative);
-		return BuildNumberKey(negative, Uhugeint::ToString(magnitude), decimal_data.scale);
+		return BuildNumberKey(negative, MagnitudeToString(magnitude), decimal_data.scale);
 	}
 	case VariantLogicalType::BIGNUM: {
 		auto bignum_blob = it.GetString();
@@ -278,12 +273,32 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIt
 		idx_t offset = negative ? 1 : 0;
 		return BuildNumberKey(negative, decimal_string.substr(offset), 0);
 	}
-	default: {
-		// integer types
+	// integer types - use the native width for the magnitude, only widening to 128-bit when necessary
+	case VariantLogicalType::INT8:
+		return IntegerNumberKey(Load<int8_t>(it.GetDataPointer()));
+	case VariantLogicalType::INT16:
+		return IntegerNumberKey(Load<int16_t>(it.GetDataPointer()));
+	case VariantLogicalType::INT32:
+		return IntegerNumberKey(Load<int32_t>(it.GetDataPointer()));
+	case VariantLogicalType::INT64:
+		return IntegerNumberKey(Load<int64_t>(it.GetDataPointer()));
+	case VariantLogicalType::UINT8:
+		return IntegerNumberKey(Load<uint8_t>(it.GetDataPointer()));
+	case VariantLogicalType::UINT16:
+		return IntegerNumberKey(Load<uint16_t>(it.GetDataPointer()));
+	case VariantLogicalType::UINT32:
+		return IntegerNumberKey(Load<uint32_t>(it.GetDataPointer()));
+	case VariantLogicalType::UINT64:
+		return IntegerNumberKey(Load<uint64_t>(it.GetDataPointer()));
+	case VariantLogicalType::INT128: {
 		bool negative;
-		auto magnitude = VariantIntegralMagnitude(type_id, it.GetDataPointer(), negative);
-		return BuildNumberKey(negative, Uhugeint::ToString(magnitude), 0);
+		auto magnitude = HugeintMagnitude(Load<hugeint_t>(it.GetDataPointer()), negative);
+		return BuildNumberKey(negative, MagnitudeToString(magnitude), 0);
 	}
+	case VariantLogicalType::UINT128:
+		return BuildNumberKey(false, MagnitudeToString(Load<uhugeint_t>(it.GetDataPointer())), 0);
+	default:
+		throw InternalException("VariantGetNumberKey called on non-number type %s", EnumUtil::ToString(type_id));
 	}
 }
 

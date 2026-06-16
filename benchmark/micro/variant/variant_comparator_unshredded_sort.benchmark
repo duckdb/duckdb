@@ -1,4 +1,4 @@
-# name: benchmark/micro/variant/variant_comparator_object_sort.benchmark
+# name: benchmark/micro/variant/variant_comparator_unshredded_sort.benchmark
 # description: Top-N over a fully-shredded VARIANT object column - stresses variant_comparator's per-object key ordering (cached for fully-shredded objects). Boolean fields keep per-field encoding cheap so the object key ordering dominates.
 # group: [variant]
 
