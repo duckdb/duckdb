@@ -215,16 +215,63 @@ inline void fastpack_half(const uint16_t *__restrict in, uint16_t *__restrict ou
 }
 }
 
+#define DUCKDB_FASTUNPACK_U8_32_CASE(BIT)                                                                             \
+	case BIT:                                                                                                         \
+		internal::__fastunpack##BIT(in, out);                                                                         \
+		internal::__fastunpack##BIT(in + (BIT), out + 8);                                                             \
+		internal::__fastunpack##BIT(in + 2 * (BIT), out + 16);                                                        \
+		internal::__fastunpack##BIT(in + 3 * (BIT), out + 24);                                                        \
+		break
+
 inline void fastunpack(const uint8_t *__restrict in, uint8_t *__restrict out, const uint32_t bit) {
-	for (uint8_t i = 0; i < 4; i++) {
-		internal::fastunpack_quarter(in + (i*bit), out+(i*8), bit);
+	switch (bit) {
+		DUCKDB_FASTUNPACK_U8_32_CASE(0);
+		DUCKDB_FASTUNPACK_U8_32_CASE(1);
+		DUCKDB_FASTUNPACK_U8_32_CASE(2);
+		DUCKDB_FASTUNPACK_U8_32_CASE(3);
+		DUCKDB_FASTUNPACK_U8_32_CASE(4);
+		DUCKDB_FASTUNPACK_U8_32_CASE(5);
+		DUCKDB_FASTUNPACK_U8_32_CASE(6);
+		DUCKDB_FASTUNPACK_U8_32_CASE(7);
+		DUCKDB_FASTUNPACK_U8_32_CASE(8);
+	default:
+		throw std::logic_error("Invalid bit width for bitpacking");
 	}
 }
 
+#undef DUCKDB_FASTUNPACK_U8_32_CASE
+
+#define DUCKDB_FASTUNPACK_U16_32_CASE(BIT)                                                                            \
+	case BIT:                                                                                                         \
+		internal::__fastunpack##BIT(in, out);                                                                         \
+		internal::__fastunpack##BIT(in + (BIT), out + 16);                                                            \
+		break
+
 inline void fastunpack(const uint16_t *__restrict in, uint16_t *__restrict out, const uint32_t bit) {
-	internal::fastunpack_half(in, out, bit);
-	internal::fastunpack_half(in + bit, out+16, bit);
+	switch (bit) {
+		DUCKDB_FASTUNPACK_U16_32_CASE(0);
+		DUCKDB_FASTUNPACK_U16_32_CASE(1);
+		DUCKDB_FASTUNPACK_U16_32_CASE(2);
+		DUCKDB_FASTUNPACK_U16_32_CASE(3);
+		DUCKDB_FASTUNPACK_U16_32_CASE(4);
+		DUCKDB_FASTUNPACK_U16_32_CASE(5);
+		DUCKDB_FASTUNPACK_U16_32_CASE(6);
+		DUCKDB_FASTUNPACK_U16_32_CASE(7);
+		DUCKDB_FASTUNPACK_U16_32_CASE(8);
+		DUCKDB_FASTUNPACK_U16_32_CASE(9);
+		DUCKDB_FASTUNPACK_U16_32_CASE(10);
+		DUCKDB_FASTUNPACK_U16_32_CASE(11);
+		DUCKDB_FASTUNPACK_U16_32_CASE(12);
+		DUCKDB_FASTUNPACK_U16_32_CASE(13);
+		DUCKDB_FASTUNPACK_U16_32_CASE(14);
+		DUCKDB_FASTUNPACK_U16_32_CASE(15);
+		DUCKDB_FASTUNPACK_U16_32_CASE(16);
+	default:
+		throw std::logic_error("Invalid bit width for bitpacking");
+	}
 }
+
+#undef DUCKDB_FASTUNPACK_U16_32_CASE
 
 inline void fastunpack(const uint32_t *__restrict in,
                        uint32_t *__restrict out, const uint32_t bit) {
