@@ -503,6 +503,7 @@ FileGlobInput DuckDBMultiFileInfo::GetGlobInput() {
 }
 
 void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
+	result.erase(COLUMN_IDENTIFIER_EMPTY);
 	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::BIGINT)));
 	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::BIGINT)));
 }
