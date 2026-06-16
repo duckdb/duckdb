@@ -225,6 +225,10 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 		test_config.on_set_option(parameter);
 	}
 	options[test_config.name] = parameter;
+	if (StringUtil::CIEquals(test_config.name, "test_env")) {
+		test_env_from_config_loaded = false;
+		test_env_from_config_keys.clear();
+	}
 	return true;
 }
 
@@ -438,6 +442,26 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	}
 }
 
+void TestConfiguration::LoadTestEnvFromConfig() {
+	if (test_env_from_config_loaded) {
+		return;
+	}
+	test_env_from_config_loaded = true;
+	test_env_from_config_keys.clear();
+	auto entry = options.find("test_env");
+	if (entry == options.end()) {
+		return;
+	}
+	auto list_children = ListValue::GetChildren(entry->second);
+	for (const auto &value : list_children) {
+		auto &struct_children = StructValue::GetChildren(value);
+		auto &env = StringValue::Get(struct_children[0]);
+		auto &env_value = StringValue::Get(struct_children[1]);
+		test_env_from_config_keys.insert(env);
+		test_env[env] = env_value;
+	}
+}
+
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
@@ -527,24 +551,20 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
-		test_env_from_config_loaded = true;
-		auto entry = options["test_env"];
-		auto list_children = ListValue::GetChildren(entry);
-		for (const auto &value : list_children) {
-			auto &struct_children = StructValue::GetChildren(value);
-			auto &env = StringValue::Get(struct_children[0]);
-			auto &env_value = StringValue::Get(struct_children[1]);
-			test_env[env] = env_value;
-		}
-	}
+	LoadTestEnvFromConfig();
 	if (test_env.find(key) == test_env.end()) {
 		return default_value;
 	}
 	return test_env[key];
 }
 
+bool TestConfiguration::HasTestEnv(const string &key) {
+	LoadTestEnvFromConfig();
+	return test_env_from_config_keys.find(key) != test_env_from_config_keys.end();
+}
+
 const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	LoadTestEnvFromConfig();
 	return test_env;
 }
 

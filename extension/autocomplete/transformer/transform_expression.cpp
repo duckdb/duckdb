@@ -1744,6 +1744,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEG
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto slice_bound = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	if (slice_bound.empty()) {
+		throw ParserException("Empty subscript '[]' is not allowed");
+	}
 	if (slice_bound.size() == 1) {
 		return make_uniq<OperatorExpression>(ExpressionType::ARRAY_EXTRACT, std::move(slice_bound));
 	}

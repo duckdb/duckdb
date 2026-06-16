@@ -36,7 +36,7 @@ public:
 
 public:
 	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener, CachedFile &cached_file);
+	                             FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -60,6 +60,8 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Refresh the cached file if the global cache state has changed.
+	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 	//! Get the version tag of the file (for checking cache invalidation)
 	const string &GetVersionTag(const unique_ptr<StorageLockKey> &guard);
 	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
@@ -94,8 +96,8 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! The associated CachedFile with cached ranges
-	CachedFile &cached_file;
+	//! Associated cached file.
+	shared_ptr<CachedFile> cached_file;
 
 	//! The underlying FileHandle (optional)
 	unique_ptr<FileHandle> file_handle;

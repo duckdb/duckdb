@@ -152,13 +152,18 @@ public:
 					status = GateStatus::GATE_SET;
 					continue;
 				}
-				// Unique indexes can have duplicates, if another transaction DELETE + INSERT
-				// the same key. In that case, the previous value must be kept alive until all
-				// other transactions do not depend on it anymore.
-
-				// We restrict this transactionality to two-value leaves, so any subsequent
-				// incoming transaction must fail here.
-				return ARTConflictType::TRANSACTION;
+				// A unique ART may temporarily contain a gated two-row leaf during commit for
+				// DELETE + INSERT of the same key: commit appends the new row first, then
+				// commit-delete cleanup removes the old row ID. No other main-ART append should
+				// enter during that window because commit-time main-index appends are serialized
+				// by the WAL lock or transaction manager commit lock.
+				//
+				// Local append and delete indexes should not contain such gates either.
+				// Note that VerifyLeaf may still legitimately observe the temporary duplicate
+				// leaf state.
+				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "
+				                     "index while inserting",
+				                     art.name);
 			}
 
 			const auto type = active_node.GetType();
