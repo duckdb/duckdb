@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 
@@ -15,6 +17,13 @@ FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
       schedule_enabled(info.schedule_enabled) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
+	}
+	if (has_schedule && schedule_enabled) {
+		// Wake the feature refresh scheduler so it picks up this schedule. This fires for entries created
+		// at runtime (CREATE FEATURE) and for entries reconstructed during WAL replay / checkpoint load on
+		// startup. Databases without scheduled features never reach here, so the scheduler stays idle and
+		// performs no catalog scan for them.
+		catalog.GetDatabase().NotifyFeatureRefreshScheduler();
 	}
 }
 

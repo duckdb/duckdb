@@ -91,6 +91,11 @@ public:
 	//! co-owns the instance via the Connections it creates) can never be the last owner and end up
 	//! joining itself during ~DatabaseInstance.
 	void StopFeatureRefreshScheduler();
+	//! Wake the feature auto-refresh scheduler so it re-scans the catalog for scheduled features.
+	//! Called when a scheduled FeatureCatalogEntry is created (at startup via WAL replay or at runtime via
+	//! CREATE FEATURE). Safe to call before the scheduler thread is started and is a no-op if the scheduler
+	//! does not exist (e.g. READ_ONLY or no-threads builds).
+	void NotifyFeatureRefreshScheduler();
 
 private:
 	void Initialize(const char *path, DBConfig *config);

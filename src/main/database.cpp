@@ -367,6 +367,12 @@ void DatabaseInstance::StopFeatureRefreshScheduler() {
 	}
 }
 
+void DatabaseInstance::NotifyFeatureRefreshScheduler() {
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Notify();
+	}
+}
+
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {

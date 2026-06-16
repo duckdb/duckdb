@@ -63,7 +63,6 @@ private:
 	//! features already tracked so heap rebuilds don't reset in-flight timers.
 	void RebuildHeap(FeatureHeap &heap);
 #endif
-
 	//! Convert an interval_t to an approximate microsecond count (1 month ≈ 30 days).
 	static int64_t IntervalToMicros(const interval_t &interval);
 

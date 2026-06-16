@@ -34,6 +34,11 @@ void FeatureRefreshScheduler::Start() {
 	}
 	started = true;
 	stop_requested.store(false);
+	// Like the TaskScheduler, the constructor only launches the background thread; it performs no
+	// catalog work here. Doing a synchronous catalog scan in Start() is unsafe because Start() runs
+	// inside the DuckDB constructor while the DBInstanceCache holds update_database_mutex, and a
+	// concurrent opener of the same database busy-spins waiting on that path. The initial heap scan
+	// therefore happens on the background thread (see Run()).
 	bg_thread = std::thread([this] { Run(); });
 #endif
 }
@@ -136,8 +141,14 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 }
 
 void FeatureRefreshScheduler::Run() {
+	// Start idle, like a TaskScheduler worker with no tasks: do NOT scan the catalog here. A scan
+	// would create a Connection + transaction and allocate buffer-managed memory on every database
+	// open, racing with queries (and memory-accounting assertions) that run right after startup, even
+	// for databases that have no scheduled features at all. Instead we wait for a Notify() — fired when
+	// a scheduled FeatureCatalogEntry is created (at startup via WAL replay or at runtime via CREATE
+	// FEATURE) — which sets heap_dirty and triggers the scan below. Databases without scheduled
+	// features therefore never run a scan and never touch the buffer manager from this thread.
 	FeatureHeap heap;
-	RebuildHeap(heap);
 
 	while (!stop_requested.load()) {
 		// Honor a pending re-scan request from Notify().
