@@ -60,7 +60,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -346,6 +346,18 @@ static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<Func
 	SerializeState(layout, result, count, addresses);
 }
 
+// destroys the temporary underlying-aggregate states referenced by `states` (no-op if the aggregate has no
+// destructor). the combine/finalize paths below initialize underlying states into scratch buffers - without this
+// their owned heap (e.g. approx_top_k's hash map, approx_quantile's t-digest) would leak.
+static void DestroyExportStates(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
+                                Vector &states, idx_t count, ArenaAllocator &allocator) {
+	if (count == 0 || !aggr.HasStateDestructorCallback()) {
+		return;
+	}
+	AggregateInputData aggr_input_data(aggr, bind_data, allocator);
+	aggr.GetStateDestructorCallback()(states, aggr_input_data, count);
+}
+
 struct CombineState : public FunctionLocalState {
 	//! The state layout, including the segment functions when the state is a linked list
 	AggregateStateLayout layout;
@@ -412,6 +424,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	AggregateFinalizeInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator);
 	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, count, 0);
+	DestroyExportStates(bind_data.aggr, bind_data.bind_data.get(), local_state.addresses, count, local_state.allocator);
 
 	auto validity = input.data[0].Validity();
 	for (idx_t i = 0; i < count; i++) {
@@ -463,10 +476,24 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 	AggregateInputData aggr_input_data(bind_data.aggr, bind_data.bind_data.get(), local_state.allocator,
 	                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
-	bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data, count);
-
-	SerializeState(bind_data.aggr, bind_data.bind_data.get(), layout, local_state.addresses1, count, result,
-	               local_state.allocator);
+	// the combine/serialize may throw (e.g. combining approx_top_k states with different k) - always destroy the
+	// scratch states so their owned heap is not leaked
+	auto destroy_states = [&]() {
+		DestroyExportStates(bind_data.aggr, bind_data.bind_data.get(), local_state.addresses0, count,
+		                    local_state.allocator);
+		DestroyExportStates(bind_data.aggr, bind_data.bind_data.get(), local_state.addresses1, count,
+		                    local_state.allocator);
+	};
+	try {
+		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
+		                                         count);
+		SerializeState(bind_data.aggr, bind_data.bind_data.get(), layout, local_state.addresses1, count, result,
+		               local_state.allocator);
+	} catch (...) {
+		destroy_states();
+		throw;
+	}
+	destroy_states();
 
 	// Rows where both inputs were NULL produce no meaningful combined state — mark result as NULL
 	for (idx_t i = 0; i < count; i++) {
@@ -664,6 +691,14 @@ void CombineAggrStateCombine(Vector &source, Vector &target, AggregateInputData 
 	bind_data.aggr.GetStateCombineCallback()(source, target, combine_input, count);
 }
 
+// destroys combine_aggr's accumulator states by forwarding to the underlying aggregate's destructor (with its own bind
+// data) - otherwise states that own heap (e.g. approx_top_k's hash map, approx_quantile's t-digest) would leak
+void CombineAggrStateDestroy(Vector &state, AggregateInputData &aggr_input_data, idx_t count) {
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
+	AggregateInputData destroy_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator);
+	bind_data.aggr.GetStateDestructorCallback()(state, destroy_input, count);
+}
+
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
@@ -675,6 +710,9 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
 	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
 	function.SetStateCombineCallback(CombineAggrStateCombine);
+	if (bind_data->aggr.HasStateDestructorCallback()) {
+		function.SetStateDestructorCallback(CombineAggrStateDestroy);
+	}
 
 	function.SetReturnType(arguments[0]->GetReturnType());
 
@@ -716,6 +754,8 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
 	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
 	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
+	// the target states are the real combine_aggr states (kept); the source states are scratch - destroy them
+	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
 }
 
 void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
