@@ -1022,17 +1022,30 @@ void ManagedAsyncWriteStreamQueue::RegisterWrite(unique_ptr<AsyncWritePayload> p
 		return;
 	}
 
+	// Completion-driven refills may schedule pending_writes as soon as they are visible.
+	write_queue->AddExternalPendingBytes(write_size, false);
+	bool inserted = false;
 	bool update_memory = true;
-	{
-		lock_guard<mutex> guard(lock);
-		VerifyOpen();
-		auto next_offset = ValidateRegistrationOffset(offset, write_size);
-		pending_writes.emplace_back(std::move(payload), offset);
-		pending_bytes += write_size;
-		next_registration_offset = next_offset;
-		update_memory = batch_depth == 0;
+	try {
+		{
+			lock_guard<mutex> guard(lock);
+			VerifyOpen();
+			auto next_offset = ValidateRegistrationOffset(offset, write_size);
+			pending_writes.emplace_back(std::move(payload), offset);
+			pending_bytes += write_size;
+			next_registration_offset = next_offset;
+			update_memory = batch_depth == 0;
+			inserted = true;
+		}
+	} catch (...) {
+		if (!inserted) {
+			write_queue->DiscardExternalPendingBytes(write_size);
+		}
+		throw;
 	}
-	write_queue->AddExternalPendingBytes(write_size, update_memory);
+	if (update_memory) {
+		write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::COARSE);
+	}
 	if (schedule_mode == ScheduleMode::ALLOW) {
 		SchedulePendingWrites();
 	}
