@@ -2,8 +2,6 @@
 # description: Slicing a shredded variant vector and consuming it (hash/aggregate)
 # group: [variant]
 
-require json
-
 load {TEST_DIR}/variant_shredded_slice.db readwrite v1.5.0
 
 # Always shred
@@ -11,29 +9,33 @@ statement ok
 SET variant_minimum_shredding_size = 0;
 
 statement ok
-create table bluesky (col VARIANT)
+create table bluesky (j VARIANT)
 
+# heterogeneous schemas -> the variant column is only partially shredded
 statement ok
-insert into bluesky from read_ndjson_objects('{DATA_DIR}/json/bluesky.json.gz')
+insert into bluesky select
+  case when i%3=0
+       then {'kind':'commit','did':'c'|| (i%4),'commit':{'collection':'coll'|| (i%2),'operation':'create'}}::VARIANT
+       else {'kind':'identity','did':'d'|| (i%5)}::VARIANT
+  end
+from range(4096) t(i)
 
 statement ok
 checkpoint
 
-# count(DISTINCT) hashes a shredded variant - the distinct aggregate slices the shredded vector
-query I
-SELECT count(DISTINCT col.did) FROM bluesky;
+# count(DISTINCT) hashes a shredded variant - the distinct aggregate slices/hashes the shredded vector
+query II
+SELECT count(DISTINCT j.did), count(*) FROM bluesky;
 ----
-10
+9	4096
 
-# jsonbench q02: filter slices the shredded vector, then it is grouped/hashed
+# jsonbench q02 style: the filter slices the shredded vector, then it is grouped/hashed
 query TII
-SELECT col.commit.collection AS event, count() AS count, count(DISTINCT col.did) AS users
+SELECT j.commit.collection AS event, count() AS count, count(DISTINCT j.did) AS users
 FROM bluesky
-WHERE (col.kind = 'commit') AND (col.commit.operation = 'create')
+WHERE (j.kind = 'commit') AND (j.commit.operation = 'create')
 GROUP BY event
 ORDER BY count DESC, event
 ----
-app.bsky.feed.like	3	3
-app.bsky.feed.post	3	3
-app.bsky.graph.follow	3	3
-app.bsky.feed.repost	1	1
+coll0	683	2
+coll1	683	2
