@@ -10,10 +10,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -294,30 +291,17 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIt
 	}
 }
 
-//! Sink that only computes the encoded length of a variant value
-struct VariantComparatorLengthSink {
-	idx_t length = 0;
-
-	inline void Write(data_t) {
-		length++;
-	}
-	inline void WriteBytes(const_data_ptr_t, idx_t count) {
-		length += count;
-	}
-};
-
-//! Sink that writes the encoded bytes of a variant value (flipping bytes for DESCENDING order)
-struct VariantComparatorWriteSink {
-	VariantComparatorWriteSink(data_ptr_t result_ptr, idx_t offset, bool flip_bytes)
-	    : result_ptr(result_ptr), offset(offset), flip_bytes(flip_bytes) {
+//! Sink that appends the encoded bytes of a variant value to a (growable) buffer, flipping bytes for
+//! DESCENDING order
+struct VariantComparatorBufferSink {
+	VariantComparatorBufferSink(string &buffer, bool flip_bytes) : buffer(buffer), flip_bytes(flip_bytes) {
 	}
 
-	data_ptr_t result_ptr;
-	idx_t offset;
+	string &buffer;
 	bool flip_bytes;
 
 	inline void Write(data_t b) {
-		result_ptr[offset++] = flip_bytes ? static_cast<data_t>(~b) : b;
+		buffer.push_back(static_cast<char>(flip_bytes ? static_cast<data_t>(~b) : b));
 	}
 	inline void WriteBytes(const_data_ptr_t src, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
@@ -470,42 +454,30 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result) {
 	VariantIteratorState variant(input);
 
-	data_t null_byte = NULL_FIRST_BYTE;
-	data_t valid_byte = NULL_LAST_BYTE;
-	if (modifiers.null_type == OrderByNullType::NULLS_LAST) {
-		std::swap(null_byte, valid_byte);
-	}
+	//! NULLs are propagated through the result validity (see the function comment), so only the prefix
+	//! byte for valid rows is needed here
+	const data_t valid_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? NULL_FIRST_BYTE : NULL_LAST_BYTE;
 	const bool flip_bytes = modifiers.order_type == OrderType::DESCENDING;
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetDataMutable<string_t>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto writer = FlatVector::Writer<string_t>(result, count);
 
+	//! reused growable buffer - the key is encoded once and then copied into the result vector
+	string buffer;
 	for (idx_t r = 0; r < count; r++) {
 		auto root = variant.Root(r);
 		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
-		const bool valid = !root.IsNull();
-		// phase 1 - compute the encoded length
-		idx_t length = 1; // validity byte
-		if (valid) {
-			VariantComparatorLengthSink length_sink;
-			EncodeVariantValue(root, length_sink);
-			length += length_sink.length;
-		}
-		// phase 2 - allocate and construct
-		result_data[r] = StringVector::EmptyString(result, length);
-		auto ptr = data_ptr_cast(result_data[r].GetDataWriteable());
-		if (!valid) {
-			ptr[0] = null_byte;
-			result_data[r].Finalize();
+		if (root.IsNull()) {
 			// propagate NULL so that NULL = NULL stays NULL and ORDER BY ... NULLS FIRST/LAST is honored
-			result_validity.SetInvalid(r);
+			writer.WriteNull();
 			continue;
 		}
-		ptr[0] = valid_byte;
-		VariantComparatorWriteSink write_sink(ptr, 1, flip_bytes);
-		EncodeVariantValue(root, write_sink);
-		result_data[r].Finalize();
+		// encode the key once into the buffer, then hand it to the writer (which copies it)
+		buffer.clear();
+		buffer.push_back(static_cast<char>(valid_byte));
+		VariantComparatorBufferSink sink(buffer, flip_bytes);
+		EncodeVariantValue(root, sink);
+		writer.WriteValue(string_t(buffer.data(), NumericCast<uint32_t>(buffer.size())));
 	}
 }
 
