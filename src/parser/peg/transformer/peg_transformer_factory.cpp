@@ -142,7 +142,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformExpression);
-	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 	REGISTER_TRANSFORM(TransformOverClause);
 }

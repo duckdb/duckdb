@@ -73,12 +73,6 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 	return std::move(select_statement);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAlias(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
                                                unique_ptr<ParsedExpression> single_expression,
@@ -1486,10 +1480,6 @@ Value PEGTransformerFactory::TransformNullLiteral(PEGTransformer &transformer) {
 
 Value PEGTransformerFactory::TransformUnknownLiteral(PEGTransformer &transformer) {
 	return Value();
-}
-
-ExpressionType PEGTransformerFactory::TransformLambdaOperator(PEGTransformer &transformer, ParseResult &parse_result) {
-	return ExpressionType::LAMBDA;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEGTransformer &transformer) {

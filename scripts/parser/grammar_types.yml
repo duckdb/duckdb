@@ -1309,7 +1309,6 @@ ExpressionType:
     - OperatorGreaterThan
     - OperatorLessThanEquals
     - OperatorGreaterThanEquals
-    - LambdaOperator
 
 SecretPersistType:
   type: "SecretPersistType"

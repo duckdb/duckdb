@@ -391,10 +391,7 @@ private:
 	static string TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// expression.gram
-	static unique_ptr<ParsedExpression> TransformExpressionAlias(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer, ParseResult &parse_result);
-	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
