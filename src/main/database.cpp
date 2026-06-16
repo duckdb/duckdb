@@ -340,6 +340,16 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	LoadExtensionSettings();
 
+	// Create the feature scheduler BEFORE loading the main database. Loading the database
+	// (CreateMainDatabase below) reconstructs FeatureCatalogEntry objects from the checkpoint and the
+	// WAL, and each scheduled entry's constructor calls NotifyFeatureRefreshScheduler() to flag that a
+	// scan is needed. If the scheduler did not exist yet, that notification would be silently dropped
+	// and the background thread would block forever without ever scanning. The scheduler's constructor
+	// only stores a reference and launches no thread, so creating it early is cheap and safe. The
+	// background thread itself is launched later, by Start() (after FinalizeStartup()), so the initial
+	// heap scan still runs against the fully committed catalog.
+	feature_refresh_scheduler = make_uniq<FeatureRefreshScheduler>(*this);
+
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
 	}
@@ -347,12 +357,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
-
-	// Create the feature scheduler now so it is available for the destructor's Stop() call even if
-	// the process exits before DuckDB::DuckDB() finishes. Start() is called AFTER FinalizeStartup()
-	// (which replays WAL / checkpoint and populates the user catalog) so the initial heap scan sees
-	// committed feature entries.
-	feature_refresh_scheduler = make_uniq<FeatureRefreshScheduler>(*this);
 }
 
 void DatabaseInstance::StartFeatureRefreshScheduler() {
