@@ -782,6 +782,13 @@
         "custom_implementation": true
     },
     {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",

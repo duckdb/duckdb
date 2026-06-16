@@ -43,6 +43,7 @@ struct DropNotNullInfo;
 struct SetColumnCommentInfo;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
+struct ColumnBinding;
 
 class TableFunction;
 struct FunctionData;
@@ -137,6 +138,11 @@ public:
 	optional_ptr<Constraint> GetPrimaryKey() const;
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
+
+	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
+	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
+	                                                             const LogicalType &result_type, ColumnBinding binding,
+	                                                             const Expression &constant_value) const;
 
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;

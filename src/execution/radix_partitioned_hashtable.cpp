@@ -1076,7 +1076,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 				    aggr.Function().GetStateSizeCallback()(aggr.Function()));
 				aggr.Function().GetStateInitCallback()(aggr.Function(), aggr_state.get());
 
-				AggregateInputData aggr_input_data(aggr, allocator);
+				AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));
 				auto &agg_result = chunk.data[null_groups.size() + i];
 				aggr.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);

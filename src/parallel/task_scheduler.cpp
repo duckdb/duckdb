@@ -273,6 +273,10 @@ int32_t TaskScheduler::NumberOfThreads() {
 	return GetPool(TaskSchedulerType::REGULAR).NumberOfThreads();
 }
 
+int32_t TaskScheduler::NumberOfAsyncThreads() {
+	return GetPool(TaskSchedulerType::ASYNC).NumberOfThreads();
+}
+
 idx_t TaskScheduler::GetNumberOfTasks() const {
 	idx_t num_tasks = 0;
 	for (auto &queue : queues) {

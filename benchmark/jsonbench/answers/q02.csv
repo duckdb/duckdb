@@ -1,0 +1,14 @@
+event|count|users
+app.bsky.feed.like|444523|123710
+app.bsky.graph.follow|337978|68768
+app.bsky.feed.post|86812|51245
+app.bsky.feed.repost|56993|27170
+app.bsky.graph.block|13838|5902
+app.bsky.graph.listitem|7568|1178
+app.bsky.actor.profile|5337|5337
+app.bsky.graph.listblock|860|460
+app.bsky.graph.list|259|218
+app.bsky.feed.threadgate|228|198
+app.bsky.graph.starterpack|104|101
+app.bsky.feed.postgate|101|83
+app.bsky.feed.generator|10|9

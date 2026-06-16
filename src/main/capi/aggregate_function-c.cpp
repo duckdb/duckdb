@@ -122,7 +122,7 @@ void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &a
 	}
 }
 
-void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+void CAPIAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                            idx_t offset) {
 	state.Flatten();
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();

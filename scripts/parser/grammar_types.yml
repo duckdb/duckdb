@@ -26,7 +26,7 @@
 # the type entry takes precedence and their value IS extracted. Keep this list
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
-# Note: some entries (e.g. CTEBodyContent, SingleArrowPair, CommentValue,
+# Note: some entries (e.g. SingleArrowPair, CommentValue,
 # IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
@@ -35,6 +35,14 @@
 # specialized Matcher instead of constructing from the grammar rule body. The
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
+#
+# optional_value_grammars: grammar stems whose generated wrappers represent
+# Optional(...) semantic children as optional<T> and syntax-only Optional(...)
+# children as bool presence flags. Grammars not listed here keep the legacy
+# default-initializer representation while their typed bodies are migrated.
+
+optional_value_grammars:
+  - select
 
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
@@ -434,11 +442,6 @@ Expression:
     - QualifyClause
     - WindowDefinition
     - SampleValue
-    - FunctionArgument
-    - GroupByExpression
-    - EmptyGroupingItem
-    - CubeOrRollupClause
-    - GroupingSetsClause
     - PivotHeader
     - ZoneValue
     - ZoneIntervalWithInterval
@@ -510,7 +513,9 @@ TableRef:
     - RegularJoinClause
     - JoinWithoutOnClause
     - TableUnpivotClause
+    - TableUnpivotClauseBody
     - TablePivotClause
+    - TablePivotClauseBody
     - InnerTableRef
     - TableFunction
     - TableFunctionLateralOpt
@@ -525,13 +530,15 @@ TableRef:
     - BaseTableSet
     - BaseTableAliasSet
     - CTEBody
-    - CTEBodyContent
+    - CTESelectBody
+    - CTEDMLBody
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
   by_value: true
   rules:
     - BaseTableName
+    - UnqualifiedBaseTableName
     - SchemaReservedTable
     - CatalogReservedSchemaTable
     - TargetOptAlias
@@ -577,6 +584,24 @@ FunctionArgumentList:
   by_value: true
   rules:
     - TableFunctionArguments
+
+FunctionArgument:
+  type: "FunctionArgument"
+  by_value: true
+  rules:
+    - FunctionArgument
+    - NamedFunctionArgument
+    - PositionalFunctionArgument
+
+GroupByExpressionInfo:
+  type: "GroupByExpressionInfo"
+  by_value: true
+  rules:
+    - GroupByExpression
+    - GroupByBaseExpression
+    - EmptyGroupingItem
+    - CubeOrRollupClause
+    - GroupingSetsClause
 
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
@@ -652,7 +677,7 @@ PivotColumnList:
 
 PivotColumnEntryList:
   type: "vector<PivotColumnEntry>"
-  by_value: false
+  by_value: true
   rules:
     - PivotTargetList
     - UnpivotTargetList
@@ -692,13 +717,13 @@ QualifiedName:
 
 OrderByNode:
   type: "OrderByNode"
-  by_value: false
+  by_value: true
   rules:
     - OrderByExpression
 
 GroupByNode:
   type: "GroupByNode"
-  by_value: false
+  by_value: true
   rules:
     - GroupByClause
     - GroupByExpressions
@@ -707,7 +732,7 @@ GroupByNode:
 
 LimitPercentResult:
   type: "LimitPercentResult"
-  by_value: false
+  by_value: true
   rules:
     - LimitClause
     - LimitValue
@@ -719,7 +744,7 @@ LimitPercentResult:
 
 DistinctClause:
   type: "DistinctClause"
-  by_value: false
+  by_value: true
   rules:
     - DistinctClause
     - DistinctOn
@@ -773,6 +798,7 @@ PivotColumn:
     - PivotColumnSubquery
     - PivotColumnExpression
     - PivotValueList
+    - PivotValueTarget
     - UnpivotValueList
 
 UnpivotNameValues:
@@ -922,8 +948,12 @@ String:
     - PrefixOperator
     - Framing
     - AtUnit
+    - VersionAtUnit
+    - TimestampAtUnit
     - TrimDirection
     - CubeOrRollup
+    - CubeKeyword
+    - RollupKeyword
     - UpdateAction
     - DeleteAction
     - KeyAction
@@ -975,6 +1005,11 @@ Bool:
     - PreserveRows
     - DeleteRows
     - DistinctOrAll
+    - DistinctKeyword
+    - AllKeyword
+    - Lateral
+    - WithOrdinality
+    - Asof
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1353,13 +1388,39 @@ overrides:
   RenameEntry: "pair<QualifiedColumnName, string>"
   # select.gram
   SetopType: "SetOperationType"
-  WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
-  JoinType: "JoinType"
+  SetopUnion: "SetOperationType"
+  SetopExcept: "SetOperationType"
+  SelectSetOpChainTail:
+    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+    by_value: true
+  IntersectChainTail:
+    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+    by_value: true
+  WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+  JoinType:
+    type: "JoinType"
+    default_initializer: "INNER"
+  FullJoin: "JoinType"
+  LeftJoin: "JoinType"
+  RightJoin: "JoinType"
+  SemiJoin: "JoinType"
+  AntiJoin: "JoinType"
+  InnerJoin: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
   SampleFunction: "SampleMethod"
+  SamplePercentage: "bool"
+  SampleRows: "bool"
   # select.gram (ordering)
-  DescOrAsc: "OrderType"
-  NullsFirstOrLast: "OrderByNullType"
+  DescOrAsc:
+    type: "OrderType"
+    default_initializer: "ORDER_DEFAULT"
+  DescendingOrder: "OrderType"
+  AscendingOrder: "OrderType"
+  NullsFirstOrLast:
+    type: "OrderByNullType"
+    default_initializer: "ORDER_DEFAULT"
+  NullsFirst: "OrderByNullType"
+  NullsLast: "OrderByNullType"
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
 
@@ -1503,12 +1564,10 @@ excluded_rules:
   - AtTimeZoneOperator
   - Generated
   - AlwaysOrByDefault
-  - Lateral
   - ConstraintNameClause
   - UsingSample
   - TableSample
   - NamedParameterAssignment
-  - WithOrdinality
   - ByName
   - CollateOperator
   - ExportClause
@@ -1518,5 +1577,9 @@ excluded_rules:
   - Unique
   - RowOrStruct
   - SetData
-  - CTEBodyContent
+  - SelectStatementInternal
+  - SimpleSelect
+  - TableRef
+  - WithClause
+  - WindowDefinition
   - SingleArrowPair

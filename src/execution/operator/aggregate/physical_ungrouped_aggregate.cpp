@@ -683,7 +683,7 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 	for (idx_t aggr_idx = 0; aggr_idx < state.functions.size(); aggr_idx++) {
 		auto &func = state.functions[aggr_idx];
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
-		AggregateInputData aggr_input_data(func, state.bind_data[aggr_idx].get(), allocator);
+		AggregateFinalizeInputData aggr_input_data(func, state.bind_data[aggr_idx].get(), allocator);
 		func.GetStateFinalizeCallback()(state_vector, aggr_input_data, result.data[column_offset + aggr_idx], 1, 0);
 		FlatVector::SetSize(result.data[column_offset + aggr_idx], count_t(1));
 	}

@@ -16,9 +16,9 @@ namespace duckdb {
 
 //! The state of the "list" aggregate - shared by aggregates that buffer their input in a linked list
 struct ListAggState {
-	LinkedList linked_list;
-
 	using STATE_TYPE = StateListType<StateReturnType>;
+
+	LinkedList linked_list;
 };
 
 struct ListFunction {
@@ -31,7 +31,9 @@ struct ListFunction {
 	}
 };
 
-//! Appends the i-th input row to the i-th state's linked list
+//! Appends the i-th input row to the i-th state's linked list.
+//! When IGNORE_NULLS is set, NULL input rows are not appended.
+template <bool IGNORE_NULLS = false>
 inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                Vector &state_vector, idx_t count) {
 	D_ASSERT(input_count == 1);
@@ -45,6 +47,12 @@ inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	GetSegmentDataFunctions(functions, input.GetType());
 
 	for (idx_t i = 0; i < count; i++) {
+		if (IGNORE_NULLS) {
+			const auto idx = input_data.unified.sel->get_index(i);
+			if (!input_data.unified.validity.RowIsValid(idx)) {
+				continue;
+			}
+		}
 		auto &state = *states[i].GetValue();
 		aggr_input_data.allocator.AlignNext();
 		functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
