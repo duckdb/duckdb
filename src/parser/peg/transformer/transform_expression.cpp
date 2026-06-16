@@ -1228,21 +1228,14 @@ BinaryExpressionTail PEGTransformerFactory::TransformExponentiationExpressionTai
 	return {exponent_operator, std::move(collate_expression)};
 }
 
-// CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto &collate_opt = list_pr.Child<OptionalParseResult>(1);
-	if (!collate_opt.HasResult()) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> at_time_zone_expression,
+    optional<vector<unique_ptr<ParsedExpression>>> collate_expression_tail) {
+	auto expr = std::move(at_time_zone_expression);
+	if (!collate_expression_tail) {
 		return expr;
 	}
-	auto &collate_expr_repeat = collate_opt.GetResult().Cast<RepeatParseResult>();
-	for (auto &collate_expr_pr : collate_expr_repeat.GetChildren()) {
-		auto &inner_list_pr = collate_expr_pr.get().Cast<ListParseResult>();
-		vector<unique_ptr<ParsedExpression>> collate_children;
-		auto collate_string_expr =
-		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+	for (auto &collate_string_expr : *collate_expression_tail) {
 		string collate_string;
 		if (collate_string_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &const_expr = collate_string_expr->Cast<ConstantExpression>();
@@ -1260,21 +1253,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 	return expr;
 }
 
-// AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer,
-                                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto &at_time_zone_opt = list_pr.Child<OptionalParseResult>(1);
-	if (!at_time_zone_opt.HasResult()) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpression(
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> prefix_expression,
+    optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail) {
+	auto expr = std::move(prefix_expression);
+	if (!at_time_zone_expression_tail) {
 		return expr;
 	}
-	auto &at_time_zone_repeat = at_time_zone_opt.GetResult().Cast<RepeatParseResult>();
-	for (auto &time_zone_expr : at_time_zone_repeat.GetChildren()) {
-		auto &inner_list_pr = time_zone_expr.get().Cast<ListParseResult>();
+	for (auto &time_zone_expr : *at_time_zone_expression_tail) {
 		vector<unique_ptr<ParsedExpression>> time_zone_children;
-		time_zone_children.push_back(
-		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		time_zone_children.push_back(std::move(time_zone_expr));
 		time_zone_children.push_back(std::move(expr));
 		auto func_expr =
 		    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone", std::move(time_zone_children));

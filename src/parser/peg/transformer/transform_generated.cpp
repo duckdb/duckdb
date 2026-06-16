@@ -5954,6 +5954,68 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExponentOperato
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCollateExpressionInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto at_time_zone_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> collate_expression_tail {};
+	auto &collate_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (collate_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> collate_expression_tail_value;
+		auto &collate_expression_tail_value_repeat_1 =
+		    collate_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &collate_expression_tail_value_item_1 : collate_expression_tail_value_repeat_1.GetChildren()) {
+			auto collate_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(collate_expression_tail_value_item_1.get());
+			collate_expression_tail_value.push_back(std::move(collate_expression_tail_value_value_1));
+		}
+		collate_expression_tail = std::move(collate_expression_tail_value);
+	}
+	auto result =
+	    TransformCollateExpression(transformer, std::move(at_time_zone_expression), std::move(collate_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCollateExpressionTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto at_time_zone_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(at_time_zone_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformAtTimeZoneExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto prefix_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail {};
+	auto &at_time_zone_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (at_time_zone_expression_tail_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> at_time_zone_expression_tail_value;
+		auto &at_time_zone_expression_tail_value_repeat_1 =
+		    at_time_zone_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &at_time_zone_expression_tail_value_item_1 :
+		     at_time_zone_expression_tail_value_repeat_1.GetChildren()) {
+			auto at_time_zone_expression_tail_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(at_time_zone_expression_tail_value_item_1.get());
+			at_time_zone_expression_tail_value.push_back(std::move(at_time_zone_expression_tail_value_value_1));
+		}
+		at_time_zone_expression_tail = std::move(at_time_zone_expression_tail_value);
+	}
+	auto result = TransformAtTimeZoneExpression(transformer, std::move(prefix_expression),
+	                                            std::move(at_time_zone_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformAtTimeZoneExpressionTailInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto prefix_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = std::move(prefix_expression);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPrefixOperatorInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10198,6 +10260,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExponentiationExpression", &PEGTransformerFactory::TransformExponentiationExpressionInternal},
 	    {"ExponentiationExpressionTail", &PEGTransformerFactory::TransformExponentiationExpressionTailInternal},
 	    {"ExponentOperator", &PEGTransformerFactory::TransformExponentOperatorInternal},
+	    {"CollateExpression", &PEGTransformerFactory::TransformCollateExpressionInternal},
+	    {"CollateExpressionTail", &PEGTransformerFactory::TransformCollateExpressionTailInternal},
+	    {"AtTimeZoneExpression", &PEGTransformerFactory::TransformAtTimeZoneExpressionInternal},
+	    {"AtTimeZoneExpressionTail", &PEGTransformerFactory::TransformAtTimeZoneExpressionTailInternal},
 	    {"PrefixOperator", &PEGTransformerFactory::TransformPrefixOperatorInternal},
 	    {"MinusPrefixOperator", &PEGTransformerFactory::TransformMinusPrefixOperatorInternal},
 	    {"PlusPrefixOperator", &PEGTransformerFactory::TransformPlusPrefixOperatorInternal},

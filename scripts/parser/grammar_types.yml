@@ -380,7 +380,9 @@ Expression:
     - ExponentiationExpression
     - PostfixOperator
     - CollateExpression
+    - CollateExpressionTail
     - AtTimeZoneExpression
+    - AtTimeZoneExpressionTail
     - PrefixExpression
     - ConstantLiteral
     - ColumnReference
@@ -1721,6 +1723,4 @@ excluded_rules:
   - LogicalAndExpression
   - IsExpression
   - OverClause
-  - CollateExpression
-  - AtTimeZoneExpression
   - PrefixExpression
