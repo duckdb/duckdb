@@ -33,4 +33,8 @@ public:
 	string GetVersionTag(FileHandle &handle) override;
 };
 
+//! In-memory DuckDB with the external file cache forced to also cache local files (off by default), so the external
+//! file cache tests can exercise the cache machinery on local temp files.
+DuckDB MakeCacheLocalFilesDB();
+
 } // namespace duckdb
