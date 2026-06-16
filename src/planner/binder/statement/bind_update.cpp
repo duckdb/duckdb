@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -36,12 +38,49 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		expr_binder_ptr = binder_with_search_path.get();
 	}
 
+	auto &all_columns = table.GetColumns();
+
+	// Bind one column assignment and add it to the UPDATE projection. Shared by
+	// the explicit SET list and the stored-generated recompute below so the two
+	// paths stay in lockstep.
+	auto append_assignment = [&](const ColumnDefinition &column, unique_ptr<ParsedExpression> &expr) {
+		columns.push_back(column.Physical());
+		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+			update_expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
+			return;
+		}
+		UpdateBinder binder(*expr_binder_ptr, context);
+		binder.target_type = column.Type();
+		auto bound_expr = binder.Bind(expr);
+		PlanSubqueries(bound_expr, root);
+		auto bound_type = bound_expr->GetReturnType();
+		auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
+		update_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(bound_type, ColumnBinding(proj_index, expr_index)));
+	};
+
+	// Stored generated columns are recomputed below when an UPDATE assigns a
+	// column they derive from; with none present, skip all of that work.
+	auto logical_columns = all_columns.Logical();
+	bool has_stored_generated =
+	    std::any_of(logical_columns.begin(), logical_columns.end(),
+	                [](const ColumnDefinition &col) { return col.Category() == TableColumnType::GENERATED_STORED; });
+
+	// Snapshot the parsed SET expressions before the bind loop consumes them.
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_set_exprs;
+	if (has_stored_generated) {
+		parsed_set_exprs.reserve(set_info.columns.size());
+		for (idx_t i = 0; i < set_info.columns.size(); i++) {
+			parsed_set_exprs[set_info.columns[i]] = set_info.expressions[i]->Copy();
+		}
+	}
+
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
 		if (!table.ColumnExists(colname)) {
 			vector<string> column_names;
-			for (auto &col : table.GetColumns().Physical()) {
+			for (auto &col : all_columns.Physical()) {
 				column_names.push_back(col.Name());
 			}
 			auto candidates = StringUtil::CandidatesErrorMessage(column_names, colname, "Did you mean");
@@ -54,20 +93,53 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		columns.push_back(column.Physical());
-		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			update_expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
-		} else {
-			UpdateBinder binder(*expr_binder_ptr, context);
-			binder.target_type = column.Type();
-			auto bound_expr = binder.Bind(expr);
-			PlanSubqueries(bound_expr, root);
+		append_assignment(column, expr);
+	}
 
-			auto bound_type = bound_expr->GetReturnType();
-			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
-
-			update_expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(bound_type, ColumnBinding(proj_index, expr_index)));
+	if (!has_stored_generated) {
+		return;
+	}
+	// Recompute each stored generated column whose value depends on an assigned
+	// column. Generated-column references are expanded inline -- the same
+	// recursion the binder uses for INSERT defaults and SELECT -- and assigned
+	// columns are substituted with their new value, so chained and virtual
+	// dependencies resolve without an explicit ordering pass.
+	for (auto &column : all_columns.Logical()) {
+		if (column.Category() != TableColumnType::GENERATED_STORED) {
+			continue;
+		}
+		auto recompute = column.GeneratedExpression().Copy();
+		bool depends_on_update = false;
+		auto expand = [&](this auto &self, unique_ptr<ParsedExpression> &e) -> void {
+			if (e->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+				ParsedExpressionIterator::EnumerateChildren(*e,
+				                                            [&](unique_ptr<ParsedExpression> &child) { self(child); });
+				return;
+			}
+			const auto &name = e->Cast<ColumnRefExpression>().GetColumnName();
+			if (auto entry = parsed_set_exprs.find(name); entry != parsed_set_exprs.end()) {
+				// Assigned column: substitute its new value (DEFAULT means the column's
+				// default expression, or NULL when it has none). Its own refs read the
+				// old row, so this is not expanded further.
+				depends_on_update = true;
+				if (entry->second->GetExpressionType() != ExpressionType::VALUE_DEFAULT) {
+					e = entry->second->Copy();
+				} else {
+					auto &base_col = table.GetColumn(name);
+					e = base_col.HasDefaultValue() ? base_col.DefaultValue().Copy()
+					                               : make_uniq<ConstantExpression>(Value(base_col.Type()));
+				}
+				return;
+			}
+			if (table.ColumnExists(name) && table.GetColumn(name).Generated()) {
+				// Generated dependency: inline its expression and keep expanding.
+				e = table.GetColumn(name).GeneratedExpression().Copy();
+				self(e);
+			}
+		};
+		expand(recompute);
+		if (depends_on_update) {
+			append_assignment(column, recompute);
 		}
 	}
 }
