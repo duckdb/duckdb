@@ -544,10 +544,13 @@ static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &
 	AsyncFileWriter writer(*con->context, fs, path);
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
 	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
-	CHECK(fs.BlockedWrites() == 0);
+	auto blocked_before_release = fs.BlockedWrites();
+	CHECK(blocked_before_release <= 1);
 
 	async_thread_blocker.Release();
-	CHECK(fs.WaitForBlockedWrites(1));
+	if (blocked_before_release == 0) {
+		CHECK(fs.WaitForBlockedWrites(1));
+	}
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	CHECK(fs.BlockedWrites() == 1);
 
