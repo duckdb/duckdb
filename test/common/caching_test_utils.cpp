@@ -21,9 +21,9 @@ const string &CachingTestFileGuard::GetPath() const {
 	return file_path;
 }
 
-DuckDB MakeForceCacheDB() {
+DuckDB MakeCacheLocalFilesDB() {
 	DBConfig config;
-	config.SetOptionByName("force_file_cache", true);
+	config.SetOptionByName("cache_local_files", true);
 	return DuckDB(":memory:", &config);
 }
 

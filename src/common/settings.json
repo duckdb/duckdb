@@ -204,6 +204,13 @@
         ]
     },
     {
+        "name": "cache_local_files",
+        "description": "Whether the external file cache also caches local files (remote files are always cached)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -766,13 +773,6 @@
         "custom_implementation": [
             "set"
         ]
-    },
-    {
-        "name": "force_file_cache",
-        "description": "Forces the external file cache to also cache local files",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "default_value": "false"
     },
     {
         "name": "force_mbedtls_unsafe",

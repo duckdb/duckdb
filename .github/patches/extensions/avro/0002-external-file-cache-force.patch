@@ -1,5 +1,5 @@
 diff --git a/test/sql/external_file_cache.test b/test/sql/external_file_cache.test
-index 440574a..61e1941 100644
+index 440574a..0e8a240 100644
 --- a/test/sql/external_file_cache.test
 +++ b/test/sql/external_file_cache.test
 @@ -4,6 +4,9 @@
@@ -7,7 +7,7 @@ index 440574a..61e1941 100644
  require avro
  
 +statement ok
-+SET force_file_cache=true
++SET cache_local_files=true
 +
  query IIII
  from duckdb_external_file_cache();

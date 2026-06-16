@@ -161,7 +161,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -205,7 +205,7 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 }
 
 TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -289,7 +289,7 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -320,7 +320,7 @@ TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]")
 }
 
 TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -399,7 +399,7 @@ TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") 
 }
 
 TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -445,7 +445,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 }
 
 TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -502,7 +502,7 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	const string test_content = "File used for caching enabled testing";
 	TestFileGuard test_file("test_caching_parallel.txt", test_content);
 
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
@@ -543,7 +543,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	const string test_content = "File used for over-sized read testing";
 	TestFileGuard test_file("test_oversized_read.txt", test_content);
 
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
@@ -561,7 +561,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -607,7 +607,7 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 }
 
 TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto failing_fs = make_uniq<FailingFileSystem>();
 	auto failing_fs_ptr = failing_fs.get();
@@ -651,7 +651,7 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 }
 
 TEST_CASE("CachingFileSystemWrapper transient IO error recovery", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto failing_fs = make_uniq<FailingFileSystem>();
 	auto failing_fs_ptr = failing_fs.get();
@@ -684,7 +684,7 @@ TEST_CASE("CachingFileSystemWrapper transient IO error recovery", "[file_system]
 }
 
 TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -705,7 +705,7 @@ TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto no_meta_fs = make_uniq<NoMetadataFileSystem>();
 	auto caching_wrapper =
@@ -725,7 +725,7 @@ TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified
 //===----------------------------------------------------------------------===//
 
 TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
@@ -816,7 +816,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 }
 
 TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
@@ -858,7 +858,7 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 }
 
 TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]") {
-	DuckDB db = MakeForceCacheDB();
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto counting_fs = make_uniq<CountingFileSystem>();
 	auto *counting_fs_ptr = counting_fs.get();

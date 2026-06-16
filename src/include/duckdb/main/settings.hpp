@@ -390,6 +390,17 @@ struct BlockAllocatorMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CacheLocalFilesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "cache_local_files";
+	static constexpr const char *Description =
+	    "Whether the external file cache also caches local files (remote files are always cached)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";
@@ -1146,16 +1157,6 @@ struct ForceCompressionSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-};
-
-struct ForceFileCacheSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "force_file_cache";
-	static constexpr const char *Description = "Forces the external file cache to also cache local files";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct ForceMbedtlsUnsafeSetting {

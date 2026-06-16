@@ -60,7 +60,7 @@ bool ExternalFileCache::ShouldCacheFile(const string &path) const {
 	}
 	// Local files are not cached: the OS page cache already serves repeated reads
 	auto &db = buffer_manager.GetDatabase();
-	return Settings::Get<ForceFileCacheSetting>(db);
+	return Settings::Get<CacheLocalFilesSetting>(db);
 }
 
 void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size,
