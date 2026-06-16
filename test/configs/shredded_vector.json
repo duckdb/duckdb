@@ -1,0 +1,23 @@
+{
+	"description": "Run with verify-vector 'shredded_vector'.",
+	"on_init": "PRAGMA debug_verify_vector = 'shredded_vector';",
+	"skip_compiled": "true",
+	"skip_tests": [
+		{
+			"reason": "Shredding fixes the object field order, so the textual/JSON representation of an object reorders its keys (values are unchanged) - these tests assert an exact key order",
+			"paths": [
+				"test/sql/types/variant/json_cast.test",
+				"test/sql/types/variant/test_all_types.test",
+				"test/sql/types/variant/tpch_test_through_json.test",
+				"test/sql/function/variant/variant_typeof.test"
+			]
+		},
+		{
+			"reason": "FIXME: surfaces pre-existing bugs in consuming shredded variants - aggregating/hashing a shredded variant crashes, and the partial-shred (overlay) roundtrip corrupts some values",
+			"paths": [
+				"test/sql/storage/types/variant/big_table.test_slow",
+				"test/parquet/variant/variant_snowflake_test.test"
+			]
+		}
+	]
+}

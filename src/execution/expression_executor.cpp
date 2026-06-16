@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/storage/table/variant_column_data.hpp"
 
 namespace duckdb {
 
@@ -207,6 +208,14 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		}
 		vector.Reference(result);
 		vector.Verify();
+	}
+	if (debug_vector_verification == DebugVectorVerification::SHREDDED_VECTOR) {
+		//! Shred (top-level) VARIANT vectors based on the schema of their first value, so downstream
+		//! operators are exercised against shredded (and partially-shredded) variant vectors
+		if (vector.GetType().id() == LogicalTypeId::VARIANT) {
+			VariantColumnData::DebugShred(vector, count);
+			vector.Verify();
+		}
 	}
 }
 
