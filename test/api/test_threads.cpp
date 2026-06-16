@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 
 #include <thread>
@@ -117,6 +118,20 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(config.options.maximum_threads == DBConfig().GetSystemMaxThreads(*file_system));
 	REQUIRE(db.NumberOfThreads() == DBConfig().GetSystemMaxThreads(*file_system));
 }
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("Test async threads", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &scheduler = TaskScheduler::GetScheduler(*con.context);
+
+	con.Query("SET async_threads=0");
+	REQUIRE(scheduler.NumberOfAsyncThreads() == 0);
+
+	con.Query("SET async_threads=2");
+	REQUIRE(scheduler.NumberOfAsyncThreads() == 2);
+}
+#endif
 
 #ifdef DUCKDB_NO_THREADS
 TEST_CASE("Test scheduling with no threads", "[api]") {

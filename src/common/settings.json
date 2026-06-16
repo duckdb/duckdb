@@ -496,6 +496,13 @@
         "default_value": "DEFAULT"
     },
     {
+        "name": "dialect_compatibility_mode",
+        "description": "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)",
+        "type": "ENUM<DialectCompatibilityMode>",
+        "default_scope": "local",
+        "default_value": "NONE"
+    },
+    {
         "name": "disable_database_invalidation",
         "description": "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
         "type": "BOOLEAN",
@@ -779,6 +786,13 @@
         "type": "BOOLEAN",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "force_variant_shredding",

@@ -729,6 +729,10 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
+bool FileSystem::SupportsPositionalWrites(FileHandle &handle) {
+	return false;
+}
+
 unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
@@ -815,6 +819,10 @@ idx_t FileHandle::SeekPosition() {
 
 bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
+}
+
+bool FileHandle::SupportsPositionalWrites() {
+	return file_system.SupportsPositionalWrites(*this);
 }
 
 FileCompressionType FileHandle::GetFileCompressionType() {

@@ -81,6 +81,15 @@ const vector<VariantValue> &VariantValue::ArrayItems() const {
 	return array_items;
 }
 
+Value VariantValue::GetValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+}
+
 static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
 	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
 	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
