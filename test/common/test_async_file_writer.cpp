@@ -4,6 +4,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -527,7 +528,8 @@ TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[a
 static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	AsyncThreadBlocker async_thread_blocker(*con->context, 2);
+	auto &scheduler = TaskScheduler::GetScheduler(*con->context);
+	AsyncThreadBlocker async_thread_blocker(*con->context, NumericCast<idx_t>(scheduler.NumberOfAsyncThreads()));
 	REQUIRE(async_thread_blocker.WaitForStarted());
 
 	BlockingWriteFileSystem fs(true, local_file);
