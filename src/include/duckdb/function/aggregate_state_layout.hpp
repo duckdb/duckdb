@@ -52,6 +52,12 @@ struct IsStateInputType : std::false_type {};
 template <idx_t I>
 struct IsStateInputType<StateInputType<I>> : std::true_type {};
 
+//! Detection trait: true when T is a type source marker (StateReturnType or StateInputType<INDEX>) - as opposed to a
+//! field descriptor (StateSortKey, StateTypedValue, ...) that describes a physical field rather than just a type.
+template <class T>
+struct IsStateTypeSource
+    : std::integral_constant<bool, std::is_same<T, StateReturnType>::value || IsStateInputType<T>::value> {};
+
 //! The runtime types of a bound aggregate function - used to resolve the logical types of state fields that are
 //! only known after binding (see StateReturnType / StateInputType).
 struct StateLayoutTypeInfo {
@@ -76,7 +82,7 @@ LogicalType ResolveStateSourceType(const StateLayoutTypeInfo &info) {
 //! Signals that the field stores a binary sort key (string_t) that must be decoded/encoded
 //! via CreateSortKeyHelpers when exporting/importing aggregate state.
 //! SOURCE describes where the decoded logical type comes from; ORDER is the ordering used when creating the sort key.
-template <class SOURCE, OrderType ORDER>
+template <class SOURCE, OrderType ORDER = OrderType::ASCENDING>
 struct StateSortKey {
 	using SOURCE_TYPE = SOURCE;
 	static constexpr OrderType order_type = ORDER;
@@ -111,6 +117,8 @@ using StateString = StateTypedValue<string_t, SOURCE>;
 //! Signals that the state is a LinkedList (see list_segment.hpp) holding the rows of a LIST value.
 //! Export reads the linked list into a LIST vector; import appends the LIST value's rows back into a linked list.
 //! SOURCE describes where the list's logical type comes from.
+//! SOURCE may be a StateSortKey<ELEMENT_SOURCE, ORDER>, signalling that the linked list physically stores binary
+//! sort keys (string_t): export decodes each element via CreateSortKeyHelpers, import re-encodes them.
 template <class SOURCE>
 struct StateListType {
 	using SOURCE_TYPE = SOURCE;
@@ -185,7 +193,15 @@ template <class T>
 LogicalType FieldToLogicalType(const StateLayoutTypeInfo &info) {
 	if constexpr (IsOptionalStateType<T>::value) {
 		return FieldToLogicalType<typename T::value_type>(info);
-	} else if constexpr (IsStateSortKeyType<T>::value || IsStateTypedValueType<T>::value || IsStateListType<T>::value) {
+	} else if constexpr (IsStateListType<T>::value) {
+		using SRC = typename T::SOURCE_TYPE;
+		if constexpr (IsStateTypeSource<SRC>::value) {
+			return ResolveStateSourceType<SRC>(info);
+		} else {
+			// the element is described by a nested field descriptor (e.g. a sort key)
+			return LogicalType::LIST(FieldToLogicalType<SRC>(info));
+		}
+	} else if constexpr (IsStateSortKeyType<T>::value || IsStateTypedValueType<T>::value) {
 		return ResolveStateSourceType<typename T::SOURCE_TYPE>(info);
 	} else if constexpr (HasStructStateType<T>::value) {
 		return T::STATE_TYPE::GetLogicalType(T::STATE_NAMES, info);
@@ -226,6 +242,8 @@ struct AggregateStateField {
 	idx_t field_alignment = 0;
 	AggregateFieldKind kind = AggregateFieldKind::PRIMITIVE;
 	OrderType sort_key_order = OrderType::ASCENDING; // only meaningful when kind == SORT_KEY
+	//! For LIST: always holds a single element descriptor (children[0]). A SORT_KEY element means the linked list
+	//! physically stores binary sort keys; any other kind means the elements are stored directly.
 	vector<AggregateStateField> children;
 	//! The segment functions used to read/write the linked list - only set when kind is LIST
 	//! (populated by PopulateListFunctions, which requires the resolved logical type)
@@ -259,10 +277,17 @@ struct AggregateStateField {
 	//! alongside the fields. Called once when the layout is created.
 	static void PopulateListFunctions(const LogicalType &type, AggregateStateField &field) {
 		switch (field.kind) {
-		case AggregateFieldKind::LIST:
+		case AggregateFieldKind::LIST: {
 			D_ASSERT(type.id() == LogicalTypeId::LIST);
-			GetSegmentDataFunctions(field.list_functions, ListType::GetChildType(type));
+			D_ASSERT(field.children.size() == 1);
+			// sort-key elements are physically stored as BLOB, all other elements as their logical child type
+			const auto child_type = ListType::GetChildType(type);
+			const auto stored_type =
+			    field.children[0].kind == AggregateFieldKind::SORT_KEY ? LogicalType::BLOB : child_type;
+			GetSegmentDataFunctions(field.list_functions, stored_type);
+			PopulateListFunctions(child_type, field.children[0]);
 			break;
+		}
 		case AggregateFieldKind::OPTIONAL_VALUE:
 			D_ASSERT(field.children.size() == 1);
 			PopulateListFunctions(type, field.children[0]);
@@ -421,6 +446,14 @@ AggregateStateField BuildStateField() {
 		field.kind = AggregateFieldKind::LIST;
 		field.field_size = sizeof(LinkedList);
 		field.field_alignment = alignof(LinkedList);
+		using SRC = typename T::SOURCE_TYPE;
+		if constexpr (IsStateTypeSource<SRC>::value) {
+			// the elements are stored directly - the (PRIMITIVE) element field resolves its type from the logical child
+			field.children.emplace_back();
+		} else {
+			// the source is a field descriptor (e.g. a sort key) describing a per-element transform
+			field.children.push_back(BuildStateField<SRC>());
+		}
 	} else if constexpr (IsStructStateType<T>::value) {
 		// T is StructStateType<Ts...> — the phantom descriptor type itself
 		field.kind = AggregateFieldKind::STRUCT;

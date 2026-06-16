@@ -531,15 +531,6 @@ AggregateFunction GetMinMaxNFunction() {
 	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-AggregateStateLayout GetExportStateType(AggregateLayoutInput &input) {
-	auto &function = input.function;
-	child_list_t<LogicalType> struct_children_types;
-	struct_children_types.emplace_back("value", function.GetReturnType());
-	struct_children_types.emplace_back("is_set", LogicalType::BOOLEAN);
-	return AggregateStateLayout(LogicalType::STRUCT(std::move(struct_children_types)),
-	                            AlignValue(function.GetStateSizeCallback()(function)));
-}
-
 } // namespace
 //---------------------------------------------------
 // Function Registration
@@ -547,14 +538,14 @@ AggregateStateLayout GetExportStateType(AggregateLayoutInput &input) {
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
 	min.AddFunction(MinFunction::GetFunction());
-	min.AddFunction(GetMinMaxNFunction<LessThan>().SetStructStateExport(GetExportStateType));
+	min.AddFunction(GetMinMaxNFunction<LessThan>());
 	return min;
 }
 
 AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
 	max.AddFunction(MaxFunction::GetFunction());
-	max.AddFunction(GetMinMaxNFunction<GreaterThan>().SetStructStateExport(GetExportStateType));
+	max.AddFunction(GetMinMaxNFunction<GreaterThan>());
 	return max;
 }
 

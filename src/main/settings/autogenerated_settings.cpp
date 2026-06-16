@@ -127,6 +127,13 @@ void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &pa
 }
 
 //===----------------------------------------------------------------------===//
+// Dialect Compatibility Mode
+//===----------------------------------------------------------------------===//
+void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DialectCompatibilityMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
