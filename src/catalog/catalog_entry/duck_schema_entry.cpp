@@ -319,6 +319,18 @@ void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEnt
 	set.Scan(callback);
 }
 
+optional_ptr<CatalogEntry> DuckSchemaEntry::GetCommittedEntryCreatedAfter(transaction_t start_time) {
+	reference<CatalogSet> sets[] = {tables,         indexes,   table_functions, copy_functions,    pragma_functions,
+	                                functions,      sequences, collations,      coordinate_systems, types};
+	for (auto &set : sets) {
+		auto conflict = set.get().GetCommittedEntryCreatedAfter(start_time);
+		if (conflict) {
+			return conflict;
+		}
+	}
+	return nullptr;
+}
+
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	auto &set = GetCatalogSet(info.type);
 

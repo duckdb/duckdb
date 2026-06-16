@@ -17,6 +17,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 
 namespace duckdb {
 
@@ -464,6 +465,45 @@ void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, C
 	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
 
 	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, start_time, entry);
+
+	if (entry.type == CatalogType::SCHEMA_ENTRY) {
+		// when dropping a schema, ensure that no entries were added into it by another transaction after we started
+		// such entries are not part of our CASCADE and would otherwise be orphaned (and freed) together with the schema
+		auto conflict = entry.Cast<DuckSchemaEntry>().GetCommittedEntryCreatedAfter(start_time);
+		if (conflict) {
+			throw TransactionException(
+			    "Could not commit DROP of schema \"%s\" because entry \"%s\" was created in it by another transaction",
+			    entry.name, conflict->name);
+		}
+	}
+}
+
+optional_ptr<CatalogEntry> CatalogSet::GetCommittedEntryCreatedAfter(transaction_t start_time) {
+	lock_guard<mutex> lock(catalog_lock);
+	for (auto &kv : map.Entries()) {
+		auto &committed = GetCommittedEntry(*kv.second);
+		if (committed.deleted) {
+			// the latest committed version is a tombstone - no live entry
+			continue;
+		}
+		auto timestamp = committed.timestamp.load();
+		if (timestamp < TRANSACTION_ID_START && timestamp > start_time) {
+			// the entry is live and was committed by another transaction after start_time
+			return committed;
+		}
+	}
+	return nullptr;
+}
+
+bool CatalogSet::IsCommittedCurrentEntry(CatalogEntry &entry) {
+	lock_guard<mutex> lock(catalog_lock);
+	auto chain = map.GetEntry(entry.name);
+	if (!chain) {
+		return false;
+	}
+	auto &committed = GetCommittedEntry(*chain);
+	// the entry is current only if it is the committed (non-deleted) version for its name
+	return !committed.deleted && &committed == &entry;
 }
 
 DuckCatalog &CatalogSet::GetCatalog() {

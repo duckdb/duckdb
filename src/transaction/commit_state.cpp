@@ -242,6 +242,16 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
 			old_entry.set->CommitDrop(commit_id, transaction.start_time, old_entry);
+		} else if (!new_entry.deleted && new_entry.IsStandardEntry()) {
+			// committing the creation (or alter) of a schema member - make sure the schema it lives in is still the
+			// current committed schema. If it was dropped (or dropped and re-created) by another transaction after we
+			// started, the entry would otherwise be orphaned in (and freed together with) the now-dropped schema.
+			auto &schema = new_entry.ParentSchema();
+			if (schema.set && !schema.set->IsCommittedCurrentEntry(schema)) {
+				throw TransactionException(
+				    "Could not commit creation of \"%s\" because its schema \"%s\" was dropped by another transaction",
+				    new_entry.name, schema.name);
+			}
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();

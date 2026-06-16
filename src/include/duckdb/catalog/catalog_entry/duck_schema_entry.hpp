@@ -78,6 +78,10 @@ public:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
 
+	//! Returns a committed, non-deleted entry in any of the schema's sets that was created after start_time by another
+	//! transaction (or nullptr). Used at commit time to detect entries added concurrently into a schema being dropped.
+	optional_ptr<CatalogEntry> GetCommittedEntryCreatedAfter(transaction_t start_time);
+
 private:
 	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
 };

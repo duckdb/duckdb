@@ -80,6 +80,13 @@ public:
 	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
 	//! Verify we can still drop the entry while committing
 	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
+	//! Returns a committed, non-deleted entry that was created after start_time by another transaction (or nullptr).
+	//! Used at commit time to detect entries added concurrently into a schema that is being dropped.
+	optional_ptr<CatalogEntry> GetCommittedEntryCreatedAfter(transaction_t start_time);
+	//! Returns true if the given entry is the current committed (non-deleted) entry for its name in this set.
+	//! Used at commit time to detect that the schema an entry was created in is no longer the live schema
+	//! (e.g. it was dropped - or dropped and re-created - by another transaction).
+	bool IsCommittedCurrentEntry(CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 
