@@ -1,6 +1,4 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/function/create_sort_key.hpp"
-#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/datetime.hpp"
@@ -34,8 +32,6 @@ namespace {
 // (they mirror the conventions used by create_sort_key).
 
 //! byte constants for the comparator encoding
-constexpr data_t NULL_FIRST_BYTE = 1;
-constexpr data_t NULL_LAST_BYTE = 2;
 constexpr data_t STRING_DELIMITER = 0;
 constexpr data_t LIST_DELIMITER = 0;
 constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
@@ -291,22 +287,18 @@ VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIt
 	}
 }
 
-//! Sink that appends the encoded bytes of a variant value to a (growable) buffer, flipping bytes for
-//! DESCENDING order
+//! Sink that appends the encoded bytes of a variant value to a (growable) buffer
 struct VariantComparatorBufferSink {
-	VariantComparatorBufferSink(string &buffer, bool flip_bytes) : buffer(buffer), flip_bytes(flip_bytes) {
+	explicit VariantComparatorBufferSink(string &buffer) : buffer(buffer) {
 	}
 
 	string &buffer;
-	bool flip_bytes;
 
 	inline void Write(data_t b) {
-		buffer.push_back(static_cast<char>(flip_bytes ? static_cast<data_t>(~b) : b));
+		buffer.push_back(static_cast<char>(b));
 	}
 	inline void WriteBytes(const_data_ptr_t src, idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Write(src[i]);
-		}
+		buffer.append(const_char_ptr_cast(src), count);
 	}
 };
 
@@ -451,13 +443,8 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 //! so it can be used by aggregates to store/decode values). For comparison / ordering we instead
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
-void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result) {
+void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 	VariantIteratorState variant(input);
-
-	//! NULLs are propagated through the result validity (see the function comment), so only the prefix
-	//! byte for valid rows is needed here
-	const data_t valid_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? NULL_FIRST_BYTE : NULL_LAST_BYTE;
-	const bool flip_bytes = modifiers.order_type == OrderType::DESCENDING;
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<string_t>(result, count);
@@ -472,10 +459,10 @@ void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers mo
 			writer.WriteNull();
 			continue;
 		}
-		// encode the key once into the buffer, then hand it to the writer (which copies it)
+		// encode the key once into the (reused) buffer, then hand it to the writer (which copies it).
+		// NULLs are handled via validity above, so no NULL/validity prefix byte is needed in the key.
 		buffer.clear();
-		buffer.push_back(static_cast<char>(valid_byte));
-		VariantComparatorBufferSink sink(buffer, flip_bytes);
+		VariantComparatorBufferSink sink(buffer);
 		EncodeVariantValue(root, sink);
 		writer.WriteValue(string_t(buffer.data(), NumericCast<uint32_t>(buffer.size())));
 	}
@@ -489,8 +476,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, OrderModifiers mo
 // FIRST/LAST is handled by the surrounding operator instead of being baked into the key.
 void VariantComparatorFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
-	OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-	CreateVariantComparator(input.data[0], input.size(), modifiers, result);
+	CreateVariantComparator(input.data[0], input.size(), result);
 }
 
 } // namespace
