@@ -176,7 +176,7 @@ uint64_t ICUDateFunc::SetTimeNS(icu::Calendar *calendar, timestamp_tz_ns_t date)
 	int64_t nanos = date.value % Interval::NANOS_PER_MSEC;
 	if (nanos < 0) {
 		--millis;
-		nanos += Interval::MICROS_PER_MSEC;
+		nanos += Interval::NANOS_PER_MSEC;
 	}
 
 	const auto udate = UDate(millis);
