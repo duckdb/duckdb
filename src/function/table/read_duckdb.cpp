@@ -8,6 +8,9 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -536,6 +539,134 @@ TableFunction ReadDuckDBTableFunction::GetFunction() {
 	read_duckdb.late_materialization = true;
 	ReadDuckDBAddNamedParameters(read_duckdb);
 	return static_cast<TableFunction>(read_duckdb);
+}
+
+namespace {
+
+struct DuckDBLookupGlobalState : GlobalTableFunctionState {
+	shared_ptr<DuckDBReader> reader;
+	//! Physical columns to fetch, plus a trailing rowid column for aligning
+	//! fetch results against the requested row ids (deleted rows are skipped
+	//! by DataTable::Fetch).
+	vector<StorageIndex> fetch_columns;
+	vector<LogicalType> fetch_types;
+	vector<idx_t> output_to_fetch_col;
+	idx_t rowid_fetch_idx = 0;
+	DataChunk fetch_chunk;
+};
+
+unique_ptr<GlobalTableFunctionState> DuckDBLookupInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+	auto &duck_bind = bind_data.bind_data->Cast<DuckDBReadBindData>();
+	auto state = make_uniq<DuckDBLookupGlobalState>();
+
+	const auto &file = bind_data.file_list->GetFirstFile();
+	state->reader = make_shared_ptr<DuckDBReader>(context, file, *duck_bind.options);
+
+	auto &table_entry = state->reader->GetTableEntry();
+	auto &columns = table_entry.GetColumns();
+	state->output_to_fetch_col.reserve(input.column_indexes.size());
+	for (auto &col : input.column_indexes) {
+		if (col.IsVirtualColumn()) {
+			state->output_to_fetch_col.push_back(DConstants::INVALID_INDEX);
+			continue;
+		}
+		const auto logical_col = col.GetPrimaryIndex();
+		const auto physical_col = columns.LogicalToPhysical(LogicalIndex(logical_col)).index;
+		idx_t fetch_idx = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < state->fetch_columns.size(); ++i) {
+			if (state->fetch_columns[i].GetPrimaryIndex() == physical_col) {
+				fetch_idx = i;
+				break;
+			}
+		}
+		if (fetch_idx == DConstants::INVALID_INDEX) {
+			fetch_idx = state->fetch_columns.size();
+			state->fetch_columns.emplace_back(physical_col);
+			state->fetch_types.push_back(columns.GetColumn(LogicalIndex(logical_col)).Type());
+		}
+		state->output_to_fetch_col.push_back(fetch_idx);
+	}
+	state->rowid_fetch_idx = state->fetch_columns.size();
+	state->fetch_columns.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	state->fetch_types.push_back(LogicalType::ROW_TYPE);
+	state->fetch_chunk.Initialize(context, state->fetch_types);
+
+	return std::move(state);
+}
+
+void DuckDBLookupScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto &gstate = data.global_state->Cast<DuckDBLookupGlobalState>();
+	if (data.pk_lookups.empty()) {
+		return;
+	}
+	D_ASSERT(data.pk_output_positions.size() == data.pk_lookups.size());
+
+	// Rows deleted (or compacted away) in the source database since CREATE
+	// INDEX produce no fetch result -- pre-null every target slot so stale
+	// row ids surface as NULLs instead of garbage.
+	for (idx_t c = 0; c < gstate.output_to_fetch_col.size(); ++c) {
+		if (gstate.output_to_fetch_col[c] == DConstants::INVALID_INDEX) {
+			continue;
+		}
+		auto &dst = output.data[c];
+		for (auto pos : data.pk_output_positions) {
+			FlatVector::SetNull(dst, pos, true);
+		}
+	}
+
+	auto &table_entry = gstate.reader->GetTableEntry();
+	auto &storage = table_entry.Cast<DuckTableEntry>().GetStorage();
+	auto &transaction = DuckTransaction::Get(context, table_entry.ParentCatalog());
+
+	const auto count = data.pk_lookups.size();
+	idx_t done = 0;
+	idx_t pk = 0;
+	while (done < count) {
+		const auto batch = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - done);
+		Vector row_ids(LogicalType::ROW_TYPE, batch);
+		auto *row_id_data = FlatVector::GetDataMutable<row_t>(row_ids);
+		for (idx_t i = 0; i < batch; ++i) {
+			row_id_data[i] = NumericCast<row_t>(data.pk_lookups[done + i]);
+		}
+		gstate.fetch_chunk.Reset();
+		ColumnFetchState fetch_state;
+		storage.Fetch(transaction, gstate.fetch_chunk, gstate.fetch_columns, row_ids, batch, fetch_state);
+
+		const auto fetched = gstate.fetch_chunk.size();
+		const auto *fetched_row_ids = FlatVector::GetData<row_t>(gstate.fetch_chunk.data[gstate.rowid_fetch_idx]);
+		// pk_lookups is sorted ascending and Fetch preserves request order,
+		// so a two-pointer walk recovers which requests were found.
+		for (idx_t k = 0; k < fetched; ++k) {
+			while (pk < count && NumericCast<row_t>(data.pk_lookups[pk]) != fetched_row_ids[k]) {
+				++pk;
+			}
+			D_ASSERT(pk < count);
+			const auto caller_pos = data.pk_output_positions[pk];
+			for (idx_t c = 0; c < gstate.output_to_fetch_col.size(); ++c) {
+				const auto i = gstate.output_to_fetch_col[c];
+				if (i == DConstants::INVALID_INDEX) {
+					continue;
+				}
+				VectorOperations::Copy(gstate.fetch_chunk.data[i], output.data[c], k + 1, k, caller_pos);
+			}
+			++pk;
+		}
+		done += batch;
+	}
+}
+
+} // namespace
+
+//! Standalone lookup TableFunction for read_duckdb: gstate opens the database
+//! once per query, pk_lookups (sorted duckdb row ids) arrive per call via
+//! TableFunctionInput, rows are fetched through DataTable::Fetch with the
+//! caller's transaction.
+TableFunction MakeDuckDBLookupTableFunction() {
+	TableFunction fn;
+	fn.init_global = DuckDBLookupInitGlobal;
+	fn.function = DuckDBLookupScan;
+	return fn;
 }
 
 unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &context, ReplacementScanInput &input,
