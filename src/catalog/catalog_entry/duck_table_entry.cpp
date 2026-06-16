@@ -101,6 +101,8 @@ virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::BIGINT)));
+	virtual_columns.insert(
+	    make_pair(COLUMN_IDENTIFIER_ROW_IS_PRESENT, TableColumn("row_is_present", LogicalType::BOOLEAN)));
 	return virtual_columns;
 }
 

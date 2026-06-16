@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -14,9 +15,9 @@ namespace duckdb {
 
 ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBinding>> lambda_bindings_p,
                                  optional_ptr<ColumnAliasBinder> alias_binder_p,
-                                 optional_ptr<HavingBinder> having_binder_p)
+                                 optional_ptr<HavingBinder> having_binder_p, bool allow_row_presence_p)
     : binder(binder_p), lambda_bindings(lambda_bindings_p), alias_binder(alias_binder_p),
-      having_binder(having_binder_p) {
+      having_binder(having_binder_p), allow_row_presence(allow_row_presence_p) {
 }
 
 static Identifier GetSQLValueFunctionName(const Identifier &column_name) {
@@ -125,7 +126,10 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 		return nullptr;
 	}
 
-	// We found the table, now create the struct_pack expression
+	// Build inline struct_pack(...) over the table columns (normal binding handles generated/computed
+	// columns), wrapped as: CASE WHEN row_is_present THEN struct_pack(...) ELSE NULL.
+	// row_is_present is a constant true emitted AT THE SOURCE (below joins, see Binder::FinalizeRowStructs),
+	// so a NULL-padding join nulls it and the whole-row variable becomes NULL for fabricated rows.
 	auto &column_names = binding->GetColumnNames();
 	vector<FunctionArgument> child_expressions;
 	child_expressions.reserve(column_names.size());
@@ -134,7 +138,33 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
 		child_expressions.emplace_back(column_name, std::move(ref));
 	}
-	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
+	auto struct_pack = make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
+
+	if (!allow_row_presence) {
+		// contexts with no scan to produce row_is_present (CREATE INDEX expr, RETURNING): the row is always
+		// present, so a plain struct_pack is correct (matches legacy behavior)
+		struct_pack->SetAlias(col_ref.ColumnNames().back());
+		return std::move(struct_pack);
+	}
+
+	// Base tables expose row_is_present as a virtual column (rowid-style) produced by the scan itself, so no
+	// finalize work is needed. Generic sources (subquery/VALUES/CTE/setop, table functions) have no such
+	// virtual column - register one and record a request so FinalizeRowStructs appends the constant at the source.
+	if (!binding->HasMatchingBinding(Binding::RowPresenceColumnName())) {
+		binding->GetOrCreateRowPresenceColumn();
+		binder.global_binder_state->row_struct_requests.insert(binding->GetIndex().index);
+	}
+	auto presence = binder.bind_context.CreateColumnReference(
+	    binding->GetBindingAlias(), Binding::RowPresenceColumnName(), ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+	auto case_expr = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(presence);
+	check.then_expr = std::move(struct_pack);
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
+	// preserve the whole-row variable's output name (the table alias), unless the caller overrides it
+	case_expr->SetAlias(col_ref.ColumnNames().back());
+	return std::move(case_expr);
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpression &expr,

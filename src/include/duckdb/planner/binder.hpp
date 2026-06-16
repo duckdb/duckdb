@@ -60,6 +60,7 @@ class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
 class BoundAtClause;
+struct ReplacementBinding;
 
 struct CreateInfo;
 struct CreateTriggerInfo;
@@ -192,6 +193,9 @@ struct GlobalBinderState {
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
 	Identifier trigger_creation_name;
+	//! Whole-row-variable source table indexes that need a row_is_present column materialized at the source
+	//! (below joins) so the CASE WHEN row_is_present ... yields NULL on join padding.
+	unordered_set<idx_t> row_struct_requests;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -480,6 +484,15 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
+
+public:
+	//! Emit a constant-true row_is_present column at each whole-row-variable source (below joins) so the
+	//! CASE WHEN row_is_present ... yields NULL on join padding. Consumes matching row_struct_requests.
+	void FinalizeRowStructs(unique_ptr<LogicalOperator> &op);
+
+private:
+	//! Recursive worker for FinalizeRowStructs: materializes the row_is_present column at each source.
+	void EmitRowPresenceColumns(unique_ptr<LogicalOperator> &op);
 
 	void BuildUnionByNameInfo(BoundSetOperationNode &result);
 

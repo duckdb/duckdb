@@ -437,6 +437,8 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	for (const auto &col_idx : input.column_indexes) {
 		if (col_idx.IsRowIdColumn() || col_idx.IsRowNumberColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+		} else if (col_idx.IsRowIsPresentColumn()) {
+			g_state->scanned_types.emplace_back(LogicalType::BOOLEAN);
 		} else if (col_idx.HasType()) {
 			g_state->scanned_types.push_back(col_idx.GetScanType());
 		} else {
@@ -844,7 +846,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, Ta
 		return nullptr;
 	}
 
-	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn()) {
+	if (column_id.IsRowIdColumn() || column_id.IsRowNumberColumn() || column_id.IsRowIsPresentColumn()) {
 		return nullptr;
 	}
 	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));

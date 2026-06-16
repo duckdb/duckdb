@@ -55,6 +55,13 @@ public:
 	idx_t GetColumnCount();
 	void SetColumnType(idx_t col_idx, LogicalType type);
 
+	//! Lazily register a hidden BOOLEAN row_is_present column at index == column count; returns its index.
+	//! A whole-row variable becomes CASE WHEN row_is_present THEN struct_pack(...) ELSE NULL; the presence
+	//! column is a constant true emitted at the source (NULL on join padding) - see Binder::FinalizeRowStructs.
+	idx_t GetOrCreateRowPresenceColumn();
+	//! Reserved internal name for the hidden row_is_present column (cannot collide with SQL identifiers).
+	static const Identifier &RowPresenceColumnName();
+
 	static BindingAlias GetAlias(const Identifier &explicit_alias, const StandardEntry &entry);
 	static BindingAlias GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry);
 
@@ -91,6 +98,9 @@ protected:
 	vector<Identifier> names;
 	//! Name -> index for the names
 	identifier_map_t<column_t> name_map;
+	//! Hidden row_is_present column: registered lazily when a whole-row variable references this binding
+	bool has_row_presence = false;
+	idx_t row_presence_index = 0;
 };
 
 struct EntryBinding : public Binding {

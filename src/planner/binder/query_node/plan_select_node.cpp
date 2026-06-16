@@ -1,5 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -125,6 +126,81 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 	return true;
 }
 
+static void RepointSourceTableIndex(LogicalOperator &op, TableIndex new_index) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+		op.Cast<LogicalGet>().table_index = new_index;
+		break;
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+		op.Cast<LogicalExpressionGet>().table_index = new_index;
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		op.Cast<LogicalCTERef>().table_index = new_index;
+		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		op.Cast<LogicalSetOperation>().table_index = new_index;
+		break;
+	default:
+		throw InternalException("row struct: unsupported source operator for whole-row variable");
+	}
+}
+
+void Binder::EmitRowPresenceColumns(unique_ptr<LogicalOperator> &op) {
+	if (!op) {
+		return;
+	}
+	auto &requests = global_binder_state->row_struct_requests;
+	// process children first (the source is always below the consuming join/projection)
+	for (auto &child : op->children) {
+		EmitRowPresenceColumns(child);
+	}
+	// find a requested table_index that this operator introduces
+	TableIndex source_index;
+	bool is_source = false;
+	for (auto ti : op->GetTableIndex()) {
+		if (requests.find(ti.index) != requests.end()) {
+			source_index = ti;
+			is_source = true;
+			break;
+		}
+	}
+	if (!is_source) {
+		return;
+	}
+	requests.erase(source_index.index);
+
+	if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		// source root is already a projection (e.g. subquery): append the constant presence column at the end
+		op->Cast<LogicalProjection>().expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+		return;
+	}
+	// other generic sources (VALUES, CTE ref, set operation): insert a pass-through projection that appends the
+	// constant presence column at the end (index == column count, which matches the bound reference).
+	op->ResolveOperatorTypes();
+	idx_t m = op->types.size();
+	auto inner_index = GenerateTableIndex();
+	RepointSourceTableIndex(*op, inner_index);
+	vector<unique_ptr<Expression>> p_exprs;
+	p_exprs.reserve(m + 1);
+	for (idx_t pos = 0; pos < m; pos++) {
+		p_exprs.push_back(
+		    make_uniq<BoundColumnRefExpression>(op->types[pos], ColumnBinding(inner_index, ProjectionIndex(pos))));
+	}
+	p_exprs.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+	auto projection = make_uniq<LogicalProjection>(source_index, std::move(p_exprs));
+	projection->AddChild(std::move(op));
+	op = std::move(projection);
+}
+
+void Binder::FinalizeRowStructs(unique_ptr<LogicalOperator> &op) {
+	if (!op || global_binder_state->row_struct_requests.empty()) {
+		return;
+	}
+	EmitRowPresenceColumns(op);
+}
+
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	D_ASSERT(statement.from_table.plan);
 	auto root = std::move(statement.from_table.plan);
@@ -230,6 +306,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		prune->AddChild(std::move(root));
 		root = std::move(prune);
 	}
+	// materialize row_is_present at non-Get whole-row-variable sources (below joins) as a constant true,
+	// so the consuming join nulls it for fabricated rows (base tables produce it via the scan instead)
+	FinalizeRowStructs(root);
 	return root;
 }
 

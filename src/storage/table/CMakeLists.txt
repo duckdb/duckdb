@@ -17,6 +17,8 @@ add_library_unity(
   persistent_table_data.cpp
   row_id_column_data.cpp
   row_number_column_data.cpp
+  default_virtual_column_data.cpp
+  row_is_present_column_data.cpp
   row_group.cpp
   row_group_collection.cpp
   row_group_reorderer.cpp

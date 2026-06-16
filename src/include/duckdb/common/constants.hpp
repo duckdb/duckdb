@@ -44,6 +44,8 @@ DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_EMPTY;
 //! Special value used to signify the ROW_NUMBER of a table
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_NUMBER;
+//! Special value used to signify the row_is_present virtual column (constant true; NULL on join padding)
+DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_IS_PRESENT;
 DUCKDB_API extern const column_t VIRTUAL_COLUMN_START;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);
 DUCKDB_API bool IsRowNumberColumnId(column_t column_id);

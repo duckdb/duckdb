@@ -30,8 +30,10 @@ vector<TableIndex> LogicalDelete::GetTableIndex() const {
 
 vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 	if (return_chunk) {
-		// Include table columns + virtual columns (e.g., rowid)
+		// Include table columns + virtual columns (e.g., rowid). row_is_present is an internal whole-row
+		// helper produced on demand by the scan - it is not a returnable column, so exclude it.
 		auto virtual_columns = table.GetVirtualColumns();
+		virtual_columns.erase(COLUMN_IDENTIFIER_ROW_IS_PRESENT);
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + virtual_columns.size());
 	}
 	return {ColumnBinding(table_index, ProjectionIndex(0))};
@@ -40,8 +42,9 @@ vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 void LogicalDelete::ResolveTypes() {
 	if (return_chunk) {
 		types = table.GetTypes();
-		// Add virtual columns (e.g., rowid)
+		// Add virtual columns (e.g., rowid); exclude the internal row_is_present helper column
 		auto virtual_columns = table.GetVirtualColumns();
+		virtual_columns.erase(COLUMN_IDENTIFIER_ROW_IS_PRESENT);
 		for (auto &entry : virtual_columns) {
 			types.push_back(entry.second.type);
 		}

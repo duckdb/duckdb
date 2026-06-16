@@ -28,6 +28,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
 #include "duckdb/storage/table/row_number_column_data.hpp"
+#include "duckdb/storage/table/row_is_present_column_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -39,14 +40,15 @@ namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
     : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), row_is_present_is_loaded(false),
+      has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
       deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
-      has_changes(false) {
+      row_is_present_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -68,7 +70,8 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), row_is_present_is_loaded(false),
+      has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -154,6 +157,19 @@ void RowGroup::LoadRowNumberColumnData() const {
 	row_number_is_loaded = true;
 }
 
+void RowGroup::LoadRowIsPresentColumnData() const {
+	if (row_is_present_is_loaded) {
+		return;
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (row_is_present_column_data) {
+		return;
+	}
+	row_is_present_column_data = make_uniq<RowIsPresentColumnData>(GetBlockManager(), GetTableInfo());
+	row_is_present_column_data->count = count.load();
+	row_is_present_is_loaded = true;
+}
+
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
 	return res;
@@ -166,6 +182,9 @@ ColumnData &RowGroup::GetColumn(storage_t c) const {
 	}
 	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
 		return *row_number_column_data;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_IS_PRESENT) {
+		return *row_is_present_column_data;
 	}
 	return *columns[c];
 }
@@ -185,6 +204,10 @@ void RowGroup::LoadColumn(storage_t c) const {
 	}
 	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
 		LoadRowNumberColumnData();
+		return;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_IS_PRESENT) {
+		LoadRowIsPresentColumnData();
 		return;
 	}
 	D_ASSERT(c < columns.size());
@@ -372,7 +395,8 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
+		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn() ||
+		    column_ids[i].IsRowIsPresentColumn()) {
 			continue;
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
@@ -1115,6 +1139,9 @@ void RowGroup::SetCount(idx_t count) {
 	}
 	if (row_number_is_loaded) {
 		row_number_column_data->count = count;
+	}
+	if (row_is_present_is_loaded) {
+		row_is_present_column_data->count = count;
 	}
 }
 
@@ -1997,6 +2024,9 @@ void RowGroup::Verify() {
 	}
 	if (row_number_is_loaded) {
 		D_ASSERT(row_number_column_data->count == count);
+	}
+	if (row_is_present_is_loaded) {
+		D_ASSERT(row_is_present_column_data->count == count);
 	}
 #endif
 }

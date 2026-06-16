@@ -58,6 +58,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();
 
+		// emit any remaining whole-row-variable structs (statements that don't build a select node, e.g.
+		// MERGE / INSERT ... RETURNING / CREATE INDEX, where the per-select-node finalize never ran)
+		binder->FinalizeRowStructs(bound_statement.plan);
+
 		RunPostBindExtensions(context, *binder, bound_statement);
 
 		this->names = bound_statement.names;

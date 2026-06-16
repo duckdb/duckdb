@@ -18,7 +18,7 @@ class ColumnQualifier {
 public:
 	explicit ColumnQualifier(Binder &binder, optional_ptr<vector<DummyBinding>> lambda_bindings = nullptr,
 	                         optional_ptr<ColumnAliasBinder> alias_binder = nullptr,
-	                         optional_ptr<HavingBinder> having_binder = nullptr);
+	                         optional_ptr<HavingBinder> having_binder = nullptr, bool allow_row_presence = true);
 	virtual ~ColumnQualifier() = default;
 
 	//! Returns the STRUCT_EXTRACT operator expression
@@ -47,6 +47,8 @@ private:
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 	optional_ptr<ColumnAliasBinder> alias_binder;
 	optional_ptr<HavingBinder> having_binder;
+	//! Whether a whole-row variable may use the row_is_present column (false -> plain struct_pack fallback)
+	bool allow_row_presence;
 
 private:
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,

@@ -4,9 +4,7 @@
 namespace duckdb {
 
 RowNumberColumnData::RowNumberColumnData(BlockManager &block_manager, DataTableInfo &info)
-    : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_NUMBER, LogicalType(LogicalTypeId::BIGINT),
-                 ColumnDataType::MAIN_TABLE, nullptr) {
-	stats->statistics.SetHasNoNullFast();
+    : DefaultVirtualColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_NUMBER, LogicalType(LogicalTypeId::BIGINT)) {
 }
 
 idx_t RowNumberColumnData::GetRowNumberBase(ColumnScanState &state) {
@@ -43,11 +41,6 @@ idx_t RowNumberColumnData::Scan(TransactionData transaction, idx_t vector_index,
 	return ScanCount(state, result, scan_count, 0);
 }
 
-void RowNumberColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
-                                             Vector &result) {
-	throw InternalException("ScanCommittedRange is not supported for row number columns");
-}
-
 idx_t RowNumberColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	if (result_offset != 0) {
 		throw InternalException("RowNumberColumnData result_offset must be 0");
@@ -68,69 +61,13 @@ void RowNumberColumnData::Select(TransactionData transaction, idx_t vector_index
 	state.offset_in_column += count;
 }
 
-idx_t RowNumberColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw InternalException("Fetch is not supported for row number columns");
-}
-
-void RowNumberColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
-                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
-                                    idx_t fetch_count, Vector &result, idx_t result_offset) {
-	throw InternalException("FetchRows is not supported for row number columns");
-}
-
 void RowNumberColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// row_number is dense - skipped rows don't consume row numbers
 	// so Skip is a no-op (offset_in_column is not advanced)
 }
 
-void RowNumberColumnData::InitializeAppend(ColumnAppendState &state) {
-	throw InternalException("RowNumberColumnData cannot be appended to");
-}
-
-void RowNumberColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
-	throw InternalException("RowNumberColumnData cannot be appended to");
-}
-
-void RowNumberColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
-	throw InternalException("RowNumberColumnData cannot be appended to");
-}
-
-void RowNumberColumnData::RevertAppend(row_t new_count) {
-	throw InternalException("RowNumberColumnData cannot be appended to");
-}
-
-void RowNumberColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
-                                 Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	throw InternalException("RowNumberColumnData cannot be updated");
-}
-
-void RowNumberColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
-                                       const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
-                                       idx_t update_count, idx_t depth, idx_t row_group_start) {
-	throw InternalException("RowNumberColumnData cannot be updated");
-}
-
-void RowNumberColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
-	throw InternalException("VisitBlockIds not supported for row number");
-}
-
-unique_ptr<ColumnCheckpointState>
-RowNumberColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	throw InternalException("RowNumberColumnData cannot be checkpointed");
-}
-
-unique_ptr<ColumnCheckpointState> RowNumberColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
-                                                                  const BaseStatistics &old_stats) {
-	throw InternalException("RowNumberColumnData cannot be checkpointed");
-}
-
-void RowNumberColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                         Vector &scan_vector) const {
-	throw InternalException("RowNumberColumnData cannot be checkpointed");
-}
-
-bool RowNumberColumnData::IsPersistent() {
-	throw InternalException("RowNumberColumnData cannot be persisted");
+string RowNumberColumnData::GetColumnDataName() const {
+	return "RowNumberColumnData";
 }
 
 } // namespace duckdb

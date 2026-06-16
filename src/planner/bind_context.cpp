@@ -216,6 +216,10 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (IsVirtualColumn(index)) {
 		return false;
 	}
+	if (index >= binding.GetColumnNames().size()) {
+		// hidden row_is_present column on a generic-path source (table function) - not a catalog column
+		return false;
+	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
 	return table_entry.GetColumn(LogicalIndex(index)).Generated();

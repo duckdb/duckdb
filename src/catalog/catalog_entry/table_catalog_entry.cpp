@@ -46,6 +46,9 @@ StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) co
 	if (column_id.IsRowNumberColumn()) {
 		return StorageIndex(COLUMN_IDENTIFIER_ROW_NUMBER);
 	}
+	if (column_id.IsRowIsPresentColumn()) {
+		return StorageIndex(COLUMN_IDENTIFIER_ROW_IS_PRESENT);
+	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table
 	// for any child indices because the indices are already the physical indices.
@@ -373,6 +376,8 @@ unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientCo
 virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	virtual_columns.insert(
+	    make_pair(COLUMN_IDENTIFIER_ROW_IS_PRESENT, TableColumn("row_is_present", LogicalType::BOOLEAN)));
 	return virtual_columns;
 }
 

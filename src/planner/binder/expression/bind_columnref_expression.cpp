@@ -29,7 +29,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
-	ColumnQualifier qualifier(binder);
+	ColumnQualifier qualifier(binder, nullptr, nullptr, nullptr, SupportsWholeRowPresence());
 	return qualifier.CreateStructPack(col_ref);
 }
 
@@ -41,7 +41,8 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 }
 
 void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
-	ColumnQualifier qualifier(expression_binder.binder, expression_binder.lambda_bindings);
+	ColumnQualifier qualifier(expression_binder.binder, expression_binder.lambda_bindings, nullptr, nullptr,
+	                          expression_binder.SupportsWholeRowPresence());
 	vector<identifier_set_t> lambda_params;
 	qualifier.QualifyColumnNames(expr, lambda_params);
 }
@@ -52,7 +53,7 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
-	ColumnQualifier qualifier(binder, lambda_bindings);
+	ColumnQualifier qualifier(binder, lambda_bindings, nullptr, nullptr, SupportsWholeRowPresence());
 	return qualifier.QualifyColumnName(col_ref, error);
 }
 

@@ -87,6 +87,12 @@ public:
 		return false;
 	}
 
+	//! Whether a whole-row variable in this context can use the row_is_present column (false for contexts
+	//! with no scan to produce it - e.g. CREATE INDEX expressions, RETURNING - which fall back to struct_pack).
+	virtual bool SupportsWholeRowPresence() const {
+		return true;
+	}
+
 	Binder &GetBinder() const {
 		return binder;
 	}

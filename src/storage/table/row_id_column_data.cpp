@@ -6,9 +6,7 @@
 namespace duckdb {
 
 RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &info)
-    : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, LogicalType(LogicalTypeId::BIGINT),
-                 ColumnDataType::MAIN_TABLE, nullptr) {
-	stats->statistics.SetHasNoNullFast();
+    : DefaultVirtualColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, LogicalType(LogicalTypeId::BIGINT)) {
 }
 
 idx_t RowIdColumnData::GetRowStart(ColumnScanState &state) {
@@ -111,10 +109,6 @@ void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	state.offset_in_column += GetVectorCount(vector_index);
 }
 
-idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw InternalException("Fetch is not supported for row id columns");
-}
-
 void RowIdColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                                 const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
                                 idx_t result_offset) {
@@ -131,54 +125,8 @@ void RowIdColumnData::Skip(ColumnScanState &state, idx_t count) {
 	state.internal_index = state.offset_in_column;
 }
 
-void RowIdColumnData::InitializeAppend(ColumnAppendState &state) {
-	throw InternalException("RowIdColumnData cannot be appended to");
-}
-
-void RowIdColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
-	throw InternalException("RowIdColumnData cannot be appended to");
-}
-
-void RowIdColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
-	throw InternalException("RowIdColumnData cannot be appended to");
-}
-
-void RowIdColumnData::RevertAppend(row_t new_count) {
-	throw InternalException("RowIdColumnData cannot be appended to");
-}
-
-void RowIdColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
-                             Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	throw InternalException("RowIdColumnData cannot be updated");
-}
-
-void RowIdColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
-                                   const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
-                                   idx_t update_count, idx_t depth, idx_t row_group_start) {
-	throw InternalException("RowIdColumnData cannot be updated");
-}
-
-void RowIdColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
-	throw InternalException("VisitBlockIds not supported for rowid");
-}
-
-unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const RowGroup &row_group,
-                                                                         PartialBlockManager &partial_block_manager) {
-	throw InternalException("RowIdColumnData cannot be checkpointed");
-}
-
-unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
-                                                              const BaseStatistics &old_stats) {
-	throw InternalException("RowIdColumnData cannot be checkpointed");
-}
-
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                     Vector &scan_vector) const {
-	throw InternalException("RowIdColumnData cannot be checkpointed");
-}
-
-bool RowIdColumnData::IsPersistent() {
-	throw InternalException("RowIdColumnData cannot be persisted");
+string RowIdColumnData::GetColumnDataName() const {
+	return "RowIdColumnData";
 }
 
 } // namespace duckdb

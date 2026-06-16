@@ -161,6 +161,7 @@ public:
 	void AddChildIndex(ColumnIndex new_index);
 	bool IsRowIdColumn() const;
 	bool IsRowNumberColumn() const;
+	bool IsRowIsPresentColumn() const;
 	bool IsEmptyColumn() const;
 	bool IsVirtualColumn() const;
 	void VerifySinglePath() const;

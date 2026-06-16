@@ -65,6 +65,23 @@ void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
 	types[col_idx] = std::move(type_p);
 }
 
+const Identifier &Binding::RowPresenceColumnName() {
+	// must match the virtual column name advertised by TableCatalogEntry::GetVirtualColumns
+	static const Identifier name("row_is_present");
+	return name;
+}
+
+idx_t Binding::GetOrCreateRowPresenceColumn() {
+	// used for generic (non-Get) sources without a row_is_present virtual column: the presence column is
+	// appended as a constant at the source's output end (index == column count) by Binder::FinalizeRowStructs.
+	if (!has_row_presence) {
+		has_row_presence = true;
+		row_presence_index = names.size();
+		name_map[RowPresenceColumnName()] = row_presence_index;
+	}
+	return row_presence_index;
+}
+
 const Identifier &Binding::GetAlias() const {
 	return alias.GetAlias();
 }
@@ -107,9 +124,15 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = ProjectionIndex(column_index);
-	LogicalType sql_type = types[column_index];
-	if (colref.GetAlias().empty()) {
-		colref.SetAlias(names[column_index]);
+	LogicalType sql_type;
+	if (has_row_presence && column_index == row_presence_index) {
+		// hidden row_is_present column (constant true emitted at the source, NULL on join padding)
+		sql_type = LogicalType::BOOLEAN;
+	} else {
+		sql_type = types[column_index];
+		if (colref.GetAlias().empty()) {
+			colref.SetAlias(names[column_index]);
+		}
 	}
 	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
 }
@@ -268,6 +291,13 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	success = TryGetBindingIndex(column_name, column_index);
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
+	}
+	if (has_row_presence && column_index == row_presence_index) {
+		// hidden row_is_present column on a generic-path source (e.g. table function): constant true emitted
+		// at the source by FinalizeRowStructs (NULL on join padding)
+		ColumnBinding binding(index, ProjectionIndex(row_presence_index));
+		return BindResult(
+		    make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), LogicalType::BOOLEAN, binding, depth));
 	}
 	auto entry = GetStandardEntry();
 	if (entry && !IsVirtualColumn(column_index)) {

@@ -58,6 +58,7 @@ public:
 	void SetIndex(idx_t new_index);
 	bool IsRowIdColumn() const;
 	bool IsRowNumberColumn() const;
+	bool IsRowIsPresentColumn() const;
 
 	void Serialize(Serializer &serializer) const;
 	static StorageIndex Deserialize(Deserializer &deserializer);
