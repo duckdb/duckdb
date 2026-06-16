@@ -412,6 +412,9 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 	auto k_data = FlatVector::GetDataMutable<uint64_t>(fields[0]);
 	auto &value_lists = fields[1];
 	auto &filter_lists = fields[2];
+	auto &k_validity = FlatVector::ValidityMutable(fields[0]);
+	auto &value_validity = FlatVector::ValidityMutable(value_lists);
+	auto &filter_validity = FlatVector::ValidityMutable(filter_lists);
 	auto value_entries = FlatVector::ScatterWriter<list_entry_t>(value_lists);
 	auto filter_entries = FlatVector::ScatterWriter<list_entry_t>(filter_lists);
 	idx_t total_values = ListVector::GetListSize(value_lists);
@@ -421,8 +424,11 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 		value_entries[i].offset = total_values;
 		filter_entries[i].offset = total_filters;
 		if (!state_ptr || state_ptr->values.empty()) {
-			// no values have been added to this state - export NULL
+			// no values have been added to this state - export NULL (children of a NULL struct must also be NULL)
 			mask.SetInvalid(i);
+			k_validity.SetInvalid(i);
+			value_validity.SetInvalid(i);
+			filter_validity.SetInvalid(i);
 			value_entries[i].length = 0;
 			filter_entries[i].length = 0;
 			k_data[i] = 0;
@@ -471,8 +477,11 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 template <class OP = HistogramGenericFunctor>
 void ApproxTopKImportState(AggregateImportInputData &input) {
 	const auto &layout = input.layout;
-	const auto &input_vec = input.input_vec;
-	const auto count = input_vec.size();
+	const auto count = input.input_vec.size();
+	// the input can be any vector type (e.g. dictionary-encoded from a compressed scan) - flatten it so the
+	// struct/list children can be read by position
+	Vector input_vec(input.input_vec, 0, count);
+	input_vec.Flatten();
 	const auto dest_buffer = input.dest_buffer;
 	auto &allocator = input.allocator;
 	const auto validity = input_vec.Validity();
