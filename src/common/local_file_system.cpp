@@ -1845,6 +1845,10 @@ bool LocalFileSystem::CanSeek() {
 	return true;
 }
 
+bool LocalFileSystem::SupportsPositionalWrites(FileHandle &handle) {
+	return true;
+}
+
 bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
 }
