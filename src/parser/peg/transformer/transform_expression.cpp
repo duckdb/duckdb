@@ -1417,7 +1417,7 @@ PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(PEGTransformer &transformer,
                                                                                const string &col_label) {
 	// ColLabelParameter <- '$' ColLabel
-	string identifier = col_label;
+	const string &identifier = col_label;
 
 	auto expr = make_uniq<ParameterExpression>();
 	idx_t known_param_index = DConstants::INVALID_INDEX;
@@ -1763,16 +1763,13 @@ unique_ptr<WindowExpression>
 PEGTransformerFactory::TransformWindowFrameNameContents(PEGTransformer &transformer,
                                                         const optional<Identifier> &base_window_name,
                                                         unique_ptr<WindowExpression> window_frame_contents) {
-	string window_name;
-	if (base_window_name) {
-		window_name = base_window_name->GetIdentifierName();
+	if (!base_window_name) {
+		return window_frame_contents;
 	}
+	auto window_name = base_window_name->GetIdentifierName();
 	auto lower_name = StringUtil::Lower(window_name);
 	if (lower_name == "partition" || lower_name == "range" || lower_name == "rows" || lower_name == "groups") {
 		throw ParserException("Invalid window name \"%s\"", window_name);
-	}
-	if (window_name.empty()) {
-		return window_frame_contents;
 	}
 	auto copied_window = transformer.GetWindowClause(*base_window_name);
 	if (copied_window->StartExpr() || copied_window->EndExpr() ||
