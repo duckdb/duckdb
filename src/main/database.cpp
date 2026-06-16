@@ -361,6 +361,12 @@ void DatabaseInstance::StartFeatureRefreshScheduler() {
 	}
 }
 
+void DatabaseInstance::StopFeatureRefreshScheduler() {
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Stop();
+	}
+}
+
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {
@@ -382,6 +388,14 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 }
 
 DuckDB::~DuckDB() {
+	// Stop the feature refresh scheduler here, while this owner still holds a strong reference to the
+	// DatabaseInstance. The scheduler's background thread transiently co-owns the instance through the
+	// Connections it creates, so it must be joined by an owner thread that is guaranteed not to be the
+	// background thread itself. Otherwise the background thread could become the last owner, trigger
+	// ~DatabaseInstance on itself, and deadlock by joining its own thread.
+	if (instance) {
+		instance->StopFeatureRefreshScheduler();
+	}
 }
 
 SecretManager &DatabaseInstance::GetSecretManager() {

@@ -86,6 +86,11 @@ public:
 	//! Start the feature auto-refresh scheduler. Must be called after FinalizeStartup() so the
 	//! catalog is fully loaded before the initial heap scan runs.
 	void StartFeatureRefreshScheduler();
+	//! Stop and join the feature auto-refresh scheduler thread. Must be called by an owner thread that
+	//! still holds a strong reference to the DatabaseInstance, so the background thread (which transiently
+	//! co-owns the instance via the Connections it creates) can never be the last owner and end up
+	//! joining itself during ~DatabaseInstance.
+	void StopFeatureRefreshScheduler();
 
 private:
 	void Initialize(const char *path, DBConfig *config);
