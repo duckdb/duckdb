@@ -765,7 +765,13 @@ inline LogicalType AggregateFunction::BuildStateLogical(const BoundAggregateFunc
 	// the runtime types of the bound function - used to resolve StateReturnType/StateInputType sources
 	StateLayoutTypeInfo info {bound_function.GetReturnType(), bound_function.GetArguments()};
 	if constexpr (IsStateListType<ST>::value) {
-		return ResolveStateSourceType<typename ST::SOURCE_TYPE>(info);
+		using SRC = typename ST::SOURCE_TYPE;
+		if constexpr (IsStateTypeSource<SRC>::value) {
+			return ResolveStateSourceType<SRC>(info);
+		} else {
+			// the element is described by a nested field descriptor (e.g. a sort key)
+			return LogicalType::LIST(FieldToLogicalType<SRC>(info));
+		}
 	} else if constexpr (IsOptionalStateType<ST>::value) {
 		using V = typename ST::value_type;
 		if constexpr (IsStructStateType<V>::value) {

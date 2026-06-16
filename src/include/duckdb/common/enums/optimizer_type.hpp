@@ -54,6 +54,7 @@ enum class OptimizerType : uint32_t {
 	PARTITIONED_EXECUTION = 37,
 	PARTIAL_AGGREGATE_PUSHDOWN = 38,
 	REMOTE_PUSHDOWN = 39,
+	GROUPING_SETS = 40,
 };
 
 string OptimizerTypeToString(OptimizerType type);

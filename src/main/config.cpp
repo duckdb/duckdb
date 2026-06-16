@@ -128,6 +128,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(DelimJoinAsCteSetting),
     DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
+    DUCKDB_SETTING_CALLBACK(DialectCompatibilityModeSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
     DUCKDB_GLOBAL(DisabledCompressionMethodsSetting),

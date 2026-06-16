@@ -185,12 +185,43 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		// linked list field: build the result LIST vector from each state's linked list
 		// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
+		D_ASSERT(field.children.size() == 1);
 		vector<LinkedList> linked_lists;
 		linked_lists.reserve(count);
 		for (idx_t i = 0; i < count; i++) {
 			linked_lists.push_back(Load<LinkedList>(addresses[i] + base + field.field_offset));
 		}
-		field.list_functions.BuildLists(linked_lists, result, 0);
+		const auto &element = field.children[0];
+		if (element.kind != AggregateFieldKind::SORT_KEY) {
+			// elements are stored directly - build the result LIST vector from each state's linked list
+			field.list_functions.BuildLists(linked_lists, result, 0);
+			break;
+		}
+		// the elements are sort keys: build the physically stored (BLOB) elements into a temporary LIST vector, then
+		// decode each sort key into the result child while rebuilding the result's list entries
+		Vector physical_list(LogicalType::LIST(LogicalType::BLOB), count);
+		field.list_functions.BuildLists(linked_lists, physical_list, 0);
+
+		ListVector::Reserve(result, ListVector::GetListSize(physical_list));
+		auto &result_child = ListVector::GetChildMutable(result);
+		auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+		const OrderModifiers modifiers(element.sort_key_order, OrderByNullType::NULLS_LAST);
+
+		idx_t child_offset = 0;
+		for (const auto list_entry : physical_list.Values<VectorListType<string_t>>()) {
+			const auto row = list_entry.GetIndex();
+			if (!list_entry.IsValid()) {
+				// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
+				FlatVector::SetNull(result, row, true);
+				result_entries[row] = {child_offset, 0};
+				continue;
+			}
+			result_entries[row] = {child_offset, list_entry.GetListLength()};
+			for (const auto sort_key : list_entry.GetChildValues()) {
+				CreateSortKeyHelpers::DecodeSortKey(sort_key.GetValueUnsafe(), result_child, child_offset++, modifiers);
+			}
+		}
+		ListVector::SetListSize(result, child_offset);
 		break;
 	}
 	}
@@ -247,11 +278,26 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 	case AggregateFieldKind::LIST: {
 		// linked list field: append each row of the input LIST vector into the state's linked list
 		D_ASSERT(type.id() == LogicalTypeId::LIST);
-		// the child data is appended through the ListSegmentFunctions API, which takes a RecursiveUnifiedVectorFormat
-		RecursiveUnifiedVectorFormat child_data;
-		Vector::RecursiveToUnifiedFormat(ListVector::GetChild(input_vec), child_data);
+		D_ASSERT(field.children.size() == 1);
+		const auto values = input_vec.Values<list_entry_t>();
+		const auto &element = field.children[0];
+		const auto &logical_child = ListVector::GetChild(input_vec);
 
-		auto values = input_vec.Values<list_entry_t>();
+		// the child is appended through the ListSegmentFunctions API, which physically stores the element type -
+		// sort-key elements are first re-encoded from the logical child into a temporary BLOB child vector
+		optional_ptr<const Vector> physical_child = logical_child;
+		unique_ptr<Vector> encoded_child;
+		if (element.kind == AggregateFieldKind::SORT_KEY) {
+			const auto child_count = ListVector::GetListSize(input_vec);
+			const OrderModifiers modifiers(element.sort_key_order, OrderByNullType::NULLS_LAST);
+			// the result must be sized for the full (possibly larger than standard) child up front
+			encoded_child = make_uniq<Vector>(LogicalType::BLOB, MaxValue<idx_t>(child_count, 1));
+			CreateSortKeyHelpers::CreateSortKey(logical_child, child_count, modifiers, *encoded_child);
+			physical_child = *encoded_child;
+		}
+
+		RecursiveUnifiedVectorFormat child_data;
+		Vector::RecursiveToUnifiedFormat(*physical_child, child_data);
 		for (idx_t i = 0; i < count; i++) {
 			LinkedList linked_list;
 			const auto entry = values[i];
@@ -479,9 +525,10 @@ void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument
 			}
 			argument_types.push_back(TypeValue::GetType(children[0]));
 			if (!children[1].IsNull()) {
-				// the parameter is bound to a constant - decode it and cast it back to the declared argument type
-				constant_parameters.emplace(arg_idx,
-				                            VariantValue::GetValue(children[1]).DefaultCastAs(argument_types.back()));
+				// the parameter is bound to a constant - decode it as-is, without casting it to the declared
+				// argument type, so that re-binding sees the same (pre-cast) constant as the original bind
+				// (e.g. a DECIMAL quantile parameter must stay DECIMAL even though the signature says DOUBLE)
+				constant_parameters.emplace(arg_idx, VariantValue::GetValue(children[1]));
 			}
 			continue;
 		}
@@ -827,19 +874,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
-	if (bound_function.HasStateDestructorCallback()) {
-		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
-	}
-	// this should be required
-	D_ASSERT(bound_function.HasStateSizeCallback());
-	D_ASSERT(bound_function.HasStateFinalizeCallback());
-
-	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
 	if (!bound_function.HasGetStateTypeCallback()) {
 		throw NotImplementedException(
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot export state",
 		    bound_function.GetName());
 	}
+	D_ASSERT(bound_function.HasStateSizeCallback());
+	D_ASSERT(bound_function.HasStateFinalizeCallback());
+	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
 	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get()));
 	return child_aggregate;
 }

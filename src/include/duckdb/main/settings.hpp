@@ -792,6 +792,18 @@ struct DeprecatedUsingKeySyntaxSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DialectCompatibilityModeSetting {
+	using RETURN_TYPE = DialectCompatibilityMode;
+	static constexpr const char *Name = "dialect_compatibility_mode";
+	static constexpr const char *Description =
+	    "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DisableDatabaseInvalidationSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "disable_database_invalidation";

@@ -34,6 +34,7 @@ public:
 
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+	void PrepareWrite(ColumnWriterState &state) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
 	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 };
