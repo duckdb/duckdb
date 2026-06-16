@@ -978,8 +978,8 @@ String:
     - NotILikeOp
     - NotLikeOp
     - NotSimilarToOp
-    - OtherOperator
     - QualifiedOperator
+    - QualifiedOperatorContents
     - ColIdDot
     - AnyOp
     - StringOperator
@@ -1476,6 +1476,25 @@ overrides:
     by_value: true
   BetweenInLikeOp:
     type: "BetweenInLikeOperator"
+    by_value: true
+  OtherOperator:
+    type: "ParsedOperator"
+    by_value: true
+  OtherOperatorTail:
+    type: "OtherOperatorTail"
+    by_value: true
+  BitwiseExpressionTail:
+    type: "BinaryExpressionTail"
+    by_value: true
+  AdditiveExpressionTail:
+    type: "BinaryExpressionTail"
+    by_value: true
+    pass_location: true
+  MultiplicativeExpressionTail:
+    type: "BinaryExpressionTail"
+    by_value: true
+  ExponentiationExpressionTail:
+    type: "BinaryExpressionTail"
     by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:

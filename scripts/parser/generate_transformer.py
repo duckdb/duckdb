@@ -38,6 +38,7 @@ class GrammarTypeInfo:
     cpp_type: str
     by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
     default_initializer: str = ""  # Optional enum member/full C++ initializer for Optional(...) values
+    pass_location: bool = False  # Pass parse_result.offset to the hand-written body
 
 
 def load_grammar_types_yaml(types_file):
@@ -106,7 +107,7 @@ def load_grammar_types(types_file):
     rule_to_source = {}  # tracks where each rule was first seen for error messages
     duplicates = []
 
-    def register(name, cpp_type, by_value, default_initializer, source):
+    def register(name, cpp_type, by_value, default_initializer, pass_location, source):
         name = str(name)
         if name in rule_types:
             duplicates.append(f"  '{name}' in '{source}' (already listed in '{rule_to_source[name]}')")
@@ -115,6 +116,7 @@ def load_grammar_types(types_file):
                 cpp_type=str(cpp_type),
                 by_value=by_value,
                 default_initializer=str(default_initializer or ""),
+                pass_location=pass_location,
             )
             rule_to_source[name] = source
 
@@ -125,12 +127,13 @@ def load_grammar_types(types_file):
     if isinstance(overrides, dict):
         for name, value in overrides.items():
             if isinstance(value, str):
-                register(name, value, False, "", "overrides")
+                register(name, value, False, "", False, "overrides")
             elif isinstance(value, dict):
                 cpp_type = value.get("type", "")
                 by_value = bool(value.get("by_value", False))
                 default_initializer = value.get("default_initializer", "")
-                register(name, cpp_type, by_value, default_initializer, "overrides")
+                pass_location = bool(value.get("pass_location", False))
+                register(name, cpp_type, by_value, default_initializer, pass_location, "overrides")
 
     # Category entries: CategoryName -> {type: "...", by_value: bool, default_initializer: "...", rules: [...]}
     for key, value in data.items():
@@ -144,8 +147,9 @@ def load_grammar_types(types_file):
             continue
         by_value = bool(value.get("by_value", False))
         default_initializer = value.get("default_initializer", "")
+        pass_location = bool(value.get("pass_location", False))
         for name in rules:
-            register(name, cpp_type, by_value, default_initializer, key)
+            register(name, cpp_type, by_value, default_initializer, pass_location, key)
 
     if duplicates:
         print(f"Error: {types_file} contains duplicate rule listings:", file=sys.stderr)

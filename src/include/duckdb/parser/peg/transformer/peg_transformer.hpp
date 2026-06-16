@@ -2423,9 +2423,18 @@ private:
 	static unique_ptr<ParsedExpression>
 	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
+	static unique_ptr<TransformResultValue> TransformOtherOperatorExpressionInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
+	                                 optional<vector<OtherOperatorTail>> other_operator_tail);
+	static unique_ptr<TransformResultValue> TransformOtherOperatorTailInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static OtherOperatorTail TransformOtherOperatorTail(PEGTransformer &transformer, ParsedOperator other_operator,
+	                                                    unique_ptr<ParsedExpression> bitwise_expression);
 	static unique_ptr<TransformResultValue> TransformOtherOperatorInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static string TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result);
+	static ParsedOperator TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<TransformResultValue> TransformAnyAllOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,
@@ -2446,14 +2455,61 @@ private:
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformStringOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQualifiedOperatorInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static string TransformQualifiedOperator(PEGTransformer &transformer, const string &qualified_operator_contents);
+	static unique_ptr<TransformResultValue> TransformQualifiedOperatorContentsInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static string TransformQualifiedOperatorContents(PEGTransformer &transformer,
+	                                                 const optional<vector<string>> &col_id_dot, const string &any_op);
 	static unique_ptr<TransformResultValue> TransformAnyOpInternal(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformBitwiseExpressionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformBitwiseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> additive_expression,
+	                           optional<vector<BinaryExpressionTail>> bitwise_expression_tail);
+	static unique_ptr<TransformResultValue> TransformBitwiseExpressionTailInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static BinaryExpressionTail TransformBitwiseExpressionTail(PEGTransformer &transformer, const string &bit_operator,
+	                                                           unique_ptr<ParsedExpression> additive_expression);
 	static unique_ptr<TransformResultValue> TransformBitOperatorInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformAdditiveExpressionInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformAdditiveExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> multiplicative_expression,
+	                            optional<vector<BinaryExpressionTail>> additive_expression_tail);
+	static unique_ptr<TransformResultValue> TransformAdditiveExpressionTailInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static BinaryExpressionTail TransformAdditiveExpressionTail(PEGTransformer &transformer, const string &term,
+	                                                            unique_ptr<ParsedExpression> multiplicative_expression,
+	                                                            optional_idx query_location);
 	static unique_ptr<TransformResultValue> TransformTermInternal(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformMultiplicativeExpressionInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformMultiplicativeExpression(PEGTransformer &transformer,
+	                                  unique_ptr<ParsedExpression> exponentiation_expression,
+	                                  optional<vector<BinaryExpressionTail>> multiplicative_expression_tail);
+	static unique_ptr<TransformResultValue> TransformMultiplicativeExpressionTailInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static BinaryExpressionTail
+	TransformMultiplicativeExpressionTail(PEGTransformer &transformer, const string &factor,
+	                                      unique_ptr<ParsedExpression> exponentiation_expression);
 	static unique_ptr<TransformResultValue> TransformFactorInternal(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExponentiationExpressionInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformExponentiationExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> collate_expression,
+	                                  optional<vector<BinaryExpressionTail>> exponentiation_expression_tail);
+	static unique_ptr<TransformResultValue> TransformExponentiationExpressionTailInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static BinaryExpressionTail TransformExponentiationExpressionTail(PEGTransformer &transformer,
+	                                                                  const string &exponent_operator,
+	                                                                  unique_ptr<ParsedExpression> collate_expression);
 	static unique_ptr<TransformResultValue> TransformExponentOperatorInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformPrefixOperatorInternal(PEGTransformer &transformer,

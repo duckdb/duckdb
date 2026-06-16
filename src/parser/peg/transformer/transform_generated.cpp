@@ -5657,12 +5657,43 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBetweenClauseIn
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformOtherOperatorExpressionInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto bitwise_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<OtherOperatorTail>> other_operator_tail {};
+	auto &other_operator_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (other_operator_tail_opt.HasResult()) {
+		vector<OtherOperatorTail> other_operator_tail_value;
+		auto &other_operator_tail_value_repeat_1 = other_operator_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &other_operator_tail_value_item_1 : other_operator_tail_value_repeat_1.GetChildren()) {
+			auto other_operator_tail_value_value_1 =
+			    transformer.Transform<OtherOperatorTail>(other_operator_tail_value_item_1.get());
+			other_operator_tail_value.push_back(std::move(other_operator_tail_value_value_1));
+		}
+		other_operator_tail = std::move(other_operator_tail_value);
+	}
+	auto result =
+	    TransformOtherOperatorExpression(transformer, std::move(bitwise_expression), std::move(other_operator_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOtherOperatorTailInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto other_operator = transformer.Transform<ParsedOperator>(list_pr.GetChild(0));
+	auto bitwise_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformOtherOperatorTail(transformer, std::move(other_operator), std::move(bitwise_expression));
+	return make_uniq<TypedTransformResult<OtherOperatorTail>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOtherOperatorInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = TransformOtherOperator(transformer, choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<string>>(result);
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyAllOperatorInternal(PEGTransformer &transformer,
@@ -5724,12 +5755,71 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStringOperatorI
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQualifiedOperatorInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto qualified_operator_contents = transformer.Transform<string>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformQualifiedOperator(transformer, qualified_operator_contents);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformQualifiedOperatorContentsInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<vector<string>> col_id_dot {};
+	auto &col_id_dot_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (col_id_dot_opt.HasResult()) {
+		vector<string> col_id_dot_value;
+		auto &col_id_dot_value_repeat_1 = col_id_dot_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &col_id_dot_value_item_1 : col_id_dot_value_repeat_1.GetChildren()) {
+			auto col_id_dot_value_value_1 = transformer.Transform<string>(col_id_dot_value_item_1.get());
+			col_id_dot_value.push_back(col_id_dot_value_value_1);
+		}
+		col_id_dot = col_id_dot_value;
+	}
+	auto any_op = transformer.Transform<string>(list_pr.GetChild(1));
+	auto result = TransformQualifiedOperatorContents(transformer, col_id_dot, any_op);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnyOpInternal(PEGTransformer &transformer,
                                                                                ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
 	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitwiseExpressionInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto additive_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<BinaryExpressionTail>> bitwise_expression_tail {};
+	auto &bitwise_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (bitwise_expression_tail_opt.HasResult()) {
+		vector<BinaryExpressionTail> bitwise_expression_tail_value;
+		auto &bitwise_expression_tail_value_repeat_1 =
+		    bitwise_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &bitwise_expression_tail_value_item_1 : bitwise_expression_tail_value_repeat_1.GetChildren()) {
+			auto bitwise_expression_tail_value_value_1 =
+			    transformer.Transform<BinaryExpressionTail>(bitwise_expression_tail_value_item_1.get());
+			bitwise_expression_tail_value.push_back(std::move(bitwise_expression_tail_value_value_1));
+		}
+		bitwise_expression_tail = std::move(bitwise_expression_tail_value);
+	}
+	auto result =
+	    TransformBitwiseExpression(transformer, std::move(additive_expression), std::move(bitwise_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformBitwiseExpressionTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto bit_operator = transformer.Transform<string>(list_pr.GetChild(0));
+	auto additive_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformBitwiseExpressionTail(transformer, bit_operator, std::move(additive_expression));
+	return make_uniq<TypedTransformResult<BinaryExpressionTail>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitOperatorInternal(PEGTransformer &transformer,
@@ -5740,6 +5830,38 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitOperatorInte
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAdditiveExpressionInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto multiplicative_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<BinaryExpressionTail>> additive_expression_tail {};
+	auto &additive_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (additive_expression_tail_opt.HasResult()) {
+		vector<BinaryExpressionTail> additive_expression_tail_value;
+		auto &additive_expression_tail_value_repeat_1 =
+		    additive_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &additive_expression_tail_value_item_1 : additive_expression_tail_value_repeat_1.GetChildren()) {
+			auto additive_expression_tail_value_value_1 =
+			    transformer.Transform<BinaryExpressionTail>(additive_expression_tail_value_item_1.get());
+			additive_expression_tail_value.push_back(std::move(additive_expression_tail_value_value_1));
+		}
+		additive_expression_tail = std::move(additive_expression_tail_value);
+	}
+	auto result = TransformAdditiveExpression(transformer, std::move(multiplicative_expression),
+	                                          std::move(additive_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformAdditiveExpressionTailInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto term = transformer.Transform<string>(list_pr.GetChild(0));
+	auto multiplicative_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result =
+	    TransformAdditiveExpressionTail(transformer, term, std::move(multiplicative_expression), parse_result.offset);
+	return make_uniq<TypedTransformResult<BinaryExpressionTail>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTermInternal(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -5748,12 +5870,80 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTermInternal(PE
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformMultiplicativeExpressionInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto exponentiation_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<BinaryExpressionTail>> multiplicative_expression_tail {};
+	auto &multiplicative_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (multiplicative_expression_tail_opt.HasResult()) {
+		vector<BinaryExpressionTail> multiplicative_expression_tail_value;
+		auto &multiplicative_expression_tail_value_repeat_1 =
+		    multiplicative_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &multiplicative_expression_tail_value_item_1 :
+		     multiplicative_expression_tail_value_repeat_1.GetChildren()) {
+			auto multiplicative_expression_tail_value_value_1 =
+			    transformer.Transform<BinaryExpressionTail>(multiplicative_expression_tail_value_item_1.get());
+			multiplicative_expression_tail_value.push_back(std::move(multiplicative_expression_tail_value_value_1));
+		}
+		multiplicative_expression_tail = std::move(multiplicative_expression_tail_value);
+	}
+	auto result = TransformMultiplicativeExpression(transformer, std::move(exponentiation_expression),
+	                                                std::move(multiplicative_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformMultiplicativeExpressionTailInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto factor = transformer.Transform<string>(list_pr.GetChild(0));
+	auto exponentiation_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformMultiplicativeExpressionTail(transformer, factor, std::move(exponentiation_expression));
+	return make_uniq<TypedTransformResult<BinaryExpressionTail>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFactorInternal(PEGTransformer &transformer,
                                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
 	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExponentiationExpressionInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto collate_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	optional<vector<BinaryExpressionTail>> exponentiation_expression_tail {};
+	auto &exponentiation_expression_tail_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (exponentiation_expression_tail_opt.HasResult()) {
+		vector<BinaryExpressionTail> exponentiation_expression_tail_value;
+		auto &exponentiation_expression_tail_value_repeat_1 =
+		    exponentiation_expression_tail_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &exponentiation_expression_tail_value_item_1 :
+		     exponentiation_expression_tail_value_repeat_1.GetChildren()) {
+			auto exponentiation_expression_tail_value_value_1 =
+			    transformer.Transform<BinaryExpressionTail>(exponentiation_expression_tail_value_item_1.get());
+			exponentiation_expression_tail_value.push_back(std::move(exponentiation_expression_tail_value_value_1));
+		}
+		exponentiation_expression_tail = std::move(exponentiation_expression_tail_value);
+	}
+	auto result = TransformExponentiationExpression(transformer, std::move(collate_expression),
+	                                                std::move(exponentiation_expression_tail));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExponentiationExpressionTailInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto exponent_operator = transformer.Transform<string>(list_pr.GetChild(0));
+	auto collate_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto result = TransformExponentiationExpressionTail(transformer, exponent_operator, std::move(collate_expression));
+	return make_uniq<TypedTransformResult<BinaryExpressionTail>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExponentOperatorInternal(PEGTransformer &transformer,
@@ -9982,6 +10172,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"InExpressionList", &PEGTransformerFactory::TransformInExpressionListInternal},
 	    {"InSelectStatement", &PEGTransformerFactory::TransformInSelectStatementInternal},
 	    {"BetweenClause", &PEGTransformerFactory::TransformBetweenClauseInternal},
+	    {"OtherOperatorExpression", &PEGTransformerFactory::TransformOtherOperatorExpressionInternal},
+	    {"OtherOperatorTail", &PEGTransformerFactory::TransformOtherOperatorTailInternal},
 	    {"OtherOperator", &PEGTransformerFactory::TransformOtherOperatorInternal},
 	    {"AnyAllOperator", &PEGTransformerFactory::TransformAnyAllOperatorInternal},
 	    {"AnyOrAll", &PEGTransformerFactory::TransformAnyOrAllInternal},
@@ -9991,10 +10183,20 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"JsonOperator", &PEGTransformerFactory::TransformJsonOperatorInternal},
 	    {"ListOperator", &PEGTransformerFactory::TransformListOperatorInternal},
 	    {"StringOperator", &PEGTransformerFactory::TransformStringOperatorInternal},
+	    {"QualifiedOperator", &PEGTransformerFactory::TransformQualifiedOperatorInternal},
+	    {"QualifiedOperatorContents", &PEGTransformerFactory::TransformQualifiedOperatorContentsInternal},
 	    {"AnyOp", &PEGTransformerFactory::TransformAnyOpInternal},
+	    {"BitwiseExpression", &PEGTransformerFactory::TransformBitwiseExpressionInternal},
+	    {"BitwiseExpressionTail", &PEGTransformerFactory::TransformBitwiseExpressionTailInternal},
 	    {"BitOperator", &PEGTransformerFactory::TransformBitOperatorInternal},
+	    {"AdditiveExpression", &PEGTransformerFactory::TransformAdditiveExpressionInternal},
+	    {"AdditiveExpressionTail", &PEGTransformerFactory::TransformAdditiveExpressionTailInternal},
 	    {"Term", &PEGTransformerFactory::TransformTermInternal},
+	    {"MultiplicativeExpression", &PEGTransformerFactory::TransformMultiplicativeExpressionInternal},
+	    {"MultiplicativeExpressionTail", &PEGTransformerFactory::TransformMultiplicativeExpressionTailInternal},
 	    {"Factor", &PEGTransformerFactory::TransformFactorInternal},
+	    {"ExponentiationExpression", &PEGTransformerFactory::TransformExponentiationExpressionInternal},
+	    {"ExponentiationExpressionTail", &PEGTransformerFactory::TransformExponentiationExpressionTailInternal},
 	    {"ExponentOperator", &PEGTransformerFactory::TransformExponentOperatorInternal},
 	    {"PrefixOperator", &PEGTransformerFactory::TransformPrefixOperatorInternal},
 	    {"MinusPrefixOperator", &PEGTransformerFactory::TransformMinusPrefixOperatorInternal},

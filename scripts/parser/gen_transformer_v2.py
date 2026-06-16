@@ -818,17 +818,23 @@ def _seq_param_decl(e):
     return f"const {e.cpp_type} &{e.var_name}"
 
 
-def generate_sequence_body_decl(rule_name, return_type, elements):
+def _sequence_body_params(rule_name, rule_types, elements):
+    params = ["PEGTransformer &transformer"]
+    params.extend(_seq_param_decl(e) for e in elements if not e.skip)
+    if rule_types[rule_name].pass_location:
+        params.append("optional_idx query_location")
+    return ", ".join(params)
+
+
+def generate_sequence_body_decl(rule_name, return_type, rule_types, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
-    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
-    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
+    params = _sequence_body_params(rule_name, rule_types, elements)
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
 
 
-def generate_sequence_body_stub(rule_name, return_type, elements):
+def generate_sequence_body_stub(rule_name, return_type, rule_types, elements):
     """Stub .cpp definition for a sequence body that must be hand-implemented."""
-    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
-    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
+    params = _sequence_body_params(rule_name, rule_types, elements)
     return (
         f"{return_type} PEGTransformerFactory::Transform{rule_name}({params}) {{\n"
         f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
@@ -846,7 +852,7 @@ def generate_choice_body_stub(rule_name, return_type):
     )
 
 
-def generate_sequence_internal(rule_name, return_type, return_by_value, elements):
+def generate_sequence_internal(rule_name, return_type, return_by_value, rule_types, elements):
     """
     Generate the Internal static class member for a sequence rule.
     Returns unique_ptr<TransformResultValue> matching transform_function_t for the static table.
@@ -871,6 +877,8 @@ def generate_sequence_internal(rule_name, return_type, return_by_value, elements
         return e.var_name
 
     args = ["transformer"] + [_param_arg(e) for e in semantic]
+    if rule_types[rule_name].pass_location:
+        args.append("parse_result.offset")
     body.append(f"\tauto result = Transform{rule_name}({', '.join(args)});")
     box = _box_result(return_type, return_by_value).rstrip('\n')
     body.append(box)
@@ -1077,11 +1085,13 @@ def collect_generated(
                         generate_sequence_forward_internal(rule_name, return_type, return_by_value, elements)
                     )
                 else:
-                    declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
+                    declarations.append(generate_sequence_body_decl(rule_name, return_type, rule_types, elements))
                     implementations.append(
-                        generate_sequence_internal(rule_name, return_type, return_by_value, elements)
+                        generate_sequence_internal(rule_name, return_type, return_by_value, rule_types, elements)
                     )
-                    body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
+                    body_stubs.append(
+                        (rule_name, generate_sequence_body_stub(rule_name, return_type, rule_types, elements))
+                    )
                 continue
             skipped.append(
                 (

@@ -149,13 +149,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformIsExpression);
-	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
-	REGISTER_TRANSFORM(TransformQualifiedOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
-	REGISTER_TRANSFORM(TransformBitwiseExpression);
-	REGISTER_TRANSFORM(TransformAdditiveExpression);
-	REGISTER_TRANSFORM(TransformMultiplicativeExpression);
-	REGISTER_TRANSFORM(TransformExponentiationExpression);
 	REGISTER_TRANSFORM(TransformCollateExpression);
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
@@ -205,7 +199,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("MinusPrefixOperator", "-");
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
-
 
 	RegisterEnum<WindowExcludeMode>("ExcludeCurrentRow", WindowExcludeMode::CURRENT_ROW);
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);

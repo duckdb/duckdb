@@ -20,4 +20,21 @@ struct BetweenInLikeOperator {
 	unique_ptr<ParsedExpression> expression;
 };
 
+struct ParsedOperator {
+	string name;
+	bool is_any_all = false;
+	bool is_any = true;
+};
+
+struct OtherOperatorTail {
+	ParsedOperator op;
+	unique_ptr<ParsedExpression> expression;
+};
+
+struct BinaryExpressionTail {
+	string op;
+	unique_ptr<ParsedExpression> expression;
+	optional_idx query_location;
+};
+
 } // namespace duckdb
