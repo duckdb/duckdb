@@ -184,6 +184,8 @@ enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
 
+enum class DialectCompatibilityMode : uint8_t;
+
 enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
@@ -784,6 +786,9 @@ const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
+const char* EnumUtil::ToChars<DialectCompatibilityMode>(DialectCompatibilityMode value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
@@ -1571,6 +1576,9 @@ DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const ch
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
+DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const char *value);
 
 template<>
 DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
