@@ -1,0 +1,129 @@
+# name: test/sql/copy/parquet/parquet_expression_filter_pruning.test
+# description: Test row group pruning with arithmetic expression filters
+# group: [parquet]
+
+require parquet
+
+# 10 row groups of 10240 rows (multiple of vector size -> deterministic boundaries)
+statement ok
+COPY (SELECT range AS a FROM range(102400)) TO '__TEST_DIR__/expr_prune_int.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
+COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '__TEST_DIR__/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
+COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '__TEST_DIR__/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
+
+# constants are not divisible by the multiplier, so the optimizer keeps the expression filter
+# instead of folding it into a plain comparison
+
+# a * 4 + 4 > 327681  <=>  a >= 81920  -> last 2 row groups
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 + 4 > 327681
+----
+20480
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	2
+SkipRowGroup	8
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# a * 4 - 4 < 40961  <=>  a <= 10241  -> first 2 row groups
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 - 4 < 40961
+----
+10242
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	2
+SkipRowGroup	8
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# false for the whole file -> optimizer folds to EMPTY_RESULT from file-level stats
+query II
+EXPLAIN SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 + 4 > 409601
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# d + d < 20479.5  <=>  d < 10239.75  -> first row group (d twice -> not foldable)
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/expr_prune_double.parquet' WHERE d + d < 20479.5e0
+----
+10240
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# NaN at row 95000 -> its row group has no min/max stats and is never pruned; the others are pruned
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '__TEST_DIR__/expr_prune_nan.parquet' WHERE d + d > 184318.5e0
+----
+10240
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# can_have_nan=true disables stats pruning entirely (NaN compares larger than anything),
+# but the NaN row must still survive the filter
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query III
+SELECT count(*), min(d), max(d) FROM read_parquet('__TEST_DIR__/expr_prune_nan.parquet', can_have_nan=true) WHERE d + d > 184318.5e0
+----
+10240	92160.0	nan
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	10
+
+statement ok
+CALL truncate_duckdb_logs()

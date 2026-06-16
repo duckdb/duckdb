@@ -33,6 +33,7 @@ public:
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	bool SupportsPositionalWrites(FileHandle &handle) override;
 	//! Excise a range of the file. The file-system is free to deallocate this
 	//! range (sparse file support). Reads to the range will succeed but will return
 	//! undefined data.

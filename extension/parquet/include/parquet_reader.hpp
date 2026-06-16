@@ -188,6 +188,14 @@ struct ParquetPrefetchMetrics {
 	}
 };
 
+//! Where the scan is in its async execution.
+enum class ParquetScanState : uint8_t {
+	SCHEDULE,       //! schedule the next row group's I/O
+	PROCESS,        //! process the current row group into a output chunk
+	RESUME_PAYLOAD, //! resume decoding the payload columns after the filter-column I/O blocked
+	FINISHED        //! the scan is done
+};
+
 struct ParquetReaderScanState {
 public:
 	ColumnReader &GetColumnReader(idx_t i);
@@ -201,22 +209,17 @@ public:
 	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
-	bool finished;
+	ParquetScanState scan_state;
 	SelectionVector sel;
 
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
 
 	bool prefetch_mode = false;
-	bool current_group_prefetched = false;
 	//! Number of filter head counts, used for prefetching
 	idx_t filter_head_count = 0;
-	//! true once the filters ran
-	bool filter_done = false;
 	//! Surviving row count
 	idx_t filter_count = 0;
-	//! Filter columns kept across the payload BLOCKED
-	DataChunk filter_stash;
 
 	ParquetPrefetchMetrics prefetch_metrics;
 
@@ -398,7 +401,7 @@ private:
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
-	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	void PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t out_col_idx);
 	//! Whole-group prefetch strategy.
 	ParquetPrefetchStrategy WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,

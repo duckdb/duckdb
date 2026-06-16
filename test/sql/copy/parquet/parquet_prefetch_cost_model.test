@@ -1,14 +1,11 @@
 # name: test/sql/copy/parquet/parquet_prefetch_cost_model.test
-# description: Check Parquet Prefetching gap stays at the default for local files (cost model is remote-only)
+# description: Check the Parquet prefetch gap for local files: default until measured, fit from disk reads, and the pin setting
 # group: [parquet]
 
 require parquet
 
 statement ok
 SET threads=1
-
-statement ok
-SET prefetch_all_parquet_files=true
 
 statement ok
 COPY (
@@ -33,7 +30,7 @@ SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a
 ----
 52350266
 
-# Local files have no network to measure, so they use the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
+# The first row group uses the default gap
 query I
 SELECT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -41,7 +38,6 @@ WHERE file_path LIKE '%cost_model_gap.parquet' AND row_group_id = 0
 ----
 16384
 
-# values are between the limits
 query I
 SELECT count(*)
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -49,10 +45,40 @@ WHERE file_path LIKE '%cost_model_gap.parquet' AND (accepted_column_gap < 4096 O
 ----
 0
 
-# The cost model is remote-only: local (on-disk) files keep the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
+statement ok
+CALL truncate_duckdb_logs()
+
+# Pinning the gap takes precedence over the cost model for every row group
+statement ok
+SET parquet_prefetch_column_gap=4096
+
+query I
+SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a >= 0 AND c >= 0
+----
+52350266
+
 query I
 SELECT DISTINCT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%cost_model_gap.parquet'
 ----
-16384
+4096
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Check 0
+statement ok
+SET parquet_prefetch_column_gap=0
+
+query I
+SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a >= 0 AND c >= 0
+----
+52350266
+
+query I
+SELECT DISTINCT accepted_column_gap
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%cost_model_gap.parquet'
+----
+0
