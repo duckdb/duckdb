@@ -113,9 +113,12 @@ EXPLAIN (FORMAT JSON) SELECT x, (x - random()) * 2, count(*) FROM t GROUP BY x, 
 ----
 logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
 
-# ROLLUP: positional groups must not collapse.
+# Multiple grouping sets: positional groups must not collapse, because the position of groups
+# matters semantically in the grouping sets. (ROLLUP/CUBE that the grouping_sets optimizer can
+# fold into a cascade are expanded into single-set aggregates before this optimizer runs, so we
+# use a non-cascadable grouping set here to exercise the multi-grouping-set guard directly.)
 query II
-EXPLAIN (FORMAT JSON) SELECT x, x-1, count(*) FROM t GROUP BY ROLLUP(x, x-1);
+EXPLAIN (FORMAT JSON) SELECT x, x-1, count(*) FROM t GROUP BY GROUPING SETS ((x), (x-1));
 ----
 logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
 
