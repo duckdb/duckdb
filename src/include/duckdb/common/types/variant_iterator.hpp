@@ -14,7 +14,6 @@
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -87,12 +86,6 @@ public:
 	//! Recursively populates this node (and its children) from a shredded variant Vector
 	DUCKDB_API void Build(const Vector &vec);
 
-	//! Returns the lexicographic field ordering for a fully-shredded OBJECT layer, building it lazily on
-	//! first use. Each entry is the field's (key, index in 'children'), pre-sorted by key. The key
-	//! string_ts are built once (they reference the stable field names), so iterating the ordering avoids
-	//! re-constructing them for every value. Only used for an OBJECT layer with no leftover fields.
-	DUCKDB_API const vector<pair<string_t, idx_t>> &GetOrderedFields() const;
-
 public:
 	//! The unified format of this layer
 	UnifiedVectorFormat unified;
@@ -100,11 +93,6 @@ public:
 	vector<ShreddedVariantIterator> children;
 	//! The logical type of this layer
 	LogicalType logical_type;
-
-private:
-	//! Lazily-built lexicographic ordering of the (fully shredded) object's fields, cached across rows
-	mutable vector<pair<string_t, idx_t>> ordered_fields;
-	mutable bool ordered_fields_built = false;
 };
 
 class VariantIterator;
@@ -272,10 +260,9 @@ struct VariantObjectEntry {
 };
 
 //! Iterates the (key, value) children of an OBJECT VariantIterator, merging the shredded (typed)
-//! fields with the leftover unshredded fields. There are three backing modes:
+//! fields with the leftover unshredded fields. There are two backing modes:
 //!   - INTERNAL order: lazy forward iteration over the raw entries (skipping missing fields)
-//!   - LEXICOGRAPHIC, fully-shredded object: iterates the cached 'ordered_fields' (no per-value sort)
-//!   - LEXICOGRAPHIC, otherwise: iterates the materialized + sorted 'ordered_entries'
+//!   - LEXICOGRAPHIC order: iterates the materialized + sorted 'ordered_entries'
 class VariantObjectIterator {
 public:
 	DUCKDB_API VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order);
@@ -322,15 +309,8 @@ public:
 private:
 	//! Materializes the entry at the given raw position (before missing-field skipping)
 	VariantObjectEntry RawEntry(idx_t raw_pos) const;
-	//! Materializes the entry at the given position in the cached field ordering
-	VariantObjectEntry OrderedEntry(idx_t pos) const;
-	//! Whether this (shredded) object is fully shredded at this level (no leftover fields)
-	bool IsFullyShredded() const;
 	//! The end position in the iteration space
 	idx_t EndPos() const {
-		if (ordered_fields) {
-			return ordered_fields->size();
-		}
 		return order == VariantIterationOrder::LEXICOGRAPHIC ? ordered_entries.size() : raw_count;
 	}
 
@@ -352,9 +332,7 @@ private:
 	idx_t typed_field_count;
 	idx_t overlay_base;
 
-	//! LEXICOGRAPHIC + fully shredded: the cached field ordering (owned by the ShreddedVariantIterator)
-	optional_ptr<const vector<pair<string_t, idx_t>>> ordered_fields;
-	//! LEXICOGRAPHIC + not fully shredded: the entries materialized and sorted by key up-front
+	//! LEXICOGRAPHIC: the entries materialized and sorted by key up-front
 	vector<VariantObjectEntry> ordered_entries;
 
 	friend class Iterator;

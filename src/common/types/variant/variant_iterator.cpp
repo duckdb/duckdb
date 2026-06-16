@@ -105,24 +105,6 @@ void ShreddedVariantIterator::Build(const Vector &vec) {
 	}
 }
 
-const vector<pair<string_t, idx_t>> &ShreddedVariantIterator::GetOrderedFields() const {
-	if (!ordered_fields_built) {
-		//! Build the lexicographic ordering once: each field's (name, index in 'children'), sorted by name.
-		//! The string_t keys reference the (stable) field names, so iterating the ordering does not need to
-		//! re-construct them for every value.
-		auto &child_types = StructType::GetChildTypes(logical_type);
-		ordered_fields.reserve(child_types.size());
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto &name = child_types[i].first;
-			ordered_fields.emplace_back(string_t(name.c_str(), NumericCast<uint32_t>(name.size())), i);
-		}
-		std::sort(ordered_fields.begin(), ordered_fields.end(),
-		          [](const pair<string_t, idx_t> &a, const pair<string_t, idx_t> &b) { return a.first < b.first; });
-		ordered_fields_built = true;
-	}
-	return ordered_fields;
-}
-
 //===--------------------------------------------------------------------===//
 // UnshreddedVariantIterator
 //===--------------------------------------------------------------------===//
@@ -489,16 +471,7 @@ VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, Vari
 		return;
 	}
 
-	if (IsFullyShredded()) {
-		//! Fully shredded at this level (no leftover fields): the present fields are a subset of the typed
-		//! fields, so their lexicographic ordering is constant across rows. Use (building on first use) the
-		//! ordering cached on the ShreddedVariantIterator instead of sorting for every value. Missing fields
-		//! are skipped while iterating (see Iterator::Load).
-		ordered_fields = content->GetOrderedFields();
-		return;
-	}
-
-	//! Otherwise materialize all (non-missing) entries and sort them by key up-front
+	//! Materialize all (non-missing) entries and sort them by key up-front
 	ordered_entries.reserve(raw_count);
 	for (idx_t raw_pos = 0; raw_pos < raw_count; raw_pos++) {
 		auto entry = RawEntry(raw_pos);
@@ -509,20 +482,6 @@ VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, Vari
 	}
 	std::sort(ordered_entries.begin(), ordered_entries.end(),
 	          [](const VariantObjectEntry &a, const VariantObjectEntry &b) { return a.key < b.key; });
-}
-
-bool VariantObjectIterator::IsFullyShredded() const {
-	//! "Fully shredded" means all of the object's data lives in the typed fields with no leftover
-	//! (overlay) fields. Individual typed fields may still be missing for a given row; those are skipped
-	//! during iteration. This is an O(1) check (no overlay <=> raw_count == typed_field_count).
-	return shredded && raw_count == typed_field_count;
-}
-
-VariantObjectEntry VariantObjectIterator::OrderedEntry(idx_t pos) const {
-	//! The key string_t is already built and cached - only the value cursor is resolved per row
-	auto &entry = (*ordered_fields)[pos];
-	return VariantObjectEntry {
-	    entry.first, VariantIterator::ResolveShredded(*state, content->children[entry.second], shredded_index, row)};
 }
 
 VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
@@ -549,17 +508,6 @@ VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
 }
 
 void VariantObjectIterator::Iterator::Load() {
-	if (parent.ordered_fields) {
-		//! Cached lexicographic ordering: iterate the (sorted) vector, skipping fields missing for this row
-		while (pos < parent.ordered_fields->size()) {
-			current = parent.OrderedEntry(pos);
-			if (!current.value.IsMissing()) {
-				return;
-			}
-			++pos;
-		}
-		return;
-	}
 	if (parent.order == VariantIterationOrder::LEXICOGRAPHIC) {
 		//! Iterate the pre-sorted entries (missing fields were already filtered out)
 		if (pos < parent.ordered_entries.size()) {
