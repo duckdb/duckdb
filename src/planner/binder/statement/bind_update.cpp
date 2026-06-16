@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
@@ -134,6 +136,17 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	if (!table_ptr) {
 		throw BinderException("Can only update base table");
 	}
+	if (node.table->type == TableReferenceType::BASE_TABLE) {
+		// A catalog may delegate the scan of its table to a storage table in
+		// another catalog; the update targets the entry the name resolves to.
+		auto &target_ref = node.table->Cast<BaseTableRef>();
+		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, target_ref.table_name);
+		auto resolved = Catalog::GetEntry(context, target_ref.catalog_name, target_ref.schema_name, table_lookup,
+		                                  OnEntryNotFound::RETURN_NULL);
+		if (resolved && resolved->type == CatalogType::TABLE_ENTRY) {
+			table_ptr = &resolved->Cast<TableCatalogEntry>();
+		}
+	}
 	auto &table = *table_ptr;
 
 	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::UPDATE_EVENT)) {
@@ -157,7 +170,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
+		properties.RegisterDBModify(table.GetStorageCatalog(context), context, DatabaseModificationType::UPDATE_DATA);
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -190,8 +203,15 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 
-	// bind any extra columns necessary for CHECK constraints or indexes
-	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
+	// bind any extra columns necessary for CHECK constraints or indexes;
+	// storage-derived decisions (index updates force delete+insert) come
+	// from the scan-bound table when the catalog delegates storage
+	auto storage_table = get->GetTable();
+	if (storage_table && storage_table.get() != &table) {
+		storage_table->BindUpdateConstraints(*this, *get, *proj, *update, context);
+	} else {
+		table.BindUpdateConstraints(*this, *get, *proj, *update, context);
+	}
 
 	// finally bind the row id column and add them to the projection list
 	BindRowIdColumns(table, *get, proj->expressions);

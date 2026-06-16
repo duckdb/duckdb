@@ -105,6 +105,12 @@ public:
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+	//! The catalog whose database is modified when writing this table; a
+	//! catalog that delegates storage to another catalog overrides this so
+	//! binders register the correct database for the transaction.
+	virtual Catalog &GetStorageCatalog(ClientContext &context) {
+		return catalog;
+	}
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
 	                                      const EntryLookupInfo &lookup_info);
 
