@@ -349,6 +349,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_local_file_system_delay_ms",
+        "description": "DEBUG SETTING: time to sleep before local file system open/close/read/write operations",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
