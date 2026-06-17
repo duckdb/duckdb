@@ -1134,9 +1134,11 @@ private:
 	static unique_ptr<ParsedExpression> TransformNoneLiteral(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformCreateMacroStmtInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
-	static unique_ptr<CreateStatement>
-	TransformCreateMacroStmt(PEGTransformer &transformer, const bool &macro_or_function, const bool &if_not_exists,
-	                         const QualifiedName &qualified_name, vector<unique_ptr<MacroFunction>> macro_definition);
+	static unique_ptr<CreateStatement> TransformCreateMacroStmt(PEGTransformer &transformer,
+	                                                            const bool &macro_or_function,
+	                                                            const optional<bool> &if_not_exists,
+	                                                            const QualifiedName &qualified_name,
+	                                                            vector<unique_ptr<MacroFunction>> macro_definition);
 	static unique_ptr<TransformResultValue> TransformMacroOrFunctionInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformMacroKeywordInternal(PEGTransformer &transformer,
@@ -1148,7 +1150,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformMacroDefinitionInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer,
-	                                                          vector<MacroParameter> macro_parameters,
+	                                                          optional<vector<MacroParameter>> macro_parameters,
 	                                                          unique_ptr<MacroFunction> macro_definition_body);
 	static unique_ptr<TransformResultValue> TransformMacroDefinitionBodyInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
@@ -1161,7 +1163,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformSimpleParameterInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer, const Identifier &type_func_name,
-	                                               const LogicalType &type);
+	                                               const optional<LogicalType> &type);
 	static unique_ptr<TransformResultValue> TransformScalarMacroDefinitionInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer,
@@ -1178,8 +1180,9 @@ private:
 	static unique_ptr<TransformResultValue> TransformCreateSecretStmtInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
-	TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists, const Identifier &secret_name,
-	                          const Identifier &secret_storage_specifier,
+	TransformCreateSecretStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
+	                          const optional<Identifier> &secret_name,
+	                          const optional<Identifier> &secret_storage_specifier,
 	                          const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformSecretStorageSpecifierInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
@@ -1578,9 +1581,10 @@ private:
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
-	TransformCreateViewStmt(PEGTransformer &transformer, const bool &create_recursive, const bool &if_not_exists,
-	                        const QualifiedName &qualified_name, const vector<string> &insert_column_list,
-	                        case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
+	TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
+	                        const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+	                        const optional<vector<string>> &insert_column_list,
+	                        optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                        unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformCreateRecursiveInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
@@ -1784,9 +1788,10 @@ private:
 	                          optional<vector<FunctionArgument>> table_function_arguments);
 	static unique_ptr<TransformResultValue> TransformExplainStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, const bool &explain_analyze,
-	                                                          const vector<GenericCopyOption> &explain_option_list,
-	                                                          unique_ptr<SQLStatement> explainable_statements);
+	static unique_ptr<SQLStatement>
+	TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
+	                          const optional<vector<GenericCopyOption>> &explain_option_list,
+	                          unique_ptr<SQLStatement> explainable_statements);
 	static unique_ptr<TransformResultValue> TransformExplainAnalyzeInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static bool TransformExplainAnalyze(PEGTransformer &transformer);
@@ -1797,7 +1802,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformExplainOptionInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static GenericCopyOption TransformExplainOption(PEGTransformer &transformer, const Identifier &explain_option_name,
-	                                                unique_ptr<ParsedExpression> expression);
+	                                                optional<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<TransformResultValue> TransformExplainSelectStatementInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
