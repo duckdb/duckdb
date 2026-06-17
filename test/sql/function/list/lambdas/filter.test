@@ -175,28 +175,28 @@ ORDER BY ct.n
 3
 
 query I
-SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)) FROM corr_test
+SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)) FROM corr_test ORDER BY ALL
 ----
+[]
 [a, 11, 23]
 [2, hello, wie gehts]
 NULL
-[]
 
 query I
-SELECT (SELECT list_filter(l, lambda elem: length(elem) >= n)) FROM corr_test
+SELECT (SELECT list_filter(l, lambda elem: length(elem) >= n)) FROM corr_test ORDER BY ALL
 ----
+[]
 [a, 11, 23]
 [hello, wie gehts]
 NULL
-[]
 
 query I
-SELECT (SELECT (SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)))) FROM corr_test
+SELECT (SELECT (SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)))) FROM corr_test ORDER BY ALL
 ----
+[]
 [a, 11, 23]
 [2, hello, wie gehts]
 NULL
-[]
 
 # positional references in lambda functions
 query I

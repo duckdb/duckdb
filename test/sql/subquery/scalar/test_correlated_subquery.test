@@ -190,7 +190,7 @@ NULL	NULL
 3	42
 
 query II
-SELECT i, (SELECT CASE WHEN sum(i) > 1 THEN 0 ELSE 1 END FROM integers WHERE i=i1.i) FROM integers i1;
+SELECT i, (SELECT CASE WHEN sum(i) > 1 THEN 0 ELSE 1 END FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY ALL;
 ----
 1	1
 2	0
