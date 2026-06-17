@@ -1,0 +1,7 @@
+{
+  "description": "Run on persistent databases with a large group-commit micro-batching delay (delay=10ms, batch-wait path).",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__group_commit_delay.db",
+  "on_init": "SET group_commit_delay=10000;",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json"
+}
