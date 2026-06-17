@@ -199,7 +199,8 @@ SELECT SUM(n) FROM audit_multi;
 ----
 330
 
-# FOR EACH ROW trigger can UPDATE another table using NEW column
+# UPDATE trigger bodies are blocked (self-accumulating patterns produce wrong results under
+# the set-based execution model. blocked entirely until per-row execution is implemented)
 statement ok
 CREATE TABLE t_upd_src (id INTEGER, amount INTEGER);
 
@@ -209,17 +210,19 @@ CREATE TABLE t_upd_totals (total INTEGER);
 statement ok
 INSERT INTO t_upd_totals VALUES (0);
 
+statement error
+CREATE TRIGGER trg_upd AFTER INSERT ON t_upd_src FOR EACH ROW
+    UPDATE t_upd_totals SET total = total + NEW.amount;
+----
+Not implemented Error: UPDATE trigger bodies in FOR EACH ROW triggers are not yet supported
+
+# FIXME: once UPDATE trigger bodies are supported and per-row execution is implemented,
+# self-accumulating semantics should produce total = 18 (5 + 10 + 3).
+mode skip instable
+
 statement ok
 CREATE TRIGGER trg_upd AFTER INSERT ON t_upd_src FOR EACH ROW
     UPDATE t_upd_totals SET total = total + NEW.amount;
-
-# FIXME: self-accumulating UPDATE triggers return wrong results with the current set-based
-# decorrelation execution model.  All trigger firings run as a single batch against one
-# transaction snapshot, so every firing reads total=0 and only the first rowid-deduped write
-# survives (result: 5, expected: 18).  Correct sequential-accumulation semantics require
-# per-row iterative execution with intermediate visibility, which is not yet implemented.
-# See the LogicalTrigger doc comment for the full list of set-based limitations.
-mode skip instable
 
 statement ok
 INSERT INTO t_upd_src VALUES (1, 5), (2, 10), (3, 3);
@@ -228,6 +231,42 @@ query I
 SELECT total FROM t_upd_totals;
 ----
 18
+
+mode unskip
+
+# UPDATE trigger body with correlated WHERE
+statement ok
+CREATE TABLE t_upd1 (id INTEGER);
+
+statement ok
+CREATE TABLE target_upd1 (id INTEGER, val INTEGER);
+
+statement error
+CREATE TRIGGER trg_upd1 AFTER INSERT ON t_upd1 FOR EACH ROW
+    UPDATE target_upd1 SET val = val + 1 WHERE id = NEW.id;
+----
+Not implemented Error: UPDATE trigger bodies in FOR EACH ROW triggers are not yet supported
+
+# FIXME: waiting for full UPDATE trigger body support. Current decorrelation breaks
+# accumulative cases, so UPDATE bodies are blocked entirely,
+# even though this specific case would pass without the blockage.
+mode skip instable
+
+statement ok
+INSERT INTO target_upd1 VALUES (1, 0), (2, 0), (3, 0);
+
+statement ok
+CREATE TRIGGER trg_upd1_corr AFTER INSERT ON t_upd1 FOR EACH ROW
+    UPDATE target_upd1 SET val = val + 1 WHERE id = NEW.id;
+
+statement ok
+INSERT INTO t_upd1 VALUES (1), (2);
+
+query II
+SELECT id, val FROM target_upd1 WHERE val = 1 ORDER BY id;
+----
+1	1
+2	1
 
 mode unskip
 
@@ -506,29 +545,6 @@ query I
 SELECT COUNT(*) FROM audit_ins2;
 ----
 2
-
-# UPDATE trigger body with correlated WHERE
-statement ok
-CREATE TABLE t_upd1 (id INTEGER);
-
-statement ok
-CREATE TABLE target_upd1 (id INTEGER, val INTEGER);
-
-statement ok
-INSERT INTO target_upd1 VALUES (1, 0), (2, 0), (3, 0);
-
-statement ok
-CREATE TRIGGER trg_upd1 AFTER INSERT ON t_upd1 FOR EACH ROW
-    UPDATE target_upd1 SET val = val + 1 WHERE id = NEW.id;
-
-statement ok
-INSERT INTO t_upd1 VALUES (1), (2);
-
-query II
-SELECT id, val FROM target_upd1 WHERE val = 1 ORDER BY id;
-----
-1	1
-2	1
 
 # DELETE trigger body with correlated WHERE
 statement ok

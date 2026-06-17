@@ -594,6 +594,9 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			throw NotImplementedException(
 			    "FOR EACH ROW triggers on tables with generated columns are not yet supported");
 		}
+		if (create_trigger_info.trigger_action->type == QueryNodeType::UPDATE_QUERY_NODE) {
+			throw NotImplementedException("UPDATE trigger bodies in FOR EACH ROW triggers are not yet supported");
+		}
 		vector<Identifier> col_names;
 		vector<LogicalType> col_types;
 		for (auto &col : table.GetColumns().Physical()) {
