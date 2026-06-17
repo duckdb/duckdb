@@ -30,16 +30,17 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 			auto cast = BoundCastExpression::AddCastToType(context, std::move(constant), return_type);
 			return BindResult(std::move(cast));
 		}
-	} else {
-		// No explicit parameter value supplied; fall back to a user variable of the same name.
-		if (binder.GetBindingMode() != BindingMode::PREPARE) {
-			Value variable_value;
-			if (ClientConfig::GetConfig(context).GetUserVariable(parameter_id, variable_value)) {
-				auto constant = make_uniq<BoundConstantExpression>(variable_value);
-				constant->SetAlias(expr.GetAlias());
-				return BindResult(std::move(constant));
-			}
+	}
+	// No explicit parameter value supplied; fall back to a user variable of the same name.
+	if (binder.GetBindingMode() != BindingMode::PREPARE) {
+		Value variable_value;
+		if (ClientConfig::GetConfig(context).GetUserVariable(parameter_id, variable_value)) {
+			auto constant = make_uniq<BoundConstantExpression>(variable_value);
+			constant->SetAlias(expr.GetAlias());
+			return BindResult(std::move(constant));
 		}
+	}
+	if (!parameters) {
 		throw BinderException("Unexpected prepared parameter. This type of statement can't be prepared!");
 	}
 

@@ -3,10 +3,8 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
@@ -28,20 +26,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	// For any named parameter not supplied by the caller, check if a user variable with the same
-	// name exists and use it as a default. This makes named params optional when a variable provides
-	// a default value — the caller's explicit values always take precedence.
-	auto &user_variables = ClientConfig::GetConfig(context).user_variables;
-	for (auto &kv : named_param_map) {
-		if (stmt.named_values.count(kv.first) == 0) {
-			auto var_it = user_variables.find(kv.first);
-			if (var_it != user_variables.end()) {
-				stmt.named_values[kv.first] = make_uniq<ConstantExpression>(var_it->second);
-			}
-		}
-	}
-
-	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map);
+	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
@@ -73,6 +58,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		}
 		bind_values[pair.first] = std::move(parameter_data);
 	}
+	prepared->PopulateMissingParameterValues(context, bind_values);
 	unique_ptr<LogicalOperator> rebound_plan;
 
 	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
@@ -104,7 +90,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	result.names = prepared->names;
 	result.types = prepared->types;
 
-	prepared->Bind(std::move(bind_values));
+	prepared->Bind(context, std::move(bind_values));
 	if (rebound_plan) {
 		auto execute_plan = make_uniq<LogicalExecute>(std::move(prepared));
 		execute_plan->children.push_back(std::move(rebound_plan));

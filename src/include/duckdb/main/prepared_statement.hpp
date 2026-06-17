@@ -12,6 +12,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
@@ -114,12 +115,16 @@ public:
 
 	template <class PAYLOAD>
 	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
-	                                     const identifier_map_t<PAYLOAD> &values) {
+	                                     const identifier_map_t<PAYLOAD> &values, ClientContext *context = nullptr) {
 		// Missing values
 		identifier_set_t missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
+				Value variable_value;
+				if (context && ClientConfig::GetConfig(*context).GetUserVariable(name, variable_value)) {
+					continue;
+				}
 				missing_set.insert(name);
 			}
 		}
@@ -132,23 +137,23 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(const identifier_map_t<PAYLOAD> &provided, const identifier_map_t<idx_t> &expected) {
-		if (expected.size() == provided.size()) {
-			// Same amount of identifiers, if
-			for (auto &pair : expected) {
-				auto &identifier = pair.first;
-				if (!provided.count(identifier)) {
-					throw InvalidInputException(MissingValuesException(expected, provided));
-				}
+	static void VerifyParameters(const identifier_map_t<PAYLOAD> &provided, const identifier_map_t<idx_t> &expected,
+	                             ClientContext *context = nullptr) {
+		for (auto &pair : provided) {
+			if (!expected.count(pair.first)) {
+				throw InvalidInputException(ExcessValuesException(expected, provided));
 			}
-			return;
 		}
-		// Mismatch in expected and provided parameters/values
-		if (expected.size() > provided.size()) {
-			throw InvalidInputException(MissingValuesException(expected, provided));
-		} else {
-			D_ASSERT(provided.size() > expected.size());
-			throw InvalidInputException(ExcessValuesException(expected, provided));
+		for (auto &pair : expected) {
+			auto &identifier = pair.first;
+			if (provided.count(identifier)) {
+				continue;
+			}
+			Value variable_value;
+			if (context && ClientConfig::GetConfig(*context).GetUserVariable(identifier, variable_value)) {
+				continue;
+			}
+			throw InvalidInputException(MissingValuesException(expected, provided, context));
 		}
 	}
 

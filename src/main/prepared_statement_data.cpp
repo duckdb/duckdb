@@ -3,7 +3,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
@@ -39,13 +41,58 @@ bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name
 	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
+static BoundParameterData GetParameterValue(ClientContext &context, const identifier_map_t<BoundParameterData> &values,
+                                            const Identifier &identifier) {
+	auto lookup = values.find(identifier);
+	if (lookup != values.end()) {
+		return lookup->second;
+	}
+	Value variable_value;
+	if (ClientConfig::GetConfig(context).GetUserVariable(identifier, variable_value)) {
+		return BoundParameterData(std::move(variable_value));
+	}
+	throw BinderException("Could not find parameter with identifier %s", identifier);
+}
+
+static identifier_map_t<idx_t> GetExpectedParameters(const bound_parameter_map_t &value_map) {
+	identifier_map_t<idx_t> result;
+	for (auto &entry : value_map) {
+		result[entry.first] = result.size();
+	}
+	return result;
+}
+
+static identifier_map_t<idx_t> GetExpectedParameters(const PreparedStatementData &data) {
+	if (data.unbound_statement && !data.unbound_statement->named_param_map.empty()) {
+		return data.unbound_statement->named_param_map;
+	}
+	return GetExpectedParameters(data.value_map);
+}
+
+void PreparedStatementData::PopulateMissingParameterValues(ClientContext &context,
+                                                           identifier_map_t<BoundParameterData> &values) const {
+	const auto expected_parameters = GetExpectedParameters(*this);
+	PreparedStatement::VerifyParameters(values, expected_parameters, &context);
+	for (auto &entry : expected_parameters) {
+		if (values.count(entry.first)) {
+			continue;
+		}
+		Value variable_value;
+		if (ClientConfig::GetConfig(context).GetUserVariable(entry.first, variable_value)) {
+			values[entry.first] = BoundParameterData(std::move(variable_value));
+		}
+	}
+}
+
 bool PreparedStatementData::RequireRebind(ClientContext &context,
                                           optional_ptr<identifier_map_t<BoundParameterData>> values) {
-	idx_t count = values ? values->size() : 0;
-	CheckParameterCount(count);
+	identifier_map_t<BoundParameterData> empty_values;
+	auto &parameter_values = values ? *values : empty_values;
 	if (!unbound_statement) {
 		throw InternalException("Prepared statement without unbound statement");
 	}
+	const auto expected_parameters = GetExpectedParameters(*this);
+	PreparedStatement::VerifyParameters(parameter_values, expected_parameters, &context);
 	if (properties.always_require_rebind) {
 		// this statement must always be re-bound
 		return true;
@@ -56,11 +103,8 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	}
 	for (auto &it : value_map) {
 		auto &identifier = it.first;
-		auto lookup = values->find(identifier);
-		if (lookup == values->end()) {
-			break;
-		}
-		if (lookup->second.GetValue().type() != it.second->return_type) {
+		auto parameter_value = GetParameterValue(context, parameter_values, identifier);
+		if (parameter_value.GetValue().type() != it.second->return_type) {
 			return true;
 		}
 	}
@@ -78,20 +122,22 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	return false;
 }
 
-void PreparedStatementData::Bind(identifier_map_t<BoundParameterData> values) {
+void PreparedStatementData::Bind(ClientContext &context, identifier_map_t<BoundParameterData> values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
-	CheckParameterCount(values.size());
+	if (unbound_statement || !value_map.empty()) {
+		const auto expected_parameters = GetExpectedParameters(*this);
+		PreparedStatement::VerifyParameters(values, expected_parameters, &context);
+	} else if (!values.empty()) {
+		CheckParameterCount(values.size());
+	}
 
 	// bind the required values
 	for (auto &it : value_map) {
 		const string &identifier = it.first.GetIdentifierName();
-		auto lookup = values.find(it.first);
-		if (lookup == values.end()) {
-			throw BinderException("Could not find parameter with identifier %s", identifier);
-		}
+		auto parameter_value = GetParameterValue(context, values, it.first);
 		D_ASSERT(it.second);
-		auto value = lookup->second.GetValue();
+		auto value = parameter_value.GetValue();
 		if (!value.DefaultTryCastAs(it.second->return_type)) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with identifier %s, expected type %s but got type %s", identifier,

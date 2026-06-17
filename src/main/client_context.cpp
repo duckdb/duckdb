@@ -497,7 +497,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 #ifdef DEBUG
 	logical_plan->Verify(*this);
 #endif
-	if (result->properties.parameter_count > 0 && !parameters.parameters) {
+	if (!result->value_map.empty() && !parameters.parameters) {
 		// if this is a prepared statement we can choose not to fully plan
 		// if we have parameters, we might want to re-bind when they are available as we can then do more optimizations
 		// in this situation we check if we want to cache the plan at all
@@ -589,7 +589,8 @@ QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress;
 }
 
-void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
+void BindPreparedStatementParameters(ClientContext &context, PreparedStatementData &statement,
+                                     const PendingQueryParameters &parameters) {
 	identifier_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
@@ -597,7 +598,7 @@ void BindPreparedStatementParameters(PreparedStatementData &statement, const Pen
 			owned_values.emplace(val);
 		}
 	}
-	statement.Bind(std::move(owned_values));
+	statement.Bind(context, std::move(owned_values));
 }
 
 void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const string &query,
@@ -644,7 +645,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
                                                 const PendingQueryParameters &parameters) {
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
-	BindPreparedStatementParameters(statement_data, parameters);
+	BindPreparedStatementParameters(*this, statement_data, parameters);
 
 	// Create the query executor.
 	active_query->executor = make_uniq<Executor>(*this);
@@ -936,46 +937,22 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
-	// For named params not explicitly provided, look up user variables as defaults
-	// so that $variable syntax works as a shorthand for getvariable()
-	PendingQueryParameters effective_parameters = parameters;
-	identifier_map_t<BoundParameterData> effective_param_map;
-	if (!statement->named_param_map.empty()) {
-		// Named params exist — build the effective map starting from any explicitly supplied values
-		if (parameters.parameters) {
-			effective_param_map = *parameters.parameters;
-		}
-		auto &user_vars = ClientConfig::GetConfig(*this).user_variables;
-		for (auto &kv : statement->named_param_map) {
-			if (!effective_param_map.count(kv.first)) {
-				auto var_it = user_vars.find(kv.first);
-				if (var_it != user_vars.end()) {
-					effective_param_map[kv.first] = BoundParameterData(var_it->second);
-				}
-			}
-		}
-		effective_parameters.parameters = effective_param_map;
-		PreparedStatement::VerifyParameters(effective_param_map, statement->named_param_map);
-	} else if (parameters.parameters) {
-		// No named params but explicit parameters were provided — check for excess
-		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map);
+	if (!statement->named_param_map.empty() && parameters.parameters) {
+		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map, this);
+	} else if (!statement->named_param_map.empty()) {
+		identifier_map_t<BoundParameterData> empty_parameters;
+		PreparedStatement::VerifyParameters(empty_parameters, statement->named_param_map, this);
 	}
 
-	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), effective_parameters,
+	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 
-	idx_t parameter_count = !effective_parameters.parameters ? 0 : effective_parameters.parameters->size();
-	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
-		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
-		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(InvalidInputException(error_message), query);
-	}
 	if (!prepared->properties.bound_all_parameters) {
 		return ErrorResult<PendingQueryResult>(InvalidInputException("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
 	CheckIfPreparedStatementIsExecutable(*prepared);
-	return PendingPreparedStatementInternal(lock, std::move(prepared), effective_parameters);
+	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
