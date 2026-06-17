@@ -598,7 +598,7 @@ void BindPreparedStatementParameters(ClientContext &context, PreparedStatementDa
 			owned_values.emplace(val);
 		}
 	}
-	statement.Bind(context, std::move(owned_values));
+	statement.Bind(context, owned_values);
 }
 
 void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const string &query,

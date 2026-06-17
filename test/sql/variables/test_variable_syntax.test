@@ -88,6 +88,48 @@ EXECUTE stmt_default(x := 1)
 ----
 10
 
+# Variables with numeric names should not satisfy positional parameters
+statement ok
+SET VARIABLE "1" = 5
+
+statement ok
+PREPARE stmt_positional_auto AS SELECT ?
+
+statement error
+EXECUTE stmt_positional_auto
+----
+Values were not provided
+
+query I
+EXECUTE stmt_positional_auto(7)
+----
+7
+
+statement ok
+PREPARE stmt_positional_numbered AS SELECT $1
+
+statement error
+EXECUTE stmt_positional_numbered
+----
+Values were not provided
+
+query I
+EXECUTE stmt_positional_numbered(8)
+----
+8
+
+# Named parameters containing digits still use user variables
+statement ok
+SET VARIABLE a1 = 9
+
+statement ok
+PREPARE stmt_named_digit AS SELECT $a1
+
+query I
+EXECUTE stmt_named_digit
+----
+9
+
 # Change variable, re-execute without params — picks up new value
 statement ok
 SET VARIABLE multiplier = 100

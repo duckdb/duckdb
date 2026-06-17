@@ -15,6 +15,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
@@ -113,6 +114,14 @@ public:
 		                          StringUtil::Join(excess_values, ", "));
 	}
 
+	static bool AllowsUserVariableFallback(const Identifier &identifier) {
+		auto &name = identifier.GetIdentifierName();
+		if (name.empty()) {
+			return false;
+		}
+		return !StringUtil::CharacterIsDigit(name[0]);
+	}
+
 	template <class PAYLOAD>
 	static string MissingValuesException(const identifier_map_t<idx_t> &parameters,
 	                                     const identifier_map_t<PAYLOAD> &values, ClientContext *context = nullptr) {
@@ -122,7 +131,8 @@ public:
 			auto &name = pair.first;
 			if (!values.count(name)) {
 				Value variable_value;
-				if (context && ClientConfig::GetConfig(*context).GetUserVariable(name, variable_value)) {
+				if (context && AllowsUserVariableFallback(name) &&
+				    ClientConfig::GetConfig(*context).GetUserVariable(name, variable_value)) {
 					continue;
 				}
 				missing_set.insert(name);
@@ -150,7 +160,8 @@ public:
 				continue;
 			}
 			Value variable_value;
-			if (context && ClientConfig::GetConfig(*context).GetUserVariable(identifier, variable_value)) {
+			if (context && AllowsUserVariableFallback(identifier) &&
+			    ClientConfig::GetConfig(*context).GetUserVariable(identifier, variable_value)) {
 				continue;
 			}
 			throw InvalidInputException(MissingValuesException(expected, provided, context));

@@ -90,7 +90,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	result.names = prepared->names;
 	result.types = prepared->types;
 
-	prepared->Bind(context, std::move(bind_values));
+	prepared->Bind(context, bind_values);
 	if (rebound_plan) {
 		auto execute_plan = make_uniq<LogicalExecute>(std::move(prepared));
 		execute_plan->children.push_back(std::move(rebound_plan));

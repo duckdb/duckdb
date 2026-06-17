@@ -56,7 +56,7 @@ public:
 	//! Fill in missing parameter values from user variables
 	void PopulateMissingParameterValues(ClientContext &context, identifier_map_t<BoundParameterData> &values) const;
 	//! Bind a set of values to the prepared statement data
-	DUCKDB_API void Bind(ClientContext &context, identifier_map_t<BoundParameterData> values);
+	DUCKDB_API void Bind(ClientContext &context, const identifier_map_t<BoundParameterData> &values);
 	//! Get the expected SQL Type of the bound parameter
 	DUCKDB_API LogicalType GetType(const Identifier &identifier);
 	//! Try to get the expected SQL Type of the bound parameter

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,8 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		}
 	}
 	// No explicit parameter value supplied; fall back to a user variable of the same name.
-	if (binder.GetBindingMode() != BindingMode::PREPARE) {
+	if (binder.GetBindingMode() != BindingMode::PREPARE &&
+	    PreparedStatement::AllowsUserVariableFallback(parameter_id)) {
 		Value variable_value;
 		if (ClientConfig::GetConfig(context).GetUserVariable(parameter_id, variable_value)) {
 			auto constant = make_uniq<BoundConstantExpression>(variable_value);
