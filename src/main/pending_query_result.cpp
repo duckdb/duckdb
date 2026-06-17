@@ -16,6 +16,10 @@ PendingQueryResult::PendingQueryResult(ErrorData error)
 }
 
 PendingQueryResult::~PendingQueryResult() {
+	try {
+		Close();
+	} catch (...) { // LCOV_EXCL_START
+	}               // LCOV_EXCL_STOP
 }
 
 unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
@@ -71,6 +75,15 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
 
+	// Drop the context reference on every exit. Don't call Close() here: it would re-acquire the
+	// already-held context lock, and ~PendingQueryResult may run under that lock on this path.
+	struct ContextRefGuard {
+		shared_ptr<ClientContext> &context;
+		~ContextRefGuard() {
+			context.reset();
+		}
+	} context_guard {context};
+
 	PendingExecutionResult execution_result;
 	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock))) {
 		if (execution_result == PendingExecutionResult::BLOCKED) {
@@ -85,9 +98,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 			return make_uniq<MaterializedQueryResult>(error);
 		}
 	}
-	auto result = context->FetchResultInternal(lock, *this);
-	Close();
-	return result;
+	return context->FetchResultInternal(lock, *this);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::Execute() {
@@ -96,6 +107,14 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 }
 
 void PendingQueryResult::Close() {
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before execution finished: release the active-query state now (matching
+			// InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

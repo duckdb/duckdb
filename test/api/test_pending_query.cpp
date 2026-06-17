@@ -113,6 +113,46 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 	}
 }
 
+TEST_CASE("Abandoned pending query must release the active query", "[api]") {
+	// A pending query created but never executed must not leak the active-query state (executor,
+	// plan, and the autocommit transaction it opens). We observe that transaction: abandoning the
+	// pending must release it immediately, not defer it to the next query or context teardown.
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+
+	SECTION("Abandon via Close()") {
+		auto pending_query = con.PendingQuery("SELECT 42");
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon by destroying the result") {
+		{
+			auto pending_query = con.PendingQuery("ATTACH ':memory:' AS abandoned_db");
+			REQUIRE(!pending_query->HasError());
+			REQUIRE(con.context->transaction.HasActiveTransaction());
+		}
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon a prepared pending query") {
+		auto prepared = con.Prepare("SELECT 42");
+		REQUIRE(!prepared->HasError());
+		auto pending_query = prepared->PendingQuery();
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	// the connection must remain usable after abandoning pending queries
+	auto result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
 static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
