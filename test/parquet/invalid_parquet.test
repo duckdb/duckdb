@@ -34,3 +34,10 @@ statement error
 SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/broken/issue22325_datapage_v2_neg_compressed_bytes.parquet');
 ----
 compressed_page_size is smaller than repetition_levels_byte_length + definition_levels_byte_length
+
+# definition_levels_byte_length set to -1: the level lengths are not range-checked by the caller,
+# so a negative i32 must be rejected before it is widened/used as a read length
+statement error
+SELECT b FROM parquet_scan('{DATA_DIR}/parquet-testing/broken/issue22325_datapage_v2_negative_def_levels.parquet');
+----
+definition_levels_byte_length must be >= 0
