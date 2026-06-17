@@ -900,6 +900,14 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			auto adaptive_filter = filter_info.GetAdaptiveFilter();
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
+				ScanFilterResult acc;
+				acc.row_span = max_count;
+				if (count != max_count) {
+					acc.InitFromSelection(sel, count, max_count);
+				} else {
+					acc.InitAllPass(max_count);
+				}
+
 				auto &filter_list = filter_info.GetFilterList();
 				const auto &permutation = adaptive_filter->GetPermutation();
 				for (idx_t i = 0; i < filter_list.size(); i++) {
@@ -915,15 +923,16 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					const auto column_idx = filter.table_column_index;
 
 					auto &result_vector = result.data[scan_idx];
-					if (approved_tuple_count == 0) {
+					if (ScanFilterResultIsEmpty(acc)) {
 						auto &col_data = GetColumn(column_idx);
 						col_data.Skip(state.column_scans[scan_idx]);
 						continue;
 					}
 					auto &col_data = GetColumn(column_idx);
-					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
-					                approved_tuple_count, filter.filter, table_filter_state);
+					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, acc,
+					                filter.filter, table_filter_state);
 				}
+				approved_tuple_count = MaterializeScanFilterResult(acc, sel);
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;

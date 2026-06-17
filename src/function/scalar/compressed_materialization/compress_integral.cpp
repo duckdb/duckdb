@@ -1,6 +1,8 @@
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
@@ -39,12 +41,69 @@ struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
 };
 
 template <class INPUT_TYPE, class RESULT_TYPE>
+static bool IntegralCompressFitsResult(const INPUT_TYPE &value) {
+	RESULT_TYPE result;
+	return TryCast::Operation(value, result);
+}
+
+template <class INPUT_TYPE, class RESULT_TYPE>
 void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
+	auto &input_vec = args.data[0];
+	auto count = args.size();
+
+	const SelectionVector *dict_sel = nullptr;
+	auto *for_vec = FORVector::TryGetFOR(input_vec, dict_sel);
+	if (for_vec) {
+		auto stored_type = FORVector::GetStoredType(*for_vec);
+		auto src = FORVector::GetData(*for_vec);
+		const auto for_max = FORVector::GetMax<INPUT_TYPE>(*for_vec);
+
+		if (min_val <= for_max) {
+			const auto compressed_max = for_max - min_val;
+			if (IntegralCompressFitsResult<INPUT_TYPE, RESULT_TYPE>(compressed_max)) {
+				if (min_val == INPUT_TYPE(0) && stored_type == result.GetType().InternalType()) {
+					auto stored_view = FORVector::CreateStoredView(*for_vec);
+					if (!dict_sel) {
+						result.Reference(stored_view);
+					} else {
+						auto entry = make_buffer<DictionaryEntry>(std::move(stored_view));
+						result.Dictionary(std::move(entry), *dict_sel, count);
+					}
+					return;
+				}
+				auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+				FOR_SWITCH_STORED(stored_type, STORED_T, {
+					auto stored_data = reinterpret_cast<const STORED_T *>(src);
+					for (idx_t i = 0; i < count; i++) {
+						auto src_idx = dict_sel ? dict_sel->get_index(i) : i;
+						auto value = FORVector::WidenStored<INPUT_TYPE>(stored_data[src_idx]);
+						result_data[i] = TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(value, min_val);
+					}
+				});
+				if (!dict_sel) {
+					FlatVector::SetValidity(result, FORVector::Validity(*for_vec));
+				} else {
+					auto &result_validity = FlatVector::ValidityMutable(result);
+					result_validity.Reset(count);
+					auto &source_validity = FORVector::Validity(*for_vec);
+					if (source_validity.CanHaveNull()) {
+						for (idx_t i = 0; i < count; i++) {
+							if (!source_validity.RowIsValid(dict_sel->get_index(i))) {
+								result_validity.SetInvalid(i);
+							}
+						}
+					}
+				}
+				return;
+			}
+		}
+	}
+
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    args.data[0], result,
+	    input_vec, result, count,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },

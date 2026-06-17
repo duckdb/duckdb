@@ -110,6 +110,11 @@ public:
 			capacity = 0ULL;
 		}
 	}
+	void Initialize(buffer_ptr<SelectionData> data, sel_t *sel, idx_t capacity_p) {
+		selection_data = std::move(data);
+		sel_vector = sel;
+		capacity = capacity_p;
+	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
 		sel_vector = other.sel_vector;

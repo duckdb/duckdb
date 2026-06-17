@@ -6,6 +6,46 @@
 
 namespace duckdb {
 
+namespace {
+
+bool IsThinIntegerType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool IsSafeThinIntegerArithmetic(const BoundFunctionExpression &expr) {
+	auto name = expr.Function().GetName();
+	if (name != "+" && name != "-" && name != "*") {
+		return false;
+	}
+	if (!IsThinIntegerType(expr.GetReturnType())) {
+		return false;
+	}
+	for (auto &child : expr.GetChildren()) {
+		if (!IsThinIntegerType(child->GetReturnType())) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool SameSelectionVector(const SelectionVector &left, const SelectionVector &right) {
+	return left.data() == right.data() && left.Capacity() == right.Capacity();
+}
+
+} // namespace
+
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// Check if the expression is eligible for dictionary optimization
@@ -17,24 +57,25 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // FIXME: get this working for STRUCT
 	}
 
-	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
+	// Mark non-constant inputs that may be eligible for dictionary optimization.
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
 		auto &children = bound_function.GetChildren();
+		bool eligible = true;
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = *children[child_idx];
 			if (child.IsFoldable()) {
 				continue; // Constant
 			}
-			if (input_col_idx.IsValid()) {
-				input_col_idx.SetInvalid(); // Found more than 1 non-constant
+			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
+				eligible = false; // FIXME
 				break;
 			}
-			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
-				break; // FIXME
-			}
-			input_col_idx = child_idx;
+			dictionary_input_indices.push_back(child_idx);
+		}
+		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeThinIntegerArithmetic(bound_function))) {
+			dictionary_input_indices.clear();
 		}
 		break;
 	}
@@ -51,25 +92,48 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr double CHUNK_FILL_RATIO_THRESHOLD = 0.5;
 
-	if (!input_col_idx.IsValid()) {
+	if (dictionary_input_indices.empty()) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
 
 	// Figure out if we can do the optimization
-	const auto &unary_input = args.data[input_col_idx.GetIndex()];
-	if (unary_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+	const auto first_input_idx = dictionary_input_indices[0];
+	const auto &first_input = args.data[first_input_idx];
+	if (first_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return false; // Not a dictionary
 	}
 
-	const auto input_dictionary_size_opt = DictionaryVector::DictionarySize(unary_input);
-	const auto &input_dictionary_id = DictionaryVector::DictionaryId(unary_input);
-	if (!input_dictionary_size_opt.IsValid() || input_dictionary_id.empty()) {
+	const auto input_dictionary_size_opt = DictionaryVector::DictionarySize(first_input);
+	const auto &first_dictionary_id = DictionaryVector::DictionaryId(first_input);
+	if (!input_dictionary_size_opt.IsValid() || first_dictionary_id.empty()) {
 		return false; // Not a dictionary that comes from storage
 	}
+	string input_dictionary_id = first_dictionary_id;
 
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	if (input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
 		return false; // Dictionary is too large, bail
+	}
+
+	auto &input_sel = DictionaryVector::SelVector(first_input);
+	for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
+		const auto &input = args.data[dictionary_input_indices[idx]];
+		if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			return false;
+		}
+		const auto dictionary_size_opt = DictionaryVector::DictionarySize(input);
+		if (!dictionary_size_opt.IsValid() || dictionary_size_opt.GetIndex() != input_dictionary_size) {
+			return false;
+		}
+		const auto &dictionary_id = DictionaryVector::DictionaryId(input);
+		if (dictionary_id.empty()) {
+			return false;
+		}
+		if (!SameSelectionVector(input_sel, DictionaryVector::SelVector(input))) {
+			return false;
+		}
+		input_dictionary_id += "\n";
+		input_dictionary_id += dictionary_id;
 	}
 
 	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
@@ -90,7 +154,14 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(args.GetTypes());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			if (col_idx != input_col_idx.GetIndex()) {
+			bool dictionary_input = false;
+			for (auto input_idx : dictionary_input_indices) {
+				if (input_idx == col_idx) {
+					dictionary_input = true;
+					break;
+				}
+			}
+			if (!dictionary_input) {
 				input_chunk.data[col_idx].Reference(args.data[col_idx]);
 			}
 		}
@@ -100,8 +171,10 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			const auto count = MinValue<idx_t>(input_dictionary_size - offset, STANDARD_VECTOR_SIZE);
 
 			// Offset the input dictionary
-			Vector offset_input(DictionaryVector::Child(unary_input), offset, offset + count);
-			input_chunk.data[input_col_idx.GetIndex()].Reference(offset_input);
+			for (auto input_idx : dictionary_input_indices) {
+				Vector offset_input(DictionaryVector::Child(args.data[input_idx]), offset, offset + count);
+				input_chunk.data[input_idx].Reference(offset_input);
+			}
 			input_chunk.SetChildCardinality(count);
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
@@ -112,7 +185,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	// Result references the dictionary
-	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input), args.size());
+	result.Dictionary(output_dictionary, DictionaryVector::SelVector(first_input), args.size());
 
 	return true;
 }

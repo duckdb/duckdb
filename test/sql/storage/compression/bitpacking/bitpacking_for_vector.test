@@ -1,0 +1,67 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_for_vector.test
+# description: Test FOR vector production from bitpacking scan
+# group: [bitpacking]
+
+require block_size 262144
+
+load {TEST_DIR}/bitpacking_for_vector.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
+statement ok
+CREATE TABLE t AS
+SELECT (1000 + (range % 50))::INTEGER AS val, (range % 50)::SMALLINT AS qty
+FROM range(10000)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT vector_type(val) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT count(*) FROM t WHERE val >= 1010 AND val <= 1020
+----
+2200
+
+query III
+SELECT min(val), max(val), sum(val) FROM t WHERE val >= 1025 AND val < 1030
+----
+1025	1029	1027000
+
+query I
+SELECT DISTINCT vector_type(val + 7) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT DISTINCT vector_type(val * 2) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT sum((val + 7) * 2) FROM t
+----
+20630000
+
+statement ok
+CREATE TABLE neg AS SELECT (-100 + (range % 50))::INTEGER AS val FROM range(2048)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT vector_type(val) FROM neg
+----
+FLAT_VECTOR
+
+query III
+SELECT min(val), max(val), sum(val) FROM neg
+----
+-100	-51	-154672

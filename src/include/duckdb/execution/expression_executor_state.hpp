@@ -76,10 +76,8 @@ public:
 	unique_ptr<FunctionLocalState> local_state;
 
 private:
-	//! The column index of the "unary" input column that may be a dictionary vector
-	//! Only valid when the expression is eligible for the dictionary expression optimization
-	//! This is the case when the input is "practically unary", i.e., only one non-const input column
-	optional_idx input_col_idx;
+	//! Non-constant input columns that may be compatible dictionary vectors
+	vector<idx_t> dictionary_input_indices;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;
 	//! ID of the input dictionary Vector
